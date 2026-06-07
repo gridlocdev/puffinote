@@ -26,7 +26,10 @@ public sealed partial class SpreadsheetGrid
     /// <summary>Raised when the grid clears the marquee itself (Esc or an edit), to drop the clipboard.</summary>
     public event EventHandler? ClipboardInvalidated;
 
-    private bool HasMarquee => _marqueeRange is not null;
+    /// <summary>Raised when Return is pressed with a marquee active — paste once and consume it (#3).</summary>
+    public event EventHandler? EnterPasteRequested;
+
+    public bool HasMarquee => _marqueeRange is not null;
 
     /// <summary>Show (or, with a null range, hide) the marquee around a clipboard source range.</summary>
     public void ShowMarquee(CellRange? range, bool isCut, string? sheetName)

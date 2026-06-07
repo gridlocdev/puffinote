@@ -49,6 +49,7 @@ public partial class MainWindow : Window, IAppEnvironment
         Grid.Attach(_session);
         Grid.SelectionChanged += (_, _) => OnSelectionChanged();
         Grid.ClipboardInvalidated += (_, _) => ClearClipboard();
+        Grid.EnterPasteRequested += (_, _) => EnterPaste();
         _session.Changed += (_, _) => { Grid.Refresh(); UpdateChrome(); };
         _session.StructureChanged += (_, _) => { BuildSheetTabs(); Grid.Refresh(); UpdateChrome(); };
 
@@ -678,6 +679,17 @@ public partial class MainWindow : Window, IAppEnvironment
         _clipboard = null;
         _clipboardText = null;
         Grid.ShowMarquee(null, false, null);
+    }
+
+    /// <summary>Return with a marquee active pastes once at the active cell and consumes the clipboard (#3).</summary>
+    private void EnterPaste()
+    {
+        if (_clipboard is { } block)
+        {
+            _session.Execute(new PasteBlockCommand(_session.ActiveSheet.Name, Selection.ActiveRow, Selection.ActiveColumn, block));
+            ClearClipboard();
+            Grid.Refresh();
+        }
     }
 
     private void PasteTsv(string text)

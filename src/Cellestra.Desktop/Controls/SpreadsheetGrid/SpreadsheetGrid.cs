@@ -603,7 +603,17 @@ public sealed partial class SpreadsheetGrid : Panel
             case Key.Left: Move(row, column - 1, extend); break;
             case Key.Right: Move(row, column + 1, extend); break;
             case Key.Tab: Move(row, column + (e.KeyModifiers.HasFlag(KeyModifiers.Shift) ? -1 : 1), false); break;
-            case Key.Return: Move(row + (e.KeyModifiers.HasFlag(KeyModifiers.Shift) ? -1 : 1), column, false); break;
+            case Key.Return:
+                if (HasMarquee)
+                {
+                    EnterPasteRequested?.Invoke(this, EventArgs.Empty); // paste once at the active cell (#3)
+                }
+                else
+                {
+                    Move(row + (e.KeyModifiers.HasFlag(KeyModifiers.Shift) ? -1 : 1), column, false);
+                }
+
+                break;
             case Key.F2: BeginEdit(null); break;
             case Key.Delete or Key.Back: ClearSelection(); break;
             case Key.Escape: InvalidateClipboard(); break;
