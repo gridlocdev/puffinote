@@ -22,6 +22,14 @@ public static class InputParser
             return new ParsedInput(null, CellValue.Empty);
         }
 
+        // A leading apostrophe forces the rest to be stored as literal text, even when it looks
+        // like a number, boolean, or formula ('007, '=notaformula). The apostrophe is an input
+        // flag, not part of the stored value, and is never displayed (Excel/Calc convention).
+        if (text[0] == '\'')
+        {
+            return new ParsedInput(null, CellValue.Text(text[1..]));
+        }
+
         if (text[0] == '=' && text.Length > 1)
         {
             return new ParsedInput(text[1..], CellValue.Empty);
