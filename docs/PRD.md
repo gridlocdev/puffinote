@@ -508,6 +508,34 @@ Intentional exclusions, not oversights.
 
 If a new ambiguity surfaces during build, resolve it here (or in `ARCHITECTURE.md` for technical detail) rather than guessing in code.
 
+### 10.1 Editing-feel decisions (resolved during build)
+
+These "everyone expects it but nobody wrote it down" behaviors were specified and built to make
+editing match spreadsheet muscle memory (§3 *Feel*). Each is implemented and tested.
+
+| Behavior | Decision |
+|---|---|
+| `-2^2` precedence | Unary minus binds **looser** than `^` (OpenFormula / LibreOffice Calc), so `-2^2 = -4`. Deliberately *not* Excel's `4`. This corrected an earlier parser bug. |
+| Leading apostrophe | Forces the rest to literal text (`'007`, `'=x`); the apostrophe is an input flag, stripped before storage and never displayed. |
+| Date entry | A typed slash date (`6/7/2026`, locale day/month order) or ISO date (`2026-06-07`) coerces to a serial and stamps a date format on a still-General cell. Bounded to slash/ISO so month names and hyphenated codes stay text. **Bare times are left as text** (the number-format mapper treats `mm` as month) — a known limitation for a later number-format pass. |
+| Cut vs copy | Cut is a deferred **move** consumed by its first paste (an unused cut leaves the data); copy pastes repeatedly until Esc. Both show a marching-ants marquee (green=copy, gray=cut) that an edit or Esc clears. Return pastes once and consumes the clipboard. |
+| Paste shape rules | One cell fills a multi-cell selection; a block on a single cell anchors and expands; a block on an exact-multiple selection tiles; any other mismatch pastes once and warns. In-app paste carries values, formulas, and styles; external paste falls back to TSV. |
+| Fill handle | Drag copy-fills along one axis; double-click fills down to the adjacent column's length. **No series extrapolation** (still a non-goal, §8.15 / §9) — a multi-cell source tiles. |
+| `#####` / spill | A number too wide for its column shows `#####`; left-aligned text overflows into empty neighbours and clips at an occupied one. |
+| Selection | Cmd+A expands region → whole sheet; Cmd+click builds discontiguous ranges; status-bar Count/Sum/Average aggregate the union; F4 cycles a reference `A1 → $A$1 → A$1 → $A1`; Tab-then-Enter returns to the tab-origin column. Undo restores the selection to the edit site. |
+| Editing aids | Point mode (click a cell while editing a formula to insert its reference), live reference highlighting on the grid, and column type-ahead autocomplete. Colouring tokens *inside* the editor needs a rich-text control and is deferred. |
+| Inserted rows/cols | Inherit the formatting of the line before them. |
+| Sheet names | Validated: non-empty, ≤31 chars, no `: \ / ? * [ ]`, no edge apostrophe; uniqueness enforced. Deleting a referenced sheet rewrites dependents to `#REF!`. |
+
+### 10.2 File-safety decisions (resolved during build)
+
+| Behavior | Decision |
+|---|---|
+| Atomic save | Write to a sibling temp file then rename over the target, so a crash mid-write never corrupts the original `.ods`. (This is write-safety, not the autosave that remains a non-goal.) |
+| LibreOffice locks | Detect a `.~lock.<name>#` and warn on open; place our own compatible lock while a file is open and remove it on close. Advisory, best-effort. |
+| Cached vs recompute | On open, cached values are shown immediately then recomputed; cells whose recompute disagrees with the file cache are counted and surfaced (a function-coverage signal), rather than silently masked. |
+| Locale separator | Formula syntax stays canonical (`,` argument separator, `.` decimal) regardless of locale — locale affects display only. Typing `SUM(1;2)` in comma-decimal locales is **not** supported in v1 (a deliberate scope limit, not an oversight). |
+
 ## 11. Possible later versions (not commitments)
 
 Printing/PDF, autosave/recovery, conditional formatting, charts, pivot tables, `.xlsx` import, cell comments/notes, Excel-style structured references, fill-handle series, more functions (e.g. `SUBTOTAL`/`SUMIFS`/`XLOOKUP`), and eventually other platforms — once the core is rock-solid.
