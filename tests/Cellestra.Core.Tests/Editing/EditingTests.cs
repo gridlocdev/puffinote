@@ -62,6 +62,25 @@ public class EditingTests
     }
 
     [Fact]
+    public void Deleting_a_referenced_sheet_breaks_dependents_and_undoes()
+    {
+        var (workbook, history) = New();
+        var sheet1 = workbook.ActiveSheet;
+        workbook.AddSheet("Data");
+        history.Execute(EditCommands.SetFormula(sheet1.Name, 0, 0, "Data.A1+1"));
+
+        history.Execute(new DeleteSheetCommand("Data"));
+
+        Assert.Null(workbook.FindSheet("Data"));
+        Assert.Equal("#REF!+1", sheet1.Find(0, 0)!.Formula);
+
+        history.Undo();
+
+        Assert.NotNull(workbook.FindSheet("Data"));
+        Assert.Equal("Data.A1+1", sheet1.Find(0, 0)!.Formula);
+    }
+
+    [Fact]
     public void Apply_style_toggles_bold_and_undoes()
     {
         var (workbook, history) = New();

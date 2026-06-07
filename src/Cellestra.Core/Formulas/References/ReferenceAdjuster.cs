@@ -56,6 +56,22 @@ public static class ReferenceAdjuster
         return Rewrite(expr, a => MapAddress(a), r => MapRange(r));
     }
 
+    /// <summary>
+    /// Adjust references when a worksheet is deleted: any reference whose effective sheet is the
+    /// deleted one becomes <c>#REF!</c>. A reference with no explicit sheet belongs to
+    /// <paramref name="homeSheet"/> (the formula's own sheet) and is only affected if that is the
+    /// sheet being deleted — which won't matter, since such a formula is deleted along with it.
+    /// </summary>
+    public static Expr ForDeleteSheet(Expr expr, string deletedSheet, string homeSheet)
+    {
+        bool Affected(string? sheet) =>
+            string.Equals(sheet ?? homeSheet, deletedSheet, StringComparison.OrdinalIgnoreCase);
+
+        return Rewrite(expr,
+            address => Affected(address.Sheet) ? null : address,
+            range => Affected(range.Sheet) ? null : range);
+    }
+
     // ---- Generic AST rewrite ---------------------------------------------
 
     private static Expr Rewrite(Expr expr, Func<CellAddress, CellAddress?> mapAddress, Func<CellRange, CellRange?> mapRange) =>

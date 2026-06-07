@@ -52,6 +52,20 @@ public class ReferenceAdjusterTests
     }
 
     [Fact]
+    public void Delete_sheet_invalidates_cross_sheet_references()
+    {
+        var adjusted = ReferenceAdjuster.ForDeleteSheet(Parser.Parse("Data.A1+1"), "Data", "Sheet1");
+        Assert.Equal("#REF!+1", Write(adjusted));
+    }
+
+    [Fact]
+    public void Delete_sheet_leaves_other_references_untouched()
+    {
+        var adjusted = ReferenceAdjuster.ForDeleteSheet(Parser.Parse("A1+Other.B2"), "Data", "Sheet1");
+        Assert.Equal("A1+Other.B2", Write(adjusted));
+    }
+
+    [Fact]
     public void Insert_columns_shifts_references_right()
     {
         var adjusted = ReferenceAdjuster.ForInsertColumns(Parser.Parse("C1"), "Sheet1", "Sheet1", atColumn: 1, count: 1);
