@@ -429,30 +429,15 @@ public sealed partial class SpreadsheetGrid : Panel
 
     private void DrawSelection(DrawingContext context, IBrush fill)
     {
-        if (!TryGetCellRect(Selection.Top, Selection.Left, out var topLeft) ||
-            !TryGetCellRect(Selection.Bottom, Selection.Right, out var bottomRight))
+        // Fill every selected rectangle (one, or several for a Cmd+click discontiguous selection),
+        // each clipped to the visible viewport.
+        foreach (var range in Selection.Ranges)
         {
-            // Selection may be partly off-screen; fall back to intersection of visible cells.
-            foreach (var (row, y, h) in _visibleRows)
+            if (TryGetRegionRect(range.Top, range.Left, range.Bottom, range.Right, out var rect))
             {
-                if (row < Selection.Top || row > Selection.Bottom)
-                {
-                    continue;
-                }
-
-                foreach (var (col, x, w) in _visibleColumns)
-                {
-                    if (col >= Selection.Left && col <= Selection.Right)
-                    {
-                        context.FillRectangle(fill, new Rect(x, y, w, h));
-                    }
-                }
+                context.FillRectangle(fill, rect);
             }
-
-            return;
         }
-
-        context.FillRectangle(fill, new Rect(topLeft.TopLeft, bottomRight.BottomRight));
     }
 
     private void DrawActiveOutline(DrawingContext context, Pen pen)
@@ -624,13 +609,14 @@ public sealed partial class SpreadsheetGrid : Panel
         }
 
         bool extend = e.KeyModifiers.HasFlag(KeyModifiers.Shift);
+        bool additive = e.KeyModifiers.HasFlag(KeyModifiers.Meta); // Cmd: add a disjoint range (#27/#28)
         if (rowHeader && !columnHeader)
         {
-            Selection.SetRange(row, 0, row, SheetDimensions.MaxColumns - 1);
+            SelectRowOrColumn(additive, row, 0, row, SheetDimensions.MaxColumns - 1);
         }
         else if (columnHeader && !rowHeader)
         {
-            Selection.SetRange(0, column, SheetDimensions.MaxRows - 1, column);
+            SelectRowOrColumn(additive, 0, column, SheetDimensions.MaxRows - 1, column);
         }
         else if (extend)
         {
@@ -638,12 +624,32 @@ public sealed partial class SpreadsheetGrid : Panel
         }
         else
         {
-            Selection.MoveTo(row, column);
+            if (additive)
+            {
+                Selection.AddPoint(row, column);
+            }
+            else
+            {
+                Selection.MoveTo(row, column);
+            }
+
             _selecting = true;
             e.Pointer.Capture(this);
         }
 
         RaiseSelectionChanged();
+    }
+
+    private void SelectRowOrColumn(bool additive, int top, int left, int bottom, int right)
+    {
+        if (additive)
+        {
+            Selection.AddRange(top, left, bottom, right);
+        }
+        else
+        {
+            Selection.SetRange(top, left, bottom, right);
+        }
     }
 
     protected override void OnPointerMoved(PointerEventArgs e)

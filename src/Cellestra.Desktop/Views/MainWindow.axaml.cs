@@ -541,25 +541,35 @@ public partial class MainWindow : Window, IAppEnvironment
     private void UpdateStatus()
     {
         var sheet = _session.ActiveSheet;
-        var range = Selection.Range;
         StatusCell.Text = new CellAddress(Selection.ActiveColumn, Selection.ActiveRow).ToString();
 
+        // Aggregate over the union of all selected ranges, deduped so overlaps aren't double-counted.
         int count = 0;
         int numericCount = 0;
         double sum = 0;
-        foreach (var (row, column) in range.Positions())
+        var seen = new HashSet<(int, int)>();
+        foreach (var range in Selection.Ranges)
         {
-            var value = sheet.GetValue(row, column);
-            if (value.IsEmpty)
+            // A whole-row/column selection spans the entire sheet; only its populated cells matter.
+            foreach (var (row, column, _) in sheet.EnumerateCells())
             {
-                continue;
-            }
+                if (!range.Contains(row, column) || !seen.Add((row, column)))
+                {
+                    continue;
+                }
 
-            count++;
-            if (value.IsNumber)
-            {
-                numericCount++;
-                sum += value.AsNumber;
+                var value = sheet.GetValue(row, column);
+                if (value.IsEmpty)
+                {
+                    continue;
+                }
+
+                count++;
+                if (value.IsNumber)
+                {
+                    numericCount++;
+                    sum += value.AsNumber;
+                }
             }
         }
 
