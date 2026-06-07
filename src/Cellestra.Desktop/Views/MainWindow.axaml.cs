@@ -206,8 +206,7 @@ public partial class MainWindow : Window, IAppEnvironment
             return;
         }
 
-        await using var stream = File.Create(_session.FilePath);
-        _session.SaveTo(stream, _session.FilePath);
+        _session.SaveToFile(_session.FilePath);
         RememberRecentFile(_session.FilePath);
         UpdateChrome();
     }
@@ -228,8 +227,7 @@ public partial class MainWindow : Window, IAppEnvironment
         }
 
         string path = file.Path.LocalPath;
-        await using var stream = File.Create(path);
-        _session.SaveTo(stream, path);
+        _session.SaveToFile(path);
         RememberRecentFile(path);
         UpdateChrome();
     }

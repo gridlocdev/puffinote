@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.IO;
 using Cellestra.Core.Dependencies;
 using Cellestra.Core.Editing;
 using Cellestra.Core.Model;
@@ -140,6 +141,51 @@ public sealed class WorkbookSession
         }
 
         IsModified = false;
+    }
+
+    /// <summary>
+    /// Save atomically: write the whole <c>.ods</c> to a sibling temp file, then rename it over
+    /// the target. A crash, disk-full, or permission error mid-write leaves the original file
+    /// untouched (PRD §3 round-trip safety) — never a half-written, corrupt document.
+    /// </summary>
+    public void SaveToFile(string path)
+    {
+        string fullPath = Path.GetFullPath(path);
+        string directory = Path.GetDirectoryName(fullPath) ?? ".";
+        string temp = Path.Combine(directory, $".{Path.GetFileName(fullPath)}.{Guid.NewGuid():N}.tmp");
+
+        try
+        {
+            using (var stream = File.Create(temp))
+            {
+                OdsWriter.Write(_workbook, stream, _sourcePackage);
+            }
+
+            File.Move(temp, fullPath, overwrite: true); // atomic on the same volume
+        }
+        catch
+        {
+            TryDelete(temp);
+            throw;
+        }
+
+        FilePath = fullPath;
+        IsModified = false;
+    }
+
+    private static void TryDelete(string path)
+    {
+        try
+        {
+            if (File.Exists(path))
+            {
+                File.Delete(path);
+            }
+        }
+        catch
+        {
+            // Best-effort cleanup of the temp file; nothing actionable if it fails.
+        }
     }
 
     private void Reset(Workbook workbook, OdsPackage? package, string? path)
