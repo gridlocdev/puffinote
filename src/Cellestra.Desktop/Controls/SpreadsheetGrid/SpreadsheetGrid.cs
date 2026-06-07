@@ -59,7 +59,8 @@ public sealed partial class SpreadsheetGrid : Panel
         {
             if (!_programmaticEdit)
             {
-                ResetPointMode(); // typing ends ref replacement (#17)
+                ResetPointMode();  // typing ends ref replacement (#17)
+                OfferCompletion(); // type-ahead from the column (#20)
             }
 
             Redraw(); // keep live reference highlights in step with the formula (#18)
@@ -889,6 +890,7 @@ public sealed partial class SpreadsheetGrid : Panel
         InvalidateArrange();
         _editor.Focus();
         _editor.CaretIndex = _editor.Text?.Length ?? 0;
+        ResetAutocomplete(); // don't treat the seeded text as a typed character (#20)
     }
 
     private static string CellEditText(Cell? cell)
