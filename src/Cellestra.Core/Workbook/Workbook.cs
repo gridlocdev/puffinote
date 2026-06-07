@@ -1,9 +1,11 @@
+using Cellestra.Core.Styling;
+
 namespace Cellestra.Core.Model;
 
 /// <summary>
-/// The whole document: an ordered list of worksheets, workbook-wide named ranges, and
-/// document settings. The style pool is attached by the styling layer. Pure model — it
-/// knows nothing about windows or drawing (ARCHITECTURE: Core has zero UI dependencies).
+/// The whole document: an ordered list of worksheets, workbook-wide named ranges, the shared
+/// style pool, and document settings. Pure model — it knows nothing about windows or drawing
+/// (ARCHITECTURE: Core has zero UI dependencies).
 /// </summary>
 public sealed class Workbook
 {
@@ -13,6 +15,9 @@ public sealed class Workbook
     public IReadOnlyList<Worksheet> Worksheets => _worksheets;
 
     public IReadOnlyList<NamedRange> NamedRanges => _namedRanges;
+
+    /// <summary>The shared style pool; every cell's <c>StyleId</c> indexes into it.</summary>
+    public StylePool Styles { get; } = new();
 
     public DocumentSettings Settings { get; } = new();
 
