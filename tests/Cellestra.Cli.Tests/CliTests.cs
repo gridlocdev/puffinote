@@ -185,6 +185,54 @@ public sealed class CliTests : IDisposable
         Assert.Contains("max\t30", output, StringComparison.Ordinal);
     }
 
+    [Theory]
+    [InlineData("get", "/no/such/file.ods", "A1")]                 // missing file (IOException)
+    [InlineData("add-sheet", null, "Sheet1")]                       // duplicate sheet (InvalidOperationException)
+    [InlineData("rename-sheet", null, "Sheet1", "bad/name")]        // invalid name (ArgumentException)
+    public void User_errors_report_cleanly_and_exit_nonzero(params string?[] template)
+    {
+        // For cases that need a real workbook, "null" in the template is replaced by a fresh file.
+        string ods = Path2("book.ods");
+        Run("new", ods);
+        var args = template.Select(a => a ?? ods).ToArray();
+
+        var (exit, _, err) = Run(args!);
+
+        Assert.Equal(1, exit);
+        Assert.StartsWith("cellestra:", err.Trim(), StringComparison.Ordinal);
+        Assert.DoesNotContain("Unhandled exception", err, StringComparison.Ordinal);
+        Assert.DoesNotContain("   at ", err, StringComparison.Ordinal); // no stack trace
+    }
+
+    [Fact]
+    public void Invalid_regex_reports_cleanly()
+    {
+        string ods = Path2("book.ods");
+        Run("new", ods);
+        var (exit, _, err) = Run("find", ods, "[", "--regex");
+        Assert.Equal(1, exit);
+        Assert.Contains("Invalid regex", err, StringComparison.Ordinal);
+        Assert.DoesNotContain("   at ", err, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Stats_ignores_empty_cells_in_a_large_range()
+    {
+        string ods = Path2("book.ods");
+        Run("new", ods);
+        Run("set", ods, "Sheet1.A1", "10", "--in-place");
+        Run("set", ods, "Sheet1.A500", "40", "--in-place");
+
+        // A wide range with only two populated cells — correctness must not change with the
+        // sparse-iteration optimization.
+        var (exit, output, _) = Run("stats", ods, "Sheet1.A1:A1000");
+        Assert.Equal(0, exit);
+        Assert.Contains("count\t2", output, StringComparison.Ordinal);
+        Assert.Contains("sum\t50", output, StringComparison.Ordinal);
+        Assert.Contains("min\t10", output, StringComparison.Ordinal);
+        Assert.Contains("max\t40", output, StringComparison.Ordinal);
+    }
+
     [Fact]
     public void Cat_csv_format_is_pipe_friendly()
     {

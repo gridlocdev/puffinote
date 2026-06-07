@@ -130,19 +130,21 @@ internal static class ExtraCommands
             int count = 0;
             int numeric = 0;
             double sum = 0, min = double.PositiveInfinity, max = double.NegativeInfinity;
-            foreach (var (row, column) in cellRange.Positions())
+
+            // Walk only the populated cells (O(populated)), not every position in the bounding box —
+            // so `stats Sheet1.A1:A1048576` over a sparse column stays fast.
+            foreach (var (row, column, cell) in worksheet.EnumerateCells())
             {
-                var value = worksheet.GetValue(row, column);
-                if (value.IsEmpty)
+                if (!cellRange.Contains(row, column) || cell.Value.IsEmpty)
                 {
                     continue;
                 }
 
                 count++;
-                if (value.IsNumber)
+                if (cell.Value.IsNumber)
                 {
                     numeric++;
-                    double n = value.AsNumber;
+                    double n = cell.Value.AsNumber;
                     sum += n;
                     min = Math.Min(min, n);
                     max = Math.Max(max, n);
@@ -183,7 +185,18 @@ internal static class ExtraCommands
             bool searchValues = where is "values" or "both";
             bool searchFormulas = where is "formulas" or "both";
             string termText = parse.GetValue(term) ?? string.Empty;
-            Regex? pattern = parse.GetValue(regex) ? new Regex(termText, RegexOptions.None) : null;
+            Regex? pattern = null;
+            if (parse.GetValue(regex))
+            {
+                try
+                {
+                    pattern = new Regex(termText, RegexOptions.None);
+                }
+                catch (ArgumentException ex)
+                {
+                    throw new CliException($"Invalid regex '{termText}': {ex.Message}");
+                }
+            }
 
             bool Matches(string candidate) => pattern is not null
                 ? pattern.IsMatch(candidate)
@@ -476,13 +489,12 @@ internal static class ExtraCommands
 
     private static void ClearSheet(Worksheet sheet)
     {
-        var used = sheet.GetUsedRange();
-        if (used is { } range)
+        // Snapshot populated positions first (can't mutate while enumerating), then clear them —
+        // O(populated), and it doesn't touch the millions of empty cells in the bounding box.
+        var positions = sheet.EnumerateCells().Select(c => (c.Row, c.Column)).ToList();
+        foreach (var (row, column) in positions)
         {
-            foreach (var (row, column) in range.Positions())
-            {
-                sheet.PutCell(row, column, null);
-            }
+            sheet.PutCell(row, column, null);
         }
     }
 

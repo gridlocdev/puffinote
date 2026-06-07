@@ -44,14 +44,30 @@ public static class CliApplication
 
     public static int Run(string[] args)
     {
+        // Turn off System.CommandLine's default handler so an error surfaces as a clean one-line
+        // message here instead of a stack trace. Action return codes still flow through.
+        var configuration = new InvocationConfiguration { EnableDefaultExceptionHandler = false };
         try
         {
-            return BuildRoot().Parse(args).Invoke();
+            return BuildRoot().Parse(args).Invoke(configuration);
         }
-        catch (CliException ex)
+        catch (Exception ex) when (IsExpectedError(ex))
         {
             Console.Error.WriteLine($"cellestra: {ex.Message}");
             return 1;
         }
     }
+
+    /// <summary>
+    /// Errors a user can cause — bad input, a missing file, an invalid sheet name, a bad regex —
+    /// are reported cleanly with exit 1. Anything else is a bug and is left to surface loudly.
+    /// </summary>
+    private static bool IsExpectedError(Exception ex) => ex is
+        CliException or
+        ArgumentException or          // includes invalid regex / culture / sheet-name rules
+        InvalidOperationException or  // e.g. duplicate sheet name, no such sheet
+        IOException or                // missing file, permission, disk
+        UnauthorizedAccessException or
+        FormatException or
+        System.Text.Json.JsonException;
 }
