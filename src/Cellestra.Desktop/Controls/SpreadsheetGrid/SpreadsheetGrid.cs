@@ -39,6 +39,7 @@ public sealed partial class SpreadsheetGrid : Panel
     private double _zoom = 1.0;
     private bool _editing;
     private bool _selecting;
+    private int? _tabOriginColumn; // the column a Tab sequence began at, so Enter returns to it (#19)
 
     private readonly List<(int Index, double Offset, double Size)> _visibleColumns = new();
     private readonly List<(int Index, double Offset, double Size)> _visibleRows = new();
@@ -503,6 +504,8 @@ public sealed partial class SpreadsheetGrid : Panel
             CommitEdit(0, 0);
         }
 
+        _tabOriginColumn = null; // a click breaks any Tab-entry sequence (#19)
+
         var point = e.GetPosition(this);
         if (TryHandleChromeClick(point))
         {
@@ -629,10 +632,10 @@ public sealed partial class SpreadsheetGrid : Panel
 
         switch (e.Key)
         {
-            case Key.Up: Move(row - 1, column, extend); break;
-            case Key.Down: Move(row + 1, column, extend); break;
-            case Key.Left: Move(row, column - 1, extend); break;
-            case Key.Right: Move(row, column + 1, extend); break;
+            case Key.Up: _tabOriginColumn = null; Move(row - 1, column, extend); break;
+            case Key.Down: _tabOriginColumn = null; Move(row + 1, column, extend); break;
+            case Key.Left: _tabOriginColumn = null; Move(row, column - 1, extend); break;
+            case Key.Right: _tabOriginColumn = null; Move(row, column + 1, extend); break;
             case Key.Tab: Move(row, column + (e.KeyModifiers.HasFlag(KeyModifiers.Shift) ? -1 : 1), false); break;
             case Key.Return:
                 if (HasMarquee)
@@ -847,9 +850,26 @@ public sealed partial class SpreadsheetGrid : Panel
         _session.Execute(Cellestra.Core.Editing.EditCommands.SetInput(
             _session.Workbook, _session.ActiveSheet.Name, row, column, text, Culture));
 
+        int targetColumn = column + moveColumn;
+        if (moveColumn != 0 && moveRow == 0)
+        {
+            // Tabbing across a row: remember where the sequence began.
+            _tabOriginColumn ??= column;
+        }
+        else if (moveRow != 0 && moveColumn == 0 && _tabOriginColumn is { } origin)
+        {
+            // Enter after tabbing returns to the origin column on the next row (#19).
+            targetColumn = origin;
+            _tabOriginColumn = null;
+        }
+        else
+        {
+            _tabOriginColumn = null;
+        }
+
         if (moveRow != 0 || moveColumn != 0)
         {
-            Selection.MoveTo(row + moveRow, column + moveColumn);
+            Selection.MoveTo(row + moveRow, targetColumn);
             EnsureVisible(Selection.ActiveRow, Selection.ActiveColumn);
         }
 
