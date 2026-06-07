@@ -4,7 +4,7 @@ Guidance for an AI coding agent (and any human) working in this repository. Read
 
 ## What this project is
 
-**Cellestra** is a from-scratch, native **macOS** spreadsheet editor whose home format is **OpenDocument Spreadsheet (`.ods`)**. It is pre-v1; much of the code described in the docs does not exist yet and is yours to build.
+**Cellestra** is a from-scratch, native **macOS** spreadsheet editor whose home format is **OpenDocument Spreadsheet (`.ods`)**. It is pre-v1 as a *product*, but the code is **substantially built**: the pure brain (`Cellestra.Core`), the Avalonia desktop app (`Cellestra.Desktop`), and the `cellestra` CLI all exist behind a green test suite (300+ tests). **Most tasks now extend or fix existing code — read what's there before adding.** The "suggested build order" below is the layering that already happened, kept as a map of where things live, not a TODO.
 
 Start by reading these, in order:
 
@@ -53,6 +53,7 @@ These are common places to improvise — don't. The spec is fixed:
 - **New-workbook & cell defaults:** one sheet `Sheet1`; Helvetica Neue 10pt; text left / numbers right; col ≈ 64px, row ≈ 20px (**PRD §8.8**). These live once in `Core/Defaults.cs`.
 - **Minimal-by-default UI:** the window opens with the **ribbon hidden** (visibility persisted between sessions). The **Command Palette (⌘⇧P)** runs any command — it reads the single `AppCommands` catalog, so don't build a second command list for it — and the **sheet switcher (⌘P)** jumps between worksheets in the open workbook (**PRD §6, §6.7**).
 - **Data features (v1):** sort (multi-level), filter (AutoFilter), **tables (⌘T)**, data validation, hide/unhide rows & columns, hyperlinks, remove-duplicates, and text-to-columns (**PRD §4 Data, §8.10–§8.15**). Tables persist as native ODF **database ranges** (`table:database-range`) — **not** Excel ListObjects — so formulas use plain A1/named refs, never `Table[Column]`. Validation → `table:content-validation`; hidden lines → `table:visibility`; all round-trip through LibreOffice. Filtering sets row **visibility**, never deletes data.
+- **Editing-feel & file-safety decisions are pinned — don't reinvent them.** The "everyone expects it but nobody wrote it down" behaviors (cut-as-move/marquee, Enter-to-paste, shape-mismatch paste, fill-handle copy-fill, `#####`/text-spill, expanding ⌘A, discontiguous select + union stats, F4 ref-cycle, undo-restores-selection, point mode, live ref highlight, column autocomplete; atomic save, LibreOffice `.~lock` files, cached-vs-recompute) are specified in **PRD §10.1/§10.2**. Notably: **`-2^2 = -4`** — unary minus binds *looser* than `^` (OpenFormula/Calc, **not** Excel's `4`); a **leading apostrophe forces text**; and a **cut is a deferred move** consumed by its first paste. Check §10.1/§10.2 before improvising "obvious" spreadsheet behavior.
 
 ## Everyday commands
 
@@ -102,6 +103,22 @@ Authoritative tree: **[ARCHITECTURE.md §12](docs/ARCHITECTURE.md#12-folder-stru
 - **CLI** → `src/Cellestra.Cli/` (`Infrastructure/` + `Commands/`; references only Core + `System.CommandLine`, no Avalonia).
 - **Tests** → `tests/Cellestra.Core.Tests/`, `tests/Cellestra.UiTests/`, `tests/Cellestra.Cli.Tests/`, `tests/Cellestra.Benchmarks/`.
 - Don't invent new top-level folders; extend the existing structure. If a new home seems necessary, note it and ask.
+
+## Working in this codebase (verified gotchas)
+
+Hard-won facts from building the app and CLI — they'll save you a failed build or a wrong assumption:
+
+- **Nullable warnings are build errors** (`WarningsAsErrors=nullable` in `Directory.Build.props`); `ImplicitUsings`, nullable refs, and `LangVersion=latest` are on solution-wide. "Clean build" means **zero** warnings.
+- **Model types live in `Cellestra.Core.Model`** — the `Workbook/` *folder* uses that namespace on purpose (a `Cellestra.Core.Workbook` namespace would clash with the `Workbook` type). `using Cellestra.Core.Model;` gets you `Workbook`, `Worksheet`, `Cell`, `CellAddress`, `CellRange`, `SheetDimensions`.
+- **Adding a NuGet package = two edits:** a `<PackageVersion>` in `Directory.Packages.props` plus a version-less `<PackageReference>` in the `.csproj` (central package management), and a stated reason (Golden Rule #6). New code is added to the solution via `Cellestra.slnx`.
+- **The grid is one control split across `SpreadsheetGrid.*.cs` partials** (`.Chrome`, `.Marquee`, `.Fill`, `.Autofit`, `.PointMode`, `.RefHighlight`, `.Autocomplete`). It draws on an inner `Surface : Control` child because `Panel.Render` is sealed; `Surface` is `IsHitTestVisible=false`, so pointer events route to the owning Panel. Don't hand-write `InitializeComponent` — it's source-generated from the `.axaml`, and named XAML controls (`Grid`, `FormulaInput`, …) are generated fields.
+- **Avalonia 12 API points that bite:** clipboard is `clipboard.TryGetTextAsync()` / `SetTextAsync()` (not `GetTextAsync`); `FormattedText` exposes `Trimming` (there is no `MaxLines`); `HorizontalAlignment`/`VerticalAlignment` exist in **both** `Avalonia.Layout` and `Cellestra.Core.Styling` — alias one (`using SAlign = Cellestra.Core.Styling.HorizontalAlignment;`) and fully-qualify the other.
+
+**Verifying changes (you usually can't run the GUI):**
+
+- **`dotnet run --project src/Cellestra.Desktop` fails from a detached/CI shell** with `Avalonia.Native … RenderTimer … -6661` — that's *environmental* (no display link), **not** a regression. Don't chase it; verify with headless tests or the `cellestra` CLI.
+- **Headless UI tests draw with real Skia** (`UseHeadlessDrawing=false` + `.UseSkia()` in `tests/Cellestra.UiTests/TestAppBuilder.cs`), so `window.Show()` runs the real render path and `CaptureRenderedFrame()` returns a real frame — handy to smoke-test that rendering doesn't throw.
+- **Pointer/focus-driven UI is hard to drive headlessly** (point mode, autocomplete, fill-drag, marquee, Tab-then-Enter). Put the real logic in Core or a pure helper (`ReferenceCycler`, `PastePlanner`, `FillCommand`, `DataRegion`, …) and unit-test **that**; keep the UI a thin call. `Cellestra.Cli.Tests` redirect the **process-global `Console`**, so they live in one class and run sequentially.
 
 ## Conventions
 
