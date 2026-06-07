@@ -33,6 +33,11 @@ public partial class MainWindow : Window, IAppEnvironment
     private AppSettings _settings;
     private FileLock? _fileLock;
 
+    // The rich in-app clipboard (values + formulas + styles) and the exact text we mirrored to the
+    // OS clipboard; an in-app paste uses the block only while the OS clipboard still matches.
+    private ClipboardBlock? _clipboard;
+    private string? _clipboardText;
+
     public MainWindow()
     {
         InitializeComponent();
@@ -318,19 +323,26 @@ public partial class MainWindow : Window, IAppEnvironment
 
     public async void Paste()
     {
-        var clipboard = Clipboard;
-        if (clipboard is null)
+        string? text = Clipboard is { } clipboard ? await clipboard.TryGetTextAsync() : null;
+
+        // Prefer the rich in-app block while the OS clipboard still holds exactly what we put there
+        // (so an external copy in between falls back to plain text).
+        if (_clipboard is { } block && text == _clipboardText)
         {
+            _session.Execute(new PasteBlockCommand(_session.ActiveSheet.Name, Selection.ActiveRow, Selection.ActiveColumn, block));
+            if (block.IsCut)
+            {
+                ClearClipboard(); // a cut is a move, consumed by its first paste
+            }
+
+            Grid.Refresh();
             return;
         }
 
-        string? text = await clipboard.TryGetTextAsync();
-        if (string.IsNullOrEmpty(text))
+        if (!string.IsNullOrEmpty(text))
         {
-            return;
+            PasteTsv(text);
         }
-
-        PasteTsv(text);
     }
 
     public void ToggleRibbon()
@@ -646,15 +658,23 @@ public partial class MainWindow : Window, IAppEnvironment
             sb.Append('\n');
         }
 
+        string tsv = sb.ToString();
+        _clipboard = ClipboardBlock.Capture(sheet, range, cut);
+        _clipboardText = tsv;
+
         if (Clipboard is { } clipboard)
         {
-            await clipboard.SetTextAsync(sb.ToString());
+            await clipboard.SetTextAsync(tsv);
         }
 
-        if (cut)
-        {
-            _session.Execute(EditCommands.ClearContents(sheet.Name, range));
-        }
+        // A cut no longer clears immediately — it is a deferred move that its first paste performs,
+        // so an unused cut (Esc / new copy) leaves the data in place.
+    }
+
+    private void ClearClipboard()
+    {
+        _clipboard = null;
+        _clipboardText = null;
     }
 
     private void PasteTsv(string text)
