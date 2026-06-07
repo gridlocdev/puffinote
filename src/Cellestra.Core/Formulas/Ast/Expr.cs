@@ -56,6 +56,18 @@ public sealed record NameExpr(string Name) : Expr
     public override T Accept<T>(IExprVisitor<T> visitor) => visitor.VisitName(this);
 }
 
+/// <summary>
+/// A reference broken by an insert/delete (its target cell was deleted). Written as
+/// <c>#REF!</c> in the formula text and evaluates to a #REF! error — the formula structure
+/// is preserved so the user can fix it (ReferenceAdjuster).
+/// </summary>
+public sealed record RefErrorExpr : Expr
+{
+    public static readonly RefErrorExpr Instance = new();
+
+    public override T Accept<T>(IExprVisitor<T> visitor) => visitor.VisitRefError(this);
+}
+
 public sealed record UnaryExpr(UnaryOperator Operator, Expr Operand) : Expr
 {
     public override T Accept<T>(IExprVisitor<T> visitor) => visitor.VisitUnary(this);
@@ -81,6 +93,8 @@ public interface IExprVisitor<out T>
     T VisitRange(RangeExpr node);
 
     T VisitName(NameExpr node);
+
+    T VisitRefError(RefErrorExpr node);
 
     T VisitUnary(UnaryExpr node);
 

@@ -49,6 +49,9 @@ public sealed class Evaluator : IExprVisitor<CellValue>, IFunctionEvaluator
         return CellValue.FromError(CellError.Name($"Unknown name '{node.Name}'."));
     }
 
+    public CellValue VisitRefError(RefErrorExpr node) =>
+        CellValue.FromError(CellError.Reference("A referenced cell was deleted."));
+
     public CellValue VisitUnary(UnaryExpr node)
     {
         var operand = Evaluate(node.Operand);
