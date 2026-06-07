@@ -1,14 +1,547 @@
+using System;
+using System.Collections.Generic;
+using System.Globalization;
+using System.IO;
+using System.Linq;
+using System.Text;
+using System.Threading.Tasks;
+using Avalonia;
 using Avalonia.Controls;
+using Avalonia.Input;
+using Avalonia.Input.Platform;
+using Avalonia.Layout;
 using Avalonia.Markup.Xaml;
+using Avalonia.Media;
+using Avalonia.Platform.Storage;
+using Cellestra.Core.Editing;
+using Cellestra.Core.Model;
+using Cellestra.Core.Values;
+using NumberFormatter = Cellestra.Core.Styling.NumberFormatter;
+using Cellestra.Desktop.Commands;
+using Cellestra.Desktop.Controls.SpreadsheetGrid;
+using Cellestra.Desktop.Services;
+using Cellestra.Desktop.Views.Overlays;
 
 namespace Cellestra.Desktop.Views;
 
-public partial class MainWindow : Window
+public partial class MainWindow : Window, IAppEnvironment
 {
+    private WorkbookSession _session = WorkbookSession.NewBlank();
+
     public MainWindow()
     {
         InitializeComponent();
+
+        Grid.Attach(_session);
+        Grid.SelectionChanged += (_, _) => OnSelectionChanged();
+        _session.Changed += (_, _) => { Grid.Refresh(); UpdateChrome(); };
+        _session.StructureChanged += (_, _) => { BuildSheetTabs(); Grid.Refresh(); UpdateChrome(); };
+
+        FormulaInput.KeyDown += FormulaInputKeyDown;
+        NameBox.KeyDown += NameBoxKeyDown;
+        FxButton.Click += (_, _) => BeginEdit();
+
+        RegisterKeyBindings();
+        BuildSheetTabs();
+        UpdateChrome();
+        OnSelectionChanged();
     }
 
-    private void InitializeComponent() => AvaloniaXamlLoader.Load(this);
+    // ---- IAppEnvironment --------------------------------------------------
+
+    public WorkbookSession Session => _session;
+
+    public GridSelection Selection => Grid.Selection;
+
+    public void Refresh()
+    {
+        Grid.Refresh();
+        UpdateChrome();
+    }
+
+    public void BeginEdit() => Grid.BeginEdit(null);
+
+    public Task NewWorkbookAsync()
+    {
+        _session = WorkbookSession.NewBlank();
+        RewireSession();
+        return Task.CompletedTask;
+    }
+
+    public async Task OpenWorkbookAsync()
+    {
+        var files = await StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
+        {
+            Title = "Open Spreadsheet",
+            AllowMultiple = false,
+            FileTypeFilter = new[] { OdsFileType },
+        });
+
+        if (files.Count == 0)
+        {
+            return;
+        }
+
+        string path = files[0].Path.LocalPath;
+        try
+        {
+            await using var stream = File.OpenRead(path);
+            _session.LoadFrom(stream, path);
+            Grid.Attach(_session);
+            BuildSheetTabs();
+            UpdateChrome();
+        }
+        catch (Exception ex)
+        {
+            Title = $"Cellestra — could not open: {ex.Message}";
+        }
+    }
+
+    public async Task SaveWorkbookAsync()
+    {
+        if (_session.FilePath is null)
+        {
+            await SaveWorkbookAsAsync();
+            return;
+        }
+
+        await using var stream = File.Create(_session.FilePath);
+        _session.SaveTo(stream, _session.FilePath);
+        UpdateChrome();
+    }
+
+    public async Task SaveWorkbookAsAsync()
+    {
+        var file = await StorageProvider.SaveFilePickerAsync(new FilePickerSaveOptions
+        {
+            Title = "Save Spreadsheet",
+            DefaultExtension = "ods",
+            SuggestedFileName = "Untitled.ods",
+            FileTypeChoices = new[] { OdsFileType },
+        });
+
+        if (file is null)
+        {
+            return;
+        }
+
+        string path = file.Path.LocalPath;
+        await using var stream = File.Create(path);
+        _session.SaveTo(stream, path);
+        UpdateChrome();
+    }
+
+    public async Task ImportCsvAsync()
+    {
+        var files = await StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
+        {
+            Title = "Import CSV",
+            AllowMultiple = false,
+            FileTypeFilter = new[] { CsvFileType },
+        });
+
+        if (files.Count == 0)
+        {
+            return;
+        }
+
+        string text = await File.ReadAllTextAsync(files[0].Path.LocalPath);
+        var workbook = Cellestra.Core.Serialization.Csv.CsvReader.ReadToWorkbook(text);
+        _session = new WorkbookSession(workbook);
+        RewireSession();
+    }
+
+    public async Task ExportCsvAsync()
+    {
+        var file = await StorageProvider.SaveFilePickerAsync(new FilePickerSaveOptions
+        {
+            Title = "Export CSV",
+            DefaultExtension = "csv",
+            SuggestedFileName = _session.ActiveSheet.Name + ".csv",
+            FileTypeChoices = new[] { CsvFileType },
+        });
+
+        if (file is null)
+        {
+            return;
+        }
+
+        string csv = Cellestra.Core.Serialization.Csv.CsvWriter.Write(_session.Workbook, _session.ActiveSheet);
+        await File.WriteAllTextAsync(file.Path.LocalPath, csv);
+    }
+
+    public void Copy() => CopyToClipboard(cut: false);
+
+    public void Cut() => CopyToClipboard(cut: true);
+
+    public async void Paste()
+    {
+        var clipboard = Clipboard;
+        if (clipboard is null)
+        {
+            return;
+        }
+
+        string? text = await clipboard.TryGetTextAsync();
+        if (string.IsNullOrEmpty(text))
+        {
+            return;
+        }
+
+        PasteTsv(text);
+    }
+
+    public void ToggleRibbon()
+    {
+        // The ribbon is hidden by default (PRD §6); a full ribbon is a later addition.
+    }
+
+    public void ShowCommandPalette()
+    {
+        var items = AppCommands.All
+            .Where(c => c.IsEnabled(this))
+            .Select(c => new PaletteItem(c.Label, c.ShortcutText, () => c.Execute(this)))
+            .ToList();
+        ShowPalette("Run a command", items);
+    }
+
+    public void ShowSheetSwitcher()
+    {
+        var items = _session.Workbook.Worksheets
+            .Select(s => new PaletteItem(s.Name, string.Empty, () => { _session.SetActiveSheet(s); BuildSheetTabs(); Grid.Refresh(); }))
+            .ToList();
+        ShowPalette("Go to sheet", items);
+    }
+
+    public void AddSheet()
+    {
+        _session.AddSheet();
+        BuildSheetTabs();
+        Grid.Refresh();
+    }
+
+    public void ZoomBy(double delta)
+    {
+        Grid.Zoom += delta;
+        UpdateChrome();
+    }
+
+    public void ResetZoom()
+    {
+        Grid.Zoom = 1.0;
+        UpdateChrome();
+    }
+
+    // ---- Chrome -----------------------------------------------------------
+
+    private void RewireSession()
+    {
+        _session.Changed += (_, _) => { Grid.Refresh(); UpdateChrome(); };
+        _session.StructureChanged += (_, _) => { BuildSheetTabs(); Grid.Refresh(); UpdateChrome(); };
+        Grid.Attach(_session);
+        BuildSheetTabs();
+        UpdateChrome();
+        OnSelectionChanged();
+    }
+
+    private void OnSelectionChanged()
+    {
+        var address = new CellAddress(Selection.ActiveColumn, Selection.ActiveRow);
+        NameBox.Text = address.ToString();
+
+        var cell = _session.ActiveSheet.Find(Selection.ActiveRow, Selection.ActiveColumn);
+        FormulaInput.Text = cell is null ? string.Empty : (cell.IsFormula ? "=" + cell.Formula : cell.Value.ToInvariantString());
+
+        UpdateStatus();
+    }
+
+    private void UpdateChrome()
+    {
+        string name = _session.FilePath is null ? "Untitled" : Path.GetFileName(_session.FilePath);
+        Title = $"{(_session.IsModified ? "● " : string.Empty)}{name} — Cellestra";
+        StatusZoom.Text = $"{Grid.Zoom * 100:0}%";
+        StatusCalc.Text = _session.Workbook.Settings.CalculationMode == CalculationMode.Manual ? "Manual" : "Auto";
+    }
+
+    private void UpdateStatus()
+    {
+        var sheet = _session.ActiveSheet;
+        var range = Selection.Range;
+        StatusCell.Text = new CellAddress(Selection.ActiveColumn, Selection.ActiveRow).ToString();
+
+        int count = 0;
+        int numericCount = 0;
+        double sum = 0;
+        foreach (var (row, column) in range.Positions())
+        {
+            var value = sheet.GetValue(row, column);
+            if (value.IsEmpty)
+            {
+                continue;
+            }
+
+            count++;
+            if (value.IsNumber)
+            {
+                numericCount++;
+                sum += value.AsNumber;
+            }
+        }
+
+        if (numericCount > 0)
+        {
+            StatusStats.Text = $"Count: {count}    Sum: {sum:0.######}    Average: {sum / numericCount:0.######}";
+        }
+        else
+        {
+            StatusStats.Text = count > 0 ? $"Count: {count}" : string.Empty;
+        }
+    }
+
+    private void BuildSheetTabs()
+    {
+        SheetTabs.Children.Clear();
+        foreach (var sheet in _session.Workbook.Worksheets)
+        {
+            bool active = ReferenceEquals(sheet, _session.ActiveSheet);
+            var button = new Button
+            {
+                Content = sheet.Name,
+                Padding = new Thickness(10, 2),
+                Background = active ? Brushes.White : Brushes.Transparent,
+                FontWeight = active ? FontWeight.SemiBold : FontWeight.Normal,
+            };
+            var captured = sheet;
+            button.Click += (_, _) => { _session.SetActiveSheet(captured); BuildSheetTabs(); Grid.Refresh(); OnSelectionChanged(); };
+            SheetTabs.Children.Add(button);
+        }
+
+        var add = new Button { Content = "＋", Padding = new Thickness(8, 2) };
+        add.Click += (_, _) => AddSheet();
+        SheetTabs.Children.Add(add);
+    }
+
+    // ---- Formula bar / Name box ------------------------------------------
+
+    private void FormulaInputKeyDown(object? sender, KeyEventArgs e)
+    {
+        if (e.Key == Key.Return)
+        {
+            _session.Execute(EditCommands.SetInput(
+                _session.ActiveSheet.Name, Selection.ActiveRow, Selection.ActiveColumn,
+                FormulaInput.Text ?? string.Empty, _session.Workbook.Settings.EffectiveLocale));
+            Selection.MoveTo(Selection.ActiveRow + 1, Selection.ActiveColumn);
+            Grid.Focus();
+            e.Handled = true;
+        }
+        else if (e.Key == Key.Escape)
+        {
+            OnSelectionChanged();
+            Grid.Focus();
+        }
+    }
+
+    private void NameBoxKeyDown(object? sender, KeyEventArgs e)
+    {
+        if (e.Key != Key.Return)
+        {
+            return;
+        }
+
+        string text = NameBox.Text ?? string.Empty;
+        if (CellAddress.TryParse(text, out var address))
+        {
+            Selection.MoveTo(address.Row, address.Column);
+            Grid.Focus();
+        }
+        else if (_session.Workbook.FindNamedRange(text) is { } named)
+        {
+            Selection.SetRange(named.Target.Top, named.Target.Left, named.Target.Bottom, named.Target.Right);
+            Grid.Focus();
+        }
+
+        e.Handled = true;
+    }
+
+    // ---- Clipboard --------------------------------------------------------
+
+    private async void CopyToClipboard(bool cut)
+    {
+        var sheet = _session.ActiveSheet;
+        var range = Selection.Range;
+        var culture = _session.Workbook.Settings.EffectiveLocale;
+        var sb = new StringBuilder();
+
+        for (int row = range.Top; row <= range.Bottom; row++)
+        {
+            for (int column = range.Left; column <= range.Right; column++)
+            {
+                if (column > range.Left)
+                {
+                    sb.Append('\t');
+                }
+
+                var cell = sheet.Find(row, column);
+                if (cell is not null && !cell.Value.IsEmpty)
+                {
+                    sb.Append(NumberFormatter.Format(cell.Value, _session.Workbook.Styles.Get(cell.StyleId).NumberFormat, culture));
+                }
+            }
+
+            sb.Append('\n');
+        }
+
+        if (Clipboard is { } clipboard)
+        {
+            await clipboard.SetTextAsync(sb.ToString());
+        }
+
+        if (cut)
+        {
+            _session.Execute(EditCommands.ClearContents(sheet.Name, range));
+        }
+    }
+
+    private void PasteTsv(string text)
+    {
+        var lines = text.Replace("\r\n", "\n", StringComparison.Ordinal).TrimEnd('\n').Split('\n');
+        int rows = lines.Length;
+        int columns = lines.Max(l => l.Split('\t').Length);
+        var values = new CellValue[rows, columns];
+        var culture = _session.Workbook.Settings.EffectiveLocale;
+
+        for (int r = 0; r < rows; r++)
+        {
+            var fields = lines[r].Split('\t');
+            for (int c = 0; c < columns; c++)
+            {
+                string field = c < fields.Length ? fields[c] : string.Empty;
+                values[r, c] = field.Length == 0
+                    ? CellValue.Empty
+                    : (double.TryParse(field, NumberStyles.Any, culture, out double n) ? CellValue.Number(n) : CellValue.Text(field));
+            }
+        }
+
+        _session.Execute(EditCommands.SetBlock(_session.ActiveSheet.Name, Selection.ActiveRow, Selection.ActiveColumn, values));
+        Grid.Refresh();
+    }
+
+    // ---- Key bindings -----------------------------------------------------
+
+    private void RegisterKeyBindings()
+    {
+        foreach (var command in AppCommands.All)
+        {
+            if (command.Shortcut is null)
+            {
+                continue;
+            }
+
+            var captured = command;
+            KeyBindings.Add(new KeyBinding
+            {
+                Gesture = command.Shortcut,
+                Command = new RelayCommand(() => captured.Execute(this), () => captured.IsEnabled(this)),
+            });
+        }
+    }
+
+    // ---- Palette overlay --------------------------------------------------
+
+    private sealed record PaletteItem(string Label, string Detail, Action Run);
+
+    private void ShowPalette(string placeholder, IReadOnlyList<PaletteItem> items)
+    {
+        OverlayHost.Children.Clear();
+
+        var input = new TextBox { PlaceholderText = placeholder, Margin = new Thickness(0, 0, 0, 6) };
+        var list = new ListBox { MaxHeight = 320 };
+
+        void Populate(string query)
+        {
+            var filtered = items
+                .Select(i => (Item: i, Score: FuzzyMatcher.Score(i.Label, query)))
+                .Where(x => x.Score >= 0)
+                .OrderByDescending(x => x.Score)
+                .Select(x => x.Item)
+                .ToList();
+            list.ItemsSource = filtered.Select(i => string.IsNullOrEmpty(i.Detail) ? i.Label : $"{i.Label}    ({i.Detail})").ToList();
+            list.Tag = filtered;
+            if (filtered.Count > 0)
+            {
+                list.SelectedIndex = 0;
+            }
+        }
+
+        Populate(string.Empty);
+
+        void Run()
+        {
+            if (list.Tag is List<PaletteItem> filtered && list.SelectedIndex >= 0 && list.SelectedIndex < filtered.Count)
+            {
+                var chosen = filtered[list.SelectedIndex];
+                CloseOverlay();
+                chosen.Run();
+            }
+        }
+
+        input.TextChanged += (_, _) => Populate(input.Text ?? string.Empty);
+        input.KeyDown += (_, e) =>
+        {
+            switch (e.Key)
+            {
+                case Key.Escape: CloseOverlay(); break;
+                case Key.Return: Run(); break;
+                case Key.Down: list.SelectedIndex = Math.Min(list.SelectedIndex + 1, (list.ItemCount) - 1); break;
+                case Key.Up: list.SelectedIndex = Math.Max(list.SelectedIndex - 1, 0); break;
+            }
+        };
+        list.DoubleTapped += (_, _) => Run();
+
+        var box = new Border
+        {
+            Width = 520,
+            Background = Brushes.White,
+            CornerRadius = new CornerRadius(8),
+            Padding = new Thickness(10),
+            Margin = new Thickness(0, 80, 0, 0),
+            VerticalAlignment = VerticalAlignment.Top,
+            HorizontalAlignment = HorizontalAlignment.Center,
+            BoxShadow = new BoxShadows(new BoxShadow { Blur = 16, OffsetY = 4, Color = Color.FromArgb(0x40, 0, 0, 0) }),
+            Child = new StackPanel { Children = { input, list } },
+        };
+
+        OverlayHost.Children.Add(box);
+        OverlayHost.IsVisible = true;
+        OverlayHost.PointerPressed += OverlayBackgroundPressed;
+        input.Focus();
+    }
+
+    private void OverlayBackgroundPressed(object? sender, PointerPressedEventArgs e)
+    {
+        if (ReferenceEquals(e.Source, OverlayHost))
+        {
+            CloseOverlay();
+        }
+    }
+
+    private void CloseOverlay()
+    {
+        OverlayHost.PointerPressed -= OverlayBackgroundPressed;
+        OverlayHost.Children.Clear();
+        OverlayHost.IsVisible = false;
+        Grid.Focus();
+    }
+
+    private static readonly FilePickerFileType OdsFileType = new("OpenDocument Spreadsheet")
+    {
+        Patterns = new[] { "*.ods" },
+        MimeTypes = new[] { "application/vnd.oasis.opendocument.spreadsheet" },
+    };
+
+    private static readonly FilePickerFileType CsvFileType = new("CSV")
+    {
+        Patterns = new[] { "*.csv" },
+        MimeTypes = new[] { "text/csv" },
+    };
 }
