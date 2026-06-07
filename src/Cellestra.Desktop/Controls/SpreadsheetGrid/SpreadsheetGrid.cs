@@ -18,7 +18,7 @@ namespace Cellestra.Desktop.Controls.SpreadsheetGrid;
 /// from the active <see cref="Worksheet"/> — no per-cell view models — and draws only the
 /// visible cells. Handles selection, keyboard navigation, scrolling, and inline editing.
 /// </summary>
-public sealed class SpreadsheetGrid : Panel
+public sealed partial class SpreadsheetGrid : Panel
 {
     public const double HeaderWidth = 46;
     public const double HeaderHeight = 22;
@@ -49,6 +49,7 @@ public sealed class SpreadsheetGrid : Panel
         _surface = new Surface(this);
         Children.Add(_surface);        // draws the grid
         Children.Add(_editor);         // floats above for inline editing
+        InitChrome();                  // popup layer for filter/validation dropdowns
         Selection.Changed += (_, _) => Redraw();
         _editor.KeyDown += EditorKeyDown;
         _editor.LostFocus += (_, _) => CommitEdit(moveRow: 0, moveColumn: 0);
@@ -188,9 +189,11 @@ public sealed class SpreadsheetGrid : Panel
         var selectionFill = new SolidColorBrush(Color.FromArgb(0x22, 0x2A, 0x7D, 0xE1));
         var activePen = new Pen(new SolidColorBrush(Color.FromRgb(0x2A, 0x7D, 0xE1)), 2);
 
+        DrawTableBanding(context, sheet);
         DrawSelection(context, selectionFill);
         DrawCells(context, sheet, gridPen);
         DrawMerges(context, sheet, gridPen);
+        DrawTableChrome(context, sheet);
         DrawFreezeDividers(context);
         DrawHeaders(context, headerBrush, headerText, gridPen);
         DrawActiveOutline(context, activePen);
@@ -497,6 +500,12 @@ public sealed class SpreadsheetGrid : Panel
         }
 
         var point = e.GetPosition(this);
+        if (TryHandleChromeClick(point))
+        {
+            e.Handled = true;
+            return;
+        }
+
         if (!HitTest(point, out int row, out int column, out bool rowHeader, out bool columnHeader))
         {
             return;
@@ -765,11 +774,20 @@ public sealed class SpreadsheetGrid : Panel
             return;
         }
 
-        _editing = false;
-        _editor.IsVisible = false;
         string text = _editor.Text ?? string.Empty;
         int row = Selection.ActiveRow;
         int column = Selection.ActiveColumn;
+
+        // Enforce data validation before committing (PRD §8.13). A Stop rule rejects the edit.
+        if (!PassesValidation(row, column, text, out string? reason))
+        {
+            ShowValidationError(reason);
+            _editor.Focus();
+            return; // keep editing so the user can correct it
+        }
+
+        _editing = false;
+        _editor.IsVisible = false;
 
         _session.Execute(Cellestra.Core.Editing.EditCommands.SetInput(
             _session.ActiveSheet.Name, row, column, text, Culture));
@@ -795,6 +813,7 @@ public sealed class SpreadsheetGrid : Panel
     protected override Size ArrangeOverride(Size finalSize)
     {
         _surface.Arrange(new Rect(finalSize));
+        _popupLayer.Arrange(new Rect(finalSize));
         BuildVisible(finalSize);
         if (_editing && TryGetCellRect(Selection.ActiveRow, Selection.ActiveColumn, out var rect))
         {
