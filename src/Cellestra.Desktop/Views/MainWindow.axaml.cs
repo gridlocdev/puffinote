@@ -50,6 +50,7 @@ public partial class MainWindow : Window, IAppEnvironment
         Grid.SelectionChanged += (_, _) => OnSelectionChanged();
         Grid.ClipboardInvalidated += (_, _) => ClearClipboard();
         Grid.EnterPasteRequested += (_, _) => EnterPaste();
+        WireSelectionUndo();
         _session.Changed += (_, _) => { Grid.Refresh(); UpdateChrome(); };
         _session.StructureChanged += (_, _) => { BuildSheetTabs(); Grid.Refresh(); UpdateChrome(); };
 
@@ -513,10 +514,21 @@ public partial class MainWindow : Window, IAppEnvironment
     {
         _session.Changed += (_, _) => { Grid.Refresh(); UpdateChrome(); };
         _session.StructureChanged += (_, _) => { BuildSheetTabs(); Grid.Refresh(); UpdateChrome(); };
+        WireSelectionUndo();
         Grid.Attach(_session);
         BuildSheetTabs();
         UpdateChrome();
         OnSelectionChanged();
+    }
+
+    /// <summary>Let the session capture/restore the grid selection so undo returns there (#33).</summary>
+    private void WireSelectionUndo()
+    {
+        _session.SelectionProvider = () => new SelectionMemento(
+            Selection.Top, Selection.Left, Selection.Bottom, Selection.Right,
+            Selection.ActiveRow, Selection.ActiveColumn);
+        _session.SelectionRestorer = m =>
+            Selection.Restore(m.Top, m.Left, m.Bottom, m.Right, m.ActiveRow, m.ActiveColumn);
     }
 
     private void OnSelectionChanged()

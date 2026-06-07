@@ -21,6 +21,11 @@ public sealed class WorkbookSession
     private EditHistory _history;
     private OdsPackage? _sourcePackage;
 
+    // Selection mementos paralleling the undo/redo stacks, so undo restores the active cell and
+    // range to where the edit happened (#33). Provided by the UI, which owns the selection.
+    private readonly Stack<SelectionMemento> _undoSelections = new();
+    private readonly Stack<SelectionMemento> _redoSelections = new();
+
     public WorkbookSession(Workbook workbook)
     {
         _workbook = workbook;
@@ -80,8 +85,20 @@ public sealed class WorkbookSession
         StructureChanged?.Invoke(this, EventArgs.Empty);
     }
 
+    /// <summary>Captures the current selection; set by the UI so undo can restore it.</summary>
+    public Func<SelectionMemento>? SelectionProvider { get; set; }
+
+    /// <summary>Restores a selection memento; set by the UI so undo can restore it.</summary>
+    public Action<SelectionMemento>? SelectionRestorer { get; set; }
+
     public void Execute(IEditCommand command)
     {
+        if (SelectionProvider is { } capture)
+        {
+            _undoSelections.Push(capture());
+            _redoSelections.Clear();
+        }
+
         var result = _history.Execute(command);
         IsModified = true;
         ApplyResult(result);
@@ -94,8 +111,18 @@ public sealed class WorkbookSession
             return;
         }
 
+        if (SelectionProvider is { } capture)
+        {
+            _redoSelections.Push(capture());
+        }
+
         ApplyResult(_history.Undo());
         IsModified = true;
+
+        if (SelectionRestorer is { } restore && _undoSelections.Count > 0)
+        {
+            restore(_undoSelections.Pop()); // back to where the edit happened
+        }
     }
 
     public void Redo()
@@ -105,8 +132,18 @@ public sealed class WorkbookSession
             return;
         }
 
+        if (SelectionProvider is { } capture)
+        {
+            _undoSelections.Push(capture());
+        }
+
         ApplyResult(_history.Redo());
         IsModified = true;
+
+        if (SelectionRestorer is { } restore && _redoSelections.Count > 0)
+        {
+            restore(_redoSelections.Pop());
+        }
     }
 
     /// <summary>Force a full recalculation (F9).</summary>
@@ -253,6 +290,8 @@ public sealed class WorkbookSession
         _recalc.RebuildGraph();
         LoadRecalcMismatches = RecalculateAndCompareToCache(workbook);
         _history = new EditHistory(workbook);
+        _undoSelections.Clear();
+        _redoSelections.Clear();
         ActiveSheet = workbook.ActiveSheet;
         FilePath = path;
         IsModified = false;

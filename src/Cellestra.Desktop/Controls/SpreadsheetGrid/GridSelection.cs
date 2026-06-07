@@ -100,6 +100,20 @@ public sealed class GridSelection
         Changed?.Invoke(this, EventArgs.Empty);
     }
 
+    /// <summary>
+    /// Restore a single rectangle with its active cell at the given corner (used by undo, #33).
+    /// Clears any disjoint ranges.
+    /// </summary>
+    public void Restore(int top, int left, int bottom, int right, int activeRow, int activeColumn)
+    {
+        _committed.Clear();
+        _activeRow = ClampRow(activeRow);
+        _activeColumn = ClampColumn(activeColumn);
+        _anchorRow = ClampRow(activeRow == top ? bottom : top);
+        _anchorColumn = ClampColumn(activeColumn == left ? right : left);
+        Changed?.Invoke(this, EventArgs.Empty);
+    }
+
     private static int ClampRow(int row) => Math.Clamp(row, 0, SheetDimensions.MaxRows - 1);
 
     private static int ClampColumn(int column) => Math.Clamp(column, 0, SheetDimensions.MaxColumns - 1);
