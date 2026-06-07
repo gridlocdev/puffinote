@@ -275,7 +275,7 @@ public sealed partial class SpreadsheetGrid
         {
             if (list.SelectedItem is string value)
             {
-                _session.Execute(EditCommands.SetInput(_session.ActiveSheet.Name, Selection.ActiveRow, Selection.ActiveColumn, value, Culture));
+                _session.Execute(EditCommands.SetInput(_session.Workbook, _session.ActiveSheet.Name, Selection.ActiveRow, Selection.ActiveColumn, value, Culture));
                 ClosePopup();
                 Redraw();
             }

@@ -544,7 +544,7 @@ public partial class MainWindow : Window, IAppEnvironment
         if (e.Key == Key.Return)
         {
             _session.Execute(EditCommands.SetInput(
-                _session.ActiveSheet.Name, Selection.ActiveRow, Selection.ActiveColumn,
+                _session.Workbook, _session.ActiveSheet.Name, Selection.ActiveRow, Selection.ActiveColumn,
                 FormulaInput.Text ?? string.Empty, _session.Workbook.Settings.EffectiveLocale));
             Selection.MoveTo(Selection.ActiveRow + 1, Selection.ActiveColumn);
             Grid.Focus();

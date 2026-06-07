@@ -46,6 +46,22 @@ public class EditingTests
     }
 
     [Fact]
+    public void SetInput_stamps_a_date_format_on_a_typed_date()
+    {
+        var (workbook, history) = New();
+        var sheet = workbook.ActiveSheet;
+        var enUs = CultureInfo.GetCultureInfo("en-US");
+
+        history.Execute(EditCommands.SetInput(workbook, sheet.Name, 0, 0, "6/7/2026", enUs));
+
+        Assert.True(sheet.GetValue(0, 0).IsNumber); // stored as a serial
+        Assert.Equal(NumberFormatKind.Date, workbook.Styles.Get(sheet.Find(0, 0)!.StyleId).NumberFormat.Kind);
+
+        history.Undo();
+        Assert.True(sheet.GetValue(0, 0).IsEmpty); // value and the stamped style both revert
+    }
+
+    [Fact]
     public void Apply_style_toggles_bold_and_undoes()
     {
         var (workbook, history) = New();

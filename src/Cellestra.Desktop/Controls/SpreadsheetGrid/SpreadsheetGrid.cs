@@ -790,7 +790,7 @@ public sealed partial class SpreadsheetGrid : Panel
         _editor.IsVisible = false;
 
         _session.Execute(Cellestra.Core.Editing.EditCommands.SetInput(
-            _session.ActiveSheet.Name, row, column, text, Culture));
+            _session.Workbook, _session.ActiveSheet.Name, row, column, text, Culture));
 
         if (moveRow != 0 || moveColumn != 0)
         {

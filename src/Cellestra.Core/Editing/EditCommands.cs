@@ -21,7 +21,15 @@ public static class EditCommands
             ws => ws.SetFormula(row, column, formula, CellValue.Empty));
 
     /// <summary>Set a cell from raw user input, choosing formula vs value (PRD §5).</summary>
-    public static IEditCommand SetInput(string sheet, int row, int column, string text, CultureInfo culture)
+    public static IEditCommand SetInput(string sheet, int row, int column, string text, CultureInfo culture) =>
+        SetInput(null, sheet, row, column, text, culture);
+
+    /// <summary>
+    /// As <see cref="SetInput(string,int,int,string,CultureInfo)"/>, but with the workbook so a
+    /// typed date can also stamp a date number-format onto a still-General cell (so it displays
+    /// as a date, not a raw serial).
+    /// </summary>
+    public static IEditCommand SetInput(Workbook? workbook, string sheet, int row, int column, string text, CultureInfo culture)
     {
         var parsed = InputParser.Parse(text, culture);
         return new CellSnapshotCommand("Edit Cell", sheet, new[] { (row, column) }, ws =>
@@ -29,10 +37,21 @@ public static class EditCommands
             if (parsed.IsFormula)
             {
                 ws.SetFormula(row, column, parsed.Formula!, CellValue.Empty);
+                return;
             }
-            else
+
+            ws.SetValue(row, column, parsed.Value);
+
+            if (workbook is not null && parsed.SuggestedFormat is { } format)
             {
-                ws.SetValue(row, column, parsed.Value);
+                var cell = ws.GetOrCreate(row, column);
+                var style = workbook.Styles.Get(cell.StyleId);
+                if (style.NumberFormat.IsGeneral)
+                {
+                    cell.StyleId = workbook.Styles.Intern(style.WithNumberFormat(format));
+                }
+
+                ws.PruneIfBlank(row, column, cell);
             }
         });
     }
