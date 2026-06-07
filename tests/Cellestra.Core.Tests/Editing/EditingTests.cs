@@ -62,6 +62,29 @@ public class EditingTests
     }
 
     [Fact]
+    public void Inserted_row_inherits_formatting_from_the_row_above()
+    {
+        var (workbook, history) = New();
+        var sheet = workbook.ActiveSheet;
+
+        // Bold A2 (row index 1), then insert a blank row directly below it (at index 2).
+        history.Execute(EditCommands.ApplyStyle(workbook, sheet.Name, CellRange.Parse("A2"),
+            s => s.WithFont(s.Font.WithBold(true))));
+        int styledId = sheet.Find(1, 0)!.StyleId;
+        Assert.NotEqual(0, styledId);
+
+        history.Execute(new StructuralEditCommand(sheet.Name, StructuralAxis.Row, StructuralOperation.Insert, at: 2, count: 1));
+
+        var inherited = sheet.Find(2, 0);
+        Assert.NotNull(inherited);
+        Assert.Equal(styledId, inherited!.StyleId); // formatting carried down
+        Assert.True(inherited.Value.IsEmpty);       // but no value
+
+        history.Undo();
+        Assert.Null(sheet.Find(2, 0)); // the inherited styled cell is removed on undo
+    }
+
+    [Fact]
     public void Deleting_a_referenced_sheet_breaks_dependents_and_undoes()
     {
         var (workbook, history) = New();

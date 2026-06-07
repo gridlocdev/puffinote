@@ -97,15 +97,75 @@ public sealed class StructuralEditCommand : IEditCommand
             cells[key] = cell;
         }
 
+        var shiftedRows = rows ? ShiftMap(before.Rows) : new Dictionary<int, Row>(before.Rows);
+        var shiftedColumns = rows ? new Dictionary<int, Column>(before.Columns) : ShiftMap(before.Columns);
+
+        // Inserted rows/columns inherit the formatting of the line just before them (PRD §8.14):
+        // the row-wide/column-wide style plus the per-cell styles along that source line, with
+        // empty values. Inserting at the very top/left (_at == 0) has no source, so no inheritance.
+        if (_operation == StructuralOperation.Insert && _at > 0)
+        {
+            InheritFormatting(before, cells, shiftedRows, shiftedColumns, rows);
+        }
+
         return new Worksheet.State
         {
             Cells = cells,
-            Rows = rows ? ShiftMap(before.Rows) : new Dictionary<int, Row>(before.Rows),
-            Columns = rows ? new Dictionary<int, Column>(before.Columns) : ShiftMap(before.Columns),
+            Rows = shiftedRows,
+            Columns = shiftedColumns,
             Merges = ShiftMerges(before.Merges, rows),
             FrozenRows = before.FrozenRows,
             FrozenColumns = before.FrozenColumns,
         };
+    }
+
+    private void InheritFormatting(
+        Worksheet.State before,
+        Dictionary<(int, int), Cell> cells,
+        Dictionary<int, Row> shiftedRows,
+        Dictionary<int, Column> shiftedColumns,
+        bool rows)
+    {
+        int source = _at - 1;
+
+        // The line-wide default style (row-wide or column-wide).
+        if (rows)
+        {
+            if (before.Rows.TryGetValue(source, out var srcRow) && srcRow.StyleId != 0)
+            {
+                for (int r = _at; r < _at + _count; r++)
+                {
+                    shiftedRows[r] = new Row { StyleId = srcRow.StyleId };
+                }
+            }
+        }
+        else if (before.Columns.TryGetValue(source, out var srcColumn) && srcColumn.StyleId != 0)
+        {
+            for (int c = _at; c < _at + _count; c++)
+            {
+                shiftedColumns[c] = new Column { StyleId = srcColumn.StyleId };
+            }
+        }
+
+        // The per-cell styles along the source line, as empty styled cells.
+        foreach (var ((row, column), cell) in before.Cells)
+        {
+            int line = rows ? row : column;
+            if (line != source || cell.StyleId == 0)
+            {
+                continue;
+            }
+
+            int cross = rows ? column : row;
+            for (int i = _at; i < _at + _count; i++)
+            {
+                var key = rows ? (i, cross) : (cross, i);
+                if (!cells.ContainsKey(key))
+                {
+                    cells[key] = new Cell { StyleId = cell.StyleId };
+                }
+            }
+        }
     }
 
     private Dictionary<int, T> ShiftMap<T>(IReadOnlyDictionary<int, T> source)
