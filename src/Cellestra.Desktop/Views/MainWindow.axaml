@@ -6,10 +6,13 @@
         Width="1100" Height="720"
         MinWidth="640" MinHeight="400">
 
-    <Grid RowDefinitions="Auto,*,Auto,Auto">
+    <Grid RowDefinitions="Auto,Auto,*,Auto,Auto">
+
+        <!-- Ribbon (hidden by default, PRD §6) -->
+        <ContentControl x:Name="RibbonHost" Grid.Row="0" IsVisible="False" />
 
         <!-- Formula bar: Name Box, fx, formula input -->
-        <Border Grid.Row="0" Background="#FAFAFA" BorderBrush="#E0E0E0" BorderThickness="0,0,0,1" Padding="4">
+        <Border Grid.Row="1" Background="#FAFAFA" BorderBrush="#E0E0E0" BorderThickness="0,0,0,1" Padding="4">
             <DockPanel>
                 <TextBox x:Name="NameBox" Width="92" DockPanel.Dock="Left" PlaceholderText="A1"
                          VerticalContentAlignment="Center" />
@@ -20,15 +23,15 @@
         </Border>
 
         <!-- The custom grid -->
-        <grid:SpreadsheetGrid x:Name="Grid" Grid.Row="1" />
+        <grid:SpreadsheetGrid x:Name="Grid" Grid.Row="2" />
 
         <!-- Sheet tab strip -->
-        <Border Grid.Row="2" Background="#F4F4F4" BorderBrush="#E0E0E0" BorderThickness="0,1,0,0" Padding="4,2">
+        <Border Grid.Row="3" Background="#F4F4F4" BorderBrush="#E0E0E0" BorderThickness="0,1,0,0" Padding="4,2">
             <StackPanel x:Name="SheetTabs" Orientation="Horizontal" Spacing="2" />
         </Border>
 
         <!-- Status bar -->
-        <Border Grid.Row="3" Background="#FAFAFA" BorderBrush="#E0E0E0" BorderThickness="0,1,0,0" Padding="8,3">
+        <Border Grid.Row="4" Background="#FAFAFA" BorderBrush="#E0E0E0" BorderThickness="0,1,0,0" Padding="8,3">
             <DockPanel>
                 <TextBlock x:Name="StatusCell" DockPanel.Dock="Left" Width="120" VerticalAlignment="Center" />
                 <TextBlock x:Name="StatusZoom" DockPanel.Dock="Right" VerticalAlignment="Center" />
@@ -38,6 +41,6 @@
         </Border>
 
         <!-- Command palette / sheet switcher overlay -->
-        <Panel x:Name="OverlayHost" Grid.RowSpan="4" IsVisible="False" Background="#40000000" />
+        <Panel x:Name="OverlayHost" Grid.RowSpan="5" IsVisible="False" Background="#40000000" />
     </Grid>
 </Window>

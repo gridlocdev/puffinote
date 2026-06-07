@@ -235,7 +235,23 @@ public partial class MainWindow : Window, IAppEnvironment
 
     public void ToggleRibbon()
     {
-        // The ribbon is hidden by default (PRD §6); a full ribbon is a later addition.
+        RibbonHost.Content ??= new Controls.Ribbon.Ribbon(this);
+        RibbonHost.IsVisible = !RibbonHost.IsVisible;
+    }
+
+    /// <summary>Whether the ribbon is currently shown (persisted between sessions, PRD §6.1).</summary>
+    public bool IsRibbonVisible
+    {
+        get => RibbonHost.IsVisible;
+        set
+        {
+            if (value)
+            {
+                RibbonHost.Content ??= new Controls.Ribbon.Ribbon(this);
+            }
+
+            RibbonHost.IsVisible = value;
+        }
     }
 
     public void ShowCommandPalette()
