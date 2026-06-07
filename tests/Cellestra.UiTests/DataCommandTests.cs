@@ -51,6 +51,27 @@ public class DataCommandTests
     }
 
     [AvaloniaFact]
+    public void Create_table_over_existing_table_does_not_crash_or_add_a_second()
+    {
+        var window = new MainWindow();
+        window.Show();
+        IAppEnvironment env = window;
+        var sheet = env.Session.ActiveSheet;
+
+        sheet.SetValue(0, 0, CellValue.Text("H"));
+        sheet.SetValue(1, 0, CellValue.Number(1));
+        env.Selection.MoveTo(0, 0);
+        AppCommands.ById("data.createTable")!.Execute(env);
+        Assert.Single(sheet.Tables);
+
+        // Second invocation over the same cells must surface a message, not throw, and add nothing.
+        env.Selection.MoveTo(1, 0);
+        AppCommands.ById("data.createTable")!.Execute(env);
+        Assert.Single(sheet.Tables);
+        Assert.Equal("Table1", sheet.Tables[0].Name);
+    }
+
+    [AvaloniaFact]
     public void Toggle_filter_sets_and_clears_active_filter()
     {
         var window = new MainWindow();

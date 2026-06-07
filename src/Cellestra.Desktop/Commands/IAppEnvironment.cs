@@ -69,6 +69,9 @@ public interface IAppEnvironment
     /// <summary>Display the keyboard shortcuts reference.</summary>
     void ShowKeyboardShortcuts();
 
+    /// <summary>Show a non-fatal message dialog: a plain-language heading and what to do about it.</summary>
+    void ShowMessage(string heading, string message);
+
     /// <summary>True when a text field (cell editor, formula bar, name box, or dialog) holds keyboard focus.</summary>
     bool IsTextInputFocused { get; }
 }

@@ -497,6 +497,8 @@ public partial class MainWindow : Window, IAppEnvironment
 
     public void ShowKeyboardShortcuts() => _ = new KeyboardShortcutsDialog().ShowDialog(this);
 
+    public void ShowMessage(string heading, string message) => _ = new MessageDialog(heading, message).ShowDialog(this);
+
     /// <summary>A text field has focus when the focused element is a <see cref="TextBox"/> (cell editor, formula bar, name box, or a dialog field).</summary>
     public bool IsTextInputFocused => FocusManager?.GetFocusedElement() is TextBox;
 

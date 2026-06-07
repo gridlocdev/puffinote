@@ -208,6 +208,20 @@ public static class AppCommands
     private static void CreateTable(IAppEnvironment e)
     {
         var (sheet, range, header) = DataTarget(e);
+
+        // A cell may belong to only one table; AddTable throws on overlap. Catch that here and
+        // explain it instead of crashing (Nielsen heuristic #9 — recover from errors).
+        var existing = sheet.Tables.FirstOrDefault(t => t.Range.Intersects(range));
+        if (existing is not null)
+        {
+            e.ShowMessage(
+                "These cells are already in a table",
+                $"The selection overlaps the table “{existing.Name}”, and a cell can belong to only one table.\n\n" +
+                "To create another table, select cells outside any existing table first. " +
+                "To change this one, select a cell inside it and use Sort, Filter, or Remove Duplicates from the Data menu.");
+            return;
+        }
+
         string name = NextTableName(sheet);
         var table = new Cellestra.Core.Data.Table(name, range, header);
         e.Session.Execute(Cellestra.Core.Editing.DataEditCommands.CreateTable(sheet.Name, table));
