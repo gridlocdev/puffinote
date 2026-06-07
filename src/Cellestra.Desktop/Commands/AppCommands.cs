@@ -121,11 +121,25 @@ public static class AppCommands
 
     private static void SelectAll(IAppEnvironment e)
     {
-        var used = e.Session.ActiveSheet.GetUsedRange();
-        if (used is { } range)
+        // Expanding Select-All (#26): the first press selects the contiguous data region around
+        // the active cell; a second press (selection already at that region) selects the whole sheet.
+        var sheet = e.Session.ActiveSheet;
+        var selection = e.Selection;
+        var region = Cellestra.Core.Data.DataRegion.CurrentRegion(sheet, selection.ActiveRow, selection.ActiveColumn);
+
+        bool atRegion = selection.Top == region.Top && selection.Left == region.Left &&
+            selection.Bottom == region.Bottom && selection.Right == region.Right;
+
+        if (atRegion)
         {
-            e.Selection.SetRange(range.Top, range.Left, range.Bottom, range.Right);
+            selection.SetRange(0, 0, Cellestra.Core.Model.SheetDimensions.MaxRows - 1, Cellestra.Core.Model.SheetDimensions.MaxColumns - 1);
         }
+        else
+        {
+            selection.SetRange(region.Top, region.Left, region.Bottom, region.Right);
+        }
+
+        e.Refresh();
     }
 
     private static void ToggleFont(IAppEnvironment e, Func<Font, bool> get, Func<Font, bool, Font> set)
