@@ -49,6 +49,7 @@ public sealed class Workbook
 
     public Worksheet AddSheet(string name)
     {
+        SheetName.Validate(name);
         if (FindSheet(name) is not null)
         {
             throw new InvalidOperationException($"A worksheet named '{name}' already exists.");
@@ -59,6 +60,25 @@ public sealed class Workbook
         return sheet;
     }
 
+    /// <summary>
+    /// Rename a worksheet, enforcing the <see cref="SheetName"/> rules and uniqueness (a name
+    /// equal to the sheet's current one is a no-op and allowed). Throws on an invalid or
+    /// duplicate name so the UI can surface the reason.
+    /// </summary>
+    public void RenameSheet(Worksheet sheet, string newName)
+    {
+        ArgumentNullException.ThrowIfNull(sheet);
+        SheetName.Validate(newName);
+
+        var existing = FindSheet(newName);
+        if (existing is not null && !ReferenceEquals(existing, sheet))
+        {
+            throw new InvalidOperationException($"A worksheet named '{newName}' already exists.");
+        }
+
+        sheet.Name = newName;
+    }
+
     /// <summary>Add a worksheet with the next unused default name (Sheet2, Sheet3, …).</summary>
     public Worksheet AddSheet()
     {
@@ -66,9 +86,27 @@ public sealed class Workbook
         return AddSheet(name);
     }
 
+    /// <summary>
+    /// Add a sheet while loading a document: enforces uniqueness only, not the interactive
+    /// <see cref="SheetName"/> rules, so a foreign file with an unusual sheet name still opens
+    /// and round-trips verbatim (PRD §8.1).
+    /// </summary>
+    internal Worksheet AddSheetForLoad(string name)
+    {
+        if (FindSheet(name) is not null)
+        {
+            throw new InvalidOperationException($"A worksheet named '{name}' already exists.");
+        }
+
+        var sheet = new Worksheet(name);
+        _worksheets.Add(sheet);
+        return sheet;
+    }
+
     public void InsertSheet(int index, Worksheet sheet)
     {
         ArgumentNullException.ThrowIfNull(sheet);
+        SheetName.Validate(sheet.Name);
         if (FindSheet(sheet.Name) is not null)
         {
             throw new InvalidOperationException($"A worksheet named '{sheet.Name}' already exists.");

@@ -42,6 +42,54 @@ public class WorkbookModelTests
         Assert.Throws<InvalidOperationException>(() => { workbook.RemoveSheet(workbook.ActiveSheet); });
     }
 
+    [Theory]
+    [InlineData("")]
+    [InlineData("   ")]
+    [InlineData("Has/Slash")]
+    [InlineData("Bad:Colon")]
+    [InlineData("Q?")]
+    [InlineData("Star*")]
+    [InlineData("Bracket[1]")]
+    [InlineData("'quoted'")]
+    public void AddSheet_rejects_invalid_names(string name)
+    {
+        var workbook = Workbook.CreateNew();
+
+        Assert.Throws<ArgumentException>(() => workbook.AddSheet(name));
+    }
+
+    [Fact]
+    public void AddSheet_rejects_names_over_the_length_cap()
+    {
+        var workbook = Workbook.CreateNew();
+
+        Assert.Throws<ArgumentException>(() => workbook.AddSheet(new string('x', SheetName.MaxLength + 1)));
+    }
+
+    [Fact]
+    public void Names_with_spaces_are_allowed()
+    {
+        var workbook = Workbook.CreateNew();
+
+        Assert.Equal("My Sheet", workbook.AddSheet("My Sheet").Name);
+    }
+
+    [Fact]
+    public void RenameSheet_enforces_uniqueness_and_rules()
+    {
+        var workbook = Workbook.CreateNew();
+        var sheet1 = workbook.ActiveSheet;
+        workbook.AddSheet("Data");
+
+        Assert.Throws<InvalidOperationException>(() => workbook.RenameSheet(sheet1, "Data")); // duplicate
+        Assert.Throws<ArgumentException>(() => workbook.RenameSheet(sheet1, "no/slash"));     // invalid
+
+        workbook.RenameSheet(sheet1, "Summary");
+        Assert.Equal("Summary", sheet1.Name);
+        workbook.RenameSheet(sheet1, "Summary"); // renaming to its own name is a no-op
+        Assert.Equal("Summary", sheet1.Name);
+    }
+
     [Fact]
     public void Worksheet_stores_only_non_blank_cells()
     {

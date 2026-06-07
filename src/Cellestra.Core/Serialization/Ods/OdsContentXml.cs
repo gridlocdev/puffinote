@@ -552,7 +552,7 @@ public static class OdsContentXml
         Dictionary<string, string> _)
     {
         string name = table.Attribute(Table + "name")?.Value ?? workbook.AddSheet().Name;
-        var sheet = workbook.FindSheet(name) ?? workbook.AddSheet(name);
+        var sheet = workbook.FindSheet(name) ?? workbook.AddSheetForLoad(name);
 
         ReadColumns(table, sheet, columnWidths);
         ReadRows(table, sheet, styleLookup, rowHeights);
