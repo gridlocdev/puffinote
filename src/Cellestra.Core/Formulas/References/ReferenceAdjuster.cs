@@ -30,6 +30,32 @@ public static class ReferenceAdjuster
     public static Expr ForDeleteColumns(Expr expr, string homeSheet, string editedSheet, int atColumn, int count) =>
         AxisRewrite(expr, homeSheet, editedSheet, rowAxis: false, AxisEdit.Delete(atColumn, count));
 
+    /// <summary>
+    /// Adjust references when a row moves during a sort (PRD §8.11). A relative reference into the
+    /// sorted data rows shifts by the same delta the formula's own row moved, so per-row formulas
+    /// (e.g. <c>=B2*C2</c>) keep pointing at their row's data. Absolute (<c>$</c>) refs, cross-sheet
+    /// refs, and refs outside the sorted rows stay put.
+    /// </summary>
+    public static Expr ForSortMove(Expr expr, int rowDelta, int dataTop, int dataBottom)
+    {
+        CellAddress MapAddress(CellAddress address)
+        {
+            if (address.Sheet is not null || address.RowAbsolute || address.Row < dataTop || address.Row > dataBottom)
+            {
+                return address;
+            }
+
+            int newRow = address.Row + rowDelta;
+            return SheetDimensions.IsValidRow(newRow)
+                ? new CellAddress(address.Column, newRow, address.ColumnAbsolute, address.RowAbsolute, address.Sheet)
+                : address;
+        }
+
+        CellRange MapRange(CellRange range) => new(MapAddress(range.Start), MapAddress(range.End));
+
+        return Rewrite(expr, a => MapAddress(a), r => MapRange(r));
+    }
+
     // ---- Generic AST rewrite ---------------------------------------------
 
     private static Expr Rewrite(Expr expr, Func<CellAddress, CellAddress?> mapAddress, Func<CellRange, CellRange?> mapRange) =>

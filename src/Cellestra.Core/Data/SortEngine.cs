@@ -1,4 +1,7 @@
+using Cellestra.Core.Formulas;
 using Cellestra.Core.Formulas.Evaluation;
+using Cellestra.Core.Formulas.Parsing;
+using Cellestra.Core.Formulas.References;
 using Cellestra.Core.Model;
 using Cellestra.Core.Values;
 
@@ -11,9 +14,9 @@ public sealed record SortLevel(int Column, bool Ascending = true);
 public sealed record SortSpec(IReadOnlyList<SortLevel> Levels, bool HasHeader = true);
 
 /// <summary>
-/// Stable, multi-level range sort (PRD §8.11). Moves each row's cells and styles together;
-/// empty cells sort last. Header rows stay in place. (Reference adjustment on sort is a
-/// later refinement; v1 moves formula text with the row.)
+/// Stable, multi-level range sort (PRD §8.11). Moves each row's cells and styles together,
+/// adjusting in-range relative formula references for the move (via <c>ReferenceAdjuster</c>);
+/// empty cells sort last and header rows stay in place.
 /// </summary>
 public static class SortEngine
 {
@@ -45,14 +48,29 @@ public static class SortEngine
             .OrderBy(r => r, Comparer<RowSnapshot>.Create((a, b) => Compare(a, b, spec, range.Left)))
             .ToList();
 
-        // Write the rows back in sorted order.
+        // Write the rows back in sorted order, adjusting formula references for the move.
         for (int i = 0; i < ordered.Count; i++)
         {
             int targetRow = firstDataRow + i;
+            int rowDelta = targetRow - ordered[i].OriginalRow;
             for (int c = 0; c < range.ColumnCount; c++)
             {
-                sheet.PutCell(targetRow, range.Left + c, ordered[i].Cells[c]);
+                var cell = ordered[i].Cells[c];
+                if (cell is { IsFormula: true } && rowDelta != 0)
+                {
+                    AdjustFormula(cell, rowDelta, firstDataRow, range.Bottom);
+                }
+
+                sheet.PutCell(targetRow, range.Left + c, cell);
             }
+        }
+    }
+
+    private static void AdjustFormula(Cell cell, int rowDelta, int dataTop, int dataBottom)
+    {
+        if (Parser.TryParse(cell.Formula!, out var expr, out _) && expr is not null)
+        {
+            cell.Formula = FormulaWriter.Write(ReferenceAdjuster.ForSortMove(expr, rowDelta, dataTop, dataBottom));
         }
     }
 
