@@ -1,0 +1,22 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    The command-line surface: a third consumer of Cellestra.Core (alongside the
+    Desktop app), for CI/build pipelines. GOLDEN RULE: no Avalonia, no network.
+    Only Cellestra.Core + System.CommandLine.
+  -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <RootNamespace>Cellestra.Cli</RootNamespace>
+    <AssemblyName>cellestra</AssemblyName>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="System.CommandLine" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Cellestra.Core\Cellestra.Core.csproj" />
+  </ItemGroup>
+
+</Project>

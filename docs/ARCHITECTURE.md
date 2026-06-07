@@ -6,22 +6,24 @@
 
 ## 1. The big picture in one breath
 
-Cellestra is split into two parts:
+Cellestra is a **pure brain with two faces**:
 
 1. **A pure brain (`Cellestra.Core`)** — knows everything about spreadsheets (data, formulas, recalculation, reading/writing `.ods`) and **nothing** about windows, buttons, or drawing. No UI dependencies at all.
-2. **A face (`Cellestra.Desktop`)** — an Avalonia app that draws the grid, handles clicks and typing, and talks to the brain.
+2. **A graphical face (`Cellestra.Desktop`)** — an Avalonia app that draws the grid, handles clicks and typing, and talks to the brain.
+3. **A command-line face (`Cellestra.Cli`)** — the `cellestra` binary for scripts, CI, and build pipelines. No Avalonia, no network. Because it reuses the same brain, `convert` shares the serializers, `eval` shares the formula engine, and `functions` reads the very same `FunctionRegistry` that powers the app's autocomplete — so CLI output and GUI behaviour can't drift apart.
 
-This separation is the most important decision in the project. The hard, bug-prone logic lives where it can be tested instantly without a window, and a different face could go on the same brain later.
+This separation is the most important decision in the project. The hard, bug-prone logic lives where it can be tested instantly without a window, and *two* different faces ride the same brain.
 
 ```
-            ┌─────────────────────────────────────────┐
-            │            Cellestra.Desktop              │
-            │  macOS menu bar · Ribbon · Formula bar    │
-            │  Grid · Sheet tabs · Status bar           │
-            │   Views ↔ ViewModels ↔ Services           │
-            └───────────────────┬───────────────────────┘
-                                │  calls into
-                                ▼
+   ┌───────────────────────────────┐   ┌──────────────────────────────┐
+   │        Cellestra.Desktop       │   │         Cellestra.Cli         │
+   │  macOS menu bar · Ribbon ·     │   │  convert · cat · get · set ·  │
+   │  Formula bar · Grid · Tabs     │   │  recalc · eval · validate ·   │
+   │  Views ↔ ViewModels ↔ Services │   │  diff · functions · …         │
+   └───────────────┬────────────────┘   └───────────────┬──────────────┘
+                   │  calls into                         │  calls into
+                   └──────────────────┬──────────────────┘
+                                      ▼
             ┌─────────────────────────────────────────┐
             │             Cellestra.Core                │
             │  Workbook model · Formula engine ·        │
@@ -55,6 +57,7 @@ Exact versions live in **`Directory.Packages.props`** (central package managemen
 | xUnit | `xunit.v3` 3.x + `xunit.runner.visualstudio` |
 | BenchmarkDotNet | latest 0.x |
 | Microsoft.Extensions.DependencyInjection | latest matching `net10.0` |
+| `System.CommandLine` (CLI arg parsing — `Cellestra.Cli` only) | 2.0.8 |
 
 **Dependency policy:** prefer the .NET base class library. Adding any new package requires a stated reason in the PR. No JavaScript/npm tooling, ever. Icons ship as **local SVG assets** (Lucide), never fetched at runtime.
 
@@ -64,10 +67,11 @@ Exact versions live in **`Directory.Packages.props`** (central package managemen
 - **Rust (egui/Slint):** great, and Core *could* be Rust, but C#+Avalonia gives text editing, IME, and macOS integration for free.
 - **raylib:** lovely drawing, but no text editing/clipboard/accessibility — too much to rebuild.
 
-## 3. The two projects
+## 3. The projects
 
 - **`Cellestra.Core`** — a plain class library; everything that defines what a spreadsheet *is*. No Avalonia. Most tests point here.
 - **`Cellestra.Desktop`** — the Avalonia executable: window, menu bar, ribbon, grid, dialogs, and a thin **Services** layer bridging user actions to Core.
+- **`Cellestra.Cli`** — the `cellestra` console executable. References only Core + `System.CommandLine`; **no Avalonia, no network**. A thin `Infrastructure` layer (`Workspace` for load/recalc/atomic-save, `Cells`/`Output`/`Locale` helpers) mirrors what the Desktop `Services` layer does, so edits are atomic and **preserve unmodeled content verbatim** (§8.1) exactly like the app. One static method per command, composed in `CliApplication` so tests can drive the same surface in-process.
 
 ## 4. The data model (lives in Core)
 
@@ -287,6 +291,13 @@ cellestra/
 │       ├── Converters/ (CellValueToDisplayConverter, …)
 │       ├── Diagnostics/ (Logging.cs)
 │       └── DependencyInjection/ (ServiceCollectionExtensions.cs)
+│   │
+│   └── Cellestra.Cli/                       # the `cellestra` console binary — no Avalonia
+│       ├── Cellestra.Cli.csproj             # references Core + System.CommandLine only
+│       ├── Program.cs  CliApplication.cs     # composes the command tree
+│       ├── Infrastructure/ (Workspace.cs = load/recalc/atomic-save preserving §8.1,
+│       │     Cells.cs, Output.cs = table|csv|tsv|json, Locale.cs, CliException.cs)
+│       └── Commands/ (Options.cs, BaselineCommands.cs, ExtraCommands.cs)
 │
 ├── tests/
 │   ├── Cellestra.Core.Tests/             # pure-logic, xUnit v3
@@ -304,6 +315,9 @@ cellestra/
 │   │   ├── TestAppBuilder.cs             # [assembly: AvaloniaTestApplication(...)]
 │   │   ├── SpreadsheetGridTests.cs       # [AvaloniaFact]/[AvaloniaTheory]
 │   │   └── RibbonAndMenuTests.cs         # command-catalog wiring
+│   │
+│   ├── Cellestra.Cli.Tests/             # end-to-end CLI, in-process (CliApplication.Run)
+│   │   └── CliTests.cs                  # convert/get/set/validate/diff/functions + §8.1 preservation
 │   │
 │   └── Cellestra.Benchmarks/             # BenchmarkDotNet: recalc & I/O targets (PRD §3)
 │

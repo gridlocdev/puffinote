@@ -470,6 +470,30 @@ On open, cached values from the file are shown immediately. If calculation mode 
 - Dragging the fill handle, like **Fill Down / Fill Right**, performs a **copy-fill**: values and styles are copied and relative references shift per §8 (absolute `$` refs don't). 
 - v1 does **not** extrapolate series (e.g. `1, 2, 3…` or `Jan, Feb…`) from the fill handle — that's deferred (§9). To repeat a pattern, select the pattern cells before filling.
 
+### 8.16 Command-line interface (`cellestra`)
+
+A second face on the same brain (`ARCHITECTURE.md` §1): the `cellestra` binary makes Cellestra useful in scripts, CI, and build pipelines. It lives in `src/Cellestra.Cli/`, references only Core + `System.CommandLine`, and has **no Avalonia and no network**. Because it reuses the engine, `convert` shares the serializers, `eval` shares the formula engine, and `functions` reads the same `FunctionRegistry` as the app's autocomplete — so CLI output and GUI behaviour can't drift. Cell addressing matches the app (`Sheet1.B2`, ranges `Sheet1.A1:C10`; omit the sheet for the active/first one). No args, `-h`, or `--help` shows help.
+
+**Baseline (the genuinely useful core):**
+- `convert <in> <out>` — `.ods ⇄ CSV`, both directions (`--from/--to`, `--sheet`, `--delimiter`).
+- `cat <file>` — print a sheet/range (`--sheet`, `--range`, `--format`, `--formula`).
+- `get <file> <cell>` — one cell's value, or its source with `--formula`.
+- `set <file> <cell> <value>` — edit a cell and save (`--in-place` or `-o`).
+- `recalc <file>` — refresh the file's cached values (ideal in CI).
+- `sheets` / `info` — worksheet dimensions; workbook overview (sheets, named ranges, locale, cell counts).
+- `eval "<formula>"` — evaluate with no file at all (pure engine).
+- `validate <file>` — opens? any formula errors / `#REF!`s / circular refs? **non-zero exit on problems.**
+
+**Extras:** `new`, `import`/`export`, `stats`, `find` (`--regex`, `--in values|formulas`), `diff` (**non-zero exit on differences**), `functions` (list / describe — same metadata as the in-app reference), `add-sheet` / `rename-sheet` / `delete-sheet`, `apply <file> <edits.json>` (batch edits, `-` for stdin), `open` (hand off to the GUI), `completions <shell>`.
+
+**Conventions (these matter more than any single command):**
+- **Pipe-friendly:** `--format table|csv|tsv|json`; read commands default to stdout; `-` means stdin/stdout.
+- **Edits are explicit and safe:** nothing overwrites without `--in-place` or `-o`; all writes are **atomic** (temp file + rename, matching the app's save rule §8.7).
+- **Edits preserve unmodeled content:** a `set`/`recalc` on a file with charts/pivots keeps them **verbatim** (§8.1) — covered by a test.
+- **Exit codes are first-class:** `validate` and `diff` return non-zero so they slot into CI and pre-commit hooks.
+- **Same engine, same rules:** evaluation, OpenFormula translation, and locale handling are identical to the app, with a `--locale` override for scripting; `recalc` matches what the GUI would show.
+- **No network, ever.**
+
 ## 9. Non-goals (deliberately NOT in v1)
 
 Intentional exclusions, not oversights.
