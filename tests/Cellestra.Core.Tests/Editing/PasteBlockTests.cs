@@ -46,6 +46,54 @@ public class PasteBlockTests
     }
 
     [Fact]
+    public void Single_cell_fills_a_multi_cell_selection()
+    {
+        var (_, history, sheet) = New();
+        sheet.SetValue(0, 0, CellValue.Number(7)); // A1
+
+        var block = ClipboardBlock.Capture(sheet, CellRange.Parse("A1"), isCut: false);
+        history.Execute(new PasteBlockCommand(sheet.Name, CellRange.Parse("C1:D2"), block));
+
+        Assert.Equal(7, sheet.GetValue(0, 2).AsNumber);
+        Assert.Equal(7, sheet.GetValue(0, 3).AsNumber);
+        Assert.Equal(7, sheet.GetValue(1, 2).AsNumber);
+        Assert.Equal(7, sheet.GetValue(1, 3).AsNumber); // whole selection filled
+    }
+
+    [Fact]
+    public void Block_tiles_across_an_exact_multiple_selection()
+    {
+        var (_, history, sheet) = New();
+        sheet.SetValue(0, 0, CellValue.Number(1)); // A1
+        sheet.SetValue(0, 1, CellValue.Number(2)); // B1 — a 1x2 block
+
+        var block = ClipboardBlock.Capture(sheet, CellRange.Parse("A1:B1"), isCut: false);
+        history.Execute(new PasteBlockCommand(sheet.Name, CellRange.Parse("A3:D3"), block)); // 1x4 = two tiles
+
+        Assert.Equal(1, sheet.GetValue(2, 0).AsNumber);
+        Assert.Equal(2, sheet.GetValue(2, 1).AsNumber);
+        Assert.Equal(1, sheet.GetValue(2, 2).AsNumber); // tiled again
+        Assert.Equal(2, sheet.GetValue(2, 3).AsNumber);
+    }
+
+    [Fact]
+    public void Mismatched_shapes_paste_once_and_flag()
+    {
+        var (_, history, sheet) = New();
+        sheet.SetValue(0, 0, CellValue.Number(1));
+        sheet.SetValue(0, 1, CellValue.Number(2)); // 1x2 block
+
+        var block = ClipboardBlock.Capture(sheet, CellRange.Parse("A1:B1"), isCut: false);
+        var command = new PasteBlockCommand(sheet.Name, CellRange.Parse("A3:C3"), block); // 1x3, not a multiple
+        history.Execute(command);
+
+        Assert.True(command.ShapeMismatch);
+        Assert.Equal(1, sheet.GetValue(2, 0).AsNumber); // pasted once at the top-left
+        Assert.Equal(2, sheet.GetValue(2, 1).AsNumber);
+        Assert.True(sheet.GetValue(2, 2).IsEmpty);
+    }
+
+    [Fact]
     public void Paste_carries_the_style_index()
     {
         var (workbook, history, sheet) = New();

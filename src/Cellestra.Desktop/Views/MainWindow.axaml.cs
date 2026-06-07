@@ -331,10 +331,16 @@ public partial class MainWindow : Window, IAppEnvironment
         // (so an external copy in between falls back to plain text).
         if (_clipboard is { } block && text == _clipboardText)
         {
-            _session.Execute(new PasteBlockCommand(_session.ActiveSheet.Name, Selection.ActiveRow, Selection.ActiveColumn, block));
+            var command = new PasteBlockCommand(_session.ActiveSheet.Name, Selection.Range, block);
+            _session.Execute(command);
             if (block.IsCut)
             {
                 ClearClipboard(); // a cut is a move, consumed by its first paste
+            }
+
+            if (command.ShapeMismatch)
+            {
+                Title = "Cellestra — paste area is a different shape than the copied cells";
             }
 
             Grid.Refresh();
@@ -686,7 +692,7 @@ public partial class MainWindow : Window, IAppEnvironment
     {
         if (_clipboard is { } block)
         {
-            _session.Execute(new PasteBlockCommand(_session.ActiveSheet.Name, Selection.ActiveRow, Selection.ActiveColumn, block));
+            _session.Execute(new PasteBlockCommand(_session.ActiveSheet.Name, Selection.Range, block));
             ClearClipboard();
             Grid.Refresh();
         }

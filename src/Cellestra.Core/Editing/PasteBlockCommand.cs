@@ -7,29 +7,37 @@ using Cellestra.Core.Model;
 namespace Cellestra.Core.Editing;
 
 /// <summary>
-/// Pastes a <see cref="ClipboardBlock"/> (values, formulas, and styles) anchored at a destination
-/// cell. A copy shifts each pasted formula's relative references by the paste offset (Golden #8);
-/// a cut moves the cells with their formulas unchanged and clears the source as part of the same
+/// Pastes a <see cref="ClipboardBlock"/> (values, formulas, and styles) into a destination
+/// selection, placing it per <see cref="PastePlanner"/> (fill / anchor / tile / mismatch). A copy
+/// shifts each pasted formula's relative references by its offset from the source (Golden #8); a
+/// cut moves the cells with their formulas unchanged and clears the source as part of the same
 /// undoable step. Undo restores both the destination and (for a cut) the source.
 /// </summary>
 public sealed class PasteBlockCommand : IEditCommand
 {
     private readonly string _destSheet;
-    private readonly int _top;
-    private readonly int _left;
     private readonly ClipboardBlock _block;
+    private readonly PastePlan _plan;
     private Dictionary<(string Sheet, int Row, int Column), Cell?>? _before;
 
-    public PasteBlockCommand(string destSheet, int top, int left, ClipboardBlock block)
+    public PasteBlockCommand(string destSheet, CellRange destination, ClipboardBlock block)
     {
         _destSheet = destSheet;
-        _top = top;
-        _left = left;
         _block = block;
+        _plan = PastePlanner.Plan(block.Rows, block.Columns, destination, block.IsCut);
         Label = block.IsCut ? "Move" : "Paste";
     }
 
+    /// <summary>Anchor a paste at a single cell (e.g. Return-to-paste); equivalent to a 1×1 selection.</summary>
+    public PasteBlockCommand(string destSheet, int top, int left, ClipboardBlock block)
+        : this(destSheet, new CellRange(new CellAddress(left, top), new CellAddress(left, top)), block)
+    {
+    }
+
     public string Label { get; }
+
+    /// <summary>True when the block and selection sizes did not reconcile (pasted once; UI should warn).</summary>
+    public bool ShapeMismatch => _plan.ShapeMismatch;
 
     public EditResult Apply(Workbook workbook)
     {
@@ -48,12 +56,15 @@ public sealed class PasteBlockCommand : IEditCommand
             }
         }
 
-        // Snapshot the destination footprint.
-        for (int r = 0; r < _block.Rows; r++)
+        // Snapshot every destination footprint (deduped).
+        foreach (var (anchorRow, anchorColumn) in _plan.Anchors)
         {
-            for (int c = 0; c < _block.Columns; c++)
+            for (int r = 0; r < _block.Rows; r++)
             {
-                Snapshot(dest, _top + r, _left + c);
+                for (int c = 0; c < _block.Columns; c++)
+                {
+                    Snapshot(dest, anchorRow + r, anchorColumn + c);
+                }
             }
         }
 
@@ -66,18 +77,21 @@ public sealed class PasteBlockCommand : IEditCommand
             }
         }
 
-        // Write the destination from the captured block.
-        int rowDelta = _top - _block.SourceRange.Top;
-        int columnDelta = _left - _block.SourceRange.Left;
-        for (int r = 0; r < _block.Rows; r++)
+        // Write the block at each anchor; relative formula references shift by that anchor's offset.
+        foreach (var (anchorRow, anchorColumn) in _plan.Anchors)
         {
-            for (int c = 0; c < _block.Columns; c++)
+            int rowDelta = anchorRow - _block.SourceRange.Top;
+            int columnDelta = anchorColumn - _block.SourceRange.Left;
+            for (int r = 0; r < _block.Rows; r++)
             {
-                WriteCell(dest, _top + r, _left + c, _block.Cells[r, c], rowDelta, columnDelta);
+                for (int c = 0; c < _block.Columns; c++)
+                {
+                    WriteCell(dest, anchorRow + r, anchorColumn + c, _block.Cells[r, c], rowDelta, columnDelta);
+                }
             }
         }
 
-        return EditResult.Cells(_before.Keys.Select(k => new CellRef(k.Sheet, k.Row, k.Column)).ToList());
+        return EditResult.Cells(ChangedRefs());
     }
 
     public EditResult Undo(Workbook workbook)
@@ -92,8 +106,11 @@ public sealed class PasteBlockCommand : IEditCommand
             workbook.FindSheet(sheetName)?.PutCell(row, column, before?.Clone());
         }
 
-        return EditResult.Cells(_before.Keys.Select(k => new CellRef(k.Sheet, k.Row, k.Column)).ToList());
+        return EditResult.Cells(ChangedRefs());
     }
+
+    private List<CellRef> ChangedRefs() =>
+        _before!.Keys.Select(k => new CellRef(k.Sheet, k.Row, k.Column)).ToList();
 
     private void Snapshot(Worksheet sheet, int row, int column)
     {
@@ -116,8 +133,7 @@ public sealed class PasteBlockCommand : IEditCommand
         if (formula is not null && !_block.IsCut &&
             Parser.TryParse(formula, out var expr, out _) && expr is not null)
         {
-            // Copy-fill: relative references shift; absolute ($) refs stay put. A cut moves the
-            // formula verbatim.
+            // Copy-fill: relative references shift; absolute ($) refs stay put. A cut moves verbatim.
             formula = FormulaWriter.Write(ReferenceAdjuster.ForCopy(expr, columnDelta, rowDelta));
         }
 
