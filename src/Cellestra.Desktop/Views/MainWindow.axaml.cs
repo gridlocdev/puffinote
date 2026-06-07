@@ -42,9 +42,47 @@ public partial class MainWindow : Window, IAppEnvironment
         FxButton.Click += (_, _) => BeginEdit();
 
         RegisterKeyBindings();
+        BuildNativeMenu();
         BuildSheetTabs();
         UpdateChrome();
         OnSelectionChanged();
+    }
+
+    /// <summary>The native macOS menu bar — the complete command list (PRD §6.2), all from the one catalog.</summary>
+    private void BuildNativeMenu()
+    {
+        var menu = new NativeMenu();
+        menu.Items.Add(Submenu("File", "file.new", "file.open", "file.save", "file.saveAs", null, "file.importCsv", "file.exportCsv"));
+        menu.Items.Add(Submenu("Edit", "edit.undo", "edit.redo", null, "edit.cut", "edit.copy", "edit.paste", "edit.delete", "edit.selectAll"));
+        menu.Items.Add(Submenu("Format", "format.bold", "format.italic", "format.underline"));
+        menu.Items.Add(Submenu("Insert", "insert.rowsAbove", "insert.columnsLeft", "insert.sheet"));
+        menu.Items.Add(Submenu("Data", "formula.recalc"));
+        menu.Items.Add(Submenu("View", "view.commandPalette", "view.goToSheet", null, "view.zoomIn", "view.zoomOut", "view.actualSize", null, "view.showRibbon"));
+        NativeMenu.SetMenu(this, menu);
+    }
+
+    private NativeMenuItem Submenu(string header, params string?[] commandIds)
+    {
+        var submenu = new NativeMenu();
+        foreach (string? id in commandIds)
+        {
+            if (id is null)
+            {
+                submenu.Items.Add(new NativeMenuItemSeparator());
+                continue;
+            }
+
+            if (AppCommands.ById(id) is { } command)
+            {
+                submenu.Items.Add(new NativeMenuItem(command.Label)
+                {
+                    Gesture = command.Shortcut,
+                    Command = new RelayCommand(() => command.Execute(this), () => command.IsEnabled(this)),
+                });
+            }
+        }
+
+        return new NativeMenuItem(header) { Menu = submenu };
     }
 
     // ---- IAppEnvironment --------------------------------------------------
