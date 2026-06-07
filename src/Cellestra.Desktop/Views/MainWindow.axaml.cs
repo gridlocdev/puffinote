@@ -56,12 +56,12 @@ public partial class MainWindow : Window, IAppEnvironment
         var menu = new NativeMenu();
         menu.Items.Add(Submenu("File", "file.new", "file.open", "file.save", "file.saveAs", null, "file.importCsv", "file.exportCsv"));
         menu.Items.Add(Submenu("Edit", "edit.undo", "edit.redo", null, "edit.cut", "edit.copy", "edit.paste", "edit.delete", "edit.selectAll", null, "edit.find", "edit.findReplace"));
-        menu.Items.Add(Submenu("Format", "format.cells", null, "format.bold", "format.italic", "format.underline"));
+        menu.Items.Add(Submenu("Format", "format.cells", null, "format.bold", "format.italic", "format.underline", null, "format.merge"));
         menu.Items.Add(Submenu("Insert", "insert.rowsAbove", "insert.columnsLeft", "insert.sheet"));
         menu.Items.Add(Submenu("Data", "data.sortAsc", "data.sortDesc", "data.customSort", null,
             "data.toggleFilter", "data.clearFilter", null, "data.createTable", "data.removeDuplicates",
             "data.textToColumns", "data.validation", null, "formula.recalc"));
-        menu.Items.Add(Submenu("View", "view.commandPalette", "view.goToSheet", null, "view.zoomIn", "view.zoomOut", "view.actualSize", null, "view.showRibbon"));
+        menu.Items.Add(Submenu("View", "view.commandPalette", "view.goToSheet", null, "view.zoomIn", "view.zoomOut", "view.actualSize", null, "view.freezePanes", "view.showRibbon"));
         NativeMenu.SetMenu(this, menu);
     }
 
@@ -365,6 +365,12 @@ public partial class MainWindow : Window, IAppEnvironment
         _findReplace = new FindReplaceDialog(this, replace);
         _findReplace.Closed += (_, _) => _findReplace = null;
         _findReplace.Show(this);
+    }
+
+    public void ToggleFreezePanes()
+    {
+        Grid.ToggleFreezePanes();
+        Refresh();
     }
 
     public async void ShowFormatCellsDialog()

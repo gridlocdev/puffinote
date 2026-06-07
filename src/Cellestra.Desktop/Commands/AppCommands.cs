@@ -85,7 +85,30 @@ public static class AppCommands
         new("view.zoomOut", "Zoom Out", e => e.ZoomBy(-0.1), "zoom-out", new KeyGesture(Key.OemMinus, Cmd)),
         new("view.actualSize", "Actual Size", e => e.ResetZoom(), "zoom-reset", new KeyGesture(Key.D0, Cmd)),
         new("view.showRibbon", "Show Ribbon", e => e.ToggleRibbon(), "chevron-up", new KeyGesture(Key.R, CmdAlt)),
+        new("view.freezePanes", "Freeze Panes", e => e.ToggleFreezePanes(), "layout-grid"),
+
+        // Insert (merge)
+        new("format.merge", "Merge Cells", MergeCells, "table-merge"),
     };
+
+    private static void MergeCells(IAppEnvironment e)
+    {
+        var sheet = e.Session.ActiveSheet;
+        if (e.Selection.IsSingleCell)
+        {
+            // Toggle: unmerge if the active cell is in a merge.
+            if (sheet.FindMerge(e.Selection.ActiveRow, e.Selection.ActiveColumn) is not null)
+            {
+                e.Session.Execute(Cellestra.Core.Editing.EditCommands.UnmergeCells(sheet.Name, e.Selection.ActiveRow, e.Selection.ActiveColumn));
+                e.Refresh();
+            }
+
+            return;
+        }
+
+        e.Session.Execute(Cellestra.Core.Editing.EditCommands.MergeCells(sheet.Name, e.Selection.Range));
+        e.Refresh();
+    }
 
     // ---- Command implementations -----------------------------------------
 

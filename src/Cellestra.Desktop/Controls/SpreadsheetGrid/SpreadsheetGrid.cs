@@ -101,6 +101,9 @@ public sealed class SpreadsheetGrid : Panel
 
     // ---- Layout -----------------------------------------------------------
 
+    private double _frozenRight = HeaderWidth;
+    private double _frozenBottom = HeaderHeight;
+
     private void BuildVisible(Size bounds)
     {
         _visibleColumns.Clear();
@@ -111,8 +114,25 @@ public sealed class SpreadsheetGrid : Panel
             return;
         }
 
+        int frozenColumns = sheet.FrozenColumns;
+        int frozenRows = sheet.FrozenRows;
+
+        // Frozen columns are always shown, pinned just right of the row header.
         double x = HeaderWidth;
-        for (int col = _scrollColumn; col < SheetDimensions.MaxColumns && x < bounds.Width; col++)
+        for (int col = 0; col < frozenColumns && x < bounds.Width; col++)
+        {
+            if (sheet.IsColumnHidden(col))
+            {
+                continue;
+            }
+
+            double w = sheet.GetColumnWidth(col) * _zoom;
+            _visibleColumns.Add((col, x, w));
+            x += w;
+        }
+
+        _frozenRight = x;
+        for (int col = Math.Max(_scrollColumn, frozenColumns); col < SheetDimensions.MaxColumns && x < bounds.Width; col++)
         {
             if (sheet.IsColumnHidden(col))
             {
@@ -125,7 +145,20 @@ public sealed class SpreadsheetGrid : Panel
         }
 
         double y = HeaderHeight;
-        for (int row = _scrollRow; row < SheetDimensions.MaxRows && y < bounds.Height; row++)
+        for (int row = 0; row < frozenRows && y < bounds.Height; row++)
+        {
+            if (sheet.IsRowHidden(row))
+            {
+                continue;
+            }
+
+            double h = sheet.GetRowHeight(row) * _zoom;
+            _visibleRows.Add((row, y, h));
+            y += h;
+        }
+
+        _frozenBottom = y;
+        for (int row = Math.Max(_scrollRow, frozenRows); row < SheetDimensions.MaxRows && y < bounds.Height; row++)
         {
             if (sheet.IsRowHidden(row))
             {
@@ -157,6 +190,8 @@ public sealed class SpreadsheetGrid : Panel
 
         DrawSelection(context, selectionFill);
         DrawCells(context, sheet, gridPen);
+        DrawMerges(context, sheet, gridPen);
+        DrawFreezeDividers(context);
         DrawHeaders(context, headerBrush, headerText, gridPen);
         DrawActiveOutline(context, activePen);
     }
@@ -167,6 +202,11 @@ public sealed class SpreadsheetGrid : Panel
         {
             foreach (var (col, x, w) in _visibleColumns)
             {
+                if (sheet.FindMerge(row, col) is not null)
+                {
+                    continue; // merged regions are painted once, in DrawMerges
+                }
+
                 var rect = new Rect(x, y, w, h);
                 context.DrawRectangle(null, gridPen, rect);
 
@@ -179,6 +219,77 @@ public sealed class SpreadsheetGrid : Panel
                 DrawCellContent(context, sheet, cell, rect);
             }
         }
+    }
+
+    private void DrawMerges(DrawingContext context, Worksheet sheet, Pen gridPen)
+    {
+        foreach (var region in sheet.MergedRegions)
+        {
+            if (!TryGetRegionRect(region.Range.Top, region.Range.Left, region.Range.Bottom, region.Range.Right, out var rect))
+            {
+                continue;
+            }
+
+            context.FillRectangle(Brushes.White, rect);
+            context.DrawRectangle(null, gridPen, rect);
+
+            var anchor = sheet.Find(region.Range.Top, region.Range.Left);
+            if (anchor is not null && !anchor.Value.IsEmpty)
+            {
+                DrawCellContent(context, sheet, anchor, rect);
+            }
+        }
+    }
+
+    private void DrawFreezeDividers(DrawingContext context)
+    {
+        var sheet = Sheet;
+        if (sheet is null)
+        {
+            return;
+        }
+
+        var pen = new Pen(new SolidColorBrush(Color.FromRgb(0x9A, 0x9A, 0x9A)), 1.5);
+        if (sheet.FrozenColumns > 0 && _frozenRight > HeaderWidth)
+        {
+            context.DrawLine(pen, new Point(_frozenRight, 0), new Point(_frozenRight, Bounds.Height));
+        }
+
+        if (sheet.FrozenRows > 0 && _frozenBottom > HeaderHeight)
+        {
+            context.DrawLine(pen, new Point(0, _frozenBottom), new Point(Bounds.Width, _frozenBottom));
+        }
+    }
+
+    private bool TryGetRegionRect(int top, int left, int bottom, int right, out Rect rect)
+    {
+        double minX = double.MaxValue, maxX = double.MinValue, minY = double.MaxValue, maxY = double.MinValue;
+        foreach (var (col, x, w) in _visibleColumns)
+        {
+            if (col >= left && col <= right)
+            {
+                minX = Math.Min(minX, x);
+                maxX = Math.Max(maxX, x + w);
+            }
+        }
+
+        foreach (var (row, y, h) in _visibleRows)
+        {
+            if (row >= top && row <= bottom)
+            {
+                minY = Math.Min(minY, y);
+                maxY = Math.Max(maxY, y + h);
+            }
+        }
+
+        if (minX > maxX || minY > maxY)
+        {
+            rect = default;
+            return false;
+        }
+
+        rect = new Rect(minX, minY, maxX - minX, maxY - minY);
+        return true;
     }
 
     private void DrawCellContent(DrawingContext context, Worksheet sheet, Cell cell, Rect rect)
@@ -542,25 +653,58 @@ public sealed class SpreadsheetGrid : Panel
 
     private void EnsureVisible(int row, int column)
     {
-        if (row < _scrollRow)
+        var sheet = Sheet;
+        int frozenRows = sheet?.FrozenRows ?? 0;
+        int frozenColumns = sheet?.FrozenColumns ?? 0;
+
+        // Frozen lines are always on screen; only scroll for cells beyond them.
+        if (row >= frozenRows)
         {
-            _scrollRow = row;
+            if (row < _scrollRow)
+            {
+                _scrollRow = row;
+            }
+            else if (_visibleRows.Count > 0 && row > _visibleRows[^1].Index)
+            {
+                _scrollRow += row - _visibleRows[^1].Index;
+            }
         }
 
-        if (column < _scrollColumn)
+        if (column >= frozenColumns)
         {
-            _scrollColumn = column;
+            if (column < _scrollColumn)
+            {
+                _scrollColumn = column;
+            }
+            else if (_visibleColumns.Count > 0 && column > _visibleColumns[^1].Index)
+            {
+                _scrollColumn += column - _visibleColumns[^1].Index;
+            }
         }
 
-        // Scroll down/right if the active cell fell past the last visible line.
-        if (_visibleRows.Count > 0 && row > _visibleRows[^1].Index)
+        _scrollRow = Math.Max(_scrollRow, frozenRows);
+        _scrollColumn = Math.Max(_scrollColumn, frozenColumns);
+        Redraw();
+    }
+
+    /// <summary>Freeze rows above and columns left of the active cell (or unfreeze if already frozen).</summary>
+    public void ToggleFreezePanes()
+    {
+        var sheet = Sheet;
+        if (sheet is null)
         {
-            _scrollRow += row - _visibleRows[^1].Index;
+            return;
         }
 
-        if (_visibleColumns.Count > 0 && column > _visibleColumns[^1].Index)
+        if (sheet.FrozenRows > 0 || sheet.FrozenColumns > 0)
         {
-            _scrollColumn += column - _visibleColumns[^1].Index;
+            sheet.FrozenRows = 0;
+            sheet.FrozenColumns = 0;
+        }
+        else
+        {
+            sheet.FrozenRows = Selection.ActiveRow;
+            sheet.FrozenColumns = Selection.ActiveColumn;
         }
 
         Redraw();

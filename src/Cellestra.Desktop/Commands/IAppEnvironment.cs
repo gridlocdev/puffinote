@@ -63,4 +63,6 @@ public interface IAppEnvironment
     void ShowFindReplace(bool replace);
 
     void ShowFormatCellsDialog();
+
+    void ToggleFreezePanes();
 }
