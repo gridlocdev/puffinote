@@ -60,13 +60,38 @@ These are common places to improvise — don't. The spec is fixed:
 dotnet restore
 dotnet build
 dotnet run    --project src/Cellestra.Desktop      # launch the app
+dotnet run    --project src/Cellestra.Cli -- <args>  # the cellestra CLI (see below)
 dotnet test                                          # all tests
 dotnet test tests/Cellestra.Core.Tests               # fast, no UI
+dotnet test tests/Cellestra.Cli.Tests                # end-to-end CLI, in-process
 dotnet test tests/Cellestra.UiTests                  # headless Avalonia (xUnit v3)
 ./build/package-mac.sh                                # notarized .app bundle
 ```
 
 **Definition of done for any task:** `dotnet build` is clean (no new warnings), `dotnet test` is green, and if you touched serialization, the `.ods` round-trip *and* unknown-content-preservation tests pass.
+
+## Debugging with the `cellestra` CLI
+
+`src/Cellestra.Cli/` is a **third consumer of `Cellestra.Core`** (no Avalonia, no network) — the same brain as the app. Reach for it to inspect a workbook, check the engine, or diff a serialization change **without launching the GUI** (which you usually can't headlessly). Because it reuses the engine, what it prints is what the app would compute. Full spec: **PRD §8.16**; design: **ARCHITECTURE §1/§3**.
+
+Run it via `dotnet run --project src/Cellestra.Cli -- <command>`, or build once and call the binary at `src/Cellestra.Cli/bin/Debug/net10.0/cellestra`. Addressing matches the app (`Sheet1.B2`, ranges `Sheet1.A1:C10`; omit the sheet for the active/first one). No args, `-h`, or `--help` lists everything.
+
+```bash
+cellestra cat budget.ods --sheet Q1 --range A1:D20    # see a sheet (table|csv|tsv|json)
+cellestra get budget.ods Sheet1.B7                     # one value …
+cellestra get budget.ods Sheet1.B7 --formula           # … or its formula source
+cellestra eval "=ROUND(355/113, 4)"                    # exercise the engine, no file
+cellestra sheets budget.ods                            # worksheet names + used dims
+cellestra info budget.ods                              # sheets, named ranges, locale, cell counts
+cellestra functions VLOOKUP                            # signature/args/example from FunctionRegistry
+cellestra validate budget.ods                          # opens? formula/#REF!/circular errors? (exit≠0 on problems)
+cellestra recalc budget.ods --in-place                 # refresh cached values like the GUI would
+cellestra diff before.ods after.ods                    # value/structure diff — IDEAL for round-trip debugging (exit≠0 if differ)
+```
+
+`diff` and `validate` are the high-leverage ones when debugging serialization or the formula engine: `validate` flags `#REF!`/circular/eval errors with a non-zero exit, and `diff` shows exactly which cells changed across an open→save→reopen (where Git only sees a binary blob).
+
+CLI conventions that matter while debugging: **reads go to stdout**; `--format table|csv|tsv|json` and `-` for stdin/stdout; **edits never overwrite without `--in-place` or `-o`** and are **atomic** (temp + rename); **edits preserve unmodeled content verbatim** (Golden Rule #7 / §8.1) — there's a CLI test that proves a chart survives a `set`; **`--locale` overrides** parsing/formatting for reproducible output. User errors print a clean `cellestra: …` line with exit 1; a stack trace means a real bug.
 
 ## Where things go
 
@@ -74,7 +99,8 @@ Authoritative tree: **[ARCHITECTURE.md §12](docs/ARCHITECTURE.md#12-folder-stru
 
 - **Spreadsheet logic** → `src/Cellestra.Core/`.
 - **UI** → `src/Cellestra.Desktop/` (Commands, Menu, Controls incl. `Ribbon` and `SpreadsheetGrid`, Views, ViewModels, Services).
-- **Tests** → `tests/Cellestra.Core.Tests/`, `tests/Cellestra.UiTests/`, `tests/Cellestra.Benchmarks/`.
+- **CLI** → `src/Cellestra.Cli/` (`Infrastructure/` + `Commands/`; references only Core + `System.CommandLine`, no Avalonia).
+- **Tests** → `tests/Cellestra.Core.Tests/`, `tests/Cellestra.UiTests/`, `tests/Cellestra.Cli.Tests/`, `tests/Cellestra.Benchmarks/`.
 - Don't invent new top-level folders; extend the existing structure. If a new home seems necessary, note it and ask.
 
 ## Conventions
