@@ -198,6 +198,8 @@ public sealed partial class SpreadsheetGrid : Panel
         DrawHeaders(context, headerBrush, headerText, gridPen);
         DrawActiveOutline(context, activePen);
         DrawMarquee(context);
+        DrawFillPreview(context);
+        DrawFillHandle(context);
     }
 
     private void DrawCells(DrawingContext context, Worksheet sheet, Pen gridPen)
@@ -507,6 +509,23 @@ public sealed partial class SpreadsheetGrid : Panel
             return;
         }
 
+        // The fill handle takes precedence over cell selection at the selection's bottom-right.
+        if (TryGetFillHandleRect(out var handle) && handle.Contains(point))
+        {
+            if (e.ClickCount == 2)
+            {
+                FillDownToAdjacent();
+            }
+            else
+            {
+                TryBeginFill(point);
+                e.Pointer.Capture(this);
+            }
+
+            e.Handled = true;
+            return;
+        }
+
         if (!HitTest(point, out int row, out int column, out bool rowHeader, out bool columnHeader))
         {
             return;
@@ -545,6 +564,12 @@ public sealed partial class SpreadsheetGrid : Panel
     protected override void OnPointerMoved(PointerEventArgs e)
     {
         base.OnPointerMoved(e);
+        if (_filling)
+        {
+            UpdateFill(e.GetPosition(this));
+            return;
+        }
+
         if (!_selecting)
         {
             return;
@@ -560,6 +585,11 @@ public sealed partial class SpreadsheetGrid : Panel
     protected override void OnPointerReleased(PointerReleasedEventArgs e)
     {
         base.OnPointerReleased(e);
+        if (_filling)
+        {
+            CommitFill();
+        }
+
         _selecting = false;
         e.Pointer.Capture(null);
     }
