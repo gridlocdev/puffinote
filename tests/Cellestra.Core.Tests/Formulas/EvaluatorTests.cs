@@ -14,6 +14,9 @@ public class EvaluatorTests
     [InlineData("2^10", 1024)]
     [InlineData("2^3^2", 64)]      // left-associative
     [InlineData("-5", -5)]
+    [InlineData("-2^2", -4)]       // unary minus binds looser than ^ (Excel/Calc: -(2^2))
+    [InlineData("(-2)^2", 4)]      // explicit parens flip it back
+    [InlineData("-2^2*2", -8)]     // = -((2^2)*2)
     [InlineData("50%", 0.5)]
     [InlineData("(1+2)*3", 9)]
     [InlineData("\"5\"+3", 8)]      // text coerces in arithmetic

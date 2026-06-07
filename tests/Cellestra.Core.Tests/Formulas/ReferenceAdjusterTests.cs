@@ -57,6 +57,23 @@ public class ReferenceAdjusterTests
         var adjusted = ReferenceAdjuster.ForInsertColumns(Parser.Parse("C1"), "Sheet1", "Sheet1", atColumn: 1, count: 1);
         Assert.Equal("D1", Write(adjusted));
     }
+
+    [Fact]
+    public void Insert_inside_a_range_grows_it()
+    {
+        // SUM(A1:A5): inserting a row at the last covered row (index 4 = A5) grows the range.
+        var adjusted = ReferenceAdjuster.ForInsertRows(Parser.Parse("SUM(A1:A5)"), "Sheet1", "Sheet1", atRow: 4, count: 1);
+        Assert.Equal("SUM(A1:A6)", Write(adjusted));
+    }
+
+    [Fact]
+    public void Insert_just_past_a_range_does_not_grow_it()
+    {
+        // Inserting at the row immediately after the range (index 5, one past A5) leaves it alone —
+        // the boundary edge does not expand.
+        var adjusted = ReferenceAdjuster.ForInsertRows(Parser.Parse("SUM(A1:A5)"), "Sheet1", "Sheet1", atRow: 5, count: 1);
+        Assert.Equal("SUM(A1:A5)", Write(adjusted));
+    }
 }
 
 public class FormulaWriterTests
@@ -68,6 +85,10 @@ public class FormulaWriterTests
     [InlineData("1-(2-3)", "1-(2-3)")]
     [InlineData("1-2+3", "1-2+3")]
     [InlineData("-A1%", "-A1%")]
+    [InlineData("-2^2", "-2^2")]        // unary minus looser than ^; no parens needed
+    [InlineData("(-2)^2", "(-2)^2")]    // parens preserved — changes meaning
+    [InlineData("2^-3", "2^(-3)")]      // sign on the exponent (writer parenthesizes uniformly)
+    [InlineData("-2*3", "-2*3")]
     public void Round_trips_with_minimal_parens(string formula, string expected)
     {
         Assert.Equal(expected, FormulaWriter.Write(Parser.Parse(formula)));

@@ -35,8 +35,8 @@ public static class FormulaWriter
 
     private static string RenderUnary(UnaryExpr unary) => unary.Operator switch
     {
-        UnaryOperator.Negate => "-" + WithParens(unary.Operand, 6),
-        UnaryOperator.Plus => "+" + WithParens(unary.Operand, 6),
+        UnaryOperator.Negate => "-" + WithParens(unary.Operand, 5),
+        UnaryOperator.Plus => "+" + WithParens(unary.Operand, 5),
         UnaryOperator.Percent => WithParens(unary.Operand, 7) + "%",
         _ => Render(unary.Operand),
     };
@@ -85,10 +85,12 @@ public static class FormulaWriter
             BinaryOperator.Concat => 2,
             BinaryOperator.Add or BinaryOperator.Subtract => 3,
             BinaryOperator.Multiply or BinaryOperator.Divide => 4,
-            BinaryOperator.Power => 5,
+            BinaryOperator.Power => 6,
             _ => 1,
         },
-        UnaryExpr u => u.Operator == UnaryOperator.Percent ? 7 : 6,
+        // Unary +/- binds looser than ^ (precedence 5 < Power's 6) so -2^2 round-trips
+        // without spurious parens; percent (postfix) binds tighter than everything.
+        UnaryExpr u => u.Operator == UnaryOperator.Percent ? 7 : 5,
         _ => 8,
     };
 

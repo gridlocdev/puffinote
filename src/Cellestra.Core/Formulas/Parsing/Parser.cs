@@ -125,24 +125,11 @@ public sealed class Parser
 
     private Expr ParseMulDiv()
     {
-        var left = ParsePower();
+        var left = ParseUnary();
         while (Current.Type is TokenType.Star or TokenType.Slash)
         {
             var op = Advance().Type == TokenType.Star ? BinaryOperator.Multiply : BinaryOperator.Divide;
-            left = new BinaryExpr(op, left, ParsePower());
-        }
-
-        return left;
-    }
-
-    private Expr ParsePower()
-    {
-        // Left-associative to match Excel/Calc (2^3^2 = 64).
-        var left = ParseUnary();
-        while (Current.Type == TokenType.Caret)
-        {
-            Advance();
-            left = new BinaryExpr(BinaryOperator.Power, left, ParseUnary());
+            left = new BinaryExpr(op, left, ParseUnary());
         }
 
         return left;
@@ -150,6 +137,9 @@ public sealed class Parser
 
     private Expr ParseUnary()
     {
+        // Unary +/- binds looser than ^ but tighter than * and / (OpenFormula / LibreOffice
+        // Calc order), so -2^2 = -(2^2) = -4. This is the .ods interop target and deliberately
+        // differs from Excel, which would give 4.
         if (Current.Type == TokenType.Minus)
         {
             Advance();
@@ -160,6 +150,37 @@ public sealed class Parser
         {
             Advance();
             return new UnaryExpr(UnaryOperator.Plus, ParseUnary());
+        }
+
+        return ParsePower();
+    }
+
+    private Expr ParsePower()
+    {
+        // Left-associative (2^3^2 = (2^3)^2 = 64). A sign directly after ^ (e.g. 2^-3) is a sign
+        // on the exponent, binding only to the following postfix — not the whole power chain.
+        var left = ParsePostfix();
+        while (Current.Type == TokenType.Caret)
+        {
+            Advance();
+            left = new BinaryExpr(BinaryOperator.Power, left, ParsePowerOperand());
+        }
+
+        return left;
+    }
+
+    private Expr ParsePowerOperand()
+    {
+        if (Current.Type == TokenType.Minus)
+        {
+            Advance();
+            return new UnaryExpr(UnaryOperator.Negate, ParsePowerOperand());
+        }
+
+        if (Current.Type == TokenType.Plus)
+        {
+            Advance();
+            return new UnaryExpr(UnaryOperator.Plus, ParsePowerOperand());
         }
 
         return ParsePostfix();
