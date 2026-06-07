@@ -1,0 +1,28 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- The Avalonia 12 desktop app: window, menu bar, ribbon, grid, dialogs. -->
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <RootNamespace>Cellestra.Desktop</RootNamespace>
+    <AssemblyName>Cellestra</AssemblyName>
+    <AvaloniaUseCompiledBindingsByDefault>true</AvaloniaUseCompiledBindingsByDefault>
+    <BuiltInComInteropSupport>true</BuiltInComInteropSupport>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Avalonia" />
+    <PackageReference Include="Avalonia.Desktop" />
+    <PackageReference Include="Avalonia.Themes.Fluent" />
+    <PackageReference Include="Avalonia.Fonts.Inter" />
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Cellestra.Core\Cellestra.Core.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <AvaloniaResource Include="Assets\**" />
+  </ItemGroup>
+
+</Project>

@@ -1,0 +1,20 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- Headless Avalonia 12 UI tests. xUnit v3 via Avalonia.Headless.XUnit. -->
+  <PropertyGroup>
+    <IsPackable>false</IsPackable>
+    <RootNamespace>Cellestra.UiTests</RootNamespace>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.NET.Test.Sdk" />
+    <PackageReference Include="xunit.v3" />
+    <PackageReference Include="xunit.runner.visualstudio" />
+    <PackageReference Include="Avalonia.Headless.XUnit" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\Cellestra.Desktop\Cellestra.Desktop.csproj" />
+  </ItemGroup>
+
+</Project>

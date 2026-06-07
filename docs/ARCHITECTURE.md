@@ -190,6 +190,13 @@ Most UX guarantees are **backed by structure** (one command catalog → three su
 
 The authoritative tree (build to match it):
 
+> **Namespace note (resolved):** the `Workbook/` folder's types use the namespace
+> `Cellestra.Core.Model`, **not** `Cellestra.Core.Workbook`. A `Cellestra.Core.Workbook`
+> namespace would collide with the root `Workbook` type it contains (C# resolves
+> `Workbook.CreateNew()` to the namespace, not the type). The folder name stays
+> `Workbook/` per this tree; only the namespace differs. IDE0130 (namespace/folder
+> match) is disabled in `.editorconfig` for this reason.
+
 ```
 cellestra/
 ├── Cellestra.sln

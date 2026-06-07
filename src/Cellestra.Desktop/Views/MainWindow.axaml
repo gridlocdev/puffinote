@@ -1,0 +1,15 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        x:Class="Cellestra.Desktop.Views.MainWindow"
+        Title="Cellestra"
+        Width="1100" Height="720"
+        MinWidth="640" MinHeight="400">
+
+    <!-- Placeholder shell. The real layout (ribbon, formula bar, grid, sheet
+         tabs, status bar) is built in the Desktop-shell and grid steps. -->
+    <TextBlock Text="Cellestra"
+               HorizontalAlignment="Center"
+               VerticalAlignment="Center"
+               FontSize="24" />
+
+</Window>

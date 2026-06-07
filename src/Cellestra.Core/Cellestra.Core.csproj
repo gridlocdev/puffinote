@@ -1,0 +1,13 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    The pure brain: spreadsheet model, formula engine, recalc, styling, and
+    .ods/CSV I/O. GOLDEN RULE #1: ZERO UI dependencies. No Avalonia.* here, ever.
+    Only the .NET BCL (System.IO.Compression for ZIP, System.Xml for XML).
+  -->
+  <PropertyGroup>
+    <RootNamespace>Cellestra.Core</RootNamespace>
+    <AssemblyName>Cellestra.Core</AssemblyName>
+  </PropertyGroup>
+
+</Project>
