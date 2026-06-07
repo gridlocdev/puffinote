@@ -74,4 +74,7 @@ public interface IAppEnvironment
 
     /// <summary>True when a text field (cell editor, formula bar, name box, or dialog) holds keyboard focus.</summary>
     bool IsTextInputFocused { get; }
+
+    /// <summary>True while a modal overlay (Command Palette or sheet switcher) is open over the grid.</summary>
+    bool IsModalOpen { get; }
 }

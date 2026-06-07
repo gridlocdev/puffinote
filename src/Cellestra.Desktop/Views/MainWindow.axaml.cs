@@ -502,6 +502,9 @@ public partial class MainWindow : Window, IAppEnvironment
     /// <summary>A text field has focus when the focused element is a <see cref="TextBox"/> (cell editor, formula bar, name box, or a dialog field).</summary>
     public bool IsTextInputFocused => FocusManager?.GetFocusedElement() is TextBox;
 
+    /// <summary>The Command Palette / sheet switcher overlay is modal: while it's up, the grid behind it must ignore command shortcuts.</summary>
+    public bool IsModalOpen => OverlayHost.IsVisible;
+
     public async void ShowFormatCellsDialog()
     {
         var sheet = _session.ActiveSheet;
@@ -775,7 +778,11 @@ public partial class MainWindow : Window, IAppEnvironment
             KeyBindings.Add(new KeyBinding
             {
                 Gesture = command.Shortcut,
-                Command = new RelayCommand(() => captured.Execute(this), () => captured.IsEnabled(this)),
+                // While a modal overlay (Command Palette / sheet switcher) is open, the grid behind it
+                // must not react to command shortcuts — only the overlay's own keys apply. So every
+                // global binding backs off, letting the focused overlay field handle the key (e.g. ⌘A
+                // selects the palette text, not all cells).
+                Command = new RelayCommand(() => captured.Execute(this), () => !IsModalOpen && captured.IsEnabled(this)),
             });
         }
     }
