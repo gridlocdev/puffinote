@@ -5,6 +5,7 @@ using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Media;
+using Cellestra.Core.Formulas.References;
 using Cellestra.Core.Model;
 using Cellestra.Core.Styling;
 using Cellestra.Core.Values;
@@ -806,7 +807,19 @@ public sealed partial class SpreadsheetGrid : Panel
                 CancelEdit();
                 e.Handled = true;
                 break;
+            case Key.F4:
+                CycleReferenceInEditor();
+                e.Handled = true;
+                break;
         }
+    }
+
+    /// <summary>F4 while editing a formula cycles the reference at the caret: A1 → $A$1 → A$1 → $A1.</summary>
+    private void CycleReferenceInEditor()
+    {
+        var (text, caret) = ReferenceCycler.Cycle(_editor.Text ?? string.Empty, _editor.CaretIndex);
+        _editor.Text = text;
+        _editor.CaretIndex = caret;
     }
 
     private void CommitEdit(int moveRow, int moveColumn)

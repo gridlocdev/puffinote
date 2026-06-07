@@ -614,6 +614,14 @@ public partial class MainWindow : Window, IAppEnvironment
             OnSelectionChanged();
             Grid.Focus();
         }
+        else if (e.Key == Key.F4)
+        {
+            var (text, caret) = Cellestra.Core.Formulas.References.ReferenceCycler.Cycle(
+                FormulaInput.Text ?? string.Empty, FormulaInput.CaretIndex);
+            FormulaInput.Text = text;
+            FormulaInput.CaretIndex = caret;
+            e.Handled = true;
+        }
     }
 
     private void NameBoxKeyDown(object? sender, KeyEventArgs e)
