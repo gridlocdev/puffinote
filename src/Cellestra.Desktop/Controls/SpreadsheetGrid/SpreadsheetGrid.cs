@@ -206,6 +206,7 @@ public sealed partial class SpreadsheetGrid : Panel
 
     private void DrawCells(DrawingContext context, Worksheet sheet, Pen gridPen)
     {
+        // Pass 1: backgrounds and gridlines for every visible cell.
         foreach (var (row, y, h) in _visibleRows)
         {
             foreach (var (col, x, w) in _visibleColumns)
@@ -216,15 +217,35 @@ public sealed partial class SpreadsheetGrid : Panel
                 }
 
                 var rect = new Rect(x, y, w, h);
-                context.DrawRectangle(null, gridPen, rect);
-
                 var cell = sheet.Find(row, col);
-                if (cell is null || cell.Value.IsEmpty)
+                if (cell is not null)
+                {
+                    var style = _session!.Workbook.Styles.Get(cell.StyleId);
+                    if (style.Fill.HasBackground)
+                    {
+                        context.FillRectangle(new SolidColorBrush(ToColor(style.Fill.Background!.Value)), rect);
+                    }
+                }
+
+                context.DrawRectangle(null, gridPen, rect);
+            }
+        }
+
+        // Pass 2: text, after all gridlines — so text spilling into empty neighbors isn't clipped.
+        foreach (var (row, y, h) in _visibleRows)
+        {
+            foreach (var (col, x, w) in _visibleColumns)
+            {
+                if (sheet.FindMerge(row, col) is not null)
                 {
                     continue;
                 }
 
-                DrawCellContent(context, sheet, cell, rect);
+                var cell = sheet.Find(row, col);
+                if (cell is not null && !cell.Value.IsEmpty)
+                {
+                    DrawCellContent(context, sheet, cell, new Rect(x, y, w, h), row, col, allowSpill: true);
+                }
             }
         }
     }
@@ -244,7 +265,7 @@ public sealed partial class SpreadsheetGrid : Panel
             var anchor = sheet.Find(region.Range.Top, region.Range.Left);
             if (anchor is not null && !anchor.Value.IsEmpty)
             {
-                DrawCellContent(context, sheet, anchor, rect);
+                DrawCellContent(context, sheet, anchor, rect, region.Range.Top, region.Range.Left, allowSpill: false);
             }
         }
     }
@@ -300,14 +321,9 @@ public sealed partial class SpreadsheetGrid : Panel
         return true;
     }
 
-    private void DrawCellContent(DrawingContext context, Worksheet sheet, Cell cell, Rect rect)
+    private void DrawCellContent(DrawingContext context, Worksheet sheet, Cell cell, Rect rect, int row, int column, bool allowSpill)
     {
         var style = _session!.Workbook.Styles.Get(cell.StyleId);
-        if (style.Fill.HasBackground)
-        {
-            context.FillRectangle(new SolidColorBrush(ToColor(style.Fill.Background!.Value)), rect);
-        }
-
         string text = NumberFormatter.Format(cell.Value, style.NumberFormat, Culture);
         if (text.Length == 0)
         {
@@ -318,20 +334,38 @@ public sealed partial class SpreadsheetGrid : Panel
             style.Font.Family,
             style.Font.Italic ? FontStyle.Italic : FontStyle.Normal,
             style.Font.Bold ? FontWeight.Bold : FontWeight.Normal);
+        double fontSize = style.Font.SizePoints * 96.0 / 72.0 * _zoom;
+        var brush = TextBrushFor(style, cell.Value);
 
         var formatted = new FormattedText(text, CultureInfo.CurrentCulture, FlowDirection.LeftToRight,
-            typeface, style.Font.SizePoints * 96.0 / 72.0 * _zoom, TextBrushFor(style, cell.Value));
+            typeface, fontSize, brush);
 
-        double available = rect.Width - 6;
-        formatted.MaxTextWidth = Math.Max(1, available);
-        formatted.Trimming = TextTrimming.CharacterEllipsis;
-
+        double cellAvailable = rect.Width - 6;
         bool numeric = cell.Value.IsNumber || cell.Value.IsBoolean || cell.Value.IsError;
+
+        // A number (or date) too wide for its column shows ##### rather than being trimmed — widen
+        // the column to see it. Errors keep their token.
+        if (numeric && !cell.Value.IsError && formatted.Width > cellAvailable)
+        {
+            DrawHashes(context, rect, typeface, fontSize, brush, cellAvailable);
+            return;
+        }
+
         var horizontal = style.Alignment.Horizontal switch
         {
             SAlign.General => numeric ? SAlign.Right : SAlign.Left,
             var h => h,
         };
+
+        // Left-aligned text overflows into empty neighbours and only clips when one is occupied.
+        double available = cellAvailable;
+        if (allowSpill && !numeric && horizontal == SAlign.Left && formatted.Width > cellAvailable)
+        {
+            available += SpillRoom(sheet, row, column);
+        }
+
+        formatted.MaxTextWidth = Math.Max(1, available);
+        formatted.Trimming = TextTrimming.CharacterEllipsis;
 
         double tx = horizontal switch
         {
@@ -342,6 +376,45 @@ public sealed partial class SpreadsheetGrid : Panel
         double ty = rect.Bottom - formatted.Height - 2;
 
         context.DrawText(formatted, new Point(tx, Math.Max(rect.Y, ty)));
+    }
+
+    /// <summary>Extra width available to the right of a cell while the next columns are empty.</summary>
+    private double SpillRoom(Worksheet sheet, int row, int column)
+    {
+        double extra = 0;
+        for (int i = 0; i < _visibleColumns.Count; i++)
+        {
+            if (_visibleColumns[i].Index != column)
+            {
+                continue;
+            }
+
+            for (int j = i + 1; j < _visibleColumns.Count; j++)
+            {
+                int next = _visibleColumns[j].Index;
+                var neighbour = sheet.Find(row, next);
+                if ((neighbour is not null && !neighbour.Value.IsEmpty) || sheet.FindMerge(row, next) is not null)
+                {
+                    break; // an occupied (or merged) neighbour clips the spill
+                }
+
+                extra += _visibleColumns[j].Size;
+            }
+
+            break;
+        }
+
+        return extra;
+    }
+
+    private void DrawHashes(DrawingContext context, Rect rect, Typeface typeface, double fontSize, IBrush brush, double available)
+    {
+        var one = new FormattedText("#", CultureInfo.CurrentCulture, FlowDirection.LeftToRight, typeface, fontSize, brush);
+        int count = Math.Max(1, (int)(available / Math.Max(1, one.Width)));
+        var hashes = new FormattedText(new string('#', count), CultureInfo.CurrentCulture, FlowDirection.LeftToRight, typeface, fontSize, brush);
+        double tx = rect.Right - 3 - hashes.Width; // numbers right-align
+        double ty = rect.Bottom - hashes.Height - 2;
+        context.DrawText(hashes, new Point(tx, Math.Max(rect.Y, ty)));
     }
 
     private IBrush TextBrushFor(CellStyle style, CellValue value)
