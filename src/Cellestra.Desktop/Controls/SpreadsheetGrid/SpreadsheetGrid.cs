@@ -55,7 +55,15 @@ public sealed partial class SpreadsheetGrid : Panel
         Selection.Changed += (_, _) => Redraw();
         _editor.KeyDown += EditorKeyDown;
         _editor.LostFocus += (_, _) => CommitEdit(moveRow: 0, moveColumn: 0);
-        _editor.TextChanged += (_, _) => { if (!_programmaticEdit) ResetPointMode(); }; // typing ends ref replacement (#17)
+        _editor.TextChanged += (_, _) =>
+        {
+            if (!_programmaticEdit)
+            {
+                ResetPointMode(); // typing ends ref replacement (#17)
+            }
+
+            Redraw(); // keep live reference highlights in step with the formula (#18)
+        };
     }
 
     private void Redraw() => _surface.InvalidateVisual();
@@ -200,6 +208,7 @@ public sealed partial class SpreadsheetGrid : Panel
         DrawFreezeDividers(context);
         DrawHeaders(context, headerBrush, headerText, gridPen);
         DrawActiveOutline(context, activePen);
+        DrawReferenceHighlights(context);
         DrawMarquee(context);
         DrawFillPreview(context);
         DrawFillHandle(context);
