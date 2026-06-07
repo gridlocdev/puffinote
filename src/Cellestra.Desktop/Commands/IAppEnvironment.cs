@@ -65,4 +65,10 @@ public interface IAppEnvironment
     void ShowFormatCellsDialog();
 
     void ToggleFreezePanes();
+
+    /// <summary>Display the keyboard shortcuts reference.</summary>
+    void ShowKeyboardShortcuts();
+
+    /// <summary>True when a text field (cell editor, formula bar, name box, or dialog) holds keyboard focus.</summary>
+    bool IsTextInputFocused { get; }
 }

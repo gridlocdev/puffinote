@@ -333,6 +333,7 @@ Shortcuts use macOS modifiers (⌘ Command, ⇧ Shift, ⌥ Option, ⌃ Control).
 | Find / Find & Replace | ⌘F / ⌥⌘F |
 | Zoom in / out / reset | ⌘= / ⌘− / ⌘0 |
 | Show/Hide ribbon | ⌥⌘R |
+| Keyboard Shortcuts reference | ? |
 
 ### 6.5 Status bar
 

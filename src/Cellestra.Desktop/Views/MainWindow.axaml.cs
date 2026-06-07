@@ -107,6 +107,7 @@ public partial class MainWindow : Window, IAppEnvironment
             "data.toggleFilter", "data.clearFilter", null, "data.createTable", "data.removeDuplicates",
             "data.textToColumns", "data.validation", null, "formula.recalc"));
         menu.Items.Add(Submenu("View", "view.commandPalette", "view.goToSheet", null, "view.zoomIn", "view.zoomOut", "view.actualSize", null, "view.freezePanes", "view.showRibbon"));
+        menu.Items.Add(Submenu("Help", "help.shortcuts"));
         NativeMenu.SetMenu(this, menu);
     }
 
@@ -493,6 +494,11 @@ public partial class MainWindow : Window, IAppEnvironment
         Grid.ToggleFreezePanes();
         Refresh();
     }
+
+    public void ShowKeyboardShortcuts() => _ = new KeyboardShortcutsDialog().ShowDialog(this);
+
+    /// <summary>A text field has focus when the focused element is a <see cref="TextBox"/> (cell editor, formula bar, name box, or a dialog field).</summary>
+    public bool IsTextInputFocused => FocusManager?.GetFocusedElement() is TextBox;
 
     public async void ShowFormatCellsDialog()
     {

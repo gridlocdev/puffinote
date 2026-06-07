@@ -89,6 +89,12 @@ public static class AppCommands
 
         // Insert (merge)
         new("format.merge", "Merge Cells", MergeCells, "table-merge"),
+
+        // Help
+        // "?" (⇧/) opens the shortcuts reference; gated off while a text field has focus so the
+        // character types normally when editing a cell, the formula bar, or a dialog.
+        new("help.shortcuts", "Keyboard Shortcuts", e => e.ShowKeyboardShortcuts(), "keyboard",
+            new KeyGesture(Key.OemQuestion, KeyModifiers.Shift), e => !e.IsTextInputFocused),
     };
 
     private static void MergeCells(IAppEnvironment e)

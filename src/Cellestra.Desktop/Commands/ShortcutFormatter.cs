@@ -8,6 +8,12 @@ public static class ShortcutFormatter
 {
     public static string Format(KeyGesture gesture)
     {
+        // "?" is inherently a shifted key; show it bare rather than "⇧?".
+        if (gesture.Key == Key.OemQuestion && gesture.KeyModifiers == KeyModifiers.Shift)
+        {
+            return "?";
+        }
+
         var sb = new StringBuilder();
         if (gesture.KeyModifiers.HasFlag(KeyModifiers.Control))
         {
