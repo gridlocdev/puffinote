@@ -45,6 +45,9 @@ public static class AppCommands
         new("edit.paste", "Paste", e => e.Paste(), "clipboard", new KeyGesture(Key.V, Cmd)),
         new("edit.delete", "Delete", ClearContents, "eraser", new KeyGesture(Key.Delete)),
         new("edit.selectAll", "Select All", SelectAll, null, new KeyGesture(Key.A, Cmd)),
+        new("edit.find", "Find…", e => e.ShowFindReplace(replace: false), "search", new KeyGesture(Key.F, Cmd)),
+        new("edit.findReplace", "Find & Replace…", e => e.ShowFindReplace(replace: true), "search",
+            new KeyGesture(Key.F, CmdAlt)),
 
         // Format
         new("format.bold", "Bold", e => ToggleFont(e, f => f.Bold, (f, v) => f.WithBold(v)), "bold",
@@ -53,13 +56,25 @@ public static class AppCommands
             new KeyGesture(Key.I, Cmd)),
         new("format.underline", "Underline", e => ToggleFont(e, f => f.Underline, (f, v) => f.WithUnderline(v)), "underline",
             new KeyGesture(Key.U, Cmd)),
+        new("format.cells", "Cells…", e => e.ShowFormatCellsDialog(), "settings", new KeyGesture(Key.D1, Cmd)),
 
         // Insert
         new("insert.rowsAbove", "Rows Above", e => InsertRows(e, above: true), "table-row-plus-before"),
         new("insert.columnsLeft", "Columns Left", e => InsertColumns(e, before: true), "table-column-plus-before"),
         new("insert.sheet", "Sheet", e => e.AddSheet(), "table-plus"),
 
-        // Data / formulas
+        // Data
+        new("data.sortAsc", "Sort Ascending", e => Sort(e, ascending: true), "sort-ascending"),
+        new("data.sortDesc", "Sort Descending", e => Sort(e, ascending: false), "sort-descending"),
+        new("data.customSort", "Sort…", e => e.ShowSortDialog(), "sort"),
+        new("data.toggleFilter", "Filter", e => e.ToggleFilter(), "filter", new KeyGesture(Key.F, CmdShift)),
+        new("data.clearFilter", "Clear Filter", ClearFilter, "filter-off"),
+        new("data.createTable", "Table", CreateTable, "table", new KeyGesture(Key.T, Cmd)),
+        new("data.removeDuplicates", "Remove Duplicates…", e => e.ShowRemoveDuplicatesDialog(), "table-minus"),
+        new("data.textToColumns", "Text to Columns…", e => e.ShowTextToColumnsDialog(), "columns-split"),
+        new("data.validation", "Data Validation…", e => e.ShowDataValidationDialog(), "checkbox"),
+
+        // Formulas
         new("formula.recalc", "Recalculate", e => e.Session.RecalculateAll(), "refresh", new KeyGesture(Key.F9)),
 
         // View
@@ -117,5 +132,55 @@ public static class AppCommands
         int at = before ? e.Selection.Left : e.Selection.Right + 1;
         e.Session.Execute(new StructuralEditCommand(sheet.Name, StructuralAxis.Column, StructuralOperation.Insert, at, e.Selection.Right - e.Selection.Left + 1));
         e.Refresh();
+    }
+
+    // ---- Data -------------------------------------------------------------
+
+    /// <summary>The data region a data command acts on: the selection, or the current region when one cell is selected.</summary>
+    public static (Cellestra.Core.Model.Worksheet Sheet, Cellestra.Core.Model.CellRange Range, bool Header) DataTarget(IAppEnvironment e)
+    {
+        var sheet = e.Session.ActiveSheet;
+        var range = e.Selection.IsSingleCell
+            ? Cellestra.Core.Data.DataRegion.CurrentRegion(sheet, e.Selection.ActiveRow, e.Selection.ActiveColumn)
+            : e.Selection.Range;
+        bool header = Cellestra.Core.Data.DataRegion.LooksLikeHeader(sheet, range);
+        return (sheet, range, header);
+    }
+
+    private static void Sort(IAppEnvironment e, bool ascending)
+    {
+        var (sheet, range, header) = DataTarget(e);
+        int column = Math.Clamp(e.Selection.ActiveColumn, range.Left, range.Right);
+        e.Session.Execute(Cellestra.Core.Editing.DataEditCommands.SortByColumn(sheet.Name, range, column, ascending, header));
+        e.Refresh();
+    }
+
+    private static void ClearFilter(IAppEnvironment e)
+    {
+        var (sheet, range, _) = DataTarget(e);
+        e.Session.Execute(Cellestra.Core.Editing.DataEditCommands.ClearFilter(sheet.Name, range));
+        e.Refresh();
+    }
+
+    private static void CreateTable(IAppEnvironment e)
+    {
+        var (sheet, range, header) = DataTarget(e);
+        string name = NextTableName(sheet);
+        var table = new Cellestra.Core.Data.Table(name, range, header);
+        e.Session.Execute(Cellestra.Core.Editing.DataEditCommands.CreateTable(sheet.Name, table));
+        e.Refresh();
+    }
+
+    private static string NextTableName(Cellestra.Core.Model.Worksheet sheet)
+    {
+        var taken = new HashSet<string>(sheet.Tables.Select(t => t.Name), StringComparer.OrdinalIgnoreCase);
+        for (int n = 1; ; n++)
+        {
+            string candidate = $"Table{n}";
+            if (!taken.Contains(candidate))
+            {
+                return candidate;
+            }
+        }
     }
 }

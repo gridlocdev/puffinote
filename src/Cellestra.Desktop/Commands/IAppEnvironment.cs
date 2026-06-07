@@ -49,4 +49,18 @@ public interface IAppEnvironment
     void ZoomBy(double delta);
 
     void ResetZoom();
+
+    void ToggleFilter();
+
+    void ShowSortDialog();
+
+    void ShowRemoveDuplicatesDialog();
+
+    void ShowTextToColumnsDialog();
+
+    void ShowDataValidationDialog();
+
+    void ShowFindReplace(bool replace);
+
+    void ShowFormatCellsDialog();
 }

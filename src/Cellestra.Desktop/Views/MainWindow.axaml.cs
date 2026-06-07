@@ -13,9 +13,11 @@ using Avalonia.Layout;
 using Avalonia.Markup.Xaml;
 using Avalonia.Media;
 using Avalonia.Platform.Storage;
+using Cellestra.Core.Data;
 using Cellestra.Core.Editing;
 using Cellestra.Core.Model;
 using Cellestra.Core.Values;
+using Cellestra.Desktop.Views.Dialogs;
 using NumberFormatter = Cellestra.Core.Styling.NumberFormatter;
 using Cellestra.Desktop.Commands;
 using Cellestra.Desktop.Controls.SpreadsheetGrid;
@@ -53,10 +55,12 @@ public partial class MainWindow : Window, IAppEnvironment
     {
         var menu = new NativeMenu();
         menu.Items.Add(Submenu("File", "file.new", "file.open", "file.save", "file.saveAs", null, "file.importCsv", "file.exportCsv"));
-        menu.Items.Add(Submenu("Edit", "edit.undo", "edit.redo", null, "edit.cut", "edit.copy", "edit.paste", "edit.delete", "edit.selectAll"));
-        menu.Items.Add(Submenu("Format", "format.bold", "format.italic", "format.underline"));
+        menu.Items.Add(Submenu("Edit", "edit.undo", "edit.redo", null, "edit.cut", "edit.copy", "edit.paste", "edit.delete", "edit.selectAll", null, "edit.find", "edit.findReplace"));
+        menu.Items.Add(Submenu("Format", "format.cells", null, "format.bold", "format.italic", "format.underline"));
         menu.Items.Add(Submenu("Insert", "insert.rowsAbove", "insert.columnsLeft", "insert.sheet"));
-        menu.Items.Add(Submenu("Data", "formula.recalc"));
+        menu.Items.Add(Submenu("Data", "data.sortAsc", "data.sortDesc", "data.customSort", null,
+            "data.toggleFilter", "data.clearFilter", null, "data.createTable", "data.removeDuplicates",
+            "data.textToColumns", "data.validation", null, "formula.recalc"));
         menu.Items.Add(Submenu("View", "view.commandPalette", "view.goToSheet", null, "view.zoomIn", "view.zoomOut", "view.actualSize", null, "view.showRibbon"));
         NativeMenu.SetMenu(this, menu);
     }
@@ -268,6 +272,97 @@ public partial class MainWindow : Window, IAppEnvironment
     {
         Grid.Zoom = 1.0;
         UpdateChrome();
+    }
+
+    public void ToggleFilter()
+    {
+        var (sheet, range, _) = AppCommands.DataTarget(this);
+        if (sheet.ActiveFilter is not null)
+        {
+            _session.Execute(DataEditCommands.ClearFilter(sheet.Name, sheet.ActiveFilter.Value));
+            sheet.ActiveFilter = null;
+        }
+        else
+        {
+            sheet.ActiveFilter = range;
+        }
+
+        Refresh();
+    }
+
+    public async void ShowSortDialog()
+    {
+        var (sheet, range, header) = AppCommands.DataTarget(this);
+        var spec = await new SortDialog(sheet, range, header).ShowDialog<SortSpec?>(this);
+        if (spec is { Levels.Count: > 0 })
+        {
+            _session.Execute(DataEditCommands.Sort(sheet.Name, range, spec));
+            Refresh();
+        }
+    }
+
+    public async void ShowRemoveDuplicatesDialog()
+    {
+        var (sheet, range, header) = AppCommands.DataTarget(this);
+        var result = await new RemoveDuplicatesDialog(sheet, range, header).ShowDialog<RemoveDuplicatesDialog.Result?>(this);
+        if (result is not null)
+        {
+            _session.Execute(DataEditCommands.RemoveDuplicates(sheet.Name, range, result.KeyColumns, result.HasHeader, out _));
+            Refresh();
+        }
+    }
+
+    public async void ShowTextToColumnsDialog()
+    {
+        var sheet = _session.ActiveSheet;
+        var selection = Selection.Range;
+        var source = new CellRange(new CellAddress(selection.Left, selection.Top), new CellAddress(selection.Left, selection.Bottom));
+        var delimiter = await new TextToColumnsDialog().ShowDialog<char?>(this);
+        if (delimiter is { } d)
+        {
+            _session.Execute(DataEditCommands.TextToColumns(sheet, source, d));
+            Refresh();
+        }
+    }
+
+    public async void ShowDataValidationDialog()
+    {
+        var sheet = _session.ActiveSheet;
+        var rule = await new DataValidationDialog(Selection.Range).ShowDialog<DataValidation?>(this);
+        if (rule is not null)
+        {
+            _session.Execute(DataEditCommands.SetValidation(sheet.Name, rule));
+            Refresh();
+        }
+    }
+
+    private FindReplaceDialog? _findReplace;
+
+    public void ShowFindReplace(bool replace)
+    {
+        if (_findReplace is not null)
+        {
+            _findReplace.Activate();
+            return;
+        }
+
+        _findReplace = new FindReplaceDialog(this, replace);
+        _findReplace.Closed += (_, _) => _findReplace = null;
+        _findReplace.Show(this);
+    }
+
+    public async void ShowFormatCellsDialog()
+    {
+        var sheet = _session.ActiveSheet;
+        var active = sheet.Find(Selection.ActiveRow, Selection.ActiveColumn);
+        var current = _session.Workbook.Styles.Get(active?.StyleId ?? Cellestra.Core.Styling.StylePool.DefaultId);
+
+        var transform = await new FormatCellsDialog(current).ShowDialog<System.Func<Cellestra.Core.Styling.CellStyle, Cellestra.Core.Styling.CellStyle>?>(this);
+        if (transform is not null)
+        {
+            _session.Execute(EditCommands.ApplyStyle(_session.Workbook, sheet.Name, Selection.Range, transform, "Format Cells"));
+            Refresh();
+        }
     }
 
     // ---- Chrome -----------------------------------------------------------

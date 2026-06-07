@@ -30,6 +30,9 @@ public sealed class Worksheet
     /// <summary>Number of columns frozen at the left (0 = none).</summary>
     public int FrozenColumns { get; set; }
 
+    /// <summary>The range showing AutoFilter dropdowns on its header row, or null when filtering is off (PRD §8.12).</summary>
+    public CellRange? ActiveFilter { get; set; }
+
     public IReadOnlyList<MergedRegion> MergedRegions => _mergedRegions;
 
     public int CellCount => _cells.Count;
