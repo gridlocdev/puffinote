@@ -55,6 +55,7 @@ public sealed partial class SpreadsheetGrid : Panel
         Selection.Changed += (_, _) => Redraw();
         _editor.KeyDown += EditorKeyDown;
         _editor.LostFocus += (_, _) => CommitEdit(moveRow: 0, moveColumn: 0);
+        _editor.TextChanged += (_, _) => { if (!_programmaticEdit) ResetPointMode(); }; // typing ends ref replacement (#17)
     }
 
     private void Redraw() => _surface.InvalidateVisual();
@@ -556,6 +557,16 @@ public sealed partial class SpreadsheetGrid : Panel
     protected override void OnPointerPressed(PointerPressedEventArgs e)
     {
         base.OnPointerPressed(e);
+        var point = e.GetPosition(this);
+
+        // Point mode: clicking a cell while typing a formula inserts its reference instead of
+        // committing (#17). Checked before stealing focus so the editor stays active.
+        if (_editing && TryPointModeInsert(point))
+        {
+            e.Handled = true;
+            return;
+        }
+
         Focus();
         if (_editing)
         {
@@ -564,7 +575,6 @@ public sealed partial class SpreadsheetGrid : Panel
 
         _tabOriginColumn = null; // a click breaks any Tab-entry sequence (#19)
 
-        var point = e.GetPosition(this);
         if (TryHandleChromeClick(point))
         {
             e.Handled = true;
@@ -862,6 +872,7 @@ public sealed partial class SpreadsheetGrid : Panel
         }
 
         InvalidateClipboard(); // starting an edit drops any pending cut/copy marquee (#5)
+        ResetPointMode();
         _editing = true;
         var cell = sheet.Find(Selection.ActiveRow, Selection.ActiveColumn);
         _editor.Text = seed ?? CellEditText(cell);
