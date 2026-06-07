@@ -31,6 +31,7 @@ public partial class MainWindow : Window, IAppEnvironment
     private readonly SettingsService _settingsService = new();
     private WorkbookSession _session = WorkbookSession.NewBlank();
     private AppSettings _settings;
+    private FileLock? _fileLock;
 
     public MainWindow()
     {
@@ -55,7 +56,11 @@ public partial class MainWindow : Window, IAppEnvironment
 
         Grid.Zoom = _settings.Zoom;
         IsRibbonVisible = _settings.RibbonVisible;
-        Closing += (_, _) => PersistSettings();
+        Closing += (_, _) =>
+        {
+            PersistSettings();
+            ReleaseFileLock();
+        };
 
         UpdateChrome();
         OnSelectionChanged();
@@ -159,6 +164,7 @@ public partial class MainWindow : Window, IAppEnvironment
 
     public Task NewWorkbookAsync()
     {
+        ReleaseFileLock();
         _session = WorkbookSession.NewBlank();
         RewireSession();
         return Task.CompletedTask;
@@ -185,17 +191,39 @@ public partial class MainWindow : Window, IAppEnvironment
     {
         try
         {
-            await using var stream = File.OpenRead(path);
-            _session.LoadFrom(stream, path);
+            var existingLock = FileLock.Inspect(path);
+
+            await using (var stream = File.OpenRead(path))
+            {
+                _session.LoadFrom(stream, path);
+            }
+
+            ReleaseFileLock();
+            _fileLock = FileLock.TryAcquire(path);
+
             Grid.Attach(_session);
             BuildSheetTabs();
             RememberRecentFile(path);
             UpdateChrome();
+
+            if (existingLock is not null)
+            {
+                string who = string.IsNullOrWhiteSpace(existingLock.User) ? "another application" : existingLock.User;
+                string host = string.IsNullOrWhiteSpace(existingLock.Host) ? string.Empty : $" on {existingLock.Host}";
+                Title = $"Cellestra — {Path.GetFileName(path)} (open in {who}{host}; changes may conflict)";
+            }
         }
         catch (Exception ex)
         {
             Title = $"Cellestra — could not open: {ex.Message}";
         }
+    }
+
+    /// <summary>Remove our document lock, if we hold one.</summary>
+    private void ReleaseFileLock()
+    {
+        _fileLock?.Dispose();
+        _fileLock = null;
     }
 
     public async Task SaveWorkbookAsync()
@@ -228,6 +256,14 @@ public partial class MainWindow : Window, IAppEnvironment
 
         string path = file.Path.LocalPath;
         _session.SaveToFile(path);
+
+        // We now own this file on disk — take its lock so other editors are warned.
+        if (_fileLock?.DocumentPath != Path.GetFullPath(path))
+        {
+            ReleaseFileLock();
+            _fileLock = FileLock.TryAcquire(path);
+        }
+
         RememberRecentFile(path);
         UpdateChrome();
     }
@@ -248,6 +284,7 @@ public partial class MainWindow : Window, IAppEnvironment
 
         string text = await File.ReadAllTextAsync(files[0].Path.LocalPath);
         var workbook = Cellestra.Core.Serialization.Csv.CsvReader.ReadToWorkbook(text);
+        ReleaseFileLock();
         _session = new WorkbookSession(workbook);
         RewireSession();
     }
