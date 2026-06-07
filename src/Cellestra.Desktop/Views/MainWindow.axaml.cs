@@ -28,11 +28,17 @@ namespace Cellestra.Desktop.Views;
 
 public partial class MainWindow : Window, IAppEnvironment
 {
+    private readonly SettingsService _settingsService = new();
     private WorkbookSession _session = WorkbookSession.NewBlank();
+    private AppSettings _settings;
 
     public MainWindow()
     {
         InitializeComponent();
+
+        _settings = _settingsService.Load();
+        Width = _settings.WindowWidth;
+        Height = _settings.WindowHeight;
 
         Grid.Attach(_session);
         Grid.SelectionChanged += (_, _) => OnSelectionChanged();
@@ -46,15 +52,41 @@ public partial class MainWindow : Window, IAppEnvironment
         RegisterKeyBindings();
         BuildNativeMenu();
         BuildSheetTabs();
+
+        Grid.Zoom = _settings.Zoom;
+        IsRibbonVisible = _settings.RibbonVisible;
+        Closing += (_, _) => PersistSettings();
+
         UpdateChrome();
         OnSelectionChanged();
+    }
+
+    private void PersistSettings()
+    {
+        _settings = _settings with
+        {
+            RibbonVisible = IsRibbonVisible,
+            Zoom = Grid.Zoom,
+            WindowWidth = Width,
+            WindowHeight = Height,
+        };
+        _settingsService.Save(_settings);
+    }
+
+    private void RememberRecentFile(string path)
+    {
+        _settings = _settings.WithRecentFile(path);
+        _settingsService.Save(_settings);
+        BuildNativeMenu(); // refresh the Open Recent submenu
     }
 
     /// <summary>The native macOS menu bar — the complete command list (PRD §6.2), all from the one catalog.</summary>
     private void BuildNativeMenu()
     {
         var menu = new NativeMenu();
-        menu.Items.Add(Submenu("File", "file.new", "file.open", "file.save", "file.saveAs", null, "file.importCsv", "file.exportCsv"));
+        var file = Submenu("File", "file.new", "file.open", "file.save", "file.saveAs", null, "file.importCsv", "file.exportCsv");
+        file.Menu!.Items.Insert(2, BuildOpenRecent());
+        menu.Items.Add(file);
         menu.Items.Add(Submenu("Edit", "edit.undo", "edit.redo", null, "edit.cut", "edit.copy", "edit.paste", "edit.delete", "edit.selectAll", null, "edit.find", "edit.findReplace"));
         menu.Items.Add(Submenu("Format", "format.cells", null, "format.bold", "format.italic", "format.underline", null, "format.merge"));
         menu.Items.Add(Submenu("Insert", "insert.rowsAbove", "insert.columnsLeft", "insert.sheet"));
@@ -63,6 +95,28 @@ public partial class MainWindow : Window, IAppEnvironment
             "data.textToColumns", "data.validation", null, "formula.recalc"));
         menu.Items.Add(Submenu("View", "view.commandPalette", "view.goToSheet", null, "view.zoomIn", "view.zoomOut", "view.actualSize", null, "view.freezePanes", "view.showRibbon"));
         NativeMenu.SetMenu(this, menu);
+    }
+
+    private NativeMenuItem BuildOpenRecent()
+    {
+        var submenu = new NativeMenu();
+        if (_settings.RecentFiles.Count == 0)
+        {
+            submenu.Items.Add(new NativeMenuItem("(none)") { IsEnabled = false });
+        }
+        else
+        {
+            foreach (string path in _settings.RecentFiles)
+            {
+                string captured = path;
+                submenu.Items.Add(new NativeMenuItem(Path.GetFileName(path))
+                {
+                    Command = new RelayCommand(() => _ = OpenPathAsync(captured)),
+                });
+            }
+        }
+
+        return new NativeMenuItem("Open Recent") { Menu = submenu };
     }
 
     private NativeMenuItem Submenu(string header, params string?[] commandIds)
@@ -124,13 +178,18 @@ public partial class MainWindow : Window, IAppEnvironment
             return;
         }
 
-        string path = files[0].Path.LocalPath;
+        await OpenPathAsync(files[0].Path.LocalPath);
+    }
+
+    public async Task OpenPathAsync(string path)
+    {
         try
         {
             await using var stream = File.OpenRead(path);
             _session.LoadFrom(stream, path);
             Grid.Attach(_session);
             BuildSheetTabs();
+            RememberRecentFile(path);
             UpdateChrome();
         }
         catch (Exception ex)
@@ -149,6 +208,7 @@ public partial class MainWindow : Window, IAppEnvironment
 
         await using var stream = File.Create(_session.FilePath);
         _session.SaveTo(stream, _session.FilePath);
+        RememberRecentFile(_session.FilePath);
         UpdateChrome();
     }
 
@@ -170,6 +230,7 @@ public partial class MainWindow : Window, IAppEnvironment
         string path = file.Path.LocalPath;
         await using var stream = File.Create(path);
         _session.SaveTo(stream, path);
+        RememberRecentFile(path);
         UpdateChrome();
     }
 
