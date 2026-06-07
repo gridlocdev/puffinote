@@ -586,6 +586,14 @@ public sealed partial class SpreadsheetGrid : Panel
             return;
         }
 
+        // Double-clicking a column header's right border autofits the column to its content (#23).
+        if (e.ClickCount == 2 && TryHitColumnBorder(point, out int borderColumn))
+        {
+            AutofitColumn(borderColumn);
+            e.Handled = true;
+            return;
+        }
+
         // The fill handle takes precedence over cell selection at the selection's bottom-right.
         if (TryGetFillHandleRect(out var handle) && handle.Contains(point))
         {
