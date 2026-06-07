@@ -5,6 +5,7 @@ using Cellestra.Core.Dependencies;
 using Cellestra.Core.Editing;
 using Cellestra.Core.Model;
 using Cellestra.Core.Serialization.Ods;
+using Cellestra.Core.Values;
 
 namespace Cellestra.Desktop.Services;
 
@@ -38,6 +39,13 @@ public sealed class WorkbookSession
     public string? FilePath { get; private set; }
 
     public bool IsModified { get; private set; }
+
+    /// <summary>
+    /// How many formula cells recomputed to a value different from the one cached in the file on
+    /// the last open (PRD §8.6). Cellestra shows the freshly recomputed values; a non-zero count
+    /// flags a divergence from what LibreOffice last wrote — usually a function-coverage gap.
+    /// </summary>
+    public int LoadRecalcMismatches { get; private set; }
 
     /// <summary>Raised after any change that affects displayed values (recalc done).</summary>
     public event EventHandler? Changed;
@@ -188,13 +196,62 @@ public sealed class WorkbookSession
         }
     }
 
+    /// <summary>
+    /// Recompute every formula and count how many disagree with the value cached in the file.
+    /// Numbers compare with a relative tolerance (floating-point noise is not a disagreement);
+    /// a cached blank is treated as "no cache" and never flagged.
+    /// </summary>
+    private int RecalculateAndCompareToCache(Workbook workbook)
+    {
+        var cached = new List<(string Sheet, int Row, int Column, CellValue Value)>();
+        foreach (var sheet in workbook.Worksheets)
+        {
+            foreach (var (row, column, cell) in sheet.EnumerateCells())
+            {
+                if (cell.IsFormula && !cell.Value.IsEmpty)
+                {
+                    cached.Add((sheet.Name, row, column, cell.Value));
+                }
+            }
+        }
+
+        _recalc.RecalculateAll();
+
+        int mismatches = 0;
+        foreach (var (sheetName, row, column, before) in cached)
+        {
+            var after = workbook.FindSheet(sheetName)?.Find(row, column)?.Value ?? CellValue.Empty;
+            if (!ValuesAgree(before, after))
+            {
+                mismatches++;
+            }
+        }
+
+        return mismatches;
+    }
+
+    private static bool ValuesAgree(CellValue cached, CellValue recomputed)
+    {
+        bool cachedNumeric = cached.IsNumber || cached.IsBoolean;
+        bool recomputedNumeric = recomputed.IsNumber || recomputed.IsBoolean;
+        if (cachedNumeric && recomputedNumeric)
+        {
+            double x = cached.AsNumber;
+            double y = recomputed.AsNumber;
+            double tolerance = 1e-9 * Math.Max(1.0, Math.Max(Math.Abs(x), Math.Abs(y)));
+            return Math.Abs(x - y) <= tolerance;
+        }
+
+        return cached.Type == recomputed.Type && cached.Equals(recomputed);
+    }
+
     private void Reset(Workbook workbook, OdsPackage? package, string? path)
     {
         _workbook = workbook;
         _sourcePackage = package;
         _recalc = new RecalculationEngine(workbook);
         _recalc.RebuildGraph();
-        _recalc.RecalculateAll();
+        LoadRecalcMismatches = RecalculateAndCompareToCache(workbook);
         _history = new EditHistory(workbook);
         ActiveSheet = workbook.ActiveSheet;
         FilePath = path;

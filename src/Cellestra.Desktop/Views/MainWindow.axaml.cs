@@ -212,6 +212,10 @@ public partial class MainWindow : Window, IAppEnvironment
                 string host = string.IsNullOrWhiteSpace(existingLock.Host) ? string.Empty : $" on {existingLock.Host}";
                 Title = $"Cellestra — {Path.GetFileName(path)} (open in {who}{host}; changes may conflict)";
             }
+            else if (_session.LoadRecalcMismatches > 0)
+            {
+                Title = $"Cellestra — {Path.GetFileName(path)} ({_session.LoadRecalcMismatches} cell(s) recomputed differently than the saved file)";
+            }
         }
         catch (Exception ex)
         {
