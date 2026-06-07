@@ -1,3 +1,4 @@
+using Cellestra.Core.Data;
 using Cellestra.Core.Values;
 
 namespace Cellestra.Core.Model;
@@ -13,6 +14,8 @@ public sealed class Worksheet
     private readonly Dictionary<int, Row> _rows = new();
     private readonly Dictionary<int, Column> _columns = new();
     private readonly List<MergedRegion> _mergedRegions = new();
+    private readonly List<Table> _tables = new();
+    private readonly List<DataValidation> _validations = new();
 
     public Worksheet(string name)
     {
@@ -92,6 +95,19 @@ public sealed class Worksheet
 
     /// <summary>Remove a cell entirely (content, style, hyperlink).</summary>
     public void Remove(int row, int column) => _cells.Remove((row, column));
+
+    /// <summary>Place (or, when null/blank, clear) a cell at a position — used to restore undo state.</summary>
+    public void PutCell(int row, int column, Cell? cell)
+    {
+        if (cell is null || cell.IsBlank)
+        {
+            _cells.Remove((row, column));
+        }
+        else
+        {
+            _cells[(row, column)] = cell;
+        }
+    }
 
     /// <summary>Drop the cell from storage if nothing distinguishes it from blank.</summary>
     public void PruneIfBlank(int row, int column, Cell cell)
@@ -182,6 +198,43 @@ public sealed class Worksheet
         return region is not null && _mergedRegions.Remove(region);
     }
 
+    // ---- Tables & validation ----------------------------------------------
+
+    public IReadOnlyList<Table> Tables => _tables;
+
+    public IReadOnlyList<DataValidation> Validations => _validations;
+
+    public void AddTable(Table table)
+    {
+        ArgumentNullException.ThrowIfNull(table);
+        if (_tables.Any(t => t.Range.Intersects(table.Range)))
+        {
+            throw new InvalidOperationException("Tables may not overlap (PRD §8.10).");
+        }
+
+        _tables.Add(table);
+    }
+
+    public bool RemoveTable(Table table) => _tables.Remove(table);
+
+    public void ReplaceTable(Table existing, Table replacement)
+    {
+        int index = _tables.IndexOf(existing);
+        if (index >= 0)
+        {
+            _tables[index] = replacement;
+        }
+    }
+
+    public Table? FindTable(int row, int column) => _tables.FirstOrDefault(t => t.Range.Contains(row, column));
+
+    public void AddValidation(DataValidation validation) => _validations.Add(validation);
+
+    public bool RemoveValidation(DataValidation validation) => _validations.Remove(validation);
+
+    public DataValidation? FindValidation(int row, int column) =>
+        _validations.FirstOrDefault(v => v.Covers(row, column));
+
     // ---- Extents ----------------------------------------------------------
 
     /// <summary>
@@ -248,6 +301,55 @@ public sealed class Worksheet
         }
 
         return new CellRange(new CellAddress(left, top), new CellAddress(right, bottom));
+    }
+
+    // ---- State capture (for structural undo) -----------------------------
+
+    /// <summary>A deep snapshot of a worksheet's grid state, for undoing structural edits.</summary>
+    internal sealed class State
+    {
+        internal required Dictionary<(int, int), Cell> Cells { get; init; }
+        internal required Dictionary<int, Row> Rows { get; init; }
+        internal required Dictionary<int, Column> Columns { get; init; }
+        internal required List<MergedRegion> Merges { get; init; }
+        internal required int FrozenRows { get; init; }
+        internal required int FrozenColumns { get; init; }
+    }
+
+    internal State Capture() => new()
+    {
+        Cells = _cells.ToDictionary(kv => kv.Key, kv => kv.Value.Clone()),
+        Rows = _rows.ToDictionary(kv => kv.Key, kv => kv.Value.Clone()),
+        Columns = _columns.ToDictionary(kv => kv.Key, kv => kv.Value.Clone()),
+        Merges = new List<MergedRegion>(_mergedRegions),
+        FrozenRows = FrozenRows,
+        FrozenColumns = FrozenColumns,
+    };
+
+    internal void Restore(State state)
+    {
+        _cells.Clear();
+        foreach (var (key, cell) in state.Cells)
+        {
+            _cells[key] = cell.Clone();
+        }
+
+        _rows.Clear();
+        foreach (var (key, row) in state.Rows)
+        {
+            _rows[key] = row.Clone();
+        }
+
+        _columns.Clear();
+        foreach (var (key, column) in state.Columns)
+        {
+            _columns[key] = column.Clone();
+        }
+
+        _mergedRegions.Clear();
+        _mergedRegions.AddRange(state.Merges);
+        FrozenRows = state.FrozenRows;
+        FrozenColumns = state.FrozenColumns;
     }
 
     private static void ValidatePosition(int row, int column)
