@@ -48,6 +48,7 @@ public partial class MainWindow : Window, IAppEnvironment
 
         Grid.Attach(_session);
         Grid.SelectionChanged += (_, _) => OnSelectionChanged();
+        Grid.ClipboardInvalidated += (_, _) => ClearClipboard();
         _session.Changed += (_, _) => { Grid.Refresh(); UpdateChrome(); };
         _session.StructureChanged += (_, _) => { BuildSheetTabs(); Grid.Refresh(); UpdateChrome(); };
 
@@ -661,6 +662,7 @@ public partial class MainWindow : Window, IAppEnvironment
         string tsv = sb.ToString();
         _clipboard = ClipboardBlock.Capture(sheet, range, cut);
         _clipboardText = tsv;
+        Grid.ShowMarquee(range, cut, sheet.Name);
 
         if (Clipboard is { } clipboard)
         {
@@ -675,6 +677,7 @@ public partial class MainWindow : Window, IAppEnvironment
     {
         _clipboard = null;
         _clipboardText = null;
+        Grid.ShowMarquee(null, false, null);
     }
 
     private void PasteTsv(string text)

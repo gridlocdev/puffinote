@@ -197,6 +197,7 @@ public sealed partial class SpreadsheetGrid : Panel
         DrawFreezeDividers(context);
         DrawHeaders(context, headerBrush, headerText, gridPen);
         DrawActiveOutline(context, activePen);
+        DrawMarquee(context);
     }
 
     private void DrawCells(DrawingContext context, Worksheet sheet, Pen gridPen)
@@ -605,7 +606,7 @@ public sealed partial class SpreadsheetGrid : Panel
             case Key.Return: Move(row + (e.KeyModifiers.HasFlag(KeyModifiers.Shift) ? -1 : 1), column, false); break;
             case Key.F2: BeginEdit(null); break;
             case Key.Delete or Key.Back: ClearSelection(); break;
-            case Key.Escape: break;
+            case Key.Escape: InvalidateClipboard(); break;
             default:
                 if (IsTypingKey(e))
                 {
@@ -729,6 +730,7 @@ public sealed partial class SpreadsheetGrid : Panel
             return;
         }
 
+        InvalidateClipboard(); // starting an edit drops any pending cut/copy marquee (#5)
         _editing = true;
         var cell = sheet.Find(Selection.ActiveRow, Selection.ActiveColumn);
         _editor.Text = seed ?? CellEditText(cell);
