@@ -6,6 +6,7 @@ using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.Media;
+using Avalonia.Reactive;
 using Cellestra.Core.Formulas.References;
 using Cellestra.Core.Model;
 using Cellestra.Core.Styling;
@@ -54,6 +55,7 @@ public sealed partial class SpreadsheetGrid : Panel
         Children.Add(_surface);        // draws the grid
         Children.Add(_editor);         // floats above for inline editing
         InitChrome();                  // popup layer for filter/validation dropdowns
+        InitSignatureHelp();           // function argument hint while typing a formula
         ApplyTheme();                  // canvas/text colors follow the system light/dark theme
         ActualThemeVariantChanged += (_, _) => ApplyTheme();
         Selection.Changed += (_, _) => Redraw();
@@ -75,7 +77,10 @@ public sealed partial class SpreadsheetGrid : Panel
             }
 
             Redraw(); // keep live reference highlights in step with the formula (#18)
+            UpdateSignatureHelp(); // refresh the argument hint as the formula changes
         };
+        // The argument hint also tracks caret movement (arrows / clicks within the formula).
+        _editor.GetObservable(TextBox.CaretIndexProperty).Subscribe(new AnonymousObserver<int>(_ => UpdateSignatureHelp()));
     }
 
     private void Redraw() => _surface.InvalidateVisual();
@@ -911,6 +916,7 @@ public sealed partial class SpreadsheetGrid : Panel
         _editor.Focus();
         _editor.CaretIndex = _editor.Text?.Length ?? 0;
         ResetAutocomplete(); // don't treat the seeded text as a typed character (#20)
+        UpdateSignatureHelp(); // a seeded formula shows its hint immediately
     }
 
     private static string CellEditText(Cell? cell)
@@ -984,6 +990,7 @@ public sealed partial class SpreadsheetGrid : Panel
 
         _editing = false;
         _editor.IsVisible = false;
+        HideSignatureHelp();
 
         _session.Execute(Cellestra.Core.Editing.EditCommands.SetInput(
             _session.Workbook, _session.ActiveSheet.Name, row, column, text, Culture));
@@ -1020,6 +1027,7 @@ public sealed partial class SpreadsheetGrid : Panel
     {
         _editing = false;
         _editor.IsVisible = false;
+        HideSignatureHelp();
         Focus();
     }
 
@@ -1031,13 +1039,36 @@ public sealed partial class SpreadsheetGrid : Panel
         if (_editing && TryGetCellRect(Selection.ActiveRow, Selection.ActiveColumn, out var rect))
         {
             _editor.Arrange(rect);
+            ArrangeSignatureTip(rect, finalSize);
         }
         else
         {
             _editor.Arrange(new Rect(0, 0, 0, 0));
+            _signatureTip.Arrange(new Rect(0, 0, 0, 0));
         }
 
         return finalSize;
+    }
+
+    /// <summary>Place the argument hint just above the cell editor, dropping below it when there's no room.</summary>
+    private void ArrangeSignatureTip(Rect editor, Size finalSize)
+    {
+        if (!_signatureTip.IsVisible)
+        {
+            _signatureTip.Arrange(new Rect(0, 0, 0, 0));
+            return;
+        }
+
+        _signatureTip.Measure(finalSize);
+        var size = _signatureTip.DesiredSize;
+        double x = Math.Max(0, Math.Min(editor.X, finalSize.Width - size.Width));
+        double y = editor.Y - size.Height - 2;
+        if (y < HeaderHeight)
+        {
+            y = editor.Bottom + 2; // no room above — show below the cell
+        }
+
+        _signatureTip.Arrange(new Rect(x, y, size.Width, size.Height));
     }
 
     private void RaiseSelectionChanged() => SelectionChanged?.Invoke(this, EventArgs.Empty);
