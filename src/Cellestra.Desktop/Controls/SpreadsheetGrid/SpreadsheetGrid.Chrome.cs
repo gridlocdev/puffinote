@@ -20,8 +20,6 @@ namespace Cellestra.Desktop.Controls.SpreadsheetGrid;
 /// </summary>
 public sealed partial class SpreadsheetGrid
 {
-    private static readonly Color HeaderBand = Color.FromRgb(0xD9, 0xE5, 0xF5);
-    private static readonly Color RowBand = Color.FromRgb(0xF2, 0xF7, 0xFD);
     private static readonly Color TableBorder = Color.FromRgb(0x4A, 0x7E, 0xBB);
 
     private readonly Canvas _popupLayer = new() { IsHitTestVisible = true };
@@ -56,11 +54,11 @@ public sealed partial class SpreadsheetGrid
                 int dataIndex = row - table.Range.Top - (table.HasHeader ? 1 : 0);
                 if (isHeader)
                 {
-                    context.FillRectangle(new SolidColorBrush(HeaderBand), rowRect);
+                    context.FillRectangle(_palette.TableHeaderBand, rowRect);
                 }
                 else if (dataIndex % 2 == 1)
                 {
-                    context.FillRectangle(new SolidColorBrush(RowBand), rowRect);
+                    context.FillRectangle(_palette.TableRowBand, rowRect);
                 }
             }
         }
@@ -111,7 +109,7 @@ public sealed partial class SpreadsheetGrid
 
             double size = Math.Min(14, cellRect.Height - 2);
             var button = new Rect(cellRect.Right - size - 2, cellRect.Y + (cellRect.Height - size) / 2, size, size);
-            context.FillRectangle(new SolidColorBrush(Color.FromRgb(0xFF, 0xFF, 0xFF)), button);
+            context.FillRectangle(_palette.HeaderFill, button);
             context.DrawRectangle(null, new Pen(new SolidColorBrush(TableBorder)), button);
             DrawGlyph(context, "▾", button);
             _filterButtons.Add((button, col, range, hasHeader));
@@ -133,16 +131,16 @@ public sealed partial class SpreadsheetGrid
 
         double size = Math.Min(16, cellRect.Height);
         var button = new Rect(cellRect.Right - size, cellRect.Bottom - size, size, size);
-        context.FillRectangle(new SolidColorBrush(Color.FromRgb(0xEE, 0xEE, 0xEE)), button);
-        context.DrawRectangle(null, new Pen(new SolidColorBrush(Color.FromRgb(0x99, 0x99, 0x99))), button);
+        context.FillRectangle(_palette.HeaderFill, button);
+        context.DrawRectangle(null, _palette.GridLine, button);
         DrawGlyph(context, "▾", button);
         _validationButton = (button, rule);
     }
 
-    private static void DrawGlyph(DrawingContext context, string glyph, Rect rect)
+    private void DrawGlyph(DrawingContext context, string glyph, Rect rect)
     {
         var text = new FormattedText(glyph, CultureInfo.InvariantCulture, FlowDirection.LeftToRight,
-            new Typeface("Helvetica Neue"), 9, new SolidColorBrush(Color.FromRgb(0x33, 0x33, 0x33)));
+            new Typeface("Helvetica Neue"), 9, _palette.HeaderText);
         context.DrawText(text, new Point(rect.X + (rect.Width - text.Width) / 2, rect.Y + (rect.Height - text.Height) / 2));
     }
 
@@ -284,11 +282,11 @@ public sealed partial class SpreadsheetGrid
         OpenPopup(anchor, PopupBox(list));
     }
 
-    private static Border PopupBox(Control content) => new()
+    private Border PopupBox(Control content) => new()
     {
         Width = 220,
-        Background = Brushes.White,
-        BorderBrush = new SolidColorBrush(Color.FromRgb(0xBB, 0xBB, 0xBB)),
+        Background = _palette.PopupSurface,
+        BorderBrush = _palette.GridLine.Brush,
         BorderThickness = new Thickness(1),
         CornerRadius = new CornerRadius(4),
         Padding = new Thickness(8),

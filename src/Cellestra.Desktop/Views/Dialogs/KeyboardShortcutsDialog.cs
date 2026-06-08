@@ -112,7 +112,8 @@ public sealed class KeyboardShortcutsDialog : Window
 
         var chip = new Border
         {
-            Background = new SolidColorBrush(Color.FromRgb(0xEE, 0xEE, 0xF0)),
+            // Translucent gray reads as light-gray on a light theme and dark-gray on a dark one.
+            Background = new SolidColorBrush(Color.FromArgb(0x22, 0x88, 0x88, 0x88)),
             CornerRadius = new CornerRadius(4),
             Padding = new Thickness(8, 2),
             MinWidth = 64,

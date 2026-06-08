@@ -82,7 +82,8 @@ public sealed class Ribbon : UserControl
 
         return new Border
         {
-            BorderBrush = new SolidColorBrush(Color.FromRgb(0xE4, 0xE4, 0xE4)),
+            // Translucent so the group divider shows on both light and dark themes.
+            BorderBrush = new SolidColorBrush(Color.FromArgb(0x33, 0x88, 0x88, 0x88)),
             BorderThickness = new Avalonia.Thickness(0, 0, 1, 0),
             Padding = new Avalonia.Thickness(6, 2),
             Child = new StackPanel

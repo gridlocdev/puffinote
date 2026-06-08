@@ -505,6 +505,11 @@ public partial class MainWindow : Window, IAppEnvironment
     /// <summary>The Command Palette / sheet switcher overlay is modal: while it's up, the grid behind it must ignore command shortcuts.</summary>
     public bool IsModalOpen => OverlayHost.IsVisible;
 
+    /// <summary>An opaque surface color for floating chrome (palette box, active tab) that follows the light/dark theme so themed text stays legible.</summary>
+    private IBrush ThemedSurface => ActualThemeVariant == Avalonia.Styling.ThemeVariant.Dark
+        ? new SolidColorBrush(Color.FromRgb(0x2B, 0x2B, 0x2B))
+        : Brushes.White;
+
     public async void ShowFormatCellsDialog()
     {
         var sheet = _session.ActiveSheet;
@@ -616,7 +621,7 @@ public partial class MainWindow : Window, IAppEnvironment
             {
                 Content = sheet.Name,
                 Padding = new Thickness(10, 2),
-                Background = active ? Brushes.White : Brushes.Transparent,
+                Background = active ? ThemedSurface : Brushes.Transparent,
                 FontWeight = active ? FontWeight.SemiBold : FontWeight.Normal,
             };
             var captured = sheet;
@@ -842,7 +847,7 @@ public partial class MainWindow : Window, IAppEnvironment
         var box = new Border
         {
             Width = 520,
-            Background = Brushes.White,
+            Background = ThemedSurface,
             CornerRadius = new CornerRadius(8),
             Padding = new Thickness(10),
             Margin = new Thickness(0, 80, 0, 0),

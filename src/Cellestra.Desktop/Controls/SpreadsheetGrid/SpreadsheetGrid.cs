@@ -44,14 +44,17 @@ public sealed partial class SpreadsheetGrid : Panel
     private readonly List<(int Index, double Offset, double Size)> _visibleColumns = new();
     private readonly List<(int Index, double Offset, double Size)> _visibleRows = new();
 
+    private GridPalette _palette = GridPalette.For(Avalonia.Styling.ThemeVariant.Light);
+
     public SpreadsheetGrid()
     {
         Focusable = true;
-        Background = Brushes.White;
         _surface = new Surface(this);
         Children.Add(_surface);        // draws the grid
         Children.Add(_editor);         // floats above for inline editing
         InitChrome();                  // popup layer for filter/validation dropdowns
+        ApplyTheme();                  // canvas/text colors follow the system light/dark theme
+        ActualThemeVariantChanged += (_, _) => ApplyTheme();
         Selection.Changed += (_, _) => Redraw();
         _editor.KeyDown += EditorKeyDown;
         _editor.LostFocus += (_, _) => CommitEdit(moveRow: 0, moveColumn: 0);
@@ -68,6 +71,16 @@ public sealed partial class SpreadsheetGrid : Panel
     }
 
     private void Redraw() => _surface.InvalidateVisual();
+
+    /// <summary>Re-resolve the theme palette and repaint; the inline editor matches the canvas so editing reads in either theme.</summary>
+    private void ApplyTheme()
+    {
+        _palette = GridPalette.For(ActualThemeVariant);
+        Background = _palette.Canvas;
+        _editor.Background = _palette.Canvas;
+        _editor.Foreground = _palette.DefaultText;
+        Redraw();
+    }
 
     /// <summary>The draw-only child. Panel.Render is sealed, so drawing lives on this Control.</summary>
     private sealed class Surface : Control
@@ -195,27 +208,26 @@ public sealed partial class SpreadsheetGrid : Panel
             return;
         }
 
-        var gridPen = new Pen(new SolidColorBrush(Color.FromRgb(0xE0, 0xE0, 0xE0)));
-        var headerBrush = new SolidColorBrush(Color.FromRgb(0xF4, 0xF4, 0xF4));
-        var headerText = new SolidColorBrush(Color.FromRgb(0x55, 0x55, 0x55));
-        var selectionFill = new SolidColorBrush(Color.FromArgb(0x22, 0x2A, 0x7D, 0xE1));
-        var activePen = new Pen(new SolidColorBrush(Color.FromRgb(0x2A, 0x7D, 0xE1)), 2);
+        // Re-resolve here too (not just on theme change) so all partials draw with one consistent palette.
+        _palette = GridPalette.For(ActualThemeVariant);
+        var gridPen = _palette.GridLine;
 
+        context.FillRectangle(_palette.Canvas, new Rect(Bounds.Size));
         DrawTableBanding(context, sheet);
-        DrawSelection(context, selectionFill);
+        DrawSelection(context, _palette.SelectionFill);
         DrawCells(context, sheet, gridPen);
         DrawMerges(context, sheet, gridPen);
         DrawTableChrome(context, sheet);
         DrawFreezeDividers(context);
-        DrawHeaders(context, headerBrush, headerText, gridPen);
-        DrawActiveOutline(context, activePen);
+        DrawHeaders(context, _palette.HeaderFill, _palette.HeaderText, gridPen);
+        DrawActiveOutline(context, _palette.ActiveOutline);
         DrawReferenceHighlights(context);
         DrawMarquee(context);
         DrawFillPreview(context);
         DrawFillHandle(context);
     }
 
-    private void DrawCells(DrawingContext context, Worksheet sheet, Pen gridPen)
+    private void DrawCells(DrawingContext context, Worksheet sheet, IPen gridPen)
     {
         // Pass 1: backgrounds and gridlines for every visible cell.
         foreach (var (row, y, h) in _visibleRows)
@@ -261,7 +273,7 @@ public sealed partial class SpreadsheetGrid : Panel
         }
     }
 
-    private void DrawMerges(DrawingContext context, Worksheet sheet, Pen gridPen)
+    private void DrawMerges(DrawingContext context, Worksheet sheet, IPen gridPen)
     {
         foreach (var region in sheet.MergedRegions)
         {
@@ -270,7 +282,7 @@ public sealed partial class SpreadsheetGrid : Panel
                 continue;
             }
 
-            context.FillRectangle(Brushes.White, rect);
+            context.FillRectangle(_palette.Canvas, rect);
             context.DrawRectangle(null, gridPen, rect);
 
             var anchor = sheet.Find(region.Range.Top, region.Range.Left);
@@ -289,7 +301,7 @@ public sealed partial class SpreadsheetGrid : Panel
             return;
         }
 
-        var pen = new Pen(new SolidColorBrush(Color.FromRgb(0x9A, 0x9A, 0x9A)), 1.5);
+        var pen = _palette.FreezeDivider;
         if (sheet.FrozenColumns > 0 && _frozenRight > HeaderWidth)
         {
             context.DrawLine(pen, new Point(_frozenRight, 0), new Point(_frozenRight, Bounds.Height));
@@ -435,7 +447,7 @@ public sealed partial class SpreadsheetGrid : Panel
             return Brushes.Crimson;
         }
 
-        return new SolidColorBrush(style.Font.Color.IsTransparent ? Colors.Black : ToColor(style.Font.Color));
+        return style.Font.Color.IsTransparent ? _palette.DefaultText : new SolidColorBrush(ToColor(style.Font.Color));
     }
 
     private void DrawSelection(DrawingContext context, IBrush fill)
@@ -451,7 +463,7 @@ public sealed partial class SpreadsheetGrid : Panel
         }
     }
 
-    private void DrawActiveOutline(DrawingContext context, Pen pen)
+    private void DrawActiveOutline(DrawingContext context, IPen pen)
     {
         if (TryGetCellRect(Selection.ActiveRow, Selection.ActiveColumn, out var rect))
         {
@@ -459,7 +471,7 @@ public sealed partial class SpreadsheetGrid : Panel
         }
     }
 
-    private void DrawHeaders(DrawingContext context, IBrush headerBrush, IBrush textBrush, Pen gridPen)
+    private void DrawHeaders(DrawingContext context, IBrush headerBrush, IBrush textBrush, IPen gridPen)
     {
         // Corner.
         context.FillRectangle(headerBrush, new Rect(0, 0, HeaderWidth, HeaderHeight));
@@ -469,7 +481,7 @@ public sealed partial class SpreadsheetGrid : Panel
         {
             var rect = new Rect(x, 0, w, HeaderHeight);
             bool active = col >= Selection.Left && col <= Selection.Right;
-            context.FillRectangle(active ? new SolidColorBrush(Color.FromRgb(0xE6, 0xEF, 0xFB)) : headerBrush, rect);
+            context.FillRectangle(active ? _palette.ActiveHeaderFill : headerBrush, rect);
             context.DrawRectangle(null, gridPen, rect);
             DrawCentered(context, SheetDimensions.ColumnToLetters(col), rect, typeface, textBrush);
         }
@@ -478,7 +490,7 @@ public sealed partial class SpreadsheetGrid : Panel
         {
             var rect = new Rect(0, y, HeaderWidth, h);
             bool active = row >= Selection.Top && row <= Selection.Bottom;
-            context.FillRectangle(active ? new SolidColorBrush(Color.FromRgb(0xE6, 0xEF, 0xFB)) : headerBrush, rect);
+            context.FillRectangle(active ? _palette.ActiveHeaderFill : headerBrush, rect);
             context.DrawRectangle(null, gridPen, rect);
             DrawCentered(context, (row + 1).ToString(CultureInfo.InvariantCulture), rect, typeface, textBrush);
         }
