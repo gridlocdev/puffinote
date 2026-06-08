@@ -40,11 +40,10 @@ public sealed partial class SpreadsheetGrid
         }
 
         // Append the suffix, selected, so typing replaces it and Enter keeps the whole word.
-        _programmaticEdit = true;
+        _programmaticText = match;
         _editor.Text = match;
         _editor.SelectionStart = text.Length;
         _editor.SelectionEnd = match.Length;
-        _programmaticEdit = false;
         _lastEditorTextLength = text.Length; // the real typed length, so the next keystroke counts as growth
     }
 

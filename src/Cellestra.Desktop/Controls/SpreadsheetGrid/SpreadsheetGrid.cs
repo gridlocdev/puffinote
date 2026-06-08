@@ -4,6 +4,7 @@ using System.Globalization;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Input;
+using Avalonia.Interactivity;
 using Avalonia.Media;
 using Cellestra.Core.Formulas.References;
 using Cellestra.Core.Model;
@@ -57,10 +58,17 @@ public sealed partial class SpreadsheetGrid : Panel
         ActualThemeVariantChanged += (_, _) => ApplyTheme();
         Selection.Changed += (_, _) => Redraw();
         _editor.KeyDown += EditorKeyDown;
+        // Arrow keys must be caught in the tunnel phase: the TextBox's own (bubbling) handler would
+        // otherwise consume them for caret movement before point mode could poke at a cell.
+        _editor.AddHandler(KeyDownEvent, EditorPreviewKeyDown, RoutingStrategies.Tunnel);
         _editor.LostFocus += (_, _) => CommitEdit(moveRow: 0, moveColumn: 0);
         _editor.TextChanged += (_, _) =>
         {
-            if (!_programmaticEdit)
+            // Compare by value (not a bool flag) so a TextChanged that arrives after SetEditorText
+            // returns still counts as our own edit, not typing.
+            bool programmatic = _editor.Text == _programmaticText;
+            _programmaticText = null;
+            if (!programmatic)
             {
                 ResetPointMode();  // typing ends ref replacement (#17)
                 OfferCompletion(); // type-ahead from the column (#20)
@@ -913,6 +921,15 @@ public sealed partial class SpreadsheetGrid : Panel
         }
 
         return cell.IsFormula ? "=" + cell.Formula : cell.Value.ToInvariantString();
+    }
+
+    private void EditorPreviewKeyDown(object? sender, KeyEventArgs e)
+    {
+        if (e.Key is Key.Up or Key.Down or Key.Left or Key.Right
+            && TryPointModeArrow(e.Key, e.KeyModifiers.HasFlag(KeyModifiers.Shift)))
+        {
+            e.Handled = true;
+        }
     }
 
     private void EditorKeyDown(object? sender, KeyEventArgs e)
