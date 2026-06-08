@@ -2,7 +2,7 @@ namespace Cellestra.Core.Styling;
 
 /// <summary>
 /// Classifies a number-format code into a <see cref="NumberFormatKind"/>. This drives the
-/// ribbon's Number group and the ODF data-style mapping; the actual rendering lives in
+/// command bar's Numbers group and the ODF data-style mapping; the actual rendering lives in
 /// <c>NumberFormatter</c>.
 /// </summary>
 public static class NumberFormatParser

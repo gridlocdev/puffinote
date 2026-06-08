@@ -8,7 +8,7 @@ namespace Cellestra.Desktop.Commands;
 
 /// <summary>
 /// The one command catalog (Golden Rule #4, ARCHITECTURE §7). Defined once here; the menu bar,
-/// ribbon, Command Palette, and keybindings all read it. Shortcuts are the defaults and are
+/// command bar, Command Palette, and keybindings all read it. Shortcuts are the defaults and are
 /// remappable in Settings.
 /// </summary>
 public static class AppCommands

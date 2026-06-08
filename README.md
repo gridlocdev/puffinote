@@ -21,13 +21,13 @@ Full reasoning is in **[docs/PRD.md](docs/PRD.md)**.
 - Multiple sheets, fast scrolling, freeze panes, hide/unhide and insert/delete rows & columns.
 - Direct, fully keyboard-driven editing: copy/paste, fill handle, undo/redo, find & replace.
 - **Sort, filter, and tables** (⌘T): multi-level sort, per-column AutoFilter, and auto-expanding tables with banded styling — plus data validation, hyperlinks, remove-duplicates, and text-to-columns.
-- A VS Code–style **Command Palette** (⌘P) to run any command and a **quick sheet switcher** (⌘⇧P), so the window stays minimal by default.
+- A VS Code–style **Command Palette** (⌘K) to run any command and a **quick sheet switcher** (⌘⇧P), so the window stays uncluttered.
 - Everyday formulas (math, logic, text, lookup, date/time) with cross-sheet and named references, plus automatic recalculation.
 - Number formats, fonts, colors, borders, and alignment.
 
 Not in v1 (on purpose): charts, pivot tables, macros, cloud sync, and `.xlsx`/Google Sheets as first-class formats. See the [PRD](docs/PRD.md#7-non-goals-deliberately-not-in-v1) for the full list.
 
-The interface is **minimal by default**: the window opens to just the grid, a formula bar with a Name Box, and a status bar with live selection stats. The **native macOS menu bar** holds the complete command list, a **Command Palette** (⌘P) runs any command by name, and the **ribbon** (Home · Insert · Formulas · Data · View) is hidden by default and summoned on demand. It's all specified, down to keybindings and iconography, in the [PRD](docs/PRD.md#6-user-interface).
+The interface is **compact and contextual**: the window opens to the grid, a formula bar with a Name Box, a status bar with live selection stats, and a single **adaptive command bar** — one row of task-grouped icon tools (Edit · Text · Align · Numbers · Insert · Data) with overflow drawers, context-aware enabling, and a collapse handle. The **native macOS menu bar** holds the complete command list, and a **Command Palette** (⌘K) runs any command by name. It's all specified, down to keybindings and iconography, in the [PRD](docs/PRD.md#6-user-interface).
 
 The design is checked against Jakob Nielsen's 10 usability heuristics, and accessibility (VoiceOver, full keyboard operation) is a first-class requirement (see the [PRD](docs/PRD.md#7-user-experience-principles-jakob-nielsens-10-heuristics)).
 

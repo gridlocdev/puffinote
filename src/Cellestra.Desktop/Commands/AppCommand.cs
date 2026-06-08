@@ -4,9 +4,9 @@ using Avalonia.Input;
 namespace Cellestra.Desktop.Commands;
 
 /// <summary>
-/// A single command in the one catalog (Golden Rule #4). Carries its label, icon key, and
-/// default shortcut plus the action and an optional enabled check. The menu bar, ribbon,
-/// Command Palette, and keybindings all bind to these, so they can never drift apart.
+/// A single command in the one catalog (Golden Rule #4). Carries its label, description, icon key,
+/// and default shortcut plus the action and optional enabled/active checks. The menu bar, command
+/// bar, Command Palette, and keybindings all bind to these, so they can never drift apart.
 /// </summary>
 public sealed class AppCommand
 {

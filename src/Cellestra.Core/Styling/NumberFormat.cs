@@ -1,6 +1,6 @@
 namespace Cellestra.Core.Styling;
 
-/// <summary>The broad category of a number format, used for ribbon toggles and ODF data-style mapping.</summary>
+/// <summary>The broad category of a number format, used for command-bar toggles and ODF data-style mapping.</summary>
 public enum NumberFormatKind
 {
     General,

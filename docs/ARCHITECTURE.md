@@ -17,7 +17,7 @@ This separation is the most important decision in the project. The hard, bug-pro
 ```
    ┌───────────────────────────────┐   ┌──────────────────────────────┐
    │        Cellestra.Desktop       │   │         Cellestra.Cli         │
-   │  macOS menu bar · Ribbon ·     │   │  convert · cat · get · set ·  │
+   │  macOS menu bar · Command bar │   │  convert · cat · get · set ·  │
    │  Formula bar · Grid · Tabs     │   │  recalc · eval · validate ·   │
    │  Views ↔ ViewModels ↔ Services │   │  diff · functions · …         │
    └───────────────┬────────────────┘   └───────────────┬──────────────┘
@@ -40,7 +40,7 @@ Statically typed, familiar, with a huge trustworthy standard library (ZIP and XM
 ### UI: Avalonia 12 (MVVM, but flexibly)
 A mature cross-platform .NET UI framework, close to WPF, modern-looking, native on macOS. **Avalonia 12** reworked rendering for speed in dense scenes (Cellestra's grid), turned on compiled bindings by default, and moved to SkiaSharp 3. It's **MIT-licensed** and is essentially **one dependency from one team** — a good fit for the supply-chain goal, versus the JavaScript world this project avoids.
 
-MVVM is used for the *chrome* (menu, ribbon, formula bar, dialogs). It is **not forced** — the grid is a hand-built control using direct code (see §6).
+MVVM is used for the *chrome* (menu, command bar, formula bar, dialogs). It is **not forced** — the grid is a hand-built control using direct code (see §6).
 
 ### License: MIT
 Cellestra ships under the **MIT License** (see `LICENSE`). All new code is MIT.
@@ -73,7 +73,7 @@ Exact versions live in **`Directory.Packages.props`** (central package managemen
 ## 3. The projects
 
 - **`Cellestra.Core`** — a plain class library; everything that defines what a spreadsheet *is*. No Avalonia. Most tests point here.
-- **`Cellestra.Desktop`** — the Avalonia executable: window, menu bar, ribbon, grid, dialogs, and a thin **Services** layer bridging user actions to Core.
+- **`Cellestra.Desktop`** — the Avalonia executable: window, menu bar, command bar, grid, dialogs, and a thin **Services** layer bridging user actions to Core.
 - **`Cellestra.Cli`** — the `cellestra` console executable. References only Core + `System.CommandLine`; **no Avalonia, no network**. A thin `Infrastructure` layer (`Workspace` for load/recalc/atomic-save, `Cells`/`Output`/`Locale` helpers) mirrors what the Desktop `Services` layer does, so edits are atomic and **preserve unmodeled content verbatim** (§8.1) exactly like the app. One static method per command, composed in `CliApplication` so tests can drive the same surface in-process.
 
 ## 4. The data model (lives in Core)
@@ -138,12 +138,12 @@ Real spreadsheets draw their own grid; so does Cellestra — and Avalonia 12's f
 
 MVVM stays for the chrome; the grid's hot path is deliberate direct code.
 
-## 7. The chrome: menu bar, ribbon, formula bar, status bar
+## 7. The chrome: menu bar, command bar, formula bar, status bar
 
-- **One command catalog.** Every user command is defined once in `AppCommands` (label + icon key + default shortcut). The **native macOS menu bar** (`NativeMenu`), the **ribbon**, the **Command Palette**, and **keybindings** all bind to it — so they cannot drift apart (heuristic #4). Shortcut remaps from Settings override the defaults at this layer.
-- **Command Palette** (`PRD.md` §6.7) — a `CommandPalette` overlay + `CommandPaletteViewModel` that fuzzy-matches the `AppCommands` catalog (⌘P) and runs the chosen command against the current selection. Since it reads the same catalog, its rows automatically carry the right label, icon, shortcut, and enabled/disabled state.
-- **Sheet switcher** (`PRD.md` §6.7) — a `SheetSwitcher` overlay + `SheetSwitcherViewModel` that fuzzy-matches the open workbook's worksheet list (⌘⇧P) and activates the chosen sheet. It is data-backed by the `Workbook`/`WorksheetViewModel`s, not the command catalog.
-- **Ribbon** — a `Ribbon` control + `RibbonViewModel` exposing the catalog grouped per `PRD.md` §6.3; **hidden by default** (visibility persisted in settings), collapsible; shared icon assets.
+- **One command catalog.** Every user command is defined once in `AppCommands` (label + description + icon key + default shortcut, plus optional enabled/active predicates). The **native macOS menu bar** (`NativeMenu`), the **adaptive command bar**, the **Command Palette**, and **keybindings** all bind to it — so they cannot drift apart (heuristic #4). Shortcut remaps from Settings override the defaults at this layer.
+- **Command Palette** (`PRD.md` §6.7) — a `CommandPalette` overlay that fuzzy-matches the `AppCommands` catalog (⌘K) and runs the chosen command against the current selection. Since it reads the same catalog, its rows automatically carry the right icon, label, description, shortcut, and enabled/disabled state.
+- **Sheet switcher** (`PRD.md` §6.7) — a similar overlay that fuzzy-matches the open workbook's worksheet list (⌘⇧P) and activates the chosen sheet, data-backed by the `Workbook`, not the command catalog.
+- **Adaptive command bar** — a `CommandBar` control (`Controls/CommandBar`) laid out by `CommandBarModel` per `PRD.md` §6.3: one always-present row of task groups, each with primary icon tools and an overflow `CommandBarDrawer` (labelled rows plus the Text group's font-size stepper and colour swatches with live preview). Context-aware (disabled/lit per the catalog's predicates) and collapsible (collapsed state persisted in settings). Icons render via `Controls/Icons` from local Lucide SVGs.
 - **Formula bar** — Name Box (jump-to-cell/named range), accept/cancel/`fx`, and the formula input, bound to `FormulaBarViewModel` + current selection.
 - **Status bar** — `StatusBarViewModel`: active cell, selection stats (Count always; Sum/Average when numeric cells are selected), calc-mode badge, busy indicator, dirty flag, zoom.
 - **Function picker, autocomplete, and Function Reference** all read the one `FunctionRegistry`.
@@ -155,7 +155,7 @@ MVVM stays for the chrome; the grid's hot path is deliberate direct code.
 - **Undo/redo manager** — holds the stacks (session-only, 1,000-step cap); drives Core's edit commands.
 - **Clipboard service** — copy/paste as tab-separated text to/from other apps; backs Paste Special.
 - **File-dialog & dialog services** — native open/save and modal dialogs, including the confirmations in `PRD.md` §8.7 (the "more than 100 non-empty cells" threshold lives here).
-- **Recent-files & settings services** — persisted to `~/Library/Application Support/Cellestra/settings.json` (window state, recent files, shortcut remaps, ribbon/zoom/view toggles, default calc mode).
+- **Recent-files & settings services** — persisted to `~/Library/Application Support/Cellestra/settings.json` (window state, recent files, shortcut remaps, command-bar collapsed/zoom/view toggles, default calc mode).
 
 ## 9. Threading
 Recalculation and file I/O run off the UI thread; results are marshaled back. Only the UI thread touches Avalonia controls.
@@ -165,11 +165,11 @@ Recalculation and file I/O run off the UI thread; results are marshaled back. On
 - **Visibility of status** → `StatusBarViewModel` + progress/busy events from the recalc engine and file service.
 - **Match real world** → `A1` syntax, familiar function names, human-readable `CellError`.
 - **Control & freedom** → `UndoRedoManager`; grid input maps **Esc** to cancel-edit; file ops cancellable.
-- **Consistency** → the single `AppCommands` catalog feeding menu, ribbon, and keys.
-- **Error prevention** → dialog-service confirmations (§8.7 thresholds); parser validates before an edit commits.
-- **Recognition over recall** → ribbon + Name Box; autocomplete, picker, and Reference all read one `FunctionRegistry`; disabled-not-hidden controls.
-- **Flexibility & efficiency** → every command in menu + ribbon + **Command Palette (⌘P)** + remappable key; **sheet switcher (⌘⇧P)**; full keyboard operation; collapsible ribbon.
-- **Minimalist design** → **minimal by default** (ribbon hidden; window is grid + formula bar + status bar); the Command Palette stands in for always-on chrome; a small flat style set; advanced options in dialogs.
+- **Consistency** → the single `AppCommands` catalog feeding menu, command bar, and keys.
+- **Error prevention** → dialog-service confirmations (§8.7 thresholds); number-format tools disabled on text cells; parser validates before an edit commits.
+- **Recognition over recall** → command-bar drawers pair each icon with a label + description; the palette surfaces all commands by name; autocomplete, picker, and Reference all read one `FunctionRegistry`; disabled-not-hidden controls.
+- **Flexibility & efficiency** → every command in menu + command bar + **Command Palette (⌘K)** + remappable key; **sheet switcher (⌘⇧P)**; full keyboard operation; a collapsible command bar.
+- **Minimalist design** → one compact, context-aware command bar instead of a multi-tab ribbon; the palette stands in for always-on discovery chrome; depth behind progressive disclosure (drawers + dialogs); a small flat style set.
 - **Diagnose/recover** → `ParseError` carries position + reason; error cells expose their reason on hover.
 - **Help** → tooltips from the catalog; Function Reference generated from `FunctionRegistry` metadata.
 - **Accessibility** → automation peers (labels/roles) for VoiceOver; full keyboard operation; honors system text-scaling/reduced-motion/increased-contrast; the renderer draws clear focus indicators.
@@ -184,8 +184,8 @@ Most UX guarantees are **backed by structure** (one command catalog → three su
 | Custom-drawn grid, no per-cell ViewModels | Speed & memory at scale | Grid behavior is built by hand |
 | C# + Avalonia 12 over JS/Rust/raylib | Familiar, lean deps, native feel | Not the absolute leanest binary |
 | MVVM for chrome, direct code for grid | Right tool per job | Two styles in one codebase (documented) |
-| One `AppCommands` catalog → menu+ribbon+palette+keys | Consistency | Commands carry metadata |
-| Minimal by default: ribbon hidden, Command Palette (⌘P) + sheet switcher (⌘⇧P) | Uncluttered, keyboard-first | Discovery leans on search, not visible chrome |
+| One `AppCommands` catalog → menu+command bar+palette+keys | Consistency | Commands carry metadata |
+| Adaptive command bar (collapsible) + Command Palette (⌘K) + sheet switcher (⌘⇧P) | Compact, contextual, keyboard-first | Context-driven tools can shift as the selection changes |
 | One `FunctionRegistry` → eval+autocomplete+help | Consistency, less drift | Registry carries metadata |
 | Preserve unknown `.ods` content verbatim | Don't destroy user data | More work in the serializer |
 | Tables as ODF database ranges, no structured refs | Clean LibreOffice round-trip | No `Table[Column]` formula syntax |
@@ -270,10 +270,11 @@ cellestra/
 │       ├── Info.plist                       # bundle id com.cellestra.Cellestra; .ods assoc.
 │       ├── Assets/ (Icons/ = local Lucide SVGs, Fonts/)
 │       ├── Styles/ (Theme.axaml, Colors.axaml, ChromeStyles.axaml)
-│       ├── Commands/ (AppCommands.cs)        # single catalog: label+icon+shortcut
+│       ├── Commands/ (AppCommands.cs)        # single catalog: label+description+icon+shortcut
 │       ├── Menu/ (NativeMenu.axaml)          # macOS menu bar → AppCommands
 │       ├── Controls/
-│       │   ├── Ribbon/ (Ribbon, RibbonTab, RibbonGroup, RibbonButton)
+│       │   ├── CommandBar/ (CommandBar, CommandBarModel, CommandBarDrawer)
+│       │   ├── Icons/ (LucideIcon, LucideIcons)   # local Lucide SVGs → stroked geometry
 │       │   ├── SpreadsheetGrid/ (SpreadsheetGrid, SpreadsheetGridRenderer,
 │       │   │     CellLayout, GridSelection, GridInputHandler, InlineCellEditor,
 │       │   │     FillHandle, MergedRegionMap, ZoomController, FrozenPanes,
@@ -288,7 +289,7 @@ cellestra/
 │       │   │     Sort, DataValidation, TextToColumns, RemoveDuplicates, Hyperlink)
 │       │   └── Overlays/ (CommandPalette, SheetSwitcher)   # PRD §6.7; FuzzyMatcher.cs
 │       ├── ViewModels/ (ViewModelBase, MainWindow, Workbook, Worksheet,
-│       │     Ribbon, FormulaBar, Selection, StatusBar, SheetTab,
+│       │     FormulaBar, Selection, StatusBar, SheetTab,
 │       │     CommandPalette, SheetSwitcher, Dialogs/…)
 │       ├── Input/ (KeyBindings.axaml)        # keys → AppCommands
 │       ├── Converters/ (CellValueToDisplayConverter, …)
@@ -317,7 +318,7 @@ cellestra/
 │   │   ├── Cellestra.UiTests.csproj      # Avalonia.Headless.XUnit 12.0.4
 │   │   ├── TestAppBuilder.cs             # [assembly: AvaloniaTestApplication(...)]
 │   │   ├── SpreadsheetGridTests.cs       # [AvaloniaFact]/[AvaloniaTheory]
-│   │   └── RibbonAndMenuTests.cs         # command-catalog wiring
+│   │   └── CommandBarTests.cs            # command-bar + catalog wiring
 │   │
 │   ├── Cellestra.Cli.Tests/             # end-to-end CLI, in-process (CliApplication.Run)
 │   │   └── CliTests.cs                  # convert/get/set/validate/diff/functions + §8.1 preservation
@@ -333,7 +334,7 @@ cellestra/
 
 - **Core**, xUnit v3 (`Cellestra.Core.Tests`): lexer, parser, evaluator, every function (vs. expected LibreOffice results), reference adjustment, recalc order, undo/redo, `.ods`/CSV round-trips, and **unknown-content preservation** (§8.1). Milliseconds to run.
 - **Round-trip tests** are the safety net for the product promise.
-- **Headless UI**, xUnit v3 (`Cellestra.UiTests`): Avalonia 12 headless platform via `Avalonia.Headless.XUnit` 12.0.4, using `[AvaloniaFact]`/`[AvaloniaTheory]` and a one-time `[assembly: AvaloniaTestApplication(typeof(TestAppBuilder))]`. Covers grid behavior and that menu/ribbon/keys resolve to the same commands.
+- **Headless UI**, xUnit v3 (`Cellestra.UiTests`): Avalonia 12 headless platform via `Avalonia.Headless.XUnit` 12.0.4, using `[AvaloniaFact]`/`[AvaloniaTheory]` and a one-time `[assembly: AvaloniaTestApplication(typeof(TestAppBuilder))]`. Covers grid behavior and that menu/command bar/keys resolve to the same commands.
 - **Benchmarks** enforce the §3 speed targets.
 
 > Both test projects are **xUnit v3**. Avalonia's headless integration gained v3 support in Avalonia 12, so staying on 12 keeps the test stack consistent.
