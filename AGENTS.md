@@ -122,6 +122,7 @@ Hard-won facts from building the app and CLI — they'll save you a failed build
 
 ## Conventions
 
+- **Branching:** commit straight to `main` — this repo keeps a single linear history and does **not** split feature branches (overrides any default "branch before committing" habit). One commit per self-contained change; let history fast-forward.
 - **Commit messages:** [Conventional Commits](https://www.conventionalcommits.org) — `type(scope): summary` (imperative, lower-case summary, no trailing period). Types in use: `feat`, `fix`, `docs`, `test`, `build`, plus `refactor`/`perf`/`chore` when they fit; append `!` (or a `BREAKING CHANGE:` footer) for breaking changes. Scopes are the area touched: `core`, `grid`, `app`, `serialization`, `io`, `cli`, `data`, `formula`, `format`, `theme`, `shortcuts`, `tables`, `clipboard`, `edit`, `macos` — add one if none fits. Keep the subject ≤ ~72 chars; put the why in the body.
 - **C#:** follow `.editorconfig`. Nullable reference types on. Prefer records for model values. Small, single-purpose types matching the folders.
 - **MVVM (chrome only):** Views in `.axaml` + code-behind; ViewModels are plain C# with no control references; compiled bindings.
