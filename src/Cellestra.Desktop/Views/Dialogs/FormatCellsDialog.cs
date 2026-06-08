@@ -3,6 +3,7 @@ using System.Linq;
 using Avalonia.Controls;
 using Avalonia.Layout;
 using Cellestra.Core.Styling;
+using Cellestra.Desktop.Controls;
 using SAlign = Cellestra.Core.Styling.HorizontalAlignment;
 
 namespace Cellestra.Desktop.Views.Dialogs;
@@ -26,8 +27,8 @@ public sealed class FormatCellsDialog : Window
     private readonly CheckBox _italic;
     private readonly CheckBox _underline;
     private readonly NumericUpDown _size;
-    private readonly TextBox _textColor;
-    private readonly TextBox _fillColor;
+    private readonly ColorPickerButton _textColor;
+    private readonly ColorPickerButton _fillColor;
     private readonly ComboBox _align;
 
     public FormatCellsDialog(CellStyle current)
@@ -45,8 +46,8 @@ public sealed class FormatCellsDialog : Window
         _italic = new CheckBox { Content = "Italic", IsChecked = current.Font.Italic };
         _underline = new CheckBox { Content = "Underline", IsChecked = current.Font.Underline };
         _size = new NumericUpDown { Width = 90, Minimum = 6, Maximum = 96, Value = (decimal)current.Font.SizePoints };
-        _textColor = new TextBox { Width = 100, Text = current.Font.Color.IsTransparent ? "#000000" : current.Font.Color.ToHex() };
-        _fillColor = new TextBox { Width = 100, PlaceholderText = "none", Text = current.Fill.HasBackground ? current.Fill.Background!.Value.ToHex() : string.Empty };
+        _textColor = new ColorPickerButton(current.Font.Color.IsTransparent ? ArgbColor.Black : current.Font.Color, allowNone: false);
+        _fillColor = new ColorPickerButton(current.Fill.HasBackground ? current.Fill.Background : null, allowNone: true);
         _align = new ComboBox { Width = 140, ItemsSource = new[] { "General", "Left", "Center", "Right" }, SelectedIndex = (int)current.Alignment.Horizontal };
 
         var ok = new Button { Content = "OK", IsDefault = true };
@@ -91,8 +92,8 @@ public sealed class FormatCellsDialog : Window
         bool italic = _italic.IsChecked == true;
         bool underline = _underline.IsChecked == true;
         double size = (double)(_size.Value ?? 10m);
-        var textColor = ArgbColor.TryFromHex(_textColor.Text, out var tc) ? tc : ArgbColor.Black;
-        Fill fill = ArgbColor.TryFromHex(_fillColor.Text, out var fc) ? Fill.Solid(fc) : Fill.None;
+        var textColor = _textColor.Color ?? ArgbColor.Black;
+        Fill fill = _fillColor.Color is { } fc ? Fill.Solid(fc) : Fill.None;
         var horizontal = (SAlign)_align.SelectedIndex;
 
         return style => style with
