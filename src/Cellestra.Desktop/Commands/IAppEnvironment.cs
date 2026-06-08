@@ -19,6 +19,9 @@ public interface IAppEnvironment
     /// <summary>Re-render the grid and the chrome after a model change.</summary>
     void Refresh();
 
+    /// <summary>Scroll the active cell into view (e.g. after jumping to a Find result).</summary>
+    void RevealActiveCell();
+
     /// <summary>Show a brief status-line message narrating an action (cleared on the next selection change).</summary>
     void Narrate(string message);
 

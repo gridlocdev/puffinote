@@ -78,18 +78,24 @@ public sealed class FindReplaceDialog : Window
         string query = _find.Text ?? string.Empty;
         if (query.Length > 0)
         {
+            // Scan only populated cells (not every coordinate of the used rectangle) so a single far
+            // cell can't make each keystroke walk millions of empty positions.
             var sheet = _env.Session.ActiveSheet;
-            if (sheet.GetUsedRange() is { } range)
+            var hits = new List<(int Row, int Column, string Display)>();
+            foreach (var (row, column, _) in sheet.EnumerateCells())
             {
-                foreach (var (row, column) in range.Positions())
+                string display = Display(sheet, row, column);
+                if (display.Contains(query, StringComparison.OrdinalIgnoreCase))
                 {
-                    string display = Display(sheet, row, column);
-                    if (display.Contains(query, StringComparison.OrdinalIgnoreCase))
-                    {
-                        _matches.Add((row, column));
-                        rows.Add($"{new CellAddress(column, row)}    {Truncate(display, 48)}");
-                    }
+                    hits.Add((row, column, display));
                 }
+            }
+
+            hits.Sort((a, b) => a.Row != b.Row ? a.Row.CompareTo(b.Row) : a.Column.CompareTo(b.Column));
+            foreach (var (row, column, display) in hits)
+            {
+                _matches.Add((row, column));
+                rows.Add($"{new CellAddress(column, row)}    {Truncate(display, 48)}");
             }
         }
 
@@ -111,6 +117,7 @@ public sealed class FindReplaceDialog : Window
         {
             var (row, column) = _matches[index];
             _env.Selection.MoveTo(row, column);
+            _env.RevealActiveCell();
             _env.Refresh();
         }
     }
@@ -165,6 +172,7 @@ public sealed class FindReplaceDialog : Window
             if (Display(sheet, row, column).Contains(query, StringComparison.OrdinalIgnoreCase))
             {
                 _env.Selection.MoveTo(row, column);
+                _env.RevealActiveCell();
                 _env.Refresh();
                 _status.Text = string.Empty;
                 return;
@@ -204,17 +212,22 @@ public sealed class FindReplaceDialog : Window
         }
 
         var sheet = _env.Session.ActiveSheet;
-        var used = sheet.GetUsedRange();
-        if (used is not { } range)
+
+        // Snapshot the matching positions first (populated cells only), then replace — so mutating
+        // cells during the loop can't disturb enumeration.
+        var targets = new List<(int Row, int Column)>();
+        foreach (var (row, column, _) in sheet.EnumerateCells())
         {
-            return;
+            if (Display(sheet, row, column).Contains(query, StringComparison.OrdinalIgnoreCase))
+            {
+                targets.Add((row, column));
+            }
         }
 
         int count = 0;
-        foreach (var (row, column) in range.Positions())
+        foreach (var (row, column) in targets)
         {
-            if (Display(sheet, row, column).Contains(query, StringComparison.OrdinalIgnoreCase) &&
-                ReplaceCell(sheet, row, column, query, _replace.Text ?? string.Empty))
+            if (ReplaceCell(sheet, row, column, query, _replace.Text ?? string.Empty))
             {
                 count++;
             }

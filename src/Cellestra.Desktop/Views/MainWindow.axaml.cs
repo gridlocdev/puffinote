@@ -184,6 +184,8 @@ public partial class MainWindow : Window, IAppEnvironment
 
     public void BeginEdit() => Grid.BeginEdit(null);
 
+    public void RevealActiveCell() => Grid.ScrollToActive();
+
     /// <summary>Narrate the last action in the status line's left indicator (a quick reference, per the mockup).</summary>
     public void Narrate(string message) => StatusAction.Text = message;
 

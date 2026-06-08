@@ -11,6 +11,10 @@ public static class EditCommands
 {
     private static IReadOnlyList<(int, int)> Positions(CellRange range) => range.Positions().ToList();
 
+    /// <summary>Bundle several edits into one undoable step (see <see cref="CompositeEditCommand"/>).</summary>
+    public static IEditCommand Composite(string label, IReadOnlyList<IEditCommand> commands) =>
+        new CompositeEditCommand(label, commands);
+
     // ---- Cell content -----------------------------------------------------
 
     public static IEditCommand SetValue(string sheet, int row, int column, CellValue value) =>

@@ -99,6 +99,9 @@ public sealed class WorkbookSession
             return;
         }
 
+        // Undo commands resolve their sheet by name, so a deleted sheet would make replaying older
+        // edits throw. Sheet structure changes aren't undoable (PRD §8.5) — clear the stacks.
+        ClearHistory();
         IsModified = true;
         var next = _workbook.Worksheets[System.Math.Min(index, _workbook.Worksheets.Count - 1)];
         SetActiveSheet(next); // raises StructureChanged
@@ -108,8 +111,18 @@ public sealed class WorkbookSession
     public void RenameSheet(Worksheet sheet, string newName)
     {
         _workbook.RenameSheet(sheet, newName);
+        // Older undo commands reference the previous sheet name and would throw on replay; drop them.
+        ClearHistory();
         IsModified = true;
         StructureChanged?.Invoke(this, EventArgs.Empty);
+    }
+
+    /// <summary>Drop the undo/redo stacks (used by non-undoable structural sheet changes).</summary>
+    private void ClearHistory()
+    {
+        _history.Clear();
+        _undoSelections.Clear();
+        _redoSelections.Clear();
     }
 
     /// <summary>Captures the current selection; set by the UI so undo can restore it.</summary>

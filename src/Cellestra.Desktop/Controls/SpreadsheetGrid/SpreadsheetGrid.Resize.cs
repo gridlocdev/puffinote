@@ -123,6 +123,21 @@ public sealed partial class SpreadsheetGrid
         Redraw();
     }
 
+    /// <summary>If the OS takes the pointer mid-drag (window deactivation, a popup), abandon the drag cleanly.</summary>
+    protected override void OnPointerCaptureLost(PointerCaptureLostEventArgs e)
+    {
+        base.OnPointerCaptureLost(e);
+        if (IsResizing)
+        {
+            _dragColumn = null;
+            _dragRow = null;
+            Redraw();
+        }
+
+        _selecting = false;
+        _filling = false;
+    }
+
     private void EndResize()
     {
         var sheet = Sheet;

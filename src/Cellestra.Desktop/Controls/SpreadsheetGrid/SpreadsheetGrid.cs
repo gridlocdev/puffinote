@@ -908,6 +908,9 @@ public sealed partial class SpreadsheetGrid : Panel
         RaiseSelectionChanged();
     }
 
+    /// <summary>Scroll the active cell into view (used after a programmatic move, e.g. a Find result).</summary>
+    internal void ScrollToActive() => EnsureVisible(Selection.ActiveRow, Selection.ActiveColumn);
+
     private void EnsureVisible(int row, int column)
     {
         var sheet = Sheet;

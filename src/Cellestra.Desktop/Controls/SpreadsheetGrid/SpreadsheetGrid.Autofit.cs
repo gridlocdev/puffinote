@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Globalization;
 using Avalonia;
 using Avalonia.Media;
@@ -45,7 +46,15 @@ public sealed partial class SpreadsheetGrid
             return;
         }
 
-        double widest = MeasureWidestInColumn(sheet, column);
+        double widest = 0;
+        foreach (var (_, col, cell) in sheet.EnumerateCells())
+        {
+            if (col == column && !cell.Value.IsEmpty)
+            {
+                widest = Math.Max(widest, MeasureCellWidth(sheet, cell));
+            }
+        }
+
         double target = widest > 0 ? Math.Clamp(widest + 10, 24, 600) : Defaults.ColumnWidth;
         _session.Execute(EditCommands.SetColumnWidth(sheet.Name, column, target));
         Redraw();
@@ -63,57 +72,57 @@ public sealed partial class SpreadsheetGrid
             return;
         }
 
-        bool changed = false;
-        for (int column = left; column <= right; column++)
+        // One pass over the populated cells, bucketing the widest content per target column.
+        var widest = new double[right - left + 1];
+        foreach (var (_, column, cell) in sheet.EnumerateCells())
         {
-            double widest = MeasureWidestInColumn(sheet, column);
-            if (widest <= 0)
+            if (column < left || column > right || cell.Value.IsEmpty)
             {
                 continue;
             }
 
-            double target = Math.Clamp(widest + 10, 24, 600);
-            if (target > sheet.GetColumnWidth(column) + 0.5)
+            int bucket = column - left;
+            double w = MeasureCellWidth(sheet, cell);
+            if (w > widest[bucket])
             {
-                _session.Execute(EditCommands.SetColumnWidth(sheet.Name, column, target));
-                changed = true;
+                widest[bucket] = w;
             }
         }
 
-        if (changed)
+        // Apply all the needed widenings as ONE undoable step (so it pairs with the format edit).
+        var edits = new List<IEditCommand>();
+        for (int column = left; column <= right; column++)
         {
+            double target = widest[column - left] > 0 ? Math.Clamp(widest[column - left] + 10, 24, 600) : 0;
+            if (target > sheet.GetColumnWidth(column) + 0.5)
+            {
+                edits.Add(EditCommands.SetColumnWidth(sheet.Name, column, target));
+            }
+        }
+
+        if (edits.Count > 0)
+        {
+            _session.Execute(edits.Count == 1 ? edits[0] : EditCommands.Composite("Resize Columns", edits));
             Redraw();
         }
     }
 
-    /// <summary>The widest formatted cell content in a column, measured in model space (no zoom). 0 if empty.</summary>
-    private double MeasureWidestInColumn(Cellestra.Core.Model.Worksheet sheet, int column)
+    /// <summary>The width of one cell's formatted content, measured in model space (no zoom).</summary>
+    private double MeasureCellWidth(Cellestra.Core.Model.Worksheet sheet, Cellestra.Core.Model.Cell cell)
     {
-        double widest = 0;
-        foreach (var (_, col, cell) in sheet.EnumerateCells())
+        var style = _session!.Workbook.Styles.Get(cell.StyleId);
+        string text = NumberFormatter.Format(cell.Value, style.NumberFormat, Culture);
+        if (text.Length == 0)
         {
-            if (col != column || cell.Value.IsEmpty)
-            {
-                continue;
-            }
-
-            var style = _session!.Workbook.Styles.Get(cell.StyleId);
-            string text = NumberFormatter.Format(cell.Value, style.NumberFormat, Culture);
-            if (text.Length == 0)
-            {
-                continue;
-            }
-
-            var typeface = new Typeface(
-                style.Font.Family,
-                style.Font.Italic ? FontStyle.Italic : FontStyle.Normal,
-                style.Font.Bold ? FontWeight.Bold : FontWeight.Normal);
-
-            var formatted = new FormattedText(text, CultureInfo.CurrentCulture, FlowDirection.LeftToRight,
-                typeface, style.Font.SizePoints * 96.0 / 72.0, Brushes.Black);
-            widest = Math.Max(widest, formatted.Width);
+            return 0;
         }
 
-        return widest;
+        var typeface = new Typeface(
+            style.Font.Family,
+            style.Font.Italic ? FontStyle.Italic : FontStyle.Normal,
+            style.Font.Bold ? FontWeight.Bold : FontWeight.Normal);
+
+        return new FormattedText(text, CultureInfo.CurrentCulture, FlowDirection.LeftToRight,
+            typeface, style.Font.SizePoints * 96.0 / 72.0, Brushes.Black).Width;
     }
 }

@@ -1,5 +1,7 @@
 using System;
 using Avalonia.Headless.XUnit;
+using Cellestra.Core.Editing;
+using Cellestra.Core.Values;
 using Cellestra.Desktop.Commands;
 using Cellestra.Desktop.Services;
 using Cellestra.Desktop.Views;
@@ -36,6 +38,22 @@ public class SheetCommandTests
         Assert.Equal("Budget", first.Name);
 
         Assert.Throws<InvalidOperationException>(() => session.RenameSheet(second, "Budget"));
+    }
+
+    [Fact]
+    public void Deleting_a_sheet_clears_undo_history_so_undo_cannot_replay_a_missing_sheet()
+    {
+        var session = WorkbookSession.NewBlank();
+        var first = session.ActiveSheet;
+        session.AddSheet();
+        session.SetActiveSheet(first);
+        session.Execute(EditCommands.SetValue(first.Name, 0, 0, CellValue.Number(1)));
+        Assert.True(session.CanUndo);
+
+        session.DeleteSheet(first);
+
+        Assert.False(session.CanUndo); // history cleared — undoing would otherwise hit the missing sheet
+        session.Undo();                // no-op, must not throw
     }
 
     [AvaloniaFact]
