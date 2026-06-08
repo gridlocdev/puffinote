@@ -11,7 +11,8 @@ namespace Cellestra.Desktop.Commands;
 public sealed class AppCommand
 {
     public AppCommand(string id, string label, string description, Action<IAppEnvironment> execute,
-        string? icon = null, KeyGesture? shortcut = null, Func<IAppEnvironment, bool>? canExecute = null)
+        string? icon = null, KeyGesture? shortcut = null, Func<IAppEnvironment, bool>? canExecute = null,
+        Func<IAppEnvironment, bool>? isActive = null)
     {
         Id = id;
         Label = label;
@@ -20,6 +21,7 @@ public sealed class AppCommand
         Icon = icon;
         Shortcut = shortcut;
         CanExecute = canExecute;
+        IsActive = isActive;
     }
 
     public string Id { get; }
@@ -37,7 +39,13 @@ public sealed class AppCommand
 
     public Func<IAppEnvironment, bool>? CanExecute { get; }
 
+    /// <summary>For toggle-style commands: whether the toggle is currently "on" for the selection.</summary>
+    public Func<IAppEnvironment, bool>? IsActive { get; }
+
     public bool IsEnabled(IAppEnvironment environment) => CanExecute?.Invoke(environment) ?? true;
+
+    /// <summary>Whether this command renders as "on" (lit) in the command bar right now.</summary>
+    public bool IsToggleActive(IAppEnvironment environment) => IsActive?.Invoke(environment) ?? false;
 
     /// <summary>The shortcut rendered for display, e.g. "⌘S".</summary>
     public string ShortcutText => Shortcut is null ? string.Empty : ShortcutFormatter.Format(Shortcut);

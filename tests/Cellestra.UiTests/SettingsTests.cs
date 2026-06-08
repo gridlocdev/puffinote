@@ -14,13 +14,13 @@ public class SettingsTests
         try
         {
             var service = new SettingsService(path);
-            var settings = new AppSettings { RibbonVisible = true, Zoom = 1.5, WindowWidth = 800, WindowHeight = 600 }
+            var settings = new AppSettings { CommandBarCollapsed = true, Zoom = 1.5, WindowWidth = 800, WindowHeight = 600 }
                 .WithRecentFile("/a.ods");
 
             service.Save(settings);
             var loaded = service.Load();
 
-            Assert.True(loaded.RibbonVisible);
+            Assert.True(loaded.CommandBarCollapsed);
             Assert.Equal(1.5, loaded.Zoom);
             Assert.Equal(800, loaded.WindowWidth);
             Assert.Equal("/a.ods", loaded.RecentFiles.Single());

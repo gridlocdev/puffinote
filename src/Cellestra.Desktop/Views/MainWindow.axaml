@@ -8,8 +8,8 @@
 
     <Grid RowDefinitions="Auto,Auto,*,Auto,Auto">
 
-        <!-- Ribbon (hidden by default, PRD §6) -->
-        <ContentControl x:Name="RibbonHost" Grid.Row="0" IsVisible="False" />
+        <!-- Adaptive command bar — always present, collapses to a slim handle (PRD §6) -->
+        <ContentControl x:Name="CommandBarHost" Grid.Row="0" />
 
         <!-- Formula bar: Name Box, fx, formula input -->
         <Border Grid.Row="1" Background="{DynamicResource ChromeBackground}" BorderBrush="{DynamicResource ChromeBorder}" BorderThickness="0,0,0,1" Padding="4">

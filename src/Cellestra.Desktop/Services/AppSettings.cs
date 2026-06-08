@@ -3,12 +3,13 @@ using System.Collections.Generic;
 namespace Cellestra.Desktop.Services;
 
 /// <summary>
-/// User settings persisted between sessions (ARCHITECTURE §8): ribbon/zoom/view state, window
+/// User settings persisted between sessions (ARCHITECTURE §8): command-bar/zoom/view state, window
 /// size, and the recent-files list. Stored as JSON under the app-support directory.
 /// </summary>
 public sealed record AppSettings
 {
-    public bool RibbonVisible { get; init; }
+    /// <summary>Whether the adaptive command bar is folded to its slim handle. Default: expanded.</summary>
+    public bool CommandBarCollapsed { get; init; }
 
     public double Zoom { get; init; } = 1.0;
 

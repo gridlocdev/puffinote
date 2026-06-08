@@ -38,8 +38,6 @@ public interface IAppEnvironment
 
     void Paste();
 
-    void ToggleRibbon();
-
     void ShowCommandPalette();
 
     void ShowSheetSwitcher();

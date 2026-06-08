@@ -38,6 +38,8 @@ public partial class MainWindow : Window, IAppEnvironment
     private ClipboardBlock? _clipboard;
     private string? _clipboardText;
 
+    private Controls.CommandBar.CommandBar? _commandBar;
+
     public MainWindow()
     {
         InitializeComponent();
@@ -63,7 +65,11 @@ public partial class MainWindow : Window, IAppEnvironment
         BuildSheetTabs();
 
         Grid.Zoom = _settings.Zoom;
-        IsRibbonVisible = _settings.RibbonVisible;
+
+        _commandBar = new Controls.CommandBar.CommandBar(this) { Collapsed = _settings.CommandBarCollapsed };
+        _commandBar.CollapsedChanged += (_, _) => PersistSettings();
+        CommandBarHost.Content = _commandBar;
+
         Closing += (_, _) =>
         {
             PersistSettings();
@@ -78,7 +84,7 @@ public partial class MainWindow : Window, IAppEnvironment
     {
         _settings = _settings with
         {
-            RibbonVisible = IsRibbonVisible,
+            CommandBarCollapsed = _commandBar?.Collapsed ?? false,
             Zoom = Grid.Zoom,
             WindowWidth = Width,
             WindowHeight = Height,
@@ -108,7 +114,7 @@ public partial class MainWindow : Window, IAppEnvironment
         menu.Items.Add(Submenu("Data", "data.sortAsc", "data.sortDesc", "data.customSort", null,
             "data.toggleFilter", "data.clearFilter", null, "data.createTable", "data.removeDuplicates",
             "data.textToColumns", "data.validation", null, "formula.recalc"));
-        menu.Items.Add(Submenu("View", "view.commandPalette", "view.goToSheet", null, "view.zoomIn", "view.zoomOut", "view.actualSize", null, "view.freezePanes", "view.showRibbon"));
+        menu.Items.Add(Submenu("View", "view.commandPalette", "view.goToSheet", null, "view.zoomIn", "view.zoomOut", "view.actualSize", null, "view.freezePanes"));
         menu.Items.Add(Submenu("Help", "help.shortcuts"));
         NativeMenu.SetMenu(this, menu);
     }
@@ -357,27 +363,6 @@ public partial class MainWindow : Window, IAppEnvironment
         }
     }
 
-    public void ToggleRibbon()
-    {
-        RibbonHost.Content ??= new Controls.Ribbon.Ribbon(this);
-        RibbonHost.IsVisible = !RibbonHost.IsVisible;
-    }
-
-    /// <summary>Whether the ribbon is currently shown (persisted between sessions, PRD §6.1).</summary>
-    public bool IsRibbonVisible
-    {
-        get => RibbonHost.IsVisible;
-        set
-        {
-            if (value)
-            {
-                RibbonHost.Content ??= new Controls.Ribbon.Ribbon(this);
-            }
-
-            RibbonHost.IsVisible = value;
-        }
-    }
-
     public void ShowCommandPalette()
     {
         var items = AppCommands.All
@@ -567,6 +552,7 @@ public partial class MainWindow : Window, IAppEnvironment
         FormulaInput.Text = cell is null ? string.Empty : (cell.IsFormula ? "=" + cell.Formula : cell.Value.ToInvariantString());
 
         UpdateStatus();
+        _commandBar?.RefreshState();
     }
 
     private void UpdateChrome()
@@ -575,6 +561,7 @@ public partial class MainWindow : Window, IAppEnvironment
         Title = $"{(_session.IsModified ? "● " : string.Empty)}{name} — Cellestra";
         StatusZoom.Text = $"{Grid.Zoom * 100:0}%";
         StatusCalc.Text = _session.Workbook.Settings.CalculationMode == CalculationMode.Manual ? "Manual" : "Auto";
+        _commandBar?.RefreshState();
     }
 
     private void UpdateStatus()
