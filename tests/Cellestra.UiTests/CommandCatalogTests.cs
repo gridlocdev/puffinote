@@ -1,4 +1,5 @@
 using System.Linq;
+using Avalonia.Headless.XUnit;
 using Cellestra.Desktop.Commands;
 using Xunit;
 
@@ -33,12 +34,29 @@ public class CommandCatalogTests
     }
 
     [Fact]
-    public void Every_command_has_a_label_and_action()
+    public void Every_command_has_a_label_action_and_description()
     {
         foreach (var command in AppCommands.All)
         {
             Assert.False(string.IsNullOrWhiteSpace(command.Label));
             Assert.NotNull(command.Execute);
+            // The bar's tooltips and the palette read Description; an empty one is a hole in the UI.
+            Assert.False(string.IsNullOrWhiteSpace(command.Description), $"{command.Id} has no description");
+        }
+    }
+
+    [AvaloniaFact]
+    public void Every_command_icon_resolves_to_a_vendored_glyph()
+    {
+        foreach (var command in AppCommands.All)
+        {
+            if (command.Icon is null)
+            {
+                continue;
+            }
+
+            Assert.True(Cellestra.Desktop.Controls.Icons.LucideIcons.Get(command.Icon) is not null,
+                $"{command.Id} references missing icon '{command.Icon}'");
         }
     }
 }

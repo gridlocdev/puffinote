@@ -28,76 +28,91 @@ public static class AppCommands
     private static List<AppCommand> Build() => new()
     {
         // File
-        new("file.new", "New", e => _ = e.NewWorkbookAsync(), "file-plus", new KeyGesture(Key.N, Cmd)),
-        new("file.open", "Open…", e => _ = e.OpenWorkbookAsync(), "folder-open", new KeyGesture(Key.O, Cmd)),
-        new("file.save", "Save", e => _ = e.SaveWorkbookAsync(), "save", new KeyGesture(Key.S, Cmd)),
-        new("file.saveAs", "Save As…", e => _ = e.SaveWorkbookAsAsync(), "save", new KeyGesture(Key.S, CmdShift)),
-        new("file.importCsv", "Import CSV…", e => _ = e.ImportCsvAsync(), "table-import"),
-        new("file.exportCsv", "Export CSV…", e => _ = e.ExportCsvAsync(), "table-export"),
+        new("file.new", "New", "Start a new, empty workbook.", e => _ = e.NewWorkbookAsync(), "file-plus", new KeyGesture(Key.N, Cmd)),
+        new("file.open", "Open…", "Open a spreadsheet from disk.", e => _ = e.OpenWorkbookAsync(), "folder-open", new KeyGesture(Key.O, Cmd)),
+        new("file.save", "Save", "Save changes to the current file.", e => _ = e.SaveWorkbookAsync(), "save", new KeyGesture(Key.S, Cmd)),
+        new("file.saveAs", "Save As…", "Save a copy under a new name.", e => _ = e.SaveWorkbookAsAsync(), "save", new KeyGesture(Key.S, CmdShift)),
+        new("file.importCsv", "Import CSV…", "Load data from a CSV file.", e => _ = e.ImportCsvAsync(), "file-down"),
+        new("file.exportCsv", "Export CSV…", "Write the active sheet to a CSV file.", e => _ = e.ExportCsvAsync(), "file-up"),
 
         // Edit
-        new("edit.undo", "Undo", e => { e.Session.Undo(); e.Refresh(); }, "undo",
+        new("edit.undo", "Undo", "Step backward through your changes.", e => { e.Session.Undo(); e.Refresh(); }, "undo",
             new KeyGesture(Key.Z, Cmd), e => e.Session.CanUndo),
-        new("edit.redo", "Redo", e => { e.Session.Redo(); e.Refresh(); }, "redo",
+        new("edit.redo", "Redo", "Re-apply a change you undid.", e => { e.Session.Redo(); e.Refresh(); }, "redo",
             new KeyGesture(Key.Z, CmdShift), e => e.Session.CanRedo),
-        new("edit.cut", "Cut", e => e.Cut(), "scissors", new KeyGesture(Key.X, Cmd)),
-        new("edit.copy", "Copy", e => e.Copy(), "copy", new KeyGesture(Key.C, Cmd)),
-        new("edit.paste", "Paste", e => e.Paste(), "clipboard", new KeyGesture(Key.V, Cmd)),
-        new("edit.delete", "Clear Contents", ClearContents, "eraser", new KeyGesture(Key.Delete)),
-        new("edit.clearFormats", "Clear Formatting", ClearFormatting, "eraser"),
-        new("edit.clearAll", "Clear All", ClearAll, "eraser"),
-        new("edit.selectAll", "Select All", SelectAll, null, new KeyGesture(Key.A, Cmd)),
-        new("edit.find", "Find…", e => e.ShowFindReplace(replace: false), "search", new KeyGesture(Key.F, Cmd)),
-        new("edit.findReplace", "Find & Replace…", e => e.ShowFindReplace(replace: true), "search",
+        new("edit.cut", "Cut", "Move the selection to the clipboard.", e => e.Cut(), "scissors", new KeyGesture(Key.X, Cmd)),
+        new("edit.copy", "Copy", "Copy the selection to the clipboard.", e => e.Copy(), "copy", new KeyGesture(Key.C, Cmd)),
+        new("edit.paste", "Paste", "Paste from the clipboard.", e => e.Paste(), "clipboard", new KeyGesture(Key.V, Cmd)),
+        new("edit.delete", "Clear Contents", "Clear the values, keep the formatting.", ClearContents, "eraser", new KeyGesture(Key.Delete)),
+        new("edit.clearFormats", "Clear Formatting", "Reset styling, keep the values.", ClearFormatting, "remove-formatting"),
+        new("edit.clearAll", "Clear All", "Clear both values and formatting.", ClearAll, "eraser"),
+        new("edit.selectAll", "Select All", "Select the data region, then the whole sheet.", SelectAll, null, new KeyGesture(Key.A, Cmd)),
+        new("edit.find", "Find…", "Find text in the sheet.", e => e.ShowFindReplace(replace: false), "search", new KeyGesture(Key.F, Cmd)),
+        new("edit.findReplace", "Find & Replace…", "Find text and replace it.", e => e.ShowFindReplace(replace: true), "replace",
             new KeyGesture(Key.F, CmdAlt)),
 
         // Format
-        new("format.bold", "Bold", e => ToggleFont(e, f => f.Bold, (f, v) => f.WithBold(v)), "bold",
+        new("format.bold", "Bold", "Make the text heavier.", e => ToggleFont(e, f => f.Bold, (f, v) => f.WithBold(v)), "bold",
             new KeyGesture(Key.B, Cmd)),
-        new("format.italic", "Italic", e => ToggleFont(e, f => f.Italic, (f, v) => f.WithItalic(v)), "italic",
+        new("format.italic", "Italic", "Slant the text.", e => ToggleFont(e, f => f.Italic, (f, v) => f.WithItalic(v)), "italic",
             new KeyGesture(Key.I, Cmd)),
-        new("format.underline", "Underline", e => ToggleFont(e, f => f.Underline, (f, v) => f.WithUnderline(v)), "underline",
+        new("format.underline", "Underline", "Underline the text.", e => ToggleFont(e, f => f.Underline, (f, v) => f.WithUnderline(v)), "underline",
             new KeyGesture(Key.U, Cmd)),
-        new("format.cells", "Cells…", e => e.ShowFormatCellsDialog(), "settings", new KeyGesture(Key.D1, Cmd)),
+        new("format.alignLeft", "Align Left", "Align contents to the left.", e => SetAlignment(e, HorizontalAlignment.Left), "align-left"),
+        new("format.alignCenter", "Align Center", "Centre contents in the cell.", e => SetAlignment(e, HorizontalAlignment.Center), "align-center"),
+        new("format.alignRight", "Align Right", "Align contents to the right.", e => SetAlignment(e, HorizontalAlignment.Right), "align-right"),
+        new("format.wrap", "Wrap Text", "Wrap long text onto multiple lines.", ToggleWrap, "wrap-text"),
+        new("format.currency", "Currency", "Format the number as currency.", e => ToggleNumberFormat(e, CurrencyFormat, NumberFormatKind.Currency),
+            "dollar-sign", canExecute: IsNumericContext),
+        new("format.percent", "Percent", "Format the number as a percentage.", e => ToggleNumberFormat(e, NumberFormat.Percent, NumberFormatKind.Percent),
+            "percent", canExecute: IsNumericContext),
+        new("format.date", "Date", "Format the number as a date.", e => ToggleNumberFormat(e, DateFormat, NumberFormatKind.Date),
+            "calendar", canExecute: IsNumericContext),
+        new("format.cells", "Cells…", "Open the full cell-formatting dialog.", e => e.ShowFormatCellsDialog(), "settings-2", new KeyGesture(Key.D1, Cmd)),
 
         // Insert
-        new("insert.rowsAbove", "Rows Above", e => InsertRows(e, above: true), "table-row-plus-before"),
-        new("insert.columnsLeft", "Columns Left", e => InsertColumns(e, before: true), "table-column-plus-before"),
-        new("insert.sheet", "Sheet", e => e.AddSheet(), "table-plus"),
+        new("insert.rowsAbove", "Rows Above", "Insert rows above the selection.", e => InsertRows(e, above: true), "rows-plus"),
+        new("insert.columnsLeft", "Columns Left", "Insert columns left of the selection.", e => InsertColumns(e, before: true), "columns-plus"),
+        new("insert.sheet", "Sheet", "Add a new worksheet.", e => e.AddSheet(), "plus"),
 
         // Data
-        new("data.sortAsc", "Sort Ascending", e => Sort(e, ascending: true), "sort-ascending"),
-        new("data.sortDesc", "Sort Descending", e => Sort(e, ascending: false), "sort-descending"),
-        new("data.customSort", "Sort…", e => e.ShowSortDialog(), "sort"),
-        new("data.toggleFilter", "Filter", e => e.ToggleFilter(), "filter", new KeyGesture(Key.F, CmdShift)),
-        new("data.clearFilter", "Clear Filter", ClearFilter, "filter-off"),
-        new("data.createTable", "Table", CreateTable, "table", new KeyGesture(Key.T, Cmd)),
-        new("data.removeDuplicates", "Remove Duplicates…", e => e.ShowRemoveDuplicatesDialog(), "table-minus"),
-        new("data.textToColumns", "Text to Columns…", e => e.ShowTextToColumnsDialog(), "columns-split"),
-        new("data.validation", "Data Validation…", e => e.ShowDataValidationDialog(), "checkbox"),
+        new("data.sortAsc", "Sort Ascending", "Sort the column A→Z.", e => Sort(e, ascending: true), "sort-asc"),
+        new("data.sortDesc", "Sort Descending", "Sort the column Z→A.", e => Sort(e, ascending: false), "sort-desc"),
+        new("data.customSort", "Sort…", "Sort by one or more columns.", e => e.ShowSortDialog(), "sort"),
+        new("data.toggleFilter", "Filter", "Filter rows by a rule.", e => e.ToggleFilter(), "filter", new KeyGesture(Key.F, CmdShift)),
+        new("data.clearFilter", "Clear Filter", "Remove the active filter.", ClearFilter, "filter-x"),
+        new("data.createTable", "Table", "Turn the range into a table.", CreateTable, "table", new KeyGesture(Key.T, Cmd)),
+        new("data.removeDuplicates", "Remove Duplicates…", "Drop repeated rows from the range.", e => e.ShowRemoveDuplicatesDialog(), "list-x"),
+        new("data.textToColumns", "Text to Columns…", "Split a column on a delimiter.", e => e.ShowTextToColumnsDialog(), "columns"),
+        new("data.validation", "Data Validation…", "Restrict what can be entered.", e => e.ShowDataValidationDialog(), "square-check"),
 
         // Formulas
-        new("formula.recalc", "Recalculate", e => e.Session.RecalculateAll(), "refresh", new KeyGesture(Key.F9)),
+        new("formula.recalc", "Recalculate", "Recompute every formula now.", e => e.Session.RecalculateAll(), "refresh-cw", new KeyGesture(Key.F9)),
 
         // View
-        new("view.commandPalette", "Command Palette…", e => e.ShowCommandPalette(), "command",
+        new("view.commandPalette", "Command Palette…", "Search and run any command.", e => e.ShowCommandPalette(), "command",
             new KeyGesture(Key.P, Cmd)),
-        new("view.goToSheet", "Go to Sheet…", e => e.ShowSheetSwitcher(), "list", new KeyGesture(Key.P, CmdShift)),
-        new("view.zoomIn", "Zoom In", e => e.ZoomBy(0.1), "zoom-in", new KeyGesture(Key.OemPlus, Cmd)),
-        new("view.zoomOut", "Zoom Out", e => e.ZoomBy(-0.1), "zoom-out", new KeyGesture(Key.OemMinus, Cmd)),
-        new("view.actualSize", "Actual Size", e => e.ResetZoom(), "zoom-reset", new KeyGesture(Key.D0, Cmd)),
-        new("view.showRibbon", "Show Ribbon", e => e.ToggleRibbon(), "chevron-up", new KeyGesture(Key.R, CmdAlt)),
-        new("view.freezePanes", "Freeze Panes", e => e.ToggleFreezePanes(), "layout-grid"),
+        new("view.goToSheet", "Go to Sheet…", "Jump to another worksheet.", e => e.ShowSheetSwitcher(), "list", new KeyGesture(Key.P, CmdShift)),
+        new("view.zoomIn", "Zoom In", "Make everything larger.", e => e.ZoomBy(0.1), "zoom-in", new KeyGesture(Key.OemPlus, Cmd)),
+        new("view.zoomOut", "Zoom Out", "Make everything smaller.", e => e.ZoomBy(-0.1), "zoom-out", new KeyGesture(Key.OemMinus, Cmd)),
+        new("view.actualSize", "Actual Size", "Reset zoom to 100%.", e => e.ResetZoom(), null, new KeyGesture(Key.D0, Cmd)),
+        new("view.freezePanes", "Freeze Panes", "Keep header rows and columns in view.", e => e.ToggleFreezePanes(), "layout-grid"),
+        new("view.showRibbon", "Show Ribbon", "Show or hide the command bar.", e => e.ToggleRibbon(), "chevron-up", new KeyGesture(Key.R, CmdAlt)),
 
         // Insert (merge)
-        new("format.merge", "Merge Cells", MergeCells, "table-merge"),
+        new("format.merge", "Merge Cells", "Combine the selected cells into one.", MergeCells, "table-cells-merge"),
 
         // Help
         // "?" (⇧/) opens the shortcuts reference; gated off while a text field has focus so the
         // character types normally when editing a cell, the formula bar, or a dialog.
-        new("help.shortcuts", "Keyboard Shortcuts", e => e.ShowKeyboardShortcuts(), "keyboard",
+        new("help.shortcuts", "Keyboard Shortcuts", "List every keyboard shortcut.", e => e.ShowKeyboardShortcuts(), "keyboard",
             new KeyGesture(Key.OemQuestion, KeyModifiers.Shift), e => !e.IsTextInputFocused),
     };
+
+    // Number-format codes the bar's one-tap toggles apply. They classify (NumberFormatParser) as
+    // Currency/Date so the toggle can tell when a cell already has that format and revert it.
+    private static readonly NumberFormat CurrencyFormat = new("$#,##0.00");
+    private static readonly NumberFormat DateFormat = new("yyyy-mm-dd");
 
     private static void MergeCells(IAppEnvironment e)
     {
@@ -175,6 +190,51 @@ public static class AppCommands
         session.Execute(EditCommands.ApplyStyle(session.Workbook, sheet.Name, e.Selection.Range,
             s => s.WithFont(set(s.Font, target)), "Format"));
         e.Refresh();
+    }
+
+    /// <summary>The cell style of the active cell — the basis for "is this toggle already on?" checks.</summary>
+    private static CellStyle ActiveStyle(IAppEnvironment e)
+    {
+        var sheet = e.Session.ActiveSheet;
+        var active = sheet.Find(e.Selection.ActiveRow, e.Selection.ActiveColumn);
+        return e.Session.Workbook.Styles.Get(active?.StyleId ?? StylePool.DefaultId);
+    }
+
+    private static void SetAlignment(IAppEnvironment e, HorizontalAlignment horizontal)
+    {
+        var session = e.Session;
+        session.Execute(EditCommands.ApplyStyle(session.Workbook, session.ActiveSheet.Name, e.Selection.Range,
+            s => s.WithAlignment(s.Alignment with { Horizontal = horizontal }), "Align"));
+        e.Refresh();
+    }
+
+    private static void ToggleWrap(IAppEnvironment e)
+    {
+        var session = e.Session;
+        bool target = !ActiveStyle(e).Alignment.WrapText;
+        session.Execute(EditCommands.ApplyStyle(session.Workbook, session.ActiveSheet.Name, e.Selection.Range,
+            s => s.WithAlignment(s.Alignment with { WrapText = target }), "Wrap Text"));
+        e.Refresh();
+    }
+
+    /// <summary>Apply <paramref name="format"/>, or revert to General when the active cell already has that kind (a toggle).</summary>
+    private static void ToggleNumberFormat(IAppEnvironment e, NumberFormat format, NumberFormatKind kind)
+    {
+        var session = e.Session;
+        var target = ActiveStyle(e).NumberFormat.Kind == kind ? NumberFormat.General : format;
+        session.Execute(EditCommands.ApplyStyle(session.Workbook, session.ActiveSheet.Name, e.Selection.Range,
+            s => s.WithNumberFormat(target), "Number Format"));
+        e.Refresh();
+    }
+
+    /// <summary>
+    /// True when the active cell can take a number format — it's empty or already numeric. Mirrors the
+    /// prototype: the Numbers tools grey out on text so applying "Currency" to a label can't fail silently.
+    /// </summary>
+    private static bool IsNumericContext(IAppEnvironment e)
+    {
+        var value = e.Session.ActiveSheet.GetValue(e.Selection.ActiveRow, e.Selection.ActiveColumn);
+        return value.IsEmpty || value.IsNumber;
     }
 
     private static void InsertRows(IAppEnvironment e, bool above)

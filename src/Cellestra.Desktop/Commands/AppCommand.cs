@@ -10,11 +10,12 @@ namespace Cellestra.Desktop.Commands;
 /// </summary>
 public sealed class AppCommand
 {
-    public AppCommand(string id, string label, Action<IAppEnvironment> execute,
+    public AppCommand(string id, string label, string description, Action<IAppEnvironment> execute,
         string? icon = null, KeyGesture? shortcut = null, Func<IAppEnvironment, bool>? canExecute = null)
     {
         Id = id;
         Label = label;
+        Description = description;
         Execute = execute;
         Icon = icon;
         Shortcut = shortcut;
@@ -24,6 +25,9 @@ public sealed class AppCommand
     public string Id { get; }
 
     public string Label { get; }
+
+    /// <summary>A one-line, plain-language explanation shown in tooltips and the Command Palette.</summary>
+    public string Description { get; }
 
     public string? Icon { get; }
 

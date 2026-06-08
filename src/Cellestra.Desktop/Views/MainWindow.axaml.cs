@@ -101,7 +101,9 @@ public partial class MainWindow : Window, IAppEnvironment
         file.Menu!.Items.Insert(2, BuildOpenRecent());
         menu.Items.Add(file);
         menu.Items.Add(Submenu("Edit", "edit.undo", "edit.redo", null, "edit.cut", "edit.copy", "edit.paste", "edit.delete", "edit.clearFormats", "edit.clearAll", "edit.selectAll", null, "edit.find", "edit.findReplace"));
-        menu.Items.Add(Submenu("Format", "format.cells", null, "format.bold", "format.italic", "format.underline", null, "format.merge"));
+        menu.Items.Add(Submenu("Format", "format.cells", null, "format.bold", "format.italic", "format.underline", null,
+            "format.alignLeft", "format.alignCenter", "format.alignRight", "format.wrap", null,
+            "format.currency", "format.percent", "format.date", null, "format.merge"));
         menu.Items.Add(Submenu("Insert", "insert.rowsAbove", "insert.columnsLeft", "insert.sheet"));
         menu.Items.Add(Submenu("Data", "data.sortAsc", "data.sortDesc", "data.customSort", null,
             "data.toggleFilter", "data.clearFilter", null, "data.createTable", "data.removeDuplicates",
