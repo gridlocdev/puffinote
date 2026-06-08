@@ -58,6 +58,7 @@ public partial class MainWindow : Window, IAppEnvironment
         SheetTabs.PointerPressed += SheetTabsPointerPressed;
         SheetTabs.PointerMoved += SheetTabsPointerMoved;
         SheetTabs.PointerReleased += SheetTabsPointerReleased;
+        SheetTabs.PointerCaptureLost += (_, _) => EndTabDragVisual(); // tidy up if the drag is interrupted
         Grid.ClipboardInvalidated += (_, _) => ClearClipboard();
         Grid.EnterPasteRequested += (_, _) => EnterPaste();
         WireSelectionUndo();
@@ -845,9 +846,23 @@ public partial class MainWindow : Window, IAppEnvironment
             return;
         }
 
-        if (!_tabDragging && System.Math.Abs(e.GetPosition(SheetTabs).X - _tabDragStartX) > 5)
+        double x = e.GetPosition(SheetTabs).X;
+        if (!_tabDragging && System.Math.Abs(x - _tabDragStartX) > 5)
         {
+            // Past the threshold this is a drag, not a click: lift the grabbed tab and show a grabbing
+            // cursor (drag-and-drop best practice — make the grabbed item and drop point obvious).
             _tabDragging = true;
+            if (_tabDragFrom < SheetTabs.Children.Count)
+            {
+                SheetTabs.Children[_tabDragFrom].Opacity = 0.4;
+            }
+
+            SetTabCursors(_grabbingCursor);
+        }
+
+        if (_tabDragging)
+        {
+            UpdateTabDropIndicator(x);
         }
     }
 
@@ -858,17 +873,7 @@ public partial class MainWindow : Window, IAppEnvironment
             if (_tabDragging)
             {
                 // Bounds are valid here (no rebuild happened during the gesture).
-                double x = e.GetPosition(SheetTabs).X;
-                int sheets = _session.Workbook.Worksheets.Count;
-                int target = 0;
-                for (int i = 0; i < sheets && i < SheetTabs.Children.Count; i++)
-                {
-                    if (x > SheetTabs.Children[i].Bounds.Center.X)
-                    {
-                        target++;
-                    }
-                }
-
+                int target = TabDropSlot(e.GetPosition(SheetTabs).X);
                 if (target > _tabDragFrom)
                 {
                     target--; // account for removing the dragged tab before re-inserting
@@ -885,10 +890,76 @@ public partial class MainWindow : Window, IAppEnvironment
             OnSelectionChanged();
         }
 
+        EndTabDragVisual(); // clears opacity/cursor/marker; the rebuilt strip already starts clean
+        e.Pointer.Capture(null);
+    }
+
+    // Reordering is horizontal, so the move cursor reads naturally as "I'm carrying this tab."
+    private readonly Avalonia.Input.Cursor _grabbingCursor = new(Avalonia.Input.StandardCursorType.DragMove);
+    private readonly Avalonia.Input.Cursor _tabHandCursor = new(Avalonia.Input.StandardCursorType.Hand);
+
+    /// <summary>The insertion slot (0..count) the pointer at <paramref name="x"/> would drop into.</summary>
+    private int TabDropSlot(double x)
+    {
+        int sheets = _session.Workbook.Worksheets.Count;
+        int slot = 0;
+        for (int i = 0; i < sheets && i < SheetTabs.Children.Count; i++)
+        {
+            if (x > SheetTabs.Children[i].Bounds.Center.X)
+            {
+                slot++;
+            }
+        }
+
+        return slot;
+    }
+
+    /// <summary>Place the green insertion marker in the gap where the dragged tab would land.</summary>
+    private void UpdateTabDropIndicator(double x)
+    {
+        int sheets = _session.Workbook.Worksheets.Count;
+        if (sheets == 0 || SheetTabs.Children.Count == 0)
+        {
+            return;
+        }
+
+        int slot = TabDropSlot(x);
+        double edge = slot == 0
+            ? SheetTabs.Children[0].Bounds.Left
+            : slot < sheets && slot < SheetTabs.Children.Count
+                ? SheetTabs.Children[slot].Bounds.Left
+                : SheetTabs.Children[sheets - 1].Bounds.Right + 1;
+
+        TabDropIndicator.Margin = new Thickness(System.Math.Max(0, edge - 1), 0, 0, 0);
+        TabDropIndicator.IsVisible = true;
+    }
+
+    private void SetTabCursors(Avalonia.Input.Cursor cursor)
+    {
+        int sheets = _session.Workbook.Worksheets.Count;
+        for (int i = 0; i < sheets && i < SheetTabs.Children.Count; i++)
+        {
+            SheetTabs.Children[i].Cursor = cursor;
+        }
+    }
+
+    /// <summary>Clear all drag affordances — opacity, cursor, drop marker — and reset the gesture state.</summary>
+    private void EndTabDragVisual()
+    {
+        TabDropIndicator.IsVisible = false;
+        if (_tabDragging)
+        {
+            if (_tabDragFrom >= 0 && _tabDragFrom < SheetTabs.Children.Count)
+            {
+                SheetTabs.Children[_tabDragFrom].Opacity = 1.0;
+            }
+
+            SetTabCursors(_tabHandCursor);
+        }
+
         _tabDragFrom = -1;
         _tabDragSheet = null;
         _tabDragging = false;
-        e.Pointer.Capture(null);
     }
 
     // ---- Formula bar / Name box ------------------------------------------

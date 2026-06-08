@@ -27,6 +27,7 @@ public sealed class FormatCellsDialog : Window
     private readonly CheckBox _bold;
     private readonly CheckBox _italic;
     private readonly CheckBox _underline;
+    private readonly CheckBox _strikethrough;
     private readonly NumericUpDown _size;
     private readonly ColorPicker _textColor;
     private readonly CheckBox _fillEnabled;
@@ -47,6 +48,7 @@ public sealed class FormatCellsDialog : Window
         _bold = new CheckBox { Content = "Bold", IsChecked = current.Font.Bold };
         _italic = new CheckBox { Content = "Italic", IsChecked = current.Font.Italic };
         _underline = new CheckBox { Content = "Underline", IsChecked = current.Font.Underline };
+        _strikethrough = new CheckBox { Content = "Strikethrough", IsChecked = current.Font.Strikethrough };
         _size = new NumericUpDown { Width = 90, Minimum = 6, Maximum = 96, Value = (decimal)current.Font.SizePoints };
 
         _textColor = new ColorPicker { Color = ToAvalonia(current.Font.Color.IsTransparent ? ArgbColor.Black : current.Font.Color) };
@@ -73,7 +75,7 @@ public sealed class FormatCellsDialog : Window
             Children =
             {
                 Row("Number", _format),
-                new StackPanel { Orientation = Orientation.Horizontal, Spacing = 12, Children = { _bold, _italic, _underline } },
+                new StackPanel { Orientation = Orientation.Horizontal, Spacing = 12, Children = { _bold, _italic, _underline, _strikethrough } },
                 Row("Size", _size),
                 Row("Text color", _textColor),
                 Row("Fill", new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8, Children = { _fillEnabled, _fillColor } }),
@@ -106,6 +108,7 @@ public sealed class FormatCellsDialog : Window
         bool bold = _bold.IsChecked == true;
         bool italic = _italic.IsChecked == true;
         bool underline = _underline.IsChecked == true;
+        bool strikethrough = _strikethrough.IsChecked == true;
         double size = (double)(_size.Value ?? 10m);
         var textColor = FromAvalonia(_textColor.Color);
         Fill fill = _fillEnabled.IsChecked == true ? Fill.Solid(FromAvalonia(_fillColor.Color)) : Fill.None;
@@ -114,7 +117,7 @@ public sealed class FormatCellsDialog : Window
         return style => style with
         {
             NumberFormat = new NumberFormat(code),
-            Font = style.Font with { Bold = bold, Italic = italic, Underline = underline, SizePoints = size, Color = textColor },
+            Font = style.Font with { Bold = bold, Italic = italic, Underline = underline, Strikethrough = strikethrough, SizePoints = size, Color = textColor },
             Fill = fill,
             Alignment = style.Alignment with { Horizontal = horizontal },
         };

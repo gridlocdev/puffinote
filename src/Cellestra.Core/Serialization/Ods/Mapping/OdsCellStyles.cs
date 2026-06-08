@@ -73,6 +73,11 @@ public static class OdsCellStyles
             textProps.Add(new XAttribute(Style + "text-underline-color", "font-color"));
         }
 
+        if (font.Strikethrough)
+        {
+            textProps.Add(new XAttribute(Style + "text-line-through-style", "solid"));
+        }
+
         if (!font.Color.Equals(ArgbColor.Black) && !font.Color.IsTransparent)
         {
             textProps.Add(new XAttribute(Fo + "color", font.Color.ToHex()));
@@ -112,6 +117,7 @@ public static class OdsCellStyles
                 Bold = textProps.Attribute(Fo + "font-weight")?.Value == "bold",
                 Italic = textProps.Attribute(Fo + "font-style")?.Value == "italic",
                 Underline = textProps.Attribute(Style + "text-underline-style") is { } u && u.Value != "none",
+                Strikethrough = textProps.Attribute(Style + "text-line-through-style") is { } s && s.Value != "none",
             };
 
             if (ArgbColor.TryFromHex(textProps.Attribute(Fo + "color")?.Value, out var color))

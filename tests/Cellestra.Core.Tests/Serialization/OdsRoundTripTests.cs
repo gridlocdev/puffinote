@@ -20,7 +20,7 @@ public class OdsRoundTripTests
         sheet.SetFormula(1, 0, "A1*2", CellValue.Number(84));
 
         int styleId = workbook.Styles.Intern(CellStyle.Default
-            .WithFont(Font.Default.WithBold(true))
+            .WithFont(Font.Default.WithBold(true).WithStrikethrough(true))
             .WithFill(Fill.Solid(ArgbColor.FromRgb(255, 0, 0)))
             .WithNumberFormat(new NumberFormat("0.00")));
         sheet.SetValue(0, 3, CellValue.Number(3.14159));
@@ -71,6 +71,7 @@ public class OdsRoundTripTests
         var style = result.Styles.Get(sheet.Find(0, 3)!.StyleId);
 
         Assert.True(style.Font.Bold);
+        Assert.True(style.Font.Strikethrough);
         Assert.True(style.Fill.HasBackground);
         Assert.Equal(ArgbColor.FromRgb(255, 0, 0), style.Fill.Background);
         Assert.Equal("0.00", style.NumberFormat.Code);

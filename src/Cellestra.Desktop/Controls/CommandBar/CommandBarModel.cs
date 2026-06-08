@@ -39,7 +39,7 @@ public static class CommandBarModel
             new[] { "edit.cut", "edit.copy", "edit.paste", "edit.delete", "edit.clearFormats", "edit.clearAll" }),
         new CommandBarGroup("Text",
             new[] { "format.bold", "format.italic", "format.underline" },
-            new[] { "format.cells" }),
+            new[] { "format.strikethrough", "format.cells" }),
         new CommandBarGroup("Align",
             new[] { "format.alignLeft", "format.alignCenter", "format.alignRight" },
             new[] { "format.wrap", "format.merge" }),

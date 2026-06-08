@@ -98,7 +98,7 @@ If I open a Cellestra-saved file in LibreOffice and notice nothing wrong, the ba
 
 ### Formatting
 - Number formats (currency, percentage, decimals, dates) that respect locale per §8.3, with one-click toggles and increase/decrease-decimals.
-- Font family, size, bold/italic/underline, text color.
+- Font family, size, bold/italic/underline/strikethrough, text color.
 - Cell background fills and borders.
 - Text alignment (horizontal and vertical) and wrapping.
 
@@ -160,8 +160,8 @@ Everything reachable in the command bar is also reachable in the menu bar, the C
    - **Name Box** (far left): shows the active cell reference (e.g. `B7`); typing a reference or named range here and pressing Enter jumps there.
    - **Cancel (✕)** and **Accept (✓)** buttons, and an **Insert Function (`fx`)** button.
    - **Formula input**: a wide field showing the active cell's formula or value, editable directly.
-4. **Grid** — column headers (A, B, C…), row headers (1, 2, 3…), the cell area, frozen panes where set, and scrollbars. The active cell has a bold outline with a fill handle at its corner. Header labels scale with the zoom. Dragging a column's right border (or a row's bottom border) resizes it — the cursor changes to the resize handle on hover; double-clicking a column border autofits it. The inline editor matches the cell's display (fill, text colour, bold/italic) so editing looks the same as the drawn cell. **Right-clicking** opens a context menu of icon+label commands: on a cell, cut/copy/paste, insert rows/columns, and clear contents/formatting/all (acting on the cell under the cursor or the selection); on a **column or row header**, it selects that column/row and offers Insert and **Delete Columns/Rows**.
-5. **Sheet tab strip** (bottom-left) — one tab per worksheet and a **＋** to add. Tabs **drag to reorder**. **Right-clicking a tab** activates it and offers Rename, Insert, and Delete (delete confirms, and a workbook always keeps at least one sheet). Context-menu items carry an icon and label.
+4. **Grid** — column headers (A, B, C…), row headers (1, 2, 3…), the cell area, frozen panes where set, and scrollbars. The active cell has a bold outline with a fill handle at its corner. Header labels scale with the zoom. Dragging a column's right border (or a row's bottom border) resizes it — the cursor changes to the resize handle on hover; double-clicking a column border autofits it. The inline editor matches the cell's display (fill, text colour, bold/italic, alignment) so editing looks the same as the drawn cell, and a formatting command applied mid-edit (e.g. Bold, a colour, an alignment) re-skins the text being typed at once. (Underline and strikethrough still apply to the value and show on the drawn cell, but a plain text editor can't render them while typing.) **Right-clicking** opens a context menu of icon+label commands: on a cell, cut/copy/paste, insert rows/columns, and clear contents/formatting/all (acting on the cell under the cursor or the selection); on a **column or row header**, it selects that column/row and offers Insert and **Delete Columns/Rows**.
+5. **Sheet tab strip** (bottom-left) — one tab per worksheet and a **＋** to add. Tabs **drag to reorder**: while dragging, the cursor becomes a move cursor, the grabbed tab dims, and a green insertion marker shows where it will land. **Right-clicking a tab** activates it and offers Rename, Insert, and Delete (delete confirms, and a workbook always keeps at least one sheet). Context-menu items carry an icon and label.
 6. **Status bar** (bottom) — see §6.5.
 
 ### 6.2 Menu bar
@@ -172,7 +172,7 @@ Everything reachable in the command bar is also reachable in the menu bar, the C
 | **File** | New (⌘N) · Open… (⌘O) · Open Recent → · Close (⌘W) · Save (⌘S) · Save As… (⇧⌘S) · Import → CSV… · Export → CSV… |
 | **Edit** | Undo (⌘Z) · Redo (⇧⌘Z) · Cut (⌘X) · Copy (⌘C) · Paste (⌘V) · Paste Special… (⌥⌘V) · Delete · Select All (⌘A) · Find → Find… (⌘F), Find & Replace… (⌥⌘F) · Fill → Down (⌘D), Right (⌘R) |
 | **Insert** | Rows Above · Rows Below · Columns Left · Columns Right · Sheet · Table (⌘T) · Function… (⌃⌥F) · Named Range… · Hyperlink… |
-| **Format** | Cells… (⌘1) · Number → … · Bold (⌘B), Italic (⌘I), Underline (⌘U) · Alignment → … · Borders → … · Merge Cells · Rows → Height…, Hide (⌃9), Unhide (⌃⇧9) · Columns → Width…, Hide (⌃0), Unhide (⌃⇧0) |
+| **Format** | Cells… (⌘1) · Number → … · Bold (⌘B), Italic (⌘I), Underline (⌘U), Strikethrough (⌘⇧X) · Alignment → … · Borders → … · Merge Cells · Rows → Height…, Hide (⌃9), Unhide (⌃⇧9) · Columns → Width…, Hide (⌃0), Unhide (⌃⇧0) |
 | **Data** | Sort… · Filter (⇧⌘F) · Clear Filter · Remove Duplicates… · Text to Columns… · Data Validation… · Recalculate (F9) · Calculation → Automatic / Manual · Named Ranges… · Import CSV… · Export CSV… |
 | **View** | Command Palette… (⌘K) · Go to Sheet… (⌘⇧P) · Zoom In (⌘=) · Zoom Out (⌘−) · Actual Size (⌘0) · Gridlines · Headers · Formula Bar · Status Bar · Freeze Panes |
 | **Window** | Minimize (⌘M) · Zoom · (standard macOS window items) |
@@ -189,7 +189,7 @@ One row, grouped by task. Each **group** shows its 2–3 most-used tools as icon
 | Group | Primary (on the bar) | In the drawer | Notes |
 |---|---|---|---|
 | **Edit** | Undo (⌘Z) · Redo (⇧⌘Z) | Cut (⌘X) · Copy (⌘C) · Paste (⌘V) · Clear Contents | — |
-| **Text** | Bold (⌘B) · Italic (⌘I) · Underline (⌘U) | Cells… (⌘1) · **Font size** stepper · **Text colour** swatches · **Cell fill** swatches | Bold/Italic/Underline light up when on; size and colour preview live on hover (below) |
+| **Text** | Bold (⌘B) · Italic (⌘I) · Underline (⌘U) | Strikethrough (⌘⇧X) · Cells… (⌘1) · **Font size** stepper · **Text colour** swatches · **Cell fill** swatches | Bold/Italic/Underline/Strikethrough light up when on; size and colour preview live on hover (below) |
 | **Align** | Align Left · Center · Right | Wrap Text · Merge Cells | The active alignment is the lit one |
 | **Numbers** | Currency · Percent | Date | Disabled when the active cell holds text (error prevention) |
 | **Insert** | Rows Above · Columns Left | Sheet · Table (⌘T) | — |
@@ -253,6 +253,7 @@ Shortcuts use macOS modifiers (⌘ Command, ⇧ Shift, ⌥ Option, ⌃ Control).
 | Action | Shortcut |
 |---|---|
 | Bold / Italic / Underline | ⌘B / ⌘I / ⌘U |
+| Strikethrough | ⌘⇧X |
 | Format Cells dialog | ⌘1 |
 | Currency / Percent / Comma | ⌃⇧$ / ⌃⇧% / ⌃⇧! |
 | Date / General format | ⌃⇧# / ⌃⇧~ |

@@ -7,6 +7,7 @@ public sealed record Font(
     bool Bold = false,
     bool Italic = false,
     bool Underline = false,
+    bool Strikethrough = false,
     ArgbColor Color = default)
 {
     /// <summary>The default font (PRD §8.8): Helvetica Neue, 10 pt, black, no emphasis.</summary>
@@ -17,4 +18,6 @@ public sealed record Font(
     public Font WithItalic(bool italic) => this with { Italic = italic };
 
     public Font WithUnderline(bool underline) => this with { Underline = underline };
+
+    public Font WithStrikethrough(bool strikethrough) => this with { Strikethrough = strikethrough };
 }

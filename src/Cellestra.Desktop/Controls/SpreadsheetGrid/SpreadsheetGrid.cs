@@ -133,7 +133,18 @@ public sealed partial class SpreadsheetGrid : Panel
         Redraw();
     }
 
-    public void Refresh() => Redraw();
+    public void Refresh()
+    {
+        // A formatting command (bold, colour, alignment, number format…) can run while a cell is being
+        // edited — the toolbar buttons don't steal focus. Re-skin the live editor so the text you're
+        // typing immediately takes on the new style, matching how the cell will look once committed.
+        if (_editing && _session is not null)
+        {
+            ApplyEditorFont(Sheet?.Find(Selection.ActiveRow, Selection.ActiveColumn));
+        }
+
+        Redraw();
+    }
 
     private Worksheet? Sheet => _session?.ActiveSheet;
 
@@ -376,9 +387,20 @@ public sealed partial class SpreadsheetGrid : Panel
 
         var formatted = new FormattedText(text, CultureInfo.CurrentCulture, FlowDirection.LeftToRight,
             typeface, fontSize, brush);
-        if (style.Font.Underline)
+        if (style.Font.Underline || style.Font.Strikethrough)
         {
-            formatted.SetTextDecorations(TextDecorations.Underline);
+            var decorations = new TextDecorationCollection();
+            if (style.Font.Underline)
+            {
+                decorations.Add(TextDecorations.Underline[0]);
+            }
+
+            if (style.Font.Strikethrough)
+            {
+                decorations.Add(TextDecorations.Strikethrough[0]);
+            }
+
+            formatted.SetTextDecorations(decorations);
         }
 
         double cellAvailable = rect.Width - 6;
@@ -1021,6 +1043,11 @@ public sealed partial class SpreadsheetGrid : Panel
 
     internal bool EditorTextIsTopAligned => _editor.VerticalContentAlignment == Avalonia.Layout.VerticalAlignment.Top;
 
+    /// <summary>Test seams: the live editor's weight and horizontal alignment, so a format command applied mid-edit can be verified.</summary>
+    internal bool EditorIsBold => _editor.FontWeight == FontWeight.Bold;
+
+    internal TextAlignment EditorTextAlignment => _editor.TextAlignment;
+
     /// <summary>Match the inline editor to the cell's drawn appearance — font, weight/style, underline,
     /// text colour, and fill — so editing looks the same as the displayed cell (not default black-on-white).</summary>
     private void ApplyEditorFont(Cell? cell)
@@ -1037,6 +1064,16 @@ public sealed partial class SpreadsheetGrid : Panel
         _editor.Background = style.Fill.HasBackground
             ? new SolidColorBrush(ToColor(style.Fill.Background!.Value))
             : _palette.Canvas;
+
+        // Mirror the cell's horizontal alignment so an Align command applied mid-edit shifts the text.
+        // (Underline/strikethrough can't show here — TextBox exposes no TextDecorations — but they still
+        // apply to the value and appear on the drawn cell once the edit is committed.)
+        _editor.TextAlignment = style.Alignment.Horizontal switch
+        {
+            SAlign.Center => TextAlignment.Center,
+            SAlign.Right => TextAlignment.Right,
+            _ => TextAlignment.Left,
+        };
     }
 
     public void BeginEdit(string? seed)

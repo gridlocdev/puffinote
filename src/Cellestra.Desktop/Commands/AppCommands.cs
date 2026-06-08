@@ -58,6 +58,8 @@ public static class AppCommands
             new KeyGesture(Key.I, Cmd), isActive: e => ActiveStyle(e).Font.Italic),
         new("format.underline", "Underline", "Underline the text.", e => ToggleFont(e, f => f.Underline, (f, v) => f.WithUnderline(v)), "underline",
             new KeyGesture(Key.U, Cmd), isActive: e => ActiveStyle(e).Font.Underline),
+        new("format.strikethrough", "Strikethrough", "Draw a line through the text.", e => ToggleFont(e, f => f.Strikethrough, (f, v) => f.WithStrikethrough(v)), "strikethrough",
+            new KeyGesture(Key.X, CmdShift), isActive: e => ActiveStyle(e).Font.Strikethrough),
         new("format.alignLeft", "Align Left", "Align contents to the left.", e => SetAlignment(e, HorizontalAlignment.Left), "align-left",
             isActive: e => ActiveStyle(e).Alignment.Horizontal == HorizontalAlignment.Left),
         new("format.alignCenter", "Align Center", "Centre contents in the cell.", e => SetAlignment(e, HorizontalAlignment.Center), "align-center",

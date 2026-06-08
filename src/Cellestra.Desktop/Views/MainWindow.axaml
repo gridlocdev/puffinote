@@ -27,7 +27,12 @@
 
         <!-- Sheet tab strip -->
         <Border Grid.Row="3" Background="{DynamicResource ChromeAltBackground}" BorderBrush="{DynamicResource ChromeBorder}" BorderThickness="0,1,0,0" Padding="4,2">
-            <StackPanel x:Name="SheetTabs" Orientation="Horizontal" Spacing="2" />
+            <Panel>
+                <StackPanel x:Name="SheetTabs" Orientation="Horizontal" Spacing="2" />
+                <!-- Insertion marker shown while dragging a tab, positioned via its left margin. -->
+                <Rectangle x:Name="TabDropIndicator" Width="2" Fill="#15734F" RadiusX="1" RadiusY="1"
+                           HorizontalAlignment="Left" VerticalAlignment="Stretch" IsVisible="False" />
+            </Panel>
         </Border>
 
         <!-- Status bar -->

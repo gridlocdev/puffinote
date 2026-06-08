@@ -125,17 +125,16 @@ public sealed class CommandBar : UserControl
     private Control BuildSlim()
     {
         var expand = BuildCollapseButton(collapse: false);
+        DockPanel.SetDock(expand, Dock.Right);
+        // LastChildFill defaults to true, which would make the lone expand button the fill element and
+        // ignore its Dock.Right — pinning it to the left. Turn it off so the button stays top-right,
+        // exactly where the collapse button sat in the full bar.
         return new DockPanel
         {
             Margin = new Thickness(6, 1),
-            Children = { Right(expand) },
+            LastChildFill = false,
+            Children = { expand },
         };
-
-        static Control Right(Control c)
-        {
-            DockPanel.SetDock(c, Dock.Right);
-            return c;
-        }
     }
 
     private Control BuildGroup(CommandBarGroup group)
