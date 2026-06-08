@@ -65,6 +65,30 @@ public static class EditCommands
             }
         });
 
+    /// <summary>Reset every cell in the range to the default style, leaving its value/formula intact.</summary>
+    public static IEditCommand ClearFormatting(Workbook workbook, string sheet, CellRange range) =>
+        ApplyStyle(workbook, sheet, range, _ => CellStyle.Default, "Clear Formatting");
+
+    /// <summary>Clear value, formula, style, and hyperlink — leaving the cells as if never touched.</summary>
+    public static IEditCommand ClearAll(string sheet, CellRange range) =>
+        new CellSnapshotCommand("Clear All", sheet, Positions(range), ws =>
+        {
+            foreach (var (row, column) in range.Positions())
+            {
+                var cell = ws.Find(row, column);
+                if (cell is null)
+                {
+                    continue;
+                }
+
+                cell.Formula = null;
+                cell.Value = CellValue.Empty;
+                cell.StyleId = StylePool.DefaultId;
+                cell.Hyperlink = null;
+                ws.PruneIfBlank(row, column, cell);
+            }
+        });
+
     /// <summary>Write a rectangular block of values starting at the top-left (paste/fill of literals).</summary>
     public static IEditCommand SetBlock(string sheet, int top, int left, CellValue[,] values, string label = "Paste")
     {

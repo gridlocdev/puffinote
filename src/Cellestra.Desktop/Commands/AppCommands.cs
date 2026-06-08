@@ -43,7 +43,9 @@ public static class AppCommands
         new("edit.cut", "Cut", e => e.Cut(), "scissors", new KeyGesture(Key.X, Cmd)),
         new("edit.copy", "Copy", e => e.Copy(), "copy", new KeyGesture(Key.C, Cmd)),
         new("edit.paste", "Paste", e => e.Paste(), "clipboard", new KeyGesture(Key.V, Cmd)),
-        new("edit.delete", "Delete", ClearContents, "eraser", new KeyGesture(Key.Delete)),
+        new("edit.delete", "Clear Contents", ClearContents, "eraser", new KeyGesture(Key.Delete)),
+        new("edit.clearFormats", "Clear Formatting", ClearFormatting, "eraser"),
+        new("edit.clearAll", "Clear All", ClearAll, "eraser"),
         new("edit.selectAll", "Select All", SelectAll, null, new KeyGesture(Key.A, Cmd)),
         new("edit.find", "Find…", e => e.ShowFindReplace(replace: false), "search", new KeyGesture(Key.F, Cmd)),
         new("edit.findReplace", "Find & Replace…", e => e.ShowFindReplace(replace: true), "search",
@@ -122,6 +124,20 @@ public static class AppCommands
     {
         var sheet = e.Session.ActiveSheet;
         e.Session.Execute(EditCommands.ClearContents(sheet.Name, e.Selection.Range));
+        e.Refresh();
+    }
+
+    private static void ClearFormatting(IAppEnvironment e)
+    {
+        var session = e.Session;
+        session.Execute(EditCommands.ClearFormatting(session.Workbook, session.ActiveSheet.Name, e.Selection.Range));
+        e.Refresh();
+    }
+
+    private static void ClearAll(IAppEnvironment e)
+    {
+        var session = e.Session;
+        session.Execute(EditCommands.ClearAll(session.ActiveSheet.Name, e.Selection.Range));
         e.Refresh();
     }
 
