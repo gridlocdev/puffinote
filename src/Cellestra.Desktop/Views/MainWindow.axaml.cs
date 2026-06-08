@@ -445,10 +445,19 @@ public partial class MainWindow : Window, IAppEnvironment
         var result = await new RemoveDuplicatesDialog(sheet, range, header).ShowDialog<RemoveDuplicatesDialog.Result?>(this);
         if (result is not null)
         {
-            _session.Execute(DataEditCommands.RemoveDuplicates(sheet.Name, range, result.KeyColumns, result.HasHeader, out _));
+            _session.Execute(DataEditCommands.RemoveDuplicates(sheet.Name, range, result.KeyColumns, result.HasHeader, out var removedCount));
             Refresh();
+
+            int removed = removedCount();
+            int remaining = range.RowCount - (result.HasHeader ? 1 : 0) - removed;
+            ShowMessage("Remove Duplicates", RemoveDuplicatesSummary(removed, remaining));
         }
     }
+
+    /// <summary>The result line after Remove Duplicates: how many were removed and how many unique rows remain.</summary>
+    internal static string RemoveDuplicatesSummary(int removed, int remaining) => removed == 0
+        ? $"No duplicates found — all {remaining} {(remaining == 1 ? "row is" : "rows are")} unique."
+        : $"Removed {removed} duplicate {(removed == 1 ? "row" : "rows")}; {remaining} unique {(remaining == 1 ? "row remains" : "rows remain")}.";
 
     public async void ShowTextToColumnsDialog()
     {
