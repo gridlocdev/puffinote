@@ -33,7 +33,13 @@
         <!-- Status bar -->
         <Border Grid.Row="4" Background="{DynamicResource ChromeBackground}" BorderBrush="{DynamicResource ChromeBorder}" BorderThickness="0,1,0,0" Padding="8,3">
             <DockPanel>
-                <TextBlock x:Name="StatusCell" DockPanel.Dock="Left" Width="120" VerticalAlignment="Center" />
+                <!-- Last action performed (a quick reference, per the mockup) -->
+                <StackPanel DockPanel.Dock="Left" Orientation="Horizontal" Spacing="6" VerticalAlignment="Center" Margin="0,0,16,0">
+                    <Ellipse Width="7" Height="7" Fill="#15734F" VerticalAlignment="Center" />
+                    <TextBlock x:Name="StatusAction" VerticalAlignment="Center" />
+                </StackPanel>
+                <TextBlock x:Name="StatusCell" DockPanel.Dock="Left" Width="72" VerticalAlignment="Center" Foreground="{DynamicResource ChromeBorder}" />
+                <TextBlock x:Name="StatusSaved" DockPanel.Dock="Right" Margin="16,0,0,0" VerticalAlignment="Center" />
                 <TextBlock x:Name="StatusZoom" DockPanel.Dock="Right" VerticalAlignment="Center" />
                 <TextBlock x:Name="StatusCalc" DockPanel.Dock="Right" Margin="0,0,16,0" VerticalAlignment="Center" />
                 <TextBlock x:Name="StatusStats" VerticalAlignment="Center" />

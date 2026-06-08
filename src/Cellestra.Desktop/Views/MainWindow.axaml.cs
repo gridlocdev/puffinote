@@ -41,6 +41,7 @@ public partial class MainWindow : Window, IAppEnvironment
     private string? _clipboardText;
 
     private Controls.CommandBar.CommandBar? _commandBar;
+    private System.DateTime? _lastSavedAt;
 
     public MainWindow()
     {
@@ -181,8 +182,8 @@ public partial class MainWindow : Window, IAppEnvironment
 
     public void BeginEdit() => Grid.BeginEdit(null);
 
-    /// <summary>Narrate a bar action in the status line; <see cref="UpdateStatus"/> restores the selection stats on the next move.</summary>
-    public void Narrate(string message) => StatusStats.Text = message;
+    /// <summary>Narrate the last action in the status line's left indicator (a quick reference, per the mockup).</summary>
+    public void Narrate(string message) => StatusAction.Text = message;
 
     public Task NewWorkbookAsync()
     {
@@ -261,6 +262,7 @@ public partial class MainWindow : Window, IAppEnvironment
         }
 
         _session.SaveToFile(_session.FilePath);
+        _lastSavedAt = System.DateTime.Now;
         RememberRecentFile(_session.FilePath);
         UpdateChrome();
     }
@@ -282,6 +284,7 @@ public partial class MainWindow : Window, IAppEnvironment
 
         string path = file.Path.LocalPath;
         _session.SaveToFile(path);
+        _lastSavedAt = System.DateTime.Now;
 
         // We now own this file on disk — take its lock so other editors are warned.
         if (_fileLock?.DocumentPath != Path.GetFullPath(path))
@@ -578,6 +581,7 @@ public partial class MainWindow : Window, IAppEnvironment
         FormulaInput.Text = cell is null ? string.Empty : (cell.IsFormula ? "=" + cell.Formula : cell.Value.ToInvariantString());
 
         UpdateStatus();
+        Narrate($"Selected {address}");
         _commandBar?.RefreshState();
     }
 
@@ -587,6 +591,8 @@ public partial class MainWindow : Window, IAppEnvironment
         Title = $"{(_session.IsModified ? "● " : string.Empty)}{name} — Cellestra";
         StatusZoom.Text = $"{Grid.Zoom * 100:0}%";
         StatusCalc.Text = _session.Workbook.Settings.CalculationMode == CalculationMode.Manual ? "Manual" : "Auto";
+        StatusSaved.Text = _session.IsModified ? "Edited"
+            : _lastSavedAt is { } saved ? $"Saved {saved:HH:mm}" : "Not saved";
         _commandBar?.RefreshState();
     }
 
