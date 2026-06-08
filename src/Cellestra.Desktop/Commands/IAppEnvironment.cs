@@ -1,4 +1,6 @@
+using System;
 using System.Threading.Tasks;
+using Cellestra.Core.Styling;
 using Cellestra.Desktop.Controls.SpreadsheetGrid;
 using Cellestra.Desktop.Services;
 
@@ -61,6 +63,12 @@ public interface IAppEnvironment
     void ShowFindReplace(bool replace);
 
     void ShowFormatCellsDialog();
+
+    /// <summary>Apply a style transform to the selection as one undoable edit (used by the bar's drawers).</summary>
+    void ApplyCellStyle(Func<CellStyle, CellStyle> transform, string label);
+
+    /// <summary>Preview a style transform over the selection without committing it; null clears the preview.</summary>
+    void PreviewCellStyle(Func<CellStyle, CellStyle>? transform);
 
     void ToggleFreezePanes();
 

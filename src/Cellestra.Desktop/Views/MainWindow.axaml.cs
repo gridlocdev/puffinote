@@ -520,6 +520,25 @@ public partial class MainWindow : Window, IAppEnvironment
         }
     }
 
+    public void ApplyCellStyle(System.Func<Cellestra.Core.Styling.CellStyle, Cellestra.Core.Styling.CellStyle> transform, string label)
+    {
+        Grid.ClearStylePreview();
+        _session.Execute(EditCommands.ApplyStyle(_session.Workbook, _session.ActiveSheet.Name, Selection.Range, transform, label));
+        Refresh();
+    }
+
+    public void PreviewCellStyle(System.Func<Cellestra.Core.Styling.CellStyle, Cellestra.Core.Styling.CellStyle>? transform)
+    {
+        if (transform is null)
+        {
+            Grid.ClearStylePreview();
+        }
+        else
+        {
+            Grid.SetStylePreview(Selection.Range, transform);
+        }
+    }
+
     // ---- Chrome -----------------------------------------------------------
 
     private void RewireSession()

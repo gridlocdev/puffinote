@@ -41,6 +41,15 @@ public static class CommandBarDrawer
             }
         }
 
+        if (group.HasStyleDrawer)
+        {
+            // Font size and colours are parametric, not discrete commands, so they live here as
+            // bespoke affordances that apply via ApplyCellStyle and preview live on hover.
+            panel.Children.Add(SizeSection(env, close));
+            panel.Children.Add(SwatchSection("Text colour", TextColours, env, close, fill: false));
+            panel.Children.Add(SwatchSection("Cell fill", FillColours, env, close, fill: true));
+        }
+
         void Refresh()
         {
             foreach (var refresh in refreshers)
@@ -122,4 +131,91 @@ public static class CommandBarDrawer
 
         return (row, Refresh);
     }
+
+    // ---- Text-group extras: size stepper + colour swatches ----------------
+
+    private static readonly double[] FontSizes = { 10, 12, 14, 18, 24 };
+    private static readonly string[] TextColours = { "#23211C", "#15734F", "#B9742A", "#B23A35", "#2D5FA8", "#928C7E" };
+    private static readonly string?[] FillColours = { null, "#DCEBE2", "#F3E3CD", "#F6D9D6", "#DDE3F0", "#ECE7DA" };
+
+    private static Control SizeSection(IAppEnvironment env, Action close)
+    {
+        var row = new WrapPanel { Orientation = Orientation.Horizontal };
+        foreach (double px in FontSizes)
+        {
+            System.Func<Cellestra.Core.Styling.CellStyle, Cellestra.Core.Styling.CellStyle> transform =
+                s => s.WithFont(s.Font with { SizePoints = px });
+
+            var button = new Button
+            {
+                Content = px.ToString(System.Globalization.CultureInfo.InvariantCulture),
+                Background = new SolidColorBrush(Color.FromArgb(0x22, 0x88, 0x88, 0x88)),
+                BorderThickness = default,
+                CornerRadius = new CornerRadius(6),
+                Padding = new Thickness(10, 4),
+                Margin = new Thickness(0, 0, 6, 0),
+                FontSize = 12,
+            };
+            Hook(button, env, transform, $"Font size {px:0}", close);
+            row.Children.Add(button);
+        }
+
+        return Section("Font size", row);
+    }
+
+    private static Control SwatchSection(string title, string?[] colours, IAppEnvironment env, Action close, bool fill)
+    {
+        var row = new WrapPanel { Orientation = Orientation.Horizontal };
+        foreach (string? hex in colours)
+        {
+            System.Func<Cellestra.Core.Styling.CellStyle, Cellestra.Core.Styling.CellStyle> transform = fill
+                ? (hex is null
+                    ? s => s.WithFill(Cellestra.Core.Styling.Fill.None)
+                    : s => s.WithFill(Cellestra.Core.Styling.Fill.Solid(Cellestra.Core.Styling.ArgbColor.FromHex(hex))))
+                : s => s.WithFont(s.Font with { Color = Cellestra.Core.Styling.ArgbColor.FromHex(hex!) });
+
+            var swatch = new Border
+            {
+                Width = 26,
+                Height = 26,
+                CornerRadius = new CornerRadius(6),
+                Margin = new Thickness(0, 0, 7, 0),
+                Background = hex is null ? Brushes.White : new SolidColorBrush(ParseHex(hex)),
+                BorderBrush = new SolidColorBrush(Color.FromArgb(0x33, 0, 0, 0)),
+                BorderThickness = new Thickness(1),
+                Cursor = new Avalonia.Input.Cursor(Avalonia.Input.StandardCursorType.Hand),
+            };
+            ToolTip.SetTip(swatch, hex is null ? "No fill" : hex);
+            Hook(swatch, env, transform, fill ? "Cell fill" : "Text colour", close);
+            row.Children.Add(swatch);
+        }
+
+        return Section(title, row);
+    }
+
+    /// <summary>Wire hover-to-preview and click-to-apply onto a swatch or size chip.</summary>
+    private static void Hook(Control control, IAppEnvironment env,
+        System.Func<Cellestra.Core.Styling.CellStyle, Cellestra.Core.Styling.CellStyle> transform, string label, Action close)
+    {
+        control.PointerEntered += (_, _) => env.PreviewCellStyle(transform);
+        control.PointerExited += (_, _) => env.PreviewCellStyle(null);
+        control.PointerPressed += (_, _) =>
+        {
+            env.ApplyCellStyle(transform, label);
+            close();
+        };
+    }
+
+    private static Control Section(string title, Control content) => new StackPanel
+    {
+        Margin = new Thickness(0, 11, 0, 0),
+        Children =
+        {
+            new TextBlock { Text = title, FontWeight = FontWeight.SemiBold, FontSize = 12.5, Margin = new Thickness(2, 0, 0, 6) },
+            content,
+        },
+    };
+
+    private static Color ParseHex(string hex) =>
+        Cellestra.Core.Styling.ArgbColor.TryFromHex(hex, out var c) ? Color.FromArgb(c.A, c.R, c.G, c.B) : Colors.Transparent;
 }

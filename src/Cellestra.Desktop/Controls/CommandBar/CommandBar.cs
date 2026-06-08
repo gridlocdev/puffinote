@@ -187,6 +187,8 @@ public sealed class CommandBar : UserControl
             ShowMode = FlyoutShowMode.Standard,
         };
         flyout.Opened += (_, _) => refresh();
+        // Belt-and-braces: if the drawer closes while a swatch is hovered, drop any live preview.
+        flyout.Closed += (_, _) => _env.PreviewCellStyle(null);
         chevron.Flyout = flyout;
         return chevron;
     }

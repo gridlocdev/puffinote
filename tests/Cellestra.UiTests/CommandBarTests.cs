@@ -37,6 +37,25 @@ public class CommandBarTests
         Assert.True(notified); // host persists the choice off this event
     }
 
+    [AvaloniaFact]
+    public void Drawer_preview_does_not_commit_but_apply_does()
+    {
+        var window = new MainWindow();
+        window.Show();
+
+        Assert.False(window.Session.CanUndo);
+
+        // Hovering a swatch/size previews without touching the model or undo stack (PRD §8.5).
+        window.PreviewCellStyle(s => s.WithFont(s.Font with { Bold = true }));
+        Assert.False(window.Session.CanUndo);
+        window.PreviewCellStyle(null);
+        Assert.False(window.Session.CanUndo);
+
+        // Clicking it commits exactly one undoable edit.
+        window.ApplyCellStyle(s => s.WithFont(s.Font with { Bold = true }), "Bold");
+        Assert.True(window.Session.CanUndo);
+    }
+
     [Fact]
     public void Bar_layout_ids_all_resolve_in_the_catalog()
     {

@@ -257,7 +257,7 @@ public sealed partial class SpreadsheetGrid : Panel
                 var cell = sheet.Find(row, col);
                 if (cell is not null)
                 {
-                    var style = _session!.Workbook.Styles.Get(cell.StyleId);
+                    var style = ResolveStyle(cell, row, col);
                     if (style.Fill.HasBackground)
                     {
                         context.FillRectangle(new SolidColorBrush(ToColor(style.Fill.Background!.Value)), rect);
@@ -360,7 +360,7 @@ public sealed partial class SpreadsheetGrid : Panel
 
     private void DrawCellContent(DrawingContext context, Worksheet sheet, Cell cell, Rect rect, int row, int column, bool allowSpill)
     {
-        var style = _session!.Workbook.Styles.Get(cell.StyleId);
+        var style = ResolveStyle(cell, row, column);
         string text = NumberFormatter.Format(cell.Value, style.NumberFormat, Culture);
         if (text.Length == 0)
         {
