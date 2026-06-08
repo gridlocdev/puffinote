@@ -32,7 +32,7 @@ These encode the core decisions. Breaking one is a bug even if it compiles.
 3. **The grid is custom-drawn** — a single virtualized Avalonia control, not `DataGrid`/`ItemsControl`. MVVM is for the chrome only.
 4. **One command catalog.** Every command is defined once in `AppCommands` (label + icon + shortcut); menu bar, ribbon, **Command Palette**, and keybindings all bind to it. Shortcut remaps come from Settings.
 5. **One function registry.** Evaluation, autocomplete, and the Function Reference all read `FunctionRegistry` (with `FunctionMetadata`). No second list anywhere.
-6. **Guard the supply chain.** Prefer the .NET BCL. No new NuGet package without a stated reason in the PR. Never add JavaScript/npm. Icons are local Lucide SVGs, never fetched at runtime.
+6. **Guard the supply chain.** Prefer the .NET BCL. No new NuGet package without a stated reason in the PR. Never add JavaScript/npm. Icons are local Lucide SVGs, never fetched at runtime. **Pre-approved exception:** first-party Avalonia-team controls under the MIT community license (catalog: <https://docs.avaloniaui.net/controls>) are in scope — pin to `$(AvaloniaVersion)`, note the reason in the `.csproj`, list in ARCHITECTURE §2.1. **Not** the Avalonia Accelerate/Pro controls (Charts, Markdown, MediaPlayer, On-Screen Keyboard, RichTextEditor, TreeDataGrid). See ARCHITECTURE §2.1.
 7. **Respect `.ods` correctness:**
    - `mimetype` must be the **first** ZIP entry and **stored uncompressed**.
    - Formulas are stored in canonical **OpenFormula** (`of:=SUM([.A1:.A3])`); always go through `OpenFormulaTranslator`.

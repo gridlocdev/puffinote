@@ -52,6 +52,7 @@ Exact versions live in **`Directory.Packages.props`** (central package managemen
 |---|---|
 | Target framework | `net10.0` (.NET SDK 10.0.x) |
 | Avalonia (`Avalonia`, `Avalonia.Desktop`, `Avalonia.Themes.Fluent`, `Avalonia.Fonts.Inter`) | 12.0.4 |
+| `Avalonia.Controls.ColorPicker` (first-party color picker — Format Cells) | 12.0.4 |
 | `Avalonia.Headless.XUnit` (UI tests) | 12.0.4 |
 | SkiaSharp | transitive via Avalonia 12 (3.x) — do not pin separately unless forced |
 | xUnit | `xunit.v3` 3.x + `xunit.runner.visualstudio` |
@@ -60,6 +61,8 @@ Exact versions live in **`Directory.Packages.props`** (central package managemen
 | `System.CommandLine` (CLI arg parsing — `Cellestra.Cli` only) | 2.0.8 |
 
 **Dependency policy:** prefer the .NET base class library. Adding any new package requires a stated reason in the PR. No JavaScript/npm tooling, ever. Icons ship as **local SVG assets** (Lucide), never fetched at runtime.
+
+**Pre-approved exception — first-party Avalonia controls.** The optional controls maintained by the **Avalonia team** under the same **MIT community license** (the catalog at <https://docs.avaloniaui.net/controls>) are in scope without a fresh supply-chain review: they're the same team, license, and version line (`12.0.4`) as Avalonia itself, so they don't widen the trust surface. Pin each to `$(AvaloniaVersion)`, add a one-line reason in the `.csproj`, and list it in the table above. In use today: **`Avalonia.Controls.ColorPicker`** (the Format Cells color pickers; its Fluent control theme is merged in `App.axaml` via `avares://Avalonia.Controls.ColorPicker/Themes/Fluent/Fluent.xaml`). **Excluded:** anything requiring the **Avalonia Accelerate / Pro** license — at time of writing **Charts, Markdown, MediaPlayer, On-Screen Keyboard, RichTextEditor, and TreeDataGrid** — which are a different license and stay out of scope (and several overlap the §9 non-goals anyway). Everything else (any other third-party NuGet) still needs the stated-reason review above.
 
 ### Why not the alternatives (short version)
 - **JavaScript/Electron/Tauri:** the dependency/supply-chain surface this project avoids.

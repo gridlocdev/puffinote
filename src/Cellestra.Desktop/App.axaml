@@ -5,6 +5,8 @@
 
     <Application.Styles>
         <FluentTheme />
+        <!-- Control theme for the first-party Avalonia.Controls.ColorPicker (used in Format Cells). -->
+        <StyleInclude Source="avares://Avalonia.Controls.ColorPicker/Themes/Fluent/Fluent.xaml" />
     </Application.Styles>
 
     <!-- Chrome surface brushes for the formula bar, tab strip, and status bar. Defined per theme so

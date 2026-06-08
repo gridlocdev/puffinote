@@ -3,14 +3,15 @@ using System.Linq;
 using Avalonia.Controls;
 using Avalonia.Layout;
 using Cellestra.Core.Styling;
-using Cellestra.Desktop.Controls;
+using AvColor = Avalonia.Media.Color;
 using SAlign = Cellestra.Core.Styling.HorizontalAlignment;
 
 namespace Cellestra.Desktop.Views.Dialogs;
 
 /// <summary>
 /// The Format Cells dialog (PRD §6.2, ⌘1): number format, font emphasis/size, colors, fill, and
-/// horizontal alignment. Returns a style transform applied to every selected cell, or null on cancel.
+/// horizontal alignment. Colors use the first-party Avalonia <see cref="ColorPicker"/> (spectrum +
+/// palette + hex). Returns a style transform applied to every selected cell, or null on cancel.
 /// </summary>
 public sealed class FormatCellsDialog : Window
 {
@@ -27,8 +28,9 @@ public sealed class FormatCellsDialog : Window
     private readonly CheckBox _italic;
     private readonly CheckBox _underline;
     private readonly NumericUpDown _size;
-    private readonly ColorPickerButton _textColor;
-    private readonly ColorPickerButton _fillColor;
+    private readonly ColorPicker _textColor;
+    private readonly CheckBox _fillEnabled;
+    private readonly ColorPicker _fillColor;
     private readonly ComboBox _align;
 
     public FormatCellsDialog(CellStyle current)
@@ -46,8 +48,17 @@ public sealed class FormatCellsDialog : Window
         _italic = new CheckBox { Content = "Italic", IsChecked = current.Font.Italic };
         _underline = new CheckBox { Content = "Underline", IsChecked = current.Font.Underline };
         _size = new NumericUpDown { Width = 90, Minimum = 6, Maximum = 96, Value = (decimal)current.Font.SizePoints };
-        _textColor = new ColorPickerButton(current.Font.Color.IsTransparent ? ArgbColor.Black : current.Font.Color, allowNone: false);
-        _fillColor = new ColorPickerButton(current.Fill.HasBackground ? current.Fill.Background : null, allowNone: true);
+
+        _textColor = new ColorPicker { Color = ToAvalonia(current.Font.Color.IsTransparent ? ArgbColor.Black : current.Font.Color) };
+
+        _fillEnabled = new CheckBox { Content = "Fill", IsChecked = current.Fill.HasBackground };
+        _fillColor = new ColorPicker
+        {
+            Color = ToAvalonia(current.Fill.Background ?? ArgbColor.White),
+            IsEnabled = current.Fill.HasBackground,
+        };
+        _fillEnabled.IsCheckedChanged += (_, _) => _fillColor.IsEnabled = _fillEnabled.IsChecked == true;
+
         _align = new ComboBox { Width = 140, ItemsSource = new[] { "General", "Left", "Center", "Right" }, SelectedIndex = (int)current.Alignment.Horizontal };
 
         var ok = new Button { Content = "OK", IsDefault = true };
@@ -65,7 +76,7 @@ public sealed class FormatCellsDialog : Window
                 new StackPanel { Orientation = Orientation.Horizontal, Spacing = 12, Children = { _bold, _italic, _underline } },
                 Row("Size", _size),
                 Row("Text color", _textColor),
-                Row("Fill color", _fillColor),
+                Row("Fill", new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8, Children = { _fillEnabled, _fillColor } }),
                 Row("Alignment", _align),
                 new StackPanel
                 {
@@ -85,6 +96,10 @@ public sealed class FormatCellsDialog : Window
         Children = { new TextBlock { Text = label, Width = 90, VerticalAlignment = Avalonia.Layout.VerticalAlignment.Center }, control },
     };
 
+    private static AvColor ToAvalonia(ArgbColor c) => AvColor.FromRgb(c.R, c.G, c.B);
+
+    private static ArgbColor FromAvalonia(AvColor c) => ArgbColor.FromRgb(c.R, c.G, c.B);
+
     private Func<CellStyle, CellStyle> BuildTransform()
     {
         string code = Formats[_format.SelectedIndex].Code;
@@ -92,8 +107,8 @@ public sealed class FormatCellsDialog : Window
         bool italic = _italic.IsChecked == true;
         bool underline = _underline.IsChecked == true;
         double size = (double)(_size.Value ?? 10m);
-        var textColor = _textColor.Color ?? ArgbColor.Black;
-        Fill fill = _fillColor.Color is { } fc ? Fill.Solid(fc) : Fill.None;
+        var textColor = FromAvalonia(_textColor.Color);
+        Fill fill = _fillEnabled.IsChecked == true ? Fill.Solid(FromAvalonia(_fillColor.Color)) : Fill.None;
         var horizontal = (SAlign)_align.SelectedIndex;
 
         return style => style with
