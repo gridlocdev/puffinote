@@ -32,6 +32,7 @@ public sealed partial class SpreadsheetGrid : Panel
         BorderThickness = new Thickness(0),
         Padding = new Thickness(3, 1, 0, 0),
         Background = Brushes.White,
+        VerticalContentAlignment = Avalonia.Layout.VerticalAlignment.Top, // sit at the top of the cell, like the drawn text
     };
 
     private readonly Surface _surface;
@@ -905,6 +906,21 @@ public sealed partial class SpreadsheetGrid : Panel
 
     // ---- Inline editing ---------------------------------------------------
 
+    /// <summary>Test seam: the inline editor's current font size and whether its text is top-aligned.</summary>
+    internal double EditorFontSize => _editor.FontSize;
+
+    internal bool EditorTextIsTopAligned => _editor.VerticalContentAlignment == Avalonia.Layout.VerticalAlignment.Top;
+
+    /// <summary>Match the inline editor's font to the cell's drawn text (family, size at the current zoom, weight, style).</summary>
+    private void ApplyEditorFont(Cell? cell)
+    {
+        var style = _session!.Workbook.Styles.Get(cell?.StyleId ?? StylePool.DefaultId);
+        _editor.FontFamily = new FontFamily(style.Font.Family);
+        _editor.FontSize = style.Font.SizePoints * 96.0 / 72.0 * _zoom;
+        _editor.FontWeight = style.Font.Bold ? FontWeight.Bold : FontWeight.Normal;
+        _editor.FontStyle = style.Font.Italic ? FontStyle.Italic : FontStyle.Normal;
+    }
+
     public void BeginEdit(string? seed)
     {
         var sheet = Sheet;
@@ -917,6 +933,7 @@ public sealed partial class SpreadsheetGrid : Panel
         ResetPointMode();
         _editing = true;
         var cell = sheet.Find(Selection.ActiveRow, Selection.ActiveColumn);
+        ApplyEditorFont(cell); // match the cell's drawn font so the text doesn't change size on edit
         _editor.Text = seed ?? CellEditText(cell);
         _editor.IsVisible = true;
         InvalidateArrange();
