@@ -178,6 +178,7 @@ public partial class MainWindow : Window, IAppEnvironment
     public void Refresh()
     {
         Grid.Refresh();
+        SyncFormulaBar(); // the active cell's value/formula may have changed, or the selection moved programmatically
         UpdateChrome();
     }
 
@@ -657,15 +658,19 @@ public partial class MainWindow : Window, IAppEnvironment
 
     private void OnSelectionChanged()
     {
+        SyncFormulaBar();
+        UpdateStatus();
+        Narrate($"Selected {new CellAddress(Selection.ActiveColumn, Selection.ActiveRow)}");
+        _commandBar?.RefreshState();
+    }
+
+    /// <summary>Mirror the active cell into the Name Box and formula input (its value/formula may have changed).</summary>
+    private void SyncFormulaBar()
+    {
         var address = new CellAddress(Selection.ActiveColumn, Selection.ActiveRow);
         NameBox.Text = address.ToString();
-
         var cell = _session.ActiveSheet.Find(Selection.ActiveRow, Selection.ActiveColumn);
         FormulaInput.Text = cell is null ? string.Empty : (cell.IsFormula ? "=" + cell.Formula : cell.Value.ToInvariantString());
-
-        UpdateStatus();
-        Narrate($"Selected {address}");
-        _commandBar?.RefreshState();
     }
 
     private void UpdateChrome()
