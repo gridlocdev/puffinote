@@ -7,4 +7,23 @@
         <FluentTheme />
     </Application.Styles>
 
+    <!-- Chrome surface brushes for the formula bar, tab strip, and status bar. Defined per theme so
+         a DynamicResource reference swaps automatically when the system light/dark theme changes. -->
+    <Application.Resources>
+        <ResourceDictionary>
+            <ResourceDictionary.ThemeDictionaries>
+                <ResourceDictionary x:Key="Light">
+                    <SolidColorBrush x:Key="ChromeBackground" Color="#FAFAFA" />
+                    <SolidColorBrush x:Key="ChromeAltBackground" Color="#F4F4F4" />
+                    <SolidColorBrush x:Key="ChromeBorder" Color="#E0E0E0" />
+                </ResourceDictionary>
+                <ResourceDictionary x:Key="Dark">
+                    <SolidColorBrush x:Key="ChromeBackground" Color="#252526" />
+                    <SolidColorBrush x:Key="ChromeAltBackground" Color="#2D2D2E" />
+                    <SolidColorBrush x:Key="ChromeBorder" Color="#3A3A3A" />
+                </ResourceDictionary>
+            </ResourceDictionary.ThemeDictionaries>
+        </ResourceDictionary>
+    </Application.Resources>
+
 </Application>

@@ -453,6 +453,9 @@ public sealed partial class SpreadsheetGrid : Panel
         context.DrawText(hashes, new Point(tx, Math.Max(rect.Y, ty)));
     }
 
+    /// <summary>Test seam: the color a cell's text would be drawn in, for the current theme.</summary>
+    internal Color ResolvedTextColor(CellStyle style, CellValue value) => ((ISolidColorBrush)TextBrushFor(style, value)).Color;
+
     private IBrush TextBrushFor(CellStyle style, CellValue value)
     {
         if (value.IsError)
@@ -460,7 +463,11 @@ public sealed partial class SpreadsheetGrid : Panel
             return Brushes.Crimson;
         }
 
-        return style.Font.Color.IsTransparent ? _palette.DefaultText : new SolidColorBrush(ToColor(style.Font.Color));
+        // The default/"automatic" font color — transparent, or the default black — follows the theme
+        // so text keeps its contrast in dark mode. An explicitly chosen non-black color is document
+        // data and is drawn as-is.
+        bool automatic = style.Font.Color.IsTransparent || style.Font.Color == ArgbColor.Black;
+        return automatic ? _palette.DefaultText : new SolidColorBrush(ToColor(style.Font.Color));
     }
 
     private void DrawSelection(DrawingContext context, IBrush fill)

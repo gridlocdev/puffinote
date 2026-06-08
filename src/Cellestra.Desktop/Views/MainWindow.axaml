@@ -12,7 +12,7 @@
         <ContentControl x:Name="RibbonHost" Grid.Row="0" IsVisible="False" />
 
         <!-- Formula bar: Name Box, fx, formula input -->
-        <Border Grid.Row="1" Background="#FAFAFA" BorderBrush="#E0E0E0" BorderThickness="0,0,0,1" Padding="4">
+        <Border Grid.Row="1" Background="{DynamicResource ChromeBackground}" BorderBrush="{DynamicResource ChromeBorder}" BorderThickness="0,0,0,1" Padding="4">
             <DockPanel>
                 <TextBox x:Name="NameBox" Width="92" DockPanel.Dock="Left" PlaceholderText="A1"
                          VerticalContentAlignment="Center" />
@@ -26,12 +26,12 @@
         <grid:SpreadsheetGrid x:Name="Grid" Grid.Row="2" />
 
         <!-- Sheet tab strip -->
-        <Border Grid.Row="3" Background="#F4F4F4" BorderBrush="#E0E0E0" BorderThickness="0,1,0,0" Padding="4,2">
+        <Border Grid.Row="3" Background="{DynamicResource ChromeAltBackground}" BorderBrush="{DynamicResource ChromeBorder}" BorderThickness="0,1,0,0" Padding="4,2">
             <StackPanel x:Name="SheetTabs" Orientation="Horizontal" Spacing="2" />
         </Border>
 
         <!-- Status bar -->
-        <Border Grid.Row="4" Background="#FAFAFA" BorderBrush="#E0E0E0" BorderThickness="0,1,0,0" Padding="8,3">
+        <Border Grid.Row="4" Background="{DynamicResource ChromeBackground}" BorderBrush="{DynamicResource ChromeBorder}" BorderThickness="0,1,0,0" Padding="8,3">
             <DockPanel>
                 <TextBlock x:Name="StatusCell" DockPanel.Dock="Left" Width="120" VerticalAlignment="Center" />
                 <TextBlock x:Name="StatusZoom" DockPanel.Dock="Right" VerticalAlignment="Center" />
