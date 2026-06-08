@@ -225,10 +225,18 @@ public static class AppCommands
     private static void ToggleNumberFormat(IAppEnvironment e, NumberFormat format, NumberFormatKind kind)
     {
         var session = e.Session;
-        var target = ActiveStyle(e).NumberFormat.Kind == kind ? NumberFormat.General : format;
+        bool applying = ActiveStyle(e).NumberFormat.Kind != kind;
+        var target = applying ? format : NumberFormat.General;
         session.Execute(EditCommands.ApplyStyle(session.Workbook, session.ActiveSheet.Name, e.Selection.Range,
             s => s.WithNumberFormat(target), "Number Format"));
         e.Refresh();
+
+        // A freshly applied format (currency/date) can be wider than the column — grow it so the
+        // result shows instead of reading #####. Removing a format never needs more room.
+        if (applying)
+        {
+            e.AutofitColumns(e.Selection.Left, e.Selection.Right);
+        }
     }
 
     /// <summary>

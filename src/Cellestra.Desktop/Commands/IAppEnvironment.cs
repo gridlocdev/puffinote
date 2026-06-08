@@ -73,6 +73,9 @@ public interface IAppEnvironment
     /// <summary>Preview a style transform over the selection without committing it; null clears the preview.</summary>
     void PreviewCellStyle(Func<CellStyle, CellStyle>? transform);
 
+    /// <summary>Grow columns <paramref name="left"/>…<paramref name="right"/> to fit their content if they clip (never shrink).</summary>
+    void AutofitColumns(int left, int right);
+
     void ToggleFreezePanes();
 
     /// <summary>Display the keyboard shortcuts reference.</summary>

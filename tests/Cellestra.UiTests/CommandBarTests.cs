@@ -69,6 +69,22 @@ public class CommandBarTests
         Assert.Equal("Bold on · A1", CommandBar.Describe(AppCommands.ById("format.bold")!, window));
     }
 
+    [AvaloniaFact]
+    public void Applying_a_wide_number_format_grows_the_column()
+    {
+        var window = new MainWindow();
+        window.Show();
+
+        var session = window.Session;
+        session.Execute(Cellestra.Core.Editing.EditCommands.SetInput(
+            session.Workbook, session.ActiveSheet.Name, 0, 0, "1234567.89", session.Workbook.Settings.EffectiveLocale));
+
+        double before = session.ActiveSheet.GetColumnWidth(0);
+        AppCommands.ById("format.currency")!.Execute(window); // "$1,234,567.89" overflows the default width
+
+        Assert.True(session.ActiveSheet.GetColumnWidth(0) > before, "column should grow to fit the formatted value");
+    }
+
     [Fact]
     public void Bar_layout_ids_all_resolve_in_the_catalog()
     {

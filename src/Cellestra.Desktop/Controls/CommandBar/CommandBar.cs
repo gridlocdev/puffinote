@@ -174,6 +174,7 @@ public sealed class CommandBar : UserControl
             Padding = new Thickness(2),
             Width = 18,
             Height = 34,
+            Focusable = false,
             Content = new LucideIcon { IconKey = "chevron-down", Size = 13, Foreground = MutedBrush, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center },
             VerticalAlignment = VerticalAlignment.Center,
         };
@@ -216,6 +217,7 @@ public sealed class CommandBar : UserControl
             BorderThickness = default,
             CornerRadius = new CornerRadius(6),
             Padding = new Thickness(9, 6),
+            Focusable = false,
             VerticalAlignment = VerticalAlignment.Center,
         };
         ToolTip.SetTip(pill, "Search and run any command");
@@ -232,6 +234,7 @@ public sealed class CommandBar : UserControl
             Padding = new Thickness(2),
             Width = 30,
             Height = collapse ? 34 : 18,
+            Focusable = false,
             Content = new LucideIcon
             {
                 IconKey = collapse ? "chevron-up" : "chevron-down",
@@ -266,6 +269,9 @@ public sealed class CommandBar : UserControl
             Height = 34;
             CornerRadius = new CornerRadius(6);
             Margin = new Thickness(1, 0);
+            // A toolbar must not steal keyboard focus from the grid — clicking Bold then typing must
+            // still type into the selected cell. Commands stay reachable via menu, ⌘K, and shortcuts.
+            Focusable = false;
 
             _icon = new LucideIcon { IconKey = command.Icon, Size = 17, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
             _dot = new Ellipse

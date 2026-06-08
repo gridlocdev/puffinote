@@ -544,6 +544,8 @@ public partial class MainWindow : Window, IAppEnvironment
         }
     }
 
+    public void AutofitColumns(int left, int right) => Grid.GrowColumnsToFit(left, right);
+
     // ---- Chrome -----------------------------------------------------------
 
     private void RewireSession()
@@ -890,8 +892,15 @@ public partial class MainWindow : Window, IAppEnvironment
     }
 
     /// <summary>One palette row: optional icon, the command name, its description beneath, and the shortcut (PRD §6.7).</summary>
-    private static Control BuildPaletteRow(PaletteItem item)
+    private static Control BuildPaletteRow(PaletteItem? item)
     {
+        // The ListBox recycles containers while scrolling and may build the template with a null
+        // item; render nothing rather than dereferencing it.
+        if (item is null)
+        {
+            return new Control();
+        }
+
         var dock = new DockPanel { LastChildFill = true };
 
         if (!string.IsNullOrEmpty(item.Shortcut))

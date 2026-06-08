@@ -376,6 +376,10 @@ public sealed partial class SpreadsheetGrid : Panel
 
         var formatted = new FormattedText(text, CultureInfo.CurrentCulture, FlowDirection.LeftToRight,
             typeface, fontSize, brush);
+        if (style.Font.Underline)
+        {
+            formatted.SetTextDecorations(TextDecorations.Underline);
+        }
 
         double cellAvailable = rect.Width - 6;
         bool numeric = cell.Value.IsNumber || cell.Value.IsBoolean || cell.Value.IsError;
