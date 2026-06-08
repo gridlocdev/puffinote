@@ -160,8 +160,8 @@ Everything reachable in the command bar is also reachable in the menu bar, the C
    - **Name Box** (far left): shows the active cell reference (e.g. `B7`); typing a reference or named range here and pressing Enter jumps there.
    - **Cancel (✕)** and **Accept (✓)** buttons, and an **Insert Function (`fx`)** button.
    - **Formula input**: a wide field showing the active cell's formula or value, editable directly.
-4. **Grid** — column headers (A, B, C…), row headers (1, 2, 3…), the cell area, frozen panes where set, and scrollbars. The active cell has a bold outline with a fill handle at its corner.
-5. **Sheet tab strip** (bottom-left) — one tab per worksheet, a **＋** to add, left/right nav arrows, and a right-click menu to rename, duplicate, reorder, color, or delete.
+4. **Grid** — column headers (A, B, C…), row headers (1, 2, 3…), the cell area, frozen panes where set, and scrollbars. The active cell has a bold outline with a fill handle at its corner. Header labels scale with the zoom. Dragging a column's right border (or a row's bottom border) resizes it — the cursor changes to the resize handle on hover; double-clicking a column border autofits it. **Right-clicking a cell** opens a context menu (cut/copy/paste, insert rows/columns, clear contents/formatting/all) acting on the cell under the cursor or the selection.
+5. **Sheet tab strip** (bottom-left) — one tab per worksheet and a **＋** to add. **Right-clicking a tab** activates it and offers Rename, Insert, and Delete (delete confirms, and a workbook always keeps at least one sheet). Context-menu items carry an icon and label.
 6. **Status bar** (bottom) — see §6.5.
 
 ### 6.2 Menu bar
@@ -179,6 +179,8 @@ Everything reachable in the command bar is also reachable in the menu bar, the C
 | **Help** | Cellestra Help · Function Reference… |
 
 (Menus deliberately *absent*: "Page Layout"/print and "Review"/comments — those features are v1 non-goals, §9.)
+
+**Find / Find & Replace** (⌘F / ⌥⌘F) is a modeless tool window: besides Find Next / Replace / Replace All, it lists **every cell whose displayed value contains the query** (address + value, updated as you type); clicking a row jumps the selection there and scrolls it into view.
 
 ### 6.3 The adaptive command bar
 
@@ -276,7 +278,7 @@ Shortcuts use macOS modifiers (⌘ Command, ⇧ Shift, ⌥ Option, ⌃ Control).
 
 ### 6.5 Status bar
 
-Left to right: the **active cell reference** and a short mode hint; in the middle, **live selection stats** — **Count** (number of non-empty cells in the selection), and, when at least one numeric cell is selected, **Sum** and **Average** over the numeric cells; on the right, a **recalculation indicator** (idle / "recalculating…"), a **calculation-mode badge** (Auto/Manual), a **modified indicator**, and a **zoom control** (slider + percentage, click to reset to 100%).
+Left to right: a **last-action indicator** (a dot plus a short narration of the most recent action — "Selected B2", "Bold on · B2", "Font size 18 · B2" — a quick reference to what just happened); the **active cell reference**; in the middle, **live selection stats** — **Count** (number of non-empty cells in the selection), and, when at least one numeric cell is selected, **Sum** and **Average** over the numeric cells; on the right, a **calculation-mode badge** (Auto/Manual), a **zoom percentage**, and a **save-state indicator** ("Edited" / "Saved HH:mm" / "Not saved").
 
 ### 6.6 Iconography
 

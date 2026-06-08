@@ -609,7 +609,8 @@ public sealed partial class SpreadsheetGrid : Panel
         var point = e.GetPosition(this);
 
         // Right-click is for the context menu (raised separately as ContextRequested); don't let it
-        // start a selection. Commit any in-progress edit first so the menu acts on a settled cell.
+        // start a selection. Commit any in-progress edit first so the menu acts on a settled cell,
+        // and focus the grid so typing works once the menu closes.
         if (e.GetCurrentPoint(this).Properties.IsRightButtonPressed)
         {
             if (_editing)
@@ -617,6 +618,7 @@ public sealed partial class SpreadsheetGrid : Panel
                 CommitEdit(0, 0);
             }
 
+            Focus();
             return;
         }
 
