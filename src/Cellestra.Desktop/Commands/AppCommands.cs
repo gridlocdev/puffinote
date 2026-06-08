@@ -78,6 +78,9 @@ public static class AppCommands
         new("insert.rowsAbove", "Rows Above", "Insert rows above the selection.", e => InsertRows(e, above: true), "rows-plus"),
         new("insert.columnsLeft", "Columns Left", "Insert columns left of the selection.", e => InsertColumns(e, before: true), "columns-plus"),
         new("insert.sheet", "Sheet", "Add a new worksheet.", e => e.AddSheet(), "plus"),
+        new("sheet.rename", "Rename Sheet…", "Rename the active worksheet.", e => e.RenameActiveSheet(), "pencil"),
+        new("sheet.delete", "Delete Sheet", "Delete the active worksheet.", e => e.DeleteActiveSheet(), "trash-2",
+            canExecute: e => e.Session.Workbook.Worksheets.Count > 1),
 
         // Data
         new("data.sortAsc", "Sort Ascending", "Sort the column A→Z.", e => Sort(e, ascending: true), "sort-asc"),

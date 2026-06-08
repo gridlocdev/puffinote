@@ -85,6 +85,33 @@ public sealed class WorkbookSession
         StructureChanged?.Invoke(this, EventArgs.Empty);
     }
 
+    /// <summary>Delete a worksheet (no-op on the last one) and activate a neighbour. Marks the workbook modified.</summary>
+    public void DeleteSheet(Worksheet sheet)
+    {
+        if (_workbook.Worksheets.Count <= 1)
+        {
+            return;
+        }
+
+        int index = _workbook.IndexOf(sheet);
+        if (!_workbook.RemoveSheet(sheet))
+        {
+            return;
+        }
+
+        IsModified = true;
+        var next = _workbook.Worksheets[System.Math.Min(index, _workbook.Worksheets.Count - 1)];
+        SetActiveSheet(next); // raises StructureChanged
+    }
+
+    /// <summary>Rename a worksheet (throws on an invalid or duplicate name so the UI can explain it).</summary>
+    public void RenameSheet(Worksheet sheet, string newName)
+    {
+        _workbook.RenameSheet(sheet, newName);
+        IsModified = true;
+        StructureChanged?.Invoke(this, EventArgs.Empty);
+    }
+
     /// <summary>Captures the current selection; set by the UI so undo can restore it.</summary>
     public Func<SelectionMemento>? SelectionProvider { get; set; }
 

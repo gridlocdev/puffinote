@@ -53,6 +53,7 @@ public partial class MainWindow : Window, IAppEnvironment
 
         Grid.Attach(_session);
         Grid.SelectionChanged += (_, _) => OnSelectionChanged();
+        Grid.ContextRequested += OnGridContextRequested;
         Grid.ClipboardInvalidated += (_, _) => ClearClipboard();
         Grid.EnterPasteRequested += (_, _) => EnterPaste();
         WireSelectionUndo();
@@ -113,7 +114,7 @@ public partial class MainWindow : Window, IAppEnvironment
         menu.Items.Add(Submenu("Format", "format.cells", null, "format.bold", "format.italic", "format.underline", null,
             "format.alignLeft", "format.alignCenter", "format.alignRight", "format.wrap", null,
             "format.currency", "format.percent", "format.date", null, "format.merge"));
-        menu.Items.Add(Submenu("Insert", "insert.rowsAbove", "insert.columnsLeft", "insert.sheet"));
+        menu.Items.Add(Submenu("Insert", "insert.rowsAbove", "insert.columnsLeft", "insert.sheet", null, "sheet.rename", "sheet.delete"));
         menu.Items.Add(Submenu("Data", "data.sortAsc", "data.sortDesc", "data.customSort", null,
             "data.toggleFilter", "data.clearFilter", null, "data.createTable", "data.removeDuplicates",
             "data.textToColumns", "data.validation", null, "formula.recalc"));
@@ -395,6 +396,88 @@ public partial class MainWindow : Window, IAppEnvironment
         Grid.Refresh();
     }
 
+    public async void RenameActiveSheet()
+    {
+        var sheet = _session.ActiveSheet;
+        string? name = await new Dialogs.TextPromptDialog("Rename sheet", "Name", sheet.Name).ShowDialog<string?>(this);
+        if (name is null || name == sheet.Name)
+        {
+            return;
+        }
+
+        try
+        {
+            _session.RenameSheet(sheet, name); // raises StructureChanged → rebuilds tabs/chrome
+            OnSelectionChanged();
+            Narrate($"Renamed sheet to {name}");
+        }
+        catch (Exception ex)
+        {
+            ShowMessage("Couldn't rename the sheet", ex.Message);
+        }
+    }
+
+    public async void DeleteActiveSheet()
+    {
+        if (_session.Workbook.Worksheets.Count <= 1)
+        {
+            ShowMessage("Can't delete the last sheet", "A workbook must keep at least one worksheet.");
+            return;
+        }
+
+        var sheet = _session.ActiveSheet;
+        bool confirmed = await new ConfirmDialog("Delete sheet?",
+            $"Delete “{sheet.Name}” and all its data? This can’t be undone.", "Delete").ShowDialog<bool>(this);
+        if (confirmed)
+        {
+            _session.DeleteSheet(sheet); // raises StructureChanged → rebuilds tabs/chrome
+            OnSelectionChanged();
+            Narrate($"Deleted sheet {sheet.Name}");
+        }
+    }
+
+    /// <summary>Build a right-click menu from catalog command ids (null = separator); each row shows its icon, label, and shortcut.</summary>
+    private MenuFlyout BuildCommandFlyout(params string?[] ids)
+    {
+        var flyout = new MenuFlyout();
+        foreach (string? id in ids)
+        {
+            if (id is null)
+            {
+                flyout.Items.Add(new Separator());
+                continue;
+            }
+
+            if (AppCommands.ById(id) is { } command)
+            {
+                flyout.Items.Add(new MenuItem
+                {
+                    Header = command.Label,
+                    InputGesture = command.Shortcut,
+                    Icon = command.Icon is null ? null : new LucideIcon { IconKey = command.Icon, Size = 15 },
+                    Command = new RelayCommand(() => command.Execute(this), () => command.IsEnabled(this)),
+                });
+            }
+        }
+
+        return flyout;
+    }
+
+    private void OnGridContextRequested(object? sender, Avalonia.Input.ContextRequestedEventArgs e)
+    {
+        if (e.TryGetPosition(Grid, out var point))
+        {
+            Grid.SelectForContext(point);
+        }
+
+        BuildCommandFlyout(
+            "edit.cut", "edit.copy", "edit.paste", null,
+            "insert.rowsAbove", "insert.columnsLeft", null,
+            "edit.delete", "edit.clearFormats", "edit.clearAll")
+            .ShowAt(Grid, showAtPointer: true);
+        e.Handled = true;
+    }
+
     public void ZoomBy(double delta)
     {
         Grid.Zoom += delta;
@@ -656,6 +739,17 @@ public partial class MainWindow : Window, IAppEnvironment
             };
             var captured = sheet;
             button.Click += (_, _) => { _session.SetActiveSheet(captured); BuildSheetTabs(); Grid.Refresh(); OnSelectionChanged(); };
+            button.ContextRequested += (_, e) =>
+            {
+                // Right-clicking a tab activates it, then offers sheet actions (incl. delete — there's
+                // no other way to remove a sheet). Anchor on the stable strip, since activating the
+                // sheet rebuilds the tab buttons.
+                _session.SetActiveSheet(captured);
+                Grid.Refresh();
+                OnSelectionChanged();
+                BuildCommandFlyout("sheet.rename", "insert.sheet", null, "sheet.delete").ShowAt(SheetTabs, showAtPointer: true);
+                e.Handled = true;
+            };
             SheetTabs.Children.Add(button);
         }
 

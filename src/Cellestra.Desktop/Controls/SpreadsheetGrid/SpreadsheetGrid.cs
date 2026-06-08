@@ -608,6 +608,18 @@ public sealed partial class SpreadsheetGrid : Panel
         base.OnPointerPressed(e);
         var point = e.GetPosition(this);
 
+        // Right-click is for the context menu (raised separately as ContextRequested); don't let it
+        // start a selection. Commit any in-progress edit first so the menu acts on a settled cell.
+        if (e.GetCurrentPoint(this).Properties.IsRightButtonPressed)
+        {
+            if (_editing)
+            {
+                CommitEdit(0, 0);
+            }
+
+            return;
+        }
+
         // Point mode: clicking a cell while typing a formula inserts its reference instead of
         // committing (#17). Checked before stealing focus so the editor stays active.
         if (_editing && TryPointModeInsert(point))
@@ -705,6 +717,26 @@ public sealed partial class SpreadsheetGrid : Panel
         }
 
         RaiseSelectionChanged();
+    }
+
+    /// <summary>
+    /// Prepare the selection for a context menu at <paramref name="point"/>: if it's a data cell
+    /// outside the current selection, move there; a click inside a multi-cell selection keeps it
+    /// (so the menu acts on the whole range).
+    /// </summary>
+    internal void SelectForContext(Point point)
+    {
+        if (!HitTest(point, out int row, out int column, out bool rowHeader, out bool columnHeader) || rowHeader || columnHeader)
+        {
+            return;
+        }
+
+        bool inSelection = row >= Selection.Top && row <= Selection.Bottom && column >= Selection.Left && column <= Selection.Right;
+        if (!inSelection)
+        {
+            Selection.MoveTo(row, column);
+            RaiseSelectionChanged();
+        }
     }
 
     private void SelectRowOrColumn(bool additive, int top, int left, int bottom, int right)

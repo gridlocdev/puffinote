@@ -49,6 +49,12 @@ public interface IAppEnvironment
 
     void AddSheet();
 
+    /// <summary>Rename the active worksheet (prompts for the new name).</summary>
+    void RenameActiveSheet();
+
+    /// <summary>Delete the active worksheet (confirms first; refuses to delete the last one).</summary>
+    void DeleteActiveSheet();
+
     void ZoomBy(double delta);
 
     void ResetZoom();

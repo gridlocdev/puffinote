@@ -36,7 +36,7 @@ public static class CommandBarModel
     {
         new CommandBarGroup("Edit",
             new[] { "edit.undo", "edit.redo" },
-            new[] { "edit.cut", "edit.copy", "edit.paste", "edit.delete" }),
+            new[] { "edit.cut", "edit.copy", "edit.paste", "edit.delete", "edit.clearFormats", "edit.clearAll" }),
         new CommandBarGroup("Text",
             new[] { "format.bold", "format.italic", "format.underline" },
             new[] { "format.cells" }),
