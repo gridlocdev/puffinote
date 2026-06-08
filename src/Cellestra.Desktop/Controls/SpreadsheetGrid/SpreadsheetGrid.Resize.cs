@@ -21,6 +21,7 @@ public sealed partial class SpreadsheetGrid
 
     private static readonly Cursor ResizeColumnCursor = new(StandardCursorType.SizeWestEast);
     private static readonly Cursor ResizeRowCursor = new(StandardCursorType.SizeNorthSouth);
+    private static readonly Cursor FillCursor = new(StandardCursorType.DragCopy);
 
     private int? _dragColumn;          // the column whose right border is being dragged
     private int? _dragRow;             // the row whose bottom border is being dragged
@@ -37,10 +38,11 @@ public sealed partial class SpreadsheetGrid
     private double EffectiveRowHeight(Worksheet sheet, int row) =>
         _dragRow == row ? _dragSize : sheet.GetRowHeight(row);
 
-    /// <summary>Hovering a header border (only): set the matching resize cursor, otherwise the arrow.</summary>
+    /// <summary>Hover feedback: the copy cursor over the fill handle, a resize cursor over a header border, else the arrow.</summary>
     private void UpdateResizeCursor(Point point)
     {
-        var desired = TryHitColumnBorder(point, out _) ? StandardCursorType.SizeWestEast
+        var desired = TryGetFillHandleRect(out var handle) && handle.Contains(point) ? StandardCursorType.DragCopy
+            : TryHitColumnBorder(point, out _) ? StandardCursorType.SizeWestEast
             : TryHitRowBorder(point, out _) ? StandardCursorType.SizeNorthSouth
             : StandardCursorType.Arrow;
 
@@ -54,6 +56,7 @@ public sealed partial class SpreadsheetGrid
         {
             StandardCursorType.SizeWestEast => ResizeColumnCursor,
             StandardCursorType.SizeNorthSouth => ResizeRowCursor,
+            StandardCursorType.DragCopy => FillCursor,
             _ => Cursor.Default,
         };
     }

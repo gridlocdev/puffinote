@@ -26,14 +26,21 @@ public sealed partial class SpreadsheetGrid : Panel
     public const double HeaderWidth = 46;
     public const double HeaderHeight = 22;
 
+    private const double EditorPadX = 3;
+    private const double EditorPadY = 1;
+
     private readonly TextBox _editor = new()
     {
         IsVisible = false,
         BorderThickness = new Thickness(0),
-        Padding = new Thickness(3, 1, 0, 0),
+        Padding = new Thickness(EditorPadX, EditorPadY, 0, 0),
         Background = Brushes.White,
         VerticalContentAlignment = Avalonia.Layout.VerticalAlignment.Top, // sit at the top of the cell, like the drawn text
     };
+
+    // A TextBox can't render underline/strikethrough, so a thin overlay above the editor draws those
+    // decorations itself — using the same text metrics the grid uses for cells, so they line up.
+    private readonly EditorDecorationLayer _editorDecorations;
 
     private readonly Surface _surface;
     private WorkbookSession? _session;
@@ -53,8 +60,10 @@ public sealed partial class SpreadsheetGrid : Panel
     {
         Focusable = true;
         _surface = new Surface(this);
-        Children.Add(_surface);        // draws the grid
-        Children.Add(_editor);         // floats above for inline editing
+        _editorDecorations = new EditorDecorationLayer(this);
+        Children.Add(_surface);            // draws the grid
+        Children.Add(_editor);             // floats above for inline editing
+        Children.Add(_editorDecorations);  // draws the editor's underline/strikethrough, above the editor
         InitChrome();                  // popup layer for filter/validation dropdowns
         InitSignatureHelp();           // function argument hint while typing a formula
         ApplyTheme();                  // canvas/text colors follow the system light/dark theme
@@ -84,7 +93,11 @@ public sealed partial class SpreadsheetGrid : Panel
         _editor.GetObservable(TextBox.CaretIndexProperty).Subscribe(new AnonymousObserver<int>(_ => UpdateSignatureHelp()));
     }
 
-    private void Redraw() => _surface.InvalidateVisual();
+    private void Redraw()
+    {
+        _surface.InvalidateVisual();
+        _editorDecorations.InvalidateVisual();
+    }
 
     /// <summary>Re-resolve the theme palette and repaint; the inline editor matches the canvas so editing reads in either theme.</summary>
     private void ApplyTheme()
@@ -108,6 +121,26 @@ public sealed partial class SpreadsheetGrid : Panel
         }
 
         public override void Render(DrawingContext context) => _owner.DrawTo(context);
+    }
+
+    /// <summary>
+    /// A transparent, click-through layer that floats directly above the inline editor and draws the
+    /// editor's underline/strikethrough — the one thing a plain <see cref="TextBox"/> can't show. It
+    /// measures the live text with the cell's typeface (matching the editor's font), so the lines sit
+    /// exactly under/through the glyphs the TextBox renders.
+    /// </summary>
+    private sealed class EditorDecorationLayer : Control
+    {
+        private readonly SpreadsheetGrid _owner;
+
+        public EditorDecorationLayer(SpreadsheetGrid owner)
+        {
+            _owner = owner;
+            IsHitTestVisible = false;
+            ClipToBounds = true;
+        }
+
+        public override void Render(DrawingContext context) => _owner.DrawEditorDecorations(context);
     }
 
     public GridSelection Selection { get; } = new();
@@ -387,19 +420,8 @@ public sealed partial class SpreadsheetGrid : Panel
 
         var formatted = new FormattedText(text, CultureInfo.CurrentCulture, FlowDirection.LeftToRight,
             typeface, fontSize, brush);
-        if (style.Font.Underline || style.Font.Strikethrough)
+        if (Decorations(style.Font) is { } decorations)
         {
-            var decorations = new TextDecorationCollection();
-            if (style.Font.Underline)
-            {
-                decorations.Add(TextDecorations.Underline[0]);
-            }
-
-            if (style.Font.Strikethrough)
-            {
-                decorations.Add(TextDecorations.Strikethrough[0]);
-            }
-
             formatted.SetTextDecorations(decorations);
         }
 
@@ -1065,15 +1087,70 @@ public sealed partial class SpreadsheetGrid : Panel
             ? new SolidColorBrush(ToColor(style.Fill.Background!.Value))
             : _palette.Canvas;
 
-        // Mirror the cell's horizontal alignment so an Align command applied mid-edit shifts the text.
-        // (Underline/strikethrough can't show here — TextBox exposes no TextDecorations — but they still
-        // apply to the value and appear on the drawn cell once the edit is committed.)
+        // Mirror the cell's horizontal alignment so an Align command applied mid-edit shifts the text;
+        // the decoration overlay (underline/strikethrough) repaints alongside via Redraw().
         _editor.TextAlignment = style.Alignment.Horizontal switch
         {
             SAlign.Center => TextAlignment.Center,
             SAlign.Right => TextAlignment.Right,
             _ => TextAlignment.Left,
         };
+    }
+
+    /// <summary>Draw the editor's underline/strikethrough on the overlay, measured against the live text so they line up with the glyphs.</summary>
+    private void DrawEditorDecorations(DrawingContext context)
+    {
+        if (!_editing || _session is null)
+        {
+            return;
+        }
+
+        var cell = Sheet?.Find(Selection.ActiveRow, Selection.ActiveColumn);
+        var style = _session.Workbook.Styles.Get(cell?.StyleId ?? StylePool.DefaultId);
+        if (Decorations(style.Font) is null)
+        {
+            return; // nothing to draw — neither underline nor strikethrough
+        }
+
+        string text = _editor.Text ?? string.Empty;
+        if (text.Length == 0)
+        {
+            return;
+        }
+
+        var typeface = new Typeface(
+            style.Font.Family,
+            style.Font.Italic ? FontStyle.Italic : FontStyle.Normal,
+            style.Font.Bold ? FontWeight.Bold : FontWeight.Normal);
+        double fontSize = style.Font.SizePoints * 96.0 / 72.0 * _zoom;
+        var brush = _editor.Foreground ?? Brushes.Black;
+        var formatted = new FormattedText(text, CultureInfo.CurrentCulture, FlowDirection.LeftToRight, typeface, fontSize, brush);
+
+        // The overlay is arranged at the editor rect, so (0,0) is the cell's top-left. The editor's
+        // content area runs [EditorPadX, width] (left pad only — right/bottom padding is 0), and the
+        // TextBox aligns text within it; matching that here puts our lines under the glyphs.
+        double width = _editorDecorations.Bounds.Width;
+        double x0 = _editor.TextAlignment switch
+        {
+            TextAlignment.Right => width - formatted.Width, // flush right (no right padding)
+            TextAlignment.Center => EditorPadX + (Math.Max(0, width - EditorPadX) - formatted.Width) / 2,
+            _ => EditorPadX,
+        };
+        double x1 = x0 + formatted.Width;
+        double baseline = EditorPadY + formatted.Baseline;
+
+        var pen = new Pen(brush, Math.Max(1, fontSize / 14.0));
+        if (style.Font.Underline)
+        {
+            double y = baseline + Math.Max(1, fontSize * 0.08);
+            context.DrawLine(pen, new Point(x0, y), new Point(x1, y));
+        }
+
+        if (style.Font.Strikethrough)
+        {
+            double y = baseline - (fontSize * 0.26);
+            context.DrawLine(pen, new Point(x0, y), new Point(x1, y));
+        }
     }
 
     public void BeginEdit(string? seed)
@@ -1218,11 +1295,13 @@ public sealed partial class SpreadsheetGrid : Panel
         if (_editing && TryGetCellRect(Selection.ActiveRow, Selection.ActiveColumn, out var rect))
         {
             _editor.Arrange(rect);
+            _editorDecorations.Arrange(rect); // the decoration overlay tracks the editor exactly
             ArrangeSignatureTip(rect, finalSize);
         }
         else
         {
             _editor.Arrange(new Rect(0, 0, 0, 0));
+            _editorDecorations.Arrange(new Rect(0, 0, 0, 0));
             _signatureTip.Arrange(new Rect(0, 0, 0, 0));
         }
 
@@ -1253,4 +1332,26 @@ public sealed partial class SpreadsheetGrid : Panel
     private void RaiseSelectionChanged() => SelectionChanged?.Invoke(this, EventArgs.Empty);
 
     private static Color ToColor(ArgbColor color) => Color.FromArgb(color.A, color.R, color.G, color.B);
+
+    /// <summary>The text decorations for a font (underline and/or strikethrough), or null when it has neither.</summary>
+    private static TextDecorationCollection? Decorations(Cellestra.Core.Styling.Font font)
+    {
+        if (!font.Underline && !font.Strikethrough)
+        {
+            return null;
+        }
+
+        var decorations = new TextDecorationCollection();
+        if (font.Underline)
+        {
+            decorations.Add(TextDecorations.Underline[0]);
+        }
+
+        if (font.Strikethrough)
+        {
+            decorations.Add(TextDecorations.Strikethrough[0]);
+        }
+
+        return decorations;
+    }
 }

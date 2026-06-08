@@ -62,32 +62,20 @@ public sealed partial class SpreadsheetGrid
             return;
         }
 
-        var src = _fillSource;
-        int rowsBeyond = row > src.Bottom ? row - src.Bottom : (row < src.Top ? row - src.Top : 0);
-        int columnsBeyond = column > src.Right ? column - src.Right : (column < src.Left ? column - src.Left : 0);
-
-        // Fill in the single dominant axis, like Excel — a drag is either vertical or horizontal.
-        if (Math.Abs(rowsBeyond) >= Math.Abs(columnsBeyond))
-        {
-            _fillTarget = rowsBeyond switch
-            {
-                > 0 => Range(src.Left, src.Top, src.Right, row),
-                < 0 => Range(src.Left, row, src.Right, src.Bottom),
-                _ => src,
-            };
-        }
-        else
-        {
-            _fillTarget = columnsBeyond switch
-            {
-                > 0 => Range(src.Left, src.Top, column, src.Bottom),
-                < 0 => Range(column, src.Top, src.Right, src.Bottom),
-                _ => src,
-            };
-        }
-
+        _fillTarget = ComputeFillTarget(_fillSource, row, column);
         Redraw();
     }
+
+    /// <summary>
+    /// The fill rectangle for a drag to (<paramref name="row"/>, <paramref name="column"/>): the
+    /// bounding box of the source and the cursor, so the drag extends in <b>both</b> axes at once
+    /// (the source tiles to fill the whole box, per <see cref="FillCommand"/>).
+    /// </summary>
+    internal static CellRange ComputeFillTarget(CellRange src, int row, int column) => Range(
+        Math.Min(src.Left, column),
+        Math.Min(src.Top, row),
+        Math.Max(src.Right, column),
+        Math.Max(src.Bottom, row));
 
     private void CommitFill()
     {
