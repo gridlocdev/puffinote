@@ -286,6 +286,7 @@ public sealed class CommandBar : UserControl
                 if (_command.IsEnabled(env))
                 {
                     _command.Execute(env);
+                    env.Narrate(Describe(_command, env));
                 }
             };
         }
@@ -305,6 +306,15 @@ public sealed class CommandBar : UserControl
                 _icon.ClearValue(LucideIcon.ForegroundProperty);
             }
         }
+    }
+
+    /// <summary>A short status-line sentence for an action: toggles report on/off, others just name themselves.</summary>
+    internal static string Describe(AppCommand command, IAppEnvironment env)
+    {
+        string address = env.Selection.ActiveAddress.ToString();
+        return command.IsActive is null
+            ? $"{command.Label} · {address}"
+            : $"{command.Label} {(command.IsToggleActive(env) ? "on" : "off")} · {address}";
     }
 
     /// <summary>Tooltip body: name + shortcut on top, the plain-language description beneath.</summary>

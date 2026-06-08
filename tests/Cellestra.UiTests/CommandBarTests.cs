@@ -56,6 +56,19 @@ public class CommandBarTests
         Assert.True(window.Session.CanUndo);
     }
 
+    [AvaloniaFact]
+    public void Narration_reports_toggle_state_and_active_cell()
+    {
+        var window = new MainWindow();
+        window.Show();
+
+        Assert.Equal("Sort Ascending · A1", CommandBar.Describe(AppCommands.ById("data.sortAsc")!, window));
+        Assert.Equal("Bold off · A1", CommandBar.Describe(AppCommands.ById("format.bold")!, window));
+
+        window.ApplyCellStyle(s => s.WithFont(s.Font with { Bold = true }), "Bold");
+        Assert.Equal("Bold on · A1", CommandBar.Describe(AppCommands.ById("format.bold")!, window));
+    }
+
     [Fact]
     public void Bar_layout_ids_all_resolve_in_the_catalog()
     {

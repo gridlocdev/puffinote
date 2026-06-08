@@ -181,6 +181,9 @@ public partial class MainWindow : Window, IAppEnvironment
 
     public void BeginEdit() => Grid.BeginEdit(null);
 
+    /// <summary>Narrate a bar action in the status line; <see cref="UpdateStatus"/> restores the selection stats on the next move.</summary>
+    public void Narrate(string message) => StatusStats.Text = message;
+
     public Task NewWorkbookAsync()
     {
         ReleaseFileLock();

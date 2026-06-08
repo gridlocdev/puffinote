@@ -19,6 +19,9 @@ public interface IAppEnvironment
     /// <summary>Re-render the grid and the chrome after a model change.</summary>
     void Refresh();
 
+    /// <summary>Show a brief status-line message narrating an action (cleared on the next selection change).</summary>
+    void Narrate(string message);
+
     /// <summary>Begin inline editing of the active cell.</summary>
     void BeginEdit();
 

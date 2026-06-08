@@ -109,6 +109,7 @@ public static class CommandBarDrawer
             if (command.IsEnabled(env))
             {
                 command.Execute(env);
+                env.Narrate(CommandBar.Describe(command, env));
             }
 
             close();
@@ -202,6 +203,7 @@ public static class CommandBarDrawer
         control.PointerPressed += (_, _) =>
         {
             env.ApplyCellStyle(transform, label);
+            env.Narrate($"{label} · {env.Selection.ActiveAddress}");
             close();
         };
     }
