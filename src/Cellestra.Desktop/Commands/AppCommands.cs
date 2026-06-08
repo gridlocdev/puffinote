@@ -46,7 +46,7 @@ public static class AppCommands
         new("edit.delete", "Clear Contents", "Clear the values, keep the formatting.", ClearContents, "eraser", new KeyGesture(Key.Delete)),
         new("edit.clearFormats", "Clear Formatting", "Reset styling, keep the values.", ClearFormatting, "remove-formatting"),
         new("edit.clearAll", "Clear All", "Clear both values and formatting.", ClearAll, "eraser"),
-        new("edit.selectAll", "Select All", "Select the data region, then the whole sheet.", SelectAll, null, new KeyGesture(Key.A, Cmd)),
+        new("edit.selectAll", "Select All", "Select the data region, then the whole sheet.", SelectAll, "square-dashed", new KeyGesture(Key.A, Cmd)),
         new("edit.find", "Find…", "Find text in the sheet.", e => e.ShowFindReplace(replace: false), "search", new KeyGesture(Key.F, Cmd)),
         new("edit.findReplace", "Find & Replace…", "Find text and replace it.", e => e.ShowFindReplace(replace: true), "replace",
             new KeyGesture(Key.F, CmdAlt)),
@@ -77,6 +77,8 @@ public static class AppCommands
         // Insert
         new("insert.rowsAbove", "Rows Above", "Insert rows above the selection.", e => InsertRows(e, above: true), "rows-plus"),
         new("insert.columnsLeft", "Columns Left", "Insert columns left of the selection.", e => InsertColumns(e, before: true), "columns-plus"),
+        new("edit.deleteRows", "Delete Rows", "Delete the selected rows.", DeleteRows, "trash-2"),
+        new("edit.deleteColumns", "Delete Columns", "Delete the selected columns.", DeleteColumns, "trash-2"),
         new("insert.sheet", "Sheet", "Add a new worksheet.", e => e.AddSheet(), "plus"),
         new("sheet.rename", "Rename Sheet…", "Rename the active worksheet.", e => e.RenameActiveSheet(), "pencil"),
         new("sheet.delete", "Delete Sheet", "Delete the active worksheet.", e => e.DeleteActiveSheet(), "trash-2",
@@ -103,7 +105,7 @@ public static class AppCommands
         new("view.goToSheet", "Go to Sheet…", "Jump to another worksheet.", e => e.ShowSheetSwitcher(), "list", new KeyGesture(Key.P, CmdShift)),
         new("view.zoomIn", "Zoom In", "Make everything larger.", e => e.ZoomBy(0.1), "zoom-in", new KeyGesture(Key.OemPlus, Cmd)),
         new("view.zoomOut", "Zoom Out", "Make everything smaller.", e => e.ZoomBy(-0.1), "zoom-out", new KeyGesture(Key.OemMinus, Cmd)),
-        new("view.actualSize", "Actual Size", "Reset zoom to 100%.", e => e.ResetZoom(), null, new KeyGesture(Key.D0, Cmd)),
+        new("view.actualSize", "Actual Size", "Reset zoom to 100%.", e => e.ResetZoom(), "maximize", new KeyGesture(Key.D0, Cmd)),
         new("view.freezePanes", "Freeze Panes", "Keep header rows and columns in view.", e => e.ToggleFreezePanes(), "layout-grid"),
 
         // Insert (merge)
@@ -265,6 +267,22 @@ public static class AppCommands
         var sheet = e.Session.ActiveSheet;
         int at = before ? e.Selection.Left : e.Selection.Right + 1;
         e.Session.Execute(new StructuralEditCommand(sheet.Name, StructuralAxis.Column, StructuralOperation.Insert, at, e.Selection.Right - e.Selection.Left + 1));
+        e.Refresh();
+    }
+
+    private static void DeleteRows(IAppEnvironment e)
+    {
+        var sheet = e.Session.ActiveSheet;
+        int count = e.Selection.Bottom - e.Selection.Top + 1;
+        e.Session.Execute(new StructuralEditCommand(sheet.Name, StructuralAxis.Row, StructuralOperation.Delete, e.Selection.Top, count));
+        e.Refresh();
+    }
+
+    private static void DeleteColumns(IAppEnvironment e)
+    {
+        var sheet = e.Session.ActiveSheet;
+        int count = e.Selection.Right - e.Selection.Left + 1;
+        e.Session.Execute(new StructuralEditCommand(sheet.Name, StructuralAxis.Column, StructuralOperation.Delete, e.Selection.Left, count));
         e.Refresh();
     }
 

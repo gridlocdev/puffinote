@@ -54,6 +54,10 @@ public partial class MainWindow : Window, IAppEnvironment
         Grid.Attach(_session);
         Grid.SelectionChanged += (_, _) => OnSelectionChanged();
         Grid.ContextRequested += OnGridContextRequested;
+
+        SheetTabs.PointerPressed += SheetTabsPointerPressed;
+        SheetTabs.PointerMoved += SheetTabsPointerMoved;
+        SheetTabs.PointerReleased += SheetTabsPointerReleased;
         Grid.ClipboardInvalidated += (_, _) => ClearClipboard();
         Grid.EnterPasteRequested += (_, _) => EnterPaste();
         WireSelectionUndo();
@@ -114,7 +118,7 @@ public partial class MainWindow : Window, IAppEnvironment
         menu.Items.Add(Submenu("Format", "format.cells", null, "format.bold", "format.italic", "format.underline", null,
             "format.alignLeft", "format.alignCenter", "format.alignRight", "format.wrap", null,
             "format.currency", "format.percent", "format.date", null, "format.merge"));
-        menu.Items.Add(Submenu("Insert", "insert.rowsAbove", "insert.columnsLeft", "insert.sheet", null, "sheet.rename", "sheet.delete"));
+        menu.Items.Add(Submenu("Insert", "insert.rowsAbove", "insert.columnsLeft", "edit.deleteRows", "edit.deleteColumns", null, "insert.sheet", null, "sheet.rename", "sheet.delete"));
         menu.Items.Add(Submenu("Data", "data.sortAsc", "data.sortDesc", "data.customSort", null,
             "data.toggleFilter", "data.clearFilter", null, "data.createTable", "data.removeDuplicates",
             "data.textToColumns", "data.validation", null, "formula.recalc"));
@@ -468,16 +472,33 @@ public partial class MainWindow : Window, IAppEnvironment
 
     private void OnGridContextRequested(object? sender, Avalonia.Input.ContextRequestedEventArgs e)
     {
-        if (e.TryGetPosition(Grid, out var point))
+        var target = e.TryGetPosition(Grid, out var point)
+            ? Grid.SelectForContext(point)
+            : Controls.SpreadsheetGrid.SpreadsheetGrid.ContextTarget.Cell;
+
+        MenuFlyout flyout = target switch
         {
-            Grid.SelectForContext(point);
+            Controls.SpreadsheetGrid.SpreadsheetGrid.ContextTarget.None => null!,
+            Controls.SpreadsheetGrid.SpreadsheetGrid.ContextTarget.ColumnHeader => BuildCommandFlyout(
+                "edit.cut", "edit.copy", "edit.paste", null,
+                "insert.columnsLeft", "edit.deleteColumns", null,
+                "edit.delete", "edit.clearFormats"),
+            Controls.SpreadsheetGrid.SpreadsheetGrid.ContextTarget.RowHeader => BuildCommandFlyout(
+                "edit.cut", "edit.copy", "edit.paste", null,
+                "insert.rowsAbove", "edit.deleteRows", null,
+                "edit.delete", "edit.clearFormats"),
+            _ => BuildCommandFlyout(
+                "edit.cut", "edit.copy", "edit.paste", null,
+                "insert.rowsAbove", "insert.columnsLeft", null,
+                "edit.delete", "edit.clearFormats", "edit.clearAll"),
+        };
+
+        if (flyout is null)
+        {
+            return; // right-clicked the header corner — nothing to offer
         }
 
-        BuildCommandFlyout(
-            "edit.cut", "edit.copy", "edit.paste", null,
-            "insert.rowsAbove", "insert.columnsLeft", null,
-            "edit.delete", "edit.clearFormats", "edit.clearAll")
-            .ShowAt(Grid, showAtPointer: true);
+        flyout.ShowAt(Grid, showAtPointer: true);
         e.Handled = true;
     }
 
@@ -737,32 +758,128 @@ public partial class MainWindow : Window, IAppEnvironment
         foreach (var sheet in _session.Workbook.Worksheets)
         {
             bool active = ReferenceEquals(sheet, _session.ActiveSheet);
-            var button = new Button
+            // Tabs are Borders (not Buttons) so pointer events bubble to the strip for click-to-switch
+            // and drag-to-reorder; the active/click/drag logic lives in the SheetTabs* handlers.
+            var tab = new Border
             {
-                Content = sheet.Name,
                 Padding = new Thickness(10, 2),
                 Background = active ? ThemedSurface : Brushes.Transparent,
-                FontWeight = active ? FontWeight.SemiBold : FontWeight.Normal,
+                Cursor = new Avalonia.Input.Cursor(Avalonia.Input.StandardCursorType.Hand),
+                Child = new TextBlock
+                {
+                    Text = sheet.Name,
+                    FontWeight = active ? FontWeight.SemiBold : FontWeight.Normal,
+                    VerticalAlignment = VerticalAlignment.Center,
+                },
             };
             var captured = sheet;
-            button.Click += (_, _) => { _session.SetActiveSheet(captured); BuildSheetTabs(); Grid.Refresh(); OnSelectionChanged(); };
-            button.ContextRequested += (_, e) =>
+            tab.ContextRequested += (_, e) =>
             {
                 // Right-clicking a tab activates it, then offers sheet actions (incl. delete — there's
                 // no other way to remove a sheet). Anchor on the stable strip, since activating the
-                // sheet rebuilds the tab buttons.
+                // sheet rebuilds the tab elements.
                 _session.SetActiveSheet(captured);
                 Grid.Refresh();
                 OnSelectionChanged();
                 BuildCommandFlyout("sheet.rename", "insert.sheet", null, "sheet.delete").ShowAt(SheetTabs, showAtPointer: true);
                 e.Handled = true;
             };
-            SheetTabs.Children.Add(button);
+            SheetTabs.Children.Add(tab);
         }
 
         var add = new Button { Content = "＋", Padding = new Thickness(8, 2) };
         add.Click += (_, _) => AddSheet();
         SheetTabs.Children.Add(add);
+    }
+
+    // ---- Sheet tab click / drag-to-reorder (handled at the strip level) ---
+
+    private int _tabDragFrom = -1;
+    private double _tabDragStartX;
+    private bool _tabDragging;
+
+    /// <summary>Index of the worksheet tab under <paramref name="point"/> (in strip coordinates), or -1 (e.g. the ＋ button).</summary>
+    private int TabIndexAt(Point point)
+    {
+        int sheets = _session.Workbook.Worksheets.Count;
+        for (int i = 0; i < sheets && i < SheetTabs.Children.Count; i++)
+        {
+            if (SheetTabs.Children[i].Bounds.Contains(point))
+            {
+                return i;
+            }
+        }
+
+        return -1;
+    }
+
+    private void SheetTabsPointerPressed(object? sender, PointerPressedEventArgs e)
+    {
+        if (!e.GetCurrentPoint(SheetTabs).Properties.IsLeftButtonPressed)
+        {
+            return; // right-click is handled per-tab via ContextRequested
+        }
+
+        var point = e.GetPosition(SheetTabs);
+        int index = TabIndexAt(point);
+        if (index < 0)
+        {
+            return; // the ＋ button has its own Click
+        }
+
+        _tabDragFrom = index;
+        _tabDragStartX = point.X;
+        _tabDragging = false;
+        _session.SetActiveSheet(_session.Workbook.Worksheets[index]); // click-to-switch (rebuilds the strip)
+        Grid.Refresh();
+        OnSelectionChanged();
+        e.Pointer.Capture(SheetTabs);
+    }
+
+    private void SheetTabsPointerMoved(object? sender, PointerEventArgs e)
+    {
+        if (_tabDragFrom < 0 || !e.GetCurrentPoint(SheetTabs).Properties.IsLeftButtonPressed)
+        {
+            return;
+        }
+
+        if (!_tabDragging && System.Math.Abs(e.GetPosition(SheetTabs).X - _tabDragStartX) > 5)
+        {
+            _tabDragging = true;
+        }
+    }
+
+    private void SheetTabsPointerReleased(object? sender, PointerReleasedEventArgs e)
+    {
+        if (_tabDragFrom >= 0 && _tabDragging)
+        {
+            double x = e.GetPosition(SheetTabs).X;
+            int sheets = _session.Workbook.Worksheets.Count;
+            int target = 0;
+            for (int i = 0; i < sheets && i < SheetTabs.Children.Count; i++)
+            {
+                if (x > SheetTabs.Children[i].Bounds.Center.X)
+                {
+                    target++;
+                }
+            }
+
+            if (target > _tabDragFrom)
+            {
+                target--; // account for removing the dragged tab before re-inserting
+            }
+
+            if (target != _tabDragFrom)
+            {
+                _session.MoveSheet(_tabDragFrom, target);
+                Grid.Refresh();
+                OnSelectionChanged();
+            }
+        }
+
+        _tabDragFrom = -1;
+        _tabDragging = false;
+        e.Pointer.Capture(null);
     }
 
     // ---- Formula bar / Name box ------------------------------------------

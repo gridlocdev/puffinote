@@ -721,16 +721,52 @@ public sealed partial class SpreadsheetGrid : Panel
         RaiseSelectionChanged();
     }
 
-    /// <summary>
-    /// Prepare the selection for a context menu at <paramref name="point"/>: if it's a data cell
-    /// outside the current selection, move there; a click inside a multi-cell selection keeps it
-    /// (so the menu acts on the whole range).
-    /// </summary>
-    internal void SelectForContext(Point point)
+    /// <summary>What a right-click landed on, so the host can show the matching context menu.</summary>
+    internal enum ContextTarget
     {
-        if (!HitTest(point, out int row, out int column, out bool rowHeader, out bool columnHeader) || rowHeader || columnHeader)
+        None,
+        Cell,
+        RowHeader,
+        ColumnHeader,
+    }
+
+    /// <summary>
+    /// Prepare the selection for a context menu at <paramref name="point"/> and report what it hit.
+    /// A cell/row/column outside the current selection becomes selected (a whole row/column for a
+    /// header); a click inside the existing selection keeps it, so the menu acts on the whole range.
+    /// </summary>
+    internal ContextTarget SelectForContext(Point point)
+    {
+        if (!HitTest(point, out int row, out int column, out bool rowHeader, out bool columnHeader))
         {
-            return;
+            return ContextTarget.None;
+        }
+
+        if (rowHeader && columnHeader)
+        {
+            return ContextTarget.None; // the top-left corner
+        }
+
+        if (rowHeader)
+        {
+            if (row < Selection.Top || row > Selection.Bottom)
+            {
+                Selection.SetRange(row, 0, row, SheetDimensions.MaxColumns - 1);
+                RaiseSelectionChanged();
+            }
+
+            return ContextTarget.RowHeader;
+        }
+
+        if (columnHeader)
+        {
+            if (column < Selection.Left || column > Selection.Right)
+            {
+                Selection.SetRange(0, column, SheetDimensions.MaxRows - 1, column);
+                RaiseSelectionChanged();
+            }
+
+            return ContextTarget.ColumnHeader;
         }
 
         bool inSelection = row >= Selection.Top && row <= Selection.Bottom && column >= Selection.Left && column <= Selection.Right;
@@ -739,6 +775,8 @@ public sealed partial class SpreadsheetGrid : Panel
             Selection.MoveTo(row, column);
             RaiseSelectionChanged();
         }
+
+        return ContextTarget.Cell;
     }
 
     private void SelectRowOrColumn(bool additive, int top, int left, int bottom, int right)
@@ -979,7 +1017,8 @@ public sealed partial class SpreadsheetGrid : Panel
 
     internal bool EditorTextIsTopAligned => _editor.VerticalContentAlignment == Avalonia.Layout.VerticalAlignment.Top;
 
-    /// <summary>Match the inline editor's font to the cell's drawn text (family, size at the current zoom, weight, style).</summary>
+    /// <summary>Match the inline editor to the cell's drawn appearance — font, weight/style, underline,
+    /// text colour, and fill — so editing looks the same as the displayed cell (not default black-on-white).</summary>
     private void ApplyEditorFont(Cell? cell)
     {
         var style = _session!.Workbook.Styles.Get(cell?.StyleId ?? StylePool.DefaultId);
@@ -987,6 +1026,12 @@ public sealed partial class SpreadsheetGrid : Panel
         _editor.FontSize = style.Font.SizePoints * 96.0 / 72.0 * _zoom;
         _editor.FontWeight = style.Font.Bold ? FontWeight.Bold : FontWeight.Normal;
         _editor.FontStyle = style.Font.Italic ? FontStyle.Italic : FontStyle.Normal;
+
+        var value = cell?.Value ?? CellValue.Empty;
+        _editor.Foreground = TextBrushFor(style, value);
+        _editor.Background = style.Fill.HasBackground
+            ? new SolidColorBrush(ToColor(style.Fill.Background!.Value))
+            : _palette.Canvas;
     }
 
     public void BeginEdit(string? seed)

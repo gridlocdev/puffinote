@@ -1,4 +1,5 @@
 using System;
+using System.Linq;
 using Avalonia.Headless.XUnit;
 using Cellestra.Core.Editing;
 using Cellestra.Core.Values;
@@ -66,5 +67,36 @@ public class SheetCommandTests
         Assert.False(delete.IsEnabled(window)); // one sheet
         window.AddSheet();
         Assert.True(delete.IsEnabled(window));
+    }
+
+    [Fact]
+    public void Move_sheet_reorders_the_tabs_and_keeps_the_active_sheet()
+    {
+        var session = WorkbookSession.NewBlank();
+        var a = session.ActiveSheet;
+        var b = session.AddSheet();
+        var c = session.AddSheet(); // order a,b,c — c active
+
+        session.MoveSheet(0, 2); // drag the first tab to the end
+
+        Assert.Equal(new[] { b.Name, c.Name, a.Name }, session.Workbook.Worksheets.Select(w => w.Name).ToArray());
+        Assert.Same(c, session.ActiveSheet); // the active sheet is preserved across a reorder
+    }
+
+    [AvaloniaFact]
+    public void Delete_rows_command_removes_the_selected_rows()
+    {
+        var window = new MainWindow();
+        window.Show();
+        IAppEnvironment env = window;
+        var sheet = env.Session.ActiveSheet;
+
+        env.Session.Execute(EditCommands.SetValue(sheet.Name, 0, 0, CellValue.Text("a")));
+        env.Session.Execute(EditCommands.SetValue(sheet.Name, 1, 0, CellValue.Text("b")));
+        env.Selection.MoveTo(0, 0);
+
+        AppCommands.ById("edit.deleteRows")!.Execute(window);
+
+        Assert.Equal("b", sheet.GetValue(0, 0).AsText); // row 0 deleted, "b" shifted up
     }
 }

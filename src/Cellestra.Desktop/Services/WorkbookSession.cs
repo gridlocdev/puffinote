@@ -117,6 +117,16 @@ public sealed class WorkbookSession
         StructureChanged?.Invoke(this, EventArgs.Empty);
     }
 
+    /// <summary>Reorder a worksheet (drag-to-reorder the tabs), keeping the same sheet active.</summary>
+    public void MoveSheet(int fromIndex, int toIndex)
+    {
+        var active = ActiveSheet;
+        _workbook.MoveSheet(fromIndex, toIndex);
+        _workbook.Settings.ActiveSheetIndex = _workbook.IndexOf(active);
+        IsModified = true;
+        StructureChanged?.Invoke(this, EventArgs.Empty);
+    }
+
     /// <summary>Drop the undo/redo stacks (used by non-undoable structural sheet changes).</summary>
     private void ClearHistory()
     {
