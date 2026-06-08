@@ -502,13 +502,15 @@ public sealed partial class SpreadsheetGrid : Panel
         context.FillRectangle(headerBrush, new Rect(0, 0, HeaderWidth, HeaderHeight));
 
         var typeface = new Typeface(Cellestra.Core.Defaults.FontFamily);
+        // Header labels scale with the zoom level, like the cell text, but stay legible at small zoom.
+        double headerFontSize = Math.Clamp(11 * _zoom, 8, HeaderHeight - 4);
         foreach (var (col, x, w) in _visibleColumns)
         {
             var rect = new Rect(x, 0, w, HeaderHeight);
             bool active = col >= Selection.Left && col <= Selection.Right;
             context.FillRectangle(active ? _palette.ActiveHeaderFill : headerBrush, rect);
             context.DrawRectangle(null, gridPen, rect);
-            DrawCentered(context, SheetDimensions.ColumnToLetters(col), rect, typeface, textBrush);
+            DrawCentered(context, SheetDimensions.ColumnToLetters(col), rect, typeface, textBrush, headerFontSize);
         }
 
         foreach (var (row, y, h) in _visibleRows)
@@ -517,13 +519,13 @@ public sealed partial class SpreadsheetGrid : Panel
             bool active = row >= Selection.Top && row <= Selection.Bottom;
             context.FillRectangle(active ? _palette.ActiveHeaderFill : headerBrush, rect);
             context.DrawRectangle(null, gridPen, rect);
-            DrawCentered(context, (row + 1).ToString(CultureInfo.InvariantCulture), rect, typeface, textBrush);
+            DrawCentered(context, (row + 1).ToString(CultureInfo.InvariantCulture), rect, typeface, textBrush, headerFontSize);
         }
     }
 
-    private static void DrawCentered(DrawingContext context, string text, Rect rect, Typeface typeface, IBrush brush)
+    private static void DrawCentered(DrawingContext context, string text, Rect rect, Typeface typeface, IBrush brush, double fontSize)
     {
-        var formatted = new FormattedText(text, CultureInfo.InvariantCulture, FlowDirection.LeftToRight, typeface, 11, brush);
+        var formatted = new FormattedText(text, CultureInfo.InvariantCulture, FlowDirection.LeftToRight, typeface, fontSize, brush);
         context.DrawText(formatted, new Point(
             rect.X + (rect.Width - formatted.Width) / 2,
             rect.Y + (rect.Height - formatted.Height) / 2));
