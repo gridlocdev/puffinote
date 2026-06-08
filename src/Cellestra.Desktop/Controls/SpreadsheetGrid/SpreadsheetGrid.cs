@@ -166,7 +166,7 @@ public sealed partial class SpreadsheetGrid : Panel
                 continue;
             }
 
-            double w = sheet.GetColumnWidth(col) * _zoom;
+            double w = EffectiveColumnWidth(sheet, col) * _zoom;
             _visibleColumns.Add((col, x, w));
             x += w;
         }
@@ -179,7 +179,7 @@ public sealed partial class SpreadsheetGrid : Panel
                 continue;
             }
 
-            double w = sheet.GetColumnWidth(col) * _zoom;
+            double w = EffectiveColumnWidth(sheet, col) * _zoom;
             _visibleColumns.Add((col, x, w));
             x += w;
         }
@@ -192,7 +192,7 @@ public sealed partial class SpreadsheetGrid : Panel
                 continue;
             }
 
-            double h = sheet.GetRowHeight(row) * _zoom;
+            double h = EffectiveRowHeight(sheet, row) * _zoom;
             _visibleRows.Add((row, y, h));
             y += h;
         }
@@ -205,7 +205,7 @@ public sealed partial class SpreadsheetGrid : Panel
                 continue;
             }
 
-            double h = sheet.GetRowHeight(row) * _zoom;
+            double h = EffectiveRowHeight(sheet, row) * _zoom;
             _visibleRows.Add((row, y, h));
             y += h;
         }
@@ -636,6 +636,14 @@ public sealed partial class SpreadsheetGrid : Panel
             return;
         }
 
+        // Drag on a header border resizes: a column by its right border, a row by its bottom border.
+        // (A double-click on the border was already handled as autofit above.)
+        if (TryBeginResize(e, point))
+        {
+            e.Handled = true;
+            return;
+        }
+
         // The fill handle takes precedence over cell selection at the selection's bottom-right.
         if (TryGetFillHandleRect(out var handle) && handle.Contains(point))
         {
@@ -712,18 +720,28 @@ public sealed partial class SpreadsheetGrid : Panel
     protected override void OnPointerMoved(PointerEventArgs e)
     {
         base.OnPointerMoved(e);
+        var point = e.GetPosition(this);
+
+        if (IsResizing)
+        {
+            UpdateResize(point);
+            return;
+        }
+
         if (_filling)
         {
-            UpdateFill(e.GetPosition(this));
+            UpdateFill(point);
             return;
         }
 
         if (!_selecting)
         {
+            // Hovering a header border shows the resize cursor; elsewhere, the default arrow.
+            UpdateResizeCursor(point);
             return;
         }
 
-        if (HitTest(e.GetPosition(this), out int row, out int column, out _, out _))
+        if (HitTest(point, out int row, out int column, out _, out _))
         {
             Selection.ExtendTo(row, column);
             RaiseSelectionChanged();
@@ -733,6 +751,13 @@ public sealed partial class SpreadsheetGrid : Panel
     protected override void OnPointerReleased(PointerReleasedEventArgs e)
     {
         base.OnPointerReleased(e);
+        if (IsResizing)
+        {
+            EndResize();
+            e.Pointer.Capture(null);
+            return;
+        }
+
         if (_filling)
         {
             CommitFill();
