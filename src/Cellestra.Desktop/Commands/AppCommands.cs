@@ -274,6 +274,11 @@ public static class AppCommands
     {
         var sheet = e.Session.ActiveSheet;
         int count = e.Selection.Bottom - e.Selection.Top + 1;
+        if (count >= Cellestra.Core.Model.SheetDimensions.MaxRows)
+        {
+            return; // refuse to delete every row (it would wipe the sheet); Excel does the same
+        }
+
         e.Session.Execute(new StructuralEditCommand(sheet.Name, StructuralAxis.Row, StructuralOperation.Delete, e.Selection.Top, count));
         e.Refresh();
     }
@@ -282,6 +287,11 @@ public static class AppCommands
     {
         var sheet = e.Session.ActiveSheet;
         int count = e.Selection.Right - e.Selection.Left + 1;
+        if (count >= Cellestra.Core.Model.SheetDimensions.MaxColumns)
+        {
+            return; // refuse to delete every column
+        }
+
         e.Session.Execute(new StructuralEditCommand(sheet.Name, StructuralAxis.Column, StructuralOperation.Delete, e.Selection.Left, count));
         e.Refresh();
     }

@@ -749,7 +749,10 @@ public sealed partial class SpreadsheetGrid : Panel
 
         if (rowHeader)
         {
-            if (row < Selection.Top || row > Selection.Bottom)
+            // Keep the selection only if it's already whole rows covering this one (so right-clicking
+            // one of several selected rows deletes them all); otherwise select just this full row.
+            bool wholeRows = Selection.Left == 0 && Selection.Right == SheetDimensions.MaxColumns - 1;
+            if (!(wholeRows && row >= Selection.Top && row <= Selection.Bottom))
             {
                 Selection.SetRange(row, 0, row, SheetDimensions.MaxColumns - 1);
                 RaiseSelectionChanged();
@@ -760,7 +763,8 @@ public sealed partial class SpreadsheetGrid : Panel
 
         if (columnHeader)
         {
-            if (column < Selection.Left || column > Selection.Right)
+            bool wholeColumns = Selection.Top == 0 && Selection.Bottom == SheetDimensions.MaxRows - 1;
+            if (!(wholeColumns && column >= Selection.Left && column <= Selection.Right))
             {
                 Selection.SetRange(0, column, SheetDimensions.MaxRows - 1, column);
                 RaiseSelectionChanged();
@@ -1028,7 +1032,8 @@ public sealed partial class SpreadsheetGrid : Panel
         _editor.FontStyle = style.Font.Italic ? FontStyle.Italic : FontStyle.Normal;
 
         var value = cell?.Value ?? CellValue.Empty;
-        _editor.Foreground = TextBrushFor(style, value);
+        // Use the cell's text colour, but not the crimson error colour — you're typing a replacement.
+        _editor.Foreground = value.IsError ? _palette.DefaultText : TextBrushFor(style, value);
         _editor.Background = style.Fill.HasBackground
             ? new SolidColorBrush(ToColor(style.Fill.Background!.Value))
             : _palette.Canvas;

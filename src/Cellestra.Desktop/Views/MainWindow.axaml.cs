@@ -476,9 +476,9 @@ public partial class MainWindow : Window, IAppEnvironment
             ? Grid.SelectForContext(point)
             : Controls.SpreadsheetGrid.SpreadsheetGrid.ContextTarget.Cell;
 
-        MenuFlyout flyout = target switch
+        MenuFlyout? flyout = target switch
         {
-            Controls.SpreadsheetGrid.SpreadsheetGrid.ContextTarget.None => null!,
+            Controls.SpreadsheetGrid.SpreadsheetGrid.ContextTarget.None => null,
             Controls.SpreadsheetGrid.SpreadsheetGrid.ContextTarget.ColumnHeader => BuildCommandFlyout(
                 "edit.cut", "edit.copy", "edit.paste", null,
                 "insert.columnsLeft", "edit.deleteColumns", null,
@@ -797,6 +797,7 @@ public partial class MainWindow : Window, IAppEnvironment
     private int _tabDragFrom = -1;
     private double _tabDragStartX;
     private bool _tabDragging;
+    private Worksheet? _tabDragSheet;
 
     /// <summary>Index of the worksheet tab under <paramref name="point"/> (in strip coordinates), or -1 (e.g. the ＋ button).</summary>
     private int TabIndexAt(Point point)
@@ -827,12 +828,13 @@ public partial class MainWindow : Window, IAppEnvironment
             return; // the ＋ button has its own Click
         }
 
+        // Record the gesture but DON'T activate yet — activating rebuilds the strip, which would
+        // invalidate the tab bounds the release needs to compute the drop target. Activation (and any
+        // reorder) happens on release, against the still-laid-out tabs.
         _tabDragFrom = index;
+        _tabDragSheet = _session.Workbook.Worksheets[index];
         _tabDragStartX = point.X;
         _tabDragging = false;
-        _session.SetActiveSheet(_session.Workbook.Worksheets[index]); // click-to-switch (rebuilds the strip)
-        Grid.Refresh();
-        OnSelectionChanged();
         e.Pointer.Capture(SheetTabs);
     }
 
@@ -851,33 +853,40 @@ public partial class MainWindow : Window, IAppEnvironment
 
     private void SheetTabsPointerReleased(object? sender, PointerReleasedEventArgs e)
     {
-        if (_tabDragFrom >= 0 && _tabDragging)
+        if (_tabDragFrom >= 0 && _tabDragSheet is { } dragged)
         {
-            double x = e.GetPosition(SheetTabs).X;
-            int sheets = _session.Workbook.Worksheets.Count;
-            int target = 0;
-            for (int i = 0; i < sheets && i < SheetTabs.Children.Count; i++)
+            if (_tabDragging)
             {
-                if (x > SheetTabs.Children[i].Bounds.Center.X)
+                // Bounds are valid here (no rebuild happened during the gesture).
+                double x = e.GetPosition(SheetTabs).X;
+                int sheets = _session.Workbook.Worksheets.Count;
+                int target = 0;
+                for (int i = 0; i < sheets && i < SheetTabs.Children.Count; i++)
                 {
-                    target++;
+                    if (x > SheetTabs.Children[i].Bounds.Center.X)
+                    {
+                        target++;
+                    }
+                }
+
+                if (target > _tabDragFrom)
+                {
+                    target--; // account for removing the dragged tab before re-inserting
+                }
+
+                if (target != _tabDragFrom)
+                {
+                    _session.MoveSheet(_tabDragFrom, target);
                 }
             }
 
-            if (target > _tabDragFrom)
-            {
-                target--; // account for removing the dragged tab before re-inserting
-            }
-
-            if (target != _tabDragFrom)
-            {
-                _session.MoveSheet(_tabDragFrom, target);
-                Grid.Refresh();
-                OnSelectionChanged();
-            }
+            _session.SetActiveSheet(dragged); // click-to-switch / activate the dragged tab (rebuilds the strip)
+            Grid.Refresh();
+            OnSelectionChanged();
         }
 
         _tabDragFrom = -1;
+        _tabDragSheet = null;
         _tabDragging = false;
         e.Pointer.Capture(null);
     }

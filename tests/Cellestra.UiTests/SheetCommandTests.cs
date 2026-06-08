@@ -2,6 +2,7 @@ using System;
 using System.Linq;
 using Avalonia.Headless.XUnit;
 using Cellestra.Core.Editing;
+using Cellestra.Core.Model;
 using Cellestra.Core.Values;
 using Cellestra.Desktop.Commands;
 using Cellestra.Desktop.Services;
@@ -98,5 +99,20 @@ public class SheetCommandTests
         AppCommands.ById("edit.deleteRows")!.Execute(window);
 
         Assert.Equal("b", sheet.GetValue(0, 0).AsText); // row 0 deleted, "b" shifted up
+    }
+
+    [AvaloniaFact]
+    public void Delete_columns_refuses_to_remove_every_column()
+    {
+        var window = new MainWindow();
+        window.Show();
+        IAppEnvironment env = window;
+        var sheet = env.Session.ActiveSheet;
+        env.Session.Execute(EditCommands.SetValue(sheet.Name, 0, 0, CellValue.Text("keep")));
+
+        env.Selection.SetRange(0, 0, SheetDimensions.MaxRows - 1, SheetDimensions.MaxColumns - 1); // Select All
+        AppCommands.ById("edit.deleteColumns")!.Execute(window);
+
+        Assert.Equal("keep", sheet.GetValue(0, 0).AsText); // refused — deleting every column would wipe the sheet
     }
 }
