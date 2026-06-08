@@ -10,6 +10,7 @@ using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Input.Platform;
 using Avalonia.Layout;
+using Avalonia.Controls.Templates;
 using Avalonia.Markup.Xaml;
 using Avalonia.Media;
 using Avalonia.Platform.Storage;
@@ -20,6 +21,7 @@ using Cellestra.Core.Values;
 using Cellestra.Desktop.Views.Dialogs;
 using NumberFormatter = Cellestra.Core.Styling.NumberFormatter;
 using Cellestra.Desktop.Commands;
+using Cellestra.Desktop.Controls.Icons;
 using Cellestra.Desktop.Controls.SpreadsheetGrid;
 using Cellestra.Desktop.Services;
 using Cellestra.Desktop.Views.Overlays;
@@ -367,15 +369,15 @@ public partial class MainWindow : Window, IAppEnvironment
     {
         var items = AppCommands.All
             .Where(c => c.IsEnabled(this))
-            .Select(c => new PaletteItem(c.Label, c.ShortcutText, () => c.Execute(this)))
+            .Select(c => new PaletteItem(c.Label, c.Icon, c.Description, c.ShortcutText, () => c.Execute(this)))
             .ToList();
-        ShowPalette("Run a command", items);
+        ShowPalette("Type a command — bold, currency, sort…", items);
     }
 
     public void ShowSheetSwitcher()
     {
         var items = _session.Workbook.Worksheets
-            .Select(s => new PaletteItem(s.Name, string.Empty, () => { _session.SetActiveSheet(s); BuildSheetTabs(); Grid.Refresh(); }))
+            .Select(s => new PaletteItem(s.Name, "list", "Worksheet", string.Empty, () => { _session.SetActiveSheet(s); BuildSheetTabs(); Grid.Refresh(); }))
             .ToList();
         ShowPalette("Go to sheet", items);
     }
@@ -811,14 +813,20 @@ public partial class MainWindow : Window, IAppEnvironment
 
     // ---- Palette overlay --------------------------------------------------
 
-    private sealed record PaletteItem(string Label, string Detail, Action Run);
+    private sealed record PaletteItem(string Label, string? Icon, string Description, string Shortcut, Action Run);
+
+    private static readonly IBrush PaletteMuted = new SolidColorBrush(Color.FromRgb(0x88, 0x88, 0x88));
 
     private void ShowPalette(string placeholder, IReadOnlyList<PaletteItem> items)
     {
         OverlayHost.Children.Clear();
 
         var input = new TextBox { PlaceholderText = placeholder, Margin = new Thickness(0, 0, 0, 6) };
-        var list = new ListBox { MaxHeight = 320 };
+        var list = new ListBox
+        {
+            MaxHeight = 340,
+            ItemTemplate = new FuncDataTemplate<PaletteItem>((item, _) => BuildPaletteRow(item)),
+        };
 
         void Populate(string query)
         {
@@ -828,8 +836,7 @@ public partial class MainWindow : Window, IAppEnvironment
                 .OrderByDescending(x => x.Score)
                 .Select(x => x.Item)
                 .ToList();
-            list.ItemsSource = filtered.Select(i => string.IsNullOrEmpty(i.Detail) ? i.Label : $"{i.Label}    ({i.Detail})").ToList();
-            list.Tag = filtered;
+            list.ItemsSource = filtered;
             if (filtered.Count > 0)
             {
                 list.SelectedIndex = 0;
@@ -840,9 +847,8 @@ public partial class MainWindow : Window, IAppEnvironment
 
         void Run()
         {
-            if (list.Tag is List<PaletteItem> filtered && list.SelectedIndex >= 0 && list.SelectedIndex < filtered.Count)
+            if (list.SelectedItem is PaletteItem chosen)
             {
-                var chosen = filtered[list.SelectedIndex];
                 CloseOverlay();
                 chosen.Run();
             }
@@ -878,6 +884,45 @@ public partial class MainWindow : Window, IAppEnvironment
         OverlayHost.IsVisible = true;
         OverlayHost.PointerPressed += OverlayBackgroundPressed;
         input.Focus();
+    }
+
+    /// <summary>One palette row: optional icon, the command name, its description beneath, and the shortcut (PRD §6.7).</summary>
+    private static Control BuildPaletteRow(PaletteItem item)
+    {
+        var dock = new DockPanel { LastChildFill = true };
+
+        if (!string.IsNullOrEmpty(item.Shortcut))
+        {
+            var shortcut = new TextBlock
+            {
+                Text = item.Shortcut,
+                Foreground = PaletteMuted,
+                FontSize = 11,
+                VerticalAlignment = VerticalAlignment.Center,
+                Margin = new Thickness(8, 0, 0, 0),
+            };
+            DockPanel.SetDock(shortcut, Dock.Right);
+            dock.Children.Add(shortcut);
+        }
+
+        if (!string.IsNullOrEmpty(item.Icon))
+        {
+            var icon = new LucideIcon { IconKey = item.Icon, Size = 16, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 11, 0) };
+            DockPanel.SetDock(icon, Dock.Left);
+            dock.Children.Add(icon);
+        }
+
+        dock.Children.Add(new StackPanel
+        {
+            VerticalAlignment = VerticalAlignment.Center,
+            Children =
+            {
+                new TextBlock { Text = item.Label, FontWeight = FontWeight.Medium },
+                new TextBlock { Text = item.Description, Foreground = PaletteMuted, FontSize = 11, TextTrimming = TextTrimming.CharacterEllipsis },
+            },
+        });
+
+        return dock;
     }
 
     private void OverlayBackgroundPressed(object? sender, PointerPressedEventArgs e)

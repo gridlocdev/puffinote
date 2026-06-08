@@ -26,10 +26,10 @@ public class CommandCatalogTests
         Assert.NotNull(AppCommands.ById("edit.undo"));
         Assert.NotNull(AppCommands.ById("view.commandPalette"));
 
-        // The palette doubles as a way to learn shortcuts (PRD §6.7). The more powerful Command
-        // Palette takes the easier ⌘P; the sheet switcher sits on ⇧⌘P.
+        // The palette doubles as a way to learn shortcuts (PRD §6.7). The Command Palette takes ⌘K
+        // (the bar's "Find a tool…" affordance); the sheet switcher sits on ⇧⌘P.
         Assert.Equal("⌘S", AppCommands.ById("file.save")!.ShortcutText);
-        Assert.Equal("⌘P", AppCommands.ById("view.commandPalette")!.ShortcutText);
+        Assert.Equal("⌘K", AppCommands.ById("view.commandPalette")!.ShortcutText);
         Assert.Equal("⇧⌘P", AppCommands.ById("view.goToSheet")!.ShortcutText);
     }
 
