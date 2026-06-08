@@ -122,6 +122,7 @@ Hard-won facts from building the app and CLI — they'll save you a failed build
 
 ## Conventions
 
+- **Commit messages:** [Conventional Commits](https://www.conventionalcommits.org) — `type(scope): summary` (imperative, lower-case summary, no trailing period). Types in use: `feat`, `fix`, `docs`, `test`, `build`, plus `refactor`/`perf`/`chore` when they fit; append `!` (or a `BREAKING CHANGE:` footer) for breaking changes. Scopes are the area touched: `core`, `grid`, `app`, `serialization`, `io`, `cli`, `data`, `formula`, `format`, `theme`, `shortcuts`, `tables`, `clipboard`, `edit`, `macos` — add one if none fits. Keep the subject ≤ ~72 chars; put the why in the body.
 - **C#:** follow `.editorconfig`. Nullable reference types on. Prefer records for model values. Small, single-purpose types matching the folders.
 - **MVVM (chrome only):** Views in `.axaml` + code-behind; ViewModels are plain C# with no control references; compiled bindings.
 - **Grid (direct code):** imperative rendering/input in `SpreadsheetGrid` is by design, not a style violation.
