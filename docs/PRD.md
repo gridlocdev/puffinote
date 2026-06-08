@@ -145,7 +145,7 @@ If I open a Cellestra-saved file in LibreOffice and notice nothing wrong, the ba
 Cellestra is **minimal by default**: it opens to just the grid, the formula bar, and the status bar — **the ribbon is hidden** until summoned. Commands are reached through three surfaces that complement each other:
 
 - The **native macOS menu bar** (top of the screen) — the *complete* list of commands, the way every good Mac app works.
-- A **Command Palette** (⌘⇧P) — a keyboard-first, type-to-find launcher for *any* command, modeled on VS Code's. This is the primary way to reach a command without the menu bar or ribbon (§6.7).
+- A **Command Palette** (⌘P) — a keyboard-first, type-to-find launcher for *any* command, modeled on VS Code's. This is the primary way to reach a command without the menu bar or ribbon (§6.7).
 - An in-window **ribbon** — a visual, grouped quick-access strip for the things touched most while editing. It is **hidden by default** and shown on demand (⌥⌘R, or View ▸ Show Ribbon); when shown, double-clicking the active tab collapses it again.
 
 Everything reachable in the ribbon is also reachable in the menu bar, the Command Palette, and by keyboard. No surface is the only path to anything.
@@ -174,7 +174,7 @@ Everything reachable in the ribbon is also reachable in the menu bar, the Comman
 | **Insert** | Rows Above · Rows Below · Columns Left · Columns Right · Sheet · Table (⌘T) · Function… (⌃⌥F) · Named Range… · Hyperlink… (⌘K) |
 | **Format** | Cells… (⌘1) · Number → … · Bold (⌘B), Italic (⌘I), Underline (⌘U) · Alignment → … · Borders → … · Merge Cells · Rows → Height…, Hide (⌃9), Unhide (⌃⇧9) · Columns → Width…, Hide (⌃0), Unhide (⌃⇧0) |
 | **Data** | Sort… · Filter (⇧⌘F) · Clear Filter · Remove Duplicates… · Text to Columns… · Data Validation… · Recalculate (F9) · Calculation → Automatic / Manual · Named Ranges… · Import CSV… · Export CSV… |
-| **View** | Command Palette… (⌘⇧P) · Go to Sheet… (⌘P) · Zoom In (⌘=) · Zoom Out (⌘−) · Actual Size (⌘0) · Show Ribbon (⌥⌘R) · Gridlines · Headers · Formula Bar · Status Bar · Freeze Panes |
+| **View** | Command Palette… (⌘P) · Go to Sheet… (⌘⇧P) · Zoom In (⌘=) · Zoom Out (⌘−) · Actual Size (⌘0) · Show Ribbon (⌥⌘R) · Gridlines · Headers · Formula Bar · Status Bar · Freeze Panes |
 | **Window** | Minimize (⌘M) · Zoom · (standard macOS window items) |
 | **Help** | Cellestra Help · Function Reference… |
 
@@ -305,7 +305,7 @@ Shortcuts use macOS modifiers (⌘ Command, ⇧ Shift, ⌥ Option, ⌃ Control).
 | Extend to edge | ⇧⌘ + Arrow |
 | Select column / row | ⌃Space / ⇧Space |
 | Previous / next sheet | ⌥⌘← / ⌥⌘→ |
-| Go to Sheet (quick switcher) | ⌘P |
+| Go to Sheet (quick switcher) | ⌘⇧P |
 | Go To (focus Name Box) | ⌃G |
 
 **Formatting**
@@ -326,7 +326,7 @@ Shortcuts use macOS modifiers (⌘ Command, ⇧ Shift, ⌥ Option, ⌃ Control).
 **Formulas & view**
 | Action | Shortcut |
 |---|---|
-| Command Palette | ⌘⇧P |
+| Command Palette | ⌘P |
 | Insert Function | ⌃⌥F |
 | AutoSum | ⌥⌘= |
 | Recalculate all | F9 |
@@ -350,15 +350,15 @@ Left to right: the **active cell reference** and a short mode hint; in the middl
 
 Because the ribbon is hidden by default (§6), two keyboard-summoned overlays are the fast path to "do a thing" and "go somewhere" — both modeled on VS Code's palettes. Each appears as a floating, centered input with a filtered result list below it; ↑/↓ move the highlight, Return activates it, Esc dismisses without changing anything.
 
-**Command Palette — ⌘⇧P (run any command).**
+**Command Palette — ⌘P (run any command).**
 - Opens an input over the grid; typing **fuzzy-filters every command in the `AppCommands` catalog** by name (see `ARCHITECTURE.md`).
 - Each row shows the command's **label**, its **icon**, and its **current keyboard shortcut** (so the palette doubles as a way to learn shortcuts). Disabled commands appear dimmed with a short reason, consistent with §6 heuristic #6.
 - Return runs the highlighted command against the current selection, then closes the palette. Because it reads the one command catalog, it can never drift out of sync with the menu bar or ribbon.
 
-**Sheet switcher — ⌘P (go to a sheet).**
+**Sheet switcher — ⌘⇧P (go to a sheet).**
 - Opens a similar input whose list is the **worksheets in the current workbook**, in tab order, active sheet first.
 - Typing **fuzzy-filters the sheet names**; Return switches to the highlighted sheet (Esc leaves the active sheet unchanged). With an empty query it behaves like a most-recently-used sheet switcher.
-- ⌘P is normally macOS *Print*, but printing is a v1 non-goal (§9), so the shortcut is free for this. Both palette shortcuts are remappable in Settings (§6.4).
+- ⌘P (the Command Palette) is normally macOS *Print*, but printing is a v1 non-goal (§9), so the more frequently used palette takes the easier-to-reach shortcut; the sheet switcher sits on ⌘⇧P. Both palette shortcuts are remappable in Settings (§6.4).
 
 Neither palette is the *only* way to do anything: every command is still in the menu bar (and the ribbon when shown), and sheets are still switchable from the tab strip (§6.1).
 
@@ -372,7 +372,7 @@ I use Nielsen's heuristics as a checklist to keep the design honest. Each below 
 4. **Consistency and standards** — macOS conventions (⌘S, ⌘Z, menu bar) *and* spreadsheet conventions (Tab/Enter, fill handle, `=`); identical icons/labels across ribbon and menus.
 5. **Error prevention** — destructive-action confirmations per §8.7; formula validated before commit so a typo doesn't silently become text.
 6. **Recognition rather than recall** — visible ribbon and Name Box; **function autocomplete and argument hints**; browsable Name Manager and Function Reference; disabled (not hidden) controls.
-7. **Flexibility and efficiency of use** — every command reachable by mouse/menu *and* keyboard; the **Command Palette (⌘⇧P)** and **sheet switcher (⌘P)** as accelerators; remappable shortcuts; fill handle, AutoSum, keyboard-only editing; collapsible ribbon.
+7. **Flexibility and efficiency of use** — every command reachable by mouse/menu *and* keyboard; the **Command Palette (⌘P)** and **sheet switcher (⌘⇧P)** as accelerators; remappable shortcuts; fill handle, AutoSum, keyboard-only editing; collapsible ribbon.
 8. **Aesthetic and minimalist design** — clean, flat, uncluttered; **minimal by default** (the window opens with no ribbon, just grid + formula bar + status bar); the Command Palette replaces always-on chrome for discovery; advanced options behind progressive disclosure (dialogs).
 9. **Help users recognize, diagnose, and recover from errors** — formula errors point at *what* and *where*; error cells show a readable reason on hover, not just `#VALUE!`.
 10. **Help and documentation** — tooltips on commands, an in-app Function Reference (purpose + arguments per function), and a reachable Help link.
@@ -523,7 +523,7 @@ Intentional exclusions, not oversights.
 | Locale / number-format behavior | Document locale when specified, else system locale (§8.3). |
 | Icon set / SF Symbols | Lucide (local SVGs); map a few menu items to SF Symbols on macOS (§6.6). |
 | Undo depth & persistence | Session-only, 1,000 steps, not saved in the file (§8.5). |
-| Default UI / discovery surface | Minimal by default: ribbon hidden, **Command Palette (⌘⇧P)** and **sheet switcher (⌘P)** as the keyboard-first surfaces (§6, §6.7). |
+| Default UI / discovery surface | Minimal by default: ribbon hidden, **Command Palette (⌘P)** and **sheet switcher (⌘⇧P)** as the keyboard-first surfaces (§6, §6.7). |
 | Sort, filter, and tables | **In v1** (§8.10–§8.12) — everyday features. Previously deferred; now core. |
 | How tables map to `.ods` | Tables are native **database ranges** (`table:database-range`) with banded styling and filters; **no Excel structured references** (§8.10, §9), to protect the LibreOffice round-trip. |
 | Data validation, hide/unhide, hyperlinks, remove-duplicates, text-to-columns | **In v1** (§4 Data, §8.13–§8.14). |

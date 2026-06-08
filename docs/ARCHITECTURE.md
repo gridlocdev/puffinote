@@ -138,8 +138,8 @@ MVVM stays for the chrome; the grid's hot path is deliberate direct code.
 ## 7. The chrome: menu bar, ribbon, formula bar, status bar
 
 - **One command catalog.** Every user command is defined once in `AppCommands` (label + icon key + default shortcut). The **native macOS menu bar** (`NativeMenu`), the **ribbon**, the **Command Palette**, and **keybindings** all bind to it — so they cannot drift apart (heuristic #4). Shortcut remaps from Settings override the defaults at this layer.
-- **Command Palette** (`PRD.md` §6.7) — a `CommandPalette` overlay + `CommandPaletteViewModel` that fuzzy-matches the `AppCommands` catalog (⌘⇧P) and runs the chosen command against the current selection. Since it reads the same catalog, its rows automatically carry the right label, icon, shortcut, and enabled/disabled state.
-- **Sheet switcher** (`PRD.md` §6.7) — a `SheetSwitcher` overlay + `SheetSwitcherViewModel` that fuzzy-matches the open workbook's worksheet list (⌘P) and activates the chosen sheet. It is data-backed by the `Workbook`/`WorksheetViewModel`s, not the command catalog.
+- **Command Palette** (`PRD.md` §6.7) — a `CommandPalette` overlay + `CommandPaletteViewModel` that fuzzy-matches the `AppCommands` catalog (⌘P) and runs the chosen command against the current selection. Since it reads the same catalog, its rows automatically carry the right label, icon, shortcut, and enabled/disabled state.
+- **Sheet switcher** (`PRD.md` §6.7) — a `SheetSwitcher` overlay + `SheetSwitcherViewModel` that fuzzy-matches the open workbook's worksheet list (⌘⇧P) and activates the chosen sheet. It is data-backed by the `Workbook`/`WorksheetViewModel`s, not the command catalog.
 - **Ribbon** — a `Ribbon` control + `RibbonViewModel` exposing the catalog grouped per `PRD.md` §6.3; **hidden by default** (visibility persisted in settings), collapsible; shared icon assets.
 - **Formula bar** — Name Box (jump-to-cell/named range), accept/cancel/`fx`, and the formula input, bound to `FormulaBarViewModel` + current selection.
 - **Status bar** — `StatusBarViewModel`: active cell, selection stats (Count always; Sum/Average when numeric cells are selected), calc-mode badge, busy indicator, dirty flag, zoom.
@@ -165,7 +165,7 @@ Recalculation and file I/O run off the UI thread; results are marshaled back. On
 - **Consistency** → the single `AppCommands` catalog feeding menu, ribbon, and keys.
 - **Error prevention** → dialog-service confirmations (§8.7 thresholds); parser validates before an edit commits.
 - **Recognition over recall** → ribbon + Name Box; autocomplete, picker, and Reference all read one `FunctionRegistry`; disabled-not-hidden controls.
-- **Flexibility & efficiency** → every command in menu + ribbon + **Command Palette (⌘⇧P)** + remappable key; **sheet switcher (⌘P)**; full keyboard operation; collapsible ribbon.
+- **Flexibility & efficiency** → every command in menu + ribbon + **Command Palette (⌘P)** + remappable key; **sheet switcher (⌘⇧P)**; full keyboard operation; collapsible ribbon.
 - **Minimalist design** → **minimal by default** (ribbon hidden; window is grid + formula bar + status bar); the Command Palette stands in for always-on chrome; a small flat style set; advanced options in dialogs.
 - **Diagnose/recover** → `ParseError` carries position + reason; error cells expose their reason on hover.
 - **Help** → tooltips from the catalog; Function Reference generated from `FunctionRegistry` metadata.
@@ -182,7 +182,7 @@ Most UX guarantees are **backed by structure** (one command catalog → three su
 | C# + Avalonia 12 over JS/Rust/raylib | Familiar, lean deps, native feel | Not the absolute leanest binary |
 | MVVM for chrome, direct code for grid | Right tool per job | Two styles in one codebase (documented) |
 | One `AppCommands` catalog → menu+ribbon+palette+keys | Consistency | Commands carry metadata |
-| Minimal by default: ribbon hidden, Command Palette (⌘⇧P) + sheet switcher (⌘P) | Uncluttered, keyboard-first | Discovery leans on search, not visible chrome |
+| Minimal by default: ribbon hidden, Command Palette (⌘P) + sheet switcher (⌘⇧P) | Uncluttered, keyboard-first | Discovery leans on search, not visible chrome |
 | One `FunctionRegistry` → eval+autocomplete+help | Consistency, less drift | Registry carries metadata |
 | Preserve unknown `.ods` content verbatim | Don't destroy user data | More work in the serializer |
 | Tables as ODF database ranges, no structured refs | Clean LibreOffice round-trip | No `Table[Column]` formula syntax |

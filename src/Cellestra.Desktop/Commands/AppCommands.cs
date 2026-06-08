@@ -79,8 +79,8 @@ public static class AppCommands
 
         // View
         new("view.commandPalette", "Command Palette…", e => e.ShowCommandPalette(), "command",
-            new KeyGesture(Key.P, CmdShift)),
-        new("view.goToSheet", "Go to Sheet…", e => e.ShowSheetSwitcher(), "list", new KeyGesture(Key.P, Cmd)),
+            new KeyGesture(Key.P, Cmd)),
+        new("view.goToSheet", "Go to Sheet…", e => e.ShowSheetSwitcher(), "list", new KeyGesture(Key.P, CmdShift)),
         new("view.zoomIn", "Zoom In", e => e.ZoomBy(0.1), "zoom-in", new KeyGesture(Key.OemPlus, Cmd)),
         new("view.zoomOut", "Zoom Out", e => e.ZoomBy(-0.1), "zoom-out", new KeyGesture(Key.OemMinus, Cmd)),
         new("view.actualSize", "Actual Size", e => e.ResetZoom(), "zoom-reset", new KeyGesture(Key.D0, Cmd)),
