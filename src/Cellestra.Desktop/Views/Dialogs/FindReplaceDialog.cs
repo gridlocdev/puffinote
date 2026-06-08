@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Globalization;
 using Avalonia.Controls;
 using Avalonia.Layout;
@@ -20,6 +21,9 @@ public sealed class FindReplaceDialog : Window
     private readonly TextBox _find = new() { Width = 200 };
     private readonly TextBox _replace = new() { Width = 200 };
     private readonly TextBlock _status = new();
+    private readonly ListBox _results = new() { MaxHeight = 220, MinWidth = 320 };
+    private readonly List<(int Row, int Column)> _matches = new();
+    private bool _suppressNavigate;
 
     public FindReplaceDialog(IAppEnvironment env, bool showReplace)
     {
@@ -49,6 +53,10 @@ public sealed class FindReplaceDialog : Window
 
         buttons.Children.Add(close);
 
+        // Live results: every cell whose displayed value contains the query. Clicking one jumps there.
+        _find.TextChanged += (_, _) => RunSearch();
+        _results.SelectionChanged += (_, _) => NavigateToSelectedMatch();
+
         var panel = new StackPanel { Margin = new Avalonia.Thickness(16), Spacing = 10 };
         panel.Children.Add(Row("Find", _find));
         if (showReplace)
@@ -58,8 +66,68 @@ public sealed class FindReplaceDialog : Window
 
         panel.Children.Add(buttons);
         panel.Children.Add(_status);
+        panel.Children.Add(new TextBlock { Text = "Matches (click to go there)" });
+        panel.Children.Add(_results);
         Content = panel;
     }
+
+    private void RunSearch()
+    {
+        _matches.Clear();
+        var rows = new List<string>();
+        string query = _find.Text ?? string.Empty;
+        if (query.Length > 0)
+        {
+            var sheet = _env.Session.ActiveSheet;
+            if (sheet.GetUsedRange() is { } range)
+            {
+                foreach (var (row, column) in range.Positions())
+                {
+                    string display = Display(sheet, row, column);
+                    if (display.Contains(query, StringComparison.OrdinalIgnoreCase))
+                    {
+                        _matches.Add((row, column));
+                        rows.Add($"{new CellAddress(column, row)}    {Truncate(display, 48)}");
+                    }
+                }
+            }
+        }
+
+        _suppressNavigate = true;          // resetting ItemsSource fires SelectionChanged; don't treat that as a click
+        _results.ItemsSource = rows;
+        _suppressNavigate = false;
+        _status.Text = query.Length == 0 ? string.Empty : $"{_matches.Count} match{(_matches.Count == 1 ? string.Empty : "es")}.";
+    }
+
+    private void NavigateToSelectedMatch()
+    {
+        if (_suppressNavigate)
+        {
+            return;
+        }
+
+        int index = _results.SelectedIndex;
+        if (index >= 0 && index < _matches.Count)
+        {
+            var (row, column) = _matches[index];
+            _env.Selection.MoveTo(row, column);
+            _env.Refresh();
+        }
+    }
+
+    private static string Truncate(string text, int max) =>
+        text.Length <= max ? text : text[..(max - 1)] + "…";
+
+    /// <summary>Test seam: run the live search for <paramref name="query"/> and return how many cells matched.</summary>
+    internal int SearchForTest(string query)
+    {
+        _find.Text = query;
+        RunSearch();
+        return _matches.Count;
+    }
+
+    /// <summary>Test seam: click the match at <paramref name="index"/>, navigating the grid to it.</summary>
+    internal void SelectMatchForTest(int index) => _results.SelectedIndex = index;
 
     private static StackPanel Row(string label, Control control) => new()
     {
@@ -124,6 +192,7 @@ public sealed class FindReplaceDialog : Window
         }
 
         FindNext();
+        RunSearch();
     }
 
     private void ReplaceAll()
@@ -152,6 +221,7 @@ public sealed class FindReplaceDialog : Window
         }
 
         _env.Refresh();
+        RunSearch();
         _status.Text = $"Replaced {count} occurrence(s).";
     }
 
