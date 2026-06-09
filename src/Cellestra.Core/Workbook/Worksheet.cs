@@ -201,6 +201,13 @@ public sealed class Worksheet
         return region is not null && _mergedRegions.Remove(region);
     }
 
+    /// <summary>Replace the whole merge set in one shot (used by undo to restore a captured layout).</summary>
+    public void ReplaceMerges(IEnumerable<MergedRegion> regions)
+    {
+        _mergedRegions.Clear();
+        _mergedRegions.AddRange(regions);
+    }
+
     // ---- Tables & validation ----------------------------------------------
 
     public IReadOnlyList<Table> Tables => _tables;

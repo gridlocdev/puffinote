@@ -50,7 +50,8 @@ public static class ShortcutFormatter
         Key.Escape => "⎋",
         Key.OemPlus => "=",
         Key.OemMinus => "−",
-        Key.D0 => "0",
+        // Top-row digit keys render as their bare digit (Key.D1 → "1"), not "D1".
+        >= Key.D0 and <= Key.D9 => ((char)('0' + (key - Key.D0))).ToString(),
         Key.F9 => "F9",
         >= Key.A and <= Key.Z => key.ToString(),
         _ => key.ToString(),

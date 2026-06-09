@@ -2,7 +2,7 @@
 
 A clean, fast, native spreadsheet editor for macOS whose home format is **OpenDocument Spreadsheet (`.ods`)**.
 
-> **Name:** *Cellestra* (from **cell** + **orchestra**), pronounced **cel-LES-trah**.
+> **Name:** *Cellestra* (from **cell** + **orchestra**), pronounced **CELL-estra**.
 >
 > **Status:** early development, pre-v1.
 

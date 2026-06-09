@@ -96,6 +96,41 @@ public class DataEditCommandTests
     }
 
     [Fact]
+    public void Create_table_styles_header_row_with_contrasting_default()
+    {
+        var (workbook, history, sheet) = New();
+        var table = new Table("Data", CellRange.Parse("A1:B3"), HasHeader: true);
+
+        history.Execute(DataEditCommands.CreateTable(workbook, sheet.Name, table));
+
+        // Header cells (row 0) get the green accent fill + bold white text; the body stays default.
+        foreach (int column in new[] { 0, 1 })
+        {
+            var header = workbook.Styles.Get(sheet.GetOrCreate(0, column).StyleId);
+            Assert.Equal(Cellestra.Core.Styling.ArgbColor.FromHex("#15734F"), header.Fill.Background);
+            Assert.True(header.Font.Bold);
+            Assert.Equal(Cellestra.Core.Styling.ArgbColor.White, header.Font.Color);
+        }
+
+        Assert.False(workbook.Styles.Get(sheet.GetOrCreate(1, 0).StyleId).Font.Bold);
+
+        history.Undo();
+        Assert.Null(sheet.FindTable(0, 0));
+        Assert.Equal(Cellestra.Core.Styling.StylePool.DefaultId, sheet.GetOrCreate(0, 0).StyleId);
+    }
+
+    [Fact]
+    public void Create_table_without_header_skips_styling()
+    {
+        var (workbook, history, sheet) = New();
+        var table = new Table("Data", CellRange.Parse("A1:B3"), HasHeader: false);
+
+        history.Execute(DataEditCommands.CreateTable(workbook, sheet.Name, table));
+
+        Assert.Equal(Cellestra.Core.Styling.StylePool.DefaultId, sheet.GetOrCreate(0, 0).StyleId);
+    }
+
+    [Fact]
     public void Set_validation_is_undoable()
     {
         var (workbook, history, sheet) = New();
