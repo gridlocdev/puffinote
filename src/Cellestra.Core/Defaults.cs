@@ -34,6 +34,15 @@ public static class Defaults
     public const uint TextColorArgb = 0xFF000000;
 
     /// <summary>
+    /// Default fill for a new table's header row, ARGB — the app's green accent (<c>#15734F</c>).
+    /// Paired with white, bold text (<see cref="TableHeaderTextArgb"/>) for legible contrast.
+    /// </summary>
+    public const uint TableHeaderFillArgb = 0xFF15734F;
+
+    /// <summary>Default text color for a new table's header row, ARGB. Opaque white (on the green fill).</summary>
+    public const uint TableHeaderTextArgb = 0xFFFFFFFF;
+
+    /// <summary>
     /// Generate the next unused default sheet name given the names already in use
     /// (Sheet2, Sheet3, … skipping any already taken).
     /// </summary>

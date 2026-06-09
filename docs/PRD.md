@@ -1,6 +1,6 @@
 # Cellestra — Product Requirements
 
-> **Name:** "Cellestra" — from *cell* + *orchestra*, pronounced **cel-LES-trah**. (A spreadsheet is a lot of little cells playing together in tune.)
+> **Name:** "Cellestra" — from *cell* + *orchestra*, pronounced **CELL-estra**. (A spreadsheet is a lot of little cells playing together in tune.)
 >
 > **Status:** Draft / pre-v1. This document changes slowly. It describes *what* I'm building and *why*, not *how*. The "how" lives in `ARCHITECTURE.md`.
 

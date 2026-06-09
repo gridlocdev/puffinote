@@ -1,6 +1,7 @@
 using System.Globalization;
 using Cellestra.Core.Data;
 using Cellestra.Core.Model;
+using Cellestra.Core.Styling;
 
 namespace Cellestra.Core.Editing;
 
@@ -86,6 +87,35 @@ public static class DataEditCommands
                 Sheet(wb, sheet).RemoveTable(table);
                 return EditResult.None;
             });
+
+    /// <summary>
+    /// Create a table and, when it has a header row, give that row a sensible contrasting default
+    /// style (the green accent fill with bold white text) so it stands out. One undoable step: the
+    /// table is registered and the header cells are restyled together. Header styling is plain cell
+    /// fills/fonts on the range — no structured references — so it round-trips to ODS.
+    /// </summary>
+    public static IEditCommand CreateTable(Workbook workbook, string sheet, Table table)
+    {
+        var add = CreateTable(sheet, table);
+        if (!table.HasHeader)
+        {
+            return add;
+        }
+
+        var headerRange = new CellRange(
+            table.Range.TopLeft,
+            new CellAddress(table.Range.Right, table.Range.Top));
+        var styleHeader = EditCommands.ApplyStyle(workbook, sheet, headerRange, StyleTableHeader, "Create Table");
+        return EditCommands.Composite("Create Table", new[] { add, styleHeader });
+    }
+
+    /// <summary>The default header style: bold white text on the green accent fill (PRD §8.10).</summary>
+    public static CellStyle StyleTableHeader(CellStyle style)
+    {
+        var fill = Fill.Solid(new ArgbColor(Defaults.TableHeaderFillArgb));
+        var font = style.Font with { Bold = true, Color = new ArgbColor(Defaults.TableHeaderTextArgb) };
+        return style.WithFill(fill).WithFont(font);
+    }
 
     public static IEditCommand RemoveTable(string sheet, Table table) =>
         new ActionCommand("Remove Table",
