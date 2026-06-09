@@ -6,16 +6,19 @@ using Avalonia.Layout;
 using Cellestra.Core.Editing;
 using Cellestra.Core.Model;
 using Cellestra.Desktop.Commands;
+using Cellestra.Desktop.Views.Overlays;
 using NumberFormatter = Cellestra.Core.Styling.NumberFormatter;
 
 namespace Cellestra.Desktop.Views.Dialogs;
 
 /// <summary>
-/// A modeless Find / Find &amp; Replace tool window (PRD §6.2). Find Next moves the selection to
-/// the next matching cell (wrapping); Replace and Replace All rewrite text and formula cells.
-/// Matching is case-insensitive over each cell's displayed value.
+/// The Find / Find &amp; Replace tool (PRD §6.2), rendered as an internal modal. Find Next moves the
+/// selection to the next matching cell (wrapping); Replace and Replace All rewrite text and formula
+/// cells. Matching is case-insensitive over each cell's displayed value. Lists every cell whose
+/// displayed value contains the query; clicking one jumps the selection there. The bool result is
+/// unused (the dialog acts on the grid directly).
 /// </summary>
-public sealed class FindReplaceDialog : Window
+public sealed class FindReplaceDialog : ModalDialog<bool>
 {
     private readonly IAppEnvironment _env;
     private readonly TextBox _find = new() { Width = 200 };
@@ -29,10 +32,7 @@ public sealed class FindReplaceDialog : Window
     {
         _env = env;
         Title = showReplace ? "Find & Replace" : "Find";
-        Width = 360;
-        SizeToContent = SizeToContent.Height;
-        CanResize = false;
-        WindowStartupLocation = WindowStartupLocation.CenterOwner;
+        InitialFocus = _find;
 
         var findNext = new Button { Content = "Find Next", IsDefault = true };
         findNext.Click += (_, _) => FindNext();
@@ -57,7 +57,7 @@ public sealed class FindReplaceDialog : Window
         _find.TextChanged += (_, _) => RunSearch();
         _results.SelectionChanged += (_, _) => NavigateToSelectedMatch();
 
-        var panel = new StackPanel { Margin = new Avalonia.Thickness(16), Spacing = 10 };
+        var panel = new StackPanel { Width = 360, Spacing = 10 };
         panel.Children.Add(Row("Find", _find));
         if (showReplace)
         {
@@ -68,7 +68,7 @@ public sealed class FindReplaceDialog : Window
         panel.Children.Add(_status);
         panel.Children.Add(new TextBlock { Text = "Matches (click to go there)" });
         panel.Children.Add(_results);
-        Content = panel;
+        DialogContent = panel;
     }
 
     private void RunSearch()

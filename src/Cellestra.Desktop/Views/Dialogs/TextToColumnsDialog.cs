@@ -1,10 +1,11 @@
 using Avalonia.Controls;
 using Avalonia.Layout;
+using Cellestra.Desktop.Views.Overlays;
 
 namespace Cellestra.Desktop.Views.Dialogs;
 
-/// <summary>Text to Columns dialog (PRD §8.14): pick the delimiter to split the selected column on.</summary>
-public sealed class TextToColumnsDialog : Window
+/// <summary>Text to Columns dialog (PRD §8.14), rendered as an internal modal: pick the delimiter to split the selected column on.</summary>
+public sealed class TextToColumnsDialog : ModalDialog<char?>
 {
     private readonly RadioButton _comma;
     private readonly RadioButton _semicolon;
@@ -14,10 +15,6 @@ public sealed class TextToColumnsDialog : Window
     public TextToColumnsDialog()
     {
         Title = "Text to Columns";
-        Width = 280;
-        SizeToContent = SizeToContent.Height;
-        CanResize = false;
-        WindowStartupLocation = WindowStartupLocation.CenterOwner;
 
         _comma = new RadioButton { Content = "Comma", GroupName = "delim", IsChecked = true };
         _semicolon = new RadioButton { Content = "Semicolon", GroupName = "delim" };
@@ -29,9 +26,9 @@ public sealed class TextToColumnsDialog : Window
         var cancel = new Button { Content = "Cancel", IsCancel = true };
         cancel.Click += (_, _) => Close(null);
 
-        Content = new StackPanel
+        DialogContent = new StackPanel
         {
-            Margin = new Avalonia.Thickness(16),
+            Width = 240,
             Spacing = 8,
             Children =
             {

@@ -68,6 +68,7 @@ public partial class MainWindow : Window, IAppEnvironment
         FormulaInput.KeyDown += FormulaInputKeyDown;
         NameBox.KeyDown += NameBoxKeyDown;
         FxButton.Click += (_, _) => BeginEdit();
+        FormulaExpandButton.Click += (_, _) => ToggleFormulaBarExpanded();
 
         RegisterKeyBindings();
         BuildNativeMenu();
@@ -112,6 +113,11 @@ public partial class MainWindow : Window, IAppEnvironment
     private void BuildNativeMenu()
     {
         var menu = new NativeMenu();
+
+        // Application menu (next to the Apple menu on macOS): the standard "About Cellestra" item lives
+        // here per PRD §6.2. Avalonia merges this first submenu into the native application menu.
+        menu.Items.Add(Submenu("Cellestra", "help.about"));
+
         var file = Submenu("File", "file.new", "file.open", "file.save", "file.saveAs", null, "file.importCsv", "file.exportCsv");
         file.Menu!.Items.Insert(2, BuildOpenRecent());
         menu.Items.Add(file);
@@ -124,7 +130,7 @@ public partial class MainWindow : Window, IAppEnvironment
             "data.toggleFilter", "data.clearFilter", null, "data.createTable", "data.removeDuplicates",
             "data.textToColumns", "data.validation", null, "formula.recalc"));
         menu.Items.Add(Submenu("View", "view.commandPalette", "view.goToSheet", null, "view.zoomIn", "view.zoomOut", "view.actualSize", null, "view.freezePanes"));
-        menu.Items.Add(Submenu("Help", "help.shortcuts"));
+        menu.Items.Add(Submenu("Help", "help.shortcuts", null, "help.about"));
         NativeMenu.SetMenu(this, menu);
     }
 
@@ -384,15 +390,34 @@ public partial class MainWindow : Window, IAppEnvironment
     {
         var items = AppCommands.All
             .Where(c => c.IsEnabled(this))
-            .Select(c => new PaletteItem(c.Label, c.Icon, c.Description, c.ShortcutText, () => c.Execute(this)))
+            .Select(c => new PaletteItem(c.Label, c.Icon, c.Description, c.ShortcutText, () => c.Execute(this), CommandCategory(c.Id)))
             .ToList();
         ShowPalette("Type a command — bold, currency, sort…", items);
+    }
+
+    /// <summary>Friendly category name for a command, derived from its id prefix, used as the palette's section header.</summary>
+    private static string CommandCategory(string id)
+    {
+        string prefix = id.Contains('.', StringComparison.Ordinal) ? id[..id.IndexOf('.', StringComparison.Ordinal)] : id;
+        return prefix switch
+        {
+            "file" => "File",
+            "edit" => "Edit",
+            "format" => "Format",
+            "insert" => "Insert",
+            "sheet" => "Insert",
+            "data" => "Data",
+            "formula" => "Formulas",
+            "view" => "View",
+            "help" => "Help",
+            _ => "Other",
+        };
     }
 
     public void ShowSheetSwitcher()
     {
         var items = _session.Workbook.Worksheets
-            .Select(s => new PaletteItem(s.Name, "list", "Worksheet", string.Empty, () => { _session.SetActiveSheet(s); BuildSheetTabs(); Grid.Refresh(); }))
+            .Select(s => new PaletteItem(s.Name, "list", "Worksheet", string.Empty, () => { _session.SetActiveSheet(s); BuildSheetTabs(); Grid.Refresh(); }, "Sheets"))
             .ToList();
         ShowPalette("Go to sheet", items);
     }
@@ -407,21 +432,30 @@ public partial class MainWindow : Window, IAppEnvironment
     public async void RenameActiveSheet()
     {
         var sheet = _session.ActiveSheet;
-        string? name = await new Dialogs.TextPromptDialog("Rename sheet", "Name", sheet.Name).ShowDialog<string?>(this);
+        string? name = await ShowModalAsync(new Dialogs.TextPromptDialog("Rename sheet", "Name", sheet.Name));
         if (name is null || name == sheet.Name)
         {
             return;
         }
 
+        CommitSheetRename(sheet, name);
+    }
+
+    /// <summary>Apply a sheet rename through the validating session path, narrating success or surfacing the error.</summary>
+    /// <returns>True when the rename succeeded.</returns>
+    private bool CommitSheetRename(Worksheet sheet, string name)
+    {
         try
         {
             _session.RenameSheet(sheet, name); // raises StructureChanged → rebuilds tabs/chrome
             OnSelectionChanged();
             Narrate($"Renamed sheet to {name}");
+            return true;
         }
         catch (Exception ex)
         {
             ShowMessage("Couldn't rename the sheet", ex.Message);
+            return false;
         }
     }
 
@@ -434,8 +468,8 @@ public partial class MainWindow : Window, IAppEnvironment
         }
 
         var sheet = _session.ActiveSheet;
-        bool confirmed = await new ConfirmDialog("Delete sheet?",
-            $"Delete “{sheet.Name}” and all its data? This can’t be undone.", "Delete").ShowDialog<bool>(this);
+        bool confirmed = await ShowModalAsync(new ConfirmDialog("Delete sheet?",
+            $"Delete “{sheet.Name}” and all its data? This can’t be undone.", "Delete"));
         if (confirmed)
         {
             _session.DeleteSheet(sheet); // raises StructureChanged → rebuilds tabs/chrome
@@ -491,7 +525,8 @@ public partial class MainWindow : Window, IAppEnvironment
             _ => BuildCommandFlyout(
                 "edit.cut", "edit.copy", "edit.paste", null,
                 "insert.rowsAbove", "insert.columnsLeft", null,
-                "edit.delete", "edit.clearFormats", "edit.clearAll"),
+                "edit.delete", "edit.clearFormats", "edit.clearAll", null,
+                "format.cells"),
         };
 
         if (flyout is null)
@@ -534,7 +569,7 @@ public partial class MainWindow : Window, IAppEnvironment
     public async void ShowSortDialog()
     {
         var (sheet, range, header) = AppCommands.DataTarget(this);
-        var spec = await new SortDialog(sheet, range, header).ShowDialog<SortSpec?>(this);
+        var spec = await ShowModalAsync(new SortDialog(sheet, range, header));
         if (spec is { Levels.Count: > 0 })
         {
             _session.Execute(DataEditCommands.Sort(sheet.Name, range, spec));
@@ -545,7 +580,7 @@ public partial class MainWindow : Window, IAppEnvironment
     public async void ShowRemoveDuplicatesDialog()
     {
         var (sheet, range, header) = AppCommands.DataTarget(this);
-        var result = await new RemoveDuplicatesDialog(sheet, range, header).ShowDialog<RemoveDuplicatesDialog.Result?>(this);
+        var result = await ShowModalAsync(new RemoveDuplicatesDialog(sheet, range, header));
         if (result is not null)
         {
             _session.Execute(DataEditCommands.RemoveDuplicates(sheet.Name, range, result.KeyColumns, result.HasHeader, out var removedCount));
@@ -567,7 +602,7 @@ public partial class MainWindow : Window, IAppEnvironment
         var sheet = _session.ActiveSheet;
         var selection = Selection.Range;
         var source = new CellRange(new CellAddress(selection.Left, selection.Top), new CellAddress(selection.Left, selection.Bottom));
-        var delimiter = await new TextToColumnsDialog().ShowDialog<char?>(this);
+        var delimiter = await ShowModalAsync(new TextToColumnsDialog());
         if (delimiter is { } d)
         {
             _session.Execute(DataEditCommands.TextToColumns(sheet, source, d));
@@ -578,7 +613,7 @@ public partial class MainWindow : Window, IAppEnvironment
     public async void ShowDataValidationDialog()
     {
         var sheet = _session.ActiveSheet;
-        var rule = await new DataValidationDialog(Selection.Range).ShowDialog<DataValidation?>(this);
+        var rule = await ShowModalAsync(new DataValidationDialog(Selection.Range));
         if (rule is not null)
         {
             _session.Execute(DataEditCommands.SetValidation(sheet.Name, rule));
@@ -586,20 +621,7 @@ public partial class MainWindow : Window, IAppEnvironment
         }
     }
 
-    private FindReplaceDialog? _findReplace;
-
-    public void ShowFindReplace(bool replace)
-    {
-        if (_findReplace is not null)
-        {
-            _findReplace.Activate();
-            return;
-        }
-
-        _findReplace = new FindReplaceDialog(this, replace);
-        _findReplace.Closed += (_, _) => _findReplace = null;
-        _findReplace.Show(this);
-    }
+    public void ShowFindReplace(bool replace) => _ = ShowModalAsync(new FindReplaceDialog(this, replace));
 
     public void ToggleFreezePanes()
     {
@@ -607,9 +629,11 @@ public partial class MainWindow : Window, IAppEnvironment
         Refresh();
     }
 
-    public void ShowKeyboardShortcuts() => _ = new KeyboardShortcutsDialog().ShowDialog(this);
+    public void ShowKeyboardShortcuts() => _ = ShowModalAsync(new KeyboardShortcutsDialog());
 
-    public void ShowMessage(string heading, string message) => _ = new MessageDialog(heading, message).ShowDialog(this);
+    public void ShowAbout() => _ = ShowModalAsync(new AboutDialog());
+
+    public void ShowMessage(string heading, string message) => _ = ShowModalAsync(new MessageDialog(heading, message));
 
     /// <summary>A text field has focus when the focused element is a <see cref="TextBox"/> (cell editor, formula bar, name box, or a dialog field).</summary>
     public bool IsTextInputFocused => FocusManager?.GetFocusedElement() is TextBox;
@@ -628,7 +652,7 @@ public partial class MainWindow : Window, IAppEnvironment
         var active = sheet.Find(Selection.ActiveRow, Selection.ActiveColumn);
         var current = _session.Workbook.Styles.Get(active?.StyleId ?? Cellestra.Core.Styling.StylePool.DefaultId);
 
-        var transform = await new FormatCellsDialog(current).ShowDialog<System.Func<Cellestra.Core.Styling.CellStyle, Cellestra.Core.Styling.CellStyle>?>(this);
+        var transform = await ShowModalAsync(new FormatCellsDialog(current));
         if (transform is not null)
         {
             _session.Execute(EditCommands.ApplyStyle(_session.Workbook, sheet.Name, Selection.Range, transform, "Format Cells"));
@@ -785,12 +809,99 @@ public partial class MainWindow : Window, IAppEnvironment
                 BuildCommandFlyout("sheet.rename", "insert.sheet", null, "sheet.delete").ShowAt(SheetTabs, showAtPointer: true);
                 e.Handled = true;
             };
+            // Double-click a tab to rename it inline, like editing a cell (no separate dialog).
+            tab.DoubleTapped += (_, e) =>
+            {
+                BeginInlineSheetRename(tab, captured);
+                e.Handled = true;
+            };
             SheetTabs.Children.Add(tab);
         }
 
         var add = new Button { Content = "＋", Padding = new Thickness(8, 2) };
         add.Click += (_, _) => AddSheet();
         SheetTabs.Children.Add(add);
+    }
+
+    /// <summary>True while an inline sheet-tab rename editor is open, so the strip drag/click logic backs off.</summary>
+    private bool _inlineRenaming;
+
+    /// <summary>
+    /// Swap a sheet tab's label for an inline editable <see cref="TextBox"/> (task: double-click renames a
+    /// sheet inline, like cell editing). Commits on Enter/blur through the validating rename path, cancels
+    /// on Esc, and restores the tab either way.
+    /// </summary>
+    private void BeginInlineSheetRename(Border tab, Worksheet sheet)
+    {
+        if (_inlineRenaming)
+        {
+            return;
+        }
+
+        _inlineRenaming = true;
+        _session.SetActiveSheet(sheet); // editing implies focusing this sheet
+        Grid.Refresh();
+        OnSelectionChanged();
+
+        var editor = new TextBox
+        {
+            Text = sheet.Name,
+            MinWidth = 60,
+            Padding = new Thickness(2, 0),
+            VerticalContentAlignment = VerticalAlignment.Center,
+        };
+        Avalonia.Automation.AutomationProperties.SetName(editor, "Sheet name");
+
+        bool finished = false;
+
+        void Finish(bool commit)
+        {
+            if (finished)
+            {
+                return;
+            }
+
+            finished = true;
+            _inlineRenaming = false;
+
+            string name = (editor.Text ?? string.Empty).Trim();
+            if (commit && name.Length > 0 && name != sheet.Name)
+            {
+                // A failed rename (duplicate/invalid) surfaces a message; rebuild the strip to drop the editor.
+                if (!CommitSheetRename(sheet, name))
+                {
+                    BuildSheetTabs();
+                }
+
+                // Success raises StructureChanged → BuildSheetTabs already ran.
+            }
+            else
+            {
+                BuildSheetTabs(); // restore the original label
+            }
+        }
+
+        editor.KeyDown += (_, e) =>
+        {
+            if (e.Key == Key.Enter)
+            {
+                Finish(commit: true);
+                e.Handled = true;
+            }
+            else if (e.Key == Key.Escape)
+            {
+                Finish(commit: false);
+                e.Handled = true;
+            }
+        };
+        editor.LostFocus += (_, _) => Finish(commit: true);
+
+        tab.Child = editor;
+        Avalonia.Threading.Dispatcher.UIThread.Post(() =>
+        {
+            editor.Focus();
+            editor.SelectAll();
+        });
     }
 
     // ---- Sheet tab click / drag-to-reorder (handled at the strip level) ---
@@ -817,6 +928,11 @@ public partial class MainWindow : Window, IAppEnvironment
 
     private void SheetTabsPointerPressed(object? sender, PointerPressedEventArgs e)
     {
+        if (_inlineRenaming)
+        {
+            return; // an inline rename editor owns the strip; don't start a drag/click gesture
+        }
+
         if (!e.GetCurrentPoint(SheetTabs).Properties.IsLeftButtonPressed)
         {
             return; // right-click is handled per-tab via ContextRequested
@@ -963,6 +1079,34 @@ public partial class MainWindow : Window, IAppEnvironment
     }
 
     // ---- Formula bar / Name box ------------------------------------------
+
+    private bool _formulaBarExpanded;
+
+    /// <summary>
+    /// Toggle the formula bar between one line and a taller multi-line area for editing long formulas
+    /// (task: formula-bar expand/collapse). Expanded, the input grows to several wrapped lines.
+    /// </summary>
+    private void ToggleFormulaBarExpanded()
+    {
+        _formulaBarExpanded = !_formulaBarExpanded;
+        if (_formulaBarExpanded)
+        {
+            FormulaInput.MinHeight = 84;
+            FormulaInput.TextWrapping = TextWrapping.Wrap;
+            FormulaInput.VerticalContentAlignment = VerticalAlignment.Top;
+            FormulaExpandButton.Content = "⌃";
+            ToolTip.SetTip(FormulaExpandButton, "Collapse formula bar");
+        }
+        else
+        {
+            FormulaInput.MinHeight = 0;
+            FormulaInput.ClearValue(TextBox.HeightProperty);
+            FormulaInput.TextWrapping = TextWrapping.NoWrap;
+            FormulaInput.VerticalContentAlignment = VerticalAlignment.Center;
+            FormulaExpandButton.Content = "⌄";
+            ToolTip.SetTip(FormulaExpandButton, "Expand formula bar");
+        }
+    }
 
     private void FormulaInputKeyDown(object? sender, KeyEventArgs e)
     {
@@ -1122,13 +1266,22 @@ public partial class MainWindow : Window, IAppEnvironment
 
     // ---- Palette overlay --------------------------------------------------
 
-    private sealed record PaletteItem(string Label, string? Icon, string Description, string Shortcut, Action Run);
+    /// <summary>
+    /// One palette row. A normal item carries an action; a <see cref="IsHeader"/> row is a non-selectable
+    /// category divider (PRD §6.7 screenshot showed results grouped by category, not a flat list).
+    /// </summary>
+    private sealed record PaletteItem(string Label, string? Icon, string Description, string Shortcut, Action Run, string Category = "", bool IsHeader = false)
+    {
+        public static PaletteItem Header(string category) =>
+            new(category, null, string.Empty, string.Empty, static () => { }, category, IsHeader: true);
+    }
 
     private static readonly IBrush PaletteMuted = new SolidColorBrush(Color.FromRgb(0x88, 0x88, 0x88));
 
     private void ShowPalette(string placeholder, IReadOnlyList<PaletteItem> items)
     {
         OverlayHost.Children.Clear();
+        _activeModal = null; // a palette isn't a result-returning modal; clear any stale handle
 
         var input = new TextBox { PlaceholderText = placeholder, Margin = new Thickness(0, 0, 0, 6) };
         var list = new ListBox
@@ -1139,27 +1292,53 @@ public partial class MainWindow : Window, IAppEnvironment
 
         void Populate(string query)
         {
-            var filtered = items
+            // Score and rank, then divide the results under their category section headers (File, Edit,
+            // Format, Data, View…) instead of one flat list. Within a category, keep the fuzzy order.
+            var matches = items
+                .Where(i => !i.IsHeader)
                 .Select(i => (Item: i, Score: FuzzyMatcher.Score(i.Label, query)))
                 .Where(x => x.Score >= 0)
                 .OrderByDescending(x => x.Score)
-                .Select(x => x.Item)
                 .ToList();
-            list.ItemsSource = filtered;
-            if (filtered.Count > 0)
+
+            var grouped = new List<PaletteItem>();
+            foreach (var group in matches.GroupBy(x => x.Item.Category))
             {
-                list.SelectedIndex = 0;
+                if (!string.IsNullOrEmpty(group.Key))
+                {
+                    grouped.Add(PaletteItem.Header(group.Key));
+                }
+
+                grouped.AddRange(group.Select(x => x.Item));
             }
+
+            list.ItemsSource = grouped;
+            list.SelectedIndex = FirstSelectableIndex(grouped, 0, +1);
         }
 
         Populate(string.Empty);
 
         void Run()
         {
-            if (list.SelectedItem is PaletteItem chosen)
+            if (list.SelectedItem is PaletteItem { IsHeader: false } chosen)
             {
                 CloseOverlay();
                 chosen.Run();
+            }
+        }
+
+        // Step over category-header rows so arrow keys land only on runnable commands.
+        void Move(int direction)
+        {
+            if (list.ItemsSource is not IReadOnlyList<PaletteItem> rows || rows.Count == 0)
+            {
+                return;
+            }
+
+            int next = FirstSelectableIndex(rows, list.SelectedIndex + direction, direction);
+            if (next >= 0)
+            {
+                list.SelectedIndex = next;
             }
         }
 
@@ -1170,8 +1349,8 @@ public partial class MainWindow : Window, IAppEnvironment
             {
                 case Key.Escape: CloseOverlay(); break;
                 case Key.Return: Run(); break;
-                case Key.Down: list.SelectedIndex = Math.Min(list.SelectedIndex + 1, (list.ItemCount) - 1); break;
-                case Key.Up: list.SelectedIndex = Math.Max(list.SelectedIndex - 1, 0); break;
+                case Key.Down: Move(+1); break;
+                case Key.Up: Move(-1); break;
             }
         };
         list.DoubleTapped += (_, _) => Run();
@@ -1191,11 +1370,26 @@ public partial class MainWindow : Window, IAppEnvironment
 
         OverlayHost.Children.Add(box);
         OverlayHost.IsVisible = true;
+        SetBackgroundBlur(true); // blur the grid behind the palette too (consistent with internal modals)
         OverlayHost.PointerPressed += OverlayBackgroundPressed;
         input.Focus();
     }
 
-    /// <summary>One palette row: optional icon, the command name, its description beneath, and the shortcut (PRD §6.7).</summary>
+    /// <summary>The first selectable (non-header) row index at or after <paramref name="start"/> stepping by <paramref name="step"/>, or -1.</summary>
+    private static int FirstSelectableIndex(IReadOnlyList<PaletteItem> rows, int start, int step)
+    {
+        for (int i = Math.Max(0, start); i >= 0 && i < rows.Count; i += step)
+        {
+            if (!rows[i].IsHeader)
+            {
+                return i;
+            }
+        }
+
+        return -1;
+    }
+
+    /// <summary>One palette row: a category divider, or an icon + command name + description + shortcut (PRD §6.7).</summary>
     private static Control BuildPaletteRow(PaletteItem? item)
     {
         // The ListBox recycles containers while scrolling and may build the template with a null
@@ -1203,6 +1397,19 @@ public partial class MainWindow : Window, IAppEnvironment
         if (item is null)
         {
             return new Control();
+        }
+
+        if (item.IsHeader)
+        {
+            // A non-interactive category section header (e.g. "Format"), dividing the results.
+            return new TextBlock
+            {
+                Text = item.Label.ToUpperInvariant(),
+                FontSize = 10,
+                FontWeight = FontWeight.SemiBold,
+                Foreground = PaletteMuted,
+                Margin = new Thickness(2, 8, 0, 2),
+            };
         }
 
         var dock = new DockPanel { LastChildFill = true };
@@ -1243,7 +1450,18 @@ public partial class MainWindow : Window, IAppEnvironment
 
     private void OverlayBackgroundPressed(object? sender, PointerPressedEventArgs e)
     {
-        if (ReferenceEquals(e.Source, OverlayHost))
+        if (!ReferenceEquals(e.Source, OverlayHost))
+        {
+            return;
+        }
+
+        // Clicking the dimmed backdrop dismisses: cancel an internal modal (so its awaiter resolves
+        // to the cancel result), or just close a palette-style overlay.
+        if (_activeModal is { } modal)
+        {
+            modal.CancelFromHost();
+        }
+        else
         {
             CloseOverlay();
         }
@@ -1254,7 +1472,79 @@ public partial class MainWindow : Window, IAppEnvironment
         OverlayHost.PointerPressed -= OverlayBackgroundPressed;
         OverlayHost.Children.Clear();
         OverlayHost.IsVisible = false;
+        _activeModal = null;
+        SetBackgroundBlur(false);
         Grid.Focus();
+    }
+
+    // ---- Internal modal host ---------------------------------------------
+
+    /// <summary>The currently shown internal modal dialog, if any (so its backdrop click cancels it).</summary>
+    private Overlays.IModalDialog? _activeModal;
+
+    /// <summary>
+    /// Blur the grid/chrome behind a modal (PRD task: "add blur to the background above any modal").
+    /// Applied to <see cref="ContentRoot"/> only, so the overlay's own content stays sharp.
+    /// </summary>
+    private void SetBackgroundBlur(bool on) =>
+        ContentRoot.Effect = on ? new BlurEffect { Radius = 8 } : null;
+
+    /// <summary>
+    /// Host an internal modal dialog over the (blurred) grid, like the command palette, and await its
+    /// result (PRD task: internal modals instead of separate OS windows). Esc / backdrop cancel.
+    /// </summary>
+    private Task<TResult?> ShowModalAsync<TResult>(Overlays.ModalDialog<TResult> dialog)
+    {
+        OverlayHost.Children.Clear();
+        _activeModal = dialog;
+
+        var chrome = BuildModalChrome(dialog, dialog.Title);
+        OverlayHost.Children.Add(chrome);
+        OverlayHost.IsVisible = true;
+        SetBackgroundBlur(true);
+        OverlayHost.PointerPressed += OverlayBackgroundPressed;
+
+        dialog.Closed += (_, _) =>
+        {
+            if (ReferenceEquals(_activeModal, dialog))
+            {
+                CloseOverlay();
+            }
+        };
+
+        // Focus the dialog so Esc reaches it even before an inner field claims focus.
+        Avalonia.Threading.Dispatcher.UIThread.Post(() => dialog.Focus());
+        return dialog.Result;
+    }
+
+    /// <summary>Wrap a modal dialog's body in the same floating "card" chrome the palette uses (title + shadow).</summary>
+    private Border BuildModalChrome(Control body, string title)
+    {
+        var stack = new StackPanel { Spacing = 10 };
+        if (!string.IsNullOrEmpty(title))
+        {
+            stack.Children.Add(new TextBlock
+            {
+                Text = title,
+                FontWeight = FontWeight.SemiBold,
+                FontSize = 14,
+            });
+        }
+
+        stack.Children.Add(body);
+
+        return new Border
+        {
+            MaxWidth = 560,
+            MaxHeight = 640,
+            Background = ThemedSurface,
+            CornerRadius = new CornerRadius(8),
+            Padding = new Thickness(16),
+            VerticalAlignment = VerticalAlignment.Center,
+            HorizontalAlignment = HorizontalAlignment.Center,
+            BoxShadow = new BoxShadows(new BoxShadow { Blur = 16, OffsetY = 4, Color = Color.FromArgb(0x40, 0, 0, 0) }),
+            Child = stack,
+        };
     }
 
     private static readonly FilePickerFileType OdsFileType = new("OpenDocument Spreadsheet")

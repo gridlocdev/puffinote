@@ -90,6 +90,9 @@ public interface IAppEnvironment
     /// <summary>Display the keyboard shortcuts reference.</summary>
     void ShowKeyboardShortcuts();
 
+    /// <summary>Show the About screen (app name, pronunciation, description, version, license).</summary>
+    void ShowAbout();
+
     /// <summary>Show a non-fatal message dialog: a plain-language heading and what to do about it.</summary>
     void ShowMessage(string heading, string message);
 

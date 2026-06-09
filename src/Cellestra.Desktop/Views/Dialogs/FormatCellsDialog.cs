@@ -3,17 +3,19 @@ using System.Linq;
 using Avalonia.Controls;
 using Avalonia.Layout;
 using Cellestra.Core.Styling;
+using Cellestra.Desktop.Views.Overlays;
 using AvColor = Avalonia.Media.Color;
 using SAlign = Cellestra.Core.Styling.HorizontalAlignment;
 
 namespace Cellestra.Desktop.Views.Dialogs;
 
 /// <summary>
-/// The Format Cells dialog (PRD §6.2, ⌘1): number format, font emphasis/size, colors, fill, and
-/// horizontal alignment. Colors use the first-party Avalonia <see cref="ColorPicker"/> (spectrum +
-/// palette + hex). Returns a style transform applied to every selected cell, or null on cancel.
+/// The Format Cells dialog (PRD §6.2, ⌘1), rendered as an internal modal: number format, font
+/// emphasis/size, colors, fill, and horizontal alignment. Colors use the first-party Avalonia
+/// <see cref="ColorPicker"/> (spectrum + palette + hex). Its <see cref="ModalDialog{T}.Result"/> is
+/// a style transform applied to every selected cell, or null on cancel.
 /// </summary>
-public sealed class FormatCellsDialog : Window
+public sealed class FormatCellsDialog : ModalDialog<Func<CellStyle, CellStyle>?>
 {
     private static readonly (string Label, string Code)[] Formats =
     {
@@ -37,10 +39,6 @@ public sealed class FormatCellsDialog : Window
     public FormatCellsDialog(CellStyle current)
     {
         Title = "Format Cells";
-        Width = 360;
-        SizeToContent = SizeToContent.Height;
-        CanResize = false;
-        WindowStartupLocation = WindowStartupLocation.CenterOwner;
 
         _format = new ComboBox { Width = 220, ItemsSource = Formats.Select(f => f.Label).ToList() };
         _format.SelectedIndex = Math.Max(0, Array.FindIndex(Formats, f => f.Code == current.NumberFormat.Code));
@@ -68,9 +66,8 @@ public sealed class FormatCellsDialog : Window
         var cancel = new Button { Content = "Cancel", IsCancel = true };
         cancel.Click += (_, _) => Close(null);
 
-        Content = new StackPanel
+        DialogContent = new StackPanel
         {
-            Margin = new Avalonia.Thickness(16),
             Spacing = 10,
             Children =
             {

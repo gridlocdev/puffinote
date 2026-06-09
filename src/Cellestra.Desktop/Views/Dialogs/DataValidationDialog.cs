@@ -5,14 +5,16 @@ using Avalonia.Controls;
 using Avalonia.Layout;
 using Cellestra.Core.Data;
 using Cellestra.Core.Model;
+using Cellestra.Desktop.Views.Overlays;
 
 namespace Cellestra.Desktop.Views.Dialogs;
 
 /// <summary>
-/// Data Validation dialog (PRD §8.13): a list rule, or a number/date/text-length constraint
-/// with an operator and operands, plus the error response. Returns a <see cref="DataValidation"/>.
+/// Data Validation dialog (PRD §8.13), rendered as an internal modal: a list rule, or a
+/// number/date/text-length constraint with an operator and operands, plus the error response. Its
+/// <see cref="ModalDialog{T}.Result"/> is a <see cref="DataValidation"/> or null on cancel.
 /// </summary>
-public sealed class DataValidationDialog : Window
+public sealed class DataValidationDialog : ModalDialog<DataValidation?>
 {
     private readonly CellRange _range;
     private readonly ComboBox _kind;
@@ -29,10 +31,6 @@ public sealed class DataValidationDialog : Window
     {
         _range = range;
         Title = "Data Validation";
-        Width = 380;
-        SizeToContent = SizeToContent.Height;
-        CanResize = false;
-        WindowStartupLocation = WindowStartupLocation.CenterOwner;
 
         _kind = new ComboBox { Width = 200, ItemsSource = new[] { "Any value", "List", "Whole number", "Decimal", "Date", "Text length" }, SelectedIndex = 1 };
         _operator = new ComboBox { Width = 160, ItemsSource = new[] { "between", "not between", "equal to", "not equal to", "greater than", "less than", "greater or equal", "less or equal" }, SelectedIndex = 0 };
@@ -53,9 +51,9 @@ public sealed class DataValidationDialog : Window
         var cancel = new Button { Content = "Cancel", IsCancel = true };
         cancel.Click += (_, _) => Close(null);
 
-        Content = new StackPanel
+        DialogContent = new StackPanel
         {
-            Margin = new Avalonia.Thickness(16),
+            Width = 340,
             Spacing = 10,
             Children =
             {

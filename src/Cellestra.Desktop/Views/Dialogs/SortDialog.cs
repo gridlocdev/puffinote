@@ -5,14 +5,16 @@ using Avalonia.Layout;
 using Avalonia.Media;
 using Cellestra.Core.Data;
 using Cellestra.Core.Model;
+using Cellestra.Desktop.Views.Overlays;
 
 namespace Cellestra.Desktop.Views.Dialogs;
 
 /// <summary>
-/// The multi-level Custom Sort dialog (PRD §8.11): a header-aware list of "Sort by / Then by"
-/// levels, each a column and a direction. Returns a <see cref="SortSpec"/> or null on cancel.
+/// The multi-level Custom Sort dialog (PRD §8.11), rendered as an internal modal: a header-aware
+/// list of "Sort by / Then by" levels, each a column and a direction. Its
+/// <see cref="ModalDialog{T}.Result"/> is a <see cref="SortSpec"/> or null on cancel.
 /// </summary>
-public sealed class SortDialog : Window
+public sealed class SortDialog : ModalDialog<SortSpec?>
 {
     private readonly Worksheet _sheet;
     private readonly CellRange _range;
@@ -24,10 +26,6 @@ public sealed class SortDialog : Window
         _sheet = sheet;
         _range = range;
         Title = "Sort";
-        Width = 420;
-        SizeToContent = SizeToContent.Height;
-        CanResize = false;
-        WindowStartupLocation = WindowStartupLocation.CenterOwner;
 
         _headerCheck = new CheckBox { Content = "My data has a header row", IsChecked = hasHeader };
         _headerCheck.IsCheckedChanged += (_, _) => RebuildLevelColumns();
@@ -41,9 +39,9 @@ public sealed class SortDialog : Window
         var cancel = new Button { Content = "Cancel", IsCancel = true };
         cancel.Click += (_, _) => Close(null);
 
-        Content = new StackPanel
+        DialogContent = new StackPanel
         {
-            Margin = new Avalonia.Thickness(16),
+            Width = 420,
             Spacing = 12,
             Children =
             {
