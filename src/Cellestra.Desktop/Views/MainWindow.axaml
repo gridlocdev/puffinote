@@ -65,5 +65,18 @@
     <!-- Command palette / sheet switcher / internal-modal overlay. Sits above ContentRoot so its
          own (sharp) content layers over the blurred grid behind it. -->
     <Panel x:Name="OverlayHost" IsVisible="False" Background="#40000000" />
+
+    <!-- Blocking busy indicator shown while a file open/save runs off the UI thread (#A). Sits on
+         top of everything and intercepts input so the document can't be edited mid-load/save. -->
+    <Panel x:Name="BusyOverlay" IsVisible="False" Background="#40000000">
+        <Border Background="{DynamicResource ChromeBackground}" BorderBrush="{DynamicResource ChromeBorder}"
+                BorderThickness="1" CornerRadius="6" Padding="24,18"
+                HorizontalAlignment="Center" VerticalAlignment="Center">
+            <StackPanel Spacing="12" MinWidth="200">
+                <ProgressBar IsIndeterminate="True" />
+                <TextBlock x:Name="BusyText" HorizontalAlignment="Center" Text="Working…" />
+            </StackPanel>
+        </Border>
+    </Panel>
     </Panel>
 </Window>

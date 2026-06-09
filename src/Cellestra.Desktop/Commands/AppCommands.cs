@@ -539,7 +539,12 @@ public static class AppCommands
 
     private static void CreateTable(IAppEnvironment e)
     {
-        var (sheet, range, header) = DataTarget(e);
+        var (sheet, range, _) = DataTarget(e);
+
+        // A new table always has a header row (Excel's ⌘T behaviour): we label any empty header
+        // cells "Column N" and open the first for editing below (#2), so creation never relies on the
+        // header-detection heuristic the way Sort/Filter do.
+        const bool header = true;
 
         // A cell may belong to only one table; AddTable throws on overlap. Catch that here and
         // explain it instead of crashing (Nielsen heuristic #9 — recover from errors).
@@ -558,6 +563,15 @@ public static class AppCommands
         var table = new Cellestra.Core.Data.Table(name, range, header);
         e.Session.Execute(Cellestra.Core.Editing.DataEditCommands.CreateTable(e.Session.Workbook, sheet.Name, table));
         e.Refresh();
+
+        // A new headered table starts ready to name: jump to the first header cell (now "Column 1")
+        // and open it for editing so the user types straight into it (#2).
+        if (header)
+        {
+            e.Selection.MoveTo(range.Top, range.Left);
+            e.RevealActiveCell();
+            e.BeginEdit();
+        }
     }
 
     private static string NextTableName(Cellestra.Core.Model.Worksheet sheet)

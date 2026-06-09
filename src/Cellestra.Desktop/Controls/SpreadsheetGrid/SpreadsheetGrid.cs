@@ -861,11 +861,25 @@ public sealed partial class SpreadsheetGrid : Panel
         bool additive = e.KeyModifiers.HasFlag(KeyModifiers.Meta); // Cmd: add a disjoint range (#27/#28)
         if (rowHeader && !columnHeader)
         {
-            SelectRowOrColumn(additive, row, 0, row, SheetDimensions.MaxColumns - 1);
+            if (extend)
+            {
+                Selection.ExtendRowBand(row); // Shift+click: select every row from the anchor to here (#3)
+            }
+            else
+            {
+                SelectRowOrColumn(additive, row, 0, row, SheetDimensions.MaxColumns - 1);
+            }
         }
         else if (columnHeader && !rowHeader)
         {
-            SelectRowOrColumn(additive, 0, column, SheetDimensions.MaxRows - 1, column);
+            if (extend)
+            {
+                Selection.ExtendColumnBand(column);
+            }
+            else
+            {
+                SelectRowOrColumn(additive, 0, column, SheetDimensions.MaxRows - 1, column);
+            }
         }
         else if (extend)
         {
@@ -1073,13 +1087,16 @@ public sealed partial class SpreadsheetGrid : Panel
         }
 
         bool extend = e.KeyModifiers.HasFlag(KeyModifiers.Shift);
+        // ⌘+Arrow (Ctrl+Arrow off macOS) jumps to the edge of the data block, Excel-style; with Shift
+        // it extends the selection to that edge instead of moving.
+        bool jump = e.KeyModifiers.HasFlag(KeyModifiers.Meta) || e.KeyModifiers.HasFlag(KeyModifiers.Control);
 
         switch (e.Key)
         {
-            case Key.Up: _tabOriginColumn = null; MoveStep(-1, 0, extend); break;
-            case Key.Down: _tabOriginColumn = null; MoveStep(1, 0, extend); break;
-            case Key.Left: _tabOriginColumn = null; MoveStep(0, -1, extend); break;
-            case Key.Right: _tabOriginColumn = null; MoveStep(0, 1, extend); break;
+            case Key.Up: _tabOriginColumn = null; Step(-1, 0, extend, jump); break;
+            case Key.Down: _tabOriginColumn = null; Step(1, 0, extend, jump); break;
+            case Key.Left: _tabOriginColumn = null; Step(0, -1, extend, jump); break;
+            case Key.Right: _tabOriginColumn = null; Step(0, 1, extend, jump); break;
             case Key.Tab: MoveStep(0, e.KeyModifiers.HasFlag(KeyModifiers.Shift) ? -1 : 1, false); break;
             case Key.Return:
                 // Cmd+Return opens the active cell's hyperlink (mirroring the Cmd-click gesture);
@@ -1148,8 +1165,39 @@ public sealed partial class SpreadsheetGrid : Panel
         Move(targetRow, targetColumn, extend);
     }
 
+    /// <summary>One arrow press: a ⌘-jump to the data edge, or a single merge-aware step.</summary>
+    private void Step(int rowDelta, int columnDelta, bool extend, bool jump)
+    {
+        if (jump)
+        {
+            JumpEdge(rowDelta, columnDelta, extend);
+        }
+        else
+        {
+            MoveStep(rowDelta, columnDelta, extend);
+        }
+    }
+
+    /// <summary>⌘+Arrow: move (or, with Shift, extend) to the next data edge in a direction (#1).</summary>
+    private void JumpEdge(int rowDelta, int columnDelta, bool extend)
+    {
+        var sheet = Sheet;
+        if (sheet is null)
+        {
+            MoveStep(rowDelta, columnDelta, extend);
+            return;
+        }
+
+        var (targetRow, targetColumn) = Cellestra.Core.Data.EdgeNavigator.FindEdge(
+            sheet, Selection.ActiveRow, Selection.ActiveColumn, rowDelta, columnDelta);
+        Move(targetRow, targetColumn, extend);
+    }
+
     /// <summary>Test seam: drive the merge-aware arrow navigation directly (no key event plumbing).</summary>
     internal void NavigateForTest(int rowDelta, int columnDelta, bool extend) => MoveStep(rowDelta, columnDelta, extend);
+
+    /// <summary>Test seam: drive ⌘+Arrow edge-jump navigation directly (no key event plumbing).</summary>
+    internal void JumpEdgeForTest(int rowDelta, int columnDelta, bool extend) => JumpEdge(rowDelta, columnDelta, extend);
 
     /// <summary>Test seam: select a cell the way a click/arrow does, expanding onto a merge.</summary>
     internal void SelectForTest(int row, int column)
@@ -1578,7 +1626,33 @@ public sealed partial class SpreadsheetGrid : Panel
         _signatureTip.Arrange(new Rect(x, y, size.Width, size.Height));
     }
 
-    private void RaiseSelectionChanged() => SelectionChanged?.Invoke(this, EventArgs.Empty);
+    private SpreadsheetGridAutomationPeer? _automationPeer;
+
+    protected override Avalonia.Automation.Peers.AutomationPeer OnCreateAutomationPeer() =>
+        _automationPeer = new SpreadsheetGridAutomationPeer(this);
+
+    /// <summary>The active cell's address and displayed value, for the accessibility peer (#C).</summary>
+    public string ActiveCellDescription
+    {
+        get
+        {
+            string address = ActiveCellName;
+            var cell = Sheet?.Find(Selection.ActiveRow, Selection.ActiveColumn);
+            if (cell is null || cell.Value.IsEmpty)
+            {
+                return $"{address}: empty";
+            }
+
+            var style = ResolveStyle(cell, Selection.ActiveRow, Selection.ActiveColumn);
+            return $"{address}: {NumberFormatter.Format(cell.Value, style.NumberFormat, Culture)}";
+        }
+    }
+
+    private void RaiseSelectionChanged()
+    {
+        SelectionChanged?.Invoke(this, EventArgs.Empty);
+        _automationPeer?.AnnounceActiveCell(ActiveCellDescription); // read the new active cell to a screen reader
+    }
 
     private static Color ToColor(ArgbColor color) => Color.FromArgb(color.A, color.R, color.G, color.B);
 

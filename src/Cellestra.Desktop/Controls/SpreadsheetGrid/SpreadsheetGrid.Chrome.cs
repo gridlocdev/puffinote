@@ -178,6 +178,41 @@ public sealed partial class SpreadsheetGrid
         _popupOpen = false;
     }
 
+    // ---- Test seams -------------------------------------------------------
+
+    /// <summary>The rendered filter-dropdown chevron rect for a column (grid-local), or null.</summary>
+    internal Rect? FilterButtonRectForTest(int column)
+    {
+        foreach (var (rect, col, _, _) in _filterButtons)
+        {
+            if (col == column)
+            {
+                return rect;
+            }
+        }
+
+        return null;
+    }
+
+    /// <summary>True when the open popup contains a text block with the given text (e.g. its title).</summary>
+    internal bool PopupHasTextForTest(string text) =>
+        Avalonia.LogicalTree.LogicalExtensions.GetLogicalDescendants(_popupLayer)
+            .OfType<TextBlock>().Any(t => t.Text == text);
+
+    /// <summary>The centre (grid-local) of an open-popup control with the given text, or null.</summary>
+    internal Point? PopupControlCenterForTest(string content)
+    {
+        foreach (var button in Avalonia.LogicalTree.LogicalExtensions.GetLogicalDescendants(_popupLayer).OfType<Button>())
+        {
+            if (button.Content as string == content)
+            {
+                return button.TranslatePoint(new Point(button.Bounds.Width / 2, button.Bounds.Height / 2), this);
+            }
+        }
+
+        return null;
+    }
+
     private void OpenPopup(Rect anchor, Control content)
     {
         ClosePopup();
@@ -255,15 +290,22 @@ public sealed partial class SpreadsheetGrid
         var sortDesc = new Button { Content = "Sort Z→A", HorizontalAlignment = HorizontalAlignment.Stretch };
         sortDesc.Click += (_, _) => SortByFilterColumn(sheet, range, column, ascending: false, hasHeader);
 
+        // Title the popup by the column's header so it's clear which column is being acted on; fall
+        // back to the column letter when there's no header (#6, user wording "Sorting <HEADER_NAME>").
+        var headerValue = sheet.GetValue(range.Top, column);
+        string headerLabel = hasHeader && !headerValue.IsEmpty
+            ? headerValue.ToInvariantString()
+            : $"Column {SheetDimensions.ColumnToLetters(column)}";
+
         OpenPopup(anchor, PopupBox(new StackPanel
         {
             Spacing = 6,
             Children =
             {
+                new TextBlock { Text = $"Sorting {headerLabel}", FontWeight = FontWeight.SemiBold },
                 sortAsc,
                 sortDesc,
                 new Border { Height = 1, Background = _palette.GridLine.Brush },
-                new TextBlock { Text = "Filter", FontWeight = FontWeight.SemiBold },
                 new ScrollViewer { MaxHeight = 180, Content = list },
                 new StackPanel { Orientation = Orientation.Horizontal, Spacing = 6, Children = { clear, apply } },
             },
@@ -355,6 +397,41 @@ public sealed partial class SpreadsheetGrid
         }
 
         reason = rule.ErrorMessage ?? "That value is not allowed for this cell.";
+        return false;
+    }
+
+    /// <summary>
+    /// Pre-flight a paste against Stop data-validation before it executes (#B). Returns true when
+    /// every projected value is allowed; on a violation it shows the validation error and returns
+    /// false so the caller aborts the whole paste (PRD §8.13).
+    /// </summary>
+    internal bool TryEnforceValidation(PasteBlockCommand command) =>
+        CheckBulkValidation(command.ProjectWrites());
+
+    /// <summary>Pre-flight a fill the same way (#B).</summary>
+    internal bool TryEnforceValidation(FillCommand command) =>
+        _session is null || CheckBulkValidation(command.ProjectWrites(_session.Workbook));
+
+    /// <summary>Pre-flight an explicit set of incoming writes (e.g. a TSV/value-block paste) (#B).</summary>
+    internal bool TryEnforceValidation(IEnumerable<(int Row, int Column, CellValue Value, bool IsFormula)> incoming) =>
+        CheckBulkValidation(incoming);
+
+    private bool CheckBulkValidation(IEnumerable<(int Row, int Column, CellValue Value, bool IsFormula)> incoming)
+    {
+        if (_session is null)
+        {
+            return true;
+        }
+
+        var violations = ValidationPreflight.FindStopViolations(_session.ActiveSheet, incoming, Culture, RangeValues);
+        if (violations.Count == 0)
+        {
+            return true;
+        }
+
+        var (row, column) = violations[0];
+        var rule = _session.ActiveSheet.FindValidation(row, column);
+        ShowValidationError(rule?.ErrorMessage ?? "That value is not allowed for this cell.");
         return false;
     }
 

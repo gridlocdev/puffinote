@@ -81,6 +81,27 @@ public sealed class GridSelection
         Changed?.Invoke(this, EventArgs.Empty);
     }
 
+    /// <summary>
+    /// Shift+click a row header: extend a full-width band from the anchored row to this one, so
+    /// clicking row 2's header then Shift+clicking row 5's selects rows 2–5 entirely (#3).
+    /// </summary>
+    public void ExtendRowBand(int row)
+    {
+        _anchorColumn = 0;
+        _activeColumn = ClampColumn(SheetDimensions.MaxColumns - 1);
+        _activeRow = ClampRow(row);
+        Changed?.Invoke(this, EventArgs.Empty);
+    }
+
+    /// <summary>Shift+click a column header: extend a full-height band from the anchored column (#3).</summary>
+    public void ExtendColumnBand(int column)
+    {
+        _anchorRow = 0;
+        _activeRow = ClampRow(SheetDimensions.MaxRows - 1);
+        _activeColumn = ClampColumn(column);
+        Changed?.Invoke(this, EventArgs.Empty);
+    }
+
     /// <summary>Extend the selection to a new active cell, keeping the anchor.</summary>
     public void ExtendTo(int row, int column)
     {

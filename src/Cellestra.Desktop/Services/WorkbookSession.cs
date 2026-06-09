@@ -323,7 +323,7 @@ public sealed class WorkbookSession
     /// Numbers compare with a relative tolerance (floating-point noise is not a disagreement);
     /// a cached blank is treated as "no cache" and never flagged.
     /// </summary>
-    private int RecalculateAndCompareToCache(Workbook workbook)
+    private static int RecalculateAndCompareToCache(Workbook workbook, RecalculationEngine recalc)
     {
         var cached = new List<(string Sheet, int Row, int Column, CellValue Value)>();
         foreach (var sheet in workbook.Worksheets)
@@ -337,7 +337,7 @@ public sealed class WorkbookSession
             }
         }
 
-        _recalc.RecalculateAll();
+        recalc.RecalculateAll();
 
         int mismatches = 0;
         foreach (var (sheetName, row, column, before) in cached)
@@ -367,17 +367,51 @@ public sealed class WorkbookSession
         return cached.Type == recomputed.Type && cached.Equals(recomputed);
     }
 
-    private void Reset(Workbook workbook, OdsPackage? package, string? path)
+    private void Reset(Workbook workbook, OdsPackage? package, string? path) =>
+        AdoptWorkbook(LoadAndRecalc(workbook, package), path);
+
+    /// <summary>
+    /// A deserialized, fully-recalculated workbook ready to adopt on the UI thread. Produced by the
+    /// heavy <see cref="LoadAndRecalc(Stream)"/> on a background thread, consumed by
+    /// <see cref="AdoptWorkbook"/> on the UI thread.
+    /// </summary>
+    public sealed record LoadedWorkbook(Workbook Workbook, OdsPackage? Package, RecalculationEngine Recalc, int Mismatches);
+
+    /// <summary>
+    /// Deserialize a workbook and run its initial recalculation (PRD §8.6) — the heavy, UI-free work
+    /// the app layer runs on a background thread so a large open never blocks the UI thread. Touches
+    /// no session state; the result is swapped in by <see cref="AdoptWorkbook"/> on the UI thread.
+    /// </summary>
+    public static LoadedWorkbook LoadAndRecalc(Stream stream)
     {
-        _workbook = workbook;
-        _sourcePackage = package;
-        _recalc = new RecalculationEngine(workbook);
-        _recalc.RebuildGraph();
-        LoadRecalcMismatches = RecalculateAndCompareToCache(workbook);
-        _history = new EditHistory(workbook);
+        var (workbook, package) = OdsReader.ReadWithPackage(stream);
+        return LoadAndRecalc(workbook, package);
+    }
+
+    private static LoadedWorkbook LoadAndRecalc(Workbook workbook, OdsPackage? package)
+    {
+        var recalc = new RecalculationEngine(workbook);
+        recalc.RebuildGraph();
+        int mismatches = RecalculateAndCompareToCache(workbook, recalc);
+        return new LoadedWorkbook(workbook, package, recalc, mismatches);
+    }
+
+    /// <summary>
+    /// Swap in a workbook produced by <see cref="LoadAndRecalc(Stream)"/> (UI thread only): adopt its
+    /// recalc engine, reset undo history and selection mementos, and raise the change events so the
+    /// grid repaints. No recalculation happens here — it already ran off-thread.
+    /// </summary>
+    public void AdoptWorkbook(LoadedWorkbook loaded, string? path)
+    {
+        ArgumentNullException.ThrowIfNull(loaded);
+        _workbook = loaded.Workbook;
+        _sourcePackage = loaded.Package;
+        _recalc = loaded.Recalc;
+        LoadRecalcMismatches = loaded.Mismatches;
+        _history = new EditHistory(_workbook);
         _undoSelections.Clear();
         _redoSelections.Clear();
-        ActiveSheet = workbook.ActiveSheet;
+        ActiveSheet = _workbook.ActiveSheet;
         FilePath = path;
         IsModified = false;
         StructureChanged?.Invoke(this, EventArgs.Empty);

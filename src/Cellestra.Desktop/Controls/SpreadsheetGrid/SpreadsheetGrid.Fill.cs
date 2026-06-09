@@ -81,9 +81,13 @@ public sealed partial class SpreadsheetGrid
     {
         if (_session is not null && _fillTarget is { } target && !SameRange(target, _fillSource))
         {
-            _session.Execute(new FillCommand(_session.ActiveSheet.Name, _fillSource, target));
-            Selection.SetRange(target.Top, target.Left, target.Bottom, target.Right);
-            RaiseSelectionChanged();
+            var command = new FillCommand(_session.ActiveSheet.Name, _fillSource, target);
+            if (TryEnforceValidation(command)) // abort the whole fill on a Stop-rule violation (#B)
+            {
+                _session.Execute(command);
+                Selection.SetRange(target.Top, target.Left, target.Bottom, target.Right);
+                RaiseSelectionChanged();
+            }
         }
 
         _filling = false;
@@ -116,9 +120,13 @@ public sealed partial class SpreadsheetGrid
         if (bottom > src.Bottom)
         {
             var target = Range(src.Left, src.Top, src.Right, bottom);
-            _session.Execute(new FillCommand(_session.ActiveSheet.Name, src, target));
-            Selection.SetRange(target.Top, target.Left, target.Bottom, target.Right);
-            RaiseSelectionChanged();
+            var command = new FillCommand(_session.ActiveSheet.Name, src, target);
+            if (TryEnforceValidation(command)) // abort the whole fill on a Stop-rule violation (#B)
+            {
+                _session.Execute(command);
+                Selection.SetRange(target.Top, target.Left, target.Bottom, target.Right);
+                RaiseSelectionChanged();
+            }
         }
     }
 

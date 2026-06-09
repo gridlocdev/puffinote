@@ -34,6 +34,7 @@ public partial class MainWindow : Window, IAppEnvironment
     private WorkbookSession _session = WorkbookSession.NewBlank();
     private AppSettings _settings;
     private FileLock? _fileLock;
+    private bool _fileBusy;
 
     // The rich in-app clipboard (values + formulas + styles) and the exact text we mirrored to the
     // OS clipboard; an in-app paste uses the block only while the OS clipboard still matches.
@@ -341,45 +342,59 @@ public partial class MainWindow : Window, IAppEnvironment
             return; // user cancelled out of the save-changes prompt; keep the current document
         }
 
-        try
+        if (BeginFileOperation($"Opening {Path.GetFileName(path)}…") is not { } busy)
         {
-            var existingLock = FileLock.Inspect(path);
-
-            await using (var stream = File.OpenRead(path))
-            {
-                _session.LoadFrom(stream, path);
-            }
-
-            ReleaseFileLock();
-            _fileLock = FileLock.TryAcquire(path);
-
-            // A freshly-opened, unmodified file is on disk in a saved state — record a baseline so the
-            // status bar reads "Saved …" rather than "Not saved" until the user edits something.
-            _lastSavedAt = System.DateTime.Now;
-
-            Grid.Attach(_session);
-            BuildSheetTabs();
-            RememberRecentFile(path);
-            UpdateChrome();
-
-            // The title stays the document name (#15); transient open conditions are narrated in the
-            // status line so they don't hijack the title bar.
-            if (existingLock is not null)
-            {
-                string who = string.IsNullOrWhiteSpace(existingLock.User) ? "another application" : existingLock.User;
-                string host = string.IsNullOrWhiteSpace(existingLock.Host) ? string.Empty : $" on {existingLock.Host}";
-                Narrate($"Open in {who}{host}; changes may conflict");
-            }
-            else if (_session.LoadRecalcMismatches > 0)
-            {
-                Narrate($"{_session.LoadRecalcMismatches} cell(s) recomputed differently than the saved file");
-            }
+            return; // another file operation is already running
         }
-        catch (Exception ex)
+
+        using (busy)
         {
-            // A failed open shouldn't permanently rename the title bar (#17a) — explain it in a dialog
-            // and leave the title showing whatever document is still open.
-            ShowMessage("Couldn't open the file", ex.Message);
+            try
+            {
+                var existingLock = FileLock.Inspect(path);
+
+                // Deserialize + initial recalc are the heavy part — run them off the UI thread so a
+                // large open never freezes the window (PRD §8.6 / threading rule), then adopt on the UI
+                // thread where the model is touched by rendering.
+                var loaded = await Task.Run(() =>
+                {
+                    using var stream = File.OpenRead(path);
+                    return WorkbookSession.LoadAndRecalc(stream);
+                });
+
+                _session.AdoptWorkbook(loaded, path);
+
+                ReleaseFileLock();
+                _fileLock = FileLock.TryAcquire(path);
+
+                // A freshly-opened, unmodified file is on disk in a saved state — record a baseline so the
+                // status bar reads "Saved …" rather than "Not saved" until the user edits something.
+                _lastSavedAt = System.DateTime.Now;
+
+                Grid.Attach(_session);
+                BuildSheetTabs();
+                RememberRecentFile(path);
+                UpdateChrome();
+
+                // The title stays the document name (#15); transient open conditions are narrated in the
+                // status line so they don't hijack the title bar.
+                if (existingLock is not null)
+                {
+                    string who = string.IsNullOrWhiteSpace(existingLock.User) ? "another application" : existingLock.User;
+                    string host = string.IsNullOrWhiteSpace(existingLock.Host) ? string.Empty : $" on {existingLock.Host}";
+                    Narrate($"Open in {who}{host}; changes may conflict");
+                }
+                else if (_session.LoadRecalcMismatches > 0)
+                {
+                    Narrate($"{_session.LoadRecalcMismatches} cell(s) recomputed differently than the saved file");
+                }
+            }
+            catch (Exception ex)
+            {
+                // A failed open shouldn't permanently rename the title bar (#17a) — explain it in a dialog
+                // and leave the title showing whatever document is still open.
+                ShowMessage("Couldn't open the file", ex.Message);
+            }
         }
     }
 
@@ -390,6 +405,34 @@ public partial class MainWindow : Window, IAppEnvironment
         _fileLock = null;
     }
 
+    /// <summary>
+    /// Show the blocking busy overlay for a file open/save that runs off the UI thread, and guard
+    /// against a second file operation starting while one is in flight (#A). Returns null when one is
+    /// already running (the caller should bail); otherwise dispose the result (via <c>using</c>) to
+    /// hide the overlay and clear the guard, even on error.
+    /// </summary>
+    private IDisposable? BeginFileOperation(string text)
+    {
+        if (_fileBusy)
+        {
+            return null;
+        }
+
+        _fileBusy = true;
+        BusyText.Text = text;
+        BusyOverlay.IsVisible = true;
+        return new FileOperationScope(this);
+    }
+
+    private sealed class FileOperationScope(MainWindow owner) : IDisposable
+    {
+        public void Dispose()
+        {
+            owner._fileBusy = false;
+            owner.BusyOverlay.IsVisible = false;
+        }
+    }
+
     public async Task SaveWorkbookAsync()
     {
         if (_session.FilePath is null)
@@ -398,20 +441,29 @@ public partial class MainWindow : Window, IAppEnvironment
             return;
         }
 
-        try
+        if (BeginFileOperation($"Saving {DocumentDisplayName()}…") is not { } busy)
         {
-            _session.SaveToFile(_session.FilePath);
-        }
-        catch (Exception ex)
-        {
-            // A failed save must not crash the app — surface it like OpenPathAsync does for opens.
-            ShowMessage("Couldn't save the file", ex.Message);
-            return;
+            return; // another file operation is already running
         }
 
-        _lastSavedAt = System.DateTime.Now;
-        RememberRecentFile(_session.FilePath);
-        UpdateChrome();
+        using (busy)
+        {
+            string filePath = _session.FilePath;
+            try
+            {
+                await Task.Run(() => _session.SaveToFile(filePath)); // atomic write off the UI thread
+            }
+            catch (Exception ex)
+            {
+                // A failed save must not crash the app — surface it like OpenPathAsync does for opens.
+                ShowMessage("Couldn't save the file", ex.Message);
+                return;
+            }
+
+            _lastSavedAt = System.DateTime.Now;
+            RememberRecentFile(filePath);
+            UpdateChrome();
+        }
     }
 
     public async Task SaveWorkbookAsAsync()
@@ -430,28 +482,36 @@ public partial class MainWindow : Window, IAppEnvironment
         }
 
         string path = file.Path.LocalPath;
-        try
+        if (BeginFileOperation($"Saving {Path.GetFileName(path)}…") is not { } busy)
         {
-            _session.SaveToFile(path);
-        }
-        catch (Exception ex)
-        {
-            // A failed save must not crash the app — surface it like OpenPathAsync does for opens.
-            ShowMessage("Couldn't save the file", ex.Message);
-            return;
+            return; // another file operation is already running
         }
 
-        _lastSavedAt = System.DateTime.Now;
-
-        // We now own this file on disk — take its lock so other editors are warned.
-        if (_fileLock?.DocumentPath != Path.GetFullPath(path))
+        using (busy)
         {
-            ReleaseFileLock();
-            _fileLock = FileLock.TryAcquire(path);
-        }
+            try
+            {
+                await Task.Run(() => _session.SaveToFile(path)); // atomic write off the UI thread
+            }
+            catch (Exception ex)
+            {
+                // A failed save must not crash the app — surface it like OpenPathAsync does for opens.
+                ShowMessage("Couldn't save the file", ex.Message);
+                return;
+            }
 
-        RememberRecentFile(path);
-        UpdateChrome();
+            _lastSavedAt = System.DateTime.Now;
+
+            // We now own this file on disk — take its lock so other editors are warned.
+            if (_fileLock?.DocumentPath != Path.GetFullPath(path))
+            {
+                ReleaseFileLock();
+                _fileLock = FileLock.TryAcquire(path);
+            }
+
+            RememberRecentFile(path);
+            UpdateChrome();
+        }
     }
 
     public async Task ImportCsvAsync()
@@ -513,6 +573,11 @@ public partial class MainWindow : Window, IAppEnvironment
         if (_clipboard is { } block && text == _clipboardText)
         {
             var command = new PasteBlockCommand(_session.ActiveSheet.Name, Selection.Range, block);
+            if (!Grid.TryEnforceValidation(command)) // reject the whole paste on a Stop-rule violation (#B)
+            {
+                return;
+            }
+
             _session.Execute(command);
             if (block.IsCut)
             {
@@ -579,6 +644,11 @@ public partial class MainWindow : Window, IAppEnvironment
         }
 
         var command = new PasteBlockCommand(_session.ActiveSheet.Name, Selection.Range, block, mode);
+        if (!Grid.TryEnforceValidation(command)) // reject the whole paste on a Stop-rule violation (#B)
+        {
+            return;
+        }
+
         _session.Execute(command);
         if (block.IsCut)
         {
@@ -1731,7 +1801,13 @@ public partial class MainWindow : Window, IAppEnvironment
     {
         if (_clipboard is { } block)
         {
-            _session.Execute(new PasteBlockCommand(_session.ActiveSheet.Name, Selection.Range, block));
+            var command = new PasteBlockCommand(_session.ActiveSheet.Name, Selection.Range, block);
+            if (!Grid.TryEnforceValidation(command)) // reject the whole paste on a Stop-rule violation (#B)
+            {
+                return;
+            }
+
+            _session.Execute(command);
             ClearClipboard();
             Grid.Refresh();
         }
@@ -1757,7 +1833,25 @@ public partial class MainWindow : Window, IAppEnvironment
             }
         }
 
-        _session.Execute(EditCommands.SetBlock(_session.ActiveSheet.Name, Selection.ActiveRow, Selection.ActiveColumn, values));
+        // Reject the whole paste if any landed value violates a Stop rule (#B). TSV values are never
+        // formulas, so every projected write is a literal value.
+        int top = Selection.ActiveRow;
+        int left = Selection.ActiveColumn;
+        var incoming = new List<(int, int, CellValue, bool)>(rows * columns);
+        for (int r = 0; r < rows; r++)
+        {
+            for (int c = 0; c < columns; c++)
+            {
+                incoming.Add((top + r, left + c, values[r, c], false));
+            }
+        }
+
+        if (!Grid.TryEnforceValidation(incoming))
+        {
+            return;
+        }
+
+        _session.Execute(EditCommands.SetBlock(_session.ActiveSheet.Name, top, left, values));
         Grid.Refresh();
     }
 
