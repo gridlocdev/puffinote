@@ -37,4 +37,35 @@ public class DateConversionTests
         Assert.Equal(0.5, serial - System.Math.Floor(serial), 9); // noon = half a day
         Assert.Equal(noon, DateConversion.FromSerial(serial));
     }
+
+    [Fact]
+    public void Date_serial_matches_LibreOffice_for_a_known_modern_date()
+    {
+        // LibreOffice Calc: DATE(2024,1,1) → serial 45292 (null date 1899-12-30).
+        Assert.Equal(45292, DateConversion.DateToSerial(2024, 1, 1), 9);
+    }
+
+    [Fact]
+    public void DATE_treats_small_year_values_literally_like_LibreOffice()
+    {
+        // Unlike Excel (which adds 1900 to a year 0–1899, so DATE(108,1,2) = 2008-01-02),
+        // LibreOffice interprets a small year literally — DATE(108,1,2) is the year 108.
+        // The two-digit-year *window* (1930–2029) applies only to typed text, not to DATE().
+        double serial = DateConversion.DateToSerial(108, 1, 2);
+        Assert.Equal(108, DateConversion.FromSerial(serial).Year);
+    }
+
+    [Theory]
+    // In range: a representable serial converts.
+    [InlineData(0.0, true)]
+    [InlineData(45292.0, true)]
+    // Out of range / non-finite: no throw, just a failed conversion so formatting can fall back.
+    [InlineData(99999999.0, false)]
+    [InlineData(-800000.0, false)]
+    [InlineData(double.NaN, false)]
+    [InlineData(double.PositiveInfinity, false)]
+    public void TryToDateTime_never_throws_and_rejects_out_of_range(double serial, bool expected)
+    {
+        Assert.Equal(expected, DateConversion.TryToDateTime(serial, dateOnly: false, out _));
+    }
 }

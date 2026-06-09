@@ -566,12 +566,38 @@ public static class CommandBarDrawer
 
         void Refresh()
         {
-            on = ActiveStyle(env).NumberFormat.Kind == option.Kind;
+            on = IsActiveFormat(ActiveStyle(env).NumberFormat, option);
             check.IsVisible = on;
             Paint();
         }
 
         return (row, Refresh);
+    }
+
+    /// <summary>
+    /// Whether <paramref name="option"/> is the format currently on the active cell. Matching on the
+    /// <see cref="NumberFormatKind"/> alone marks BOTH "Plain number" and "Whole number" (they're both
+    /// <see cref="NumberFormatKind.Number"/>), so for kinds that have more than one option in the list
+    /// we disambiguate by the exact format code — leaving exactly one row checked.
+    /// </summary>
+    private static bool IsActiveFormat(NumberFormat active, FormatOption option)
+    {
+        if (active.Kind != option.Kind)
+        {
+            return false;
+        }
+
+        // Count how many options share this kind; if more than one, require an exact code match.
+        int sharing = 0;
+        foreach (var o in FormatOptions)
+        {
+            if (o.Kind == option.Kind)
+            {
+                sharing++;
+            }
+        }
+
+        return sharing <= 1 || string.Equals(active.Code, option.Format.Code, StringComparison.OrdinalIgnoreCase);
     }
 
     /// <summary>A representative formatted sample for a format option, so the user can recognise it.</summary>

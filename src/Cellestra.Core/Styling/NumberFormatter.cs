@@ -45,9 +45,14 @@ public static class NumberFormatter
         {
             // Time/date-time formats render hours, minutes and seconds, so they need the time-of-day
             // fraction preserved (FromSerial). A pure date drops it (DateFromSerial) as before.
-            var when = kind == NumberFormatKind.Date
-                ? DateConversion.DateFromSerial(number)
-                : DateConversion.FromSerial(number);
+            // A serial outside DateTime's representable range (roughly years 1–9999) can't name a real
+            // date — LibreOffice falls back to a plain number rather than erroring, so do the same
+            // instead of letting AddDays throw and crash the whole format/TEXT() call.
+            if (!DateConversion.TryToDateTime(number, dateOnly: kind == NumberFormatKind.Date, out var when))
+            {
+                return FormatGeneral(number, culture);
+            }
+
             return when.ToString(ExcelDateFormatToNet(code), culture);
         }
 

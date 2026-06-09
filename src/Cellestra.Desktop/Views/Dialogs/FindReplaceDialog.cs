@@ -13,8 +13,9 @@ namespace Cellestra.Desktop.Views.Dialogs;
 
 /// <summary>
 /// The Find / Find &amp; Replace tool (PRD §6.2), rendered as an internal modal. Find Next moves the
-/// selection to the next matching cell (wrapping); Replace and Replace All rewrite text and formula
-/// cells. Matching is case-insensitive over each cell's displayed value. Lists every cell whose
+/// selection to the next matching cell (wrapping); Replace and Replace All rewrite text, formula, and
+/// numeric cells (a numeric replacement is re-parsed, staying a number if it still looks like one).
+/// Matching is case-insensitive over each cell's displayed value. Lists every cell whose
 /// displayed value contains the query; clicking one jumps the selection there. The bool result is
 /// unused (the dialog acts on the grid directly).
 /// </summary>
@@ -131,6 +132,14 @@ public sealed class FindReplaceDialog : ModalDialog<bool>
         _find.Text = query;
         RunSearch();
         return _matches.Count;
+    }
+
+    /// <summary>Test seam: set the find/replace text and run Replace All.</summary>
+    internal void ReplaceAllForTest(string find, string replace)
+    {
+        _find.Text = find;
+        _replace.Text = replace;
+        ReplaceAll();
     }
 
     /// <summary>Test seam: click the match at <paramref name="index"/>, navigating the grid to it.</summary>
@@ -256,6 +265,18 @@ public sealed class FindReplaceDialog : ModalDialog<bool>
         if (cell.Value.IsText)
         {
             string updated = cell.Value.AsText.Replace(find, replace, StringComparison.OrdinalIgnoreCase);
+            _env.Session.Execute(EditCommands.SetInput(sheet.Name, row, column, updated, _env.Session.Workbook.Settings.EffectiveLocale));
+            return true;
+        }
+
+        // Numbers (and booleans): replace against the same representation Find matched on — the cell's
+        // displayed value (Display) — then commit through SetInput so the result is re-parsed. A still-
+        // numeric result stays a number; anything else becomes text. Using Display here keeps Find and
+        // Replace consistent: a value that shows up in the match list is the value we rewrite.
+        string display = Display(sheet, row, column);
+        if (display.Contains(find, StringComparison.OrdinalIgnoreCase))
+        {
+            string updated = display.Replace(find, replace, StringComparison.OrdinalIgnoreCase);
             _env.Session.Execute(EditCommands.SetInput(sheet.Name, row, column, updated, _env.Session.Workbook.Settings.EffectiveLocale));
             return true;
         }

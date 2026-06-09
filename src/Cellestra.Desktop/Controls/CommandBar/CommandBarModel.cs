@@ -45,7 +45,8 @@ public static class CommandBarModel
     {
         new CommandBarGroup("Edit",
             new[] { "edit.undo", "edit.redo" },
-            new[] { "edit.cut", "edit.copy", "edit.paste", "edit.delete", "edit.clearFormats", "edit.clearAll" }),
+            // Format Painter sits with the clipboard tools — it's a "copy the look, paste it" action.
+            new[] { "edit.cut", "edit.copy", "edit.paste", "edit.formatPainter", "edit.delete", "edit.clearFormats", "edit.clearAll" }),
         new CommandBarGroup("Text",
             new[] { "format.bold", "format.italic", "format.underline" },
             new[] { "format.strikethrough", "format.cells" }),
@@ -54,9 +55,10 @@ public static class CommandBarModel
             new[] { "format.wrap", "format.merge" }),
         new CommandBarGroup("Numbers",
             new[] { "format.currency", "format.percent" },
-            // No overflow command buttons: the previewed, text-based "Format as" picker (HasNumberDrawer)
-            // already offers Date/Time/etc., so a separate "Date" toggle here would just duplicate it.
-            System.Array.Empty<string>()),
+            // The increase/decrease-decimal steppers live in the drawer (greyed on text, like the
+            // other number tools); the previewed "Format as" picker (HasNumberDrawer) covers the
+            // discrete formats, so no "Date" toggle is duplicated here.
+            new[] { "format.increaseDecimal", "format.decreaseDecimal" }),
         new CommandBarGroup("Insert",
             new[] { "insert.rowsAbove", "insert.columnsLeft" },
             new[] { "insert.sheet", "data.createTable" }),

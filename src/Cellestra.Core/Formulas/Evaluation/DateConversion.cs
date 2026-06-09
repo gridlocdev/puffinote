@@ -25,4 +25,33 @@ public static class DateConversion
 
     /// <summary>The whole-day part of a serial, truncated toward zero (drops the time fraction).</summary>
     public static DateTime DateFromSerial(double serial) => Epoch.AddDays(Math.Floor(serial));
+
+    /// <summary>
+    /// Convert a serial to a <see cref="DateTime"/> without throwing. Returns false when the serial
+    /// falls outside the representable range (years 1–9999) — or is NaN/infinite — so a date/time
+    /// number format can fall back to a plain number instead of crashing (LibreOffice shows such
+    /// out-of-range serials as numbers, not as dates). <paramref name="dateOnly"/> truncates the
+    /// time-of-day fraction the way a pure date format does.
+    /// </summary>
+    public static bool TryToDateTime(double serial, bool dateOnly, out DateTime result)
+    {
+        result = default;
+        if (double.IsNaN(serial) || double.IsInfinity(serial))
+        {
+            return false;
+        }
+
+        // DateTime spans 0001-01-01 .. 9999-12-31; express those bounds as serials about the epoch
+        // and reject anything beyond them before AddDays would throw.
+        double days = dateOnly ? Math.Floor(serial) : serial;
+        double minSerial = (DateTime.MinValue - Epoch).TotalDays;
+        double maxSerial = (DateTime.MaxValue - Epoch).TotalDays;
+        if (days < minSerial || days > maxSerial)
+        {
+            return false;
+        }
+
+        result = Epoch.AddDays(days);
+        return true;
+    }
 }

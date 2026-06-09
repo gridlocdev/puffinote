@@ -76,6 +76,10 @@ public static class AppCommands
             "percent", canExecute: IsNumericContext, isActive: e => ActiveStyle(e).NumberFormat.Kind == NumberFormatKind.Percent),
         new("format.date", "Date", "Format the number as a date.", e => ToggleNumberFormat(e, DateFormat, NumberFormatKind.Date),
             "calendar", canExecute: IsNumericContext, isActive: e => ActiveStyle(e).NumberFormat.Kind == NumberFormatKind.Date),
+        new("format.increaseDecimal", "Increase Decimal", "Show one more decimal place.",
+            e => StepDecimals(e, +1), "move-decimal-left", canExecute: IsNumericContext),
+        new("format.decreaseDecimal", "Decrease Decimal", "Show one fewer decimal place.",
+            e => StepDecimals(e, -1), "move-decimal-right", canExecute: IsNumericContext),
         new("format.cells", "Format Cells…", "Open the full cell-formatting dialog.", e => e.ShowFormatCellsDialog(), "settings-2", new KeyGesture(Key.D1, Cmd)),
 
         // Insert
@@ -272,6 +276,27 @@ public static class AppCommands
         // A freshly applied format (currency/date) can be wider than the column — grow it so the
         // result shows instead of reading #####. Removing a format never needs more room.
         if (applying)
+        {
+            e.AutofitColumns(e.Selection.Left, e.Selection.Right);
+        }
+    }
+
+    /// <summary>
+    /// Step the active cells' number-format precision by <paramref name="delta"/> decimal places
+    /// (Increase/Decrease Decimal). Each cell's own code is adjusted via the pure
+    /// <see cref="NumberFormatCode"/> helper so a currency, percent, or scientific format keeps its
+    /// shape and only its fraction-digit count changes; date/time/text codes are left untouched.
+    /// </summary>
+    private static void StepDecimals(IAppEnvironment e, int delta)
+    {
+        var session = e.Session;
+        session.Execute(EditCommands.ApplyStyle(session.Workbook, session.ActiveSheet.Name, e.Selection.Range,
+            s => s.WithNumberFormat(new NumberFormat(NumberFormatCode.AdjustDecimals(s.NumberFormat.Code, delta))),
+            delta > 0 ? "Increase Decimal" : "Decrease Decimal"));
+        e.Refresh();
+
+        // More decimals can overflow the column width; grow it so the result shows, not #####.
+        if (delta > 0)
         {
             e.AutofitColumns(e.Selection.Left, e.Selection.Right);
         }

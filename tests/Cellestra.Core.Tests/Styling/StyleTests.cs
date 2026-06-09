@@ -109,4 +109,52 @@ public class StyleTests
         Assert.Equal("#DIV/0!", NumberFormatter.Format(CellValue.FromError(CellError.DivideByZero()), "0.00", CultureInfo.InvariantCulture));
         Assert.Equal("hello", NumberFormatter.Format(CellValue.Text("hello"), "0.00", CultureInfo.InvariantCulture));
     }
+
+    [Theory]
+    // A serial outside the representable date range must not throw — it falls back to a plain number
+    // (LibreOffice shows such out-of-range serials numerically, not as #### or an exception).
+    [InlineData(99999999.0)]
+    [InlineData(-800000.0)]
+    public void NumberFormatter_falls_back_on_out_of_range_date_serial(double serial)
+    {
+        // No exception, and the result is the general-number rendering rather than a date string.
+        string expected = NumberFormatter.FormatGeneral(serial, CultureInfo.InvariantCulture);
+        Assert.Equal(expected, NumberFormatter.Format(CellValue.Number(serial), "yyyy-mm-dd", CultureInfo.InvariantCulture));
+    }
+
+    [Theory]
+    [InlineData("0", "0.0")]
+    [InlineData("0.00", "0.000")]
+    [InlineData("#,##0.00", "#,##0.000")]
+    [InlineData("$#,##0.00", "$#,##0.000")]
+    [InlineData("0.00%", "0.000%")]
+    [InlineData("0.00E+00", "0.000E+00")] // only the mantissa grows; the exponent's "00" is left alone
+    [InlineData("General", "#,##0.0")]    // General seeds from the grouped number, then steps up
+    public void NumberFormatCode_increase_adds_a_decimal(string code, string expected)
+    {
+        Assert.Equal(expected, NumberFormatCode.IncreaseDecimals(code));
+    }
+
+    [Theory]
+    [InlineData("0.000", "0.00")]
+    [InlineData("0.0", "0")]
+    [InlineData("0", "0")]            // already none — clamps, no negative
+    [InlineData("#,##0.00", "#,##0.0")]
+    [InlineData("$#,##0.0", "$#,##0")]
+    [InlineData("0.00E+00", "0.0E+00")]
+    [InlineData("General", "#,##0")]  // General has no decimals; stays at zero
+    public void NumberFormatCode_decrease_removes_a_decimal(string code, string expected)
+    {
+        Assert.Equal(expected, NumberFormatCode.DecreaseDecimals(code));
+    }
+
+    [Theory]
+    [InlineData("yyyy-mm-dd")]
+    [InlineData("hh:mm:ss")]
+    [InlineData("@")]
+    public void NumberFormatCode_leaves_non_numeric_codes_untouched(string code)
+    {
+        Assert.Equal(code, NumberFormatCode.IncreaseDecimals(code));
+        Assert.Equal(code, NumberFormatCode.DecreaseDecimals(code));
+    }
 }
