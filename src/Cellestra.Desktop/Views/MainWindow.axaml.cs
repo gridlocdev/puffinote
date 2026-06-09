@@ -157,9 +157,12 @@ public partial class MainWindow : Window, IAppEnvironment
             "edit.find", "edit.findReplace", null, "edit.autoSum");
         edit.Menu!.Items.Add(Submenu("Fill", "fill.down", "fill.right")); // Edit ▸ Fill ▸ Down / Right (PRD §6.2)
         menu.Items.Add(edit);
-        menu.Items.Add(Submenu("Format", "format.cells", null, "format.bold", "format.italic", "format.underline", null,
+        var format = Submenu("Format", "format.cells", null, "format.bold", "format.italic", "format.underline", null,
             "format.alignLeft", "format.alignCenter", "format.alignRight", "format.wrap", null,
-            "format.currency", "format.percent", "format.date", null, "format.merge"));
+            "format.currency", "format.percent", "format.date", null, "format.merge");
+        format.Menu!.Items.Add(Submenu("Borders", "format.borderAll", "format.borderOutline",
+            "format.borderTop", "format.borderBottom", "format.borderLeft", "format.borderRight", null, "format.borderNone"));
+        menu.Items.Add(format);
         menu.Items.Add(Submenu("Insert", "insert.rowsAbove", "insert.columnsLeft", "edit.deleteRows", "edit.deleteColumns", null, "insert.sheet", null, "sheet.rename", "sheet.delete"));
         menu.Items.Add(Submenu("Data", "data.sortAsc", "data.sortDesc", "data.customSort", null,
             "data.toggleFilter", "data.clearFilter", null, "data.createTable", "data.removeDuplicates",

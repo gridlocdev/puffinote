@@ -46,7 +46,8 @@ public static class CommandBarModel
         new CommandBarGroup("Edit",
             new[] { "edit.undo", "edit.redo" },
             // Format Painter sits with the clipboard tools — it's a "copy the look, paste it" action.
-            new[] { "edit.cut", "edit.copy", "edit.paste", "edit.formatPainter", "edit.delete", "edit.clearFormats", "edit.clearAll" }),
+            // Paste Special and Fill Down/Right round out the clipboard/fill actions.
+            new[] { "edit.cut", "edit.copy", "edit.paste", "edit.pasteSpecial", "edit.formatPainter", "fill.down", "fill.right", "edit.delete", "edit.clearFormats", "edit.clearAll" }),
         new CommandBarGroup("Text",
             new[] { "format.bold", "format.italic", "format.underline" },
             new[] { "format.strikethrough", "format.cells" }),
@@ -64,6 +65,10 @@ public static class CommandBarModel
             // other number tools); the previewed "Format as" picker (HasNumberDrawer) covers the
             // discrete formats, so no "Date" toggle is duplicated here.
             new[] { "format.increaseDecimal", "format.decreaseDecimal" }),
+        // AutoSum: a flagship one-click "sum the column/row" action, surfaced on its own.
+        new CommandBarGroup("Formula",
+            new[] { "edit.autoSum" },
+            System.Array.Empty<string>()),
         new CommandBarGroup("Insert",
             new[] { "insert.rowsAbove", "insert.columnsLeft" },
             new[] { "insert.sheet", "data.createTable" }),
