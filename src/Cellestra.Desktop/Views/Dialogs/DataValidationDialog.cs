@@ -4,6 +4,7 @@ using System.Linq;
 using Avalonia.Controls;
 using Avalonia.Layout;
 using Cellestra.Core.Data;
+using Cellestra.Core.Editing;
 using Cellestra.Core.Model;
 using Cellestra.Desktop.Views.Overlays;
 
@@ -45,6 +46,9 @@ public sealed class DataValidationDialog : ModalDialog<DataValidation?>
         _listPanel = new StackPanel { Spacing = 6, Children = { Row("Values", _listValues) } };
 
         _kind.SelectionChanged += (_, _) => UpdateVisibility();
+        // The "And" operand only applies to between/not-between, so its enabled state depends on the
+        // operator too — without this the second box stayed greyed when switching back to "between".
+        _operator.SelectionChanged += (_, _) => UpdateVisibility();
 
         var ok = new Button { Content = "OK", IsDefault = true };
         ok.Click += (_, _) => Close(Build());
@@ -82,6 +86,23 @@ public sealed class DataValidationDialog : ModalDialog<DataValidation?>
         Children = { new TextBlock { Text = label, Width = 80, VerticalAlignment = VerticalAlignment.Center }, control },
     };
 
+    /// <summary>Test seam: drive the controls and build a rule the way clicking OK would.</summary>
+    internal DataValidation? BuildForTest(ValidationKind kind, ValidationOperator op, string operand1, string operand2 = "")
+    {
+        _kind.SelectedIndex = (int)kind;
+        _operator.SelectedIndex = (int)op;
+        _operand1.Text = operand1;
+        _operand2.Text = operand2;
+        return Build();
+    }
+
+    /// <summary>Test seam: whether the second ("And") operand box is enabled for the given operator.</summary>
+    internal bool Operand2EnabledForTest(ValidationOperator op)
+    {
+        _operator.SelectedIndex = (int)op;
+        return _operand2.IsEnabled;
+    }
+
     private void UpdateVisibility()
     {
         var kind = (ValidationKind)_kind.SelectedIndex;
@@ -111,11 +132,37 @@ public sealed class DataValidationDialog : ModalDialog<DataValidation?>
         }
         else if (kind != ValidationKind.Any)
         {
-            double.TryParse(_operand1.Text, NumberStyles.Any, CultureInfo.CurrentCulture, out double o1);
-            double.TryParse(_operand2.Text, NumberStyles.Any, CultureInfo.CurrentCulture, out double o2);
-            rule = rule with { Operand1 = o1, Operand2 = o2 };
+            rule = rule with
+            {
+                Operand1 = ParseOperand(_operand1.Text, kind),
+                Operand2 = ParseOperand(_operand2.Text, kind),
+            };
         }
 
         return rule;
+    }
+
+    /// <summary>
+    /// Parse an operand to its stored numeric value. For a Date rule the constraint is a date serial,
+    /// so a typed date (e.g. <c>2026-01-01</c>) is coerced via the same date parser the cell editor
+    /// uses — users shouldn't have to hand-compute a serial. Plain numbers still parse directly.
+    /// </summary>
+    private static double ParseOperand(string? text, ValidationKind kind)
+    {
+        if (double.TryParse(text, NumberStyles.Any, CultureInfo.CurrentCulture, out double number))
+        {
+            return number;
+        }
+
+        if (kind == ValidationKind.Date && !string.IsNullOrWhiteSpace(text))
+        {
+            var parsed = InputParser.Parse(text, CultureInfo.CurrentCulture);
+            if (parsed.Value.IsNumber)
+            {
+                return parsed.Value.AsNumber;
+            }
+        }
+
+        return 0;
     }
 }

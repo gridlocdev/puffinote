@@ -566,12 +566,30 @@ public static class CommandBarDrawer
 
         void Refresh()
         {
+            // Numeric-format rows grey out on text cells, just like the bar's primary number buttons
+            // (IsNumericContext) — applying "Currency"/"Date"/… to a label can't fail silently.
+            // "Automatic (General)" and "Text" always stay enabled (you can always reset or force text).
+            row.IsEnabled = !NeedsNumericContext(option) || IsNumericContext(env);
             on = IsActiveFormat(ActiveStyle(env).NumberFormat, option);
             check.IsVisible = on;
             Paint();
         }
 
         return (row, Refresh);
+    }
+
+    /// <summary>True for "Format as" options that only make sense on a numeric cell (everything but General/Text).</summary>
+    private static bool NeedsNumericContext(FormatOption option) =>
+        option.Kind is not (NumberFormatKind.General or NumberFormatKind.Text);
+
+    /// <summary>
+    /// Mirrors <c>AppCommands.IsNumericContext</c>: the active cell can take a number format when it's
+    /// empty or already numeric. Used to grey the "Format as" numeric rows on text cells.
+    /// </summary>
+    private static bool IsNumericContext(IAppEnvironment env)
+    {
+        var value = env.Session.ActiveSheet.GetValue(env.Selection.ActiveRow, env.Selection.ActiveColumn);
+        return value.IsEmpty || value.IsNumber;
     }
 
     /// <summary>

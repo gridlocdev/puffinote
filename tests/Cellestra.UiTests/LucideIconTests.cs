@@ -18,6 +18,7 @@ public class LucideIconTests
     [InlineData("chevron-down")]
     [InlineData("table-cells-merge")] // exercises <rect rx ry>
     [InlineData("scissors")]          // exercises <circle>
+    [InlineData("paintbrush")]        // Format Painter glyph (was paint-bucket)
     public void Vendored_glyph_parses_to_non_empty_geometry(string key)
     {
         var geometry = LucideIcons.Get(key);

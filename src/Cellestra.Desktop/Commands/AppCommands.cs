@@ -44,7 +44,7 @@ public static class AppCommands
         new("edit.copy", "Copy", "Copy the selection to the clipboard.", e => e.Copy(), "copy", new KeyGesture(Key.C, Cmd)),
         new("edit.paste", "Paste", "Paste from the clipboard.", e => e.Paste(), "clipboard", new KeyGesture(Key.V, Cmd)),
         new("edit.formatPainter", "Format Painter", "Copy formatting from the active cell, then paste it onto the next selection.",
-            FormatPainter, "paint-bucket", new KeyGesture(Key.C, CmdShift), isActive: e => e.Session.IsFormatPainterArmed),
+            FormatPainter, "paintbrush", new KeyGesture(Key.C, CmdShift), isActive: e => e.Session.IsFormatPainterArmed),
         new("edit.delete", "Clear Contents", "Clear the values, keep the formatting.", ClearContents, "eraser", new KeyGesture(Key.Delete)),
         new("edit.clearFormats", "Clear Formatting", "Reset styling, keep the values.", ClearFormatting, "remove-formatting"),
         new("edit.clearAll", "Clear All", "Clear both values and formatting.", ClearAll, "eraser"),
@@ -78,9 +78,9 @@ public static class AppCommands
         new("format.date", "Date", "Format the number as a date.", e => ToggleNumberFormat(e, DateFormat, NumberFormatKind.Date),
             "calendar", canExecute: IsNumericContext, isActive: e => ActiveStyle(e).NumberFormat.Kind == NumberFormatKind.Date),
         new("format.increaseDecimal", "Increase Decimal", "Show one more decimal place.",
-            e => StepDecimals(e, +1), "move-decimal-left", canExecute: IsNumericContext),
+            e => StepDecimals(e, +1), "move-decimal-left", canExecute: CanStepDecimals),
         new("format.decreaseDecimal", "Decrease Decimal", "Show one fewer decimal place.",
-            e => StepDecimals(e, -1), "move-decimal-right", canExecute: IsNumericContext),
+            e => StepDecimals(e, -1), "move-decimal-right", canExecute: CanStepDecimals),
         new("format.cells", "Format Cells…", "Open the full cell-formatting dialog.", e => e.ShowFormatCellsDialog(), "settings-2", new KeyGesture(Key.D1, Cmd)),
 
         // Insert
@@ -118,7 +118,8 @@ public static class AppCommands
         new("view.freezePanes", "Freeze Panes", "Keep header rows and columns in view.", e => e.ToggleFreezePanes(), "layout-grid"),
 
         // Insert (merge)
-        new("format.merge", "Merge Cells", "Combine the selected cells into one.", MergeCells, "table-cells-merge"),
+        new("format.merge", "Merge Cells", "Combine the selected cells into one.", MergeCells, "table-cells-merge",
+            isActive: e => e.Session.ActiveSheet.FindMerge(e.Selection.ActiveRow, e.Selection.ActiveColumn) is not null),
 
         // Help
         // "?" (⇧/) opens the shortcuts reference; gated off while a text field has focus so the
@@ -302,6 +303,23 @@ public static class AppCommands
         return value.IsEmpty || value.IsNumber;
     }
 
+    /// <summary>
+    /// True when Increase/Decrease Decimal can do something: the cell is numeric context AND its
+    /// number-format kind actually carries decimal places. Date/Time/DateTime and Text codes have no
+    /// fraction digits to step (AdjustDecimals leaves them untouched), so the tools would silently
+    /// no-op — disable them there instead.
+    /// </summary>
+    private static bool CanStepDecimals(IAppEnvironment e)
+    {
+        if (!IsNumericContext(e))
+        {
+            return false;
+        }
+
+        return ActiveStyle(e).NumberFormat.Kind is not (
+            NumberFormatKind.Date or NumberFormatKind.Time or NumberFormatKind.DateTime or NumberFormatKind.Text);
+    }
+
     private static void InsertRows(IAppEnvironment e, bool above)
     {
         var sheet = e.Session.ActiveSheet;
@@ -369,6 +387,11 @@ public static class AppCommands
     {
         var (sheet, range, _) = DataTarget(e);
         e.Session.Execute(Cellestra.Core.Editing.DataEditCommands.ClearFilter(sheet.Name, range));
+
+        // The command only re-shows the rows; the database-range's filter/sort criteria still linger
+        // on the sheet, so they re-serialize and resurrect the filter on reopen. Drop that state too.
+        sheet.ActiveFilterSpec = null;
+        sheet.ActiveSort = null;
         e.Refresh();
     }
 

@@ -89,4 +89,35 @@ public class DataCommandTests
         env.ToggleFilter();
         Assert.Null(sheet.ActiveFilter);
     }
+
+    [AvaloniaFact]
+    public void Clear_filter_command_clears_lingering_filter_and_sort_state()
+    {
+        var window = new MainWindow();
+        window.Show();
+        IAppEnvironment env = window;
+        var sheet = env.Session.ActiveSheet;
+
+        sheet.SetValue(0, 0, CellValue.Text("H"));
+        sheet.SetValue(1, 0, CellValue.Number(1));
+        env.Selection.MoveTo(0, 0);
+
+        // Simulate an applied filter + sort persisted on the database range.
+        sheet.ActiveFilterSpec = new Cellestra.Core.Data.FilterSpec(
+            new System.Collections.Generic.Dictionary<int, Cellestra.Core.Data.ColumnFilter>
+            {
+                [0] = new Cellestra.Core.Data.ColumnFilter
+                {
+                    AllowedValues = new System.Collections.Generic.HashSet<string> { "1" },
+                },
+            });
+        sheet.ActiveSort = new Cellestra.Core.Data.SortSpec(
+            new[] { new Cellestra.Core.Data.SortLevel(0, true) });
+
+        AppCommands.ById("data.clearFilter")!.Execute(env);
+
+        // Clearing must drop the persisted spec/sort so they don't resurrect on reopen.
+        Assert.Null(sheet.ActiveFilterSpec);
+        Assert.Null(sheet.ActiveSort);
+    }
 }

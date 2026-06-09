@@ -15,9 +15,12 @@ namespace Cellestra.Desktop.Views.Dialogs;
 /// The Find / Find &amp; Replace tool (PRD §6.2), rendered as an internal modal. Find Next moves the
 /// selection to the next matching cell (wrapping); Replace and Replace All rewrite text, formula, and
 /// numeric cells (a numeric replacement is re-parsed, staying a number if it still looks like one).
-/// Matching is case-insensitive over each cell's displayed value. Lists every cell whose
-/// displayed value contains the query; clicking one jumps the selection there. The bool result is
-/// unused (the dialog acts on the grid directly).
+/// Matching is case-insensitive over each cell's <em>match text</em>: for a formula cell that's the
+/// formula source (<c>"="+Formula</c>) — matching Excel/Calc, which find and replace inside the
+/// formula text — and otherwise the cell's displayed value. Match scope and replace scope are kept
+/// consistent so a listed hit is exactly what gets rewritten. Lists every cell whose match text
+/// contains the query; clicking one jumps the selection there. The bool result is unused (the dialog
+/// acts on the grid directly).
 /// </summary>
 public sealed class FindReplaceDialog : ModalDialog<bool>
 {
@@ -82,21 +85,21 @@ public sealed class FindReplaceDialog : ModalDialog<bool>
             // Scan only populated cells (not every coordinate of the used rectangle) so a single far
             // cell can't make each keystroke walk millions of empty positions.
             var sheet = _env.Session.ActiveSheet;
-            var hits = new List<(int Row, int Column, string Display)>();
+            var hits = new List<(int Row, int Column, string Text)>();
             foreach (var (row, column, _) in sheet.EnumerateCells())
             {
-                string display = Display(sheet, row, column);
-                if (display.Contains(query, StringComparison.OrdinalIgnoreCase))
+                string text = MatchText(sheet, row, column);
+                if (text.Contains(query, StringComparison.OrdinalIgnoreCase))
                 {
-                    hits.Add((row, column, display));
+                    hits.Add((row, column, text));
                 }
             }
 
             hits.Sort((a, b) => a.Row != b.Row ? a.Row.CompareTo(b.Row) : a.Column.CompareTo(b.Column));
-            foreach (var (row, column, display) in hits)
+            foreach (var (row, column, text) in hits)
             {
                 _matches.Add((row, column));
-                rows.Add($"{new CellAddress(column, row)}    {Truncate(display, 48)}");
+                rows.Add($"{new CellAddress(column, row)}    {Truncate(text, 48)}");
             }
         }
 
@@ -178,7 +181,7 @@ public sealed class FindReplaceDialog : ModalDialog<bool>
             int index = (startIndex + step) % total;
             int row = range.Top + (index / range.ColumnCount);
             int column = range.Left + (index % range.ColumnCount);
-            if (Display(sheet, row, column).Contains(query, StringComparison.OrdinalIgnoreCase))
+            if (MatchText(sheet, row, column).Contains(query, StringComparison.OrdinalIgnoreCase))
             {
                 _env.Selection.MoveTo(row, column);
                 _env.RevealActiveCell();
@@ -202,7 +205,7 @@ public sealed class FindReplaceDialog : ModalDialog<bool>
         var sheet = _env.Session.ActiveSheet;
         int row = _env.Selection.ActiveRow;
         int column = _env.Selection.ActiveColumn;
-        if (Display(sheet, row, column).Contains(query, StringComparison.OrdinalIgnoreCase) &&
+        if (MatchText(sheet, row, column).Contains(query, StringComparison.OrdinalIgnoreCase) &&
             ReplaceCell(sheet, row, column, query, _replace.Text ?? string.Empty))
         {
             _env.Refresh();
@@ -227,7 +230,7 @@ public sealed class FindReplaceDialog : ModalDialog<bool>
         var targets = new List<(int Row, int Column)>();
         foreach (var (row, column, _) in sheet.EnumerateCells())
         {
-            if (Display(sheet, row, column).Contains(query, StringComparison.OrdinalIgnoreCase))
+            if (MatchText(sheet, row, column).Contains(query, StringComparison.OrdinalIgnoreCase))
             {
                 targets.Add((row, column));
             }
@@ -247,6 +250,10 @@ public sealed class FindReplaceDialog : ModalDialog<bool>
         _status.Text = $"Replaced {count} occurrence(s).";
     }
 
+    /// <summary>Test seam: replace <paramref name="find"/> with <paramref name="replace"/> in one cell; returns whether it changed.</summary>
+    internal bool ReplaceCellForTest(int row, int column, string find, string replace) =>
+        ReplaceCell(_env.Session.ActiveSheet, row, column, find, replace);
+
     private bool ReplaceCell(Worksheet sheet, int row, int column, string find, string replace)
     {
         var cell = sheet.Find(row, column);
@@ -257,8 +264,19 @@ public sealed class FindReplaceDialog : ModalDialog<bool>
 
         if (cell.IsFormula)
         {
-            string updated = cell.Formula!.Replace(find, replace, StringComparison.OrdinalIgnoreCase);
-            _env.Session.Execute(EditCommands.SetFormula(sheet.Name, row, column, updated));
+            // Match AND replace against the formula SOURCE text ("="+Formula), the same string Find
+            // matched on (MatchText). Excel/Calc find & replace inside the formula text, so editing
+            // `=A1+A2` to `=A1+A3` works and references stay valid; rewriting against the computed
+            // display (as before) either no-oped or corrupted the formula. Re-commit through
+            // SetInput so a result that no longer starts with "=" stops being a formula.
+            string source = "=" + cell.Formula;
+            if (!source.Contains(find, StringComparison.OrdinalIgnoreCase))
+            {
+                return false;
+            }
+
+            string updated = source.Replace(find, replace, StringComparison.OrdinalIgnoreCase);
+            _env.Session.Execute(EditCommands.SetInput(sheet.Name, row, column, updated, _env.Session.Workbook.Settings.EffectiveLocale));
             return true;
         }
 
@@ -282,6 +300,22 @@ public sealed class FindReplaceDialog : ModalDialog<bool>
         }
 
         return false;
+    }
+
+    /// <summary>
+    /// The text Find matches against (and Replace rewrites) for a cell, kept consistent between the
+    /// two: a formula cell matches on its source text (<c>"="+Formula</c>, like Excel/Calc), any
+    /// other cell on its displayed value.
+    /// </summary>
+    private string MatchText(Worksheet sheet, int row, int column)
+    {
+        var cell = sheet.Find(row, column);
+        if (cell is null)
+        {
+            return string.Empty;
+        }
+
+        return cell.IsFormula ? "=" + cell.Formula : Display(sheet, row, column);
     }
 
     private string Display(Worksheet sheet, int row, int column)

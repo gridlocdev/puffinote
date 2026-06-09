@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Linq;
 using Avalonia.Controls;
 using Avalonia.Layout;
@@ -15,9 +16,17 @@ namespace Cellestra.Desktop.Views.Dialogs;
 /// emphasis/size, colors, fill, and horizontal alignment. Colors use the first-party Avalonia
 /// <see cref="ColorPicker"/> (spectrum + palette + hex). Its <see cref="ModalDialog{T}.Result"/> is
 /// a style transform applied to every selected cell, or null on cancel.
+///
+/// <para>Mixed selections: when opened on cells whose styles differ, every control reflects that —
+/// emphasis checkboxes go tri-state (indeterminate), and combos/colours seed to a "(varies)" /
+/// untouched state. <see cref="BuildTransform"/> then only rewrites the fields the user actually
+/// touched, so a field left "(varies)" preserves each cell's own value instead of flattening the
+/// whole selection to the active cell's style.</para>
 /// </summary>
 public sealed class FormatCellsDialog : ModalDialog<Func<CellStyle, CellStyle>?>
 {
+    private const string Varies = "(varies)";
+
     private static readonly (string Label, string Code)[] Formats =
     {
         ("General", "General"), ("Number (0)", "0"), ("Number (0.00)", "0.00"),
@@ -38,29 +47,75 @@ public sealed class FormatCellsDialog : ModalDialog<Func<CellStyle, CellStyle>?>
     private readonly ComboBox _align;
     private readonly ComboBox _valign;
 
-    public FormatCellsDialog(CellStyle current)
+    // When the selection's styles disagree on a field, the matching control seeds to a neutral
+    // "varies" state and we leave that field untouched unless the user changes it.
+    private readonly bool _formatVaries;
+    private readonly bool _sizeVaries;
+    private readonly bool _textColorVaries;
+    private readonly bool _fillVaries;
+    private readonly bool _alignVaries;
+    private readonly bool _valignVaries;
+
+    // Colour pickers can't show a "varies" sentinel, so we track whether the user touched them; an
+    // untouched, varying colour is left alone.
+    private bool _textColorTouched;
+    private bool _fillColorTouched;
+
+    /// <param name="current">The active cell's style — seeds every control and is the fallback when no selection styles are supplied.</param>
+    /// <param name="styles">
+    /// Optional: the distinct styles across the whole selection. When supplied and they differ, the
+    /// dialog reflects the mixed state and only rewrites touched fields. Defaults to just
+    /// <paramref name="current"/> (the previous single-cell behaviour), so existing callers are unchanged.
+    /// </param>
+    public FormatCellsDialog(CellStyle current, IReadOnlyCollection<CellStyle>? styles = null)
     {
         Title = "Format Cells";
 
-        _format = new ComboBox { Width = 220, ItemsSource = Formats.Select(f => f.Label).ToList() };
-        _format.SelectedIndex = Math.Max(0, Array.FindIndex(Formats, f => f.Code == current.NumberFormat.Code));
+        var all = styles is { Count: > 0 } ? styles : new[] { current };
 
-        _bold = new CheckBox { Content = "Bold", IsChecked = current.Font.Bold };
-        _italic = new CheckBox { Content = "Italic", IsChecked = current.Font.Italic };
-        _underline = new CheckBox { Content = "Underline", IsChecked = current.Font.Underline };
-        _strikethrough = new CheckBox { Content = "Strikethrough", IsChecked = current.Font.Strikethrough };
+        _formatVaries = !AllSame(all, s => s.NumberFormat.Code);
+        _sizeVaries = !AllSame(all, s => s.Font.SizePoints);
+        _textColorVaries = !AllSame(all, s => s.Font.Color);
+        _fillVaries = !AllSame(all, s => s.Fill);
+        _alignVaries = !AllSame(all, s => s.Alignment.Horizontal);
+        _valignVaries = !AllSame(all, s => s.Alignment.Vertical);
+
+        var formatLabels = Formats.Select(f => f.Label).ToList();
+        if (_formatVaries)
+        {
+            formatLabels.Add(Varies);
+        }
+
+        _format = new ComboBox { Width = 220, ItemsSource = formatLabels };
+        _format.SelectedIndex = _formatVaries
+            ? formatLabels.Count - 1
+            : Math.Max(0, Array.FindIndex(Formats, f => f.Code == current.NumberFormat.Code));
+
+        _bold = EmphasisBox("Bold", all, f => f.Bold);
+        _italic = EmphasisBox("Italic", all, f => f.Italic);
+        _underline = EmphasisBox("Underline", all, f => f.Underline);
+        _strikethrough = EmphasisBox("Strikethrough", all, f => f.Strikethrough);
+
         // Wider than the 90px it used to be so the value (e.g. "10") isn't clipped by the spin buttons.
-        _size = new NumericUpDown { Width = 130, Minimum = 6, Maximum = 96, Value = (decimal)current.Font.SizePoints };
+        _size = new NumericUpDown { Width = 130, Minimum = 6, Maximum = 96 };
+        _size.Value = _sizeVaries ? null : (decimal)current.Font.SizePoints;
 
         _textColor = new ColorPicker { Color = ToAvalonia(current.Font.Color.IsTransparent ? ArgbColor.Black : current.Font.Color) };
+        _textColor.ColorChanged += (_, _) => _textColorTouched = true;
         var textReset = ResetButton("Reset the text colour to black", () => _textColor.Color = ToAvalonia(ArgbColor.Black));
 
-        _fillEnabled = new CheckBox { Content = "Fill", IsChecked = current.Fill.HasBackground };
+        _fillEnabled = new CheckBox
+        {
+            Content = "Fill",
+            IsThreeState = _fillVaries,
+            IsChecked = _fillVaries ? null : current.Fill.HasBackground,
+        };
         _fillColor = new ColorPicker
         {
             Color = ToAvalonia(current.Fill.Background ?? ArgbColor.White),
-            IsEnabled = current.Fill.HasBackground,
+            IsEnabled = !_fillVaries && current.Fill.HasBackground,
         };
+        _fillColor.ColorChanged += (_, _) => _fillColorTouched = true;
         _fillEnabled.IsCheckedChanged += (_, _) => _fillColor.IsEnabled = _fillEnabled.IsChecked == true;
         var fillReset = ResetButton("Clear the fill (no background)", () =>
         {
@@ -68,8 +123,23 @@ public sealed class FormatCellsDialog : ModalDialog<Func<CellStyle, CellStyle>?>
             _fillColor.Color = ToAvalonia(ArgbColor.White);
         });
 
-        _align = new ComboBox { Width = 140, ItemsSource = new[] { "General", "Left", "Center", "Right" }, SelectedIndex = (int)current.Alignment.Horizontal };
-        _valign = new ComboBox { Width = 140, ItemsSource = new[] { "Top", "Middle", "Bottom" }, SelectedIndex = (int)current.Alignment.Vertical };
+        var alignItems = new List<string> { "General", "Left", "Center", "Right" };
+        if (_alignVaries)
+        {
+            alignItems.Add(Varies);
+        }
+
+        _align = new ComboBox { Width = 140, ItemsSource = alignItems };
+        _align.SelectedIndex = _alignVaries ? alignItems.Count - 1 : (int)current.Alignment.Horizontal;
+
+        var valignItems = new List<string> { "Top", "Middle", "Bottom" };
+        if (_valignVaries)
+        {
+            valignItems.Add(Varies);
+        }
+
+        _valign = new ComboBox { Width = 140, ItemsSource = valignItems };
+        _valign.SelectedIndex = _valignVaries ? valignItems.Count - 1 : (int)current.Alignment.Vertical;
 
         var ok = new Button { Content = "OK", IsDefault = true };
         ok.Click += (_, _) => Close(BuildTransform());
@@ -99,6 +169,39 @@ public sealed class FormatCellsDialog : ModalDialog<Func<CellStyle, CellStyle>?>
         };
     }
 
+    private static bool AllSame<T>(IEnumerable<CellStyle> styles, Func<CellStyle, T> select)
+    {
+        bool first = true;
+        T? seed = default;
+        foreach (var style in styles)
+        {
+            var value = select(style);
+            if (first)
+            {
+                seed = value;
+                first = false;
+            }
+            else if (!EqualityComparer<T>.Default.Equals(seed, value))
+            {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    /// <summary>A bold/italic/… checkbox; tri-state (indeterminate) when the selection disagrees.</summary>
+    private static CheckBox EmphasisBox(string label, IEnumerable<CellStyle> styles, Func<Font, bool> get)
+    {
+        bool varies = !AllSame(styles, s => get(s.Font));
+        return new CheckBox
+        {
+            Content = label,
+            IsThreeState = varies,
+            IsChecked = varies ? null : get(styles.First().Font),
+        };
+    }
+
     /// <summary>A compact "Reset" button that reverts a colour control to its default (PRD §6.2).</summary>
     private static Button ResetButton(string tip, Action onClick)
     {
@@ -119,25 +222,97 @@ public sealed class FormatCellsDialog : ModalDialog<Func<CellStyle, CellStyle>?>
 
     private static ArgbColor FromAvalonia(AvColor c) => ArgbColor.FromRgb(c.R, c.G, c.B);
 
-    private Func<CellStyle, CellStyle> BuildTransform()
+    /// <summary>
+    /// Build the style transform applied to every selected cell. Each field is only rewritten when
+    /// the user actually touched it — a tri-state checkbox left indeterminate, a combo left on
+    /// "(varies)", or an untouched mixed colour all preserve each cell's own value, so a mixed
+    /// selection isn't flattened to one style.
+    /// </summary>
+    internal Func<CellStyle, CellStyle> BuildTransform()
     {
-        string code = Formats[_format.SelectedIndex].Code;
-        bool bold = _bold.IsChecked == true;
-        bool italic = _italic.IsChecked == true;
-        bool underline = _underline.IsChecked == true;
-        bool strikethrough = _strikethrough.IsChecked == true;
-        double size = (double)(_size.Value ?? 10m);
-        var textColor = FromAvalonia(_textColor.Color);
-        Fill fill = _fillEnabled.IsChecked == true ? Fill.Solid(FromAvalonia(_fillColor.Color)) : Fill.None;
-        var horizontal = (SAlign)_align.SelectedIndex;
-        var vertical = (SVAlign)_valign.SelectedIndex;
+        // Capture each decision once; the returned closure applies them per cell.
+        bool changeFormat = !(_formatVaries && _format.SelectedIndex == Formats.Length);
+        string? code = changeFormat ? Formats[_format.SelectedIndex].Code : null;
 
-        return style => style with
+        bool? bold = _bold.IsChecked;
+        bool? italic = _italic.IsChecked;
+        bool? underline = _underline.IsChecked;
+        bool? strike = _strikethrough.IsChecked;
+
+        bool changeSize = _size.Value is not null;
+        double size = (double)(_size.Value ?? 10m);
+
+        bool changeTextColor = !_textColorVaries || _textColorTouched;
+        var textColor = FromAvalonia(_textColor.Color);
+
+        // Fill: tri-state checkbox. Indeterminate → leave each cell's fill alone. Unchecked → no fill.
+        // Checked → solid; only swap the colour when it's unambiguous or the user picked one.
+        bool? fillOn = _fillEnabled.IsChecked;
+        bool changeFillColor = !_fillVaries || _fillColorTouched;
+        var fillColor = FromAvalonia(_fillColor.Color);
+
+        bool changeAlign = !(_alignVaries && _align.SelectedIndex == 4);
+        var horizontal = changeAlign ? (SAlign)_align.SelectedIndex : default;
+
+        bool changeValign = !(_valignVaries && _valign.SelectedIndex == 3);
+        var vertical = changeValign ? (SVAlign)_valign.SelectedIndex : default;
+
+        return style =>
         {
-            NumberFormat = new NumberFormat(code),
-            Font = style.Font with { Bold = bold, Italic = italic, Underline = underline, Strikethrough = strikethrough, SizePoints = size, Color = textColor },
-            Fill = fill,
-            Alignment = style.Alignment with { Horizontal = horizontal, Vertical = vertical },
+            var font = style.Font;
+            if (bold is { } b)
+            {
+                font = font with { Bold = b };
+            }
+
+            if (italic is { } i)
+            {
+                font = font with { Italic = i };
+            }
+
+            if (underline is { } u)
+            {
+                font = font with { Underline = u };
+            }
+
+            if (strike is { } s)
+            {
+                font = font with { Strikethrough = s };
+            }
+
+            if (changeSize)
+            {
+                font = font with { SizePoints = size };
+            }
+
+            if (changeTextColor)
+            {
+                font = font with { Color = textColor };
+            }
+
+            var fill = style.Fill;
+            if (fillOn == false)
+            {
+                fill = Fill.None;
+            }
+            else if (fillOn == true)
+            {
+                fill = Fill.Solid(changeFillColor ? fillColor : style.Fill.Background ?? fillColor);
+            }
+
+            var alignment = style.Alignment;
+            if (changeAlign)
+            {
+                alignment = alignment with { Horizontal = horizontal };
+            }
+
+            if (changeValign)
+            {
+                alignment = alignment with { Vertical = vertical };
+            }
+
+            var result = style with { Font = font, Fill = fill, Alignment = alignment };
+            return changeFormat ? result.WithNumberFormat(new NumberFormat(code!)) : result;
         };
     }
 }
