@@ -318,17 +318,25 @@ public static class CommandBarDrawer
     {
         var button = new Button
         {
-            Content = "Custom…",
+            Content = new LucideIcon
+            {
+                IconKey = "pipette",
+                Size = 16,
+                HorizontalAlignment = HorizontalAlignment.Center,
+                VerticalAlignment = VerticalAlignment.Center,
+            },
+            Width = 26,
             Height = 26,
-            Padding = new Thickness(9, 0),
-            FontSize = 11.5,
+            Padding = new Thickness(0),
             VerticalContentAlignment = VerticalAlignment.Center,
+            HorizontalContentAlignment = HorizontalAlignment.Center,
             Background = ChipBrush,
             BorderThickness = default,
             CornerRadius = new CornerRadius(6),
             Margin = new Thickness(0, 0, 7, 7),
         };
         ToolTip.SetTip(button, "Pick any colour…");
+        Avalonia.Automation.AutomationProperties.SetName(button, "Pick a custom colour");
         CommandBar.AddHover(button, ChipBrush);
 
         // A live ColorView (first-party Avalonia control, Golden Rule #6) plus an Apply button.
@@ -379,18 +387,25 @@ public static class CommandBarDrawer
         var row = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 6 };
         var repainters = new List<Action>();
 
-        (string Label, VAlign Value)[] options =
+        (string Label, VAlign Value, string Icon)[] options =
         {
-            ("Top", VAlign.Top),
-            ("Middle", VAlign.Middle),
-            ("Bottom", VAlign.Bottom),
+            ("Top", VAlign.Top, "align-vertical-justify-start"),
+            ("Middle", VAlign.Middle, "align-vertical-justify-center"),
+            ("Bottom", VAlign.Bottom, "align-vertical-justify-end"),
         };
 
-        foreach (var (label, value) in options)
+        foreach (var (label, value, iconKey) in options)
         {
+            var icon = new LucideIcon
+            {
+                IconKey = iconKey,
+                Size = 17,
+                HorizontalAlignment = HorizontalAlignment.Center,
+                VerticalAlignment = VerticalAlignment.Center,
+            };
             var button = new Button
             {
-                Content = label,
+                Content = icon,
                 Height = 30,
                 Padding = new Thickness(12, 0),
                 FontSize = 12.5,
@@ -400,7 +415,8 @@ public static class CommandBarDrawer
                 BorderThickness = default,
                 CornerRadius = new CornerRadius(6),
             };
-            ToolTip.SetTip(button, $"Align contents to the {label.ToLowerInvariant()} of the cell");
+            ToolTip.SetTip(button, $"Align {label}");
+            Avalonia.Automation.AutomationProperties.SetName(button, $"Align {label}");
 
             bool on = false;
             bool hover = false;
@@ -414,7 +430,19 @@ public static class CommandBarDrawer
                 close();
             };
 
-            repainters.Add(() => { on = ActiveStyle(env).Alignment.Vertical == value; Paint(); });
+            repainters.Add(() =>
+            {
+                on = ActiveStyle(env).Alignment.Vertical == value;
+                Paint();
+                if (on)
+                {
+                    icon.Foreground = CommandBar.ActiveForeground;
+                }
+                else
+                {
+                    icon.ClearValue(LucideIcon.ForegroundProperty);
+                }
+            });
             row.Children.Add(button);
         }
 
@@ -487,17 +515,17 @@ public static class CommandBarDrawer
         };
         DockPanel.SetDock(preview, Dock.Right);
 
-        var check = new TextBlock
+        var check = new LucideIcon
         {
-            Text = "✓",
-            FontSize = 13,
-            FontWeight = FontWeight.Bold,
+            IconKey = "check",
+            Size = 14,
             Foreground = CommandBar.ActiveForeground,
             VerticalAlignment = VerticalAlignment.Center,
             Width = 16,
             Margin = new Thickness(0, 0, 6, 0),
             IsVisible = false,
         };
+        Avalonia.Automation.AutomationProperties.SetName(check, "Active format");
         DockPanel.SetDock(check, Dock.Left);
 
         var layout = new DockPanel { LastChildFill = true };
