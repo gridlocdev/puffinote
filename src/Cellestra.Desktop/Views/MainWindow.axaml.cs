@@ -715,8 +715,9 @@ public partial class MainWindow : Window, IAppEnvironment
     /// <summary>Mirror the active cell into the Name Box and formula input (its value/formula may have changed).</summary>
     private void SyncFormulaBar()
     {
-        var address = new CellAddress(Selection.ActiveColumn, Selection.ActiveRow);
-        NameBox.Text = address.ToString();
+        // Grid.ActiveCellName reports a selected merge as its whole span (e.g. B2:C3); fall back to the
+        // single active address for ordinary cells.
+        NameBox.Text = Grid.ActiveCellName;
         var cell = _session.ActiveSheet.Find(Selection.ActiveRow, Selection.ActiveColumn);
         FormulaInput.Text = cell is null ? string.Empty : (cell.IsFormula ? "=" + cell.Formula : cell.Value.ToInvariantString());
     }
