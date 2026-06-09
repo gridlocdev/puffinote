@@ -43,6 +43,14 @@ public static class AppCommands
         new("edit.cut", "Cut", "Move the selection to the clipboard.", e => e.Cut(), "scissors", new KeyGesture(Key.X, Cmd)),
         new("edit.copy", "Copy", "Copy the selection to the clipboard.", e => e.Copy(), "copy", new KeyGesture(Key.C, Cmd)),
         new("edit.paste", "Paste", "Paste from the clipboard.", e => e.Paste(), "clipboard", new KeyGesture(Key.V, Cmd)),
+        new("edit.pasteSpecial", "Paste Special…", "Paste only values, formats, or formulas.", e => e.PasteSpecial(), "clipboard-paste",
+            new KeyGesture(Key.V, CmdAlt)),
+        new("edit.autoSum", "AutoSum", "Sum the numbers above or to the left of the active cell.", AutoSum, "sigma",
+            new KeyGesture(Key.OemPlus, CmdAlt)),
+        new("fill.down", "Fill Down", "Copy the top row of the selection down through the rest.", FillDown, "arrow-down-to-line",
+            new KeyGesture(Key.D, Cmd)),
+        new("fill.right", "Fill Right", "Copy the left column of the selection rightward.", FillRight, "arrow-right-to-line",
+            new KeyGesture(Key.R, Cmd)),
         new("edit.formatPainter", "Format Painter", "Copy formatting from the active cell, then paste it onto the next selection.",
             FormatPainter, "paintbrush", new KeyGesture(Key.C, CmdShift), isActive: e => e.Session.IsFormatPainterArmed),
         new("edit.delete", "Clear Contents", "Clear the values, keep the formatting.", ClearContents, "eraser", new KeyGesture(Key.Delete)),
@@ -230,6 +238,68 @@ public static class AppCommands
         var next = Controls.SpreadsheetGrid.SelectAllExpander.Next(
             e.Session.ActiveSheet, selection.Range, selection.ActiveRow, selection.ActiveColumn);
         selection.SetRange(next.Top, next.Left, next.Bottom, next.Right);
+        e.Refresh();
+    }
+
+    /// <summary>
+    /// AutoSum: propose <c>=SUM(...)</c> over the contiguous numbers above (or, failing that, left of)
+    /// the active cell — or, for a multi-cell selection of numbers, one SUM per column in the row
+    /// below. The range heuristic is the pure, unit-tested <see cref="AutoSumPlanner"/>; each proposal
+    /// commits through the canonical <see cref="EditCommands.SetInput(Workbook,string,int,int,string,System.Globalization.CultureInfo)"/>
+    /// OpenFormula path, all in one undoable step. After committing a single-cell sum the selection
+    /// moves to that cell so the user can confirm/edit it.
+    /// </summary>
+    private static void AutoSum(IAppEnvironment e)
+    {
+        var session = e.Session;
+        var sheet = session.ActiveSheet;
+        var proposals = AutoSumPlanner.Plan(sheet, e.Selection.Range, e.Selection.ActiveRow, e.Selection.ActiveColumn);
+        if (proposals.Count == 0)
+        {
+            e.Narrate("Nothing to AutoSum — no numbers above or to the left.");
+            return;
+        }
+
+        var culture = session.Workbook.Settings.EffectiveLocale;
+        var commands = proposals
+            .Select(p => EditCommands.SetInput(session.Workbook, sheet.Name, p.TargetRow, p.TargetColumn, p.Formula, culture))
+            .ToList();
+        session.Execute(commands.Count == 1 ? commands[0] : EditCommands.Composite("AutoSum", commands));
+
+        // Land on the (first) cell we wrote so the result/formula is visible and editable.
+        var first = proposals[0];
+        e.Selection.MoveTo(first.TargetRow, first.TargetColumn);
+        e.RevealActiveCell();
+        e.Refresh();
+    }
+
+    private static void FillDown(IAppEnvironment e) => Fill(e, down: true);
+
+    private static void FillRight(IAppEnvironment e) => Fill(e, down: false);
+
+    /// <summary>
+    /// Fill Down/Right (PRD §8.15) over the existing <see cref="FillCommand"/>: Fill Down copies the
+    /// selection's top row down through the rest; Fill Right copies the left column rightward. A
+    /// single-cell selection has nothing to fill into, so it no-ops with a hint.
+    /// </summary>
+    private static void Fill(IAppEnvironment e, bool down)
+    {
+        var selection = e.Selection.Range;
+        if (selection.IsSingleCell)
+        {
+            e.Narrate(down ? "Select cells below to fill into." : "Select cells to the right to fill into.");
+            return;
+        }
+
+        var source = down
+            ? new Cellestra.Core.Model.CellRange(
+                new Cellestra.Core.Model.CellAddress(selection.Left, selection.Top),
+                new Cellestra.Core.Model.CellAddress(selection.Right, selection.Top))
+            : new Cellestra.Core.Model.CellRange(
+                new Cellestra.Core.Model.CellAddress(selection.Left, selection.Top),
+                new Cellestra.Core.Model.CellAddress(selection.Left, selection.Bottom));
+
+        e.Session.Execute(new FillCommand(e.Session.ActiveSheet.Name, source, selection));
         e.Refresh();
     }
 

@@ -106,4 +106,78 @@ public class PasteBlockTests
 
         Assert.Equal(styledId, sheet.Find(2, 2)!.StyleId);
     }
+
+    // ---- Paste Special modes ---------------------------------------------
+
+    [Fact]
+    public void PasteValues_writes_value_without_formula_and_keeps_destination_style()
+    {
+        var (workbook, history, sheet) = New();
+        sheet.SetValue(0, 0, CellValue.Number(10)); // A1
+        sheet.SetFormula(0, 1, "A1*2", CellValue.Number(20)); // B1 = A1*2, cached 20
+
+        // Give the destination (B2) its own style so we can assert it's preserved.
+        history.Execute(EditCommands.ApplyStyle(workbook, sheet.Name, CellRange.Parse("B2"),
+            s => s.WithFont(s.Font.WithItalic(true))));
+        int destStyle = sheet.Find(1, 1)!.StyleId;
+
+        var block = ClipboardBlock.Capture(sheet, CellRange.Parse("B1"), isCut: false);
+        history.Execute(new PasteBlockCommand(sheet.Name, 1, 1, block, PasteMode.Values)); // into B2
+
+        var dest = sheet.Find(1, 1)!;
+        Assert.Null(dest.Formula);                 // no formula, just the computed value
+        Assert.Equal(20, dest.Value.AsNumber);
+        Assert.Equal(destStyle, dest.StyleId);     // destination style kept
+    }
+
+    [Fact]
+    public void PasteFormulas_writes_shifted_formula_and_keeps_destination_style()
+    {
+        var (workbook, history, sheet) = New();
+        sheet.SetValue(0, 0, CellValue.Number(10)); // A1
+        sheet.SetFormula(0, 1, "A1*2", CellValue.Number(20)); // B1 = A1*2
+
+        history.Execute(EditCommands.ApplyStyle(workbook, sheet.Name, CellRange.Parse("B2"),
+            s => s.WithFont(s.Font.WithItalic(true))));
+        int destStyle = sheet.Find(1, 1)!.StyleId;
+
+        var block = ClipboardBlock.Capture(sheet, CellRange.Parse("B1"), isCut: false);
+        history.Execute(new PasteBlockCommand(sheet.Name, 1, 1, block, PasteMode.Formulas)); // into B2
+
+        var dest = sheet.Find(1, 1)!;
+        Assert.Equal("A2*2", dest.Formula);        // formula came across, reference shifted
+        Assert.Equal(destStyle, dest.StyleId);     // destination style kept (no style paste)
+    }
+
+    [Fact]
+    public void PasteFormats_applies_source_style_and_leaves_destination_value()
+    {
+        var (workbook, history, sheet) = New();
+        history.Execute(EditCommands.ApplyStyle(workbook, sheet.Name, CellRange.Parse("A1"),
+            s => s.WithFont(s.Font.WithBold(true))));
+        int sourceStyle = sheet.Find(0, 0)!.StyleId;
+        sheet.SetValue(2, 2, CellValue.Number(99)); // C3 has a value, default style
+
+        var block = ClipboardBlock.Capture(sheet, CellRange.Parse("A1"), isCut: false);
+        history.Execute(new PasteBlockCommand(sheet.Name, 2, 2, block, PasteMode.Formats)); // into C3
+
+        var dest = sheet.Find(2, 2)!;
+        Assert.Equal(99, dest.Value.AsNumber);     // value untouched
+        Assert.Equal(sourceStyle, dest.StyleId);   // formatting applied
+    }
+
+    [Fact]
+    public void PasteSpecial_is_undoable()
+    {
+        var (_, history, sheet) = New();
+        sheet.SetFormula(0, 1, "1+1", CellValue.Number(2)); // B1
+        sheet.SetValue(1, 1, CellValue.Number(5));          // B2 (destination)
+
+        var block = ClipboardBlock.Capture(sheet, CellRange.Parse("B1"), isCut: false);
+        history.Execute(new PasteBlockCommand(sheet.Name, 1, 1, block, PasteMode.Values));
+        Assert.Equal(2, sheet.GetValue(1, 1).AsNumber);
+
+        history.Undo();
+        Assert.Equal(5, sheet.GetValue(1, 1).AsNumber); // original destination value restored
+    }
 }

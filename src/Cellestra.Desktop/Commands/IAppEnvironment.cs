@@ -46,6 +46,9 @@ public interface IAppEnvironment
 
     void Paste();
 
+    /// <summary>Offer Paste Special (values / formats / formulas / all) and paste the chosen facet.</summary>
+    void PasteSpecial();
+
     void ShowCommandPalette();
 
     void ShowSheetSwitcher();

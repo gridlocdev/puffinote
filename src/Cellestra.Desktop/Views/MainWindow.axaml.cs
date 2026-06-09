@@ -152,7 +152,11 @@ public partial class MainWindow : Window, IAppEnvironment
         _openRecentItem = BuildOpenRecent();
         file.Menu!.Items.Insert(2, _openRecentItem);
         menu.Items.Add(file);
-        menu.Items.Add(Submenu("Edit", "edit.undo", "edit.redo", null, "edit.cut", "edit.copy", "edit.paste", "edit.delete", "edit.clearFormats", "edit.clearAll", "sheet.resetData", "edit.selectAll", null, "edit.find", "edit.findReplace"));
+        var edit = Submenu("Edit", "edit.undo", "edit.redo", null, "edit.cut", "edit.copy", "edit.paste", "edit.pasteSpecial",
+            "edit.delete", "edit.clearFormats", "edit.clearAll", "sheet.resetData", "edit.selectAll", null,
+            "edit.find", "edit.findReplace", null, "edit.autoSum");
+        edit.Menu!.Items.Add(Submenu("Fill", "fill.down", "fill.right")); // Edit ▸ Fill ▸ Down / Right (PRD §6.2)
+        menu.Items.Add(edit);
         menu.Items.Add(Submenu("Format", "format.cells", null, "format.bold", "format.italic", "format.underline", null,
             "format.alignLeft", "format.alignCenter", "format.alignRight", "format.wrap", null,
             "format.currency", "format.percent", "format.date", null, "format.merge"));
@@ -522,6 +526,65 @@ public partial class MainWindow : Window, IAppEnvironment
         {
             PasteTsv(text);
         }
+    }
+
+    /// <summary>
+    /// Paste Special (PRD §4 / §6.2): offer the four modes — Values / Formats / Formulas / All — in
+    /// the palette overlay, then paste the chosen facet. The narrowed modes need the rich in-app block
+    /// (values+formulas+styles); a plain external clipboard has only text, so we fall back to an
+    /// ordinary TSV value paste and say so.
+    /// </summary>
+    public async void PasteSpecial()
+    {
+        string? text = Clipboard is { } clipboard ? await clipboard.TryGetTextAsync() : null;
+
+        // Only the rich in-app block carries formulas and styles; without it there's nothing special
+        // to choose between, so paste the external text as values.
+        if (_clipboard is not { } || text != _clipboardText)
+        {
+            if (!string.IsNullOrEmpty(text))
+            {
+                PasteTsv(text);
+                Narrate("Pasted values (external clipboard has no formats or formulas)");
+            }
+
+            return;
+        }
+
+        var items = new[]
+        {
+            PasteSpecialItem("Paste Values", "Computed values only — no formulas, keep formatting", PasteMode.Values),
+            PasteSpecialItem("Paste Formats", "Formatting only — leave the values in place", PasteMode.Formats),
+            PasteSpecialItem("Paste Formulas", "Formulas (and their results) — keep formatting", PasteMode.Formulas),
+            PasteSpecialItem("Paste All", "Values, formulas, and formatting", PasteMode.All),
+        };
+        ShowPalette("Paste Special — values, formats, formulas…", items);
+    }
+
+    private PaletteItem PasteSpecialItem(string label, string description, PasteMode mode) =>
+        new(label, "clipboard-paste", description, string.Empty, () => PasteWithMode(mode), "Edit");
+
+    /// <summary>Paste the in-app block at the current selection in the given <paramref name="mode"/>.</summary>
+    private void PasteWithMode(PasteMode mode)
+    {
+        if (_clipboard is not { } block)
+        {
+            return; // the clipboard cleared (e.g. an edit) between opening the chooser and picking
+        }
+
+        var command = new PasteBlockCommand(_session.ActiveSheet.Name, Selection.Range, block, mode);
+        _session.Execute(command);
+        if (block.IsCut)
+        {
+            ClearClipboard(); // a cut is a move, consumed by its first paste
+        }
+
+        if (command.ShapeMismatch)
+        {
+            Narrate("Paste area is a different shape than the copied cells");
+        }
+
+        Grid.Refresh();
     }
 
     public void ShowCommandPalette()

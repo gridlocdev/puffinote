@@ -7,30 +7,49 @@ using Cellestra.Core.Model;
 namespace Cellestra.Core.Editing;
 
 /// <summary>
+/// What a paste carries (Paste Special, PRD §4 / §6.2). <see cref="All"/> is the ordinary paste —
+/// values, formulas, and styles together. The narrowed modes paste only one facet, leaving the rest
+/// of each destination cell untouched: <see cref="Values"/> writes the source's computed value with
+/// no formula and keeps the destination's style; <see cref="Formats"/> applies only the source's
+/// style, leaving the destination's value/formula; <see cref="Formulas"/> writes the source's
+/// formula text (and cached value) but keeps the destination's style.
+/// </summary>
+public enum PasteMode
+{
+    All,
+    Values,
+    Formats,
+    Formulas,
+}
+
+/// <summary>
 /// Pastes a <see cref="ClipboardBlock"/> (values, formulas, and styles) into a destination
 /// selection, placing it per <see cref="PastePlanner"/> (fill / anchor / tile / mismatch). A copy
 /// shifts each pasted formula's relative references by its offset from the source (Golden #8); a
 /// cut moves the cells with their formulas unchanged and clears the source as part of the same
-/// undoable step. Undo restores both the destination and (for a cut) the source.
+/// undoable step. A <see cref="PasteMode"/> narrows what is written (Paste Special). Undo restores
+/// both the destination and (for a cut) the source.
 /// </summary>
 public sealed class PasteBlockCommand : IEditCommand
 {
     private readonly string _destSheet;
     private readonly ClipboardBlock _block;
     private readonly PastePlan _plan;
+    private readonly PasteMode _mode;
     private Dictionary<(string Sheet, int Row, int Column), Cell?>? _before;
 
-    public PasteBlockCommand(string destSheet, CellRange destination, ClipboardBlock block)
+    public PasteBlockCommand(string destSheet, CellRange destination, ClipboardBlock block, PasteMode mode = PasteMode.All)
     {
         _destSheet = destSheet;
         _block = block;
+        _mode = mode;
         _plan = PastePlanner.Plan(block.Rows, block.Columns, destination, block.IsCut);
-        Label = block.IsCut ? "Move" : "Paste";
+        Label = block.IsCut ? "Move" : mode == PasteMode.All ? "Paste" : "Paste Special";
     }
 
     /// <summary>Anchor a paste at a single cell (e.g. Return-to-paste); equivalent to a 1×1 selection.</summary>
-    public PasteBlockCommand(string destSheet, int top, int left, ClipboardBlock block)
-        : this(destSheet, new CellRange(new CellAddress(left, top), new CellAddress(left, top)), block)
+    public PasteBlockCommand(string destSheet, int top, int left, ClipboardBlock block, PasteMode mode = PasteMode.All)
+        : this(destSheet, new CellRange(new CellAddress(left, top), new CellAddress(left, top)), block, mode)
     {
     }
 
@@ -123,25 +142,73 @@ public sealed class PasteBlockCommand : IEditCommand
 
     private void WriteCell(Worksheet dest, int row, int column, ClipboardCell? source, int rowDelta, int columnDelta)
     {
-        if (source is null)
+        // Paste Formats keeps the destination's value/formula and only re-skins it; a blank source
+        // cell carries the default style, so its destination is reset to default too (Excel parity).
+        if (_mode == PasteMode.Formats)
         {
-            dest.PutCell(row, column, null); // a blank source cell clears the destination
+            var existing = dest.Find(row, column);
+            var cell = existing?.Clone() ?? new Cell();
+            cell.StyleId = source?.StyleId ?? Cellestra.Core.Styling.StylePool.DefaultId;
+            dest.PutCell(row, column, cell.IsBlank ? null : cell);
             return;
         }
 
+        if (source is null)
+        {
+            // Values/Formulas keep the destination's style on a blank source (only the content is
+            // cleared); All wipes the cell entirely so a blank source clears the destination.
+            if (_mode == PasteMode.All)
+            {
+                dest.PutCell(row, column, null);
+            }
+            else
+            {
+                var existing = dest.Find(row, column);
+                if (existing is not null)
+                {
+                    existing.Formula = null;
+                    existing.Value = Cellestra.Core.Values.CellValue.Empty;
+                    dest.PutCell(row, column, existing.IsBlank ? null : existing);
+                }
+            }
+
+            return;
+        }
+
+        // Resolve the formula to write (shifting relative refs on a copy; a cut moves verbatim).
         string? formula = source.Formula;
         if (formula is not null && !_block.IsCut &&
             Parser.TryParse(formula, out var expr, out _) && expr is not null)
         {
-            // Copy-fill: relative references shift; absolute ($) refs stay put. A cut moves verbatim.
             formula = FormulaWriter.Write(ReferenceAdjuster.ForCopy(expr, columnDelta, rowDelta));
         }
 
+        switch (_mode)
+        {
+            case PasteMode.Values:
+                // Computed value only, no formula; keep the destination's style.
+                WriteContent(dest, row, column, source.Value, formula: null, keepDestStyle: true, sourceStyle: source.StyleId);
+                break;
+
+            case PasteMode.Formulas:
+                // Formula text + cached value, keep the destination's style.
+                WriteContent(dest, row, column, source.Value, formula, keepDestStyle: true, sourceStyle: source.StyleId);
+                break;
+
+            default: // All
+                WriteContent(dest, row, column, source.Value, formula, keepDestStyle: false, sourceStyle: source.StyleId);
+                break;
+        }
+    }
+
+    private static void WriteContent(Worksheet dest, int row, int column, Cellestra.Core.Values.CellValue value, string? formula, bool keepDestStyle, int sourceStyle)
+    {
+        int styleId = keepDestStyle ? (dest.Find(row, column)?.StyleId ?? Cellestra.Core.Styling.StylePool.DefaultId) : sourceStyle;
         dest.PutCell(row, column, new Cell
         {
-            Value = source.Value,
+            Value = value,
             Formula = formula,
-            StyleId = source.StyleId,
+            StyleId = styleId,
         });
     }
 }
