@@ -48,6 +48,7 @@ public static class AppCommands
         new("edit.delete", "Clear Contents", "Clear the values, keep the formatting.", ClearContents, "eraser", new KeyGesture(Key.Delete)),
         new("edit.clearFormats", "Clear Formatting", "Reset styling, keep the values.", ClearFormatting, "remove-formatting"),
         new("edit.clearAll", "Clear All", "Clear both values and formatting.", ClearAll, "eraser"),
+        new("sheet.resetData", "Reset Sheet Data", "Clear every cell and its formatting on the active sheet.", e => e.ResetSheetData(), "eraser"),
         new("edit.selectAll", "Select All", "Select the data region, then the whole sheet.", SelectAll, "square-dashed", new KeyGesture(Key.A, Cmd)),
         new("edit.find", "Find…", "Find text in the sheet.", e => e.ShowFindReplace(replace: false), "search", new KeyGesture(Key.F, Cmd)),
         new("edit.findReplace", "Find & Replace…", "Find text and replace it.", e => e.ShowFindReplace(replace: true), "replace",

@@ -58,6 +58,9 @@ public interface IAppEnvironment
     /// <summary>Delete the active worksheet (confirms first; refuses to delete the last one).</summary>
     void DeleteActiveSheet();
 
+    /// <summary>Clear every cell and its formatting on the active sheet (confirms above the §8.7 threshold; undoable).</summary>
+    void ResetSheetData();
+
     void ZoomBy(double delta);
 
     void ResetZoom();

@@ -107,8 +107,11 @@ public partial class MainWindow : Window, IAppEnvironment
     {
         _settings = _settings.WithRecentFile(path);
         _settingsService.Save(_settings);
-        BuildNativeMenu(); // refresh the Open Recent submenu
+        RefreshOpenRecent(); // refresh the Open Recent submenu in place (don't rebuild the whole menu — see #17a)
     }
+
+    /// <summary>The "Open Recent" submenu item, kept so its contents refresh in place without a full menu rebuild.</summary>
+    private NativeMenuItem? _openRecentItem;
 
     /// <summary>The native macOS menu bar — the complete command list (PRD §6.2), all from the one catalog.</summary>
     private void BuildNativeMenu()
@@ -120,9 +123,10 @@ public partial class MainWindow : Window, IAppEnvironment
         menu.Items.Add(Submenu("Cellestra", "help.about"));
 
         var file = Submenu("File", "file.new", "file.open", "file.save", "file.saveAs", null, "file.importCsv", "file.exportCsv");
-        file.Menu!.Items.Insert(2, BuildOpenRecent());
+        _openRecentItem = BuildOpenRecent();
+        file.Menu!.Items.Insert(2, _openRecentItem);
         menu.Items.Add(file);
-        menu.Items.Add(Submenu("Edit", "edit.undo", "edit.redo", null, "edit.cut", "edit.copy", "edit.paste", "edit.delete", "edit.clearFormats", "edit.clearAll", "edit.selectAll", null, "edit.find", "edit.findReplace"));
+        menu.Items.Add(Submenu("Edit", "edit.undo", "edit.redo", null, "edit.cut", "edit.copy", "edit.paste", "edit.delete", "edit.clearFormats", "edit.clearAll", "sheet.resetData", "edit.selectAll", null, "edit.find", "edit.findReplace"));
         menu.Items.Add(Submenu("Format", "format.cells", null, "format.bold", "format.italic", "format.underline", null,
             "format.alignLeft", "format.alignCenter", "format.alignRight", "format.wrap", null,
             "format.currency", "format.percent", "format.date", null, "format.merge"));
@@ -137,24 +141,42 @@ public partial class MainWindow : Window, IAppEnvironment
 
     private NativeMenuItem BuildOpenRecent()
     {
-        var submenu = new NativeMenu();
+        var item = new NativeMenuItem("Open Recent") { Menu = new NativeMenu() };
+        PopulateOpenRecent(item.Menu);
+        return item;
+    }
+
+    /// <summary>Fill an Open Recent submenu's items from the current recent-files list.</summary>
+    private void PopulateOpenRecent(NativeMenu submenu)
+    {
+        submenu.Items.Clear();
         if (_settings.RecentFiles.Count == 0)
         {
             submenu.Items.Add(new NativeMenuItem("(none)") { IsEnabled = false });
-        }
-        else
-        {
-            foreach (string path in _settings.RecentFiles)
-            {
-                string captured = path;
-                submenu.Items.Add(new NativeMenuItem(Path.GetFileName(path))
-                {
-                    Command = new RelayCommand(() => _ = OpenPathAsync(captured)),
-                });
-            }
+            return;
         }
 
-        return new NativeMenuItem("Open Recent") { Menu = submenu };
+        foreach (string path in _settings.RecentFiles)
+        {
+            string captured = path;
+            submenu.Items.Add(new NativeMenuItem(Path.GetFileName(path))
+            {
+                Command = new RelayCommand(() => _ = OpenPathAsync(captured)),
+            });
+        }
+    }
+
+    /// <summary>
+    /// Refresh the Open Recent submenu's items <em>in place</em> after opening/saving a file. Rebuilding and
+    /// re-<see cref="NativeMenu.SetMenu"/>-ting the whole menu while it's mounted is what threw
+    /// "the menu being updated does not match" on macOS (#17a); mutating the existing submenu's items avoids it.
+    /// </summary>
+    private void RefreshOpenRecent()
+    {
+        if (_openRecentItem?.Menu is { } submenu)
+        {
+            PopulateOpenRecent(submenu);
+        }
     }
 
     private NativeMenuItem Submenu(string header, params string?[] commandIds)
@@ -245,20 +267,24 @@ public partial class MainWindow : Window, IAppEnvironment
             RememberRecentFile(path);
             UpdateChrome();
 
+            // The title stays the document name (#15); transient open conditions are narrated in the
+            // status line so they don't hijack the title bar.
             if (existingLock is not null)
             {
                 string who = string.IsNullOrWhiteSpace(existingLock.User) ? "another application" : existingLock.User;
                 string host = string.IsNullOrWhiteSpace(existingLock.Host) ? string.Empty : $" on {existingLock.Host}";
-                Title = $"Cellestra — {Path.GetFileName(path)} (open in {who}{host}; changes may conflict)";
+                Narrate($"Open in {who}{host}; changes may conflict");
             }
             else if (_session.LoadRecalcMismatches > 0)
             {
-                Title = $"Cellestra — {Path.GetFileName(path)} ({_session.LoadRecalcMismatches} cell(s) recomputed differently than the saved file)";
+                Narrate($"{_session.LoadRecalcMismatches} cell(s) recomputed differently than the saved file");
             }
         }
         catch (Exception ex)
         {
-            Title = $"Cellestra — could not open: {ex.Message}";
+            // A failed open shouldn't permanently rename the title bar (#17a) — explain it in a dialog
+            // and leave the title showing whatever document is still open.
+            ShowMessage("Couldn't open the file", ex.Message);
         }
     }
 
@@ -374,7 +400,7 @@ public partial class MainWindow : Window, IAppEnvironment
 
             if (command.ShapeMismatch)
             {
-                Title = "Cellestra — paste area is a different shape than the copied cells";
+                Narrate("Paste area is a different shape than the copied cells");
             }
 
             Grid.Refresh();
@@ -427,7 +453,11 @@ public partial class MainWindow : Window, IAppEnvironment
     {
         _session.AddSheet();
         BuildSheetTabs();
+        // The new sheet is empty and active: reset the active cell to A1 and resync the chrome so the
+        // formula bar reflects the new empty cell instead of stale text from the previous sheet (#7).
+        Selection.MoveTo(0, 0);
         Grid.Refresh();
+        OnSelectionChanged();
     }
 
     public async void RenameActiveSheet()
@@ -477,6 +507,50 @@ public partial class MainWindow : Window, IAppEnvironment
             OnSelectionChanged();
             Narrate($"Deleted sheet {sheet.Name}");
         }
+    }
+
+    public async void ResetSheetData()
+    {
+        var sheet = _session.ActiveSheet;
+        var used = sheet.GetUsedRange();
+        if (used is null)
+        {
+            Narrate("Sheet is already empty");
+            return; // nothing to clear
+        }
+
+        // Confirm only above the §8.7 threshold (>100 non-empty cells); below it, undo covers a mistake.
+        int nonEmpty = CountNonEmpty(sheet);
+        if (nonEmpty > 100)
+        {
+            bool confirmed = await ShowModalAsync(new ConfirmDialog("Reset sheet data?",
+                $"Clear all data and formatting from “{sheet.Name}” ({nonEmpty} cells)? You can undo this.", "Reset"));
+            if (!confirmed)
+            {
+                return;
+            }
+        }
+
+        // ClearAll wipes value, formula, style, and hyperlink over the range (one undoable step).
+        _session.Execute(EditCommands.ClearAll(sheet.Name, used.Value));
+        Selection.MoveTo(0, 0);
+        Refresh();
+        Narrate($"Reset {sheet.Name}");
+    }
+
+    /// <summary>Number of cells on the sheet that hold a value or formula (the §8.7 "non-empty" count).</summary>
+    private static int CountNonEmpty(Worksheet sheet)
+    {
+        int count = 0;
+        foreach (var (_, _, cell) in sheet.EnumerateCells())
+        {
+            if (!cell.Value.IsEmpty || cell.IsFormula)
+            {
+                count++;
+            }
+        }
+
+        return count;
     }
 
     /// <summary>Build a right-click menu from catalog command ids (null = separator); each row shows its icon, label, and shortcut.</summary>
@@ -725,14 +799,26 @@ public partial class MainWindow : Window, IAppEnvironment
 
     private void UpdateChrome()
     {
-        string name = _session.FilePath is null ? "Untitled" : Path.GetFileName(_session.FilePath);
-        Title = $"{(_session.IsModified ? "● " : string.Empty)}{name} — Cellestra";
+        Title = DocumentTitle();
         StatusZoom.Text = $"{Grid.Zoom * 100:0}%";
         StatusCalc.Text = _session.Workbook.Settings.CalculationMode == CalculationMode.Manual ? "Manual" : "Auto";
         StatusSaved.Text = _session.IsModified ? "Edited"
             : _lastSavedAt is { } saved ? $"Saved {saved:HH:mm}" : "Not saved";
         _commandBar?.RefreshState();
     }
+
+    /// <summary>
+    /// The window title: just the document's file name (e.g. <c>Budget.ods</c>, or <c>Untitled</c> for a
+    /// new workbook), with a leading ● when there are unsaved changes. No app-name suffix, and transient
+    /// errors/status never overwrite it — those surface in the status line instead (#15/#16/#17a).
+    /// </summary>
+    internal static string ComposeTitle(string? filePath, bool modified)
+    {
+        string name = filePath is null ? "Untitled" : Path.GetFileName(filePath);
+        return $"{(modified ? "● " : string.Empty)}{name}";
+    }
+
+    private string DocumentTitle() => ComposeTitle(_session.FilePath, _session.IsModified);
 
     private void UpdateStatus()
     {
@@ -840,10 +926,25 @@ public partial class MainWindow : Window, IAppEnvironment
             return;
         }
 
+        // Editing implies focusing this sheet. But SetActiveSheet raises StructureChanged, which runs
+        // BuildSheetTabs and rebuilds the strip — orphaning the `tab` we were handed. So switch FIRST
+        // (only when needed), then re-find the freshly-built tab Border to host the editor.
+        if (!ReferenceEquals(_session.ActiveSheet, sheet))
+        {
+            _session.SetActiveSheet(sheet); // rebuilds the strip via StructureChanged
+            Grid.Refresh();
+            OnSelectionChanged();
+
+            int index = _session.Workbook.IndexOf(sheet);
+            if (index < 0 || index >= SheetTabs.Children.Count || SheetTabs.Children[index] is not Border rebuilt)
+            {
+                return; // strip changed out from under us; nothing safe to edit
+            }
+
+            tab = rebuilt;
+        }
+
         _inlineRenaming = true;
-        _session.SetActiveSheet(sheet); // editing implies focusing this sheet
-        Grid.Refresh();
-        OnSelectionChanged();
 
         var editor = new TextBox
         {
@@ -1264,11 +1365,34 @@ public partial class MainWindow : Window, IAppEnvironment
                 // While a modal overlay (Command Palette / sheet switcher) is open, the grid behind it
                 // must not react to command shortcuts — only the overlay's own keys apply. So every
                 // global binding backs off, letting the focused overlay field handle the key (e.g. ⌘A
-                // selects the palette text, not all cells).
-                Command = new RelayCommand(() => captured.Execute(this), () => !IsModalOpen && captured.IsEnabled(this)),
+                // selects the palette text, not all cells). Likewise, a plain-key gesture (no ⌘/⌃, e.g.
+                // Delete) must not fire its global cell command while a text input is focused — there it
+                // is ordinary in-textbox editing, not "clear the cell" (#8).
+                Command = new RelayCommand(
+                    () => captured.Execute(this),
+                    () => !IsModalOpen && !BlockedByTextInput(captured.Shortcut) && captured.IsEnabled(this)),
             });
         }
     }
+
+    /// <summary>
+    /// True when a global binding must yield to a focused text input (#8): the gesture is a plain key
+    /// (no ⌘/⌃) — like Delete or Backspace — and a <see cref="TextBox"/> (cell editor, formula bar, name
+    /// box, dialog field) holds focus, so the key does ordinary in-textbox editing instead of firing the
+    /// cell command (e.g. ClearContents). Modifier shortcuts (⌘C, ⌘V, ⌘Z…) still apply, and the textbox's
+    /// own handlers take precedence over them anyway.
+    /// </summary>
+    internal static bool ShouldYieldToTextInput(KeyGesture? gesture, bool textInputFocused)
+    {
+        if (gesture is null || !textInputFocused)
+        {
+            return false;
+        }
+
+        return (gesture.KeyModifiers & (KeyModifiers.Meta | KeyModifiers.Control)) == 0;
+    }
+
+    private bool BlockedByTextInput(KeyGesture? gesture) => ShouldYieldToTextInput(gesture, IsTextInputFocused);
 
     // ---- Palette overlay --------------------------------------------------
 

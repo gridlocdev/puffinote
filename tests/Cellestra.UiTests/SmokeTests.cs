@@ -12,6 +12,7 @@ public class SmokeTests
         var window = new MainWindow();
         window.Show();
 
-        Assert.Contains("Cellestra", window.Title);
+        // The title is just the document name now (#15): a new workbook shows "Untitled".
+        Assert.Equal("Untitled", window.Title);
     }
 }
