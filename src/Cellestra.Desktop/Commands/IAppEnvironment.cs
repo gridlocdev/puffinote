@@ -82,6 +82,17 @@ public interface IAppEnvironment
 
     void ShowFormatCellsDialog();
 
+    // ---- Insert menu (function picker / named ranges / hyperlinks) ---------
+
+    /// <summary>Open the Insert Function picker; choosing a function seeds <c>=NAME(</c> and enters edit mode.</summary>
+    void ShowFunctionPicker();
+
+    /// <summary>Open the Named Range manager (create a name for the selection, list, and delete names).</summary>
+    void ShowNamedRangeManager();
+
+    /// <summary>Open the Insert/Edit Hyperlink dialog for the active cell (set, change, or remove its link).</summary>
+    void ShowHyperlinkDialog();
+
     /// <summary>Apply a style transform to the selection as one undoable edit (used by the bar's drawers).</summary>
     void ApplyCellStyle(Func<CellStyle, CellStyle> transform, string label);
 

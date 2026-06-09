@@ -70,7 +70,9 @@ public partial class MainWindow : Window, IAppEnvironment
         FormulaInput.LostFocus += FormulaInputLostFocus;
         Grid.InlineEditTextChanged += OnInlineEditTextChanged;
         NameBox.KeyDown += NameBoxKeyDown;
-        FxButton.Click += (_, _) => BeginEdit();
+        // The formula bar's fx button opens the Insert Function picker (conventional behavior), which
+        // seeds "=NAME(" and enters edit mode; the inline autocomplete/signature help takes over.
+        FxButton.Click += (_, _) => ShowFunctionPicker();
         FormulaExpandButton.Content = _formulaExpandIcon;
         FormulaExpandButton.Click += (_, _) => ToggleFormulaBarExpanded();
 
@@ -163,7 +165,8 @@ public partial class MainWindow : Window, IAppEnvironment
         format.Menu!.Items.Add(Submenu("Borders", "format.borderAll", "format.borderOutline",
             "format.borderTop", "format.borderBottom", "format.borderLeft", "format.borderRight", null, "format.borderNone"));
         menu.Items.Add(format);
-        menu.Items.Add(Submenu("Insert", "insert.rowsAbove", "insert.columnsLeft", "edit.deleteRows", "edit.deleteColumns", null, "insert.sheet", null, "sheet.rename", "sheet.delete"));
+        menu.Items.Add(Submenu("Insert", "insert.rowsAbove", "insert.columnsLeft", "edit.deleteRows", "edit.deleteColumns", null,
+            "insert.sheet", "data.createTable", "insert.function", "insert.namedRange", "insert.hyperlink", null, "sheet.rename", "sheet.delete"));
         menu.Items.Add(Submenu("Data", "data.sortAsc", "data.sortDesc", "data.customSort", null,
             "data.toggleFilter", "data.clearFilter", null, "data.createTable", "data.removeDuplicates",
             "data.textToColumns", "data.validation", null, "formula.recalc"));
@@ -956,6 +959,72 @@ public partial class MainWindow : Window, IAppEnvironment
             _session.Execute(EditCommands.ApplyStyle(_session.Workbook, sheet.Name, Selection.Range, transform, "Format Cells"));
             Refresh();
         }
+    }
+
+    // ---- Insert ▸ Function… / Named Range… / Hyperlink… -------------------
+
+    /// <summary>
+    /// Insert Function picker (PRD §4 Formulas). Lists every function from the one
+    /// <see cref="Cellestra.Core.Formulas.Functions.FunctionRegistry"/>; choosing one seeds
+    /// <c>=NAME(</c> into the active cell and enters edit mode with the caret after the open paren,
+    /// ready for arguments — the inline autocomplete/signature help then takes over as usual.
+    /// </summary>
+    public async void ShowFunctionPicker()
+    {
+        var meta = await ShowModalAsync(new FunctionPickerDialog());
+        if (meta is not null)
+        {
+            // Seed "=NAME(" so the existing autocomplete/signature help kicks in for the arguments;
+            // BeginEdit places the caret at the end of the seed (right after the paren).
+            Grid.BeginEdit($"={meta.Name}(");
+        }
+    }
+
+    /// <summary>
+    /// Named Range manager (PRD §4 Formulas). Defaults the Target to the current selection (scoped to
+    /// the active sheet), lets the user add/delete names, and refreshes the grid and Name Box if
+    /// anything changed (a new/removed name affects formula resolution and the Name Box jump list).
+    /// </summary>
+    public async void ShowNamedRangeManager()
+    {
+        var selection = Selection.Range.WithSheet(_session.ActiveSheet.Name);
+        bool changed = await ShowModalAsync(new NamedRangeDialog(_session.Workbook, selection));
+        if (changed)
+        {
+            _session.RecalculateAll();
+            Refresh();
+        }
+    }
+
+    /// <summary>
+    /// Insert/edit Hyperlink on the active cell (PRD §4 Editing). Sets, edits, or clears
+    /// <see cref="Cell.Hyperlink"/> through the undoable <see cref="EditCommands.SetHyperlink"/>; when
+    /// the cell is empty and the user supplied display text, that text is set in the same undoable step.
+    /// </summary>
+    public async void ShowHyperlinkDialog()
+    {
+        var sheet = _session.ActiveSheet;
+        int row = Selection.ActiveRow, column = Selection.ActiveColumn;
+        var cell = sheet.Find(row, column);
+        var value = sheet.GetValue(row, column);
+        bool cellIsEmpty = value.IsEmpty && (cell is null || !cell.IsFormula);
+        string displayValue = cellIsEmpty ? string.Empty : value.ToInvariantString();
+
+        var outcome = await ShowModalAsync(new HyperlinkDialog(cell?.Hyperlink, displayValue, cellIsEmpty));
+        if (outcome is null)
+        {
+            return; // cancelled — no change
+        }
+
+        var commands = new List<IEditCommand>();
+        if (outcome.DisplayText is { } text)
+        {
+            commands.Add(EditCommands.SetInput(_session.Workbook, sheet.Name, row, column, text, _session.Workbook.Settings.EffectiveLocale));
+        }
+
+        commands.Add(EditCommands.SetHyperlink(_session.Workbook, sheet.Name, row, column, outcome.Link));
+        _session.Execute(commands.Count == 1 ? commands[0] : EditCommands.Composite("Set Hyperlink", commands));
+        Refresh();
     }
 
     /// <summary>

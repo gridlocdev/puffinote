@@ -24,6 +24,7 @@ public static class AppCommands
     private const KeyModifiers Cmd = KeyModifiers.Meta;
     private const KeyModifiers CmdShift = KeyModifiers.Meta | KeyModifiers.Shift;
     private const KeyModifiers CmdAlt = KeyModifiers.Meta | KeyModifiers.Alt;
+    private const KeyModifiers CtrlAlt = KeyModifiers.Control | KeyModifiers.Alt;
 
     private static List<AppCommand> Build() => new()
     {
@@ -114,6 +115,12 @@ public static class AppCommands
         new("edit.deleteRows", "Delete Rows", "Delete the selected rows.", DeleteRows, "trash-2"),
         new("edit.deleteColumns", "Delete Columns", "Delete the selected columns.", DeleteColumns, "trash-2"),
         new("insert.sheet", "Sheet", "Add a new worksheet.", e => e.AddSheet(), "plus"),
+        new("insert.function", "Function…", "Browse the function library and insert one into the active cell.",
+            e => e.ShowFunctionPicker(), "sigma", new KeyGesture(Key.F, CtrlAlt)),
+        new("insert.namedRange", "Named Range…", "Name the current selection, or manage existing named ranges.",
+            e => e.ShowNamedRangeManager(), "tag"),
+        new("insert.hyperlink", "Hyperlink…", "Add, edit, or remove a hyperlink on the active cell.",
+            e => e.ShowHyperlinkDialog(), "link", new KeyGesture(Key.K, CmdAlt)),
         new("sheet.rename", "Rename Sheet…", "Rename the active worksheet.", e => e.RenameActiveSheet(), "pencil"),
         new("sheet.delete", "Delete Sheet", "Delete the active worksheet.", e => e.DeleteActiveSheet(), "trash-2",
             canExecute: e => e.Session.Workbook.Worksheets.Count > 1),

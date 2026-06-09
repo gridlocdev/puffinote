@@ -113,6 +113,19 @@ public static class EditCommands
         });
     }
 
+    /// <summary>
+    /// Set, change, or clear a single cell's <see cref="Cell.Hyperlink"/> (PRD §4 Editing — Insert
+    /// hyperlinks). Pass <paramref name="hyperlink"/> = null to remove the link. Snapshots/restores the
+    /// one cell like the other single-cell edits, so undo/redo restores the prior link (or its absence).
+    /// </summary>
+    public static IEditCommand SetHyperlink(Workbook workbook, string sheet, int row, int column, Hyperlink? hyperlink) =>
+        new CellSnapshotCommand("Set Hyperlink", sheet, new[] { (row, column) }, ws =>
+        {
+            var cell = ws.GetOrCreate(row, column);
+            cell.Hyperlink = hyperlink;
+            ws.PruneIfBlank(row, column, cell);
+        });
+
     public static IEditCommand ClearContents(string sheet, CellRange range) =>
         new CellSnapshotCommand("Clear Contents", sheet, ws => ClampedPositions(ws, range), ws =>
         {

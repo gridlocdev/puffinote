@@ -33,6 +33,54 @@ public class EditingTests
     }
 
     [Fact]
+    public void SetHyperlink_sets_and_undoes()
+    {
+        var (workbook, history) = New();
+        var sheet = workbook.ActiveSheet;
+
+        var link = new Hyperlink("https://example.com") { Tooltip = "Example" };
+        history.Execute(EditCommands.SetHyperlink(workbook, sheet.Name, 0, 0, link));
+        Assert.Equal(link, sheet.Find(0, 0)!.Hyperlink);
+
+        history.Undo();
+        Assert.Null(sheet.Find(0, 0)?.Hyperlink);
+
+        history.Redo();
+        Assert.Equal("https://example.com", sheet.Find(0, 0)!.Hyperlink!.Target);
+    }
+
+    [Fact]
+    public void SetHyperlink_null_clears_an_existing_link_and_undo_restores_it()
+    {
+        var (workbook, history) = New();
+        var sheet = workbook.ActiveSheet;
+
+        // A cell with a value and a link, so clearing the link must keep the value.
+        history.Execute(EditCommands.SetValue(sheet.Name, 0, 0, CellValue.Text("Anchor")));
+        history.Execute(EditCommands.SetHyperlink(workbook, sheet.Name, 0, 0, new Hyperlink("https://a.test")));
+
+        history.Execute(EditCommands.SetHyperlink(workbook, sheet.Name, 0, 0, null));
+        Assert.Null(sheet.Find(0, 0)!.Hyperlink);
+        Assert.Equal("Anchor", sheet.GetValue(0, 0).AsText);
+
+        history.Undo(); // restores the cleared link
+        Assert.Equal("https://a.test", sheet.Find(0, 0)!.Hyperlink!.Target);
+    }
+
+    [Fact]
+    public void SetHyperlink_null_on_an_otherwise_blank_cell_prunes_it()
+    {
+        var (workbook, history) = New();
+        var sheet = workbook.ActiveSheet;
+
+        history.Execute(EditCommands.SetHyperlink(workbook, sheet.Name, 0, 0, new Hyperlink("https://a.test")));
+        history.Execute(EditCommands.SetHyperlink(workbook, sheet.Name, 0, 0, null));
+
+        // No value, no formula, no style, no link → the cell should be pruned away entirely.
+        Assert.Null(sheet.Find(0, 0));
+    }
+
+    [Fact]
     public void SetInput_chooses_formula_or_value()
     {
         var (workbook, history) = New();
