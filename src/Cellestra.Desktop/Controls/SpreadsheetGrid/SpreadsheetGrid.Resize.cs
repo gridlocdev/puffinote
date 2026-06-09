@@ -176,6 +176,13 @@ public sealed partial class SpreadsheetGrid
 
         _selecting = false;
         _filling = false;
+        if (_painting)
+        {
+            // Pointer yanked mid-paint (window deactivated, popup): abandon without painting, stay armed.
+            _painting = false;
+            _paintTarget = null;
+            Redraw();
+        }
     }
 
     private void EndResize()

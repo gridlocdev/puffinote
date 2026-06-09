@@ -114,4 +114,64 @@ public class FormatBlockTests
         Assert.NotNull(restored);
         Assert.Equal(CellRange.Parse("A3:A4"), restored!.Range);
     }
+
+    // ---- Drag-to-paint range resolution (the grid's pointer code is a thin call over this) --------
+
+    [Theory]
+    [InlineData(2, 1, 2, 1, "B3", "B3")]   // click without a drag → the single cell
+    [InlineData(2, 1, 4, 3, "B3", "D5")]   // drag down-right → the bounding box
+    [InlineData(4, 3, 2, 1, "B3", "D5")]   // drag up-left → same box, normalized
+    public void PaintTarget_is_the_bounding_box_of_anchor_and_pointer(
+        int anchorRow, int anchorColumn, int row, int column, string topLeft, string bottomRight)
+    {
+        var target = FormatBlock.PaintTarget(anchorRow, anchorColumn, row, column);
+        Assert.Equal(CellRange.Parse($"{topLeft}:{bottomRight}"), target);
+    }
+
+    [Fact]
+    public void Dragging_paints_the_stamp_over_the_resolved_range_leaving_values()
+    {
+        var (workbook, history, sheet) = New();
+        // Source A1: bold + yellow fill, with a value.
+        int sourceStyle = workbook.Styles.Intern(CellStyle.Default
+            .WithFont(Font.Default.WithBold(true))
+            .WithFill(Fill.Solid(ArgbColor.FromHex("#FFFF00"))));
+        sheet.SetValue(0, 0, CellValue.Text("source"));
+        sheet.GetOrCreate(0, 0).StyleId = sourceStyle;
+
+        // A value sitting inside the dragged range must survive the paint.
+        sheet.SetValue(3, 2, CellValue.Number(7));
+
+        var stamp = FormatBlock.Capture(workbook, sheet, CellRange.Parse("A1"));
+
+        // Simulate a drag from B3 to D5 the way the grid resolves it, then paint over that range.
+        var painted = FormatBlock.PaintTarget(anchorRow: 2, anchorColumn: 1, row: 4, column: 3);
+        history.Execute(stamp.ApplyTo(sheet.Name, painted));
+
+        foreach (var (row, column) in painted.Positions())
+        {
+            var style = workbook.Styles.Get(Style(sheet, row, column));
+            Assert.True(style.Font.Bold);
+            Assert.Equal(ArgbColor.FromHex("#FFFF00"), style.Fill.Background);
+        }
+
+        Assert.Equal(7, sheet.GetValue(3, 2).AsNumber);          // value untouched
+        Assert.True(sheet.GetValue(2, 0).IsEmpty);               // outside the range, unpainted
+        Assert.False(workbook.Styles.Get(Style(sheet, 2, 0)).Font.Bold);
+    }
+
+    [Fact]
+    public void Dragging_replicates_a_source_merge_over_the_painted_range()
+    {
+        var (workbook, history, sheet) = New();
+        sheet.AddMerge(new MergedRegion(CellRange.Parse("A1:B1")));
+
+        var stamp = FormatBlock.Capture(workbook, sheet, CellRange.Parse("A1:B1"));
+        var painted = FormatBlock.PaintTarget(anchorRow: 2, anchorColumn: 0, row: 2, column: 1); // A3:B3
+        history.Execute(stamp.ApplyTo(sheet.Name, painted));
+
+        var merge = sheet.FindMerge(2, 0);
+        Assert.NotNull(merge);
+        Assert.Equal(CellRange.Parse("A3:B3"), merge!.Range);
+    }
 }

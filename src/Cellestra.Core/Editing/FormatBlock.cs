@@ -71,6 +71,18 @@ public sealed class FormatBlock
     public IEditCommand ApplyTo(string sheet, CellRange target) =>
         new PaintCommand(this, sheet, target);
 
+    /// <summary>
+    /// The rectangle a drag-to-paint covers: the bounding box of the press cell
+    /// (<paramref name="anchorRow"/>, <paramref name="anchorColumn"/>) and the cell the pointer is
+    /// currently over (<paramref name="row"/>, <paramref name="column"/>). A click without a drag
+    /// (both cells the same) yields that single cell. Pure so the grid's pointer code stays a thin
+    /// call over a unit-tested helper.
+    /// </summary>
+    public static CellRange PaintTarget(int anchorRow, int anchorColumn, int row, int column) =>
+        new(
+            new CellAddress(Math.Min(anchorColumn, column), Math.Min(anchorRow, row)),
+            new CellAddress(Math.Max(anchorColumn, column), Math.Max(anchorRow, row)));
+
     private sealed class PaintCommand : IEditCommand
     {
         private readonly FormatBlock _block;
