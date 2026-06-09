@@ -67,6 +67,7 @@ public partial class MainWindow : Window, IAppEnvironment
 
         FormulaInput.KeyDown += FormulaInputKeyDown;
         FormulaInput.TextChanged += FormulaInputTextChanged;
+        FormulaInput.LostFocus += FormulaInputLostFocus;
         Grid.InlineEditTextChanged += OnInlineEditTextChanged;
         NameBox.KeyDown += NameBoxKeyDown;
         FxButton.Click += (_, _) => BeginEdit();
@@ -83,14 +84,37 @@ public partial class MainWindow : Window, IAppEnvironment
         _commandBar.CollapsedChanged += (_, _) => PersistSettings();
         CommandBarHost.Content = _commandBar;
 
-        Closing += (_, _) =>
-        {
-            PersistSettings();
-            ReleaseFileLock();
-        };
+        Closing += OnWindowClosing;
 
         UpdateChrome();
         OnSelectionChanged();
+    }
+
+    /// <summary>Set once the user has answered the unsaved-changes prompt and chosen to close, so the
+    /// programmatic re-close we trigger skips the prompt instead of looping.</summary>
+    private bool _forceClose;
+
+    /// <summary>
+    /// On close/quit with unsaved changes, cancel the close and ask Save / Don't Save / Cancel (PRD §8.7).
+    /// On Save (succeeded) or Don't Save we re-close the window for real; on Cancel we stay open. A clean
+    /// (unmodified) document closes immediately.
+    /// </summary>
+    private async void OnWindowClosing(object? sender, WindowClosingEventArgs e)
+    {
+        if (!_forceClose && _session.IsModified)
+        {
+            e.Cancel = true; // hold the window open until the user decides
+            if (await ConfirmDiscardChangesAsync())
+            {
+                _forceClose = true;
+                Close(); // re-enter Closing, this time allowed straight through
+            }
+
+            return; // cancelled, or we'll finish teardown on the forced re-close
+        }
+
+        PersistSettings();
+        ReleaseFileLock();
     }
 
     private void PersistSettings()
@@ -225,12 +249,62 @@ public partial class MainWindow : Window, IAppEnvironment
     /// <summary>Narrate the last action in the status line's left indicator (a quick reference, per the mockup).</summary>
     public void Narrate(string message) => StatusAction.Text = message;
 
-    public Task NewWorkbookAsync()
+    /// <summary>The user's answer to a "you have unsaved changes" prompt (PRD §8.7).</summary>
+    internal enum SaveChoice
     {
+        Save,
+        DontSave,
+        Cancel,
+    }
+
+    /// <summary>
+    /// Decide whether a discard-the-document action (close/quit, New, Open, Import) may proceed, given
+    /// whether the workbook is modified and — only when it is — the user's <see cref="SaveChoice"/>.
+    /// Pure so the close/open/new gating logic is unit-testable without a window (AGENTS.md: focus/pointer
+    /// flows are hard headlessly). Returns true to proceed (discarding), false to stay put.
+    /// </summary>
+    internal static bool ShouldProceedAfterPrompt(bool isModified, SaveChoice choice) =>
+        !isModified || choice != SaveChoice.Cancel;
+
+    /// <summary>
+    /// Gate a document-replacing action on the save-changes prompt (PRD §8.7). If nothing is modified it
+    /// proceeds silently; otherwise it asks Save / Don't Save / Cancel, saving first on Save. Returns
+    /// true when the caller may discard the current document, false when the user cancelled.
+    /// </summary>
+    private async Task<bool> ConfirmDiscardChangesAsync()
+    {
+        if (!_session.IsModified)
+        {
+            return true;
+        }
+
+        var choice = await ShowModalAsync(new SaveChangesDialog(DocumentDisplayName()));
+        if (choice == SaveChoice.Save)
+        {
+            await SaveWorkbookAsync();
+            // If the save was cancelled (no path chosen in Save As) or failed, the document is still
+            // modified — don't discard it.
+            return !_session.IsModified;
+        }
+
+        return ShouldProceedAfterPrompt(isModified: true, choice);
+    }
+
+    /// <summary>The document's display name for prompts (file name, or "Untitled" for a new workbook).</summary>
+    private string DocumentDisplayName() =>
+        _session.FilePath is null ? "Untitled" : Path.GetFileName(_session.FilePath);
+
+    public async Task NewWorkbookAsync()
+    {
+        if (!await ConfirmDiscardChangesAsync())
+        {
+            return; // user cancelled out of the save-changes prompt
+        }
+
         ReleaseFileLock();
         _session = WorkbookSession.NewBlank();
+        _lastSavedAt = null;
         RewireSession();
-        return Task.CompletedTask;
     }
 
     public async Task OpenWorkbookAsync()
@@ -252,6 +326,11 @@ public partial class MainWindow : Window, IAppEnvironment
 
     public async Task OpenPathAsync(string path)
     {
+        if (!await ConfirmDiscardChangesAsync())
+        {
+            return; // user cancelled out of the save-changes prompt; keep the current document
+        }
+
         try
         {
             var existingLock = FileLock.Inspect(path);
@@ -263,6 +342,10 @@ public partial class MainWindow : Window, IAppEnvironment
 
             ReleaseFileLock();
             _fileLock = FileLock.TryAcquire(path);
+
+            // A freshly-opened, unmodified file is on disk in a saved state — record a baseline so the
+            // status bar reads "Saved …" rather than "Not saved" until the user edits something.
+            _lastSavedAt = System.DateTime.Now;
 
             Grid.Attach(_session);
             BuildSheetTabs();
@@ -305,7 +388,17 @@ public partial class MainWindow : Window, IAppEnvironment
             return;
         }
 
-        _session.SaveToFile(_session.FilePath);
+        try
+        {
+            _session.SaveToFile(_session.FilePath);
+        }
+        catch (Exception ex)
+        {
+            // A failed save must not crash the app — surface it like OpenPathAsync does for opens.
+            ShowMessage("Couldn't save the file", ex.Message);
+            return;
+        }
+
         _lastSavedAt = System.DateTime.Now;
         RememberRecentFile(_session.FilePath);
         UpdateChrome();
@@ -327,7 +420,17 @@ public partial class MainWindow : Window, IAppEnvironment
         }
 
         string path = file.Path.LocalPath;
-        _session.SaveToFile(path);
+        try
+        {
+            _session.SaveToFile(path);
+        }
+        catch (Exception ex)
+        {
+            // A failed save must not crash the app — surface it like OpenPathAsync does for opens.
+            ShowMessage("Couldn't save the file", ex.Message);
+            return;
+        }
+
         _lastSavedAt = System.DateTime.Now;
 
         // We now own this file on disk — take its lock so other editors are warned.
@@ -355,10 +458,16 @@ public partial class MainWindow : Window, IAppEnvironment
             return;
         }
 
+        if (!await ConfirmDiscardChangesAsync())
+        {
+            return; // user cancelled out of the save-changes prompt; keep the current document
+        }
+
         string text = await File.ReadAllTextAsync(files[0].Path.LocalPath);
         var workbook = Cellestra.Core.Serialization.Csv.CsvReader.ReadToWorkbook(text);
         ReleaseFileLock();
         _session = new WorkbookSession(workbook);
+        _lastSavedAt = null;
         RewireSession();
     }
 
@@ -446,7 +555,7 @@ public partial class MainWindow : Window, IAppEnvironment
     public void ShowSheetSwitcher()
     {
         var items = _session.Workbook.Worksheets
-            .Select(s => new PaletteItem(s.Name, "list", "Worksheet", string.Empty, () => { _session.SetActiveSheet(s); BuildSheetTabs(); Grid.Refresh(); }, "Sheets"))
+            .Select(s => new PaletteItem(s.Name, "list", "Worksheet", string.Empty, () => { _session.SetActiveSheet(s); BuildSheetTabs(); Grid.Refresh(); OnSelectionChanged(); }, "Sheets"))
             .ToList();
         ShowPalette("Go to sheet", items);
     }
@@ -634,6 +743,10 @@ public partial class MainWindow : Window, IAppEnvironment
         {
             _session.Execute(DataEditCommands.ClearFilter(sheet.Name, sheet.ActiveFilter.Value));
             sheet.ActiveFilter = null;
+            // Also drop the conditions and sort so they don't linger and resurrect when the filter
+            // is turned back on.
+            sheet.ActiveFilterSpec = null;
+            sheet.ActiveSort = null;
         }
         else
         {
@@ -650,6 +763,10 @@ public partial class MainWindow : Window, IAppEnvironment
         if (spec is { Levels.Count: > 0 })
         {
             _session.Execute(DataEditCommands.Sort(sheet.Name, range, spec));
+            // Persist the sort so it round-trips like the dropdown quick-sort, and remember the sorted
+            // range as the active filter region if one isn't already set.
+            sheet.ActiveSort = spec;
+            sheet.ActiveFilter ??= range;
             Refresh();
         }
     }
@@ -682,9 +799,47 @@ public partial class MainWindow : Window, IAppEnvironment
         var delimiter = await ShowModalAsync(new TextToColumnsDialog());
         if (delimiter is { } d)
         {
+            // The split writes the extra fields into the columns to the right of the source; warn before
+            // clobbering anything already there (PRD §8.14).
+            if (HasDataToRight(sheet, source))
+            {
+                bool confirmed = await ShowModalAsync(new ConfirmDialog(
+                    "Overwrite data to the right?",
+                    "This may overwrite data to the right. Continue?", "Continue"));
+                if (!confirmed)
+                {
+                    return;
+                }
+            }
+
             _session.Execute(DataEditCommands.TextToColumns(sheet, source, d));
             Refresh();
         }
+    }
+
+    /// <summary>
+    /// True when any cell immediately right of <paramref name="source"/>'s single column — within its row
+    /// range — holds a value or formula, so a Text-to-Columns split there would overwrite data (PRD §8.14).
+    /// Conservatively scans only the column directly to the right (the first the split would fill).
+    /// </summary>
+    internal static bool HasDataToRight(Worksheet sheet, CellRange source)
+    {
+        int rightColumn = source.Left + 1;
+        if (rightColumn >= SheetDimensions.MaxColumns)
+        {
+            return false;
+        }
+
+        for (int row = source.Top; row <= source.Bottom; row++)
+        {
+            var cell = sheet.Find(row, rightColumn);
+            if (cell is not null && (!cell.Value.IsEmpty || cell.IsFormula))
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     public async void ShowDataValidationDialog()
@@ -1256,21 +1411,14 @@ public partial class MainWindow : Window, IAppEnvironment
     {
         if (e.Key == Key.Return)
         {
-            if (Grid.IsInlineEditing)
-            {
-                // Typing in the bar opened a mirrored inline edit; commit it through the grid's one
-                // path (validation, SetInput, move-down) so both surfaces share a lifecycle (task 9).
-                Grid.CommitInlineEdit(1, 0);
-            }
-            else
-            {
-                _session.Execute(EditCommands.SetInput(
-                    _session.Workbook, _session.ActiveSheet.Name, Selection.ActiveRow, Selection.ActiveColumn,
-                    FormulaInput.Text ?? string.Empty, _session.Workbook.Settings.EffectiveLocale));
-                Selection.MoveTo(Selection.ActiveRow + 1, Selection.ActiveColumn);
-                Grid.Focus();
-            }
-
+            CommitFormulaBar(moveColumn: 0, moveRow: 1);
+            e.Handled = true;
+        }
+        else if (e.Key == Key.Tab)
+        {
+            // Commit-and-move like the inline editor: Tab steps right, Shift+Tab left (task 15a).
+            bool shift = e.KeyModifiers.HasFlag(KeyModifiers.Shift);
+            CommitFormulaBar(moveColumn: shift ? -1 : 1, moveRow: 0);
             e.Handled = true;
         }
         else if (e.Key == Key.Escape)
@@ -1293,6 +1441,42 @@ public partial class MainWindow : Window, IAppEnvironment
         }
     }
 
+    /// <summary>
+    /// Commit what's in the formula bar through the grid's one validated path (so data validation runs
+    /// either way), then move the selection. Whether or not a mirrored inline edit is already open, we go
+    /// through <see cref="SpreadsheetGrid.SpreadsheetGrid.CommitInlineEdit"/> — when none is open we first
+    /// push the bar's text in as an edit so the same validate-then-SetInput lifecycle applies (task 15b).
+    /// </summary>
+    private void CommitFormulaBar(int moveColumn, int moveRow)
+    {
+        if (!Grid.IsInlineEditing)
+        {
+            // Mirror the bar's text into a (focus-less) inline edit so the commit runs validation rather
+            // than calling EditCommands.SetInput directly and bypassing it.
+            Grid.SetInlineEditorText(FormulaInput.Text ?? string.Empty);
+        }
+
+        Grid.CommitInlineEdit(moveRow, moveColumn);
+        Grid.Focus();
+    }
+
+    /// <summary>
+    /// Clicking away from the formula bar (to a non-grid surface) leaves a mirrored inline edit open and
+    /// uncommitted; commit it on blur so the typed value isn't silently lost (task 15).
+    /// </summary>
+    private void FormulaInputLostFocus(object? sender, Avalonia.Interactivity.RoutedEventArgs e)
+    {
+        if (_syncingFormulaBar)
+        {
+            return; // a programmatic refresh moved focus, not the user committing
+        }
+
+        if (Grid.IsInlineEditing)
+        {
+            Grid.CommitInlineEdit(0, 0); // commit in place, no selection move
+        }
+    }
+
     private void NameBoxKeyDown(object? sender, KeyEventArgs e)
     {
         if (e.Key != Key.Return)
@@ -1304,15 +1488,31 @@ public partial class MainWindow : Window, IAppEnvironment
         if (CellAddress.TryParse(text, out var address))
         {
             Selection.MoveTo(address.Row, address.Column);
-            Grid.Focus();
+            JumpFromNameBox();
         }
         else if (_session.Workbook.FindNamedRange(text) is { } named)
         {
             Selection.SetRange(named.Target.Top, named.Target.Left, named.Target.Bottom, named.Target.Right);
-            Grid.Focus();
+            JumpFromNameBox();
+        }
+        else
+        {
+            // Unrecognized input: don't silently swallow it — tell the user, and restore the box to the
+            // current address so it doesn't keep showing the bad text.
+            Narrate($"No cell or named range “{text.Trim()}”");
+            SyncFormulaBar();
         }
 
         e.Handled = true;
+    }
+
+    /// <summary>Finish a Name Box jump: scroll the new selection into view, refresh the chrome, focus the grid.</summary>
+    private void JumpFromNameBox()
+    {
+        RevealActiveCell();
+        OnSelectionChanged();
+        Refresh();
+        Grid.Focus();
     }
 
     // ---- Clipboard --------------------------------------------------------
@@ -1740,4 +1940,48 @@ public partial class MainWindow : Window, IAppEnvironment
         Patterns = new[] { "*.csv" },
         MimeTypes = new[] { "text/csv" },
     };
+}
+
+/// <summary>
+/// The "you have unsaved changes" prompt (PRD §8.7): Save / Don't Save / Cancel, rendered as an
+/// internal modal like the other dialogs. Esc and a backdrop click both resolve to
+/// <see cref="MainWindow.SaveChoice.Cancel"/> — the safe, non-destructive default.
+/// </summary>
+internal sealed class SaveChangesDialog : Overlays.ModalDialog<MainWindow.SaveChoice>
+{
+    public SaveChangesDialog(string documentName)
+    {
+        Title = "Unsaved changes";
+
+        var save = new Button { Content = "Save", IsDefault = true };
+        save.Click += (_, _) => Close(MainWindow.SaveChoice.Save);
+        var dontSave = new Button { Content = "Don’t Save" };
+        dontSave.Click += (_, _) => Close(MainWindow.SaveChoice.DontSave);
+        var cancel = new Button { Content = "Cancel", IsCancel = true };
+        cancel.Click += (_, _) => Close(MainWindow.SaveChoice.Cancel);
+
+        DialogContent = new StackPanel
+        {
+            Width = 380,
+            Spacing = 12,
+            Children =
+            {
+                new TextBlock
+                {
+                    Text = $"Do you want to save the changes you made to “{documentName}”? Your changes will be lost if you don’t save them.",
+                    TextWrapping = TextWrapping.Wrap,
+                },
+                new StackPanel
+                {
+                    Orientation = Orientation.Horizontal,
+                    Spacing = 8,
+                    HorizontalAlignment = HorizontalAlignment.Right,
+                    Children = { dontSave, cancel, save },
+                },
+            },
+        };
+    }
+
+    // Esc / backdrop click must mean "stay" (don't lose data), not the enum's default of Save.
+    protected override MainWindow.SaveChoice CancelResult => MainWindow.SaveChoice.Cancel;
 }
