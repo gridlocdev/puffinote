@@ -46,6 +46,27 @@ public class EditingTests
     }
 
     [Fact]
+    public void Rewriting_a_cells_text_preserves_its_alignment()
+    {
+        // Find & Replace rewrites a matched cell's text through SetInput. A cell the user explicitly
+        // aligned (e.g. a centered header) must keep that alignment after the replacement.
+        var (workbook, history) = New();
+        var sheet = workbook.ActiveSheet;
+
+        history.Execute(EditCommands.SetInput(sheet.Name, 0, 0, "Total", CultureInfo.InvariantCulture));
+        history.Execute(EditCommands.ApplyStyle(workbook, sheet.Name, CellRange.Parse("A1"),
+            s => s with { Alignment = s.Alignment with { Horizontal = HorizontalAlignment.Center, Vertical = VerticalAlignment.Middle } }));
+
+        history.Execute(EditCommands.SetInput(sheet.Name, 0, 0, "Sum", CultureInfo.InvariantCulture));
+
+        var cell = sheet.Find(0, 0)!;
+        Assert.Equal("Sum", cell.Value.AsText);
+        var alignment = workbook.Styles.Get(cell.StyleId).Alignment;
+        Assert.Equal(HorizontalAlignment.Center, alignment.Horizontal);
+        Assert.Equal(VerticalAlignment.Middle, alignment.Vertical);
+    }
+
+    [Fact]
     public void SetInput_stamps_a_date_format_on_a_typed_date()
     {
         var (workbook, history) = New();

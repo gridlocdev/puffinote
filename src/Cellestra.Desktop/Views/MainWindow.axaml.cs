@@ -68,6 +68,7 @@ public partial class MainWindow : Window, IAppEnvironment
         FormulaInput.KeyDown += FormulaInputKeyDown;
         NameBox.KeyDown += NameBoxKeyDown;
         FxButton.Click += (_, _) => BeginEdit();
+        FormulaExpandButton.Content = _formulaExpandIcon;
         FormulaExpandButton.Click += (_, _) => ToggleFormulaBarExpanded();
 
         RegisterKeyBindings();
@@ -1083,6 +1084,10 @@ public partial class MainWindow : Window, IAppEnvironment
 
     private bool _formulaBarExpanded;
 
+    // The expand/collapse chevron, drawn as a crisp Lucide glyph (the old "⌄"/"⌃" text glyphs were
+    // clipped by the button's fixed width). Its IconKey flips with _formulaBarExpanded.
+    private readonly Controls.Icons.LucideIcon _formulaExpandIcon = new() { IconKey = "chevron-down", Size = 14 };
+
     /// <summary>
     /// Toggle the formula bar between one line and a taller multi-line area for editing long formulas
     /// (task: formula-bar expand/collapse). Expanded, the input grows to several wrapped lines.
@@ -1095,7 +1100,7 @@ public partial class MainWindow : Window, IAppEnvironment
             FormulaInput.MinHeight = 84;
             FormulaInput.TextWrapping = TextWrapping.Wrap;
             FormulaInput.VerticalContentAlignment = VerticalAlignment.Top;
-            FormulaExpandButton.Content = "⌃";
+            _formulaExpandIcon.IconKey = "chevron-up";
             ToolTip.SetTip(FormulaExpandButton, "Collapse formula bar");
         }
         else
@@ -1104,7 +1109,7 @@ public partial class MainWindow : Window, IAppEnvironment
             FormulaInput.ClearValue(TextBox.HeightProperty);
             FormulaInput.TextWrapping = TextWrapping.NoWrap;
             FormulaInput.VerticalContentAlignment = VerticalAlignment.Center;
-            FormulaExpandButton.Content = "⌄";
+            _formulaExpandIcon.IconKey = "chevron-down";
             ToolTip.SetTip(FormulaExpandButton, "Expand formula bar");
         }
     }

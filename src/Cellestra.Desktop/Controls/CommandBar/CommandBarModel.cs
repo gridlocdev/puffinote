@@ -54,7 +54,9 @@ public static class CommandBarModel
             new[] { "format.wrap", "format.merge" }),
         new CommandBarGroup("Numbers",
             new[] { "format.currency", "format.percent" },
-            new[] { "format.date" }),
+            // No overflow command buttons: the previewed, text-based "Format as" picker (HasNumberDrawer)
+            // already offers Date/Time/etc., so a separate "Date" toggle here would just duplicate it.
+            System.Array.Empty<string>()),
         new CommandBarGroup("Insert",
             new[] { "insert.rowsAbove", "insert.columnsLeft" },
             new[] { "insert.sheet", "data.createTable" }),

@@ -76,7 +76,7 @@ public static class AppCommands
             "percent", canExecute: IsNumericContext, isActive: e => ActiveStyle(e).NumberFormat.Kind == NumberFormatKind.Percent),
         new("format.date", "Date", "Format the number as a date.", e => ToggleNumberFormat(e, DateFormat, NumberFormatKind.Date),
             "calendar", canExecute: IsNumericContext, isActive: e => ActiveStyle(e).NumberFormat.Kind == NumberFormatKind.Date),
-        new("format.cells", "Cells…", "Open the full cell-formatting dialog.", e => e.ShowFormatCellsDialog(), "settings-2", new KeyGesture(Key.D1, Cmd)),
+        new("format.cells", "Format Cells…", "Open the full cell-formatting dialog.", e => e.ShowFormatCellsDialog(), "settings-2", new KeyGesture(Key.D1, Cmd)),
 
         // Insert
         new("insert.rowsAbove", "Rows Above", "Insert rows above the selection.", e => InsertRows(e, above: true), "rows-plus"),

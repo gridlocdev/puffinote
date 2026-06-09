@@ -6,6 +6,7 @@ using Cellestra.Core.Styling;
 using Cellestra.Desktop.Views.Overlays;
 using AvColor = Avalonia.Media.Color;
 using SAlign = Cellestra.Core.Styling.HorizontalAlignment;
+using SVAlign = Cellestra.Core.Styling.VerticalAlignment;
 
 namespace Cellestra.Desktop.Views.Dialogs;
 
@@ -35,6 +36,7 @@ public sealed class FormatCellsDialog : ModalDialog<Func<CellStyle, CellStyle>?>
     private readonly CheckBox _fillEnabled;
     private readonly ColorPicker _fillColor;
     private readonly ComboBox _align;
+    private readonly ComboBox _valign;
 
     public FormatCellsDialog(CellStyle current)
     {
@@ -47,9 +49,11 @@ public sealed class FormatCellsDialog : ModalDialog<Func<CellStyle, CellStyle>?>
         _italic = new CheckBox { Content = "Italic", IsChecked = current.Font.Italic };
         _underline = new CheckBox { Content = "Underline", IsChecked = current.Font.Underline };
         _strikethrough = new CheckBox { Content = "Strikethrough", IsChecked = current.Font.Strikethrough };
-        _size = new NumericUpDown { Width = 90, Minimum = 6, Maximum = 96, Value = (decimal)current.Font.SizePoints };
+        // Wider than the 90px it used to be so the value (e.g. "10") isn't clipped by the spin buttons.
+        _size = new NumericUpDown { Width = 130, Minimum = 6, Maximum = 96, Value = (decimal)current.Font.SizePoints };
 
         _textColor = new ColorPicker { Color = ToAvalonia(current.Font.Color.IsTransparent ? ArgbColor.Black : current.Font.Color) };
+        var textReset = ResetButton("Reset the text colour to black", () => _textColor.Color = ToAvalonia(ArgbColor.Black));
 
         _fillEnabled = new CheckBox { Content = "Fill", IsChecked = current.Fill.HasBackground };
         _fillColor = new ColorPicker
@@ -58,8 +62,14 @@ public sealed class FormatCellsDialog : ModalDialog<Func<CellStyle, CellStyle>?>
             IsEnabled = current.Fill.HasBackground,
         };
         _fillEnabled.IsCheckedChanged += (_, _) => _fillColor.IsEnabled = _fillEnabled.IsChecked == true;
+        var fillReset = ResetButton("Clear the fill (no background)", () =>
+        {
+            _fillEnabled.IsChecked = false;
+            _fillColor.Color = ToAvalonia(ArgbColor.White);
+        });
 
         _align = new ComboBox { Width = 140, ItemsSource = new[] { "General", "Left", "Center", "Right" }, SelectedIndex = (int)current.Alignment.Horizontal };
+        _valign = new ComboBox { Width = 140, ItemsSource = new[] { "Top", "Middle", "Bottom" }, SelectedIndex = (int)current.Alignment.Vertical };
 
         var ok = new Button { Content = "OK", IsDefault = true };
         ok.Click += (_, _) => Close(BuildTransform());
@@ -74,9 +84,10 @@ public sealed class FormatCellsDialog : ModalDialog<Func<CellStyle, CellStyle>?>
                 Row("Number", _format),
                 new StackPanel { Orientation = Orientation.Horizontal, Spacing = 12, Children = { _bold, _italic, _underline, _strikethrough } },
                 Row("Size", _size),
-                Row("Text color", _textColor),
-                Row("Fill", new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8, Children = { _fillEnabled, _fillColor } }),
-                Row("Alignment", _align),
+                Row("Text color", new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8, Children = { _textColor, textReset } }),
+                Row("Fill", new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8, Children = { _fillEnabled, _fillColor, fillReset } }),
+                Row("Horizontal", _align),
+                Row("Vertical", _valign),
                 new StackPanel
                 {
                     Orientation = Orientation.Horizontal,
@@ -86,6 +97,15 @@ public sealed class FormatCellsDialog : ModalDialog<Func<CellStyle, CellStyle>?>
                 },
             },
         };
+    }
+
+    /// <summary>A compact "Reset" button that reverts a colour control to its default (PRD §6.2).</summary>
+    private static Button ResetButton(string tip, Action onClick)
+    {
+        var button = new Button { Content = "Reset" };
+        Avalonia.Controls.ToolTip.SetTip(button, tip);
+        button.Click += (_, _) => onClick();
+        return button;
     }
 
     private static StackPanel Row(string label, Control control) => new()
@@ -110,13 +130,14 @@ public sealed class FormatCellsDialog : ModalDialog<Func<CellStyle, CellStyle>?>
         var textColor = FromAvalonia(_textColor.Color);
         Fill fill = _fillEnabled.IsChecked == true ? Fill.Solid(FromAvalonia(_fillColor.Color)) : Fill.None;
         var horizontal = (SAlign)_align.SelectedIndex;
+        var vertical = (SVAlign)_valign.SelectedIndex;
 
         return style => style with
         {
             NumberFormat = new NumberFormat(code),
             Font = style.Font with { Bold = bold, Italic = italic, Underline = underline, Strikethrough = strikethrough, SizePoints = size, Color = textColor },
             Fill = fill,
-            Alignment = style.Alignment with { Horizontal = horizontal },
+            Alignment = style.Alignment with { Horizontal = horizontal, Vertical = vertical },
         };
     }
 }

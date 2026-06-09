@@ -85,6 +85,24 @@ public class StyleTests
         Assert.Equal("2026-06-07", NumberFormatter.Format(CellValue.Number(serial), "yyyy-mm-dd", CultureInfo.InvariantCulture));
     }
 
+    [Theory]
+    // 0.520834 of a day ≈ 12:30:00. AM/PM must render as the literal "PM" (12-hour clock), not the
+    // month-number "A1/P1"; "mm" between hours and seconds is minutes, not the month.
+    [InlineData("h:mm:ss AM/PM", 0.520834, "12:30:00 PM")]
+    [InlineData("h:mm AM/PM", 0.1, "2:24 AM")]
+    [InlineData("hh:mm:ss", 0.520834, "12:30:00")]
+    public void NumberFormatter_formats_times(string code, double value, string expected)
+    {
+        Assert.Equal(expected, NumberFormatter.Format(CellValue.Number(value), code, CultureInfo.InvariantCulture));
+    }
+
+    [Fact]
+    public void NumberFormatter_renders_date_time_components_together()
+    {
+        double serial = Cellestra.Core.Formulas.Evaluation.DateConversion.DateToSerial(2026, 6, 7) + 0.520834;
+        Assert.Equal("2026-06-07 12:30:00", NumberFormatter.Format(CellValue.Number(serial), "yyyy-mm-dd hh:mm:ss", CultureInfo.InvariantCulture));
+    }
+
     [Fact]
     public void NumberFormatter_passes_errors_and_text_through()
     {

@@ -488,7 +488,12 @@ public sealed partial class SpreadsheetGrid : Panel
             SAlign.Center => rect.X + (rect.Width - formatted.Width) / 2,
             _ => rect.X + CellPadX,
         };
-        double ty = rect.Bottom - formatted.Height - CellPadY;
+        double ty = style.Alignment.Vertical switch
+        {
+            Cellestra.Core.Styling.VerticalAlignment.Top => rect.Y + CellPadY,
+            Cellestra.Core.Styling.VerticalAlignment.Middle => rect.Y + (rect.Height - formatted.Height) / 2,
+            _ => rect.Bottom - formatted.Height - CellPadY, // Bottom (the default)
+        };
 
         context.DrawText(formatted, new Point(tx, Math.Max(rect.Y, ty)));
     }
