@@ -134,6 +134,56 @@ public class WorkbookModelTests
     }
 
     [Fact]
+    public void SelectionRangeAt_returns_whole_merge_for_any_covered_cell()
+    {
+        var sheet = new Worksheet("S");
+        sheet.AddMerge(new MergedRegion(CellRange.Parse("B2:D4")));
+
+        // The anchor and every covered cell report the full merged range.
+        Assert.Equal(CellRange.Parse("B2:D4"), sheet.SelectionRangeAt(1, 1)); // anchor B2
+        Assert.Equal(CellRange.Parse("B2:D4"), sheet.SelectionRangeAt(3, 3)); // covered D4
+        Assert.Equal(CellRange.Parse("B2:D4"), sheet.SelectionRangeAt(2, 2)); // covered C3
+
+        // A cell outside the merge is just itself.
+        Assert.Equal(new CellRange(new CellAddress(0, 0)), sheet.SelectionRangeAt(0, 0));
+    }
+
+    [Fact]
+    public void StepOverMerges_skips_past_a_merge_when_leaving_it()
+    {
+        var sheet = new Worksheet("S");
+        sheet.AddMerge(new MergedRegion(CellRange.Parse("B2:D4"))); // rows 1..3, cols 1..3
+
+        // From inside the merge, moving down lands on the row below its bottom edge.
+        Assert.Equal((4, 1), sheet.StepOverMerges(1, 1, 1, 0));
+        // Moving right lands on the column past its right edge.
+        Assert.Equal((1, 4), sheet.StepOverMerges(1, 1, 0, 1));
+        // Moving up from inside lands above the top edge, keeping the cell's own column.
+        Assert.Equal((0, 2), sheet.StepOverMerges(2, 2, -1, 0));
+        // Moving left from inside lands left of the left edge, keeping the cell's own row.
+        Assert.Equal((2, 0), sheet.StepOverMerges(2, 2, 0, -1));
+    }
+
+    [Fact]
+    public void StepOverMerges_snaps_to_anchor_when_entering_a_merge()
+    {
+        var sheet = new Worksheet("S");
+        sheet.AddMerge(new MergedRegion(CellRange.Parse("B2:D4"))); // anchor B2 = (1,1)
+
+        // Stepping from above into the merge's column snaps to the anchor.
+        Assert.Equal((1, 1), sheet.StepOverMerges(0, 2, 1, 0));
+        // Stepping from the left into a covered row snaps to the anchor.
+        Assert.Equal((1, 1), sheet.StepOverMerges(3, 0, 0, 1));
+    }
+
+    [Fact]
+    public void StepOverMerges_clamps_at_sheet_edges()
+    {
+        var sheet = new Worksheet("S");
+        Assert.Equal((0, 0), sheet.StepOverMerges(0, 0, -1, -1));
+    }
+
+    [Fact]
     public void GetUsedRange_covers_content_and_sizing()
     {
         var sheet = new Worksheet("S");

@@ -208,6 +208,46 @@ public sealed class Worksheet
         _mergedRegions.AddRange(regions);
     }
 
+    /// <summary>
+    /// The selection range a cell represents: the full merged region when (row, column) falls inside a
+    /// merge, otherwise the single cell. The UI uses this so selecting any covered cell highlights the
+    /// whole merge and reports its full address in the Name Box.
+    /// </summary>
+    public CellRange SelectionRangeAt(int row, int column) =>
+        FindMerge(row, column)?.Range ?? new CellRange(new CellAddress(column, row));
+
+    /// <summary>
+    /// Where keyboard navigation should land when stepping one cell from (row, column) by
+    /// (<paramref name="rowDelta"/>, <paramref name="columnDelta"/>), accounting for merged cells:
+    /// a step starts from the far edge of the current merge (so you leave the whole span at once), and
+    /// landing inside a merge snaps to that merge's anchor (so the whole merge becomes active). The
+    /// result is clamped to the sheet bounds. Pure geometry — no selection side effects.
+    /// </summary>
+    public (int Row, int Column) StepOverMerges(int row, int column, int rowDelta, int columnDelta)
+    {
+        // Start from the edge of the current merge in the direction of travel, so one keypress steps
+        // off the whole span rather than into a still-covered cell.
+        if (FindMerge(row, column) is { } from)
+        {
+            if (rowDelta > 0) { row = from.Range.Bottom; }
+            else if (rowDelta < 0) { row = from.Range.Top; }
+            if (columnDelta > 0) { column = from.Range.Right; }
+            else if (columnDelta < 0) { column = from.Range.Left; }
+        }
+
+        int targetRow = Math.Clamp(row + rowDelta, 0, SheetDimensions.MaxRows - 1);
+        int targetColumn = Math.Clamp(column + columnDelta, 0, SheetDimensions.MaxColumns - 1);
+
+        // Landing inside a merge selects the whole merge by snapping the active cell to its anchor.
+        if (FindMerge(targetRow, targetColumn) is { } into)
+        {
+            targetRow = into.Range.Top;
+            targetColumn = into.Range.Left;
+        }
+
+        return (targetRow, targetColumn);
+    }
+
     // ---- Tables & validation ----------------------------------------------
 
     public IReadOnlyList<Table> Tables => _tables;

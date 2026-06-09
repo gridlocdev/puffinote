@@ -32,11 +32,48 @@ public sealed partial class SpreadsheetGrid
 
     private bool IsResizing => _dragColumn is not null || _dragRow is not null;
 
+    // Per-frame cache of each row's tallest font (in points), so a layout pass scans the sparse cell
+    // store only once instead of once per visible row. Rebuilt at the start of each BuildVisible.
+    private readonly Dictionary<int, double> _rowFontPoints = new();
+
+    /// <summary>The largest font size (points) used by any cell in <paramref name="row"/>, or 0 if none.</summary>
+    private double TallestFontPoints(Worksheet sheet, int row) =>
+        _rowFontPoints.TryGetValue(row, out double pts) ? pts : 0;
+
+    /// <summary>Recompute the row→tallest-font map for the active sheet (one sparse-store scan per frame).</summary>
+    private void RebuildRowFontMap(Worksheet sheet)
+    {
+        _rowFontPoints.Clear();
+        foreach (var (row, _, cell) in sheet.EnumerateCells())
+        {
+            if (cell.Value.IsEmpty)
+            {
+                continue;
+            }
+
+            double pts = _session!.Workbook.Styles.Get(cell.StyleId).Font.SizePoints;
+            if (!_rowFontPoints.TryGetValue(row, out double current) || pts > current)
+            {
+                _rowFontPoints[row] = pts;
+            }
+        }
+    }
+
     private double EffectiveColumnWidth(Worksheet sheet, int column) =>
         _dragColumn == column ? _dragSize : sheet.GetColumnWidth(column);
 
-    private double EffectiveRowHeight(Worksheet sheet, int row) =>
-        _dragRow == row ? _dragSize : sheet.GetRowHeight(row);
+    private double EffectiveRowHeight(Worksheet sheet, int row)
+    {
+        // While dragging a row's border, show the raw previewed size so the drag reads true.
+        if (_dragRow == row)
+        {
+            return _dragSize;
+        }
+
+        // Otherwise grow the row to fit the tallest font any of its cells uses, so a larger font
+        // size never clips/overlaps the next row (task 3). The default 20px row is the floor.
+        return RowHeightCalculator.Effective(sheet.GetRowHeight(row), TallestFontPoints(sheet, row), CellPadY);
+    }
 
     /// <summary>Hover feedback: the copy cursor over the fill handle, a resize cursor over a header border, else the arrow.</summary>
     private void UpdateResizeCursor(Point point)
