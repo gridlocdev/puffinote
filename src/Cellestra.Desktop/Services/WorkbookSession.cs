@@ -41,6 +41,41 @@ public sealed class WorkbookSession
 
     public Worksheet ActiveSheet { get; private set; }
 
+    // ---- Format Painter arming -------------------------------------------
+    // The Format Painter is a two-step gesture: a first invocation captures the source's formatting
+    // (the "stamp"); the painter is then "armed" until that formatting is applied once. The stamp
+    // lives here (not in a private static) so both the command catalog and the grid observe one shared
+    // state through a clean seam — the grid arms its paintbrush cursor and drag-to-paint off it.
+    private FormatBlock? _formatStamp;
+
+    /// <summary>The captured formatting waiting to be painted, or null when the painter isn't armed.</summary>
+    public FormatBlock? FormatStamp => _formatStamp;
+
+    /// <summary>True while the Format Painter holds a captured stamp ready to apply.</summary>
+    public bool IsFormatPainterArmed => _formatStamp is not null;
+
+    /// <summary>Raised when the painter is armed or disarmed, so the grid can update its cursor and repaint.</summary>
+    public event EventHandler? FormatPainterArmedChanged;
+
+    /// <summary>Capture <paramref name="stamp"/> and arm the painter (replaces any prior stamp).</summary>
+    public void ArmFormatPainter(FormatBlock stamp)
+    {
+        _formatStamp = stamp;
+        FormatPainterArmedChanged?.Invoke(this, EventArgs.Empty);
+    }
+
+    /// <summary>Disarm the painter without applying (Esc, or after a single-shot paint).</summary>
+    public void DisarmFormatPainter()
+    {
+        if (_formatStamp is null)
+        {
+            return;
+        }
+
+        _formatStamp = null;
+        FormatPainterArmedChanged?.Invoke(this, EventArgs.Empty);
+    }
+
     public string? FilePath { get; private set; }
 
     public bool IsModified { get; private set; }

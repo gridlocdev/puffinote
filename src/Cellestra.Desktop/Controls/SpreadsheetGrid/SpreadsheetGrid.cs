@@ -189,6 +189,7 @@ public sealed partial class SpreadsheetGrid : Panel
         _scrollRow = 0;
         _scrollColumn = 0;
         Selection.MoveTo(0, 0);
+        WireFormatPainter(session); // paintbrush cursor + drag-to-paint follow the session's armed stamp
         Redraw();
     }
 
@@ -311,6 +312,7 @@ public sealed partial class SpreadsheetGrid : Panel
         DrawMarquee(context);
         DrawFillPreview(context);
         DrawFillHandle(context);
+        DrawPaintPreview(context);
     }
 
     private void DrawCells(DrawingContext context, Worksheet sheet, IPen gridPen)
@@ -735,6 +737,14 @@ public sealed partial class SpreadsheetGrid : Panel
 
         _tabOriginColumn = null; // a click breaks any Tab-entry sequence (#19)
 
+        // When the Format Painter is armed, a press starts a paint gesture (click one cell or drag a
+        // range), taking precedence over normal selection — release paints the stamp and disarms.
+        if (TryBeginPaint(e, point))
+        {
+            e.Handled = true;
+            return;
+        }
+
         if (TryHandleChromeClick(point))
         {
             e.Handled = true;
@@ -909,6 +919,18 @@ public sealed partial class SpreadsheetGrid : Panel
             return;
         }
 
+        if (_painting)
+        {
+            UpdatePaint(point);
+            return;
+        }
+
+        if (IsFormatPainterArmed)
+        {
+            UpdatePaintCursor(); // keep the paintbrush cursor; don't let resize-hover override it
+            return;
+        }
+
         if (!_selecting)
         {
             // Hovering a header border shows the resize cursor; elsewhere, the default arrow.
@@ -936,6 +958,11 @@ public sealed partial class SpreadsheetGrid : Panel
         if (_filling)
         {
             CommitFill();
+        }
+
+        if (_painting)
+        {
+            CommitPaint(); // paint the stamp over the dragged (or single-cell) range, then disarm
         }
 
         _selecting = false;
@@ -967,6 +994,13 @@ public sealed partial class SpreadsheetGrid : Panel
         base.OnKeyDown(e);
         if (_editing)
         {
+            return;
+        }
+
+        // Esc disarms the Format Painter (cancel without painting) before any other Esc behavior.
+        if (e.Key == Key.Escape && TryCancelPaint())
+        {
+            e.Handled = true;
             return;
         }
 

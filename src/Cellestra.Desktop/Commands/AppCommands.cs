@@ -25,10 +25,6 @@ public static class AppCommands
     private const KeyModifiers CmdShift = KeyModifiers.Meta | KeyModifiers.Shift;
     private const KeyModifiers CmdAlt = KeyModifiers.Meta | KeyModifiers.Alt;
 
-    // Format Painter is a two-step gesture: the first invocation captures the active cell's
-    // formatting (the "stamp"); the next applies it to the selection and clears the stamp.
-    private static Cellestra.Core.Editing.FormatBlock? _formatStamp;
-
     private static List<AppCommand> Build() => new()
     {
         // File
@@ -48,7 +44,7 @@ public static class AppCommands
         new("edit.copy", "Copy", "Copy the selection to the clipboard.", e => e.Copy(), "copy", new KeyGesture(Key.C, Cmd)),
         new("edit.paste", "Paste", "Paste from the clipboard.", e => e.Paste(), "clipboard", new KeyGesture(Key.V, Cmd)),
         new("edit.formatPainter", "Format Painter", "Copy formatting from the active cell, then paste it onto the next selection.",
-            FormatPainter, "paint-bucket", new KeyGesture(Key.C, CmdShift), isActive: _ => _formatStamp is not null),
+            FormatPainter, "paint-bucket", new KeyGesture(Key.C, CmdShift), isActive: e => e.Session.IsFormatPainterArmed),
         new("edit.delete", "Clear Contents", "Clear the values, keep the formatting.", ClearContents, "eraser", new KeyGesture(Key.Delete)),
         new("edit.clearFormats", "Clear Formatting", "Reset styling, keep the values.", ClearFormatting, "remove-formatting"),
         new("edit.clearAll", "Clear All", "Clear both values and formatting.", ClearAll, "eraser"),
@@ -153,27 +149,29 @@ public static class AppCommands
 
     /// <summary>
     /// Format Painter (two-step): with no stamp held, capture the active cell's formatting (its
-    /// single cell, or the whole selection so a multi-cell pattern is reused); with a stamp held,
-    /// paint it onto the current selection — including replicating merge-cells — then clear it.
+    /// single cell, or the whole selection so a multi-cell pattern is reused) and arm the painter so
+    /// the grid shows a paintbrush cursor and lets you click/drag to paint; with a stamp already
+    /// held, paint it onto the current selection — including replicating merge-cells — then disarm.
+    /// The stamp lives on the session so the grid's drag-to-paint shares it (see <see cref="Services.WorkbookSession"/>).
     /// </summary>
     private static void FormatPainter(IAppEnvironment e)
     {
         var session = e.Session;
         var sheet = session.ActiveSheet;
 
-        if (_formatStamp is null)
+        if (!session.IsFormatPainterArmed)
         {
             var source = e.Selection.IsSingleCell
                 ? new Cellestra.Core.Model.CellRange(e.Selection.ActiveAddress, e.Selection.ActiveAddress)
                 : e.Selection.Range;
-            _formatStamp = Cellestra.Core.Editing.FormatBlock.Capture(session.Workbook, sheet, source);
-            e.Narrate("Format Painter: select cells to paint the copied formatting.");
+            session.ArmFormatPainter(Cellestra.Core.Editing.FormatBlock.Capture(session.Workbook, sheet, source));
+            e.Narrate("Format Painter: click or drag over cells to paint the copied formatting.");
             e.Refresh();
             return;
         }
 
-        session.Execute(_formatStamp.ApplyTo(sheet.Name, e.Selection.Range));
-        _formatStamp = null;
+        session.Execute(session.FormatStamp!.ApplyTo(sheet.Name, e.Selection.Range));
+        session.DisarmFormatPainter();
         e.Refresh();
     }
 
