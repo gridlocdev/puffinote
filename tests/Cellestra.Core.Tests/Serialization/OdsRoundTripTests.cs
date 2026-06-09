@@ -78,6 +78,34 @@ public class OdsRoundTripTests
     }
 
     [Fact]
+    public void Borders_survive()
+    {
+        // A workbook with mixed per-edge border styles and a non-black colour must survive
+        // open → save → reopen (the UI sets these via Format Cells / the Border drawer).
+        var workbook = Workbook.CreateNew();
+        var sheet = workbook.ActiveSheet;
+        var border = new Border(
+            Left: new BorderEdge(BorderLineStyle.Dashed, ArgbColor.FromRgb(0, 0, 255)),
+            Right: BorderEdge.Of(BorderLineStyle.Thick),
+            Top: BorderEdge.Of(BorderLineStyle.Thin),
+            Bottom: new BorderEdge(BorderLineStyle.Double, ArgbColor.FromRgb(0, 128, 0)));
+        int styleId = workbook.Styles.Intern(CellStyle.Default.WithBorder(border));
+        sheet.SetValue(0, 0, CellValue.Number(1));
+        sheet.GetOrCreate(0, 0).StyleId = styleId;
+
+        var result = RoundTrip(workbook);
+        var reopened = result.FindSheet("Sheet1")!;
+        var b = result.Styles.Get(reopened.Find(0, 0)!.StyleId).Border;
+
+        Assert.Equal(BorderLineStyle.Dashed, b.Left.Style);
+        Assert.Equal(ArgbColor.FromRgb(0, 0, 255), b.Left.Color);
+        Assert.Equal(BorderLineStyle.Thick, b.Right.Style);
+        Assert.Equal(BorderLineStyle.Thin, b.Top.Style);
+        Assert.Equal(BorderLineStyle.Double, b.Bottom.Style);
+        Assert.Equal(ArgbColor.FromRgb(0, 128, 0), b.Bottom.Color);
+    }
+
+    [Fact]
     public void Layout_survives()
     {
         var sheet = RoundTrip(BuildSample()).FindSheet("Sheet1")!;

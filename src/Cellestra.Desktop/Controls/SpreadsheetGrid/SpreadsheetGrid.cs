@@ -317,6 +317,7 @@ public sealed partial class SpreadsheetGrid : Panel
         DrawSelection(context, _palette.SelectionFill);
         DrawCells(context, sheet, gridPen);
         DrawMerges(context, sheet, gridPen);
+        DrawCellBorders(context, sheet);
         DrawTableChrome(context, sheet);
         DrawFreezeDividers(context);
         DrawHeaders(context, _palette.HeaderFill, _palette.HeaderText, gridPen);

@@ -53,6 +53,11 @@ public static class CommandBarModel
         new CommandBarGroup("Align",
             new[] { "format.alignLeft", "format.alignCenter", "format.alignRight" },
             new[] { "format.wrap", "format.merge" }),
+        // Borders: a small group whose chevron drawer lists the common presets (recognition over
+        // recall). The primary tool is "All Borders"; the rest live behind the drawer.
+        new CommandBarGroup("Border",
+            new[] { "format.borderAll" },
+            new[] { "format.borderOutline", "format.borderNone", "format.borderBottom", "format.borderTop", "format.borderLeft", "format.borderRight" }),
         new CommandBarGroup("Numbers",
             new[] { "format.currency", "format.percent" },
             // The increase/decrease-decimal steppers live in the drawer (greyed on text, like the

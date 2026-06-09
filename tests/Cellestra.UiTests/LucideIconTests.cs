@@ -19,6 +19,9 @@ public class LucideIconTests
     [InlineData("table-cells-merge")] // exercises <rect rx ry>
     [InlineData("scissors")]          // exercises <circle>
     [InlineData("paintbrush")]        // Format Painter glyph (was paint-bucket)
+    [InlineData("grid-2x2")]          // All Borders glyph
+    [InlineData("square")]            // Outer Border glyph
+    [InlineData("square-x")]          // No Border glyph
     public void Vendored_glyph_parses_to_non_empty_geometry(string key)
     {
         var geometry = LucideIcons.Get(key);

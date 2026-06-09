@@ -83,6 +83,23 @@ public static class AppCommands
             e => StepDecimals(e, -1), "move-decimal-right", canExecute: CanStepDecimals),
         new("format.cells", "Format Cells…", "Open the full cell-formatting dialog.", e => e.ShowFormatCellsDialog(), "settings-2", new KeyGesture(Key.D1, Cmd)),
 
+        // Borders — quick presets applied via the standard ApplyStyle path. The dropdown lives on the
+        // command bar (see CommandBarModel "Border" group); Format Cells… covers per-edge control.
+        new("format.borderAll", "All Borders", "Draw thin borders on every side of each selected cell.",
+            e => ApplyBorderToEach(e, "All Borders", _ => Border.All(BorderLineStyle.Thin)), "grid-2x2"),
+        new("format.borderOutline", "Outer Border", "Draw a thin border around the outside of the selection.",
+            e => ApplyOutline(e), "square"),
+        new("format.borderBottom", "Bottom Border", "Draw a thin border along the bottom of each selected cell.",
+            e => ApplyBorderToEach(e, "Bottom Border", b => b with { Bottom = ThinEdge }), "square"),
+        new("format.borderTop", "Top Border", "Draw a thin border along the top of each selected cell.",
+            e => ApplyBorderToEach(e, "Top Border", b => b with { Top = ThinEdge }), "square"),
+        new("format.borderLeft", "Left Border", "Draw a thin border along the left of each selected cell.",
+            e => ApplyBorderToEach(e, "Left Border", b => b with { Left = ThinEdge }), "square"),
+        new("format.borderRight", "Right Border", "Draw a thin border along the right of each selected cell.",
+            e => ApplyBorderToEach(e, "Right Border", b => b with { Right = ThinEdge }), "square"),
+        new("format.borderNone", "No Border", "Remove every border from the selected cells.",
+            e => ApplyBorderToEach(e, "No Border", _ => Border.None), "square-x"),
+
         // Insert
         new("insert.rowsAbove", "Rows Above", "Insert rows above the selection.", e => InsertRows(e, above: true), "rows-plus"),
         new("insert.columnsLeft", "Columns Left", "Insert columns left of the selection.", e => InsertColumns(e, before: true), "columns-plus"),
@@ -235,6 +252,54 @@ public static class AppCommands
         var sheet = e.Session.ActiveSheet;
         var active = sheet.Find(e.Selection.ActiveRow, e.Selection.ActiveColumn);
         return e.Session.Workbook.Styles.Get(active?.StyleId ?? StylePool.DefaultId);
+    }
+
+    // ---- Borders ----------------------------------------------------------
+
+    private static readonly BorderEdge ThinEdge = BorderEdge.Of(BorderLineStyle.Thin);
+
+    /// <summary>
+    /// Apply a per-cell border transform to every cell in the selection as one undoable edit. The
+    /// transform takes each cell's current border so additive presets (e.g. "Bottom Border") keep
+    /// the other edges; "All"/"None" simply ignore the input.
+    /// </summary>
+    private static void ApplyBorderToEach(IAppEnvironment e, string label, Func<Border, Border> transform)
+    {
+        var session = e.Session;
+        session.Execute(EditCommands.ApplyStyle(session.Workbook, session.ActiveSheet.Name, e.Selection.Range,
+            s => s.WithBorder(transform(s.Border)), label));
+        e.Refresh();
+    }
+
+    /// <summary>
+    /// Draw a thin border around the OUTSIDE of the whole selection: only the perimeter cells gain
+    /// the outermost edge (top row → top edge, left column → left edge, …), so the result reads as a
+    /// single box, not a border on every cell. A single cell gets a full box. Built as one undoable
+    /// composite of the four perimeter strips, each adding its edge while preserving the others.
+    /// </summary>
+    private static void ApplyOutline(IAppEnvironment e)
+    {
+        var session = e.Session;
+        string sheet = session.ActiveSheet.Name;
+        var range = e.Selection.Range;
+        int top = range.Top, bottom = range.Bottom, left = range.Left, right = range.Right;
+        var wb = session.Workbook;
+
+        var topStrip = new Cellestra.Core.Model.CellRange(new Cellestra.Core.Model.CellAddress(left, top), new Cellestra.Core.Model.CellAddress(right, top));
+        var bottomStrip = new Cellestra.Core.Model.CellRange(new Cellestra.Core.Model.CellAddress(left, bottom), new Cellestra.Core.Model.CellAddress(right, bottom));
+        var leftStrip = new Cellestra.Core.Model.CellRange(new Cellestra.Core.Model.CellAddress(left, top), new Cellestra.Core.Model.CellAddress(left, bottom));
+        var rightStrip = new Cellestra.Core.Model.CellRange(new Cellestra.Core.Model.CellAddress(right, top), new Cellestra.Core.Model.CellAddress(right, bottom));
+
+        var parts = new List<IEditCommand>
+        {
+            EditCommands.ApplyStyle(wb, sheet, topStrip, s => s.WithBorder(s.Border with { Top = ThinEdge }), "Outer Border"),
+            EditCommands.ApplyStyle(wb, sheet, bottomStrip, s => s.WithBorder(s.Border with { Bottom = ThinEdge }), "Outer Border"),
+            EditCommands.ApplyStyle(wb, sheet, leftStrip, s => s.WithBorder(s.Border with { Left = ThinEdge }), "Outer Border"),
+            EditCommands.ApplyStyle(wb, sheet, rightStrip, s => s.WithBorder(s.Border with { Right = ThinEdge }), "Outer Border"),
+        };
+
+        session.Execute(EditCommands.Composite("Outer Border", parts));
+        e.Refresh();
     }
 
     private static void SetAlignment(IAppEnvironment e, HorizontalAlignment horizontal)

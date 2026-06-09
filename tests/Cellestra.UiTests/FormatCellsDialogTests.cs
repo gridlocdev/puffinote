@@ -56,4 +56,33 @@ public class FormatCellsDialogTests
         Assert.Equal("$#,##0.00", transform(currency).NumberFormat.Code);
         Assert.Equal("0%", transform(percent).NumberFormat.Code);
     }
+
+    [AvaloniaFact]
+    public void Single_selection_border_is_seeded_and_applied()
+    {
+        // A single style with an outline border: the dialog seeds the edge checkboxes from it, so an
+        // untouched OK re-applies that same border (changeBorder is true when borders all agree).
+        var outlined = CellStyle.Default.WithBorder(Border.All(BorderLineStyle.Medium));
+        var dialog = new FormatCellsDialog(outlined);
+        var transform = dialog.BuildTransform();
+
+        var result = transform(CellStyle.Default);
+        Assert.True(result.Border.HasAnyEdge);
+        Assert.Equal(BorderLineStyle.Medium, result.Border.Top.Style);
+        Assert.Equal(BorderLineStyle.Medium, result.Border.Left.Style);
+    }
+
+    [AvaloniaFact]
+    public void Mixed_border_is_preserved_when_untouched()
+    {
+        var boxed = CellStyle.Default.WithBorder(Border.All(BorderLineStyle.Thin));
+        var none = CellStyle.Default; // Border.None
+
+        // Borders differ across the selection → the dialog leaves them alone unless touched.
+        var dialog = new FormatCellsDialog(boxed, new[] { boxed, none });
+        var transform = dialog.BuildTransform();
+
+        Assert.True(transform(boxed).Border.HasAnyEdge);   // the boxed cell keeps its box
+        Assert.False(transform(none).Border.HasAnyEdge);   // the plain cell stays borderless
+    }
 }

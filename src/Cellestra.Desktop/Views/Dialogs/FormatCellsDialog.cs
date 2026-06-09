@@ -8,6 +8,9 @@ using Cellestra.Desktop.Views.Overlays;
 using AvColor = Avalonia.Media.Color;
 using SAlign = Cellestra.Core.Styling.HorizontalAlignment;
 using SVAlign = Cellestra.Core.Styling.VerticalAlignment;
+using SBorder = Cellestra.Core.Styling.Border;
+using SBorderEdge = Cellestra.Core.Styling.BorderEdge;
+using SBorderLineStyle = Cellestra.Core.Styling.BorderLineStyle;
 
 namespace Cellestra.Desktop.Views.Dialogs;
 
@@ -46,6 +49,25 @@ public sealed class FormatCellsDialog : ModalDialog<Func<CellStyle, CellStyle>?>
     private readonly ColorPicker _fillColor;
     private readonly ComboBox _align;
     private readonly ComboBox _valign;
+
+    // Border controls. The dialog holds an in-progress Border; edge checkboxes and presets mutate it.
+    private readonly ComboBox _borderStyle;
+    private readonly ColorPicker _borderColor;
+    private readonly CheckBox _borderTop;
+    private readonly CheckBox _borderBottom;
+    private readonly CheckBox _borderLeft;
+    private readonly CheckBox _borderRight;
+    private readonly bool _borderVaries;
+
+    // The border is only rewritten once the user touches it (a preset, an edge toggle, or — when the
+    // selection's borders all agree — any change at all). A mixed, untouched border is left per-cell.
+    private bool _borderTouched;
+
+    private static readonly (string Label, SBorderLineStyle Style)[] BorderStyles =
+    {
+        ("Thin", SBorderLineStyle.Thin), ("Medium", SBorderLineStyle.Medium), ("Thick", SBorderLineStyle.Thick),
+        ("Dashed", SBorderLineStyle.Dashed), ("Dotted", SBorderLineStyle.Dotted), ("Double", SBorderLineStyle.Double),
+    };
 
     // When the selection's styles disagree on a field, the matching control seeds to a neutral
     // "varies" state and we leave that field untouched unless the user changes it.
@@ -141,6 +163,40 @@ public sealed class FormatCellsDialog : ModalDialog<Func<CellStyle, CellStyle>?>
         _valign = new ComboBox { Width = 140, ItemsSource = valignItems };
         _valign.SelectedIndex = _valignVaries ? valignItems.Count - 1 : (int)current.Alignment.Vertical;
 
+        // ---- Border section -------------------------------------------------
+        _borderVaries = !AllSame(all, s => s.Border);
+        var seedBorder = current.Border;
+
+        _borderStyle = new ComboBox { Width = 140, ItemsSource = BorderStyles.Select(b => b.Label).ToList() };
+        // Seed the style picker from any visible edge so it reflects what's already there.
+        var seedEdge = FirstVisibleEdge(seedBorder);
+        _borderStyle.SelectedIndex = Math.Max(0, Array.FindIndex(BorderStyles, b => b.Style == seedEdge.Style));
+        _borderStyle.SelectionChanged += (_, _) => RestyleBorder();
+
+        _borderColor = new ColorPicker { Color = ToAvalonia(seedEdge.Color.IsTransparent ? ArgbColor.Black : seedEdge.Color) };
+        _borderColor.ColorChanged += (_, _) => RestyleBorder();
+
+        _borderTop = EdgeBox("Top", seedBorder.Top.IsVisible);
+        _borderBottom = EdgeBox("Bottom", seedBorder.Bottom.IsVisible);
+        _borderLeft = EdgeBox("Left", seedBorder.Left.IsVisible);
+        _borderRight = EdgeBox("Right", seedBorder.Right.IsVisible);
+
+        var presets = new StackPanel
+        {
+            Orientation = Orientation.Horizontal,
+            Spacing = 6,
+            Children =
+            {
+                BorderPreset("None", () => SetEdges(false, false, false, false)),
+                BorderPreset("Outline", () => SetEdges(true, true, true, true)),
+                BorderPreset("All", () => SetEdges(true, true, true, true)),
+                BorderPreset("Top", () => SetEdges(top: true, bottom: false, left: false, right: false)),
+                BorderPreset("Bottom", () => SetEdges(top: false, bottom: true, left: false, right: false)),
+                BorderPreset("Left", () => SetEdges(top: false, bottom: false, left: true, right: false)),
+                BorderPreset("Right", () => SetEdges(top: false, bottom: false, left: false, right: true)),
+            },
+        };
+
         var ok = new Button { Content = "OK", IsDefault = true };
         ok.Click += (_, _) => Close(BuildTransform());
         var cancel = new Button { Content = "Cancel", IsCancel = true };
@@ -158,6 +214,9 @@ public sealed class FormatCellsDialog : ModalDialog<Func<CellStyle, CellStyle>?>
                 Row("Fill", new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8, Children = { _fillEnabled, _fillColor, fillReset } }),
                 Row("Horizontal", _align),
                 Row("Vertical", _valign),
+                Row("Border line", new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8, Children = { _borderStyle, _borderColor } }),
+                Row("Border edges", new StackPanel { Orientation = Orientation.Horizontal, Spacing = 12, Children = { _borderTop, _borderBottom, _borderLeft, _borderRight } }),
+                Row("Presets", presets),
                 new StackPanel
                 {
                     Orientation = Orientation.Horizontal,
@@ -211,6 +270,66 @@ public sealed class FormatCellsDialog : ModalDialog<Func<CellStyle, CellStyle>?>
         return button;
     }
 
+    // ---- Border helpers --------------------------------------------------
+
+    /// <summary>An edge checkbox (Top/Bottom/Left/Right); toggling it marks the border touched.</summary>
+    private CheckBox EdgeBox(string label, bool on)
+    {
+        var box = new CheckBox { Content = label, IsChecked = on };
+        box.IsCheckedChanged += (_, _) => _borderTouched = true;
+        return box;
+    }
+
+    /// <summary>A preset button (None/Outline/All/Top/…) that sets the edge checkboxes and marks the border touched.</summary>
+    private Button BorderPreset(string label, Action apply)
+    {
+        var button = new Button { Content = label };
+        button.Click += (_, _) => { apply(); _borderTouched = true; };
+        return button;
+    }
+
+    /// <summary>Set the four edge checkboxes (used by presets).</summary>
+    private void SetEdges(bool top, bool bottom, bool left, bool right)
+    {
+        _borderTop.IsChecked = top;
+        _borderBottom.IsChecked = bottom;
+        _borderLeft.IsChecked = left;
+        _borderRight.IsChecked = right;
+    }
+
+    /// <summary>Changing the line style or colour re-skins whatever edges are on, and counts as a touch.</summary>
+    private void RestyleBorder() => _borderTouched = true;
+
+    /// <summary>The chosen edge (style + colour) the dialog applies to every "on" edge.</summary>
+    private SBorderEdge CurrentEdge() =>
+        new(BorderStyles[Math.Max(0, _borderStyle.SelectedIndex)].Style, FromAvalonia(_borderColor.Color));
+
+    /// <summary>The first visible edge of a border, to seed the style/colour pickers; falls back to a thin black edge.</summary>
+    private static SBorderEdge FirstVisibleEdge(SBorder border)
+    {
+        if (border.Top.IsVisible)
+        {
+            return border.Top;
+        }
+
+        if (border.Bottom.IsVisible)
+        {
+            return border.Bottom;
+        }
+
+        if (border.Left.IsVisible)
+        {
+            return border.Left;
+        }
+
+        if (border.Right.IsVisible)
+        {
+            return border.Right;
+        }
+
+        return SBorderEdge.Of(SBorderLineStyle.Thin);
+    }
+
     private static StackPanel Row(string label, Control control) => new()
     {
         Orientation = Orientation.Horizontal,
@@ -256,6 +375,17 @@ public sealed class FormatCellsDialog : ModalDialog<Func<CellStyle, CellStyle>?>
 
         bool changeValign = !(_valignVaries && _valign.SelectedIndex == 3);
         var vertical = changeValign ? (SVAlign)_valign.SelectedIndex : default;
+
+        // Border: only rewrite when the user touched it (a preset, an edge toggle, or any change while
+        // the selection's borders agreed). The chosen edge (style+colour) applies to every "on" edge;
+        // "off" edges become BorderEdge.None. An untouched, varying border is left per-cell.
+        bool changeBorder = _borderTouched || !_borderVaries;
+        var edge = CurrentEdge();
+        var border = new SBorder(
+            _borderLeft.IsChecked == true ? edge : SBorderEdge.None,
+            _borderRight.IsChecked == true ? edge : SBorderEdge.None,
+            _borderTop.IsChecked == true ? edge : SBorderEdge.None,
+            _borderBottom.IsChecked == true ? edge : SBorderEdge.None);
 
         return style =>
         {
@@ -312,6 +442,11 @@ public sealed class FormatCellsDialog : ModalDialog<Func<CellStyle, CellStyle>?>
             }
 
             var result = style with { Font = font, Fill = fill, Alignment = alignment };
+            if (changeBorder)
+            {
+                result = result.WithBorder(border);
+            }
+
             return changeFormat ? result.WithNumberFormat(new NumberFormat(code!)) : result;
         };
     }
