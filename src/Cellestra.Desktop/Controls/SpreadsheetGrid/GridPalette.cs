@@ -38,6 +38,9 @@ internal sealed class GridPalette
 
     public required ImmutablePen ActiveOutline { get; init; }
 
+    /// <summary>The colour a cell's hyperlinked text is drawn in — a blue that reads on both themes.</summary>
+    public required IBrush Hyperlink { get; init; }
+
     public static GridPalette For(ThemeVariant variant) => variant == ThemeVariant.Dark ? Dark : Light;
 
     private static IBrush Brush(uint argb) => new ImmutableSolidColorBrush(Color.FromUInt32(argb));
@@ -59,6 +62,7 @@ internal sealed class GridPalette
         PopupSurface = Brush(0xFFFFFFFF),
         SelectionFill = Brush(0x222A7DE1),
         ActiveOutline = Pen(0xFF2A7DE1, 2),
+        Hyperlink = Brush(0xFF0B5FCC),
     };
 
     private static readonly GridPalette Dark = new()
@@ -75,5 +79,6 @@ internal sealed class GridPalette
         PopupSurface = Brush(0xFF2B2B2B),
         SelectionFill = Brush(0x332A7DE1),
         ActiveOutline = Pen(0xFF4A90E2, 2),
+        Hyperlink = Brush(0xFF6BB0FF),
     };
 }

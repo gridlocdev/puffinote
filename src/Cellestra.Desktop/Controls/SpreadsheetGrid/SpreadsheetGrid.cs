@@ -367,7 +367,8 @@ public sealed partial class SpreadsheetGrid : Panel
                 }
 
                 var cell = sheet.Find(row, col);
-                if (cell is not null && !cell.Value.IsEmpty)
+                // A hyperlinked cell draws even when empty (its target stands in as the link text).
+                if (cell is not null && (!cell.Value.IsEmpty || cell.Hyperlink is not null))
                 {
                     DrawCellContent(context, sheet, cell, new Rect(x, y, w, h), row, col, allowSpill: true);
                 }
@@ -459,7 +460,14 @@ public sealed partial class SpreadsheetGrid : Panel
     private void DrawCellContent(DrawingContext context, Worksheet sheet, Cell cell, Rect rect, int row, int column, bool allowSpill)
     {
         var style = ResolveStyle(cell, row, column);
+        bool isLink = cell.Hyperlink is not null;
         string text = NumberFormatter.Format(cell.Value, style.NumberFormat, Culture);
+        // An empty hyperlinked cell shows its target as the visible (clickable) link text.
+        if (text.Length == 0 && isLink)
+        {
+            text = cell.Hyperlink!.Target;
+        }
+
         if (text.Length == 0)
         {
             return;
@@ -470,11 +478,13 @@ public sealed partial class SpreadsheetGrid : Panel
             style.Font.Italic ? FontStyle.Italic : FontStyle.Normal,
             style.Font.Bold ? FontWeight.Bold : FontWeight.Normal);
         double fontSize = style.Font.SizePoints * 96.0 / 72.0 * _zoom;
-        var brush = TextBrushFor(style, cell.Value);
+        // A hyperlink draws in the themed link colour and is always underlined, regardless of the
+        // cell's own font colour/decorations, so links read as links in both light and dark mode.
+        var brush = isLink ? _palette.Hyperlink : TextBrushFor(style, cell.Value);
 
         var formatted = new FormattedText(text, CultureInfo.CurrentCulture, FlowDirection.LeftToRight,
             typeface, fontSize, brush);
-        if (Decorations(style.Font) is { } decorations)
+        if (LinkDecorations(style.Font, isLink) is { } decorations)
         {
             formatted.SetTextDecorations(decorations);
         }
@@ -830,6 +840,16 @@ public sealed partial class SpreadsheetGrid : Panel
             return;
         }
 
+        // Cmd-click a hyperlinked cell opens its link with the OS default handler, leaving the
+        // selection untouched (so the link gesture never breaks the discontiguous-select gesture
+        // for non-linked cells). Single click only; headers and double-clicks fall through.
+        if (e.ClickCount == 1 && !rowHeader && !columnHeader
+            && e.KeyModifiers.HasFlag(KeyModifiers.Meta) && TryActivateHyperlink(row, column))
+        {
+            e.Handled = true;
+            return;
+        }
+
         if (e.ClickCount == 2)
         {
             SelectCellOrMerge(row, column);
@@ -976,7 +996,7 @@ public sealed partial class SpreadsheetGrid : Panel
         {
             // Hovering a header border shows the resize cursor; elsewhere, the default arrow.
             UpdateResizeCursor(point);
-            UpdateErrorTip(point); // show an error cell's plain-English reason on hover (task 12)
+            UpdateHoverTip(point); // error-cell reason (task 12) or "⌘-click to open …" for a link
             return;
         }
 
@@ -1014,7 +1034,7 @@ public sealed partial class SpreadsheetGrid : Panel
     protected override void OnPointerExited(PointerEventArgs e)
     {
         base.OnPointerExited(e);
-        ClearErrorTip(); // don't leave a stale error tooltip when the pointer leaves the grid
+        ClearHoverTip(); // don't leave a stale tooltip when the pointer leaves the grid
     }
 
     protected override void OnPointerWheelChanged(PointerWheelEventArgs e)
@@ -1062,6 +1082,15 @@ public sealed partial class SpreadsheetGrid : Panel
             case Key.Right: _tabOriginColumn = null; MoveStep(0, 1, extend); break;
             case Key.Tab: MoveStep(0, e.KeyModifiers.HasFlag(KeyModifiers.Shift) ? -1 : 1, false); break;
             case Key.Return:
+                // Cmd+Return opens the active cell's hyperlink (mirroring the Cmd-click gesture);
+                // plain Return keeps its established meaning — paste a marquee, else move down — so
+                // hyperlink activation never steals Enter from navigation/commit.
+                if (e.KeyModifiers.HasFlag(KeyModifiers.Meta)
+                    && TryActivateHyperlink(Selection.ActiveRow, Selection.ActiveColumn))
+                {
+                    break;
+                }
+
                 if (HasMarquee)
                 {
                     EnterPasteRequested?.Invoke(this, EventArgs.Empty); // paste once at the active cell (#3)
@@ -1552,6 +1581,26 @@ public sealed partial class SpreadsheetGrid : Panel
     private void RaiseSelectionChanged() => SelectionChanged?.Invoke(this, EventArgs.Empty);
 
     private static Color ToColor(ArgbColor color) => Color.FromArgb(color.A, color.R, color.G, color.B);
+
+    /// <summary>
+    /// The decorations to draw on a cell: a hyperlink is always underlined (adding the font's own
+    /// strikethrough if set); a plain cell uses just its font's underline/strikethrough.
+    /// </summary>
+    private static TextDecorationCollection? LinkDecorations(Cellestra.Core.Styling.Font font, bool isLink)
+    {
+        if (!isLink)
+        {
+            return Decorations(font);
+        }
+
+        var decorations = new TextDecorationCollection { TextDecorations.Underline[0] };
+        if (font.Strikethrough)
+        {
+            decorations.Add(TextDecorations.Strikethrough[0]);
+        }
+
+        return decorations;
+    }
 
     /// <summary>The text decorations for a font (underline and/or strikethrough), or null when it has neither.</summary>
     private static TextDecorationCollection? Decorations(Cellestra.Core.Styling.Font font)
