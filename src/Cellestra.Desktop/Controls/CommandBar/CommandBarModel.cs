@@ -20,8 +20,17 @@ public enum CommandContext
 /// </summary>
 public sealed record CommandBarGroup(string Name, IReadOnlyList<string> Primary, IReadOnlyList<string> Overflow)
 {
-    /// <summary>True when the Text group — the only one with bespoke drawer affordances (font size, colours).</summary>
+    /// <summary>True for the Text group — bespoke drawer affordances for font size and colours.</summary>
     public bool HasStyleDrawer => Name == "Text";
+
+    /// <summary>True for the Align group — adds vertical-alignment buttons alongside the horizontal ones.</summary>
+    public bool HasAlignDrawer => Name == "Align";
+
+    /// <summary>True for the Numbers group — adds the grouped, previewed "Format as" picker.</summary>
+    public bool HasNumberDrawer => Name == "Numbers";
+
+    /// <summary>Whether this group needs a chevron — it has overflow commands or any bespoke drawer content.</summary>
+    public bool HasDrawer => Overflow.Count > 0 || HasStyleDrawer || HasAlignDrawer || HasNumberDrawer;
 }
 
 /// <summary>The bar layout per context. Group/primary/overflow ids all resolve in <c>AppCommands</c>.</summary>
@@ -50,7 +59,7 @@ public static class CommandBarModel
             new[] { "insert.rowsAbove", "insert.columnsLeft" },
             new[] { "insert.sheet", "data.createTable" }),
         new CommandBarGroup("Data",
-            new[] { "data.sortAsc", "data.toggleFilter" },
-            new[] { "data.sortDesc", "data.customSort", "data.clearFilter", "data.removeDuplicates", "data.textToColumns", "data.validation" }),
+            new[] { "data.sortAsc", "data.sortDesc", "data.toggleFilter" },
+            new[] { "data.customSort", "data.clearFilter", "data.removeDuplicates", "data.textToColumns", "data.validation" }),
     };
 }
