@@ -351,6 +351,8 @@ These are the v1 commitment. Adding functions later is expected and cheap (one r
 ### 8.3 Locale and number formats
 Number, date, and currency formatting follow the **document's locale** when the `.ods` file specifies one. For a **new** document, and for any format the file leaves unspecified, Cellestra uses the **system locale**. The decimal/thousands separators and currency symbol follow the active locale.
 
+**Two-digit years** in typed dates resolve on LibreOffice Calc's default window — **1930–2029** (`00`–`29` → 2000–2029, `30`–`99` → 1930–1999) — not .NET's default (…2049). So `3/4/30` is 1930.
+
 ### 8.4 CSV format
 - **Encoding:** UTF-8. On import, a UTF-8 BOM is detected and stripped; other encodings are read as UTF-8 (best effort).
 - **Delimiter:** comma by default; the Import/Export dialog lets the user pick comma, semicolon, or tab.

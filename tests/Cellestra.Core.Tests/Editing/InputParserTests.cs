@@ -67,6 +67,24 @@ public class InputParserTests
             InputParser.Parse("03/04/2026", EnUs).Value.AsNumber, 9);
     }
 
+    [Theory]
+    // Two-digit years resolve on LibreOffice Calc's 1930–2029 window, not .NET's default (…2049):
+    // 00–29 → 2000–2029, 30–99 → 1930–1999.
+    [InlineData("6/7/26", 2026)]
+    [InlineData("6/7/29", 2029)]
+    [InlineData("6/7/30", 1930)]
+    [InlineData("6/7/99", 1999)]
+    [InlineData("6/7/00", 2000)]
+    public void Two_digit_year_uses_calc_1930_window(string typed, int expectedYear)
+    {
+        var parsed = InputParser.Parse(typed, EnUs);
+
+        Assert.True(parsed.Value.IsNumber);
+        Assert.Equal(
+            DateConversion.ToSerial(new System.DateTime(expectedYear, 6, 7)),
+            parsed.Value.AsNumber, 9);
+    }
+
     [Fact]
     public void Plain_text_and_codes_are_not_coerced_to_dates()
     {

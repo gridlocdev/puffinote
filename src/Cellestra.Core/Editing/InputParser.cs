@@ -88,7 +88,7 @@ public static class InputParser
         }
 
         if (trimmed.IndexOf('/') >= 0 &&
-            DateTime.TryParse(trimmed, culture, Styles, out var date) &&
+            DateTime.TryParse(trimmed, TwoDigitYearCulture(culture), Styles, out var date) &&
             date.TimeOfDay == TimeSpan.Zero)
         {
             serial = DateConversion.ToSerial(date.Date);
@@ -97,6 +97,18 @@ public static class InputParser
         }
 
         return false;
+    }
+
+    /// <summary>
+    /// The active locale, adjusted so a two-digit year resolves on LibreOffice Calc's default
+    /// 1930–2029 window (so <c>3/4/30</c> is 1930, not .NET's default 2030). Cloned because the
+    /// calendar's <see cref="System.Globalization.Calendar.TwoDigitYearMax"/> is per-instance.
+    /// </summary>
+    private static CultureInfo TwoDigitYearCulture(CultureInfo culture)
+    {
+        var adjusted = (CultureInfo)culture.Clone();
+        adjusted.Calendar.TwoDigitYearMax = 2029;
+        return adjusted;
     }
 
     private static bool IsIsoDate(string text)
