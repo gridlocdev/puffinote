@@ -131,6 +131,22 @@ Hard-won facts from building the app and CLI — they'll save you a failed build
 - **Accessibility:** new controls expose automation peers (labels/roles) and are keyboard-operable. No mouse-only interactions.
 - **Threading:** recalc and file I/O off the UI thread; touch Avalonia controls only on the UI thread.
 
+## Parallel subagents (dividing a batch of tasks)
+
+When handed a *list* of independent tasks (a backlog, a checklist), it's worth fanning the work out to parallel subagents — but this codebase is a tightly-coupled UI app with a few **shared hub files** that many features touch, so naive parallelism corrupts them. Follow this:
+
+- **Divide by area so every hub file has exactly one owner.** Two agents editing the same file concurrently *will* clobber each other. The hubs that pull in many tasks:
+  - `Views/MainWindow.axaml.cs` (+ `.axaml`) — native menu, **context menus**, **sheet tabs**, **formula bar**, and the **overlay/modal host** (`OverlayHost`, `ShowPalette`, the internal-modal system). The single busiest file; give it one owner.
+  - `Commands/AppCommands.cs` — the one command catalog (Golden Rule #4). Many tasks add/touch a command here.
+  - `Controls/SpreadsheetGrid/*.cs` — one control across partials; treat the whole folder as one owner.
+  - `Controls/CommandBar/*` — the toolbar; one owner.
+  - `Core/Workbook/Worksheet.cs`, `Core/Styling/*` — shared Core types.
+  - Map each task to the file it *most* needs and group tasks by that. A task that spans two hubs goes to the owner of the harder hub; note any cross-area seam for integration (e.g. the Name Box reads `Grid.ActiveCellName`).
+- **Isolate with git worktrees.** Spawn each agent with `isolation: "worktree"` so concurrent agents mutate separate checkouts — otherwise they race on one working tree and index. (This is the one sanctioned use of branches; see Branching above — they're a temporary isolation mechanism, squash/merged into `main` then deleted, not a move to feature-branch development.)
+- **Brief each agent tightly:** read this file + the relevant PRD/ARCH sections; an **explicit file scope** ("you may ONLY edit X; do NOT touch Y — another agent owns it"); the definition of done (clean `dotnet build`, green tests); and to **commit** with the standard co-author trailer and report which files/sections it changed.
+- **Integrate sequentially with a build+test gate.** Merge one branch at a time, resolving the small, mechanical hub-file conflicts (two agents appending different methods to `Worksheet.cs`, or commands to different *sections* of `AppCommands.cs` — keep both). After all merges, wire the cross-area seams the agents flagged, then run the **full** `dotnet build` + `dotnet test` once more — per-worktree green doesn't prove the integrated whole builds.
+- **Clean up carefully:** `git worktree remove … --force`, `git branch -D …`, `git worktree prune`. **Never `git add -A` while agent worktrees still exist under `.claude/worktrees/`** — they're nested git repos and get staged as embedded gitlinks (mode 160000). That path is gitignored; keep it that way.
+
 ## Testing expectations
 
 - New Core logic ships **with xUnit v3 tests** in `Cellestra.Core.Tests` (formula and serialization code especially; assert function results against LibreOffice's).
