@@ -1,26 +1,21 @@
-using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Layout;
-using Avalonia.Media;
+using Cellestra.Desktop.Views.Overlays;
 
 namespace Cellestra.Desktop.Views.Dialogs;
 
 /// <summary>
-/// A modal single-line text prompt (e.g. renaming a sheet). Returns the trimmed entry from
-/// <see cref="Window.ShowDialog{TResult}"/> on OK/Enter, or null on cancel/close.
+/// A single-line text prompt rendered as an internal modal (e.g. renaming a sheet). Its
+/// <see cref="ModalDialog{T}.Result"/> is the trimmed entry on OK/Enter, or null on cancel/Esc.
 /// </summary>
-public sealed class TextPromptDialog : Window
+public sealed class TextPromptDialog : ModalDialog<string?>
 {
     private readonly TextBox _input;
 
     public TextPromptDialog(string heading, string label, string initial = "")
     {
         Title = heading;
-        Width = 360;
-        SizeToContent = SizeToContent.Height;
-        CanResize = false;
-        WindowStartupLocation = WindowStartupLocation.CenterOwner;
 
         _input = new TextBox { Text = initial, Width = 220 };
         _input.KeyDown += (_, e) =>
@@ -30,19 +25,18 @@ public sealed class TextPromptDialog : Window
                 Accept();
             }
         };
+        InitialFocus = _input;
 
         var ok = new Button { Content = "OK", IsDefault = true };
         ok.Click += (_, _) => Accept();
         var cancel = new Button { Content = "Cancel", IsCancel = true };
         cancel.Click += (_, _) => Close(null);
 
-        Content = new StackPanel
+        DialogContent = new StackPanel
         {
-            Margin = new Thickness(20),
             Spacing = 12,
             Children =
             {
-                new TextBlock { Text = heading, FontWeight = FontWeight.SemiBold, FontSize = 14 },
                 new StackPanel
                 {
                     Orientation = Orientation.Horizontal,
@@ -58,8 +52,6 @@ public sealed class TextPromptDialog : Window
                 },
             },
         };
-
-        Opened += (_, _) => _input.Focus();
     }
 
     private void Accept()

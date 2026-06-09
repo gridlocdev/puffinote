@@ -118,6 +118,7 @@ public static class AppCommands
         // character types normally when editing a cell, the formula bar, or a dialog.
         new("help.shortcuts", "Keyboard Shortcuts", "List every keyboard shortcut.", e => e.ShowKeyboardShortcuts(), "keyboard",
             new KeyGesture(Key.OemQuestion, KeyModifiers.Shift), e => !e.IsTextInputFocused),
+        new("help.about", "About Cellestra", "About Cellestra — version, pronunciation, and license.", e => e.ShowAbout(), "info"),
     };
 
     // Number-format codes the bar's one-tap toggles apply. They classify (NumberFormatParser) as

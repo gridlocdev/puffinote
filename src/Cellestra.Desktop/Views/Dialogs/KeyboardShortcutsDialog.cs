@@ -6,15 +6,16 @@ using Avalonia.Controls;
 using Avalonia.Layout;
 using Avalonia.Media;
 using Cellestra.Desktop.Commands;
+using Cellestra.Desktop.Views.Overlays;
 
 namespace Cellestra.Desktop.Views.Dialogs;
 
 /// <summary>
-/// The keyboard shortcuts reference, opened with <c>?</c> (PRD §6). Reads every shortcut from the
-/// one command catalog (Golden Rule #4) so it can never drift from the real bindings, grouped by
-/// area, plus the grid navigation keys the grid handles directly.
+/// The keyboard shortcuts reference, opened with <c>?</c> (PRD §6), rendered as an internal modal.
+/// Reads every shortcut from the one command catalog (Golden Rule #4) so it can never drift from
+/// the real bindings, grouped by area, plus the grid navigation keys the grid handles directly.
 /// </summary>
-public sealed class KeyboardShortcutsDialog : Window
+public sealed class KeyboardShortcutsDialog : ModalDialog<bool>
 {
     // Catalog id prefix → section heading, in display order.
     private static readonly (string Prefix, string Title)[] Categories =
@@ -44,10 +45,6 @@ public sealed class KeyboardShortcutsDialog : Window
     public KeyboardShortcutsDialog()
     {
         Title = "Keyboard Shortcuts";
-        Width = 460;
-        Height = 560;
-        CanResize = false;
-        WindowStartupLocation = WindowStartupLocation.CenterOwner;
 
         var sections = new StackPanel { Spacing = 18 };
 
@@ -78,9 +75,10 @@ public sealed class KeyboardShortcutsDialog : Window
 
         var scroll = new ScrollViewer { Content = sections };
 
-        Content = new Grid
+        DialogContent = new Grid
         {
-            Margin = new Thickness(16),
+            Width = 440,
+            Height = 520,
             RowDefinitions = new RowDefinitions("*,Auto"),
             Children = { scroll, close },
         };
