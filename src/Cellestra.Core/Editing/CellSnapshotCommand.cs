@@ -11,7 +11,8 @@ namespace Cellestra.Core.Editing;
 public sealed class CellSnapshotCommand : IEditCommand
 {
     private readonly string _sheetName;
-    private readonly IReadOnlyList<(int Row, int Column)> _positions;
+    private IReadOnlyList<(int Row, int Column)> _positions;
+    private readonly Func<Worksheet, IReadOnlyList<(int Row, int Column)>>? _positionFactory;
     private readonly Action<Worksheet> _mutate;
     private List<(int Row, int Column, Cell? Before)>? _snapshot;
 
@@ -23,11 +24,31 @@ public sealed class CellSnapshotCommand : IEditCommand
         _mutate = mutate;
     }
 
+    /// <summary>
+    /// As the eager overload, but the affected positions are computed from the worksheet at
+    /// <see cref="Apply"/> time. Lets range-iterating edits clamp to the used range instead of
+    /// materializing a whole-sheet selection (16384×1048576 ≈ 17 billion cells), which otherwise
+    /// hangs/crashes the app when an operation runs over an "everything" selection (PRD §10.1).
+    /// </summary>
+    public CellSnapshotCommand(string label, string sheetName, Func<Worksheet, IReadOnlyList<(int Row, int Column)>> positionFactory, Action<Worksheet> mutate)
+    {
+        Label = label;
+        _sheetName = sheetName;
+        _positions = Array.Empty<(int, int)>();
+        _positionFactory = positionFactory;
+        _mutate = mutate;
+    }
+
     public string Label { get; }
 
     public EditResult Apply(Workbook workbook)
     {
         var sheet = workbook.FindSheet(_sheetName) ?? throw new InvalidOperationException($"Sheet '{_sheetName}' not found.");
+
+        if (_positionFactory is not null)
+        {
+            _positions = _positionFactory(sheet);
+        }
 
         _snapshot = new List<(int, int, Cell?)>(_positions.Count);
         foreach (var (row, column) in _positions)

@@ -11,6 +11,59 @@ public static class EditCommands
 {
     private static IReadOnlyList<(int, int)> Positions(CellRange range) => range.Positions().ToList();
 
+    /// <summary>
+    /// The cells an in-place edit must touch, clamped to the worksheet's used range. A whole-sheet
+    /// or far-oversized selection (expanding ⌘A, PRD §10.1) would otherwise materialize billions of
+    /// positions and hang/crash the app; intersecting with the used range bounds the work to the
+    /// cells that actually exist. The mutation closures iterate the same clamped range.
+    /// </summary>
+    internal static IReadOnlyList<(int, int)> ClampedPositions(Worksheet sheet, CellRange range)
+    {
+        var clamped = ClampToUsed(sheet, range);
+        return clamped is null ? Array.Empty<(int, int)>() : clamped.Value.Positions().ToList();
+    }
+
+    /// <summary>
+    /// A small range is iterated verbatim (so styling still reaches empty cells the user picked);
+    /// an oversized range — a whole-sheet or near-whole-sheet selection — is clamped to the used
+    /// range so styling can't iterate billions of cells.
+    /// </summary>
+    private const int InPlaceCellCap = 1 << 20; // 1,048,576 — one full column's worth
+
+    private static CellRange StyleRange(Worksheet sheet, CellRange range)
+    {
+        long cells = (long)range.RowCount * range.ColumnCount;
+        if (cells <= InPlaceCellCap)
+        {
+            return range;
+        }
+
+        return ClampToUsed(sheet, range) ?? new CellRange(range.TopLeft);
+    }
+
+    private static IReadOnlyList<(int, int)> StylePositions(Worksheet sheet, CellRange range) =>
+        StyleRange(sheet, range).Positions().ToList();
+
+    /// <summary>Intersect a range with the worksheet's used range; null when nothing overlaps.</summary>
+    internal static CellRange? ClampToUsed(Worksheet sheet, CellRange range)
+    {
+        if (sheet.GetUsedRange() is not { } used)
+        {
+            return null; // empty sheet: nothing to iterate
+        }
+
+        int top = Math.Max(range.Top, used.Top);
+        int bottom = Math.Min(range.Bottom, used.Bottom);
+        int left = Math.Max(range.Left, used.Left);
+        int right = Math.Min(range.Right, used.Right);
+        if (top > bottom || left > right)
+        {
+            return null;
+        }
+
+        return new CellRange(new CellAddress(left, top), new CellAddress(right, bottom));
+    }
+
     /// <summary>Bundle several edits into one undoable step (see <see cref="CompositeEditCommand"/>).</summary>
     public static IEditCommand Composite(string label, IReadOnlyList<IEditCommand> commands) =>
         new CompositeEditCommand(label, commands);
@@ -61,11 +114,14 @@ public static class EditCommands
     }
 
     public static IEditCommand ClearContents(string sheet, CellRange range) =>
-        new CellSnapshotCommand("Clear Contents", sheet, Positions(range), ws =>
+        new CellSnapshotCommand("Clear Contents", sheet, ws => ClampedPositions(ws, range), ws =>
         {
-            foreach (var (row, column) in range.Positions())
+            foreach (var (row, column) in (ClampToUsed(ws, range) ?? range).Positions())
             {
-                ws.SetValue(row, column, CellValue.Empty); // keeps style/hyperlink, drops value+formula
+                if (ws.Find(row, column) is not null)
+                {
+                    ws.SetValue(row, column, CellValue.Empty); // keeps style/hyperlink, drops value+formula
+                }
             }
         });
 
@@ -75,9 +131,9 @@ public static class EditCommands
 
     /// <summary>Clear value, formula, style, and hyperlink — leaving the cells as if never touched.</summary>
     public static IEditCommand ClearAll(string sheet, CellRange range) =>
-        new CellSnapshotCommand("Clear All", sheet, Positions(range), ws =>
+        new CellSnapshotCommand("Clear All", sheet, ws => ClampedPositions(ws, range), ws =>
         {
-            foreach (var (row, column) in range.Positions())
+            foreach (var (row, column) in (ClampToUsed(ws, range) ?? range).Positions())
             {
                 var cell = ws.Find(row, column);
                 if (cell is null)
@@ -123,9 +179,9 @@ public static class EditCommands
 
     /// <summary>Apply a style transform to every cell in a range (e.g. toggle bold).</summary>
     public static IEditCommand ApplyStyle(Workbook workbook, string sheet, CellRange range, Func<CellStyle, CellStyle> change, string label = "Format Cells") =>
-        new CellSnapshotCommand(label, sheet, Positions(range), ws =>
+        new CellSnapshotCommand(label, sheet, ws => StylePositions(ws, range), ws =>
         {
-            foreach (var (row, column) in range.Positions())
+            foreach (var (row, column) in StyleRange(ws, range).Positions())
             {
                 var cell = ws.GetOrCreate(row, column);
                 cell.StyleId = workbook.Styles.Intern(change(workbook.Styles.Get(cell.StyleId)));

@@ -239,16 +239,39 @@ public sealed partial class SpreadsheetGrid
             ClosePopup();
         };
 
+        // Sort controls sit above the filter checkbox list (task 14): sort the whole table/range
+        // by this column, then close. Wired to the existing sort engine via DataEditCommands.
+        var sortAsc = new Button { Content = "Sort A→Z", HorizontalAlignment = HorizontalAlignment.Stretch };
+        sortAsc.Click += (_, _) => SortByFilterColumn(sheet, range, column, ascending: true, hasHeader);
+        var sortDesc = new Button { Content = "Sort Z→A", HorizontalAlignment = HorizontalAlignment.Stretch };
+        sortDesc.Click += (_, _) => SortByFilterColumn(sheet, range, column, ascending: false, hasHeader);
+
         OpenPopup(anchor, PopupBox(new StackPanel
         {
             Spacing = 6,
             Children =
             {
+                sortAsc,
+                sortDesc,
+                new Border { Height = 1, Background = _palette.GridLine.Brush },
                 new TextBlock { Text = "Filter", FontWeight = FontWeight.SemiBold },
                 new ScrollViewer { MaxHeight = 180, Content = list },
                 new StackPanel { Orientation = Orientation.Horizontal, Spacing = 6, Children = { clear, apply } },
             },
         }));
+    }
+
+    /// <summary>Sort the table/filter range by the dropdown's column, then close the popup (task 14).</summary>
+    private void SortByFilterColumn(Worksheet sheet, CellRange range, int column, bool ascending, bool hasHeader)
+    {
+        if (_session is null)
+        {
+            return;
+        }
+
+        _session.Execute(DataEditCommands.SortByColumn(sheet.Name, range, column, ascending, hasHeader));
+        ClosePopup();
+        Redraw();
     }
 
     private void ApplyColumnFilters(Worksheet sheet, CellRange range, bool hasHeader)

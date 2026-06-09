@@ -17,7 +17,9 @@ public static class DataEditCommands
     // ---- Sort -------------------------------------------------------------
 
     public static IEditCommand Sort(string sheet, CellRange range, SortSpec spec) =>
-        new CellSnapshotCommand("Sort", sheet, Positions(range), ws => SortEngine.Sort(ws, range, spec));
+        new CellSnapshotCommand("Sort", sheet,
+            ws => EditCommands.ClampedPositions(ws, range),
+            ws => SortEngine.Sort(ws, EditCommands.ClampToUsed(ws, range) ?? range, spec));
 
     /// <summary>Quick single-column sort by the active column, ascending or descending.</summary>
     public static IEditCommand SortByColumn(string sheet, CellRange range, int column, bool ascending, bool hasHeader = true) =>

@@ -95,6 +95,14 @@ public sealed partial class SpreadsheetGrid : Panel
 
             Redraw(); // keep live reference highlights in step with the formula (#18)
             UpdateSignatureHelp(); // refresh the argument hint as the formula changes
+
+            // Task-9 hook: notify external listeners (the formula bar) of user-driven edits so
+            // they can mirror the inline editor live. Programmatic pushes (autocomplete, point
+            // mode, SetInlineEditorText) are suppressed to avoid an echo loop.
+            if (!programmatic)
+            {
+                InlineEditTextChanged?.Invoke(_editor.Text ?? string.Empty);
+            }
         };
         // The argument hint also tracks caret movement (arrows / clicks within the formula).
         _editor.GetObservable(TextBox.CaretIndexProperty).Subscribe(new AnonymousObserver<int>(_ => UpdateSignatureHelp()));

@@ -204,24 +204,13 @@ public static class AppCommands
 
     private static void SelectAll(IAppEnvironment e)
     {
-        // Expanding Select-All (#26): the first press selects the contiguous data region around
-        // the active cell; a second press (selection already at that region) selects the whole sheet.
-        var sheet = e.Session.ActiveSheet;
+        // Expanding Select-All (#26 / PRD §10.1): the first press selects the contiguous data
+        // region around the active cell; a second press (selection already at that region) widens
+        // to the whole sheet. The expansion decision is a pure, unit-tested helper in the grid.
         var selection = e.Selection;
-        var region = Cellestra.Core.Data.DataRegion.CurrentRegion(sheet, selection.ActiveRow, selection.ActiveColumn);
-
-        bool atRegion = selection.Top == region.Top && selection.Left == region.Left &&
-            selection.Bottom == region.Bottom && selection.Right == region.Right;
-
-        if (atRegion)
-        {
-            selection.SetRange(0, 0, Cellestra.Core.Model.SheetDimensions.MaxRows - 1, Cellestra.Core.Model.SheetDimensions.MaxColumns - 1);
-        }
-        else
-        {
-            selection.SetRange(region.Top, region.Left, region.Bottom, region.Right);
-        }
-
+        var next = Controls.SpreadsheetGrid.SelectAllExpander.Next(
+            e.Session.ActiveSheet, selection.Range, selection.ActiveRow, selection.ActiveColumn);
+        selection.SetRange(next.Top, next.Left, next.Bottom, next.Right);
         e.Refresh();
     }
 
