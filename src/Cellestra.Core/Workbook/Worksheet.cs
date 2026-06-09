@@ -33,6 +33,20 @@ public sealed class Worksheet
     /// <summary>The range showing AutoFilter dropdowns on its header row, or null when filtering is off (PRD §8.12).</summary>
     public CellRange? ActiveFilter { get; set; }
 
+    /// <summary>
+    /// The per-column criteria of the sheet-level AutoFilter (the conditions behind
+    /// <see cref="ActiveFilter"/>), or null when no conditions are active. Held in Core so the
+    /// filter definition round-trips through the ODF <c>table:database-range</c> — the grid's
+    /// filter dropdown (Desktop) reads/writes this alongside <see cref="ActiveFilter"/>.
+    /// </summary>
+    public FilterSpec? ActiveFilterSpec { get; set; }
+
+    /// <summary>
+    /// The sort order most recently applied to the sheet-level AutoFilter region, or null when
+    /// none. Persisted on the same <c>table:database-range</c> as <see cref="ActiveFilter"/>.
+    /// </summary>
+    public SortSpec? ActiveSort { get; set; }
+
     public IReadOnlyList<MergedRegion> MergedRegions => _mergedRegions;
 
     public int CellCount => _cells.Count;

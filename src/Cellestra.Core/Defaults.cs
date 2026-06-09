@@ -34,12 +34,13 @@ public static class Defaults
     public const uint TextColorArgb = 0xFF000000;
 
     /// <summary>
-    /// Default fill for a new table's header row, ARGB — the app's green accent (<c>#15734F</c>).
-    /// Paired with white, bold text (<see cref="TableHeaderTextArgb"/>) for legible contrast.
+    /// Default fill for a new table's header row, ARGB — a saturated royal blue (<c>#1E4FB5</c>).
+    /// Paired with white, bold text (<see cref="TableHeaderTextArgb"/>); contrast ≈ 7.39:1 with
+    /// white, well past WCAG AA (4.5:1) and AAA (7:1) for legible header labels.
     /// </summary>
-    public const uint TableHeaderFillArgb = 0xFF15734F;
+    public const uint TableHeaderFillArgb = 0xFF1E4FB5;
 
-    /// <summary>Default text color for a new table's header row, ARGB. Opaque white (on the green fill).</summary>
+    /// <summary>Default text color for a new table's header row, ARGB. Opaque white (on the royal-blue fill).</summary>
     public const uint TableHeaderTextArgb = 0xFFFFFFFF;
 
     /// <summary>

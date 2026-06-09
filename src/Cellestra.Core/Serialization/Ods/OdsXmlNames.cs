@@ -16,6 +16,23 @@ public static class OdsXmlNames
     public static readonly XNamespace Config = "urn:oasis:names:tc:opendocument:xmlns:config:1.0";
     public static readonly XNamespace Xlink = "http://www.w3.org/1999/xlink";
 
+    // ---- table:database-range (filter + sort round-trip, ODF §9.4.x) ----
+    public const string DatabaseRanges = "database-ranges";
+    public const string DatabaseRange = "database-range";
+    public const string TargetRangeAddress = "target-range-address";
+    public const string DisplayFilterButtons = "display-filter-buttons";
+    public const string Sort = "sort";
+    public const string SortBy = "sort-by";
+    public const string FieldNumber = "field-number";
+    public const string Order = "order";
+    public const string Filter = "filter";
+    public const string FilterAnd = "filter-and";
+    public const string FilterOr = "filter-or";
+    public const string FilterCondition = "filter-condition";
+    public const string Operator = "operator";
+    public const string DataType = "data-type";
+    public const string ContainsHeader = "contains-header";
+
     public const string MimeType = "application/vnd.oasis.opendocument.spreadsheet";
 
     public const string MimetypePart = "mimetype";

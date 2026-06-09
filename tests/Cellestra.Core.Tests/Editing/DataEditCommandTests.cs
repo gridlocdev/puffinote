@@ -103,11 +103,11 @@ public class DataEditCommandTests
 
         history.Execute(DataEditCommands.CreateTable(workbook, sheet.Name, table));
 
-        // Header cells (row 0) get the green accent fill + bold white text; the body stays default.
+        // Header cells (row 0) get the royal-blue accent fill + bold white text; the body stays default.
         foreach (int column in new[] { 0, 1 })
         {
             var header = workbook.Styles.Get(sheet.GetOrCreate(0, column).StyleId);
-            Assert.Equal(Cellestra.Core.Styling.ArgbColor.FromHex("#15734F"), header.Fill.Background);
+            Assert.Equal(Cellestra.Core.Styling.ArgbColor.FromHex("#1E4FB5"), header.Fill.Background);
             Assert.True(header.Font.Bold);
             Assert.Equal(Cellestra.Core.Styling.ArgbColor.White, header.Font.Color);
         }
