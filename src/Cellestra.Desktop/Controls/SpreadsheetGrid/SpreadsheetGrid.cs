@@ -1443,6 +1443,8 @@ public sealed partial class SpreadsheetGrid : Panel
         _session.Execute(Cellestra.Core.Editing.EditCommands.SetInput(
             _session.Workbook, _session.ActiveSheet.Name, row, column, text, Culture));
 
+        ExpandTableIfAdjacent(row, column, text);
+
         int targetColumn = column + moveColumn;
         if (moveColumn != 0 && moveRow == 0)
         {
@@ -1469,6 +1471,31 @@ public sealed partial class SpreadsheetGrid : Panel
         Focus();
         Redraw();
         RaiseSelectionChanged();
+    }
+
+    /// <summary>
+    /// After an edit commits, grow any table the edit sits just below or to the right of (PRD §8.10
+    /// table auto-expand). A non-empty edit adjacent to exactly one table absorbs the new row/column;
+    /// the Core command is a no-op (returns null) otherwise. Skipped when the cell was cleared.
+    /// </summary>
+    private void ExpandTableIfAdjacent(int row, int column, string text)
+    {
+        if (_session is null || string.IsNullOrEmpty(text))
+        {
+            return;
+        }
+
+        var sheet = _session.ActiveSheet;
+        // Snapshot the table list: executing the expand replaces entries in sheet.Tables.
+        foreach (var table in sheet.Tables.ToArray())
+        {
+            if (Cellestra.Core.Editing.DataEditCommands.ExpandTableForEdit(
+                    _session.Workbook, sheet.Name, table, row, column) is { } expand)
+            {
+                _session.Execute(expand);
+                break; // tables can't overlap, so at most one absorbs the edit
+            }
+        }
     }
 
     private void CancelEdit()

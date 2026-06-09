@@ -884,12 +884,39 @@ public partial class MainWindow : Window, IAppEnvironment
         var active = sheet.Find(Selection.ActiveRow, Selection.ActiveColumn);
         var current = _session.Workbook.Styles.Get(active?.StyleId ?? Cellestra.Core.Styling.StylePool.DefaultId);
 
-        var transform = await ShowModalAsync(new FormatCellsDialog(current));
+        var transform = await ShowModalAsync(new FormatCellsDialog(current, DistinctSelectionStyles(sheet)));
         if (transform is not null)
         {
             _session.Execute(EditCommands.ApplyStyle(_session.Workbook, sheet.Name, Selection.Range, transform, "Format Cells"));
             Refresh();
         }
+    }
+
+    /// <summary>
+    /// The distinct styles across the current selection, so the Format Cells dialog can show a mixed
+    /// selection as "(varies)" rather than flattening everything to the active cell. Walks only stored
+    /// cells (bounded), and adds the default style when the selection also covers blank cells.
+    /// </summary>
+    private IReadOnlyCollection<Cellestra.Core.Styling.CellStyle> DistinctSelectionStyles(Worksheet sheet)
+    {
+        var ids = new HashSet<int>();
+        long stored = 0;
+        foreach (var (row, column, cell) in sheet.EnumerateCells())
+        {
+            if (Selection.Ranges.Any(r => r.Contains(row, column)))
+            {
+                ids.Add(cell.StyleId);
+                stored++;
+            }
+        }
+
+        long area = Selection.Ranges.Sum(r => (long)(r.Bottom - r.Top + 1) * (r.Right - r.Left + 1));
+        if (area > stored) // the selection includes at least one blank (default-styled) cell
+        {
+            ids.Add(Cellestra.Core.Styling.StylePool.DefaultId);
+        }
+
+        return ids.Select(id => _session.Workbook.Styles.Get(id)).ToList();
     }
 
     public void ApplyCellStyle(System.Func<Cellestra.Core.Styling.CellStyle, Cellestra.Core.Styling.CellStyle> transform, string label)
