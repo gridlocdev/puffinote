@@ -1,6 +1,7 @@
 using System;
 using Avalonia;
 using Avalonia.Input;
+using Avalonia.Media;
 using Cellestra.Core.Editing;
 using Cellestra.Core.Model;
 
@@ -36,27 +37,117 @@ public sealed partial class SpreadsheetGrid
     // store only once instead of once per visible row. Rebuilt at the start of each BuildVisible.
     private readonly Dictionary<int, double> _rowFontPoints = new();
 
+    // Per-frame cache of each row's tallest wrapped-cell height, in model-space pixels (zoom=1), so a
+    // Wrap-Text cell grows its row to fit every wrapped line (task 6). Rebuilt alongside _rowFontPoints.
+    private readonly Dictionary<int, double> _rowWrappedPixels = new();
+
     /// <summary>The largest font size (points) used by any cell in <paramref name="row"/>, or 0 if none.</summary>
     private double TallestFontPoints(Worksheet sheet, int row) =>
         _rowFontPoints.TryGetValue(row, out double pts) ? pts : 0;
 
-    /// <summary>Recompute the row→tallest-font map for the active sheet (one sparse-store scan per frame).</summary>
+    /// <summary>The tallest wrapped-cell height (model-space px) in <paramref name="row"/>, or 0 if none wrap.</summary>
+    private double WrappedRowPixels(int row) =>
+        _rowWrappedPixels.TryGetValue(row, out double px) ? px : 0;
+
+    /// <summary>Recompute the row→tallest-font (and row→wrapped-height) maps for the active sheet (one sparse-store scan per frame).</summary>
     private void RebuildRowFontMap(Worksheet sheet)
     {
         _rowFontPoints.Clear();
-        foreach (var (row, _, cell) in sheet.EnumerateCells())
+        _rowWrappedPixels.Clear();
+        foreach (var (row, col, cell) in sheet.EnumerateCells())
         {
             if (cell.Value.IsEmpty)
             {
                 continue;
             }
 
-            double pts = _session!.Workbook.Styles.Get(cell.StyleId).Font.SizePoints;
+            var style = _session!.Workbook.Styles.Get(cell.StyleId);
+            double pts = style.Font.SizePoints;
             if (!_rowFontPoints.TryGetValue(row, out double current) || pts > current)
             {
                 _rowFontPoints[row] = pts;
             }
+
+            // A Wrap-Text cell needs a row tall enough for every wrapped line at this column's width.
+            bool numeric = cell.Value.IsNumber || cell.Value.IsBoolean || cell.Value.IsError;
+            if (style.Alignment.WrapText && !numeric && !sheet.IsColumnHidden(col))
+            {
+                double wrapped = MeasureWrappedRowHeight(sheet, cell, style, row, col);
+                if (!_rowWrappedPixels.TryGetValue(row, out double existing) || wrapped > existing)
+                {
+                    _rowWrappedPixels[row] = wrapped;
+                }
+            }
         }
+    }
+
+    /// <summary>
+    /// Measure how tall a Wrap-Text cell must be (model-space px, zoom=1) so its text wraps to the
+    /// column width without clipping. Uses the same metrics as the render path so what's measured is
+    /// what's drawn. A cell inside a merge wraps to the merge's full width, not one column.
+    /// </summary>
+    private double MeasureWrappedRowHeight(Worksheet sheet, Cell cell, Cellestra.Core.Styling.CellStyle style, int row, int column)
+    {
+        string text = Cellestra.Core.Styling.NumberFormatter.Format(cell.Value, style.NumberFormat, Culture);
+        if (text.Length == 0)
+        {
+            return 0;
+        }
+
+        // A cell covered by (but not anchoring) a merge is drawn by the anchor — don't grow its row.
+        var merge = sheet.FindMerge(row, column);
+        if (merge is not null && (merge.Range.Top != row || merge.Range.Left != column))
+        {
+            return 0;
+        }
+
+        // Multi-row merges already provide their own vertical room; only a single-row merge (or a plain
+        // cell) needs its row grown. Use the full merged width so the line count matches what's drawn.
+        double widthModel = sheet.GetColumnWidth(column);
+        if (merge is not null)
+        {
+            if (merge.Range.Top != merge.Range.Bottom)
+            {
+                return 0; // a multi-row merge already has the vertical room
+            }
+
+            widthModel = 0;
+            for (int c = merge.Range.Left; c <= merge.Range.Right; c++)
+            {
+                widthModel += sheet.GetColumnWidth(c);
+            }
+        }
+
+        var typeface = new Typeface(
+            style.Font.Family,
+            style.Font.Italic ? FontStyle.Italic : FontStyle.Normal,
+            style.Font.Bold ? FontWeight.Bold : FontWeight.Normal);
+        double fontSize = style.Font.SizePoints * 96.0 / 72.0; // model space (zoom applied later)
+        var formatted = new FormattedText(text, System.Globalization.CultureInfo.CurrentCulture, FlowDirection.LeftToRight,
+            typeface, fontSize, Brushes.Black)
+        {
+            MaxTextWidth = Math.Max(1, widthModel - 2 * CellPadX),
+            Trimming = TextTrimming.None,
+        };
+
+        return Math.Ceiling(formatted.Height + 2 * CellPadY);
+    }
+
+    /// <summary>
+    /// Test seam: the effective model-space height of a row (the floor, grown for the tallest font and
+    /// any wrapped cell), after rebuilding the per-row maps from the active sheet. Lets a headless test
+    /// assert that wrapping a long string grows the row without driving a full render.
+    /// </summary>
+    internal double MeasuredRowHeightForTest(int row)
+    {
+        var sheet = Sheet;
+        if (sheet is null)
+        {
+            return 0;
+        }
+
+        RebuildRowFontMap(sheet);
+        return EffectiveRowHeight(sheet, row);
     }
 
     private double EffectiveColumnWidth(Worksheet sheet, int column) =>
@@ -70,9 +161,11 @@ public sealed partial class SpreadsheetGrid
             return _dragSize;
         }
 
-        // Otherwise grow the row to fit the tallest font any of its cells uses, so a larger font
-        // size never clips/overlaps the next row (task 3). The default 20px row is the floor.
-        return RowHeightCalculator.Effective(sheet.GetRowHeight(row), TallestFontPoints(sheet, row), CellPadY);
+        // Otherwise grow the row to fit the tallest font any of its cells uses (task 3) and the tallest
+        // wrapped cell (task 6), so larger fonts or wrapped text never clip/overlap the next row. The
+        // default 20px row is the floor.
+        return RowHeightCalculator.Effective(
+            sheet.GetRowHeight(row), TallestFontPoints(sheet, row), CellPadY, WrappedRowPixels(row));
     }
 
     /// <summary>Hover feedback: the copy cursor over the fill handle, a resize cursor over a header border, else the arrow.</summary>

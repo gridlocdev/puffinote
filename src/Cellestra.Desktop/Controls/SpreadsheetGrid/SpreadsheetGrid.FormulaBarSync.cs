@@ -47,7 +47,10 @@ public sealed partial class SpreadsheetGrid
 
         if (!_editing)
         {
-            // Mirror the bar without stealing focus: the user is typing in the formula bar.
+            // Mirror the bar without stealing focus: the user is typing in the formula bar. Flag the
+            // seeded text as a bar echo so BeginEdit's TextChanged doesn't bounce straight back.
+            _programmaticText = text;
+            _barEcho = true;
             BeginEdit(text, focus: false);
             _editor.CaretIndex = text.Length;
             return;
@@ -60,6 +63,7 @@ public sealed partial class SpreadsheetGrid
 
         int caret = Math.Min(_editor.CaretIndex, text.Length);
         _programmaticText = text;  // suppress the resulting TextChanged from re-firing as "typing"
+        _barEcho = true;           // ...and from echoing back to the bar
         _editor.Text = text;
         _editor.CaretIndex = caret;
     }

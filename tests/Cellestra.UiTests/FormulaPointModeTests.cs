@@ -43,6 +43,23 @@ public class FormulaPointModeTests
     }
 
     [AvaloniaFact]
+    public void Point_mode_reference_mirrors_to_the_formula_bar()
+    {
+        // A grid self-edit (point-mode poke) must still raise InlineEditTextChanged so the formula bar
+        // keeps tracking the cell — only the bar's own echo is suppressed.
+        var window = Editing(out _);
+
+        string? last = null;
+        window.Grid.InlineEditTextChanged += t => last = t;
+
+        window.KeyTextInput("=");
+        window.KeyPressQwerty(PhysicalKey.ArrowDown, RawInputModifiers.None); // poke A2 into the formula
+        Pump();
+
+        Assert.Equal("=A2", last);
+    }
+
+    [AvaloniaFact]
     public void Shift_arrow_extends_the_poke_into_a_range()
     {
         var window = Editing(out var env);

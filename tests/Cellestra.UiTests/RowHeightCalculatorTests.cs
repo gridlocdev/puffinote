@@ -56,4 +56,34 @@ public class RowHeightCalculatorTests
             prev = h;
         }
     }
+
+    [Fact]
+    public void One_wrapped_line_matches_a_single_font_line()
+    {
+        // A wrapped cell that needs only one line is the same height as an unwrapped one.
+        Assert.Equal(
+            RowHeightCalculator.ForFontSize(10, VerticalPadding),
+            RowHeightCalculator.ForWrappedLines(1, 10, VerticalPadding));
+    }
+
+    [Fact]
+    public void More_wrapped_lines_grow_the_height()
+    {
+        double one = RowHeightCalculator.ForWrappedLines(1, 10, VerticalPadding);
+        double three = RowHeightCalculator.ForWrappedLines(3, 10, VerticalPadding);
+        Assert.True(three > one, $"3 wrapped lines ({three}) should be taller than 1 ({one})");
+        // Each extra line adds roughly one glyph box.
+        double oneBox = RowHeightCalculator.ForFontSize(10, 0);
+        Assert.True(three >= one + 1.5 * oneBox, "three lines should add about two extra glyph boxes");
+    }
+
+    [Fact]
+    public void A_wrapped_cell_grows_the_row_via_effective()
+    {
+        // Effective grows the row to fit the wrapped pixels even when the font alone wouldn't.
+        double wrapped = RowHeightCalculator.ForWrappedLines(4, 10, VerticalPadding);
+        double effective = RowHeightCalculator.Effective(Defaults.RowHeight, 10, VerticalPadding, wrapped);
+        Assert.Equal(wrapped, effective);
+        Assert.True(effective > Defaults.RowHeight);
+    }
 }

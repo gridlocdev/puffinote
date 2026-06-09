@@ -17,6 +17,7 @@ public sealed partial class SpreadsheetGrid
     private int _pointInsertStart = -1; // start of the last poke-inserted reference, or -1
     private int _pointInsertLength;
     private string? _programmaticText;   // the text we set ourselves, so its TextChanged isn't treated as typing
+    private bool _barEcho;               // true only when _programmaticText came FROM the formula bar (suppress the bar echo)
 
     // Keyboard point mode: the cell the arrows are currently pointing at, plus the range anchor.
     private bool _pointKeyboard;

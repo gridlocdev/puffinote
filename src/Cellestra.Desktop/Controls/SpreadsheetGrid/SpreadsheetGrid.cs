@@ -84,9 +84,13 @@ public sealed partial class SpreadsheetGrid : Panel
         _editor.TextChanged += (_, _) =>
         {
             // Compare by value (not a bool flag) so a TextChanged that arrives after SetEditorText
-            // returns still counts as our own edit, not typing.
+            // returns still counts as our own edit, not typing. Two kinds of "programmatic" change
+            // are distinguished: a grid self-edit (point mode, autocomplete, F4) still drives the
+            // formula bar, while an echo coming FROM the bar must not bounce back.
             bool programmatic = _editor.Text == _programmaticText;
+            bool barEcho = programmatic && _barEcho;
             _programmaticText = null;
+            _barEcho = false;
             if (!programmatic)
             {
                 ResetPointMode();  // typing ends ref replacement (#17)
@@ -96,10 +100,11 @@ public sealed partial class SpreadsheetGrid : Panel
             Redraw(); // keep live reference highlights in step with the formula (#18)
             UpdateSignatureHelp(); // refresh the argument hint as the formula changes
 
-            // Task-9 hook: notify external listeners (the formula bar) of user-driven edits so
-            // they can mirror the inline editor live. Programmatic pushes (autocomplete, point
-            // mode, SetInlineEditorText) are suppressed to avoid an echo loop.
-            if (!programmatic)
+            // Task-9 hook: notify external listeners (the formula bar) of edits so they can mirror
+            // the inline editor live. User typing AND grid self-edits (point-mode references,
+            // autocomplete, F4) update the bar; only the echo coming FROM the bar (SetInlineEditorText)
+            // is suppressed, to avoid an echo loop.
+            if (!barEcho)
             {
                 InlineEditTextChanged?.Invoke(_editor.Text ?? string.Empty);
             }
@@ -378,10 +383,20 @@ public sealed partial class SpreadsheetGrid : Panel
                 continue;
             }
 
-            context.FillRectangle(_palette.Canvas, rect);
+            // Paint the anchor cell's fill across the whole merge (mirroring DrawCells, including any
+            // live style-preview); fall back to the blank canvas when it has no background (task 7).
+            var anchor = sheet.Find(region.Range.Top, region.Range.Left);
+            if (anchor is not null && ResolveStyle(anchor, region.Range.Top, region.Range.Left).Fill is { HasBackground: true } fill)
+            {
+                context.FillRectangle(new SolidColorBrush(ToColor(fill.Background!.Value)), rect);
+            }
+            else
+            {
+                context.FillRectangle(_palette.Canvas, rect);
+            }
+
             context.DrawRectangle(null, gridPen, rect);
 
-            var anchor = sheet.Find(region.Range.Top, region.Range.Left);
             if (anchor is not null && !anchor.Value.IsEmpty)
             {
                 DrawCellContent(context, sheet, anchor, rect, region.Range.Top, region.Range.Left, allowSpill: false);
@@ -480,15 +495,27 @@ public sealed partial class SpreadsheetGrid : Panel
             var h => h,
         };
 
-        // Left-aligned text overflows into empty neighbours and only clips when one is occupied.
-        double available = cellAvailable;
-        if (allowSpill && !numeric && horizontal == SAlign.Left && formatted.Width > cellAvailable)
+        // Wrap Text: the text flows onto multiple lines within the column width (never spilling into
+        // neighbours, never trimmed); the row grows to fit via EffectiveRowHeight (task 6). Numbers
+        // ignore wrap (they ##### instead, handled above).
+        bool wrap = style.Alignment.WrapText && !numeric;
+        if (wrap)
         {
-            available += SpillRoom(sheet, row, column);
+            formatted.MaxTextWidth = Math.Max(1, cellAvailable);
+            formatted.Trimming = TextTrimming.None;
         }
+        else
+        {
+            // Left-aligned text overflows into empty neighbours and only clips when one is occupied.
+            double available = cellAvailable;
+            if (allowSpill && !numeric && horizontal == SAlign.Left && formatted.Width > cellAvailable)
+            {
+                available += SpillRoom(sheet, row, column);
+            }
 
-        formatted.MaxTextWidth = Math.Max(1, available);
-        formatted.Trimming = TextTrimming.CharacterEllipsis;
+            formatted.MaxTextWidth = Math.Max(1, available);
+            formatted.Trimming = TextTrimming.CharacterEllipsis;
+        }
 
         double tx = horizontal switch
         {
@@ -948,6 +975,7 @@ public sealed partial class SpreadsheetGrid : Panel
         {
             // Hovering a header border shows the resize cursor; elsewhere, the default arrow.
             UpdateResizeCursor(point);
+            UpdateErrorTip(point); // show an error cell's plain-English reason on hover (task 12)
             return;
         }
 
@@ -980,6 +1008,12 @@ public sealed partial class SpreadsheetGrid : Panel
 
         _selecting = false;
         e.Pointer.Capture(null);
+    }
+
+    protected override void OnPointerExited(PointerEventArgs e)
+    {
+        base.OnPointerExited(e);
+        ClearErrorTip(); // don't leave a stale error tooltip when the pointer leaves the grid
     }
 
     protected override void OnPointerWheelChanged(PointerWheelEventArgs e)

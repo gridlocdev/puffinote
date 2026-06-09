@@ -30,17 +30,37 @@ internal static class RowHeightCalculator
     }
 
     /// <summary>
-    /// The effective height for a row: the larger of the row's explicit/default height and the height
-    /// the tallest font in the row needs. So increasing a cell's font size grows the row, while a
-    /// hand-resized (taller) row keeps its size.
+    /// The natural pixel height for a wrapped cell with <paramref name="lineCount"/> text lines at
+    /// <paramref name="fontSizePoints"/>, including the top and bottom vertical padding. A single line
+    /// matches <see cref="ForFontSize"/>; each extra line adds one more glyph box (task 6: a wrapped
+    /// cell grows its row to fit every line).
     /// </summary>
-    internal static double Effective(double rowHeight, double tallestFontPoints, double verticalPadding)
+    internal static double ForWrappedLines(int lineCount, double fontSizePoints, double verticalPadding)
     {
-        if (tallestFontPoints <= 0)
+        int lines = Math.Max(1, lineCount);
+        double glyphBox = fontSizePoints * PointToPixel * LineFactor;
+        return Math.Ceiling(glyphBox * lines + 2 * verticalPadding);
+    }
+
+    /// <summary>
+    /// The effective height for a row: the larger of the row's explicit/default height, the height the
+    /// tallest font in the row needs, and the height any wrapped cell in the row needs. So increasing a
+    /// cell's font size (or wrapping its text onto more lines) grows the row, while a hand-resized
+    /// (taller) row keeps its size.
+    /// </summary>
+    internal static double Effective(double rowHeight, double tallestFontPoints, double verticalPadding, double wrappedPixels = 0)
+    {
+        double effective = rowHeight;
+        if (tallestFontPoints > 0)
         {
-            return rowHeight;
+            effective = Math.Max(effective, ForFontSize(tallestFontPoints, verticalPadding));
         }
 
-        return Math.Max(rowHeight, ForFontSize(tallestFontPoints, verticalPadding));
+        if (wrappedPixels > 0)
+        {
+            effective = Math.Max(effective, wrappedPixels);
+        }
+
+        return effective;
     }
 }
