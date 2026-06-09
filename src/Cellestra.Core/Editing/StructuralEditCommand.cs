@@ -1,3 +1,4 @@
+using Cellestra.Core.Data;
 using Cellestra.Core.Dependencies;
 using Cellestra.Core.Formulas;
 using Cellestra.Core.Formulas.Parsing;
@@ -114,9 +115,38 @@ public sealed class StructuralEditCommand : IEditCommand
             Rows = shiftedRows,
             Columns = shiftedColumns,
             Merges = ShiftMerges(before.Merges, rows),
+            Tables = ShiftTables(before.Tables, rows),
             FrozenRows = before.FrozenRows,
             FrozenColumns = before.FrozenColumns,
         };
+    }
+
+    // A row/column edit that overlaps a table resizes it (delete shrinks, insert-within grows) along
+    // the edited axis; a table entirely inside a deleted span is removed. The cross axis is untouched.
+    // Mirrors ShiftMerges' coordinate math so tables and merges shift consistently. Undo restores the
+    // original tables because they live in the captured State.
+    private List<Table> ShiftTables(List<Table> source, bool rows)
+    {
+        var result = new List<Table>();
+        foreach (var table in source)
+        {
+            int lo = rows ? table.Range.Top : table.Range.Left;
+            int hi = rows ? table.Range.Bottom : table.Range.Right;
+            if (SurvivingExtremes(lo, hi) is not (int minSurv, int maxSurv))
+            {
+                continue; // the table's edited-axis span is entirely deleted
+            }
+
+            int newLo = MapCoord(minSurv)!.Value;
+            int newHi = MapCoord(maxSurv)!.Value;
+            var range = rows
+                ? new CellRange(new CellAddress(table.Range.Left, newLo), new CellAddress(table.Range.Right, newHi))
+                : new CellRange(new CellAddress(newLo, table.Range.Top), new CellAddress(newHi, table.Range.Bottom));
+
+            result.Add(table.WithRange(range));
+        }
+
+        return result;
     }
 
     private void InheritFormatting(

@@ -120,6 +120,25 @@ public class DataEditCommandTests
     }
 
     [Fact]
+    public void Create_table_prefills_empty_header_cells_left_to_right()
+    {
+        var (workbook, history, sheet) = New();
+        sheet.SetValue(0, 1, CellValue.Text("Name")); // B1 already labelled; A1/C1 are empty
+        var table = new Table("Data", CellRange.Parse("A1:C3"), HasHeader: true);
+
+        history.Execute(DataEditCommands.CreateTable(workbook, sheet.Name, table));
+
+        Assert.Equal("Column 1", sheet.GetValue(0, 0).AsText); // A1 placeholder
+        Assert.Equal("Name", sheet.GetValue(0, 1).AsText);     // B1 left as typed
+        Assert.Equal("Column 3", sheet.GetValue(0, 2).AsText); // C1 placeholder, numbered by position
+        Assert.True(workbook.Styles.Get(sheet.GetOrCreate(0, 0).StyleId).Font.Bold);
+
+        history.Undo();
+        Assert.True(sheet.GetValue(0, 0).IsEmpty); // placeholder removed
+        Assert.Equal("Name", sheet.GetValue(0, 1).AsText);
+    }
+
+    [Fact]
     public void Create_table_without_header_skips_styling()
     {
         var (workbook, history, sheet) = New();

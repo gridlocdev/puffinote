@@ -3,6 +3,7 @@ using Cellestra.Core.Formulas;
 using Cellestra.Core.Formulas.Parsing;
 using Cellestra.Core.Formulas.References;
 using Cellestra.Core.Model;
+using Cellestra.Core.Values;
 
 namespace Cellestra.Core.Editing;
 
@@ -71,6 +72,42 @@ public sealed class FillCommand : IEditCommand
         }
 
         return EditResult.Cells(ChangedRefs());
+    }
+
+    /// <summary>
+    /// The cells this fill would write, as <c>(row, column, value, isFormula)</c>, computed without
+    /// mutating the sheet — used to pre-flight data validation before the fill runs. The source cells
+    /// stay put (skipped); a blank source clears its destination (skipped). Mirrors <see cref="Apply"/>'s
+    /// tiling so the projection cannot drift from what is actually written.
+    /// </summary>
+    public IEnumerable<(int Row, int Column, CellValue Value, bool IsFormula)> ProjectWrites(Workbook workbook)
+    {
+        var sheet = workbook.FindSheet(_sheetName);
+        if (sheet is null)
+        {
+            yield break;
+        }
+
+        var block = ClipboardBlock.Capture(sheet, _source, isCut: false).Cells;
+        int height = _source.RowCount;
+        int width = _source.ColumnCount;
+        foreach (var (row, column) in _fill.Positions())
+        {
+            if (_source.Contains(row, column))
+            {
+                continue;
+            }
+
+            int sourceRow = _source.Top + Mod(row - _source.Top, height);
+            int sourceColumn = _source.Left + Mod(column - _source.Left, width);
+            var source = block[sourceRow - _source.Top, sourceColumn - _source.Left];
+            if (source is null)
+            {
+                continue;
+            }
+
+            yield return (row, column, source.Value, source.Formula is not null);
+        }
     }
 
     private List<CellRef> ChangedRefs() =>

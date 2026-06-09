@@ -113,6 +113,39 @@ public sealed class PasteBlockCommand : IEditCommand
         return EditResult.Cells(ChangedRefs());
     }
 
+    /// <summary>
+    /// The cells this paste would write, as <c>(row, column, value, isFormula)</c>, computed without
+    /// mutating the sheet — used to pre-flight data validation before the paste runs. Paste Formats
+    /// writes no value (yields nothing); a blank source clears its destination (an always-valid empty
+    /// value) and is skipped. Formula targets are reported as such so the caller can skip them
+    /// (formulas validate on recalc, not on entry).
+    /// </summary>
+    public IEnumerable<(int Row, int Column, Cellestra.Core.Values.CellValue Value, bool IsFormula)> ProjectWrites()
+    {
+        if (_mode == PasteMode.Formats)
+        {
+            yield break;
+        }
+
+        foreach (var (anchorRow, anchorColumn) in _plan.Anchors)
+        {
+            for (int r = 0; r < _block.Rows; r++)
+            {
+                for (int c = 0; c < _block.Columns; c++)
+                {
+                    var source = _block.Cells[r, c];
+                    if (source is null)
+                    {
+                        continue;
+                    }
+
+                    bool isFormula = _mode != PasteMode.Values && source.Formula is not null;
+                    yield return (anchorRow + r, anchorColumn + c, source.Value, isFormula);
+                }
+            }
+        }
+    }
+
     public EditResult Undo(Workbook workbook)
     {
         if (_before is null)

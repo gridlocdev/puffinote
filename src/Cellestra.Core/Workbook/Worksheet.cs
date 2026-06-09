@@ -376,6 +376,7 @@ public sealed class Worksheet
         internal required Dictionary<int, Row> Rows { get; init; }
         internal required Dictionary<int, Column> Columns { get; init; }
         internal required List<MergedRegion> Merges { get; init; }
+        internal required List<Table> Tables { get; init; }
         internal required int FrozenRows { get; init; }
         internal required int FrozenColumns { get; init; }
     }
@@ -386,6 +387,7 @@ public sealed class Worksheet
         Rows = _rows.ToDictionary(kv => kv.Key, kv => kv.Value.Clone()),
         Columns = _columns.ToDictionary(kv => kv.Key, kv => kv.Value.Clone()),
         Merges = new List<MergedRegion>(_mergedRegions),
+        Tables = new List<Table>(_tables), // Table is an immutable record — a shallow list copy is a full snapshot.
         FrozenRows = FrozenRows,
         FrozenColumns = FrozenColumns,
     };
@@ -412,6 +414,8 @@ public sealed class Worksheet
 
         _mergedRegions.Clear();
         _mergedRegions.AddRange(state.Merges);
+        _tables.Clear();
+        _tables.AddRange(state.Tables);
         FrozenRows = state.FrozenRows;
         FrozenColumns = state.FrozenColumns;
     }

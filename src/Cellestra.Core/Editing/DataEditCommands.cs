@@ -2,6 +2,7 @@ using System.Globalization;
 using Cellestra.Core.Data;
 using Cellestra.Core.Model;
 using Cellestra.Core.Styling;
+using Cellestra.Core.Values;
 
 namespace Cellestra.Core.Editing;
 
@@ -107,8 +108,25 @@ public static class DataEditCommands
         var headerRange = new CellRange(
             table.Range.TopLeft,
             new CellAddress(table.Range.Right, table.Range.Top));
+
+        // Empty header cells get a placeholder name ("Column 1", "Column 2", …, left-to-right) so the
+        // table always reads as labelled; cells that already carry a header are left as the user typed.
+        int headerRow = table.Range.Top;
+        int firstColumn = table.Range.Left;
+        var fillHeaders = new CellSnapshotCommand("Create Table", sheet, Positions(headerRange),
+            ws =>
+            {
+                for (int column = firstColumn; column <= table.Range.Right; column++)
+                {
+                    if (ws.GetValue(headerRow, column).IsEmpty)
+                    {
+                        ws.SetValue(headerRow, column, CellValue.Text($"Column {column - firstColumn + 1}"));
+                    }
+                }
+            });
+
         var styleHeader = EditCommands.ApplyStyle(workbook, sheet, headerRange, StyleTableHeader, "Create Table");
-        return EditCommands.Composite("Create Table", new[] { add, styleHeader });
+        return EditCommands.Composite("Create Table", new[] { add, fillHeaders, styleHeader });
     }
 
     /// <summary>The default header style: bold white text on the green accent fill (PRD §8.10).</summary>
