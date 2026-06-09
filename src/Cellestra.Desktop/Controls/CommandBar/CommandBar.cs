@@ -24,6 +24,9 @@ public sealed class CommandBar : UserControl
     // Emerald accent (from the prototype) for "on" tools — legible on both light and dark chrome.
     internal static readonly IBrush ActiveBackground = new SolidColorBrush(Color.FromArgb(0x33, 0x15, 0x73, 0x4F));
     internal static readonly IBrush ActiveForeground = new SolidColorBrush(Color.FromRgb(0x1A, 0x8A, 0x5E));
+    // A subtle, theme-neutral grey wash for pointer-over feedback — readable on both light and dark
+    // chrome, and deliberately lighter than the emerald "on" wash so an on-and-hovered tool still reads as on.
+    internal static readonly IBrush HoverBackground = new SolidColorBrush(Color.FromArgb(0x1A, 0x88, 0x88, 0x88));
     private static readonly IBrush DividerBrush = new SolidColorBrush(Color.FromArgb(0x33, 0x88, 0x88, 0x88));
     private static readonly IBrush MutedBrush = new SolidColorBrush(Color.FromRgb(0x88, 0x88, 0x88));
 
@@ -150,7 +153,7 @@ public sealed class CommandBar : UserControl
             }
         }
 
-        if (group.Overflow.Count > 0 || group.HasStyleDrawer)
+        if (group.HasDrawer)
         {
             row.Children.Add(BuildChevron(group));
         }
@@ -176,7 +179,9 @@ public sealed class CommandBar : UserControl
             Focusable = false,
             Content = new LucideIcon { IconKey = "chevron-down", Size = 13, Foreground = MutedBrush, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center },
             VerticalAlignment = VerticalAlignment.Center,
+            CornerRadius = new CornerRadius(6),
         };
+        AddHover(chevron);
         ToolTip.SetTip(chevron, $"More {group.Name.ToLowerInvariant()} tools");
 
         var (content, refresh) = CommandBarDrawer.Build(group, _env, () => (chevron.Flyout as Flyout)?.Hide());
@@ -219,6 +224,8 @@ public sealed class CommandBar : UserControl
             Focusable = false,
             VerticalAlignment = VerticalAlignment.Center,
         };
+        var pillRest = pill.Background;
+        AddHover(pill, pillRest);
         ToolTip.SetTip(pill, "Search and run any command");
         pill.Click += (_, _) => _env.ShowCommandPalette();
         return pill;
@@ -243,7 +250,9 @@ public sealed class CommandBar : UserControl
                 VerticalAlignment = VerticalAlignment.Center,
             },
             VerticalAlignment = VerticalAlignment.Center,
+            CornerRadius = new CornerRadius(6),
         };
+        AddHover(button);
         ToolTip.SetTip(button, collapse ? "Collapse the bar — more room for your data" : "Show the command bar");
         button.Click += (_, _) => Collapsed = collapse;
         return button;
@@ -257,6 +266,8 @@ public sealed class CommandBar : UserControl
         private readonly AppCommand _command;
         private readonly LucideIcon _icon;
         private readonly Ellipse _dot;
+        private bool _on;
+        private bool _hover;
 
         public CommandBarButton(AppCommand command, IAppEnvironment env)
         {
@@ -286,6 +297,8 @@ public sealed class CommandBar : UserControl
             Content = new Panel { Children = { _icon, _dot } };
 
             ToolTip.SetTip(this, BuildTip(command));
+            PointerEntered += (_, _) => { _hover = true; ApplyBackground(); };
+            PointerExited += (_, _) => { _hover = false; ApplyBackground(); };
             Click += (_, _) =>
             {
                 if (_command.IsEnabled(env))
@@ -299,10 +312,10 @@ public sealed class CommandBar : UserControl
         public void UpdateState(IAppEnvironment env)
         {
             IsEnabled = _command.IsEnabled(env);
-            bool on = _command.IsToggleActive(env);
-            Background = on ? ActiveBackground : Brushes.Transparent;
-            _dot.IsVisible = on;
-            if (on)
+            _on = _command.IsToggleActive(env);
+            _dot.IsVisible = _on;
+            ApplyBackground();
+            if (_on)
             {
                 _icon.Foreground = ActiveForeground;
             }
@@ -311,6 +324,22 @@ public sealed class CommandBar : UserControl
                 _icon.ClearValue(LucideIcon.ForegroundProperty);
             }
         }
+
+        // "On" wins over hover so a lit toggle keeps its emerald wash; hover supplies a subtle highlight otherwise.
+        private void ApplyBackground() =>
+            Background = _on ? ActiveBackground : _hover ? HoverBackground : Brushes.Transparent;
+    }
+
+    /// <summary>
+    /// Give a transparent-backed control a brief, subtle pointer-over highlight that respects the theme.
+    /// On exit it returns to <paramref name="rest"/> (Transparent by default), so callers that carry their
+    /// own "on"/"resting" wash pass that brush to avoid clobbering it.
+    /// </summary>
+    internal static void AddHover(TemplatedControl control, IBrush? rest = null)
+    {
+        rest ??= Brushes.Transparent;
+        control.PointerEntered += (_, _) => control.Background = HoverBackground;
+        control.PointerExited += (_, _) => control.Background = rest;
     }
 
     /// <summary>A short status-line sentence for an action: toggles report on/off, others just name themselves.</summary>

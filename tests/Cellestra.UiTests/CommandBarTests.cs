@@ -96,4 +96,44 @@ public class CommandBarTests
             }
         }
     }
+
+    [Fact]
+    public void Data_group_surfaces_both_sort_directions_as_primary_tools()
+    {
+        var data = CommandBarModel.For(CommandContext.Cell).Single(g => g.Name == "Data");
+        Assert.Contains("data.sortAsc", data.Primary);
+        Assert.Contains("data.sortDesc", data.Primary);
+    }
+
+    [AvaloniaFact]
+    public void Every_groups_drawer_builds_and_refreshes_without_throwing()
+    {
+        var window = new MainWindow();
+        window.Show();
+
+        // Text, Align, and Numbers carry bespoke drawer affordances (colours/size, vertical align,
+        // format-as); building each and running its open-time refresh must not throw.
+        foreach (var group in CommandBarModel.For(CommandContext.Cell).Where(g => g.HasDrawer))
+        {
+            var (content, refresh) = CommandBarDrawer.Build(group, window, () => { });
+            Assert.NotNull(content);
+            refresh(); // mirrors Flyout.Opened
+        }
+    }
+
+    [AvaloniaFact]
+    public void Drawer_applies_vertical_alignment_and_font_size_through_the_session()
+    {
+        var window = new MainWindow();
+        window.Show();
+
+        window.ApplyCellStyle(s => s.WithAlignment(s.Alignment with { Vertical = Cellestra.Core.Styling.VerticalAlignment.Middle }), "Vertical align");
+        var sheet = window.Session.ActiveSheet;
+        var style = window.Session.Workbook.Styles.Get(sheet.Find(0, 0)?.StyleId ?? Cellestra.Core.Styling.StylePool.DefaultId);
+        Assert.Equal(Cellestra.Core.Styling.VerticalAlignment.Middle, style.Alignment.Vertical);
+
+        window.ApplyCellStyle(s => s.WithFont(s.Font with { SizePoints = 22 }), "Font size 22");
+        style = window.Session.Workbook.Styles.Get(sheet.Find(0, 0)?.StyleId ?? Cellestra.Core.Styling.StylePool.DefaultId);
+        Assert.Equal(22, style.Font.SizePoints);
+    }
 }
