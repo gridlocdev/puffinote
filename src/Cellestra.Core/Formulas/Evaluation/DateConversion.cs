@@ -14,6 +14,14 @@ public static class DateConversion
 
     public static double DateToSerial(int year, int month, int day)
     {
+        // A two-digit year (0–99) resolves on LibreOffice Calc's default window 1930–2029
+        // (00–29 → 2000–2029, 30–99 → 1930–1999), matching PRD §8.3, so DATE(30,1,1) = 1930.
+        // Years 100–1899 are taken literally (LibreOffice does not shift those).
+        if (year is >= 0 and <= 99)
+        {
+            year += year <= 29 ? 2000 : 1900;
+        }
+
         // DATE allows overflowing months/days to roll over (e.g. DATE(2020,13,1) = 2021-01-01).
         var date = new DateTime(year, 1, 1, 0, 0, 0, DateTimeKind.Unspecified)
             .AddMonths(month - 1)

@@ -16,14 +16,14 @@ public static class DataEditCommands
 
     // ---- Sort -------------------------------------------------------------
 
-    public static IEditCommand Sort(string sheet, CellRange range, SortSpec spec) =>
+    public static IEditCommand Sort(string sheet, CellRange range, SortSpec spec, CultureInfo? culture = null) =>
         new CellSnapshotCommand("Sort", sheet,
             ws => EditCommands.ClampedPositions(ws, range),
-            ws => SortEngine.Sort(ws, EditCommands.ClampToUsed(ws, range) ?? range, spec));
+            ws => SortEngine.Sort(ws, EditCommands.ClampToUsed(ws, range) ?? range, spec, culture));
 
     /// <summary>Quick single-column sort by the active column, ascending or descending.</summary>
-    public static IEditCommand SortByColumn(string sheet, CellRange range, int column, bool ascending, bool hasHeader = true) =>
-        Sort(sheet, range, new SortSpec(new[] { new SortLevel(column, ascending) }, hasHeader));
+    public static IEditCommand SortByColumn(string sheet, CellRange range, int column, bool ascending, bool hasHeader = true, CultureInfo? culture = null) =>
+        Sort(sheet, range, new SortSpec(new[] { new SortLevel(column, ascending) }, hasHeader), culture);
 
     // ---- Remove duplicates ------------------------------------------------
 
@@ -144,6 +144,45 @@ public static class DataEditCommands
                 Sheet(wb, sheet).ReplaceTable(replacement, existing);
                 return EditResult.None;
             });
+
+    /// <summary>
+    /// Auto-expand a table to absorb an edit made in the row directly below it or the column
+    /// directly to its right (PRD §8.10). Returns a single undoable command that grows the
+    /// table's range and re-styles any newly-absorbed header cells, or <c>null</c> when the edit
+    /// is not adjacent to the table (no expansion applies). The orchestrator calls this from the
+    /// grid's commit path; this method does not wire the grid trigger itself.
+    /// </summary>
+    /// <remarks>
+    /// Signature: <c>ExpandTableForEdit(Workbook workbook, string sheet, Table table, int editedRow, int editedColumn)</c>.
+    /// </remarks>
+    public static IEditCommand? ExpandTableForEdit(Workbook workbook, string sheet, Table table, int editedRow, int editedColumn)
+    {
+        ArgumentNullException.ThrowIfNull(workbook);
+        ArgumentNullException.ThrowIfNull(table);
+
+        if (TableAutoExpand.ExpandFor(table, editedRow, editedColumn) is not { } grownRange)
+        {
+            return null; // the edit is not adjacent to the table — nothing to expand
+        }
+
+        var grown = table.WithRange(grownRange);
+        var replace = ReplaceTable(sheet, table, grown);
+
+        // Growing right adds new header cell(s) in the top row of the new column(s); give them the
+        // table-header style so the band reads as part of the table. Growing down adds only data
+        // rows (the header stays on the original top row), so no header restyle is needed.
+        bool grewRight = grownRange.Right > table.Range.Right;
+        if (table.HasHeader && grewRight)
+        {
+            var newHeaderCells = new CellRange(
+                new CellAddress(table.Range.Right + 1, grownRange.Top),
+                new CellAddress(grownRange.Right, grownRange.Top));
+            var styleHeader = EditCommands.ApplyStyle(workbook, sheet, newHeaderCells, StyleTableHeader, "Expand Table");
+            return EditCommands.Composite("Expand Table", new[] { replace, styleHeader });
+        }
+
+        return EditCommands.Composite("Expand Table", new[] { replace });
+    }
 
     // ---- Validation -------------------------------------------------------
 

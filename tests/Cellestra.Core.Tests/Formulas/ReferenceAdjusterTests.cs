@@ -88,6 +88,23 @@ public class ReferenceAdjusterTests
         var adjusted = ReferenceAdjuster.ForInsertRows(Parser.Parse("SUM(A1:A5)"), "Sheet1", "Sheet1", atRow: 5, count: 1);
         Assert.Equal("SUM(A1:A5)", Write(adjusted));
     }
+
+    [Fact]
+    public void Insert_pushing_a_reference_past_the_last_row_yields_ref_error()
+    {
+        // A1048576 is the sheet's last row (index 1048575). Inserting a row before it has nowhere
+        // to push it — it becomes #REF! rather than clamping to the edge.
+        var adjusted = ReferenceAdjuster.ForInsertRows(Parser.Parse("A1048576"), "Sheet1", "Sheet1", atRow: 0, count: 1);
+        Assert.Equal("#REF!", Write(adjusted));
+    }
+
+    [Fact]
+    public void Insert_pushing_a_reference_past_the_last_column_yields_ref_error()
+    {
+        // XFD is the last column (index 16383). Inserting a column before it overflows to #REF!.
+        var adjusted = ReferenceAdjuster.ForInsertColumns(Parser.Parse("XFD1"), "Sheet1", "Sheet1", atColumn: 0, count: 1);
+        Assert.Equal("#REF!", Write(adjusted));
+    }
 }
 
 public class FormulaWriterTests

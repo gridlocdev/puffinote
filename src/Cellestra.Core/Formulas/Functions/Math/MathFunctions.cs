@@ -250,7 +250,13 @@ public static class MathFunctions
                     continue;
                 }
 
-                var target = sumRange is null ? cell : sumRange.Get(r, c);
+                // Excel/Calc anchor sum_range at its top-left and reshape it to the criteria
+                // range's dimensions, so sum_range's own size/shape is ignored. Read the cell at
+                // offset (r, c) from sum_range's top-left via the context rather than bounding by
+                // sum_range's own RowCount/ColumnCount (which would yield #REF! on a mismatch).
+                var target = sumRange is null
+                    ? cell
+                    : ev.Context.GetCell(sumRange.Range.Sheet, sumRange.Range.Top + r, sumRange.Range.Left + c);
                 if (target.IsError)
                 {
                     return target;

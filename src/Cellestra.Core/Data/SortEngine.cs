@@ -1,3 +1,4 @@
+using System.Globalization;
 using Cellestra.Core.Formulas;
 using Cellestra.Core.Formulas.Evaluation;
 using Cellestra.Core.Formulas.Parsing;
@@ -20,7 +21,7 @@ public sealed record SortSpec(IReadOnlyList<SortLevel> Levels, bool HasHeader = 
 /// </summary>
 public static class SortEngine
 {
-    public static void Sort(Worksheet sheet, CellRange range, SortSpec spec)
+    public static void Sort(Worksheet sheet, CellRange range, SortSpec spec, CultureInfo? culture = null)
     {
         ArgumentNullException.ThrowIfNull(sheet);
         ArgumentNullException.ThrowIfNull(spec);
@@ -62,6 +63,34 @@ public static class SortEngine
                 }
 
                 sheet.PutCell(targetRow, range.Left + c, cell);
+            }
+        }
+
+        ReapplyActiveFilter(sheet, range, culture);
+    }
+
+    /// <summary>
+    /// After a sort moves data, any active AutoFilter's per-row Hidden flags are stale — they were
+    /// pinned to row indices while the values underneath them moved (bug: wrong rows stay hidden).
+    /// Re-run the filter so visibility follows the data. Covers both the sheet-level AutoFilter and
+    /// a table whose range overlaps the sorted region. No-op when nothing relevant is filtered.
+    /// </summary>
+    private static void ReapplyActiveFilter(Worksheet sheet, CellRange sorted, CultureInfo? culture)
+    {
+        culture ??= CultureInfo.CurrentCulture;
+
+        if (sheet.ActiveFilterSpec is { } sheetSpec &&
+            sheet.ActiveFilter is { } filterRange &&
+            filterRange.Intersects(sorted))
+        {
+            FilterEngine.Apply(sheet, filterRange, sheetSpec, culture);
+        }
+
+        foreach (var table in sheet.Tables)
+        {
+            if (table.Filter is { } tableSpec && table.Range.Intersects(sorted))
+            {
+                FilterEngine.Apply(sheet, table.Range, tableSpec, culture);
             }
         }
     }

@@ -83,6 +83,42 @@ public class DataEngineTests
     }
 
     [Fact]
+    public void Sort_reapplies_the_active_filter_so_visibility_follows_the_data()
+    {
+        var sheet = SheetWith(
+            (0, 0, "Score"),
+            (1, 0, 90), (2, 0, 10), (3, 0, 50));
+
+        var range = CellRange.Parse("A1:A4");
+        var spec = new FilterSpec(new Dictionary<int, ColumnFilter>
+        {
+            [0] = new ColumnFilter { Condition = ">40" },
+        });
+
+        FilterEngine.Apply(sheet, range, spec, CultureInfo.InvariantCulture);
+        sheet.ActiveFilter = range;
+        sheet.ActiveFilterSpec = spec;
+
+        // Before sort: 90 (row1) and 50 (row3) visible; 10 (row2) hidden.
+        Assert.False(sheet.IsRowHidden(1));
+        Assert.True(sheet.IsRowHidden(2));
+        Assert.False(sheet.IsRowHidden(3));
+
+        // Sort ascending — data becomes 10, 50, 90. Without re-applying the filter the Hidden flags
+        // would stay pinned to the old indices and hide the wrong row.
+        SortEngine.Sort(sheet, range, new SortSpec(new[] { new SortLevel(0, Ascending: true) }), CultureInfo.InvariantCulture);
+
+        Assert.Equal(10, sheet.GetValue(1, 0).AsNumber);
+        Assert.Equal(50, sheet.GetValue(2, 0).AsNumber);
+        Assert.Equal(90, sheet.GetValue(3, 0).AsNumber);
+
+        // After sort: 10 (row1) hidden; 50 (row2) and 90 (row3) visible — visibility tracks values.
+        Assert.True(sheet.IsRowHidden(1));
+        Assert.False(sheet.IsRowHidden(2));
+        Assert.False(sheet.IsRowHidden(3));
+    }
+
+    [Fact]
     public void Remove_duplicates_keeps_first_occurrence()
     {
         var sheet = SheetWith(

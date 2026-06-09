@@ -198,7 +198,10 @@ public static class ReferenceAdjuster
             if (_insert)
             {
                 int shifted = coord >= _at ? coord + _count : coord;
-                return System.Math.Min(shifted, _limit - 1);
+
+                // An insert that pushes a reference past the sheet's last row/column has nowhere
+                // to land — it becomes #REF! (null) rather than silently clamping to the edge.
+                return shifted >= _limit ? null : shifted;
             }
 
             int deleteEnd = _at + _count;

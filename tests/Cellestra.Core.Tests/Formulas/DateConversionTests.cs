@@ -46,13 +46,23 @@ public class DateConversionTests
     }
 
     [Fact]
-    public void DATE_treats_small_year_values_literally_like_LibreOffice()
+    public void DATE_treats_three_or_four_digit_years_literally_like_LibreOffice()
     {
-        // Unlike Excel (which adds 1900 to a year 0–1899, so DATE(108,1,2) = 2008-01-02),
-        // LibreOffice interprets a small year literally — DATE(108,1,2) is the year 108.
-        // The two-digit-year *window* (1930–2029) applies only to typed text, not to DATE().
+        // LibreOffice interprets a year of 100–1899 literally — DATE(108,1,2) is the year 108.
+        // Only a two-digit year (0–99) resolves on the 1930–2029 window.
         double serial = DateConversion.DateToSerial(108, 1, 2);
         Assert.Equal(108, DateConversion.FromSerial(serial).Year);
+    }
+
+    [Theory]
+    [InlineData(30, 1930)]  // 30–99 → 1930–1999
+    [InlineData(99, 1999)]
+    [InlineData(0, 2000)]   // 00–29 → 2000–2029
+    [InlineData(29, 2029)]
+    public void DATE_resolves_a_two_digit_year_on_the_1930_2029_window(int year, int expectedYear)
+    {
+        double serial = DateConversion.DateToSerial(year, 1, 1);
+        Assert.Equal(expectedYear, DateConversion.FromSerial(serial).Year);
     }
 
     [Theory]

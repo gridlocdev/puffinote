@@ -33,6 +33,20 @@ public static class OdsXmlNames
     public const string DataType = "data-type";
     public const string ContainsHeader = "contains-header";
 
+    // ---- table:content-validation (data validation round-trip, ODF §9.4.5) ----
+    public const string ContentValidations = "content-validations";
+    public const string ContentValidation = "content-validation";
+    public const string ContentValidationName = "content-validation-name";
+    public const string Condition = "condition";
+    public const string BaseCellAddress = "base-cell-address";
+    public const string AllowEmptyCell = "allow-empty-cell";
+    public const string DisplayList = "display-list";
+    public const string ErrorMessage = "error-message";
+    public const string HelpMessage = "help-message";
+    public const string MessageType = "message-type";
+    public const string Display = "display";
+    public const string Title = "title";
+
     public const string MimeType = "application/vnd.oasis.opendocument.spreadsheet";
 
     public const string MimetypePart = "mimetype";

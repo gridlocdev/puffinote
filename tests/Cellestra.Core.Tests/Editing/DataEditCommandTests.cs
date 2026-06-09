@@ -131,6 +131,57 @@ public class DataEditCommandTests
     }
 
     [Fact]
+    public void Expand_table_for_edit_below_grows_the_range_and_is_undoable()
+    {
+        var (workbook, history, sheet) = New();
+        var table = new Table("Data", CellRange.Parse("A1:B3"), HasHeader: true);
+        history.Execute(DataEditCommands.CreateTable(workbook, sheet.Name, table));
+
+        // An edit in the row directly below the table (row 3, within columns A–B) grows it down.
+        var command = DataEditCommands.ExpandTableForEdit(workbook, sheet.Name, table, editedRow: 3, editedColumn: 0);
+        Assert.NotNull(command);
+        history.Execute(command!);
+
+        Assert.Equal(CellRange.Parse("A1:B4"), Assert.Single(sheet.Tables).Range);
+
+        history.Undo();
+        Assert.Equal(CellRange.Parse("A1:B3"), Assert.Single(sheet.Tables).Range);
+    }
+
+    [Fact]
+    public void Expand_table_for_edit_right_grows_range_and_styles_new_header()
+    {
+        var (workbook, history, sheet) = New();
+        var table = new Table("Data", CellRange.Parse("A1:B3"), HasHeader: true);
+        history.Execute(DataEditCommands.CreateTable(workbook, sheet.Name, table));
+
+        // An edit in the column directly to the right (column C, within rows 1–3) grows it right.
+        var command = DataEditCommands.ExpandTableForEdit(workbook, sheet.Name, table, editedRow: 0, editedColumn: 2);
+        Assert.NotNull(command);
+        history.Execute(command!);
+
+        Assert.Equal(CellRange.Parse("A1:C3"), Assert.Single(sheet.Tables).Range);
+
+        // The new header cell C1 gets the table-header style (accent fill + bold white text).
+        var header = workbook.Styles.Get(sheet.GetOrCreate(0, 2).StyleId);
+        Assert.Equal(Cellestra.Core.Styling.ArgbColor.FromHex("#1E4FB5"), header.Fill.Background);
+        Assert.True(header.Font.Bold);
+
+        history.Undo();
+        Assert.Equal(CellRange.Parse("A1:B3"), Assert.Single(sheet.Tables).Range);
+        Assert.Equal(Cellestra.Core.Styling.StylePool.DefaultId, sheet.GetOrCreate(0, 2).StyleId);
+    }
+
+    [Fact]
+    public void Expand_table_for_edit_returns_null_when_not_adjacent()
+    {
+        var (workbook, _, sheet) = New();
+        var table = new Table("Data", CellRange.Parse("A1:B3"), HasHeader: true);
+
+        Assert.Null(DataEditCommands.ExpandTableForEdit(workbook, sheet.Name, table, editedRow: 10, editedColumn: 10));
+    }
+
+    [Fact]
     public void Set_validation_is_undoable()
     {
         var (workbook, history, sheet) = New();

@@ -123,12 +123,45 @@ internal static class H
     public static bool TryParseNumberOrDate(string text, CultureInfo culture, out double number)
     {
         text = text.Trim();
+
+        // A trailing percent sign means "this fraction of one": "50%" → 0.5 (Excel/Calc).
+        if (text.EndsWith('%'))
+        {
+            string body = text[..^1].Trim();
+            if (double.TryParse(body, NumberStyles.Any, culture, out number) ||
+                double.TryParse(body, NumberStyles.Any, CultureInfo.InvariantCulture, out number))
+            {
+                number /= 100d;
+                return true;
+            }
+        }
+
         if (double.TryParse(text, NumberStyles.Any, culture, out number))
         {
             return true;
         }
 
         if (double.TryParse(text, NumberStyles.Any, CultureInfo.InvariantCulture, out number))
+        {
+            return true;
+        }
+
+        // A leading/trailing currency symbol (the culture's, or a plain "$") is stripped so
+        // "$100" parses as 100. NumberStyles.Any only honours the *current* culture's symbol,
+        // so handle the common "$" explicitly for invariant/foreign locales.
+        string stripped = text;
+        if (stripped.StartsWith('$'))
+        {
+            stripped = stripped[1..].TrimStart();
+        }
+        else if (stripped.StartsWith(culture.NumberFormat.CurrencySymbol, StringComparison.Ordinal))
+        {
+            stripped = stripped[culture.NumberFormat.CurrencySymbol.Length..].TrimStart();
+        }
+
+        if (!ReferenceEquals(stripped, text) &&
+            (double.TryParse(stripped, NumberStyles.Any, culture, out number) ||
+             double.TryParse(stripped, NumberStyles.Any, CultureInfo.InvariantCulture, out number)))
         {
             return true;
         }

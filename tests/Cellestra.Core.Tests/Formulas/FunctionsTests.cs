@@ -97,6 +97,51 @@ public class FunctionsTests
         Assert.Equal(120, FormulaHarness.Number("SUMIF(A1:A5,\">2\",B1:B5)", setup));
     }
 
+    [Fact]
+    public void Sumif_reshapes_a_smaller_sum_range_to_the_criteria_range()
+    {
+        // sum_range B1:B3 is smaller than the criteria range A1:A5; Excel/Calc anchor it at B1 and
+        // reshape it to A1:A5's shape, so the matched rows 3,4,5 read B3,B4,B5 = 30+40+50 = 120.
+        Action<Worksheet> setup = s =>
+        {
+            Column(0, 1, 2, 3, 4, 5)(s);
+            Column(1, 10, 20, 30, 40, 50)(s);
+        };
+
+        Assert.Equal(120, FormulaHarness.Number("SUMIF(A1:A5,\">2\",B1:B3)", setup));
+    }
+
+    [Fact]
+    public void Sumif_reshapes_a_single_cell_sum_range()
+    {
+        // A single-cell sum_range B1 is anchored and reshaped to A1:A5; matched rows 3,4,5 read
+        // B3,B4,B5 = 30+40+50 = 120 (it must not be clamped to B1 nor yield #REF!).
+        Action<Worksheet> setup = s =>
+        {
+            Column(0, 1, 2, 3, 4, 5)(s);
+            Column(1, 10, 20, 30, 40, 50)(s);
+        };
+
+        Assert.Equal(120, FormulaHarness.Number("SUMIF(A1:A5,\">2\",B1)", setup));
+    }
+
+    [Fact]
+    public void Sumif_reshapes_an_offset_sum_range()
+    {
+        // sum_range C2:C6 is offset from the criteria range; anchored at C2, matched rows 3,4,5
+        // (offsets 2,3,4) read C4,C5,C6 = 300+400+500 = 1200.
+        Action<Worksheet> setup = s =>
+        {
+            Column(0, 1, 2, 3, 4, 5)(s);
+            for (int i = 0; i < 5; i++)
+            {
+                s.SetValue(1 + i, 2, CellValue.Number((i + 1) * 100)); // C2..C6 = 100..500
+            }
+        };
+
+        Assert.Equal(1200, FormulaHarness.Number("SUMIF(A1:A5,\">2\",C2:C6)", setup));
+    }
+
     // ---- Logical ----------------------------------------------------------
 
     [Theory]
@@ -145,6 +190,16 @@ public class FunctionsTests
     {
         Assert.Equal(9, FormulaHarness.Number("LEN(\"Cellestra\")"));
         Assert.Equal(123, FormulaHarness.Number("VALUE(\"123\")"));
+    }
+
+    [Theory]
+    [InlineData("VALUE(\"50%\")", 0.5)]   // a trailing percent divides by 100
+    [InlineData("VALUE(\"100%\")", 1.0)]
+    [InlineData("VALUE(\"$100\")", 100)]  // a leading currency symbol is stripped
+    [InlineData("VALUE(\"$1.5\")", 1.5)]
+    public void Value_parses_percent_and_currency(string formula, double expected)
+    {
+        Assert.Equal(expected, FormulaHarness.Number(formula), 10);
     }
 
     // ---- Lookup -----------------------------------------------------------
