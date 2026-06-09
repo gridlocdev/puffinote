@@ -26,14 +26,21 @@ public sealed partial class SpreadsheetGrid : Panel
     public const double HeaderWidth = 46;
     public const double HeaderHeight = 22;
 
-    private const double EditorPadX = 3;
-    private const double EditorPadY = 1;
+    // Inset around cell text so glyphs have a little breathing room from the gridlines. The same
+    // values drive both the drawn text (see DrawCellContent/DrawHashes) and the inline editor, so
+    // committing an edit never shifts the text. CellPadX is the per-side horizontal inset; CellPadY
+    // the per-side vertical inset.
+    private const double CellPadX = 5;
+    private const double CellPadY = 2;
+
+    private const double EditorPadX = CellPadX;
+    private const double EditorPadY = CellPadY;
 
     private readonly TextBox _editor = new()
     {
         IsVisible = false,
         BorderThickness = new Thickness(0),
-        Padding = new Thickness(EditorPadX, EditorPadY, 0, 0),
+        Padding = new Thickness(EditorPadX, EditorPadY, EditorPadX, 0),
         Background = Brushes.White,
         VerticalContentAlignment = Avalonia.Layout.VerticalAlignment.Top, // sit at the top of the cell, like the drawn text
     };
@@ -147,6 +154,25 @@ public sealed partial class SpreadsheetGrid : Panel
 
     public event EventHandler? SelectionChanged;
 
+    /// <summary>
+    /// The active cell's address as text for the Name Box — the full merged range (e.g. <c>A1:B2</c>)
+    /// when the active cell sits inside a merge, otherwise the single address (e.g. <c>A1</c>). The
+    /// host's formula bar should display this rather than building the address from the raw
+    /// active row/column, so a selected merge reads as its whole span.
+    /// </summary>
+    public string ActiveCellName
+    {
+        get
+        {
+            if (Sheet?.FindMerge(Selection.ActiveRow, Selection.ActiveColumn) is { } merge)
+            {
+                return merge.Range.ToString();
+            }
+
+            return new CellAddress(Selection.ActiveColumn, Selection.ActiveRow).ToString();
+        }
+    }
+
     public double Zoom
     {
         get => _zoom;
@@ -197,6 +223,8 @@ public sealed partial class SpreadsheetGrid : Panel
         {
             return;
         }
+
+        RebuildRowFontMap(sheet); // so EffectiveRowHeight can grow rows to fit their tallest font
 
         int frozenColumns = sheet.FrozenColumns;
         int frozenRows = sheet.FrozenRows;
@@ -425,7 +453,7 @@ public sealed partial class SpreadsheetGrid : Panel
             formatted.SetTextDecorations(decorations);
         }
 
-        double cellAvailable = rect.Width - 6;
+        double cellAvailable = rect.Width - 2 * CellPadX;
         bool numeric = cell.Value.IsNumber || cell.Value.IsBoolean || cell.Value.IsError;
 
         // A number (or date) too wide for its column shows ##### rather than being trimmed — widen
@@ -454,11 +482,11 @@ public sealed partial class SpreadsheetGrid : Panel
 
         double tx = horizontal switch
         {
-            SAlign.Right => rect.Right - 3 - formatted.Width,
+            SAlign.Right => rect.Right - CellPadX - formatted.Width,
             SAlign.Center => rect.X + (rect.Width - formatted.Width) / 2,
-            _ => rect.X + 3,
+            _ => rect.X + CellPadX,
         };
-        double ty = rect.Bottom - formatted.Height - 2;
+        double ty = rect.Bottom - formatted.Height - CellPadY;
 
         context.DrawText(formatted, new Point(tx, Math.Max(rect.Y, ty)));
     }
@@ -497,8 +525,8 @@ public sealed partial class SpreadsheetGrid : Panel
         var one = new FormattedText("#", CultureInfo.CurrentCulture, FlowDirection.LeftToRight, typeface, fontSize, brush);
         int count = Math.Max(1, (int)(available / Math.Max(1, one.Width)));
         var hashes = new FormattedText(new string('#', count), CultureInfo.CurrentCulture, FlowDirection.LeftToRight, typeface, fontSize, brush);
-        double tx = rect.Right - 3 - hashes.Width; // numbers right-align
-        double ty = rect.Bottom - hashes.Height - 2;
+        double tx = rect.Right - CellPadX - hashes.Width; // numbers right-align
+        double ty = rect.Bottom - hashes.Height - CellPadY;
         context.DrawText(hashes, new Point(tx, Math.Max(rect.Y, ty)));
     }
 
@@ -534,6 +562,17 @@ public sealed partial class SpreadsheetGrid : Panel
 
     private void DrawActiveOutline(DrawingContext context, IPen pen)
     {
+        // A merged active cell is outlined around its whole region, not just the anchor.
+        if (Sheet?.FindMerge(Selection.ActiveRow, Selection.ActiveColumn) is { } merge)
+        {
+            if (TryGetRegionRect(merge.Range.Top, merge.Range.Left, merge.Range.Bottom, merge.Range.Right, out var mergeRect))
+            {
+                context.DrawRectangle(null, pen, mergeRect);
+            }
+
+            return;
+        }
+
         if (TryGetCellRect(Selection.ActiveRow, Selection.ActiveColumn, out var rect))
         {
             context.DrawRectangle(null, pen, rect);
@@ -606,6 +645,20 @@ public sealed partial class SpreadsheetGrid : Panel
 
         rect = new Rect(x.Value, y.Value, w!.Value, h!.Value);
         return true;
+    }
+
+    /// <summary>
+    /// The on-screen rectangle the inline editor should occupy for the active cell: the combined
+    /// merged region when the active cell is merged, otherwise just the single cell.
+    /// </summary>
+    private bool TryGetActiveCellRect(out Rect rect)
+    {
+        if (Sheet?.FindMerge(Selection.ActiveRow, Selection.ActiveColumn) is { } merge)
+        {
+            return TryGetRegionRect(merge.Range.Top, merge.Range.Left, merge.Range.Bottom, merge.Range.Right, out rect);
+        }
+
+        return TryGetCellRect(Selection.ActiveRow, Selection.ActiveColumn, out rect);
     }
 
     // ---- Hit testing & input ---------------------------------------------
@@ -728,7 +781,7 @@ public sealed partial class SpreadsheetGrid : Panel
 
         if (e.ClickCount == 2)
         {
-            Selection.MoveTo(row, column);
+            SelectCellOrMerge(row, column);
             BeginEdit(null);
             return;
         }
@@ -755,7 +808,7 @@ public sealed partial class SpreadsheetGrid : Panel
             }
             else
             {
-                Selection.MoveTo(row, column);
+                SelectCellOrMerge(row, column);
             }
 
             _selecting = true;
@@ -918,16 +971,14 @@ public sealed partial class SpreadsheetGrid : Panel
         }
 
         bool extend = e.KeyModifiers.HasFlag(KeyModifiers.Shift);
-        int row = Selection.ActiveRow;
-        int column = Selection.ActiveColumn;
 
         switch (e.Key)
         {
-            case Key.Up: _tabOriginColumn = null; Move(row - 1, column, extend); break;
-            case Key.Down: _tabOriginColumn = null; Move(row + 1, column, extend); break;
-            case Key.Left: _tabOriginColumn = null; Move(row, column - 1, extend); break;
-            case Key.Right: _tabOriginColumn = null; Move(row, column + 1, extend); break;
-            case Key.Tab: Move(row, column + (e.KeyModifiers.HasFlag(KeyModifiers.Shift) ? -1 : 1), false); break;
+            case Key.Up: _tabOriginColumn = null; MoveStep(-1, 0, extend); break;
+            case Key.Down: _tabOriginColumn = null; MoveStep(1, 0, extend); break;
+            case Key.Left: _tabOriginColumn = null; MoveStep(0, -1, extend); break;
+            case Key.Right: _tabOriginColumn = null; MoveStep(0, 1, extend); break;
+            case Key.Tab: MoveStep(0, e.KeyModifiers.HasFlag(KeyModifiers.Shift) ? -1 : 1, false); break;
             case Key.Return:
                 if (HasMarquee)
                 {
@@ -935,7 +986,7 @@ public sealed partial class SpreadsheetGrid : Panel
                 }
                 else
                 {
-                    Move(row + (e.KeyModifiers.HasFlag(KeyModifiers.Shift) ? -1 : 1), column, false);
+                    MoveStep(e.KeyModifiers.HasFlag(KeyModifiers.Shift) ? -1 : 1, 0, false);
                 }
 
                 break;
@@ -970,6 +1021,32 @@ public sealed partial class SpreadsheetGrid : Panel
         !e.KeyModifiers.HasFlag(KeyModifiers.Meta) && !e.KeyModifiers.HasFlag(KeyModifiers.Control) &&
         e.Key is (>= Key.A and <= Key.Z) or (>= Key.D0 and <= Key.D9);
 
+    /// <summary>
+    /// Move (or extend) the active cell by one step, skipping over any merged region: a step starts
+    /// from the current merge's edge and lands on the cell past it, and entering a merge selects the
+    /// whole span. Falls back to a plain one-cell step when there are no merges in the way.
+    /// </summary>
+    private void MoveStep(int rowDelta, int columnDelta, bool extend)
+    {
+        var sheet = Sheet;
+        int row = Selection.ActiveRow;
+        int column = Selection.ActiveColumn;
+        var (targetRow, targetColumn) = sheet?.StepOverMerges(row, column, rowDelta, columnDelta)
+            ?? (Math.Clamp(row + rowDelta, 0, SheetDimensions.MaxRows - 1),
+                Math.Clamp(column + columnDelta, 0, SheetDimensions.MaxColumns - 1));
+        Move(targetRow, targetColumn, extend);
+    }
+
+    /// <summary>Test seam: drive the merge-aware arrow navigation directly (no key event plumbing).</summary>
+    internal void NavigateForTest(int rowDelta, int columnDelta, bool extend) => MoveStep(rowDelta, columnDelta, extend);
+
+    /// <summary>Test seam: select a cell the way a click/arrow does, expanding onto a merge.</summary>
+    internal void SelectForTest(int row, int column)
+    {
+        SelectCellOrMerge(row, column);
+        RaiseSelectionChanged();
+    }
+
     private void Move(int row, int column, bool extend)
     {
         if (extend)
@@ -978,10 +1055,28 @@ public sealed partial class SpreadsheetGrid : Panel
         }
         else
         {
-            Selection.MoveTo(row, column);
+            SelectCellOrMerge(row, column);
         }
 
         RaiseSelectionChanged();
+    }
+
+    /// <summary>
+    /// Select a single cell, or — when it falls inside a merged region — the whole merge (active cell
+    /// at the merge's anchor). This keeps the active outline and Name Box reporting the full span.
+    /// </summary>
+    private void SelectCellOrMerge(int row, int column)
+    {
+        if (Sheet?.FindMerge(row, column) is { } merge)
+        {
+            // active = anchor (top-left); the range covers the whole merge.
+            Selection.Restore(merge.Range.Top, merge.Range.Left, merge.Range.Bottom, merge.Range.Right,
+                merge.Range.Top, merge.Range.Left);
+        }
+        else
+        {
+            Selection.MoveTo(row, column);
+        }
     }
 
     private void ClearSelection()
@@ -1070,6 +1165,10 @@ public sealed partial class SpreadsheetGrid : Panel
 
     internal TextAlignment EditorTextAlignment => _editor.TextAlignment;
 
+    /// <summary>Test seam: the rectangle the inline editor would occupy for the active cell (the full
+    /// merged region when the active cell is merged), so a merged editor's span can be verified.</summary>
+    internal Rect ActiveEditorRect => TryGetActiveCellRect(out var rect) ? rect : default;
+
     /// <summary>Match the inline editor to the cell's drawn appearance — font, weight/style, underline,
     /// text colour, and fill — so editing looks the same as the displayed cell (not default black-on-white).</summary>
     private void ApplyEditorFont(Cell? cell)
@@ -1127,13 +1226,14 @@ public sealed partial class SpreadsheetGrid : Panel
         var formatted = new FormattedText(text, CultureInfo.CurrentCulture, FlowDirection.LeftToRight, typeface, fontSize, brush);
 
         // The overlay is arranged at the editor rect, so (0,0) is the cell's top-left. The editor's
-        // content area runs [EditorPadX, width] (left pad only — right/bottom padding is 0), and the
+        // content area is inset by EditorPadX on both sides (and EditorPadY at the top), and the
         // TextBox aligns text within it; matching that here puts our lines under the glyphs.
         double width = _editorDecorations.Bounds.Width;
+        double inner = Math.Max(0, width - 2 * EditorPadX);
         double x0 = _editor.TextAlignment switch
         {
-            TextAlignment.Right => width - formatted.Width, // flush right (no right padding)
-            TextAlignment.Center => EditorPadX + (Math.Max(0, width - EditorPadX) - formatted.Width) / 2,
+            TextAlignment.Right => Math.Max(EditorPadX, width - EditorPadX - formatted.Width),
+            TextAlignment.Center => EditorPadX + (inner - formatted.Width) / 2,
             _ => EditorPadX,
         };
         double x1 = x0 + formatted.Width;
@@ -1292,7 +1392,7 @@ public sealed partial class SpreadsheetGrid : Panel
         _surface.Arrange(new Rect(finalSize));
         _popupLayer.Arrange(new Rect(finalSize));
         BuildVisible(finalSize);
-        if (_editing && TryGetCellRect(Selection.ActiveRow, Selection.ActiveColumn, out var rect))
+        if (_editing && TryGetActiveCellRect(out var rect))
         {
             _editor.Arrange(rect);
             _editorDecorations.Arrange(rect); // the decoration overlay tracks the editor exactly
