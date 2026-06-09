@@ -26,6 +26,15 @@ public sealed partial class SpreadsheetGrid
     public bool IsInlineEditing => _editing;
 
     /// <summary>
+    /// Commit the active inline edit through the grid's normal path (validation, SetInput, selection
+    /// move), so the formula bar's Enter shares one commit lifecycle with in-cell editing (task 9).
+    /// </summary>
+    public void CommitInlineEdit(int moveRow, int moveColumn) => CommitEdit(moveRow, moveColumn);
+
+    /// <summary>Discard the active inline edit (formula bar's Escape).</summary>
+    public void CancelInlineEdit() => CancelEdit();
+
+    /// <summary>
     /// Push text into the active inline editor from outside (the formula bar). Begins an edit on
     /// the active cell if one isn't already running. The update is flagged programmatic so it does
     /// not echo back through <see cref="InlineEditTextChanged"/>. The caret is kept where it was
@@ -38,7 +47,8 @@ public sealed partial class SpreadsheetGrid
 
         if (!_editing)
         {
-            BeginEdit(text);
+            // Mirror the bar without stealing focus: the user is typing in the formula bar.
+            BeginEdit(text, focus: false);
             _editor.CaretIndex = text.Length;
             return;
         }

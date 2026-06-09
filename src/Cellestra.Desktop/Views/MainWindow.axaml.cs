@@ -66,6 +66,8 @@ public partial class MainWindow : Window, IAppEnvironment
         _session.StructureChanged += (_, _) => { BuildSheetTabs(); Grid.Refresh(); UpdateChrome(); };
 
         FormulaInput.KeyDown += FormulaInputKeyDown;
+        FormulaInput.TextChanged += FormulaInputTextChanged;
+        Grid.InlineEditTextChanged += OnInlineEditTextChanged;
         NameBox.KeyDown += NameBoxKeyDown;
         FxButton.Click += (_, _) => BeginEdit();
         FormulaExpandButton.Content = _formulaExpandIcon;
@@ -794,7 +796,42 @@ public partial class MainWindow : Window, IAppEnvironment
         // single active address for ordinary cells.
         NameBox.Text = Grid.ActiveCellName;
         var cell = _session.ActiveSheet.Find(Selection.ActiveRow, Selection.ActiveColumn);
+        _syncingFormulaBar = true; // a programmatic refresh, not the user typing — don't echo into the cell
         FormulaInput.Text = cell is null ? string.Empty : (cell.IsFormula ? "=" + cell.Formula : cell.Value.ToInvariantString());
+        _syncingFormulaBar = false;
+    }
+
+    // Guards the two-way formula-bar ↔ inline-editor mirror (task 9) against feedback loops.
+    private bool _syncingFormulaBar;
+
+    /// <summary>Cell → formula bar: reflect live keystrokes in the inline editor up into the formula input.</summary>
+    private void OnInlineEditTextChanged(string text)
+    {
+        if (_syncingFormulaBar)
+        {
+            return;
+        }
+
+        _syncingFormulaBar = true;
+        int caret = FormulaInput.CaretIndex;
+        FormulaInput.Text = text;
+        FormulaInput.CaretIndex = Math.Min(caret, text.Length);
+        _syncingFormulaBar = false;
+    }
+
+    /// <summary>Formula bar → cell: mirror typing in the formula input into the inline editor ("vice versa").</summary>
+    private void FormulaInputTextChanged(object? sender, TextChangedEventArgs e)
+    {
+        // Only when the user is actually typing in the bar — not during a programmatic SyncFormulaBar
+        // refresh or an echo from the cell side (which would otherwise begin a spurious edit).
+        if (_syncingFormulaBar || !FormulaInput.IsFocused)
+        {
+            return;
+        }
+
+        _syncingFormulaBar = true;
+        Grid.SetInlineEditorText(FormulaInput.Text ?? string.Empty);
+        _syncingFormulaBar = false;
     }
 
     private void UpdateChrome()
@@ -1219,15 +1256,30 @@ public partial class MainWindow : Window, IAppEnvironment
     {
         if (e.Key == Key.Return)
         {
-            _session.Execute(EditCommands.SetInput(
-                _session.Workbook, _session.ActiveSheet.Name, Selection.ActiveRow, Selection.ActiveColumn,
-                FormulaInput.Text ?? string.Empty, _session.Workbook.Settings.EffectiveLocale));
-            Selection.MoveTo(Selection.ActiveRow + 1, Selection.ActiveColumn);
-            Grid.Focus();
+            if (Grid.IsInlineEditing)
+            {
+                // Typing in the bar opened a mirrored inline edit; commit it through the grid's one
+                // path (validation, SetInput, move-down) so both surfaces share a lifecycle (task 9).
+                Grid.CommitInlineEdit(1, 0);
+            }
+            else
+            {
+                _session.Execute(EditCommands.SetInput(
+                    _session.Workbook, _session.ActiveSheet.Name, Selection.ActiveRow, Selection.ActiveColumn,
+                    FormulaInput.Text ?? string.Empty, _session.Workbook.Settings.EffectiveLocale));
+                Selection.MoveTo(Selection.ActiveRow + 1, Selection.ActiveColumn);
+                Grid.Focus();
+            }
+
             e.Handled = true;
         }
         else if (e.Key == Key.Escape)
         {
+            if (Grid.IsInlineEditing)
+            {
+                Grid.CancelInlineEdit();
+            }
+
             OnSelectionChanged();
             Grid.Focus();
         }

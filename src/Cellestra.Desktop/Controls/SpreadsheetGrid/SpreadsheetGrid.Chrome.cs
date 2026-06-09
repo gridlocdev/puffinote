@@ -196,13 +196,22 @@ public sealed partial class SpreadsheetGrid
             return;
         }
 
+        var sheet = _session.ActiveSheet;
         if (_filterRange != range)
         {
             _columnFilters.Clear();
             _filterRange = range;
+            // Reopened file: seed the checkbox state from the filter conditions restored by the ODS
+            // reader (#17b/#18) so the dropdown reflects what's actually filtering the rows.
+            if (sheet.ActiveFilter == range && sheet.ActiveFilterSpec is { } saved)
+            {
+                foreach (var (savedColumn, savedFilter) in saved.Columns)
+                {
+                    _columnFilters[savedColumn] = savedFilter;
+                }
+            }
         }
 
-        var sheet = _session.ActiveSheet;
         var distinct = FilterEngine.DistinctValues(sheet, range, column, hasHeader);
         var allowed = _columnFilters.TryGetValue(column, out var existing) ? existing.AllowedValues : null;
 
@@ -270,6 +279,9 @@ public sealed partial class SpreadsheetGrid
         }
 
         _session.Execute(DataEditCommands.SortByColumn(sheet.Name, range, column, ascending, hasHeader));
+        // Persist the sort so it round-trips through table:database-range (#18).
+        sheet.ActiveSort = new SortSpec(new[] { new SortLevel(column, ascending) }, hasHeader);
+        sheet.ActiveFilter ??= range;
         ClosePopup();
         Redraw();
     }
@@ -281,6 +293,9 @@ public sealed partial class SpreadsheetGrid
         var spec = new FilterSpec(active, hasHeader);
         _session!.Execute(DataEditCommands.ApplyFilter(sheet.Name, range, spec, Culture));
         sheet.ActiveFilter ??= range;
+        // Persist the filter conditions in Core so save→reopen restores them (#17b/#18). No active
+        // conditions → drop the spec so an empty filter isn't written.
+        sheet.ActiveFilterSpec = active.Count > 0 ? spec : null;
         Redraw();
     }
 

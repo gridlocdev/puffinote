@@ -1300,7 +1300,14 @@ public sealed partial class SpreadsheetGrid : Panel
         }
     }
 
-    public void BeginEdit(string? seed)
+    public void BeginEdit(string? seed) => BeginEdit(seed, focus: true);
+
+    /// <param name="focus">
+    /// When false the inline editor is shown and seeded but keeps focus where it is. The formula bar
+    /// uses this to mirror the cell while the user keeps typing in the bar (task 9) — focusing the
+    /// editor would steal the caret and trigger its LostFocus commit.
+    /// </param>
+    public void BeginEdit(string? seed, bool focus)
     {
         var sheet = Sheet;
         if (sheet is null)
@@ -1316,7 +1323,11 @@ public sealed partial class SpreadsheetGrid : Panel
         _editor.Text = seed ?? CellEditText(cell);
         _editor.IsVisible = true;
         InvalidateArrange();
-        _editor.Focus();
+        if (focus)
+        {
+            _editor.Focus();
+        }
+
         _editor.CaretIndex = _editor.Text?.Length ?? 0;
         ResetAutocomplete(); // don't treat the seeded text as a typed character (#20)
         UpdateSignatureHelp(); // a seeded formula shows its hint immediately
