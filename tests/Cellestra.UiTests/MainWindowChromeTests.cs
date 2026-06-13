@@ -60,6 +60,19 @@ public class MainWindowChromeTests
         Assert.False(MainWindow.ShouldYieldToTextInput(gesture: null, textInputFocused: true));
     }
 
+    // ---- launch focus: the grid is keyboard-ready without a priming click ----
+
+    [AvaloniaFact]
+    public void The_grid_takes_focus_when_the_window_opens()
+    {
+        // OnOpened focuses the grid (and activates the window) so the keyboard works from launch
+        // instead of the first interaction being spent activating an inactive macOS window.
+        var window = new MainWindow();
+        window.Show();
+
+        Assert.True(window.Grid.IsFocused);
+    }
+
     // ---- #12: Reset Sheet Data clears values and formatting, undoably ----
 
     [AvaloniaFact]

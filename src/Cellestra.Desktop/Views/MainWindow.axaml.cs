@@ -15,6 +15,7 @@ using Avalonia.Controls.Templates;
 using Avalonia.Markup.Xaml;
 using Avalonia.Media;
 using Avalonia.Platform.Storage;
+using Avalonia.VisualTree;
 using Cellestra.Charts;
 using Cellestra.Core.Data;
 using Cellestra.Core.Editing;
@@ -100,6 +101,22 @@ public partial class MainWindow : Window, IAppEnvironment
         UpdateChrome();
         RefreshSheetView();
         OnSelectionChanged();
+    }
+
+    /// <summary>
+    /// Bring the app to the foreground and take keyboard focus when the window first opens. Avalonia
+    /// does not reliably make a freshly-launched macOS window key/active, which surfaced as three
+    /// distinct UI glitches: the global menu bar kept showing the previously-active app's menu until
+    /// ours was clicked; the very first click into the window was consumed activating it (so the
+    /// Command Palette appeared to need an extra click to register); and a file dialog could open
+    /// without focus until the user switched apps and back. Activating here makes the window key and
+    /// the app frontmost, and focusing the grid means the keyboard works without a priming click.
+    /// </summary>
+    protected override void OnOpened(EventArgs e)
+    {
+        base.OnOpened(e);
+        Activate();
+        Grid.Focus();
     }
 
     /// <summary>Window-level Esc → dismiss whatever overlay is open: cancel an internal modal (so its
@@ -359,8 +376,18 @@ public partial class MainWindow : Window, IAppEnvironment
         RewireSession();
     }
 
+    /// <summary>
+    /// Make our window key/frontmost before presenting a native file dialog. The macOS open/save panel
+    /// is shown as a sheet on this window; if the window has lost key status (e.g. focus drifted to
+    /// another app) the panel opens unfocused, and the user has to switch apps and back to type in it.
+    /// Activating first guarantees the sheet is focused. Companion to the launch activation in
+    /// <see cref="OnOpened"/>.
+    /// </summary>
+    private void ActivateForDialog() => Activate();
+
     public async Task OpenWorkbookAsync()
     {
+        ActivateForDialog();
         var files = await StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
         {
             Title = "Open Spreadsheet",
@@ -509,6 +536,7 @@ public partial class MainWindow : Window, IAppEnvironment
 
     public async Task SaveWorkbookAsAsync()
     {
+        ActivateForDialog();
         var file = await StorageProvider.SaveFilePickerAsync(new FilePickerSaveOptions
         {
             Title = "Save Spreadsheet",
@@ -557,6 +585,7 @@ public partial class MainWindow : Window, IAppEnvironment
 
     public async Task ImportCsvAsync()
     {
+        ActivateForDialog();
         var files = await StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
         {
             Title = "Import CSV",
@@ -584,6 +613,7 @@ public partial class MainWindow : Window, IAppEnvironment
 
     public async Task ExportCsvAsync()
     {
+        ActivateForDialog();
         var file = await StorageProvider.SaveFilePickerAsync(new FilePickerSaveOptions
         {
             Title = "Export CSV",
@@ -2192,7 +2222,17 @@ public partial class MainWindow : Window, IAppEnvironment
                 case Key.Up: Move(-1); break;
             }
         };
-        list.DoubleTapped += (_, _) => Run();
+        // A single click on a result row runs it (it's a launcher modeled on VS Code's palette, PRD
+        // §6.7 — "do a thing" fast). The ListBox selects the row on pointer-press, so by release
+        // SelectedItem is the clicked row; we only run when the click actually landed on an item row
+        // (not the empty space below a short list, and not a category header).
+        list.PointerReleased += (_, e) =>
+        {
+            if ((e.Source as Visual)?.FindAncestorOfType<ListBoxItem>(includeSelf: true) is not null)
+            {
+                Run();
+            }
+        };
 
         var box = new Border
         {
@@ -2211,7 +2251,9 @@ public partial class MainWindow : Window, IAppEnvironment
         OverlayHost.IsVisible = true;
         SetBackgroundBlur(true); // blur the grid behind the palette too (consistent with internal modals)
         OverlayHost.PointerPressed += OverlayBackgroundPressed;
-        input.Focus();
+        // Defer focus until the overlay's template is realized, otherwise focusing the just-shown input
+        // can silently fail and the user has to click into it first (mirrors ShowModalAsync's deferral).
+        Avalonia.Threading.Dispatcher.UIThread.Post(() => input.Focus());
     }
 
     /// <summary>The first selectable (non-header) row index at or after <paramref name="start"/> stepping by <paramref name="step"/>, or -1.</summary>
