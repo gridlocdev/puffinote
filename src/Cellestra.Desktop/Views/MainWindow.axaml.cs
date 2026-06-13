@@ -258,13 +258,16 @@ public partial class MainWindow : Window, IAppEnvironment
             {
                 submenu.Items.Add(new NativeMenuItem(command.Label)
                 {
-                    Gesture = command.Shortcut,
-                    // Mirror the in-window KeyBinding's guard (RegisterKeyBindings): a native menu item's
-                    // Gesture becomes a macOS key equivalent that the system dispatches globally, ahead of
-                    // the focused control. Without the same back-off, a plain-key command (Delete → Clear
-                    // Contents) fires while the formula bar or inline cell editor is focused — wiping the
-                    // whole cell instead of forward-deleting one character. Yielding here lets the key fall
-                    // through to the focused TextBox so it edits in place (#8).
+                    // A native menu item's Gesture becomes a macOS key equivalent the system claims
+                    // globally, ahead of the focused control — and a *disabled* item still swallows its
+                    // key equivalent rather than passing it on (Avalonia #7133 / discussion #10902). For a
+                    // plain-key command (Delete → Clear Contents) that means: while a cell or the formula
+                    // bar is being edited the item is disabled, yet macOS eats the Delete so the TextBox
+                    // never forward-deletes. So we give plain keys NO native key equivalent — the grid's
+                    // own OnKeyDown (selection mode) and the editors' handlers (edit mode) drive them, and
+                    // the gated KeyBinding remains the cross-platform fallback. Modifier shortcuts (⌘S, ⌘C…)
+                    // keep their equivalent for the menu hint and still back off from a focused text input.
+                    Gesture = IsPlainKeyGesture(command.Shortcut) ? null : command.Shortcut,
                     Command = new RelayCommand(
                         () => command.Execute(this),
                         () => !IsModalOpen && !BlockedByTextInput(command.Shortcut) && command.IsEnabled(this)),
@@ -1972,15 +1975,16 @@ public partial class MainWindow : Window, IAppEnvironment
     /// cell command (e.g. ClearContents). Modifier shortcuts (⌘C, ⌘V, ⌘Z…) still apply, and the textbox's
     /// own handlers take precedence over them anyway.
     /// </summary>
-    internal static bool ShouldYieldToTextInput(KeyGesture? gesture, bool textInputFocused)
-    {
-        if (gesture is null || !textInputFocused)
-        {
-            return false;
-        }
+    internal static bool ShouldYieldToTextInput(KeyGesture? gesture, bool textInputFocused) =>
+        textInputFocused && IsPlainKeyGesture(gesture);
 
-        return (gesture.KeyModifiers & (KeyModifiers.Meta | KeyModifiers.Control)) == 0;
-    }
+    /// <summary>
+    /// True for a "plain-key" gesture — one with no ⌘/⌃ modifier (Delete, Backspace, a bare letter).
+    /// These collide with ordinary in-textbox editing, so they get no native-menu key equivalent (see
+    /// <see cref="Submenu"/>) and a global binding yields to a focused text input for them (#8).
+    /// </summary>
+    internal static bool IsPlainKeyGesture(KeyGesture? gesture) =>
+        gesture is not null && (gesture.KeyModifiers & (KeyModifiers.Meta | KeyModifiers.Control)) == 0;
 
     // An active inline edit counts the same as a focused text field: while a cell is being edited
     // (in the cell or mirrored from the formula bar), a plain key like Delete is in-editor text
