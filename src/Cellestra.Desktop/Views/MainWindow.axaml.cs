@@ -518,7 +518,11 @@ public partial class MainWindow : Window, IAppEnvironment
             string filePath = _session.FilePath;
             try
             {
-                await Task.Run(() => _session.SaveToFile(filePath)); // atomic write off the UI thread
+                // Serialize on the UI thread (a consistent snapshot, no edit can race it), then write
+                // the immutable bytes to disk off-thread so a large save never freezes the window.
+                byte[] image = _session.SerializeToBytes();
+                await Task.Run(() => WorkbookSession.WriteBytesAtomically(filePath, image));
+                _session.MarkSaved(filePath);
             }
             catch (Exception ex)
             {
@@ -559,7 +563,10 @@ public partial class MainWindow : Window, IAppEnvironment
         {
             try
             {
-                await Task.Run(() => _session.SaveToFile(path)); // atomic write off the UI thread
+                // Serialize on the UI thread (consistent snapshot), write the bytes off-thread.
+                byte[] image = _session.SerializeToBytes();
+                await Task.Run(() => WorkbookSession.WriteBytesAtomically(path, image));
+                _session.MarkSaved(path);
             }
             catch (Exception ex)
             {

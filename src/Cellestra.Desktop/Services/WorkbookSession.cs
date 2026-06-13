@@ -300,17 +300,33 @@ public sealed class WorkbookSession
     /// </summary>
     public void SaveToFile(string path)
     {
+        WriteBytesAtomically(path, SerializeToBytes());
+        MarkSaved(path);
+    }
+
+    /// <summary>
+    /// Serialize the workbook to an in-memory <c>.ods</c> image. The model is read synchronously, so
+    /// callers on the UI thread get a consistent snapshot with no concurrent edit; the returned bytes
+    /// are immutable and safe to hand to a background thread for the disk write. (The earlier code
+    /// serialized the live model directly on a background <c>Task.Run</c> while the grid still had
+    /// keyboard focus, so a keystroke mid-save mutated the model under the serializer.)
+    /// </summary>
+    public byte[] SerializeToBytes() => OdsWriter.WriteToBytes(_workbook, _sourcePackage);
+
+    /// <summary>
+    /// Atomically write a pre-serialized <c>.ods</c> image to disk: a sibling temp file, then a rename
+    /// over the target. Any failure leaves the original untouched and cleans up the temp. Safe to call
+    /// off the UI thread since it touches no shared model state.
+    /// </summary>
+    public static void WriteBytesAtomically(string path, byte[] bytes)
+    {
         string fullPath = Path.GetFullPath(path);
         string directory = Path.GetDirectoryName(fullPath) ?? ".";
         string temp = Path.Combine(directory, $".{Path.GetFileName(fullPath)}.{Guid.NewGuid():N}.tmp");
 
         try
         {
-            using (var stream = File.Create(temp))
-            {
-                OdsWriter.Write(_workbook, stream, _sourcePackage);
-            }
-
+            File.WriteAllBytes(temp, bytes);
             File.Move(temp, fullPath, overwrite: true); // atomic on the same volume
         }
         catch
@@ -318,8 +334,12 @@ public sealed class WorkbookSession
             TryDelete(temp);
             throw;
         }
+    }
 
-        FilePath = fullPath;
+    /// <summary>Record that the in-memory workbook now matches the file saved at <paramref name="path"/>.</summary>
+    public void MarkSaved(string path)
+    {
+        FilePath = Path.GetFullPath(path);
         IsModified = false;
     }
 

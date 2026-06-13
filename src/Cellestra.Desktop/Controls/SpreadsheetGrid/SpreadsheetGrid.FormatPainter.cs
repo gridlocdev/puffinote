@@ -35,8 +35,14 @@ public sealed partial class SpreadsheetGrid
     /// <summary>Hook the session's arm/disarm so the cursor and any in-flight drag stay in step. Called from <see cref="Attach"/>.</summary>
     private void WireFormatPainter(Services.WorkbookSession session)
     {
-        session.FormatPainterArmedChanged += (_, _) => OnFormatPainterArmedChanged();
+        // Attach can run more than once against the same session (every file Open adopts the workbook
+        // in place and re-attaches), so unsubscribe first to keep exactly one handler — a fresh lambda
+        // each time would accumulate and fire N redundant cursor-updates per arm/disarm.
+        session.FormatPainterArmedChanged -= OnSessionFormatPainterArmedChanged;
+        session.FormatPainterArmedChanged += OnSessionFormatPainterArmedChanged;
     }
+
+    private void OnSessionFormatPainterArmedChanged(object? sender, EventArgs e) => OnFormatPainterArmedChanged();
 
     private void OnFormatPainterArmedChanged()
     {
