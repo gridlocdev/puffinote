@@ -289,14 +289,14 @@ public partial class MainWindow : Window, IAppEnvironment
                 {
                     // A native menu item's Gesture becomes a macOS key equivalent the system claims
                     // globally, ahead of the focused control — and a *disabled* item still swallows its
-                    // key equivalent rather than passing it on (Avalonia #7133 / discussion #10902). For a
-                    // plain-key command (Delete → Clear Contents) that means: while a cell or the formula
-                    // bar is being edited the item is disabled, yet macOS eats the Delete so the TextBox
-                    // never forward-deletes. So we give plain keys NO native key equivalent — the grid's
-                    // own OnKeyDown (selection mode) and the editors' handlers (edit mode) drive them, and
-                    // the gated KeyBinding remains the cross-platform fallback. Modifier shortcuts (⌘S, ⌘C…)
-                    // keep their equivalent for the menu hint and still back off from a focused text input.
-                    Gesture = IsPlainKeyGesture(command.Shortcut) ? null : command.Shortcut,
+                    // key equivalent rather than passing it on (Avalonia #7133 / discussion #10902). So a
+                    // gesture that a focused text field must handle itself (Delete → Clear Contents; ⌘A →
+                    // Select All; ⌘C/⌘X/⌘V/⌘Z) gets NO native equivalent — otherwise macOS eats it mid-edit
+                    // and the TextBox never selects/copies/deletes its text. Those are driven instead by the
+                    // grid's OnKeyDown (selection mode), the editors (edit mode), and the gated KeyBinding as
+                    // the cross-platform fallback. Other shortcuts (⌘S, ⌘B…) keep their equivalent for the
+                    // menu hint and still back off from a focused text input.
+                    Gesture = YieldsToTextInput(command.Shortcut) ? null : command.Shortcut,
                     Command = menuCommand,
                 });
             }
@@ -2146,15 +2146,53 @@ public partial class MainWindow : Window, IAppEnvironment
     /// own handlers take precedence over them anyway.
     /// </summary>
     internal static bool ShouldYieldToTextInput(KeyGesture? gesture, bool textInputFocused) =>
-        textInputFocused && IsPlainKeyGesture(gesture);
+        textInputFocused && YieldsToTextInput(gesture);
+
+    /// <summary>
+    /// True when a gesture also has a meaning inside a focused text field and must therefore yield to
+    /// it — so it gets no native-menu key equivalent (<see cref="Submenu"/>) and a global binding backs
+    /// off while a <see cref="TextBox"/> (cell editor, formula bar, name box, dialog field) is focused.
+    /// Two families qualify: <see cref="IsPlainKeyGesture"/> (Delete/Backspace/bare keys) and the
+    /// standard editing chords (<see cref="IsTextEditingChord"/> — select-all, copy/cut/paste,
+    /// undo/redo). Otherwise — on macOS in particular — the system claims the key ahead of the editor
+    /// and, because a disabled native item still swallows its equivalent (Avalonia #7133), the editor
+    /// never sees it: e.g. ⌘A would Select All cells instead of the text being edited.
+    /// </summary>
+    internal static bool YieldsToTextInput(KeyGesture? gesture) =>
+        IsPlainKeyGesture(gesture) || IsTextEditingChord(gesture);
 
     /// <summary>
     /// True for a "plain-key" gesture — one with no ⌘/⌃ modifier (Delete, Backspace, a bare letter).
-    /// These collide with ordinary in-textbox editing, so they get no native-menu key equivalent (see
-    /// <see cref="Submenu"/>) and a global binding yields to a focused text input for them (#8).
     /// </summary>
     internal static bool IsPlainKeyGesture(KeyGesture? gesture) =>
         gesture is not null && (gesture.KeyModifiers & (KeyModifiers.Meta | KeyModifiers.Control)) == 0;
+
+    /// <summary>
+    /// True for the standard text-editing chords every text field handles itself: ⌘A select-all,
+    /// ⌘C copy, ⌘X cut, ⌘V paste, ⌘Z undo and ⌘⇧Z redo (⌃ on non-mac). The modifier set must be
+    /// exactly the primary accelerator (plus Shift only for redo) so sibling chords on the same letter
+    /// are excluded — ⌘⇧X is Strikethrough (not Cut), ⌘⇧C is Format Painter (not Copy), ⌘⌥V is Paste
+    /// Special (a cell-only op) — those keep firing their command even while editing.
+    /// </summary>
+    internal static bool IsTextEditingChord(KeyGesture? gesture)
+    {
+        if (gesture is null)
+        {
+            return false;
+        }
+
+        var mods = gesture.KeyModifiers;
+        bool primaryOnly = mods == KeyModifiers.Meta || mods == KeyModifiers.Control;
+        bool primaryShift = mods == (KeyModifiers.Meta | KeyModifiers.Shift) ||
+            mods == (KeyModifiers.Control | KeyModifiers.Shift);
+
+        return gesture.Key switch
+        {
+            Key.A or Key.C or Key.X or Key.V => primaryOnly,  // select-all / copy / cut / paste
+            Key.Z => primaryOnly || primaryShift,             // undo / redo
+            _ => false,
+        };
+    }
 
     // An active inline edit counts the same as a focused text field: while a cell is being edited
     // (in the cell or mirrored from the formula bar), a plain key like Delete is in-editor text

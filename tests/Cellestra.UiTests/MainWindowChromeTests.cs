@@ -35,7 +35,7 @@ public class MainWindowChromeTests
         Assert.Equal("● Untitled", MainWindow.ComposeTitle(null, modified: true));
     }
 
-    // ---- #8: plain-key cell commands yield to a focused text input ----
+    // ---- #8: cell commands that conflict with text editing yield to a focused text input ----
 
     [Fact]
     public void Plain_Delete_yields_to_a_focused_text_input()
@@ -45,13 +45,34 @@ public class MainWindowChromeTests
         Assert.False(MainWindow.ShouldYieldToTextInput(delete, textInputFocused: false));
     }
 
-    [Fact]
-    public void Modifier_shortcuts_still_fire_while_a_text_input_is_focused()
+    [Theory]
+    // The standard text-editing chords (select-all, copy, cut, paste, undo, redo) yield to a focused
+    // text field — so ⌘A selects the text being edited, not every cell — but only when focused.
+    [InlineData(Key.A, KeyModifiers.Meta)]
+    [InlineData(Key.C, KeyModifiers.Meta)]
+    [InlineData(Key.X, KeyModifiers.Meta)]
+    [InlineData(Key.V, KeyModifiers.Meta)]
+    [InlineData(Key.Z, KeyModifiers.Meta)]
+    [InlineData(Key.Z, KeyModifiers.Meta | KeyModifiers.Shift)]
+    public void Text_editing_chords_yield_to_a_focused_text_input(Key key, KeyModifiers mods)
     {
-        var save = new KeyGesture(Key.S, KeyModifiers.Meta);
-        var copy = new KeyGesture(Key.C, KeyModifiers.Meta);
-        Assert.False(MainWindow.ShouldYieldToTextInput(save, textInputFocused: true));
-        Assert.False(MainWindow.ShouldYieldToTextInput(copy, textInputFocused: true));
+        var gesture = new KeyGesture(key, mods);
+        Assert.True(MainWindow.ShouldYieldToTextInput(gesture, textInputFocused: true));
+        Assert.False(MainWindow.ShouldYieldToTextInput(gesture, textInputFocused: false));
+    }
+
+    [Theory]
+    // Modifier shortcuts that are NOT text-field gestures keep firing even while editing: Save, Bold,
+    // and the sibling chords sharing a letter with an editing chord — ⌘⇧X Strikethrough (vs ⌘X Cut),
+    // ⌘⇧C Format Painter (vs ⌘C Copy), ⌘⌥V Paste Special (vs ⌘V Paste).
+    [InlineData(Key.S, KeyModifiers.Meta)]
+    [InlineData(Key.B, KeyModifiers.Meta)]
+    [InlineData(Key.X, KeyModifiers.Meta | KeyModifiers.Shift)]
+    [InlineData(Key.C, KeyModifiers.Meta | KeyModifiers.Shift)]
+    [InlineData(Key.V, KeyModifiers.Meta | KeyModifiers.Alt)]
+    public void Non_text_modifier_shortcuts_still_fire_while_a_text_input_is_focused(Key key, KeyModifiers mods)
+    {
+        Assert.False(MainWindow.ShouldYieldToTextInput(new KeyGesture(key, mods), textInputFocused: true));
     }
 
     [Fact]

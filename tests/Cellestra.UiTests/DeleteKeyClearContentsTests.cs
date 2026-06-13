@@ -31,17 +31,24 @@ public class DeleteKeyClearContentsTests
     private static NativeMenuItem ClearContentsItem(MainWindow window) => MenuItem(window, "Edit", "Clear Contents");
 
     [AvaloniaFact]
-    public void Plain_key_menu_item_has_no_native_key_equivalent_but_modifier_items_keep_theirs()
+    public void Text_editing_gestures_have_no_native_key_equivalent_but_other_shortcuts_keep_theirs()
     {
         var window = new MainWindow();
         window.Show();
 
-        // Clear Contents (plain Delete) must NOT register a macOS key equivalent — otherwise the system
-        // swallows Delete while a cell/formula bar is being edited, blocking the TextBox's forward-delete.
+        // Gestures a focused text field must handle itself carry no macOS key equivalent — otherwise the
+        // system swallows them mid-edit and the editor never selects/copies/deletes its text. This covers
+        // plain Delete (Clear Contents) and the standard ⌘ editing chords (Select All, Copy, Cut, Paste).
         Assert.Null(ClearContentsItem(window).Gesture);
+        Assert.Null(MenuItem(window, "Edit", "Select All").Gesture);
+        Assert.Null(MenuItem(window, "Edit", "Copy").Gesture);
+        Assert.Null(MenuItem(window, "Edit", "Cut").Gesture);
+        Assert.Null(MenuItem(window, "Edit", "Paste").Gesture);
 
-        // Modifier shortcuts (⌘C) are safe — they keep their equivalent so the menu shows the hint.
-        Assert.NotNull(MenuItem(window, "Edit", "Copy").Gesture);
+        // Other modifier shortcuts (⌘F Find, ⌘⌥V Paste Special — a cell-only op) are not text-field
+        // gestures, so they keep their equivalent and the menu shows the hint.
+        Assert.NotNull(MenuItem(window, "Edit", "Find…").Gesture);
+        Assert.NotNull(MenuItem(window, "Edit", "Paste Special…").Gesture);
     }
 
     [AvaloniaFact]

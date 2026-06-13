@@ -14,6 +14,46 @@ public class SelectAllTests
     private static void RunSelectAll(IAppEnvironment env) =>
         AppCommands.All.First(c => c.Id == "edit.selectAll").Execute(env);
 
+    private static Avalonia.Controls.NativeMenuItem SelectAllMenuItem(MainWindow window)
+    {
+        var menu = Avalonia.Controls.NativeMenu.GetMenu(window)!;
+        var edit = menu.Items.OfType<Avalonia.Controls.NativeMenuItem>().Single(i => i.Header == "Edit").Menu!;
+        return edit.Items.OfType<Avalonia.Controls.NativeMenuItem>().Single(i => i.Header == "Select All");
+    }
+
+    [AvaloniaFact]
+    public void Select_all_command_backs_off_while_a_text_field_is_focused()
+    {
+        var window = new MainWindow();
+        window.Show();
+        window.Session.ActiveSheet.SetValue(0, 0, CellValue.Text("hello"));
+        window.Selection.MoveTo(0, 0);
+        window.Refresh();
+
+        var selectAll = SelectAllMenuItem(window);
+
+        // Grid focused (selection mode): ⌘A is live — it selects cells.
+        window.Grid.Focus();
+        Assert.True(selectAll.Command!.CanExecute(null));
+
+        // Formula bar focused (editing text): the command backs off so ⌘A reaches the TextBox and
+        // selects the text being edited instead of every cell.
+        window.FormulaInput.Focus();
+        Assert.False(selectAll.Command!.CanExecute(null));
+    }
+
+    [AvaloniaFact]
+    public void Select_all_command_backs_off_while_the_cell_editor_is_focused()
+    {
+        var window = new MainWindow();
+        window.Show();
+        window.Selection.MoveTo(0, 0);
+        window.Grid.Focus();
+        window.Grid.BeginEdit("typing"); // inline cell editor takes focus
+
+        Assert.False(SelectAllMenuItem(window).Command!.CanExecute(null));
+    }
+
     [AvaloniaFact]
     public void First_select_all_picks_the_region_then_the_whole_sheet()
     {
