@@ -191,6 +191,13 @@ public sealed partial class SpreadsheetGrid : Panel
         }
     }
 
+    /// <summary>
+    /// When true (a modal overlay is open above the grid), the grid ignores keyboard and text input so
+    /// navigation, typing and editing don't leak to the hidden grid behind the modal. The event is left
+    /// unhandled so it still reaches the overlay. Set by the window when it shows/hides an overlay.
+    /// </summary>
+    public bool InputBlocked { get; set; }
+
     public double Zoom
     {
         get => _zoom;
@@ -1079,6 +1086,11 @@ public sealed partial class SpreadsheetGrid : Panel
     protected override void OnKeyDown(KeyEventArgs e)
     {
         base.OnKeyDown(e);
+        if (InputBlocked)
+        {
+            return; // a modal is open above the grid — let the key reach the overlay, not the grid
+        }
+
         if (_editing)
         {
             return;
@@ -1143,6 +1155,11 @@ public sealed partial class SpreadsheetGrid : Panel
     protected override void OnTextInput(TextInputEventArgs e)
     {
         base.OnTextInput(e);
+        if (InputBlocked)
+        {
+            return; // a modal is open above the grid — don't begin an edit behind it
+        }
+
         if (!_editing && !string.IsNullOrEmpty(e.Text) && e.Text[0] >= ' ')
         {
             BeginEdit(e.Text);

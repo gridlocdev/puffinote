@@ -40,6 +40,12 @@ public partial class MainWindow : Window, IAppEnvironment
     private FileLock? _fileLock;
     private bool _fileBusy;
 
+    // Every gated shortcut command (native-menu items + KeyBindings). A macOS native menu item caches
+    // its enabled state and only refreshes it when CanExecuteChanged fires, so without an explicit
+    // nudge a ⌘-shortcut's key equivalent keeps firing on the grid even while a modal is open. We hold
+    // the commands so opening/closing an overlay can re-publish their CanExecute (see RefreshCommandStates).
+    private readonly List<RelayCommand> _gatedCommands = new();
+
     // The rich in-app clipboard (values + formulas + styles) and the exact text we mirrored to the
     // OS clipboard; an in-app paste uses the block only while the OS clipboard still matches.
     private ClipboardBlock? _clipboard;
@@ -275,6 +281,10 @@ public partial class MainWindow : Window, IAppEnvironment
 
             if (AppCommands.ById(id) is { } command)
             {
+                var menuCommand = new RelayCommand(
+                    () => command.Execute(this),
+                    () => !IsModalOpen && !BlockedByTextInput(command.Shortcut) && command.IsEnabled(this));
+                _gatedCommands.Add(menuCommand);
                 submenu.Items.Add(new NativeMenuItem(command.Label)
                 {
                     // A native menu item's Gesture becomes a macOS key equivalent the system claims
@@ -287,9 +297,7 @@ public partial class MainWindow : Window, IAppEnvironment
                     // the gated KeyBinding remains the cross-platform fallback. Modifier shortcuts (⌘S, ⌘C…)
                     // keep their equivalent for the menu hint and still back off from a focused text input.
                     Gesture = IsPlainKeyGesture(command.Shortcut) ? null : command.Shortcut,
-                    Command = new RelayCommand(
-                        () => command.Execute(this),
-                        () => !IsModalOpen && !BlockedByTextInput(command.Shortcut) && command.IsEnabled(this)),
+                    Command = menuCommand,
                 });
             }
         }
@@ -2096,6 +2104,10 @@ public partial class MainWindow : Window, IAppEnvironment
             }
 
             var captured = command;
+            var binding = new RelayCommand(
+                () => captured.Execute(this),
+                () => !IsModalOpen && !BlockedByTextInput(captured.Shortcut) && captured.IsEnabled(this));
+            _gatedCommands.Add(binding);
             KeyBindings.Add(new KeyBinding
             {
                 Gesture = command.Shortcut,
@@ -2105,11 +2117,25 @@ public partial class MainWindow : Window, IAppEnvironment
                 // selects the palette text, not all cells). Likewise, a plain-key gesture (no ⌘/⌃, e.g.
                 // Delete) must not fire its global cell command while a text input is focused — there it
                 // is ordinary in-textbox editing, not "clear the cell" (#8).
-                Command = new RelayCommand(
-                    () => captured.Execute(this),
-                    () => !IsModalOpen && !BlockedByTextInput(captured.Shortcut) && captured.IsEnabled(this)),
+                Command = binding,
             });
         }
+    }
+
+    /// <summary>
+    /// Re-publish CanExecute for every gated shortcut so a native macOS menu item refreshes its
+    /// enabled state. Called whenever a modal overlay opens or closes: without it the menu's cached
+    /// "enabled" persists and macOS keeps firing a ⌘-shortcut's key equivalent (e.g. ⌘A → Select All)
+    /// against the grid behind the modal instead of letting the overlay handle the key.
+    /// </summary>
+    private void RefreshCommandStates()
+    {
+        foreach (var command in _gatedCommands)
+        {
+            command.RaiseCanExecuteChanged();
+        }
+
+        Grid.InputBlocked = IsModalOpen;
     }
 
     /// <summary>
@@ -2255,6 +2281,7 @@ public partial class MainWindow : Window, IAppEnvironment
 
         OverlayHost.Children.Add(box);
         OverlayHost.IsVisible = true;
+        RefreshCommandStates(); // the grid behind the palette must stop reacting to shortcuts/keys
         SetBackgroundBlur(true); // blur the grid behind the palette too (consistent with internal modals)
         OverlayHost.PointerPressed += OverlayBackgroundPressed;
         // Defer focus until the overlay's template is realized, otherwise focusing the just-shown input
@@ -2360,6 +2387,7 @@ public partial class MainWindow : Window, IAppEnvironment
         OverlayHost.Children.Clear();
         OverlayHost.IsVisible = false;
         _activeModal = null;
+        RefreshCommandStates(); // shortcuts/keys act on the grid again now the overlay is gone
         SetBackgroundBlur(false);
         Grid.Focus();
     }
@@ -2388,6 +2416,7 @@ public partial class MainWindow : Window, IAppEnvironment
         var chrome = BuildModalChrome(dialog, dialog.Title);
         OverlayHost.Children.Add(chrome);
         OverlayHost.IsVisible = true;
+        RefreshCommandStates(); // the grid behind the modal must stop reacting to shortcuts/keys
         SetBackgroundBlur(true);
         OverlayHost.PointerPressed += OverlayBackgroundPressed;
 

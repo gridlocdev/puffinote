@@ -42,6 +42,52 @@ public class ModalShortcutScopingTests
     }
 
     [AvaloniaFact]
+    public void Grid_navigation_is_blocked_while_a_modal_is_open()
+    {
+        var window = new MainWindow();
+        window.Show();
+        IAppEnvironment env = window;
+        env.Selection.MoveTo(0, 0);
+        Assert.False(window.Grid.InputBlocked);
+
+        env.ShowCommandPalette();
+        Assert.True(window.Grid.InputBlocked);
+
+        // Even with focus forced back onto the grid behind the palette, arrow keys must not move the
+        // selection (they previously leaked to the hidden grid). The key is left for the overlay.
+        window.Grid.Focus();
+        window.KeyPressQwerty(PhysicalKey.ArrowDown, RawInputModifiers.None);
+        Assert.Equal(0, env.Selection.ActiveRow);
+
+        window.KeyPressQwerty(PhysicalKey.Escape, RawInputModifiers.None);
+        Assert.False(window.Grid.InputBlocked);
+
+        // With the overlay gone, navigation works again.
+        window.Grid.Focus();
+        window.KeyPressQwerty(PhysicalKey.ArrowDown, RawInputModifiers.None);
+        Assert.Equal(1, env.Selection.ActiveRow);
+    }
+
+    [AvaloniaFact]
+    public void Select_all_does_not_expand_the_grid_while_the_palette_is_open()
+    {
+        var window = new MainWindow();
+        window.Show();
+        IAppEnvironment env = window;
+        env.Session.ActiveSheet.SetValue(0, 0, CellValue.Text("x"));
+        env.Selection.MoveTo(0, 0);
+
+        env.ShowCommandPalette();
+        window.KeyPressQwerty(PhysicalKey.A, RawInputModifiers.Meta);
+
+        // ⌘A belongs to the palette, not the grid behind it — the selection stays a single cell.
+        Assert.Equal(0, env.Selection.Top);
+        Assert.Equal(0, env.Selection.Bottom);
+        Assert.Equal(0, env.Selection.Left);
+        Assert.Equal(0, env.Selection.Right);
+    }
+
+    [AvaloniaFact]
     public void Command_shortcut_is_ignored_while_the_palette_is_open()
     {
         var window = new MainWindow();
