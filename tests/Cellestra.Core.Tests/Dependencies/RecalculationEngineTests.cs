@@ -81,6 +81,27 @@ public class RecalculationEngineTests
     }
 
     [Fact]
+    public void Incremental_edit_inside_a_large_range_recomputes_the_formula()
+    {
+        var (workbook, sheet) = NewBook();
+        // A range over 200k cells is summarized by its corners in the graph; an edit to an interior
+        // cell must still recompute the formula on an incremental pass (not only on RecalculateAll).
+        sheet.SetValue(0, 0, CellValue.Number(1));        // A1
+        sheet.SetValue(299_999, 0, CellValue.Number(1));  // A300000
+        sheet.SetFormula(0, 1, "SUM(A1:A300000)", CellValue.Empty); // B1
+
+        var engine = new RecalculationEngine(workbook);
+        engine.RebuildGraph();
+        engine.RecalculateAll();
+        Assert.Equal(2, sheet.GetValue(0, 1).AsNumber);
+
+        sheet.SetValue(149_999, 0, CellValue.Number(40)); // A150000 — interior, not a corner
+        engine.RecordEdits(new[] { new CellRef(sheet.Name, 149_999, 0) });
+
+        Assert.Equal(42, sheet.GetValue(0, 1).AsNumber);
+    }
+
+    [Fact]
     public void Direct_self_reference_is_detected_as_circular()
     {
         var (workbook, sheet) = NewBook();

@@ -28,6 +28,10 @@ public sealed class RecalculationEngine
     private readonly DependencyGraph _graph = new();
     private readonly Dictionary<CellRef, Expr?> _formulaAst = new();
     private readonly HashSet<CellRef> _volatile = new();
+
+    // Formula cells whose precedents include a range too large to expand into the graph; the range
+    // is kept here so an edit to its interior still marks the formula for recalculation.
+    private readonly Dictionary<CellRef, List<RangeRef>> _largeRangePrecedents = new();
     private readonly Dictionary<string, Expr?> _parseCache = new(StringComparer.Ordinal);
 
     public RecalculationEngine(Workbook workbook, FunctionRegistry? functions = null, Func<DateTime>? clock = null)
@@ -46,6 +50,7 @@ public sealed class RecalculationEngine
         _graph.Clear();
         _formulaAst.Clear();
         _volatile.Clear();
+        _largeRangePrecedents.Clear();
 
         foreach (var sheet in _workbook.Worksheets)
         {
@@ -109,6 +114,7 @@ public sealed class RecalculationEngine
             _graph.RemoveFormula(cell);
             _formulaAst.Remove(cell);
             _volatile.Remove(cell);
+            _largeRangePrecedents.Remove(cell);
         }
     }
 
@@ -121,12 +127,23 @@ public sealed class RecalculationEngine
         {
             _graph.SetPrecedents(cell, Array.Empty<CellRef>());
             _volatile.Remove(cell);
+            _largeRangePrecedents.Remove(cell);
             return;
         }
 
         var precedents = new HashSet<CellRef>();
-        ReferenceCollector.Collect(ast, cell.Sheet, ResolveName, precedents);
+        var largeRanges = new List<RangeRef>();
+        ReferenceCollector.Collect(ast, cell.Sheet, ResolveName, precedents, largeRanges);
         _graph.SetPrecedents(cell, precedents);
+
+        if (largeRanges.Count > 0)
+        {
+            _largeRangePrecedents[cell] = largeRanges;
+        }
+        else
+        {
+            _largeRangePrecedents.Remove(cell);
+        }
 
         if (ReferenceCollector.IsVolatile(ast))
         {
@@ -169,28 +186,42 @@ public sealed class RecalculationEngine
                 queue.Enqueue(seed);
             }
 
-            foreach (var dependent in _graph.GetDependents(seed))
-            {
-                if (affected.Add(dependent))
-                {
-                    queue.Enqueue(dependent);
-                }
-            }
+            AddDependents(seed, affected, queue);
         }
 
         while (queue.Count > 0)
         {
             var current = queue.Dequeue();
-            foreach (var dependent in _graph.GetDependents(current))
-            {
-                if (affected.Add(dependent))
-                {
-                    queue.Enqueue(dependent);
-                }
-            }
+            AddDependents(current, affected, queue);
         }
 
         return affected;
+    }
+
+    /// <summary>Enqueue every formula that reads <paramref name="cell"/> — via a stored edge, or via
+    /// a large precedent range that contains it (those are summarized, not expanded, in the graph).</summary>
+    private void AddDependents(CellRef cell, HashSet<CellRef> affected, Queue<CellRef> queue)
+    {
+        foreach (var dependent in _graph.GetDependents(cell))
+        {
+            if (affected.Add(dependent))
+            {
+                queue.Enqueue(dependent);
+            }
+        }
+
+        if (_largeRangePrecedents.Count == 0)
+        {
+            return;
+        }
+
+        foreach (var (formula, ranges) in _largeRangePrecedents)
+        {
+            if (!affected.Contains(formula) && ranges.Any(range => range.Contains(cell)) && affected.Add(formula))
+            {
+                queue.Enqueue(formula);
+            }
+        }
     }
 
     private RecalculationResult Evaluate(IReadOnlyCollection<CellRef> nodes)
