@@ -21,8 +21,12 @@ public sealed class DependencyGraph
             return;
         }
 
+        // Keep a self-edge when a formula reads its own cell (directly, e.g. =A1+1, or via a range
+        // that covers it, e.g. =SUM(A1:A5)). It gives the cell in-degree 1 in the topological sort,
+        // so it is reported as circular instead of being silently evaluated once against its own
+        // stale value. The affected-set walk and the sort both guard with visited sets, so the
+        // self-edge cannot loop.
         var set = new HashSet<CellRef>(precedents);
-        set.Remove(cell); // a self-reference is a cycle handled at recalc time, not a stored edge
         _precedents[cell] = set;
         foreach (var precedent in set)
         {

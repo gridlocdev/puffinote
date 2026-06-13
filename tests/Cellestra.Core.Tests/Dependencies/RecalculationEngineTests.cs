@@ -81,6 +81,35 @@ public class RecalculationEngineTests
     }
 
     [Fact]
+    public void Direct_self_reference_is_detected_as_circular()
+    {
+        var (workbook, sheet) = NewBook();
+        sheet.SetFormula(0, 0, "A1+1", CellValue.Empty);
+
+        var engine = new RecalculationEngine(workbook);
+        engine.RebuildGraph();
+        var result = engine.RecalculateAll();
+
+        Assert.True(result.HasCircularReference);
+        Assert.Equal("#REF!", sheet.GetValue(0, 0).AsError.Token);
+    }
+
+    [Fact]
+    public void Range_self_reference_is_detected_as_circular()
+    {
+        var (workbook, sheet) = NewBook();
+        // A formula whose range covers its own cell is circular (Excel/Calc flag it the same way).
+        sheet.SetFormula(0, 0, "SUM(A1:A3)", CellValue.Empty);
+
+        var engine = new RecalculationEngine(workbook);
+        engine.RebuildGraph();
+        var result = engine.RecalculateAll();
+
+        Assert.True(result.HasCircularReference);
+        Assert.Equal("#REF!", sheet.GetValue(0, 0).AsError.Token);
+    }
+
+    [Fact]
     public void Manual_mode_defers_recalculation()
     {
         var (workbook, sheet) = NewBook();
