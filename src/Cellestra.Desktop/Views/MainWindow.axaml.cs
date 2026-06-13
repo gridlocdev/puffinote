@@ -194,10 +194,9 @@ public partial class MainWindow : Window, IAppEnvironment
     {
         var menu = new NativeMenu();
 
-        // Application menu (next to the Apple menu on macOS): the standard "About Cellestra" item lives
-        // here per PRD §6.2. Avalonia merges this first submenu into the native application menu.
-        menu.Items.Add(Submenu("Cellestra", "help.about"));
-
+        // macOS always shows a bold application menu titled from Application.Name (set in App.axaml);
+        // Avalonia does not merge our items into it, so we don't add our own "Cellestra" submenu here —
+        // doing so produced a duplicate menu. "About Cellestra" (help.about) lives in the Help menu below.
         var file = Submenu("File", "file.new", "file.open", "file.save", "file.saveAs", null, "file.importCsv", "file.exportCsv");
         _openRecentItem = BuildOpenRecent();
         file.Menu!.Items.Insert(2, _openRecentItem);
