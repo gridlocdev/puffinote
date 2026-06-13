@@ -39,6 +39,21 @@ public class CellRangeTests
         Assert.Equal("Sheet1.A1:B2", range.ToString());
     }
 
+    [Theory]
+    [InlineData("Sheet1.A1:Sheet2.B2")] // conflicting sheet on the end corner
+    [InlineData("A1:Sheet2.B2")]         // lone sheet qualifier on the end corner
+    public void Cross_sheet_range_is_rejected(string text)
+    {
+        Assert.False(CellRange.TryParse(text, out _));
+    }
+
+    [Fact]
+    public void Matching_sheet_on_both_corners_parses()
+    {
+        Assert.True(CellRange.TryParse("Sheet1.A1:Sheet1.B2", out var range));
+        Assert.Equal("Sheet1", range.Sheet);
+    }
+
     [Fact]
     public void Contains_and_Intersects()
     {

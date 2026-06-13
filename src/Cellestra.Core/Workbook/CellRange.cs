@@ -128,7 +128,15 @@ public readonly record struct CellRange
             return false;
         }
 
-        // A sheet qualifier on the start corner applies to the whole range.
+        // A range lives on a single sheet, so the sheet qualifier belongs on the start corner. A
+        // qualifier on the end corner is only valid when it matches the start's; a different (or
+        // lone end-corner) sheet — e.g. "Sheet1.A1:Sheet2.B2" — is malformed and rejected rather
+        // than silently kept as a contradictory cross-sheet range.
+        if (end.Sheet is not null && !string.Equals(end.Sheet, start.Sheet, StringComparison.OrdinalIgnoreCase))
+        {
+            return false;
+        }
+
         if (start.Sheet is not null && end.Sheet is null)
         {
             end = end.WithSheet(start.Sheet);
