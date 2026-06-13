@@ -20,8 +20,9 @@ namespace Cellestra.Desktop.Controls.CommandBar;
 /// the whole bar collapses to a slim handle to give the grid more room. The drawer is enriched with
 /// swatches and a size stepper by <see cref="CommandBarDrawer"/>.
 /// When the window is too narrow to fit every group, the rightmost groups fold (in reading order)
-/// into a single overflow drawer behind a double-chevron button — each folded group flattened into
-/// one menu (its tools as rows, no nested submenu) rather than scrolling off behind a scrollbar.
+/// into a single overflow drawer behind a double-chevron button — each folded group shown as its
+/// header over a grid of icon buttons (its whole toolset, no nested submenu) rather than scrolling
+/// off behind a scrollbar.
 /// </summary>
 public sealed class CommandBar : UserControl
 {
@@ -43,10 +44,10 @@ public sealed class CommandBar : UserControl
     // is too narrow, the rightmost groups are the first to fold into the overflow drawer.
     private readonly List<Control> _groupControls = new();
     private readonly List<double> _groupWidths = new();
-    // The parallel flattened panels shown for folded groups in the overflow drawer (primary + overflow
-    // tools as flat rows, no nested submenu) and the action that refreshes each one's state.
+    // The parallel sections shown for folded groups in the overflow drawer: each is the group's header
+    // over a wrap of icon buttons for its whole toolset (no nested submenu). The buttons are added to
+    // _buttons, so RefreshState keeps them in sync just like the bar's own.
     private readonly List<Control> _overflowPanels = new();
-    private readonly List<Action> _overflowRefreshers = new();
     private readonly Panel _root;
     private readonly Control _full;
     private readonly Control _slim;
@@ -143,9 +144,9 @@ public sealed class CommandBar : UserControl
             VerticalAlignment = VerticalAlignment.Center,
             ClipToBounds = true,
         };
-        // A folded group shows its whole toolset flattened into one menu — no nested submenu — so the
-        // overflow drawer is a single vertical list of those panels (scrolled when it gets tall).
-        _overflowHost = new StackPanel { Orientation = Orientation.Vertical, Spacing = 2, Margin = new Thickness(6) };
+        // A folded group drops down as its header over a grid of icon buttons — the toolbar, dropped
+        // down — so the overflow drawer is a vertical stack of those sections (scrolled if it gets tall).
+        _overflowHost = new StackPanel { Orientation = Orientation.Vertical, Spacing = 14, Margin = new Thickness(10, 8) };
 
         foreach (var group in CommandBarModel.For(CommandContext.Cell))
         {
@@ -157,11 +158,8 @@ public sealed class CommandBar : UserControl
             _groupWidths.Add(control.DesiredSize.Width);
             _strip.Children.Add(control);
 
-            // The flattened counterpart used when this group folds away — built once, mounted on demand.
-            // Its close action dismisses the whole overflow drawer (the flyout), like the bar's other rows.
-            var (panel, refresh) = CommandBarDrawer.BuildFlat(group, _env, () => _overflowFlyout.Hide());
-            _overflowPanels.Add(panel);
-            _overflowRefreshers.Add(refresh);
+            // The overflow counterpart used when this group folds away — built once, mounted on demand.
+            _overflowPanels.Add(BuildOverflowGroup(group));
         }
 
         _overflowButton = BuildOverflowButton();
@@ -222,24 +220,14 @@ public sealed class CommandBar : UserControl
             Placement = PlacementMode.BottomEdgeAlignedRight,
             ShowMode = FlyoutShowMode.Standard,
         };
-        // Mirror the open/closed state in the glyph: double-chevron-down to open, up to close.
+        // Mirror the open/closed state in the glyph: double-chevron-down to open, up to close. The
+        // drawer's buttons are in _buttons, so RefreshState syncs them to the selection on open.
         _overflowFlyout.Opened += (_, _) =>
         {
             _overflowIcon.IconKey = "chevrons-up";
             RefreshState();
-            // The flattened group panels carry their own rows/affordances — sync them to the selection
-            // on open, the same way an inline group's drawer refreshes when it opens.
-            foreach (var refresh in _overflowRefreshers)
-            {
-                refresh();
-            }
         };
-        _overflowFlyout.Closed += (_, _) =>
-        {
-            _overflowIcon.IconKey = "chevrons-down";
-            // A flattened panel may have been previewing a style on hover — drop it when the drawer closes.
-            _env.PreviewCellStyle(null);
-        };
+        _overflowFlyout.Closed += (_, _) => _overflowIcon.IconKey = "chevrons-down";
         button.Flyout = _overflowFlyout;
         return button;
     }
@@ -289,20 +277,7 @@ public sealed class CommandBar : UserControl
             _overflowHost.Children.Clear();
             for (int i = 0; i < _groupControls.Count; i++)
             {
-                if (i < fit)
-                {
-                    _strip.Children.Add(_groupControls[i]);
-                }
-                else
-                {
-                    // Hairline separator between flattened group panels so the menu reads as sections.
-                    if (_overflowHost.Children.Count > 0)
-                    {
-                        _overflowHost.Children.Add(new Border { Height = 1, Background = DividerBrush, Margin = new Thickness(6, 4) });
-                    }
-
-                    _overflowHost.Children.Add(_overflowPanels[i]);
-                }
+                ((i < fit) ? (Panel)_strip : _overflowHost).Children.Add((i < fit) ? _groupControls[i] : _overflowPanels[i]);
             }
 
             _overflowButton.IsVisible = overflow;
@@ -358,6 +333,34 @@ public sealed class CommandBar : UserControl
             Padding = new Thickness(3, 0),
             Child = row,
         };
+    }
+
+    /// <summary>
+    /// A folded group's section in the overflow drawer: the group name over a wrapping grid of icon
+    /// buttons covering its WHOLE toolset (primary + overflow), each clicking through to the command and
+    /// dismissing the drawer. No chevron, no submenu — recognition by icon, the same buttons as the bar.
+    /// </summary>
+    private Control BuildOverflowGroup(CommandBarGroup group)
+    {
+        var grid = new WrapPanel { Orientation = Orientation.Horizontal, MaxWidth = 248 };
+        foreach (string id in group.Primary.Concat(group.Overflow))
+        {
+            if (AppCommands.ById(id) is { } command)
+            {
+                var button = new CommandBarButton(command, _env, () => _overflowFlyout.Hide());
+                _buttons.Add(button);
+                grid.Children.Add(button);
+            }
+        }
+
+        var header = new TextBlock
+        {
+            Text = group.Name,
+            FontWeight = FontWeight.SemiBold,
+            FontSize = 12.5,
+            Margin = new Thickness(3, 0, 0, 5),
+        };
+        return new StackPanel { Children = { header, grid } };
     }
 
     private Control BuildChevron(CommandBarGroup group)
@@ -462,7 +465,7 @@ public sealed class CommandBar : UserControl
         private bool _on;
         private bool _hover;
 
-        public CommandBarButton(AppCommand command, IAppEnvironment env)
+        public CommandBarButton(AppCommand command, IAppEnvironment env, Action? onClicked = null)
         {
             _command = command;
             Background = Brushes.Transparent;
@@ -499,6 +502,10 @@ public sealed class CommandBar : UserControl
                     _command.Execute(env);
                     env.Narrate(Describe(_command, env));
                 }
+
+                // In the overflow drawer, clicking a tool dismisses it (like Google Sheets); on the bar
+                // itself there's nothing to close, so onClicked is null there.
+                onClicked?.Invoke();
             };
         }
 

@@ -160,7 +160,7 @@ public class CommandBarTests
     }
 
     [AvaloniaFact]
-    public void Overflow_drawer_flattens_a_folded_group_into_rows_with_no_nested_submenu()
+    public void Overflow_drawer_shows_a_folded_group_as_an_icon_grid_with_no_nested_submenu()
     {
         var window = new MainWindow();
         var bar = new CommandBar(window);
@@ -170,27 +170,18 @@ public class CommandBarTests
 
         Assert.True(bar.IsOverflowing);
 
-        // The Data group is rightmost, so it folds first. In the drawer it must appear flattened: its
-        // group header, its PRIMARY tools (e.g. Sort Ascending) AND its overflow tools (e.g. Custom
-        // Sort) all as rows in one menu — not behind a nested chevron submenu.
-        var labels = bar.OverflowDrawerPanels
-            .SelectMany(p => p.GetLogicalDescendants().OfType<TextBlock>())
-            .Select(t => t.Text)
-            .ToList();
+        // The Data group is rightmost, so it folds first. In the drawer it appears as its header over a
+        // grid of icon buttons for its WHOLE toolset (3 primary + 5 overflow) — not a nested submenu.
+        var dataSection = bar.OverflowDrawerPanels
+            .FirstOrDefault(p => p.GetLogicalDescendants().OfType<TextBlock>().Any(t => t.Text == "Data"));
+        Assert.NotNull(dataSection);
 
-        Assert.Contains("Data", labels);             // group header
-        Assert.Contains("Sort Ascending", labels);   // a primary tool, now a flat row
-        Assert.Contains("Sort…", labels);            // an overflow tool, same flat menu
+        var buttons = dataSection!.GetLogicalDescendants().OfType<Button>().ToList();
+        var data = CommandBarModel.For(CommandContext.Cell).Single(g => g.Name == "Data");
+        Assert.Equal(data.Primary.Count + data.Overflow.Count, buttons.Count);
 
-        // No folded group keeps a chevron submenu in the drawer: the only flyouts hanging off drawer
-        // buttons are bespoke pickers (the colour "Custom…" picker), never a group's "More …" drawer.
-        foreach (var button in bar.OverflowDrawerPanels.SelectMany(p => p.GetLogicalDescendants().OfType<Button>()))
-        {
-            if (button.Flyout is not null)
-            {
-                Assert.DoesNotContain("tools", ToolTip.GetTip(button) as string ?? string.Empty);
-            }
-        }
+        // Flattened: every tool is a direct icon button — none opens a "More …" chevron submenu.
+        Assert.All(buttons, b => Assert.Null(b.Flyout));
     }
 
     // The reflow runs off the strip's SizeChanged and reparents groups, which queues another layout

@@ -33,28 +33,7 @@ public static class CommandBarDrawer
     private static readonly IBrush MutedBrush = new SolidColorBrush(Color.FromRgb(0x88, 0x88, 0x88));
     private static readonly IBrush ChipBrush = new SolidColorBrush(Color.FromArgb(0x22, 0x88, 0x88, 0x88));
 
-    /// <summary>
-    /// The drawer behind a group's chevron on the bar: the group's <see cref="CommandBarGroup.Overflow"/>
-    /// tools (its primary tools are already the visible icons next to the chevron) plus any bespoke
-    /// affordances.
-    /// </summary>
-    public static (Control Content, Action Refresh) Build(CommandBarGroup group, IAppEnvironment env, Action close) =>
-        BuildPanel(group, group.Overflow, env, close);
-
-    /// <summary>
-    /// The flattened panel shown when a whole group has folded into the command bar's overflow drawer:
-    /// lists the group's PRIMARY tools as rows too (they're no longer on the bar as icons), so the
-    /// group is fully usable in one flat menu — no nested submenu to open.
-    /// </summary>
-    public static (Control Content, Action Refresh) BuildFlat(CommandBarGroup group, IAppEnvironment env, Action close)
-    {
-        var ids = new List<string>(group.Primary.Count + group.Overflow.Count);
-        ids.AddRange(group.Primary);
-        ids.AddRange(group.Overflow);
-        return BuildPanel(group, ids, env, close);
-    }
-
-    private static (Control Content, Action Refresh) BuildPanel(CommandBarGroup group, IReadOnlyList<string> ids, IAppEnvironment env, Action close)
+    public static (Control Content, Action Refresh) Build(CommandBarGroup group, IAppEnvironment env, Action close)
     {
         // Cap the width so a long description wraps onto the next line instead of stretching the drawer
         // ever wider and pushing the shortcut (and the drawer's right edge) off-screen. TextWrapping on
@@ -69,7 +48,7 @@ public static class CommandBarDrawer
         });
 
         var refreshers = new List<Action>();
-        foreach (string id in ids)
+        foreach (string id in group.Overflow)
         {
             if (AppCommands.ById(id) is { } command)
             {
