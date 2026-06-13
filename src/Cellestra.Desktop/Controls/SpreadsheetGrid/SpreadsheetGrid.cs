@@ -198,6 +198,10 @@ public sealed partial class SpreadsheetGrid : Panel
     /// </summary>
     public bool InputBlocked { get; set; }
 
+    // The modifier chord from the most recent key press; consulted in OnTextInput so a Cmd/Ctrl combo
+    // never types into a cell. KeyDown always precedes the text input it produces, so this stays current.
+    private KeyModifiers _lastKeyModifiers;
+
     public double Zoom
     {
         get => _zoom;
@@ -1085,6 +1089,9 @@ public sealed partial class SpreadsheetGrid : Panel
 
     protected override void OnKeyDown(KeyEventArgs e)
     {
+        // Remember the chord on the key that may generate the next OnTextInput, so a Cmd/Ctrl combo
+        // (reserved for shortcuts) never begins a cell edit even when the OS still emits its character.
+        _lastKeyModifiers = e.KeyModifiers;
         base.OnKeyDown(e);
         if (InputBlocked)
         {
@@ -1158,6 +1165,13 @@ public sealed partial class SpreadsheetGrid : Panel
         if (InputBlocked)
         {
             return; // a modal is open above the grid — don't begin an edit behind it
+        }
+
+        // A Cmd/Ctrl chord is reserved for shortcuts; the character some platforms still emit for an
+        // unbound combo (e.g. ⌘J) must not start a cell edit.
+        if (_lastKeyModifiers.HasFlag(KeyModifiers.Meta) || _lastKeyModifiers.HasFlag(KeyModifiers.Control))
+        {
+            return;
         }
 
         if (!_editing && !string.IsNullOrEmpty(e.Text) && e.Text[0] >= ' ')
