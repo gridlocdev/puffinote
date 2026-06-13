@@ -227,6 +227,23 @@ public class EditingTests
     }
 
     [Fact]
+    public void Insert_pushing_cells_off_the_sheet_drops_them_without_overwriting_survivors()
+    {
+        var (workbook, history) = New();
+        var sheet = workbook.ActiveSheet;
+        int last = SheetDimensions.MaxRows - 1;
+        sheet.SetValue(last - 1, 0, CellValue.Number(111)); // second-to-last row
+        sheet.SetValue(last, 0, CellValue.Number(222));     // last row
+
+        // Inserting a row at the top shifts both down: 111 lands on the last row, 222 is pushed off.
+        // The old clamp collapsed both onto the last row, so 222 overwrote 111 and one value vanished.
+        history.Execute(new StructuralEditCommand(sheet.Name, StructuralAxis.Row, StructuralOperation.Insert, 0, 1));
+
+        Assert.Equal(111, sheet.GetValue(last, 0).AsNumber); // survivor kept, not overwritten
+        Assert.True(sheet.GetValue(last - 1, 0).IsEmpty);    // its old slot vacated
+    }
+
+    [Fact]
     public void Delete_rows_breaks_reference_to_deleted_cell()
     {
         var (workbook, history) = New();

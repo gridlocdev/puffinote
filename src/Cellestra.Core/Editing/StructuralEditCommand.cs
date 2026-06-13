@@ -132,13 +132,12 @@ public sealed class StructuralEditCommand : IEditCommand
         {
             int lo = rows ? table.Range.Top : table.Range.Left;
             int hi = rows ? table.Range.Bottom : table.Range.Right;
-            if (SurvivingExtremes(lo, hi) is not (int minSurv, int maxSurv))
+            if (SurvivingExtremes(lo, hi) is not (int minSurv, int maxSurv) ||
+                MapSpan(minSurv, maxSurv) is not (int newLo, int newHi))
             {
-                continue; // the table's edited-axis span is entirely deleted
+                continue; // the table's edited-axis span is entirely deleted or pushed off the sheet
             }
 
-            int newLo = MapCoord(minSurv)!.Value;
-            int newHi = MapCoord(maxSurv)!.Value;
             var range = rows
                 ? new CellRange(new CellAddress(table.Range.Left, newLo), new CellAddress(table.Range.Right, newHi))
                 : new CellRange(new CellAddress(newLo, table.Range.Top), new CellAddress(newHi, table.Range.Bottom));
@@ -219,13 +218,12 @@ public sealed class StructuralEditCommand : IEditCommand
         {
             int lo = rows ? region.Range.Top : region.Range.Left;
             int hi = rows ? region.Range.Bottom : region.Range.Right;
-            if (SurvivingExtremes(lo, hi) is not (int minSurv, int maxSurv))
+            if (SurvivingExtremes(lo, hi) is not (int minSurv, int maxSurv) ||
+                MapSpan(minSurv, maxSurv) is not (int newLo, int newHi))
             {
-                continue; // entirely deleted
+                continue; // entirely deleted or pushed off the sheet
             }
 
-            int newLo = MapCoord(minSurv)!.Value;
-            int newHi = MapCoord(maxSurv)!.Value;
             var range = rows
                 ? new CellRange(new CellAddress(region.Range.Left, newLo), new CellAddress(region.Range.Right, newHi))
                 : new CellRange(new CellAddress(newLo, region.Range.Top), new CellAddress(newHi, region.Range.Bottom));
@@ -293,8 +291,17 @@ public sealed class StructuralEditCommand : IEditCommand
     {
         if (_operation == StructuralOperation.Insert)
         {
+            if (coord < _at)
+            {
+                return coord;
+            }
+
+            // A cell pushed past the sheet's last line is dropped (null), not clamped onto the edge:
+            // clamping collapsed several rows/columns onto limit-1 and they overwrote each other,
+            // silently destroying data. Mirrors the delete branch returning null for removed lines.
             int limit = _axis == StructuralAxis.Row ? SheetDimensions.MaxRows : SheetDimensions.MaxColumns;
-            return coord >= _at ? Math.Min(coord + _count, limit - 1) : coord;
+            int shifted = coord + _count;
+            return shifted >= limit ? null : shifted;
         }
 
         int deleteEnd = _at + _count;
@@ -304,6 +311,23 @@ public sealed class StructuralEditCommand : IEditCommand
         }
 
         return coord < deleteEnd ? null : coord - _count;
+    }
+
+    /// <summary>
+    /// Map a surviving [min,max] span to its post-edit corners. On an insert the far corner can be
+    /// pushed past the sheet edge: it clamps to the last line (the span shrinks), while a span
+    /// pushed off entirely returns null so the caller drops it.
+    /// </summary>
+    private (int Lo, int Hi)? MapSpan(int min, int max)
+    {
+        if (MapCoord(min) is not { } lo)
+        {
+            return null;
+        }
+
+        int limit = _axis == StructuralAxis.Row ? SheetDimensions.MaxRows : SheetDimensions.MaxColumns;
+        int hi = MapCoord(max) ?? (limit - 1);
+        return (lo, hi);
     }
 
     private (int Min, int Max)? SurvivingExtremes(int from, int to)
