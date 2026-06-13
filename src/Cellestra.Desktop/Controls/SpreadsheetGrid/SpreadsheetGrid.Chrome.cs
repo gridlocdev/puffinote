@@ -343,12 +343,21 @@ public sealed partial class SpreadsheetGrid
 
     private void ShowValidationPopup(Rect anchor, DataValidation rule)
     {
-        if (_session is null || rule.ListValues is null)
+        if (_session is null)
         {
             return;
         }
 
-        var list = new ListBox { ItemsSource = rule.ListValues, MaxHeight = 180 };
+        // The dropdown is fed by either the literal list or, when the rule draws its allowed values
+        // from a cell range, the live contents of that range.
+        IReadOnlyList<string>? items = rule.ListValues
+            ?? (rule.ListSource is { } source ? ResolveListSource(source) : null);
+        if (items is null || items.Count == 0)
+        {
+            return;
+        }
+
+        var list = new ListBox { ItemsSource = items, MaxHeight = 180 };
         list.SelectionChanged += (_, _) =>
         {
             if (list.SelectedItem is string value)
@@ -437,11 +446,48 @@ public sealed partial class SpreadsheetGrid
 
     private IEnumerable<CellValue> RangeValues(CellRange range)
     {
-        var sheet = _session!.ActiveSheet;
+        // A list-source range may point at another sheet (e.g. a hidden "Lists" sheet), so honour its
+        // own sheet qualifier and fall back to the active sheet when it carries none.
+        var sheet = (range.Sheet is { } name ? _session!.Workbook.FindSheet(name) : null) ?? _session!.ActiveSheet;
         foreach (var (r, c) in range.Positions())
         {
             yield return sheet.GetValue(r, c);
         }
+    }
+
+    /// <summary>Test seam: the items a list rule's dropdown would offer for a cell (literal or range-sourced).</summary>
+    internal IReadOnlyList<string>? ValidationDropdownItemsForTest(int row, int column)
+    {
+        var rule = _session?.ActiveSheet.FindValidation(row, column);
+        if (rule is not { Kind: ValidationKind.List })
+        {
+            return null;
+        }
+
+        return rule.ListValues ?? (rule.ListSource is { } source ? ResolveListSource(source) : null);
+    }
+
+    /// <summary>The distinct, non-empty display strings a list-source range offers, in document order.</summary>
+    private IReadOnlyList<string> ResolveListSource(CellRange source)
+    {
+        var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var items = new List<string>();
+        foreach (var value in RangeValues(source))
+        {
+            if (value.IsEmpty)
+            {
+                continue;
+            }
+
+            // Mirror Validator.MatchesList's candidate text so picking an item always passes the rule.
+            string text = value.IsText ? value.AsText : value.ToInvariantString();
+            if (text.Length > 0 && seen.Add(text))
+            {
+                items.Add(text);
+            }
+        }
+
+        return items;
     }
 
     private void ShowValidationError(string? reason)

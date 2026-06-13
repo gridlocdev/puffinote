@@ -50,4 +50,31 @@ public class DataValidationDialogTests
         Assert.Equal(1, rule!.Operand1);
         Assert.Equal(10, rule.Operand2);
     }
+
+    [AvaloniaFact]
+    public void List_rule_uses_literal_values_when_no_range_is_given()
+    {
+        var dialog = new DataValidationDialog(Range);
+
+        var rule = dialog.BuildListForTest("Red, Green, Blue");
+
+        Assert.NotNull(rule);
+        Assert.Equal(ValidationKind.List, rule!.Kind);
+        Assert.Null(rule.ListSource);
+        Assert.Equal(new[] { "Red", "Green", "Blue" }, rule.ListValues);
+    }
+
+    [AvaloniaFact]
+    public void List_rule_draws_from_a_cell_range_when_one_is_supplied()
+    {
+        var dialog = new DataValidationDialog(Range);
+
+        // A range source wins over any literal values typed alongside it.
+        var rule = dialog.BuildListForTest("ignored", "Lists.A1:A20");
+
+        Assert.NotNull(rule);
+        Assert.Equal(ValidationKind.List, rule!.Kind);
+        Assert.Null(rule.ListValues);
+        Assert.Equal(CellRange.Parse("Lists.A1:A20"), rule.ListSource);
+    }
 }

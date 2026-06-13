@@ -129,6 +129,28 @@ public class OdsDataValidationTests
     }
 
     [Fact]
+    public void List_rule_with_a_cell_range_source_round_trips()
+    {
+        var workbook = Workbook.CreateNew();
+        var sheet = workbook.ActiveSheet;
+        sheet.AddValidation(new DataValidation(ValidationKind.List, CellRange.Parse("A1:A3"))
+        {
+            ListSource = CellRange.Parse("E1:E8"),
+            Response = ValidationResponse.Stop,
+        });
+
+        var reopened = RoundTrip(workbook).FindSheet("Sheet1")!;
+        var rule = Assert.Single(reopened.Validations);
+
+        Assert.Equal(ValidationKind.List, rule.Kind);
+        Assert.Null(rule.ListValues);
+        Assert.NotNull(rule.ListSource);
+        Assert.Equal(4, rule.ListSource!.Value.Left); // column E → index 4
+        Assert.Equal(0, rule.ListSource!.Value.Top); // row 1 → index 0
+        Assert.Equal(7, rule.ListSource!.Value.Bottom); // row 8 → index 7
+    }
+
+    [Fact]
     public void No_validation_emits_no_block_and_reopens_clean()
     {
         var workbook = Workbook.CreateNew();

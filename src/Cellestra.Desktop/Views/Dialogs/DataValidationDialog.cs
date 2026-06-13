@@ -1,6 +1,7 @@
 using System;
 using System.Globalization;
 using System.Linq;
+using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Layout;
 using Cellestra.Core.Data;
@@ -23,6 +24,7 @@ public sealed class DataValidationDialog : ModalDialog<DataValidation?>
     private readonly TextBox _operand1 = new() { Width = 120 };
     private readonly TextBox _operand2 = new() { Width = 120 };
     private readonly TextBox _listValues = new() { Width = 250, PlaceholderText = "Red, Green, Blue" };
+    private readonly TextBox _listSource = new() { Width = 250, PlaceholderText = "e.g. $E$1:$E$8 or Lists.A1:A20" };
     private readonly ComboBox _response;
     private readonly TextBox _errorMessage = new() { Width = 250 };
     private readonly StackPanel _numberPanel;
@@ -43,7 +45,19 @@ public sealed class DataValidationDialog : ModalDialog<DataValidation?>
             Row("Value", _operand1),
             Row("And", _operand2),
         } };
-        _listPanel = new StackPanel { Spacing = 6, Children = { Row("Values", _listValues) } };
+        _listPanel = new StackPanel { Spacing = 6, Children =
+        {
+            Row("Values", _listValues),
+            Row("Cell range", _listSource),
+            new TextBlock
+            {
+                Text = "Enter a comma-separated list, or a cell range to draw allowed values from. A range wins when both are filled.",
+                Width = 330,
+                TextWrapping = Avalonia.Media.TextWrapping.Wrap,
+                Opacity = 0.7,
+                Margin = new Thickness(88, 0, 0, 0),
+            },
+        } };
 
         _kind.SelectionChanged += (_, _) => UpdateVisibility();
         // The "And" operand only applies to between/not-between, so its enabled state depends on the
@@ -96,6 +110,15 @@ public sealed class DataValidationDialog : ModalDialog<DataValidation?>
         return Build();
     }
 
+    /// <summary>Test seam: drive the list controls and build a List rule the way clicking OK would.</summary>
+    internal DataValidation? BuildListForTest(string values, string source = "")
+    {
+        _kind.SelectedIndex = (int)ValidationKind.List;
+        _listValues.Text = values;
+        _listSource.Text = source;
+        return Build();
+    }
+
     /// <summary>Test seam: whether the second ("And") operand box is enabled for the given operator.</summary>
     internal bool Operand2EnabledForTest(ValidationOperator op)
     {
@@ -124,11 +147,19 @@ public sealed class DataValidationDialog : ModalDialog<DataValidation?>
 
         if (kind == ValidationKind.List)
         {
-            rule = rule with
+            // A cell-range source takes precedence over a literal list when both are supplied.
+            if (CellRange.TryParse(_listSource.Text?.Trim(), out var source))
             {
-                ListValues = (_listValues.Text ?? string.Empty)
-                    .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries),
-            };
+                rule = rule with { ListSource = source, ListValues = null };
+            }
+            else
+            {
+                rule = rule with
+                {
+                    ListValues = (_listValues.Text ?? string.Empty)
+                        .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries),
+                };
+            }
         }
         else if (kind != ValidationKind.Any)
         {
