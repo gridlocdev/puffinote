@@ -259,7 +259,15 @@ public partial class MainWindow : Window, IAppEnvironment
                 submenu.Items.Add(new NativeMenuItem(command.Label)
                 {
                     Gesture = command.Shortcut,
-                    Command = new RelayCommand(() => command.Execute(this), () => command.IsEnabled(this)),
+                    // Mirror the in-window KeyBinding's guard (RegisterKeyBindings): a native menu item's
+                    // Gesture becomes a macOS key equivalent that the system dispatches globally, ahead of
+                    // the focused control. Without the same back-off, a plain-key command (Delete → Clear
+                    // Contents) fires while the formula bar or inline cell editor is focused — wiping the
+                    // whole cell instead of forward-deleting one character. Yielding here lets the key fall
+                    // through to the focused TextBox so it edits in place (#8).
+                    Command = new RelayCommand(
+                        () => command.Execute(this),
+                        () => !IsModalOpen && !BlockedByTextInput(command.Shortcut) && command.IsEnabled(this)),
                 });
             }
         }
@@ -1974,7 +1982,14 @@ public partial class MainWindow : Window, IAppEnvironment
         return (gesture.KeyModifiers & (KeyModifiers.Meta | KeyModifiers.Control)) == 0;
     }
 
-    private bool BlockedByTextInput(KeyGesture? gesture) => ShouldYieldToTextInput(gesture, IsTextInputFocused);
+    // An active inline edit counts the same as a focused text field: while a cell is being edited
+    // (in the cell or mirrored from the formula bar), a plain key like Delete is in-editor text
+    // editing, not "clear the cell". This explicit flag is steadier than focus detection alone and,
+    // because the gate lives in CanExecute, it makes the binding/native-menu hotkey inert so the key
+    // flows through to the editor — Avalonia evaluates these gestures before the focused element ever
+    // sees the KeyDown, so e.Handled in the editor can't claw it back after the fact.
+    private bool BlockedByTextInput(KeyGesture? gesture) =>
+        ShouldYieldToTextInput(gesture, IsTextInputFocused || Grid.IsInlineEditing);
 
     // ---- Palette overlay --------------------------------------------------
 
