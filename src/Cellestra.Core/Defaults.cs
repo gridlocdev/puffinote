@@ -12,6 +12,9 @@ public static class Defaults
     /// <summary>Prefix for auto-generated sheet names (Sheet2, Sheet3, …).</summary>
     public const string SheetNamePrefix = "Sheet";
 
+    /// <summary>Prefix for auto-generated chart-sheet names (Chart1, Chart2, …).</summary>
+    public const string ChartSheetNamePrefix = "Chart";
+
     /// <summary>Default cell font family (PRD §8.8).</summary>
     public const string FontFamily = "Helvetica Neue";
 
@@ -47,12 +50,22 @@ public static class Defaults
     /// Generate the next unused default sheet name given the names already in use
     /// (Sheet2, Sheet3, … skipping any already taken).
     /// </summary>
-    public static string NextSheetName(IReadOnlyCollection<string> existingNames)
+    public static string NextSheetName(IReadOnlyCollection<string> existingNames) =>
+        NextName(SheetNamePrefix, existingNames);
+
+    /// <summary>
+    /// Generate the next unused chart-sheet name given the names already in use
+    /// (Chart1, Chart2, … skipping any already taken).
+    /// </summary>
+    public static string NextChartSheetName(IReadOnlyCollection<string> existingNames) =>
+        NextName(ChartSheetNamePrefix, existingNames);
+
+    private static string NextName(string prefix, IReadOnlyCollection<string> existingNames)
     {
         var taken = new HashSet<string>(existingNames, StringComparer.OrdinalIgnoreCase);
         for (int n = 1; ; n++)
         {
-            string candidate = $"{SheetNamePrefix}{n}";
+            string candidate = $"{prefix}{n}";
             if (!taken.Contains(candidate))
             {
                 return candidate;

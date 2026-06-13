@@ -14,8 +14,8 @@
         <!-- Adaptive command bar — always present, collapses to a slim handle (PRD §6) -->
         <ContentControl x:Name="CommandBarHost" Grid.Row="0" />
 
-        <!-- Formula bar: Name Box, fx, formula input, expand toggle -->
-        <Border Grid.Row="1" Background="{DynamicResource ChromeBackground}" BorderBrush="{DynamicResource ChromeBorder}" BorderThickness="0,0,0,1" Padding="4">
+        <!-- Formula bar: Name Box, fx, formula input, expand toggle. Hidden on chart sheets. -->
+        <Border x:Name="FormulaBarPanel" Grid.Row="1" Background="{DynamicResource ChromeBackground}" BorderBrush="{DynamicResource ChromeBorder}" BorderThickness="0,0,0,1" Padding="4">
             <DockPanel>
                 <TextBox x:Name="NameBox" Width="92" DockPanel.Dock="Left" PlaceholderText="A1"
                          VerticalContentAlignment="Center" VerticalAlignment="Top" />
@@ -31,8 +31,10 @@
             </DockPanel>
         </Border>
 
-        <!-- The custom grid -->
+        <!-- The custom grid (data sheets) and the chart view (chart sheets) share row 2; only one is
+             visible at a time, chosen by the active sheet's type. -->
         <grid:SpreadsheetGrid x:Name="Grid" Grid.Row="2" />
+        <ContentControl x:Name="ChartHost" Grid.Row="2" IsVisible="False" />
 
         <!-- Sheet tab strip -->
         <Border Grid.Row="3" Background="{DynamicResource ChromeAltBackground}" BorderBrush="{DynamicResource ChromeBorder}" BorderThickness="0,1,0,0" Padding="4,2">

@@ -64,6 +64,8 @@ public static class OdsContentXml
             new XAttribute(XNamespace.Xmlns + "fo", Fo.NamespaceName),
             new XAttribute(XNamespace.Xmlns + "number", Number.NamespaceName),
             new XAttribute(XNamespace.Xmlns + "svg", Svg.NamespaceName),
+            new XAttribute(XNamespace.Xmlns + "draw", Draw.NamespaceName),
+            new XAttribute(XNamespace.Xmlns + "xlink", Xlink.NamespaceName),
             new XAttribute(Office + "version", "1.3"),
             autoStyles,
             new XElement(Office + "body", spreadsheet));
@@ -91,6 +93,14 @@ public static class OdsContentXml
 
         WriteColumns(table, sheet, lastColumn, registry);
         WriteRows(table, sheet, lastRow, lastColumn, registry, cellValidation);
+
+        // A chart sheet embeds its chart as an ODF draw frame in the table (the chart object's own
+        // content.xml is written into the package by OdsCharts.WriteObjects, called first by OdsWriter).
+        if (sheet.IsChartSheet)
+        {
+            OdsCharts.InjectFrame(table, sheet);
+        }
+
         return table;
     }
 
@@ -1019,7 +1029,7 @@ public static class OdsContentXml
 
     // ---- Read -------------------------------------------------------------
 
-    public static void Read(XDocument document, Workbook workbook, List<ForeignXml> foreign)
+    public static void Read(XDocument document, Workbook workbook, List<ForeignXml> foreign, OdsPackage? package = null)
     {
         var root = document.Root!;
         var styleLookup = ReadAutomaticStyles(root, workbook.Styles, out var columnWidths, out var rowHeights, out var styleNumberFormats);
@@ -1041,7 +1051,7 @@ public static class OdsContentXml
             if (child.Name == Table + "table")
             {
                 seenTable = true;
-                ReadTable(child, workbook, styleLookup, columnWidths, rowHeights, styleNumberFormats, validationCells);
+                ReadTable(child, workbook, styleLookup, columnWidths, rowHeights, styleNumberFormats, validationCells, package);
             }
             else if (child.Name == Table + "named-expressions")
             {
@@ -1292,13 +1302,17 @@ public static class OdsContentXml
         Dictionary<string, double> columnWidths,
         Dictionary<string, double> rowHeights,
         Dictionary<string, string> _,
-        Dictionary<(string Sheet, string Name), List<(int Row, int Column)>> validationCells)
+        Dictionary<(string Sheet, string Name), List<(int Row, int Column)>> validationCells,
+        OdsPackage? package)
     {
         string name = table.Attribute(Table + "name")?.Value ?? workbook.AddSheet().Name;
         var sheet = workbook.FindSheet(name) ?? workbook.AddSheetForLoad(name);
 
         ReadColumns(table, sheet, columnWidths);
         ReadRows(table, sheet, styleLookup, rowHeights, validationCells);
+
+        // If the table embeds a chart object, attach it so the sheet opens as a chart sheet.
+        OdsCharts.ReadChart(table, package, sheet);
     }
 
     private static void ReadColumns(XElement table, Worksheet sheet, Dictionary<string, double> columnWidths)

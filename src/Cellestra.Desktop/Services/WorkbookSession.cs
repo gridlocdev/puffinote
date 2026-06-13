@@ -108,6 +108,26 @@ public sealed class WorkbookSession
         return sheet;
     }
 
+    /// <summary>Add a chart sheet for <paramref name="chart"/>, make it active, and mark the workbook modified.</summary>
+    public Worksheet AddChartSheet(Cellestra.Charts.ChartDefinition chart)
+    {
+        var sheet = _workbook.AddChartSheet(chart);
+        IsModified = true;
+        SetActiveSheet(sheet); // raises StructureChanged so the UI swaps in the chart view
+        return sheet;
+    }
+
+    /// <summary>
+    /// Record that a chart definition was edited in place: mark the workbook modified and raise
+    /// <see cref="Changed"/> so the chrome (dirty flag, status) refreshes. Chart edits are not part of
+    /// the cell undo history (like other structural sheet changes, PRD §8.5).
+    /// </summary>
+    public void MarkChartModified()
+    {
+        IsModified = true;
+        Changed?.Invoke(this, EventArgs.Empty);
+    }
+
     public void SetActiveSheet(Worksheet sheet)
     {
         if (_workbook.IndexOf(sheet) < 0)

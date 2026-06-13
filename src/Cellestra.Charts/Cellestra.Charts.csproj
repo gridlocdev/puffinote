@@ -1,0 +1,16 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    The chart store: a from-scratch model for chart sheets and its own OpenDocument
+    chart (chart:chart) serializer. Like Cellestra.Core it has ZERO UI dependencies and
+    does NOT use any third-party charting library — every chart type is a custom
+    implementation (model here, custom renderer in Cellestra.Desktop). It is also free of
+    a Core dependency on purpose: data ranges are stored as plain ODF address strings
+    (e.g. "Data.B2:B7"), so Cellestra.Core can reference this library without a cycle.
+  -->
+  <PropertyGroup>
+    <RootNamespace>Cellestra.Charts</RootNamespace>
+    <AssemblyName>Cellestra.Charts</AssemblyName>
+  </PropertyGroup>
+
+</Project>

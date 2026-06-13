@@ -89,13 +89,21 @@ public static class OdsSupportXml
         }
     }
 
-    public static XDocument BuildManifest(IEnumerable<string> parts)
+    public static XDocument BuildManifest(IEnumerable<string> parts, IEnumerable<string>? chartObjectDirs = null)
     {
         var manifest = new XElement(Manifest + "manifest",
             new XAttribute(XNamespace.Xmlns + "manifest", Manifest.NamespaceName),
             new XAttribute(Manifest + "version", "1.3"));
 
         manifest.Add(FileEntry("/", MimeType));
+
+        // Each embedded chart sub-document needs its directory declared with the chart media type
+        // (the inner content.xml is added by the per-part loop below as text/xml).
+        foreach (string dir in chartObjectDirs ?? Enumerable.Empty<string>())
+        {
+            manifest.Add(FileEntry($"{dir}/", ChartMediaType));
+        }
+
         foreach (string part in parts)
         {
             if (part == MimetypePart)

@@ -72,7 +72,8 @@ Exact versions live in **`Directory.Packages.props`** (central package managemen
 
 ## 3. The projects
 
-- **`Cellestra.Core`** — a plain class library; everything that defines what a spreadsheet *is*. No Avalonia. Most tests point here.
+- **`Cellestra.Core`** — a plain class library; everything that defines what a spreadsheet *is*. No Avalonia. Most tests point here. References `Cellestra.Charts` (to embed/read chart sheets and resolve their ranges to numbers).
+- **`Cellestra.Charts`** — the standalone chart store: the chart-sheet model (`ChartDefinition`/`ChartSeries`/`ChartType`) and a from-scratch ODF `chart:chart` serializer (`Ods/ChartDocument`). No Avalonia, **no third-party charting library** (every chart type is a custom implementation), and deliberately no dependency on Core — chart data ranges are stored as plain ODF address strings, so Core can reference it without a cycle. Chart **drawing** lives in the desktop `ChartControl`.
 - **`Cellestra.Desktop`** — the Avalonia executable: window, menu bar, command bar, grid, dialogs, and a thin **Services** layer bridging user actions to Core.
 - **`Cellestra.Cli`** — the `cellestra` console executable. References only Core + `System.CommandLine`; **no Avalonia, no network**. A thin `Infrastructure` layer (`Workspace` for load/recalc/atomic-save, `Cells`/`Output`/`Locale` helpers) mirrors what the Desktop `Services` layer does, so edits are atomic and **preserve unmodeled content verbatim** (§8.1) exactly like the app. One static method per command, composed in `CliApplication` so tests can drive the same surface in-process.
 

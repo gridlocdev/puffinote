@@ -21,6 +21,8 @@
 
   <ItemGroup>
     <ProjectReference Include="..\Cellestra.Core\Cellestra.Core.csproj" />
+    <!-- The chart store: chart-sheet model used by the chart view and its custom renderer. -->
+    <ProjectReference Include="..\Cellestra.Charts\Cellestra.Charts.csproj" />
   </ItemGroup>
 
   <ItemGroup>

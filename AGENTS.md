@@ -38,7 +38,7 @@ These encode the core decisions. Breaking one is a bug even if it compiles.
    - Formulas are stored in canonical **OpenFormula** (`of:=SUM([.A1:.A3])`); always go through `OpenFormulaTranslator`.
    - **Preserve unmodeled content verbatim** (PRD §8.1) — never silently drop features you don't understand.
 8. **Adjust references, don't copy them verbatim.** Copy/fill and insert/delete row/column go through `ReferenceAdjuster`; `$` refs are absolute, others shift.
-9. **Don't build the non-goals** (PRD §9): no charts, pivots, macros, cloud, printing, autosave, `.xlsx`-as-home, conditional formatting, **Excel-style structured references** (`Table[Column]`), or fill-handle series in v1. (Sort, filter, and tables **are** v1 — see below.) If a task seems to need a non-goal, stop and ask.
+9. **Don't build the non-goals** (PRD §9): no pivots, macros, cloud, printing, autosave, `.xlsx`-as-home, conditional formatting, **Excel-style structured references** (`Table[Column]`), or fill-handle series in v1. (Sort, filter, tables, and **chart sheets** **are** in scope — see below.) If a task seems to need a non-goal, stop and ask. **Charts** were promoted from a non-goal to a feature: chart sheets are stored in the standalone `Cellestra.Charts` library (custom model + custom ODF `chart:chart` serializer — no third-party charting library), round-trip as ODF embedded chart objects, and render in a custom `ChartControl`.
 
 ## Settled behavior you must follow (no guessing)
 

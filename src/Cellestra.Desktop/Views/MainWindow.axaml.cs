@@ -15,10 +15,12 @@ using Avalonia.Controls.Templates;
 using Avalonia.Markup.Xaml;
 using Avalonia.Media;
 using Avalonia.Platform.Storage;
+using Cellestra.Charts;
 using Cellestra.Core.Data;
 using Cellestra.Core.Editing;
 using Cellestra.Core.Model;
 using Cellestra.Core.Values;
+using Cellestra.Desktop.Controls.ChartView;
 using Cellestra.Desktop.Views.Dialogs;
 using NumberFormatter = Cellestra.Core.Styling.NumberFormatter;
 using Cellestra.Desktop.Commands;
@@ -64,8 +66,8 @@ public partial class MainWindow : Window, IAppEnvironment
         Grid.ClipboardInvalidated += (_, _) => ClearClipboard();
         Grid.EnterPasteRequested += (_, _) => EnterPaste();
         WireSelectionUndo();
-        _session.Changed += (_, _) => { Grid.Refresh(); UpdateChrome(); };
-        _session.StructureChanged += (_, _) => { BuildSheetTabs(); Grid.Refresh(); UpdateChrome(); };
+        _session.Changed += (_, _) => { Grid.Refresh(); UpdateChrome(); RefreshChartData(); };
+        _session.StructureChanged += (_, _) => { BuildSheetTabs(); Grid.Refresh(); UpdateChrome(); RefreshSheetView(); };
 
         FormulaInput.KeyDown += FormulaInputKeyDown;
         FormulaInput.TextChanged += FormulaInputTextChanged;
@@ -96,6 +98,7 @@ public partial class MainWindow : Window, IAppEnvironment
         AddHandler(KeyDownEvent, OnPreviewKeyDownForOverlay, RoutingStrategies.Tunnel);
 
         UpdateChrome();
+        RefreshSheetView();
         OnSelectionChanged();
     }
 
@@ -748,6 +751,110 @@ public partial class MainWindow : Window, IAppEnvironment
         OnSelectionChanged();
     }
 
+    public void AddChartSheet()
+    {
+        var definition = new ChartDefinition { Type = ChartType.Column, Title = "Chart" };
+        SeedChartFromSelection(definition);
+        _session.AddChartSheet(definition); // raises StructureChanged → RefreshSheetView swaps in the chart view
+        BuildSheetTabs();
+        UpdateChrome();
+        Narrate("Added chart sheet");
+    }
+
+    /// <summary>
+    /// Pre-fill a new chart from the current grid selection when it looks tabular: the first column
+    /// becomes the category labels and each remaining column becomes a series, taking its name from a
+    /// text header row when present. A single-column selection becomes one unnamed series.
+    /// </summary>
+    private void SeedChartFromSelection(ChartDefinition definition)
+    {
+        var sheet = _session.ActiveSheet;
+        if (sheet.IsChartSheet)
+        {
+            return; // a chart sheet has no grid data to seed from
+        }
+
+        var range = Selection.Range;
+        if (range.RowCount < 2)
+        {
+            return; // not enough rows to chart anything meaningful
+        }
+
+        string name = sheet.Name;
+        int top = range.Top, bottom = range.Bottom, left = range.Left, right = range.Right;
+        bool headerRow = sheet.GetValue(top, left).IsText;
+        int dataTop = headerRow && bottom > top ? top + 1 : top;
+
+        string Ref(int column, int fromRow, int toRow) =>
+            $"{name}.{SheetDimensions.ColumnToLetters(column)}{fromRow + 1}:{SheetDimensions.ColumnToLetters(column)}{toRow + 1}";
+
+        if (right > left)
+        {
+            definition.CategoriesReference = Ref(left, dataTop, bottom);
+            for (int column = left + 1; column <= right; column++)
+            {
+                var series = new ChartSeries { ValuesReference = Ref(column, dataTop, bottom) };
+                if (headerRow)
+                {
+                    series.NameReference = $"{name}.{SheetDimensions.ColumnToLetters(column)}{top + 1}";
+                }
+
+                definition.Series.Add(series);
+            }
+        }
+        else
+        {
+            // Single column: chart it as one series with no category labels.
+            definition.Series.Add(new ChartSeries { ValuesReference = Ref(left, dataTop, bottom) });
+        }
+    }
+
+    /// <summary>
+    /// Show the right view for the active sheet: the chart editor for a chart sheet (with the grid and
+    /// formula bar hidden), otherwise the spreadsheet grid. Rebuilds the chart view each switch so it
+    /// binds to the active sheet's definition.
+    /// </summary>
+    private void RefreshSheetView()
+    {
+        var sheet = _session.ActiveSheet;
+        bool isChart = sheet.IsChartSheet;
+
+        Grid.IsVisible = !isChart;
+        ChartHost.IsVisible = isChart;
+        FormulaBarPanel.IsVisible = !isChart;
+
+        if (isChart && sheet.Chart is { } definition)
+        {
+            var view = new ChartSheetView(_session.Workbook, definition);
+            view.ChartChanged += (_, _) => { _session.MarkChartModified(); UpdateChrome(); };
+            ChartHost.Content = view;
+        }
+        else
+        {
+            ChartHost.Content = null;
+        }
+    }
+
+    /// <summary>Re-resolve the active chart against the (possibly just-edited) data and repaint it.</summary>
+    private void RefreshChartData()
+    {
+        if (ChartHost.Content is ChartSheetView view)
+        {
+            view.RefreshData();
+        }
+    }
+
+    // ---- Test seams (headless UI tests; InternalsVisibleTo Cellestra.UiTests) ----
+
+    /// <summary>True when the chart view is showing instead of the grid (active sheet is a chart sheet).</summary>
+    internal bool ChartViewVisibleForTest => ChartHost.IsVisible;
+
+    /// <summary>True when the formula bar is showing (hidden on chart sheets).</summary>
+    internal bool FormulaBarVisibleForTest => FormulaBarPanel.IsVisible;
+
+    /// <summary>The chart view currently hosted, or null on a data sheet.</summary>
+    internal ChartSheetView? ActiveChartViewForTest => ChartHost.Content as ChartSheetView;
+
     public async void RenameActiveSheet()
     {
         var sheet = _session.ActiveSheet;
@@ -1193,12 +1300,13 @@ public partial class MainWindow : Window, IAppEnvironment
 
     private void RewireSession()
     {
-        _session.Changed += (_, _) => { Grid.Refresh(); UpdateChrome(); };
-        _session.StructureChanged += (_, _) => { BuildSheetTabs(); Grid.Refresh(); UpdateChrome(); };
+        _session.Changed += (_, _) => { Grid.Refresh(); UpdateChrome(); RefreshChartData(); };
+        _session.StructureChanged += (_, _) => { BuildSheetTabs(); Grid.Refresh(); UpdateChrome(); RefreshSheetView(); };
         WireSelectionUndo();
         Grid.Attach(_session);
         BuildSheetTabs();
         UpdateChrome();
+        RefreshSheetView();
         OnSelectionChanged();
     }
 
@@ -1362,7 +1470,7 @@ public partial class MainWindow : Window, IAppEnvironment
                 _session.SetActiveSheet(captured);
                 Grid.Refresh();
                 OnSelectionChanged();
-                BuildCommandFlyout("sheet.rename", "insert.sheet", null, "sheet.delete").ShowAt(SheetTabs, showAtPointer: true);
+                BuildCommandFlyout("sheet.rename", "insert.sheet", "insert.chartSheet", null, "sheet.delete").ShowAt(SheetTabs, showAtPointer: true);
                 e.Handled = true;
             };
             // Double-click renames inline — but that's driven from SheetTabsPointerPressed (ClickCount==2),

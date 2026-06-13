@@ -15,6 +15,10 @@ public static class OdsXmlNames
     public static readonly XNamespace Svg = "urn:oasis:names:tc:opendocument:xmlns:svg-compatible:1.0";
     public static readonly XNamespace Config = "urn:oasis:names:tc:opendocument:xmlns:config:1.0";
     public static readonly XNamespace Xlink = "http://www.w3.org/1999/xlink";
+    public static readonly XNamespace Draw = "urn:oasis:names:tc:opendocument:xmlns:drawing:1.0";
+
+    /// <summary>The ODF media type of an embedded chart sub-document (its object directory).</summary>
+    public const string ChartMediaType = "application/vnd.oasis.opendocument.chart";
 
     // ---- table:database-range (filter + sort round-trip, ODF §9.4.x) ----
     public const string DatabaseRanges = "database-ranges";

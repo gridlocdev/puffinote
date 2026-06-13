@@ -55,6 +55,9 @@ public interface IAppEnvironment
 
     void AddSheet();
 
+    /// <summary>Add a new chart sheet, seeding its data from the current selection when it looks tabular.</summary>
+    void AddChartSheet();
+
     /// <summary>Rename the active worksheet (prompts for the new name).</summary>
     void RenameActiveSheet();
 

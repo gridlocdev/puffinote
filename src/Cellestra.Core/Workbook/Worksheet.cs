@@ -1,3 +1,4 @@
+using Cellestra.Charts;
 using Cellestra.Core.Data;
 using Cellestra.Core.Values;
 
@@ -7,6 +8,8 @@ namespace Cellestra.Core.Model;
 /// One worksheet: a sparse grid of cells plus per-row/column layout, merged regions,
 /// and frozen-pane state. Cells are stored only when non-blank (ARCHITECTURE "no object
 /// per cell"); the UI grid reads positions directly from here and draws only what's visible.
+/// A worksheet whose <see cref="Chart"/> is set is a <i>chart sheet</i>: it carries a chart
+/// definition instead of a meaningful cell grid, and the UI shows the chart view for it.
 /// </summary>
 public sealed class Worksheet
 {
@@ -23,6 +26,16 @@ public sealed class Worksheet
     }
 
     public string Name { get; set; }
+
+    /// <summary>
+    /// When non-null this sheet is a <i>chart sheet</i> backed by this chart definition rather than a
+    /// data grid. Chart sheets still round-trip as an ODF table carrying an embedded chart object, so
+    /// the rest of the workbook machinery (tabs, ordering, naming) treats them like any other sheet.
+    /// </summary>
+    public ChartDefinition? Chart { get; set; }
+
+    /// <summary>True when this sheet is a chart sheet (its <see cref="Chart"/> is set).</summary>
+    public bool IsChartSheet => Chart is not null;
 
     /// <summary>Number of rows frozen at the top (0 = none).</summary>
     public int FrozenRows { get; set; }

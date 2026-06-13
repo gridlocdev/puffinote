@@ -10,4 +10,13 @@
     <AssemblyName>Cellestra.Core</AssemblyName>
   </PropertyGroup>
 
+  <ItemGroup>
+    <!--
+      The chart store. A sibling pure-logic library (no UI, no third-party charting dependency)
+      that deliberately does NOT depend on Core, so this reference adds no cycle: Core resolves a
+      chart's stored range strings to numbers and embeds/reads the ODF chart object on save/open.
+    -->
+    <ProjectReference Include="..\Cellestra.Charts\Cellestra.Charts.csproj" />
+  </ItemGroup>
+
 </Project>

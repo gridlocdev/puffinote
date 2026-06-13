@@ -27,7 +27,7 @@ public static class OdsReader
         if (contentXml is not null)
         {
             var document = XDocument.Parse(contentXml, LoadOptions.PreserveWhitespace);
-            OdsContentXml.Read(document, workbook, package.ForeignSpreadsheetChildren);
+            OdsContentXml.Read(document, workbook, package.ForeignSpreadsheetChildren, package);
         }
 
         // A valid spreadsheet always has at least one sheet.

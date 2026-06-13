@@ -134,6 +134,7 @@ public static class AppCommands
         new("edit.deleteRows", "Delete Rows", "Delete the selected rows.", DeleteRows, "trash-2"),
         new("edit.deleteColumns", "Delete Columns", "Delete the selected columns.", DeleteColumns, "trash-2"),
         new("insert.sheet", "Sheet", "Add a new worksheet.", e => e.AddSheet(), "plus"),
+        new("insert.chartSheet", "Chart Sheet", "Add a sheet that shows a chart of your data.", e => e.AddChartSheet(), "chart-column"),
         new("insert.function", "Function…", "Browse the function library and insert one into the active cell.",
             e => e.ShowFunctionPicker(), "sigma", new KeyGesture(Key.F, CtrlAlt)),
         new("insert.namedRange", "Named Range…", "Name the current selection, or manage existing named ranges.",

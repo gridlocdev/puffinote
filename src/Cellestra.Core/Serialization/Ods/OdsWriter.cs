@@ -18,6 +18,11 @@ public static class OdsWriter
         var package = source ?? new OdsPackage();
 
         package.SetText(OdsXmlNames.MimetypePart, OdsXmlNames.MimeType);
+
+        // Chart objects must exist (with assigned Object N names) before content.xml is built, since
+        // the table writer embeds a draw frame pointing at each one.
+        var chartObjectDirs = OdsCharts.WriteObjects(workbook, package);
+
         package.SetText(OdsXmlNames.ContentPart, Serialize(OdsContentXml.Write(workbook, package.ForeignSpreadsheetChildren)));
         package.SetText(OdsXmlNames.SettingsPart, Serialize(OdsSupportXml.BuildSettings(workbook)));
 
@@ -31,9 +36,10 @@ public static class OdsWriter
             package.SetText(OdsXmlNames.MetaPart, Serialize(OdsSupportXml.BuildMeta()));
         }
 
-        // Manifest lists every part (it is regenerated to match the final contents).
+        // Manifest lists every part (it is regenerated to match the final contents), plus a directory
+        // entry per embedded chart object so it's declared with the chart media type.
         var parts = package.PartNames.Where(p => p != OdsXmlNames.ManifestPart).ToList();
-        package.SetText(OdsXmlNames.ManifestPart, Serialize(OdsSupportXml.BuildManifest(parts)));
+        package.SetText(OdsXmlNames.ManifestPart, Serialize(OdsSupportXml.BuildManifest(parts, chartObjectDirs)));
 
         package.Write(stream);
     }

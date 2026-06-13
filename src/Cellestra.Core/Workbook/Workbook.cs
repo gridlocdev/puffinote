@@ -1,3 +1,4 @@
+using Cellestra.Charts;
 using Cellestra.Core.Styling;
 
 namespace Cellestra.Core.Model;
@@ -84,6 +85,19 @@ public sealed class Workbook
     {
         string name = Defaults.NextSheetName(_worksheets.Select(s => s.Name).ToList());
         return AddSheet(name);
+    }
+
+    /// <summary>
+    /// Add a chart sheet carrying <paramref name="chart"/>, named with the next unused
+    /// <c>Chart1</c>, <c>Chart2</c>, … . The sheet appears in the tab order like any other.
+    /// </summary>
+    public Worksheet AddChartSheet(ChartDefinition chart)
+    {
+        ArgumentNullException.ThrowIfNull(chart);
+        string name = Defaults.NextChartSheetName(_worksheets.Select(s => s.Name).ToList());
+        var sheet = AddSheet(name);
+        sheet.Chart = chart;
+        return sheet;
     }
 
     /// <summary>
