@@ -493,6 +493,8 @@ public sealed class ChartControl : Control
                 context.DrawEllipse(brush, null, new Point(px, py), r, r);
             }
         }
+
+        DrawAxisTitles(context, chart, plot, area, horizontal: false);
     }
 
     // ---- Radar ------------------------------------------------------------
@@ -564,6 +566,30 @@ public sealed class ChartControl : Control
 
     private LegendModel BuildLegend(ResolvedChart chart)
     {
+        // Pie/doughnut draw a single series as slices, so the legend names the slices (categories),
+        // colour-keyed by slice index to match DrawPie — not the lone, unhelpful series name.
+        if (chart.Type is ChartType.Pie or ChartType.Doughnut)
+        {
+            var series = chart.Series.FirstOrDefault();
+            var slices = new List<(string Name, int Index)>();
+            if (series is not null)
+            {
+                for (int i = 0; i < series.Values.Count; i++)
+                {
+                    double v = series.Values[i];
+                    if (double.IsNaN(v) || v <= 0)
+                    {
+                        continue; // matches the slices DrawPie actually draws
+                    }
+
+                    string label = i < chart.Categories.Count ? chart.Categories[i] : (i + 1).ToString(CultureInfo.InvariantCulture);
+                    slices.Add((label, i));
+                }
+            }
+
+            return new LegendModel(slices, 26);
+        }
+
         var items = chart.Series.Select((s, i) => (s.Name, i)).ToList();
         return new LegendModel(items, 26);
     }

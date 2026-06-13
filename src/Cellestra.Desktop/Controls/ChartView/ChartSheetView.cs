@@ -1,5 +1,4 @@
 using System;
-using System.Collections.Generic;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Layout;
@@ -12,21 +11,46 @@ namespace Cellestra.Desktop.Controls.ChartView;
 
 /// <summary>
 /// The chart sheet's two-pane editor: the chart fills the left (most of the window), and a panel of
-/// labelled controls on the right defines the data and presentation. Every field carries a title and
-/// a hover description (tooltip), and editing any field updates the chart immediately. The view reads
-/// and writes the sheet's <see cref="ChartDefinition"/> in place and resolves its ranges against the
-/// workbook through <see cref="ChartDataResolver"/>, so it also re-renders when the source data changes.
+/// labelled controls on the right defines the data and presentation. Title and chart type are pinned
+/// at the top; everything below adapts to the chosen type's <see cref="ChartFamily"/> so each chart
+/// only asks for the data it actually plots (e.g. a pie asks for slice labels and one set of values;
+/// a scatter asks for X and Y values, not categories). Editing any field updates the chart immediately.
+/// The view reads and writes the sheet's <see cref="ChartDefinition"/> in place and resolves its ranges
+/// against the workbook through <see cref="ChartDataResolver"/>, so it also re-renders when source data
+/// changes.
 /// </summary>
 public sealed class ChartSheetView : UserControl
 {
     private readonly Workbook _workbook;
     private readonly ChartDefinition _chart;
     private readonly ChartControl _control = new();
+
+    /// <summary>The pinned controls below Title/Type, rebuilt whenever the chart type changes.</summary>
+    private readonly StackPanel _typeControls = new() { Spacing = 10 };
+
+    /// <summary>The per-series rows; reused across rebuilds (not used by the single-series pie/doughnut).</summary>
     private readonly StackPanel _seriesPanel = new() { Spacing = 8 };
+
     private bool _loading;
 
     /// <summary>Raised when the user edits a field (so the host can mark the document modified).</summary>
     public event EventHandler? ChartChanged;
+
+    /// <summary>The data shape a chart type needs; drives which fields the panel shows.</summary>
+    private enum ChartFamily
+    {
+        /// <summary>Column/Bar/Line/Area: categories down one axis, one or more value series, optional combo.</summary>
+        Cartesian,
+
+        /// <summary>Radar/FilledRadar: one value per spoke (category), one or more series.</summary>
+        Radar,
+
+        /// <summary>Pie/Doughnut: a single series shown as proportions of a whole.</summary>
+        PartToWhole,
+
+        /// <summary>Scatter/Bubble: each series carries its own X and Y values (and bubble sizes).</summary>
+        Xy,
+    }
 
     private readonly (ChartType Type, string Label)[] _types =
     {
@@ -42,7 +66,13 @@ public sealed class ChartSheetView : UserControl
         (ChartType.FilledRadar, "Filled Radar"),
     };
 
-    private ComboBox _stacking = null!;
+    private static ChartFamily FamilyOf(ChartType type) => type switch
+    {
+        ChartType.Pie or ChartType.Doughnut => ChartFamily.PartToWhole,
+        ChartType.Scatter or ChartType.Bubble => ChartFamily.Xy,
+        ChartType.Radar or ChartType.FilledRadar => ChartFamily.Radar,
+        _ => ChartFamily.Cartesian,
+    };
 
     public ChartSheetView(Workbook workbook, ChartDefinition chart)
     {
@@ -65,13 +95,15 @@ public sealed class ChartSheetView : UserControl
         Grid.SetColumn(chartBorder, 0);
         grid.Children.Add(chartBorder);
 
+        _loading = true;
         var panel = BuildControlsPanel();
         Grid.SetColumn(panel, 1);
         grid.Children.Add(panel);
 
         Content = grid;
 
-        LoadFromModel();
+        RebuildTypeControls();
+        _loading = false;
         RenderChart();
     }
 
@@ -84,6 +116,49 @@ public sealed class ChartSheetView : UserControl
     /// <summary>The most recently resolved chart data, exposed for headless tests.</summary>
     internal ResolvedChart? ResolvedForTest { get; private set; }
 
+    /// <summary>The field and section labels currently shown in the adaptive panel, for headless tests.</summary>
+    internal System.Collections.Generic.IReadOnlyList<string> VisibleFieldsForTest()
+    {
+        var labels = new System.Collections.Generic.List<string>();
+        Collect(_typeControls);
+        return labels;
+
+        void Collect(Control control)
+        {
+            switch (control)
+            {
+                case TextBlock text when !string.IsNullOrEmpty(text.Text):
+                    labels.Add(text.Text!);
+                    break;
+                case CheckBox check when check.Content is string content:
+                    labels.Add(content);
+                    break;
+                case Panel panel:
+                    foreach (var child in panel.Children)
+                    {
+                        Collect(child);
+                    }
+
+                    break;
+                case Decorator decorator when decorator.Child is { } child:
+                    Collect(child);
+                    break;
+                case ContentControl host when host.Content is Control hosted:
+                    Collect(hosted);
+                    break;
+            }
+        }
+    }
+
+    /// <summary>Switch the chart type as if the user picked it, for headless tests.</summary>
+    internal void SetTypeForTest(ChartType type)
+    {
+        _chart.Type = type;
+        RebuildTypeControls();
+        OnEdited();
+    }
+
+    /// <summary>Builds the pinned header (Title + Chart type) and hosts the adaptive controls below it.</summary>
     private Control BuildControlsPanel()
     {
         var stack = new StackPanel { Spacing = 10, Margin = new Thickness(12), Width = 320 };
@@ -95,10 +170,9 @@ public sealed class ChartSheetView : UserControl
             FontSize = 14,
         });
 
-        var title = new TextBox();
+        var title = new TextBox { Text = _chart.Title };
         title.TextChanged += (_, _) => Edit(() => _chart.Title = title.Text ?? string.Empty);
         stack.Children.Add(Field("Title", "The heading shown above the chart. Leave blank for no title.", title));
-        _title = title;
 
         var type = new ComboBox { HorizontalAlignment = HorizontalAlignment.Stretch };
         foreach (var (_, label) in _types)
@@ -106,73 +180,24 @@ public sealed class ChartSheetView : UserControl
             type.Items.Add(label);
         }
 
+        type.SelectedIndex = Array.FindIndex(_types, t => t.Type == _chart.Type);
         type.SelectionChanged += (_, _) => Edit(() =>
         {
             if (type.SelectedIndex >= 0)
             {
                 _chart.Type = _types[type.SelectedIndex].Type;
-                UpdateStackingEnabled();
+                RebuildTypeControls();
             }
         });
-        stack.Children.Add(Field("Chart type", "How the data is drawn. Column/Bar are the same data shown vertically or horizontally; Pie/Doughnut show one series as proportions; Scatter/Bubble plot X vs Y; Radar plots each category on its own spoke.", type));
-        _type = type;
+        stack.Children.Add(Field(
+            "Chart type",
+            "How the data is drawn. Column/Bar are the same data shown vertically or horizontally; " +
+            "Line/Area trace it across categories; Pie/Doughnut show one series as proportions; " +
+            "Scatter/Bubble plot X vs Y; Radar plots each category on its own spoke. " +
+            "The fields below change to match the type you pick.",
+            type));
 
-        _stacking = new ComboBox { HorizontalAlignment = HorizontalAlignment.Stretch };
-        _stacking.Items.Add("None");
-        _stacking.Items.Add("Stacked");
-        _stacking.Items.Add("100% stacked");
-        _stacking.SelectionChanged += (_, _) => Edit(() =>
-        {
-            _chart.Stacking = _stacking.SelectedIndex switch
-            {
-                1 => ChartStacking.Stacked,
-                2 => ChartStacking.Percent,
-                _ => ChartStacking.None,
-            };
-        });
-        stack.Children.Add(Field("Stacking", "For column, bar, and area charts: stack series on top of one another, or scale each category to 100%. Ignored by other chart types.", _stacking));
-
-        var categories = new TextBox { PlaceholderText = "e.g. Sheet1.A2:A7" };
-        categories.TextChanged += (_, _) => Edit(() => _chart.CategoriesReference = Blank(categories.Text));
-        stack.Children.Add(Field("Category labels (X)", "The cells holding the label for each data point — one per row or column, e.g. Sheet1.A2:A7. These name the columns/bars/points and the radar spokes.", categories));
-        _categories = categories;
-
-        var xTitle = new TextBox();
-        xTitle.TextChanged += (_, _) => Edit(() => _chart.XAxisTitle = Blank(xTitle.Text));
-        stack.Children.Add(Field("X-axis title", "Optional label drawn beneath the horizontal axis.", xTitle));
-        _xTitle = xTitle;
-
-        var yTitle = new TextBox();
-        yTitle.TextChanged += (_, _) => Edit(() => _chart.YAxisTitle = Blank(yTitle.Text));
-        stack.Children.Add(Field("Y-axis title", "Optional label for the value axis.", yTitle));
-        _yTitle = yTitle;
-
-        var legend = new CheckBox { Content = "Show legend" };
-        legend.IsCheckedChanged += (_, _) => Edit(() => _chart.ShowLegend = legend.IsChecked == true);
-        ToolTip.SetTip(legend, "Show a key naming each series. Hidden when there is only one series you don't need to distinguish.");
-        stack.Children.Add(legend);
-        _legend = legend;
-
-        stack.Children.Add(new Separator { Margin = new Thickness(0, 4) });
-        stack.Children.Add(new TextBlock { Text = "Series", FontWeight = FontWeight.SemiBold });
-        stack.Children.Add(new TextBlock
-        {
-            Text = "Each series is one set of values plotted across the categories.",
-            TextWrapping = TextWrapping.Wrap,
-            Foreground = Brushes.Gray,
-            FontSize = 11,
-        });
-        stack.Children.Add(_seriesPanel);
-
-        var addSeries = new Button { Content = "＋ Add series", HorizontalAlignment = HorizontalAlignment.Stretch };
-        addSeries.Click += (_, _) =>
-        {
-            _chart.Series.Add(new ChartSeries());
-            RebuildSeriesRows();
-            OnEdited();
-        };
-        ToolTip.SetTip(addSeries, "Add another set of values to plot (a second column, line, etc.). Give each its own values range.");
-        stack.Children.Add(addSeries);
+        stack.Children.Add(_typeControls);
 
         return new ScrollViewer
         {
@@ -183,51 +208,78 @@ public sealed class ChartSheetView : UserControl
         };
     }
 
-    private TextBox _title = null!;
-    private ComboBox _type = null!;
-    private TextBox _categories = null!;
-    private TextBox _xTitle = null!;
-    private TextBox _yTitle = null!;
-    private CheckBox _legend = null!;
-
-    private void LoadFromModel()
-    {
-        _loading = true;
-        try
-        {
-            _title.Text = _chart.Title;
-            _type.SelectedIndex = Array.FindIndex(_types, t => t.Type == _chart.Type);
-            _stacking.SelectedIndex = _chart.Stacking switch
-            {
-                ChartStacking.Stacked => 1,
-                ChartStacking.Percent => 2,
-                _ => 0,
-            };
-            _categories.Text = _chart.CategoriesReference ?? string.Empty;
-            _xTitle.Text = _chart.XAxisTitle ?? string.Empty;
-            _yTitle.Text = _chart.YAxisTitle ?? string.Empty;
-            _legend.IsChecked = _chart.ShowLegend;
-            UpdateStackingEnabled();
-            RebuildSeriesRows();
-        }
-        finally
-        {
-            _loading = false;
-        }
-    }
-
-    private void UpdateStackingEnabled() => _stacking.IsEnabled = ChartTypes.SupportsStacking(_chart.Type);
-
-    private void RebuildSeriesRows()
+    /// <summary>Rebuild the adaptive controls so only the fields the current chart type needs are shown.</summary>
+    private void RebuildTypeControls()
     {
         bool wasLoading = _loading;
         _loading = true;
         try
         {
-            _seriesPanel.Children.Clear();
-            for (int i = 0; i < _chart.Series.Count; i++)
+            _typeControls.Children.Clear();
+
+            var type = _chart.Type;
+            var family = FamilyOf(type);
+
+            // Stacking — only column/bar/area honour it, so only they offer it.
+            if (ChartTypes.SupportsStacking(type))
             {
-                _seriesPanel.Children.Add(BuildSeriesRow(_chart.Series[i], i + 1));
+                _typeControls.Children.Add(Field(
+                    "Stacking",
+                    "Stack each category's series on top of one another, or scale every category to 100%.",
+                    BuildStacking()));
+            }
+
+            // Category / spoke / slice labels — every family except X/Y, with family-correct wording.
+            if (family != ChartFamily.Xy)
+            {
+                var (label, tip) = family switch
+                {
+                    ChartFamily.PartToWhole => (
+                        "Slice labels",
+                        "The cells naming each slice — one per value, e.g. Sheet1.A2:A7. Shown in the legend."),
+                    ChartFamily.Radar => (
+                        "Spoke labels",
+                        "The cells naming each spoke of the radar — one per value, e.g. Sheet1.A2:A7."),
+                    _ => (
+                        "Category labels",
+                        "The cells holding the label for each data point — one per row, e.g. Sheet1.A2:A7. " +
+                        "These name the columns/bars/points along the category axis."),
+                };
+
+                var categories = new TextBox { Text = _chart.CategoriesReference ?? string.Empty, PlaceholderText = "e.g. Sheet1.A2:A7" };
+                categories.TextChanged += (_, _) => Edit(() => _chart.CategoriesReference = Blank(categories.Text));
+                _typeControls.Children.Add(Field(label, tip, categories));
+            }
+
+            // Axis titles — only the families whose renderer draws axes (cartesian and X/Y).
+            if (family is ChartFamily.Cartesian or ChartFamily.Xy)
+            {
+                var xTitle = new TextBox { Text = _chart.XAxisTitle ?? string.Empty };
+                xTitle.TextChanged += (_, _) => Edit(() => _chart.XAxisTitle = Blank(xTitle.Text));
+                _typeControls.Children.Add(Field("X-axis title", "Optional label drawn beneath the horizontal axis.", xTitle));
+
+                var yTitle = new TextBox { Text = _chart.YAxisTitle ?? string.Empty };
+                yTitle.TextChanged += (_, _) => Edit(() => _chart.YAxisTitle = Blank(yTitle.Text));
+                _typeControls.Children.Add(Field("Y-axis title", "Optional label for the value axis.", yTitle));
+            }
+
+            // Legend — every family can show one.
+            var legend = new CheckBox { Content = "Show legend", IsChecked = _chart.ShowLegend };
+            legend.IsCheckedChanged += (_, _) => Edit(() => _chart.ShowLegend = legend.IsChecked == true);
+            ToolTip.SetTip(legend, family == ChartFamily.PartToWhole
+                ? "Show a key naming each slice."
+                : "Show a key naming each series. Hide it when a single series needs no label.");
+            _typeControls.Children.Add(legend);
+
+            _typeControls.Children.Add(new Separator { Margin = new Thickness(0, 4) });
+
+            if (family == ChartFamily.PartToWhole)
+            {
+                BuildSingleSeriesControls();
+            }
+            else
+            {
+                BuildSeriesListControls(family);
             }
         }
         finally
@@ -236,7 +288,110 @@ public sealed class ChartSheetView : UserControl
         }
     }
 
-    private Control BuildSeriesRow(ChartSeries series, int ordinal)
+    private ComboBox BuildStacking()
+    {
+        var stacking = new ComboBox { HorizontalAlignment = HorizontalAlignment.Stretch };
+        stacking.Items.Add("None");
+        stacking.Items.Add("Stacked");
+        stacking.Items.Add("100% stacked");
+        stacking.SelectedIndex = _chart.Stacking switch
+        {
+            ChartStacking.Stacked => 1,
+            ChartStacking.Percent => 2,
+            _ => 0,
+        };
+        stacking.SelectionChanged += (_, _) => Edit(() =>
+        {
+            _chart.Stacking = stacking.SelectedIndex switch
+            {
+                1 => ChartStacking.Stacked,
+                2 => ChartStacking.Percent,
+                _ => ChartStacking.None,
+            };
+        });
+        return stacking;
+    }
+
+    /// <summary>Pie/Doughnut: a single series shown as one "Slice values" range — no series list.</summary>
+    private void BuildSingleSeriesControls()
+    {
+        // A part-to-whole chart only ever draws its first series, so present exactly one values field.
+        if (_chart.Series.Count == 0)
+        {
+            _chart.Series.Add(new ChartSeries());
+        }
+
+        var series = _chart.Series[0];
+
+        _typeControls.Children.Add(new TextBlock { Text = "Values", FontWeight = FontWeight.SemiBold });
+        _typeControls.Children.Add(new TextBlock
+        {
+            Text = "A pie or doughnut shows one set of values as proportions of a whole.",
+            TextWrapping = TextWrapping.Wrap,
+            Foreground = Brushes.Gray,
+            FontSize = 11,
+        });
+
+        var values = new TextBox { Text = series.ValuesReference, PlaceholderText = "e.g. Sheet1.B2:B7" };
+        values.TextChanged += (_, _) => Edit(() => series.ValuesReference = values.Text ?? string.Empty);
+        _typeControls.Children.Add(Field(
+            "Slice values",
+            "The cells holding the value for each slice — one per slice label, e.g. Sheet1.B2:B7.",
+            values));
+    }
+
+    /// <summary>Cartesian/Radar/X-Y: a list of series with an "Add series" button.</summary>
+    private void BuildSeriesListControls(ChartFamily family)
+    {
+        _typeControls.Children.Add(new TextBlock { Text = "Series", FontWeight = FontWeight.SemiBold });
+        _typeControls.Children.Add(new TextBlock
+        {
+            Text = family switch
+            {
+                ChartFamily.Xy => "Each series is a set of points. Give each its own X and Y values.",
+                ChartFamily.Radar => "Each series is one outline plotted across the spokes.",
+                _ => "Each series is one set of values plotted across the categories.",
+            },
+            TextWrapping = TextWrapping.Wrap,
+            Foreground = Brushes.Gray,
+            FontSize = 11,
+        });
+
+        RebuildSeriesRows(family);
+        _typeControls.Children.Add(_seriesPanel);
+
+        var addSeries = new Button { Content = "＋ Add series", HorizontalAlignment = HorizontalAlignment.Stretch };
+        addSeries.Click += (_, _) =>
+        {
+            _chart.Series.Add(new ChartSeries());
+            RebuildSeriesRows(family);
+            OnEdited();
+        };
+        ToolTip.SetTip(addSeries, family == ChartFamily.Xy
+            ? "Add another set of points to plot. Give each its own X and Y values."
+            : "Add another set of values to plot (a second column, line, etc.). Give each its own values range.");
+        _typeControls.Children.Add(addSeries);
+    }
+
+    private void RebuildSeriesRows(ChartFamily family)
+    {
+        bool wasLoading = _loading;
+        _loading = true;
+        try
+        {
+            _seriesPanel.Children.Clear();
+            for (int i = 0; i < _chart.Series.Count; i++)
+            {
+                _seriesPanel.Children.Add(BuildSeriesRow(_chart.Series[i], i + 1, family));
+            }
+        }
+        finally
+        {
+            _loading = wasLoading;
+        }
+    }
+
+    private Control BuildSeriesRow(ChartSeries series, int ordinal, ChartFamily family)
     {
         var box = new StackPanel { Spacing = 4 };
         var border = new Border
@@ -254,7 +409,7 @@ public sealed class ChartSheetView : UserControl
         remove.Click += (_, _) =>
         {
             _chart.Series.Remove(series);
-            RebuildSeriesRows();
+            RebuildSeriesRows(family);
             OnEdited();
         };
         ToolTip.SetTip(remove, "Remove this series from the chart.");
@@ -269,29 +424,45 @@ public sealed class ChartSheetView : UserControl
         nameRef.TextChanged += (_, _) => Edit(() => series.NameReference = Blank(nameRef.Text));
         box.Children.Add(Field("Name cell", "A single cell whose text names the series (e.g. the column header Sheet1.B1). Overrides the typed name.", nameRef));
 
-        var values = new TextBox { Text = series.ValuesReference, PlaceholderText = "e.g. Sheet1.B2:B7" };
-        values.TextChanged += (_, _) => Edit(() => series.ValuesReference = values.Text ?? string.Empty);
-        box.Children.Add(Field("Values", "The cells holding this series' numbers — one per category, e.g. Sheet1.B2:B7. This is the data that gets plotted.", values));
-
-        var seriesType = new ComboBox { HorizontalAlignment = HorizontalAlignment.Stretch };
-        seriesType.Items.Add("Same as chart");
-        foreach (var (_, label) in _types)
+        // X/Y charts need an X range per series; categories don't apply to them.
+        if (family == ChartFamily.Xy)
         {
-            seriesType.Items.Add(label);
+            var xValues = new TextBox { Text = series.XValuesReference ?? string.Empty, PlaceholderText = "e.g. Sheet1.A2:A7" };
+            xValues.TextChanged += (_, _) => Edit(() => series.XValuesReference = Blank(xValues.Text));
+            box.Children.Add(Field("X values", "The horizontal position of each point, e.g. Sheet1.A2:A7. Defaults to 1, 2, 3… when blank.", xValues));
         }
 
-        seriesType.SelectedIndex = series.Type is { } t ? Array.FindIndex(_types, x => x.Type == t) + 1 : 0;
-        seriesType.SelectionChanged += (_, _) => Edit(() =>
-            series.Type = seriesType.SelectedIndex <= 0 ? null : _types[seriesType.SelectedIndex - 1].Type);
-        box.Children.Add(Field("Draw as", "Override the chart type for just this series — e.g. draw one series as a Line over Column bars to make a combo chart.", seriesType));
+        string valuesTitle = family == ChartFamily.Xy ? "Y values" : "Values";
+        string valuesTip = family == ChartFamily.Xy
+            ? "The vertical position of each point — one per X value, e.g. Sheet1.B2:B7."
+            : "The cells holding this series' numbers — one per category, e.g. Sheet1.B2:B7. This is the data that gets plotted.";
+        var values = new TextBox { Text = series.ValuesReference, PlaceholderText = "e.g. Sheet1.B2:B7" };
+        values.TextChanged += (_, _) => Edit(() => series.ValuesReference = values.Text ?? string.Empty);
+        box.Children.Add(Field(valuesTitle, valuesTip, values));
 
-        var xValues = new TextBox { Text = series.XValuesReference ?? string.Empty, PlaceholderText = "e.g. Sheet1.A2:A7" };
-        xValues.TextChanged += (_, _) => Edit(() => series.XValuesReference = Blank(xValues.Text));
-        box.Children.Add(Field("X values", "Only for Scatter and Bubble charts: the horizontal position of each point. Defaults to 1, 2, 3… when blank.", xValues));
+        // Combo charts: only the cartesian family lets a series override the chart type.
+        if (family == ChartFamily.Cartesian)
+        {
+            var seriesType = new ComboBox { HorizontalAlignment = HorizontalAlignment.Stretch };
+            seriesType.Items.Add("Same as chart");
+            foreach (var (_, label) in _types)
+            {
+                seriesType.Items.Add(label);
+            }
 
-        var bubble = new TextBox { Text = series.BubbleSizeReference ?? string.Empty, PlaceholderText = "e.g. Sheet1.C2:C7" };
-        bubble.TextChanged += (_, _) => Edit(() => series.BubbleSizeReference = Blank(bubble.Text));
-        box.Children.Add(Field("Bubble size", "Only for Bubble charts: the value that sizes each bubble.", bubble));
+            seriesType.SelectedIndex = series.Type is { } t ? Array.FindIndex(_types, x => x.Type == t) + 1 : 0;
+            seriesType.SelectionChanged += (_, _) => Edit(() =>
+                series.Type = seriesType.SelectedIndex <= 0 ? null : _types[seriesType.SelectedIndex - 1].Type);
+            box.Children.Add(Field("Draw as", "Override the chart type for just this series — e.g. draw one series as a Line over Column bars to make a combo chart.", seriesType));
+        }
+
+        // Bubble charts size each point by a third value.
+        if (_chart.Type == ChartType.Bubble)
+        {
+            var bubble = new TextBox { Text = series.BubbleSizeReference ?? string.Empty, PlaceholderText = "e.g. Sheet1.C2:C7" };
+            bubble.TextChanged += (_, _) => Edit(() => series.BubbleSizeReference = Blank(bubble.Text));
+            box.Children.Add(Field("Bubble size", "The value that sizes each bubble — one per point, e.g. Sheet1.C2:C7.", bubble));
+        }
 
         return border;
     }

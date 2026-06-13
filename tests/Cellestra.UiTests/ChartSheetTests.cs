@@ -112,6 +112,59 @@ public class ChartSheetTests
     }
 
     [AvaloniaFact]
+    public void The_sidebar_shows_only_the_fields_each_chart_type_needs()
+    {
+        var window = WindowWithData();
+        IAppEnvironment env = window;
+        env.Selection.MoveTo(0, 0);
+        env.Selection.ExtendTo(2, 1);
+        env.AddChartSheet();
+        var view = window.ActiveChartViewForTest!;
+
+        // Column (cartesian): categories, axis titles, stacking, and the per-series combo override.
+        view.SetTypeForTest(Cellestra.Charts.ChartType.Column);
+        var column = view.VisibleFieldsForTest();
+        Assert.Contains("Category labels", column);
+        Assert.Contains("Stacking", column);
+        Assert.Contains("X-axis title", column);
+        Assert.Contains("Draw as", column);
+        Assert.DoesNotContain("X values", column);
+        Assert.DoesNotContain("Bubble size", column);
+
+        // Pie (part-to-whole): slice labels + a single values field, no stacking/axes/combo/X.
+        view.SetTypeForTest(Cellestra.Charts.ChartType.Pie);
+        var pie = view.VisibleFieldsForTest();
+        Assert.Contains("Slice labels", pie);
+        Assert.Contains("Slice values", pie);
+        Assert.DoesNotContain("Stacking", pie);
+        Assert.DoesNotContain("X-axis title", pie);
+        Assert.DoesNotContain("Draw as", pie);
+        Assert.DoesNotContain("Category labels", pie);
+
+        // Scatter (X/Y): X and Y values, axis titles, but no categories or stacking.
+        view.SetTypeForTest(Cellestra.Charts.ChartType.Scatter);
+        var scatter = view.VisibleFieldsForTest();
+        Assert.Contains("X values", scatter);
+        Assert.Contains("Y values", scatter);
+        Assert.Contains("X-axis title", scatter);
+        Assert.DoesNotContain("Category labels", scatter);
+        Assert.DoesNotContain("Stacking", scatter);
+
+        // Bubble adds the third value; Scatter does not.
+        Assert.DoesNotContain("Bubble size", scatter);
+        view.SetTypeForTest(Cellestra.Charts.ChartType.Bubble);
+        Assert.Contains("Bubble size", view.VisibleFieldsForTest());
+
+        // Radar (spokes): spoke labels, no axis titles, no stacking, no combo override.
+        view.SetTypeForTest(Cellestra.Charts.ChartType.Radar);
+        var radar = view.VisibleFieldsForTest();
+        Assert.Contains("Spoke labels", radar);
+        Assert.DoesNotContain("X-axis title", radar);
+        Assert.DoesNotContain("Stacking", radar);
+        Assert.DoesNotContain("Draw as", radar);
+    }
+
+    [AvaloniaFact]
     public void Chart_sheet_appears_as_a_tab_and_can_be_listed_with_the_grid_sheets()
     {
         var window = WindowWithData();
