@@ -92,6 +92,39 @@ public class OdsRoundTripTests
     }
 
     [Fact]
+    public void Non_finite_numbers_serialize_as_valid_odf_and_survive()
+    {
+        // A formula overflow can cache ±Infinity / NaN. office:value is an xsd:double whose lexical
+        // space is INF/-INF/NaN — "Infinity"/"-Infinity" are invalid and rejected by other readers.
+        var workbook = Workbook.CreateNew();
+        var sheet = workbook.ActiveSheet;
+        sheet.SetValue(0, 0, CellValue.Number(double.PositiveInfinity));
+        sheet.SetValue(1, 0, CellValue.Number(double.NegativeInfinity));
+        sheet.SetValue(2, 0, CellValue.Number(double.NaN));
+
+        byte[] bytes = OdsWriter.WriteToBytes(workbook);
+        string content = ReadContentXml(bytes);
+        Assert.Contains("office:value=\"INF\"", content);
+        Assert.Contains("office:value=\"-INF\"", content);
+        Assert.Contains("office:value=\"NaN\"", content);
+        Assert.DoesNotContain("office:value=\"Infinity\"", content);
+        Assert.DoesNotContain("office:value=\"-Infinity\"", content);
+
+        using var stream = new MemoryStream(bytes);
+        var reopened = OdsReader.Read(stream).FindSheet("Sheet1")!;
+        Assert.True(double.IsPositiveInfinity(reopened.GetValue(0, 0).AsNumber));
+        Assert.True(double.IsNegativeInfinity(reopened.GetValue(1, 0).AsNumber));
+        Assert.True(double.IsNaN(reopened.GetValue(2, 0).AsNumber));
+    }
+
+    private static string ReadContentXml(byte[] bytes)
+    {
+        using var archive = new ZipArchive(new MemoryStream(bytes), ZipArchiveMode.Read);
+        using var reader = new StreamReader(archive.GetEntry("content.xml")!.Open());
+        return reader.ReadToEnd();
+    }
+
+    [Fact]
     public void Styles_survive()
     {
         var result = RoundTrip(BuildSample());

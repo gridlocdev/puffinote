@@ -138,7 +138,7 @@ public static class CsvReader
                     continue;
                 }
 
-                if (double.TryParse(raw, NumberStyles.Any, culture, out double number))
+                if (double.TryParse(raw, NumberStyles.Any, culture, out double number) && double.IsFinite(number))
                 {
                     sheet.SetValue(r, c, CellValue.Number(number));
                 }

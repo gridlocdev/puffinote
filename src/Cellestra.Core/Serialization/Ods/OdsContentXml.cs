@@ -322,7 +322,7 @@ public static class OdsContentXml
                 break;
             case CellValueType.Number:
                 element.Add(new XAttribute(Office + "value-type", "float"));
-                element.Add(new XAttribute(Office + "value", value.AsNumber.ToString("R", CultureInfo.InvariantCulture)));
+                element.Add(new XAttribute(Office + "value", FloatValueText(value.AsNumber)));
                 element.Add(new XElement(Text + "p", DisplayText(cell, registry)));
                 break;
             case CellValueType.Boolean:
@@ -352,6 +352,19 @@ public static class OdsContentXml
 
     private static string DisplayText(Cell cell, StyleRegistry registry) =>
         NumberFormatter.Format(cell.Value, registry.Styles.Get(cell.StyleId).NumberFormat, CultureInfo.InvariantCulture);
+
+    /// <summary>
+    /// Render a number as an ODF <c>office:value</c> (an <c>xsd:double</c>). The non-finite values
+    /// spell as <c>INF</c>/<c>-INF</c>/<c>NaN</c>; .NET's "R" would emit "Infinity"/"-Infinity",
+    /// which conformant readers (LibreOffice, Excel) reject as invalid.
+    /// </summary>
+    private static string FloatValueText(double number)
+    {
+        if (double.IsNaN(number)) return "NaN";
+        if (double.IsPositiveInfinity(number)) return "INF";
+        if (double.IsNegativeInfinity(number)) return "-INF";
+        return number.ToString("R", CultureInfo.InvariantCulture);
+    }
 
     /// <summary>
     /// Render a date serial as an ODF <c>office:date-value</c>. Pure dates stay <c>yyyy-MM-dd</c>;
@@ -1529,8 +1542,17 @@ public static class OdsContentXml
     private static int ReadSpan(XElement element, XName attribute) =>
         int.TryParse(element.Attribute(attribute)?.Value, out int n) && n > 0 ? n : 1;
 
-    private static bool ParseDouble(string? text, out double value) =>
-        double.TryParse(text, NumberStyles.Float, CultureInfo.InvariantCulture, out value);
+    private static bool ParseDouble(string? text, out double value)
+    {
+        switch (text)
+        {
+            case "INF": value = double.PositiveInfinity; return true;
+            case "-INF": value = double.NegativeInfinity; return true;
+            case "NaN": value = double.NaN; return true;
+        }
+
+        return double.TryParse(text, NumberStyles.Float, CultureInfo.InvariantCulture, out value);
+    }
 
     /// <summary>Parse an ODF <c>office:time-value</c> ISO-8601 duration into a day serial.</summary>
     private static bool TryParseDuration(string? text, out double days)
