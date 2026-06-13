@@ -122,8 +122,17 @@ public static class ReferenceAdjuster
                 return null;
             }
 
-            int newMin = edit.Map(survivingMin)!.Value;
-            int newMax = edit.Map(survivingMax)!.Value;
+            // An insert can push a corner past the sheet edge (Map returns null). If the lower
+            // corner is pushed off, the whole surviving span has nowhere to land → #REF!; if only
+            // the upper corner spills over, clamp it to the last line (the range shrinks, mirroring
+            // how a partial delete shrinks rather than wiping the reference).
+            if (edit.Map(survivingMin) is not { } newMin)
+            {
+                return null;
+            }
+
+            int lastLine = (rowAxis ? SheetDimensions.MaxRows : SheetDimensions.MaxColumns) - 1;
+            int newMax = edit.Map(survivingMax) ?? lastLine;
 
             // Re-attach each original corner's $ flags: the corner at the span's min keeps newMin.
             CellAddress NewCorner(CellAddress corner)

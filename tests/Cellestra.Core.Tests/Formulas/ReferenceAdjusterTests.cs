@@ -105,6 +105,26 @@ public class ReferenceAdjusterTests
         var adjusted = ReferenceAdjuster.ForInsertColumns(Parser.Parse("XFD1"), "Sheet1", "Sheet1", atColumn: 0, count: 1);
         Assert.Equal("#REF!", Write(adjusted));
     }
+
+    [Fact]
+    public void Insert_pushing_only_a_ranges_far_corner_off_the_sheet_clamps_it()
+    {
+        // SUM(A1048575:A1048576) covers the last two rows. Inserting a row at the top pushes the
+        // bottom corner off the sheet; it must clamp to the last row (not crash with a force-unwrap).
+        var adjusted = ReferenceAdjuster.ForInsertRows(
+            Parser.Parse("SUM(A1048575:A1048576)"), "Sheet1", "Sheet1", atRow: 0, count: 1);
+        // Both corners land on the last row, collapsing the range to a single cell.
+        Assert.Equal("SUM(A1048576)", Write(adjusted));
+    }
+
+    [Fact]
+    public void Insert_pushing_a_whole_range_off_the_sheet_yields_ref_error()
+    {
+        // The entire range sits on the last row; inserting above pushes all of it off → #REF!.
+        var adjusted = ReferenceAdjuster.ForInsertRows(
+            Parser.Parse("SUM(A1048576:B1048576)"), "Sheet1", "Sheet1", atRow: 0, count: 1);
+        Assert.Equal("SUM(#REF!)", Write(adjusted));
+    }
 }
 
 public class FormulaWriterTests
