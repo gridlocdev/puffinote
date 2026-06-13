@@ -96,6 +96,18 @@ public class StyleTests
         Assert.Equal(expected, NumberFormatter.Format(CellValue.Number(value), code, CultureInfo.InvariantCulture));
     }
 
+    [Theory]
+    // 0.520834 of a day ≈ 12:30:00. A single-character date/time code must not be read as a .NET
+    // *standard* specifier ("H" throws; "d"/"m"/"s" render the wrong field) — it crashed the grid
+    // paint / TEXT() path. The bracketed elapsed-hours form keeps "mm" as minutes, not the month.
+    [InlineData("h", 0.520834, "12")]
+    [InlineData("s", 0.520834, "0")]
+    [InlineData("[h]:mm", 0.520834, "[12]:30")]
+    public void NumberFormatter_handles_single_char_and_bracketed_time_codes(string code, double value, string expected)
+    {
+        Assert.Equal(expected, NumberFormatter.Format(CellValue.Number(value), code, CultureInfo.InvariantCulture));
+    }
+
     [Fact]
     public void NumberFormatter_renders_date_time_components_together()
     {

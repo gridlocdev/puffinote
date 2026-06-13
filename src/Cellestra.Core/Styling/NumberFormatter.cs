@@ -53,7 +53,14 @@ public static class NumberFormatter
                 return FormatGeneral(number, culture);
             }
 
-            return when.ToString(ExcelDateFormatToNet(code), culture);
+            try
+            {
+                return when.ToString(ExcelDateFormatToNet(code), culture);
+            }
+            catch (FormatException)
+            {
+                return FormatGeneral(number, culture);
+            }
         }
 
         try
@@ -157,7 +164,12 @@ public static class NumberFormatter
             }
         }
 
-        return sb.ToString();
+        string pattern = sb.ToString();
+
+        // .NET reads a single-character format string as a *standard* date specifier (e.g. "d" =
+        // short date, "H" = invalid → throws), not the custom token we built. Escape it with '%'
+        // so a code like "h" renders the hour instead of crashing the format/TEXT()/grid-paint call.
+        return pattern.Length == 1 ? "%" + pattern : pattern;
     }
 
     private static bool StartsWith(string s, int index, string token) =>
@@ -184,7 +196,7 @@ public static class NumberFormatter
         for (int j = start - 1; j >= 0; j--)
         {
             char c = s[j];
-            if (c is ':' or '.' or ' ')
+            if (c is ':' or '.' or ' ' or '[' or ']')
             {
                 continue;
             }
@@ -200,7 +212,7 @@ public static class NumberFormatter
         for (int j = end; j < s.Length; j++)
         {
             char c = s[j];
-            if (c is ':' or '.' or ' ')
+            if (c is ':' or '.' or ' ' or '[' or ']')
             {
                 continue;
             }
