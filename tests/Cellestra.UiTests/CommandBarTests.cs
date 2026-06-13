@@ -1,10 +1,14 @@
 using System.Linq;
+using Avalonia.Controls;
 using Avalonia.Headless.XUnit;
+using Avalonia.Threading;
 using Avalonia.VisualTree;
 using Cellestra.Desktop.Commands;
 using Cellestra.Desktop.Controls.CommandBar;
 using Cellestra.Desktop.Views;
 using Xunit;
+// The Cellestra command bar and Avalonia both expose a `CommandBar` type; bind the bare name to ours.
+using CommandBar = Cellestra.Desktop.Controls.CommandBar.CommandBar;
 
 namespace Cellestra.UiTests;
 
@@ -119,6 +123,47 @@ public class CommandBarTests
             Assert.NotNull(content);
             refresh(); // mirrors Flyout.Opened
         }
+    }
+
+    [AvaloniaFact]
+    public void Narrow_bar_folds_groups_into_the_overflow_drawer_instead_of_scrolling()
+    {
+        var window = new MainWindow();
+        var bar = new CommandBar(window);
+        // Host the bar in a window we can resize, so the strip gets a real arranged width to fit against.
+        var host = new Window { Content = bar, Width = 1400, Height = 120 };
+        host.Show();
+        Pump(host);
+
+        int total = CommandBarModel.For(CommandContext.Cell).Count;
+
+        // Wide: everything fits inline, no overflow affordance.
+        Assert.False(bar.IsOverflowing);
+        Assert.Equal(total, bar.InlineGroupCount);
+        Assert.Equal(0, bar.OverflowGroupCount);
+
+        // Narrow: the rightmost groups fold away behind the double-chevron button — no group is lost.
+        host.Width = 340;
+        Pump(host);
+
+        Assert.True(bar.IsOverflowing);
+        Assert.True(bar.InlineGroupCount < total);
+        Assert.Equal(total, bar.InlineGroupCount + bar.OverflowGroupCount);
+
+        // Widen again and the groups come back inline, drawer closes.
+        host.Width = 1400;
+        Pump(host);
+
+        Assert.False(bar.IsOverflowing);
+        Assert.Equal(total, bar.InlineGroupCount);
+    }
+
+    // The reflow runs off the strip's SizeChanged and reparents groups, which queues another layout
+    // pass; flush the dispatcher (twice, for the cascade) so the split settles before asserting.
+    private static void Pump(Window window)
+    {
+        Dispatcher.UIThread.RunJobs();
+        Dispatcher.UIThread.RunJobs();
     }
 
     [AvaloniaFact]

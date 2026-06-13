@@ -30,12 +30,29 @@ public sealed class CommandBar : UserControl
     private static readonly IBrush DividerBrush = new SolidColorBrush(Color.FromArgb(0x33, 0x88, 0x88, 0x88));
     private static readonly IBrush MutedBrush = new SolidColorBrush(Color.FromRgb(0x88, 0x88, 0x88));
 
+    /// <summary>The expanded bar's row height — groups are measured against it to size the reflow.</summary>
+    private const double BarHeight = 34;
+
     private readonly IAppEnvironment _env;
     private readonly List<CommandBarButton> _buttons = new();
+    // The group controls and their natural widths, in left-to-right priority order: when the window
+    // is too narrow, the rightmost groups are the first to fold into the overflow drawer.
+    private readonly List<Control> _groupControls = new();
+    private readonly List<double> _groupWidths = new();
     private readonly Panel _root;
     private readonly Control _full;
     private readonly Control _slim;
     private bool _collapsed;
+
+    // Adaptive overflow: groups that don't fit on the strip move into a drop-down drawer behind a
+    // double-chevron button (Google-Sheets style) rather than scrolling off behind a scrollbar.
+    private StackPanel _strip = null!;
+    private WrapPanel _overflowHost = null!;
+    private Button _overflowButton = null!;
+    private Flyout _overflowFlyout = null!;
+    private LucideIcon _overflowIcon = null!;
+    private int _currentFit = -1;
+    private bool _reflowing;
 
     /// <summary>Raised when the user collapses or expands the bar, so the host can persist the choice.</summary>
     public event EventHandler? CollapsedChanged;
@@ -78,6 +95,15 @@ public sealed class CommandBar : UserControl
         }
     }
 
+    /// <summary>Test hook: whether any groups are currently folded into the overflow drawer.</summary>
+    internal bool IsOverflowing => _overflowButton.IsVisible;
+
+    /// <summary>Test hook: the number of groups currently shown inline on the strip.</summary>
+    internal int InlineGroupCount => _strip.Children.Count;
+
+    /// <summary>Test hook: the number of groups currently tucked into the overflow drawer.</summary>
+    internal int OverflowGroupCount => _overflowHost.Children.Count;
+
     /// <summary>Re-evaluate every tool's enabled and toggle state against the current selection.</summary>
     public void RefreshState()
     {
@@ -97,19 +123,31 @@ public sealed class CommandBar : UserControl
 
     private Control BuildFull()
     {
-        var groups = new StackPanel { Orientation = Orientation.Horizontal };
+        // The inline strip holds the groups that currently fit; ClipToBounds keeps a group that's
+        // momentarily too wide (mid-resize, before the reflow fires) from drawing over the search pill.
+        _strip = new StackPanel
+        {
+            Orientation = Orientation.Horizontal,
+            VerticalAlignment = VerticalAlignment.Center,
+            ClipToBounds = true,
+        };
+        // Overflowed groups wrap inside the drawer, so a very narrow window stacks them into rows
+        // instead of one long line that runs off the screen edge.
+        _overflowHost = new WrapPanel { Orientation = Orientation.Horizontal, MaxWidth = 480, Margin = new Thickness(4) };
+
         foreach (var group in CommandBarModel.For(CommandContext.Cell))
         {
-            groups.Children.Add(BuildGroup(group));
+            var control = BuildGroup(group);
+            // A group's width is fixed (icon buttons have fixed sizes), so measure it once up front
+            // and drive the reflow off the cached widths — no per-resize remeasuring of the children.
+            control.Measure(new Size(double.PositiveInfinity, BarHeight));
+            _groupControls.Add(control);
+            _groupWidths.Add(control.DesiredSize.Width);
+            _strip.Children.Add(control);
         }
 
-        var scroller = new ScrollViewer
-        {
-            Content = groups,
-            HorizontalScrollBarVisibility = ScrollBarVisibility.Auto,
-            VerticalScrollBarVisibility = ScrollBarVisibility.Disabled,
-            VerticalAlignment = VerticalAlignment.Center,
-        };
+        _overflowButton = BuildOverflowButton();
+        _overflowButton.IsVisible = false;
 
         var dock = new DockPanel { Margin = new Thickness(6, 4) };
         var right = new StackPanel
@@ -117,12 +155,130 @@ public sealed class CommandBar : UserControl
             Orientation = Orientation.Horizontal,
             Spacing = 6,
             VerticalAlignment = VerticalAlignment.Center,
-            Children = { BuildSearchPill(), BuildCollapseButton(collapse: true) },
+            Children = { _overflowButton, BuildSearchPill(), BuildCollapseButton(collapse: true) },
         };
         DockPanel.SetDock(right, Dock.Right);
         dock.Children.Add(right);
-        dock.Children.Add(scroller);
+        dock.Children.Add(_strip); // fills the space left of the right cluster
+        // The strip is the DockPanel's fill child, so its width is exactly the room available for
+        // tools; recompute the split whenever that changes (window resize, overflow button toggling).
+        _strip.SizeChanged += (_, _) => Reflow();
         return dock;
+    }
+
+    private Button BuildOverflowButton()
+    {
+        _overflowIcon = new LucideIcon
+        {
+            IconKey = "chevrons-down",
+            Size = 16,
+            Foreground = MutedBrush,
+            HorizontalAlignment = HorizontalAlignment.Center,
+            VerticalAlignment = VerticalAlignment.Center,
+        };
+        var button = new Button
+        {
+            Background = Brushes.Transparent,
+            BorderThickness = default,
+            Padding = new Thickness(2),
+            Width = 30,
+            Height = 34,
+            Focusable = false,
+            Content = _overflowIcon,
+            VerticalAlignment = VerticalAlignment.Center,
+            CornerRadius = new CornerRadius(6),
+        };
+        AddHover(button);
+        ToolTip.SetTip(button, "More tools");
+
+        var scroller = new ScrollViewer
+        {
+            Content = _overflowHost,
+            HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled,
+            VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
+            MaxHeight = 320,
+        };
+        _overflowFlyout = new Flyout
+        {
+            Content = scroller,
+            Placement = PlacementMode.BottomEdgeAlignedRight,
+            ShowMode = FlyoutShowMode.Standard,
+        };
+        // Mirror the open/closed state in the glyph: double-chevron-down to open, up to close.
+        _overflowFlyout.Opened += (_, _) =>
+        {
+            _overflowIcon.IconKey = "chevrons-up";
+            RefreshState();
+        };
+        _overflowFlyout.Closed += (_, _) =>
+        {
+            _overflowIcon.IconKey = "chevrons-down";
+            // A nested group drawer may have been previewing a style — drop it when the drawer closes.
+            _env.PreviewCellStyle(null);
+        };
+        button.Flyout = _overflowFlyout;
+        return button;
+    }
+
+    /// <summary>
+    /// Split the groups between the inline strip and the overflow drawer to fit the current width:
+    /// fill the strip left-to-right with as many whole groups as fit, fold the rest into the drawer,
+    /// and show the double-chevron button only when something was folded away. Idempotent and guarded
+    /// against re-entrancy, so the layout settles after the strip's width stabilises.
+    /// </summary>
+    private void Reflow()
+    {
+        if (_reflowing)
+        {
+            return;
+        }
+
+        double available = _strip.Bounds.Width;
+        if (available <= 0 || _groupControls.Count == 0)
+        {
+            return;
+        }
+
+        int fit = 0;
+        double sum = 0;
+        foreach (double width in _groupWidths)
+        {
+            if (sum + width > available)
+            {
+                break;
+            }
+
+            sum += width;
+            fit++;
+        }
+
+        bool overflow = fit < _groupControls.Count;
+        if (fit == _currentFit && overflow == _overflowButton.IsVisible)
+        {
+            return; // already in the right shape — avoid needless reparenting (and a layout loop)
+        }
+
+        _reflowing = true;
+        try
+        {
+            _strip.Children.Clear();
+            _overflowHost.Children.Clear();
+            for (int i = 0; i < _groupControls.Count; i++)
+            {
+                ((i < fit) ? (Panel)_strip : _overflowHost).Children.Add(_groupControls[i]);
+            }
+
+            _overflowButton.IsVisible = overflow;
+            _currentFit = fit;
+            if (!overflow)
+            {
+                _overflowFlyout.Hide(); // nothing left to show; close the drawer if it was open
+            }
+        }
+        finally
+        {
+            _reflowing = false;
+        }
     }
 
     private Control BuildSlim()
