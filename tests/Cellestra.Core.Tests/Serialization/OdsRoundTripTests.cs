@@ -64,6 +64,34 @@ public class OdsRoundTripTests
     }
 
     [Fact]
+    public void Date_time_of_day_survives_round_trip()
+    {
+        // A datetime cell (2026-06-13 15:30) carries a fractional serial; saving must not
+        // floor it to midnight (that silently destroyed every time-of-day on save).
+        var workbook = Workbook.CreateNew();
+        var sheet = workbook.ActiveSheet;
+        double serial = Cellestra.Core.Formulas.Evaluation.DateConversion.ToSerial(new DateTime(2026, 6, 13, 15, 30, 0));
+
+        int dateTimeStyle = workbook.Styles.Intern(
+            CellStyle.Default.WithNumberFormat(new NumberFormat("YYYY-MM-DD HH:MM:SS")));
+        sheet.SetValue(0, 0, CellValue.Number(serial));
+        sheet.GetOrCreate(0, 0).StyleId = dateTimeStyle;
+
+        // A pure time-of-day cell (noon = 0.5) and an elapsed time past 24h must both survive.
+        int timeStyle = workbook.Styles.Intern(CellStyle.Default.WithNumberFormat(new NumberFormat("HH:MM:SS")));
+        sheet.SetValue(1, 0, CellValue.Number(0.5));
+        sheet.GetOrCreate(1, 0).StyleId = timeStyle;
+        sheet.SetValue(2, 0, CellValue.Number(1.25));
+        sheet.GetOrCreate(2, 0).StyleId = timeStyle;
+
+        var result = RoundTrip(workbook).FindSheet("Sheet1")!;
+
+        Assert.Equal(serial, result.GetValue(0, 0).AsNumber, 6);
+        Assert.Equal(0.5, result.GetValue(1, 0).AsNumber, 6);
+        Assert.Equal(1.25, result.GetValue(2, 0).AsNumber, 6);
+    }
+
+    [Fact]
     public void Styles_survive()
     {
         var result = RoundTrip(BuildSample());

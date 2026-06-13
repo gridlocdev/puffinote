@@ -301,15 +301,23 @@ public static class OdsContentXml
         }
 
         var value = cell.Value;
-        bool isDate = registry.Styles.Get(cell.StyleId).NumberFormat.Kind is
-            NumberFormatKind.Date or NumberFormatKind.DateTime or NumberFormatKind.Time;
+        var kind = registry.Styles.Get(cell.StyleId).NumberFormat.Kind;
+        bool isTime = kind is NumberFormatKind.Time;
+        bool isDate = kind is NumberFormatKind.Date or NumberFormatKind.DateTime;
 
         switch (value.Type)
         {
+            case CellValueType.Number when isTime:
+                // A time format stores the serial as an ISO-8601 duration so the whole value
+                // (days *and* time-of-day fraction) survives, including elapsed times past 24h.
+                element.Add(new XAttribute(Office + "value-type", "time"));
+                element.Add(new XAttribute(Office + "time-value",
+                    System.Xml.XmlConvert.ToString(TimeSpan.FromDays(value.AsNumber))));
+                element.Add(new XElement(Text + "p", DisplayText(cell, registry)));
+                break;
             case CellValueType.Number when isDate:
                 element.Add(new XAttribute(Office + "value-type", "date"));
-                element.Add(new XAttribute(Office + "date-value",
-                    Formulas.Evaluation.DateConversion.DateFromSerial(value.AsNumber).ToString("yyyy-MM-dd", CultureInfo.InvariantCulture)));
+                element.Add(new XAttribute(Office + "date-value", DateValueText(value.AsNumber)));
                 element.Add(new XElement(Text + "p", DisplayText(cell, registry)));
                 break;
             case CellValueType.Number:
@@ -344,6 +352,23 @@ public static class OdsContentXml
 
     private static string DisplayText(Cell cell, StyleRegistry registry) =>
         NumberFormatter.Format(cell.Value, registry.Styles.Get(cell.StyleId).NumberFormat, CultureInfo.InvariantCulture);
+
+    /// <summary>
+    /// Render a date serial as an ODF <c>office:date-value</c>. Pure dates stay <c>yyyy-MM-dd</c>;
+    /// values carrying a time-of-day fraction emit the full ISO-8601 timestamp so the time is not
+    /// silently dropped on save. Out-of-range serials fall back to a plain date string.
+    /// </summary>
+    private static string DateValueText(double serial)
+    {
+        if (!Formulas.Evaluation.DateConversion.TryToDateTime(serial, dateOnly: false, out var when))
+        {
+            return Formulas.Evaluation.DateConversion.DateFromSerial(serial).ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
+        }
+
+        return when.TimeOfDay == TimeSpan.Zero
+            ? when.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture)
+            : when.ToString("yyyy-MM-dd'T'HH:mm:ss", CultureInfo.InvariantCulture);
+    }
 
     private static void AddNamedExpressions(XElement spreadsheet, Workbook workbook)
     {
@@ -1452,6 +1477,11 @@ public static class OdsContentXml
                 return DateTime.TryParse(dateText, CultureInfo.InvariantCulture, DateTimeStyles.None, out var date)
                     ? CellValue.Number(Formulas.Evaluation.DateConversion.ToSerial(date))
                     : CellValue.Empty;
+            case "time":
+                var timeText = element.Attribute(Office + "time-value")?.Value;
+                return TryParseDuration(timeText, out double timeSerial)
+                    ? CellValue.Number(timeSerial)
+                    : CellValue.Empty;
             case "boolean":
                 return CellValue.Boolean(element.Attribute(Office + "boolean-value")?.Value == "true");
             case "string":
@@ -1501,6 +1531,26 @@ public static class OdsContentXml
 
     private static bool ParseDouble(string? text, out double value) =>
         double.TryParse(text, NumberStyles.Float, CultureInfo.InvariantCulture, out value);
+
+    /// <summary>Parse an ODF <c>office:time-value</c> ISO-8601 duration into a day serial.</summary>
+    private static bool TryParseDuration(string? text, out double days)
+    {
+        days = 0;
+        if (string.IsNullOrEmpty(text))
+        {
+            return false;
+        }
+
+        try
+        {
+            days = System.Xml.XmlConvert.ToTimeSpan(text).TotalDays;
+            return true;
+        }
+        catch (FormatException)
+        {
+            return false;
+        }
+    }
 
     private static double? ParseCm(string? value)
     {
