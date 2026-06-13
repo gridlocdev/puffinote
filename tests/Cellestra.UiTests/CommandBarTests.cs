@@ -184,6 +184,29 @@ public class CommandBarTests
         Assert.All(buttons, b => Assert.Null(b.Flyout));
     }
 
+    [AvaloniaFact]
+    public void Overflow_sections_are_ordered_by_usefulness_not_bar_order()
+    {
+        var window = new MainWindow();
+        var bar = new CommandBar(window);
+        // Narrow enough that several groups fold, so their relative order is observable.
+        var host = new Window { Content = bar, Width = 300, Height = 120 };
+        host.Show();
+        Pump(host);
+
+        var headers = bar.OverflowDrawerPanels
+            .Select(p => p.GetLogicalDescendants().OfType<TextBlock>().First().Text!)
+            .ToList();
+        Assert.True(headers.Count >= 2, "expected several groups to fold at this width");
+
+        // The drawer follows the usefulness ranking (Numbers, Data, Insert, Border, Formula, …), so the
+        // shown headers must be that ranking filtered to the folded groups — never the bar's left-to-right
+        // order (which would lead with Data/Insert, the rightmost groups that fold first).
+        string[] ranking = { "Numbers", "Data", "Insert", "Border", "Formula", "Edit", "Text", "Align" };
+        var expected = ranking.Where(headers.Contains).ToList();
+        Assert.Equal(expected, headers);
+    }
+
     // The reflow runs off the strip's SizeChanged and reparents groups, which queues another layout
     // pass; flush the dispatcher (twice, for the cascade) so the split settles before asserting.
     private static void Pump(Window window)

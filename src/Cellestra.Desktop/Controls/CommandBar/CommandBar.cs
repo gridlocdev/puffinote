@@ -38,12 +38,20 @@ public sealed class CommandBar : UserControl
     /// <summary>The expanded bar's row height — groups are measured against it to size the reflow.</summary>
     private const double BarHeight = 34;
 
+    // The order folded sections appear in the overflow drawer — by everyday usefulness, NOT the bar's
+    // left-to-right order. Numbers/Data/Insert lead (the user's call); the rest follow by how often
+    // they're reached day to day: borders and AutoSum over the clipboard/text/align tools that are
+    // mostly already muscle-memory shortcuts (⌘Z/⌘C/⌘B). Names not listed sort last, in bar order.
+    private static readonly string[] OverflowOrder = { "Numbers", "Data", "Insert", "Border", "Formula", "Edit", "Text", "Align" };
+
     private readonly IAppEnvironment _env;
     private readonly List<CommandBarButton> _buttons = new();
     // The group controls and their natural widths, in left-to-right priority order: when the window
     // is too narrow, the rightmost groups are the first to fold into the overflow drawer.
     private readonly List<Control> _groupControls = new();
     private readonly List<double> _groupWidths = new();
+    // Each group's display rank in the overflow drawer (see OverflowOrder), parallel to _groupControls.
+    private readonly List<int> _overflowRank = new();
     // The parallel sections shown for folded groups in the overflow drawer: each is the group's header
     // over a wrap of icon buttons for its whole toolset (no nested submenu). The buttons are added to
     // _buttons, so RefreshState keeps them in sync just like the bar's own.
@@ -158,6 +166,9 @@ public sealed class CommandBar : UserControl
             _groupWidths.Add(control.DesiredSize.Width);
             _strip.Children.Add(control);
 
+            int rank = Array.IndexOf(OverflowOrder, group.Name);
+            _overflowRank.Add(rank < 0 ? int.MaxValue : rank);
+
             // The overflow counterpart used when this group folds away — built once, mounted on demand.
             _overflowPanels.Add(BuildOverflowGroup(group));
         }
@@ -217,7 +228,8 @@ public sealed class CommandBar : UserControl
         _overflowFlyout = new Flyout
         {
             Content = scroller,
-            Placement = PlacementMode.BottomEdgeAlignedRight,
+            // Centre the drawer under the button's icon (Avalonia nudges it back on-screen near the edge).
+            Placement = PlacementMode.Bottom,
             ShowMode = FlyoutShowMode.Standard,
         };
         // Mirror the open/closed state in the glyph: double-chevron-down to open, up to close. The
@@ -275,9 +287,25 @@ public sealed class CommandBar : UserControl
         {
             _strip.Children.Clear();
             _overflowHost.Children.Clear();
-            for (int i = 0; i < _groupControls.Count; i++)
+
+            // The strip keeps bar order (left-to-right reading order); whichever groups fit stay put.
+            for (int i = 0; i < fit; i++)
             {
-                ((i < fit) ? (Panel)_strip : _overflowHost).Children.Add((i < fit) ? _groupControls[i] : _overflowPanels[i]);
+                _strip.Children.Add(_groupControls[i]);
+            }
+
+            // The overflow drawer orders its sections by everyday usefulness (OverflowOrder), not bar
+            // order — the most-reached folded tools sit at the top of the drawer.
+            var folded = new List<int>();
+            for (int i = fit; i < _groupControls.Count; i++)
+            {
+                folded.Add(i);
+            }
+
+            folded.Sort((a, b) => _overflowRank[a].CompareTo(_overflowRank[b]));
+            foreach (int i in folded)
+            {
+                _overflowHost.Children.Add(_overflowPanels[i]);
             }
 
             _overflowButton.IsVisible = overflow;
