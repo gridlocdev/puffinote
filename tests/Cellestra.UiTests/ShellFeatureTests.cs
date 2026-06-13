@@ -37,6 +37,10 @@ public class ShellFeatureTests
         Assert.Equal(0, env.Selection.ActiveRow);              // on the first header cell
         Assert.Equal(0, env.Selection.ActiveColumn);
         Assert.Equal("Column 1", sheet.GetValue(0, 0).AsText); // placeholder pre-filled
+
+        // The placeholder opens fully selected, so the next keystroke overtypes it (#2).
+        Assert.Equal("Column 1", window.Grid.EditorText);
+        Assert.True(window.Grid.EditorTextIsAllSelected);
     }
 
     [AvaloniaFact]

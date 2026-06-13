@@ -1460,6 +1460,12 @@ public sealed partial class SpreadsheetGrid : Panel
 
     internal TextAlignment EditorTextAlignment => _editor.TextAlignment;
 
+    /// <summary>Test seams: the live editor's text and selected substring, to verify select-all-on-open.</summary>
+    internal string EditorText => _editor.Text ?? string.Empty;
+
+    internal bool EditorTextIsAllSelected =>
+        _editor.SelectionStart == 0 && _editor.SelectionEnd == (_editor.Text?.Length ?? 0) && (_editor.Text?.Length ?? 0) > 0;
+
     /// <summary>Test seam: the rectangle the inline editor would occupy for the active cell (the full
     /// merged region when the active cell is merged), so a merged editor's span can be verified.</summary>
     internal Rect ActiveEditorRect => TryGetActiveCellRect(out var rect) ? rect : default;
@@ -1550,12 +1556,25 @@ public sealed partial class SpreadsheetGrid : Panel
 
     public void BeginEdit(string? seed) => BeginEdit(seed, focus: true);
 
+    /// <summary>
+    /// Opens the cell for editing with its existing content fully selected, so the next keystroke
+    /// replaces it (used when a new table's first header cell — pre-filled "Column 1" — opens for
+    /// naming, mirroring Excel's "type straight over the placeholder").
+    /// </summary>
+    public void BeginEditSelectAll() => BeginEdit(seed: null, focus: true, selectAll: true);
+
     /// <param name="focus">
     /// When false the inline editor is shown and seeded but keeps focus where it is. The formula bar
     /// uses this to mirror the cell while the user keeps typing in the bar (task 9) — focusing the
     /// editor would steal the caret and trigger its LostFocus commit.
     /// </param>
-    public void BeginEdit(string? seed, bool focus)
+    public void BeginEdit(string? seed, bool focus) => BeginEdit(seed, focus, selectAll: false);
+
+    /// <param name="selectAll">
+    /// When true the seeded text is selected rather than left with the caret at its end, so the first
+    /// keystroke overtypes it. Only meaningful when <paramref name="focus"/> is true.
+    /// </param>
+    public void BeginEdit(string? seed, bool focus, bool selectAll)
     {
         var sheet = Sheet;
         if (sheet is null)
@@ -1576,7 +1595,19 @@ public sealed partial class SpreadsheetGrid : Panel
             _editor.Focus();
         }
 
-        _editor.CaretIndex = _editor.Text?.Length ?? 0;
+        int length = _editor.Text?.Length ?? 0;
+        if (selectAll && focus)
+        {
+            // Select the whole seeded value so the next key overtypes it (table-header naming). Setting
+            // SelectionStart/End (not CaretIndex, which collapses the selection) anchors the range.
+            _editor.SelectionStart = 0;
+            _editor.SelectionEnd = length;
+        }
+        else
+        {
+            _editor.CaretIndex = length;
+        }
+
         ResetAutocomplete(); // don't treat the seeded text as a typed character (#20)
         UpdateSignatureHelp(); // a seeded formula shows its hint immediately
     }

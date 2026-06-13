@@ -28,6 +28,12 @@ public interface IAppEnvironment
     /// <summary>Begin inline editing of the active cell.</summary>
     void BeginEdit();
 
+    /// <summary>
+    /// Begin inline editing of the active cell with its existing content selected, so the next key
+    /// overtypes it (used when a new table's first header cell opens for naming).
+    /// </summary>
+    void BeginEditSelectAll();
+
     Task NewWorkbookAsync();
 
     Task OpenWorkbookAsync();

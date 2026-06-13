@@ -320,6 +320,8 @@ public partial class MainWindow : Window, IAppEnvironment
 
     public void BeginEdit() => Grid.BeginEdit(null);
 
+    public void BeginEditSelectAll() => Grid.BeginEditSelectAll();
+
     public void RevealActiveCell() => Grid.ScrollToActive();
 
     /// <summary>Narrate the last action in the status line's left indicator (a quick reference, per the mockup).</summary>

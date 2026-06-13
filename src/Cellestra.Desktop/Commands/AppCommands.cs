@@ -615,12 +615,12 @@ public static class AppCommands
         e.Refresh();
 
         // A new headered table starts ready to name: jump to the first header cell (now "Column 1")
-        // and open it for editing so the user types straight into it (#2).
+        // and open it with the placeholder selected so the user types straight over it (#2).
         if (header)
         {
             e.Selection.MoveTo(range.Top, range.Left);
             e.RevealActiveCell();
-            e.BeginEdit();
+            e.BeginEditSelectAll();
         }
     }
 
