@@ -39,6 +39,37 @@ public class FunctionsTests
         Assert.Equal(expected, FormulaHarness.Number(formula), 10);
     }
 
+    [Theory]
+    // A value typed directly as an argument is coerced like arithmetic — booleans become 1/0 and
+    // numeric strings parse — unlike values pulled from a range (Sum_over_range_ignores_text).
+    [InlineData("SUM(TRUE,FALSE,5)", 6)]
+    [InlineData("AVERAGE(TRUE,FALSE)", 0.5)]
+    [InlineData("MAX(TRUE,0.5)", 1)]
+    [InlineData("COUNT(\"x\",1,TRUE)", 2)]
+    [InlineData("SUM(1,\"2\")", 3)]
+    public void Direct_arguments_coerce_booleans_and_numeric_text(string formula, double expected)
+    {
+        Assert.Equal(expected, FormulaHarness.Number(formula), 10);
+    }
+
+    [Theory]
+    // A direct non-numeric / non-logical argument is an error (a range would ignore it instead).
+    [InlineData("SUM(1,\"x\")")]
+    [InlineData("AND(1,\"x\")")]
+    public void Direct_non_value_arguments_error(string formula)
+    {
+        Assert.Equal("#VALUE!", FormulaHarness.ErrorToken(formula));
+    }
+
+    [Theory]
+    // Number→text coercion keeps fixed-point across Calc's wide band; G15 wrongly used scientific.
+    [InlineData("0.000001&\"\"", "0.000001")]
+    [InlineData("100000000000000000&\"\"", "100000000000000000")]
+    public void Number_to_text_avoids_scientific_notation(string formula, string expected)
+    {
+        Assert.Equal(expected, FormulaHarness.Text(formula));
+    }
+
     [Fact]
     public void Sum_over_range_ignores_text()
     {

@@ -122,8 +122,30 @@ public static class Coercion
             return value.ToString(CultureInfo.InvariantCulture);
         }
 
-        // 15 significant digits matches spreadsheet display precision and trims trailing zeros.
-        string text = value.ToString("G15", CultureInfo.InvariantCulture);
-        return text;
+        if (value == 0d)
+        {
+            return "0";
+        }
+
+        double abs = System.Math.Abs(value);
+
+        // An exact integer prints in full decimal, never in scientific notation — Calc renders
+        // 10^17 as "100000000000000000", not the "1E+17" that G15 produced.
+        if (value == System.Math.Floor(value) && abs < 1e21)
+        {
+            return value.ToString("0", CultureInfo.InvariantCulture);
+        }
+
+        // Outside roughly 1e-10 … 1e15 Calc switches to scientific notation; mirror that. Inside the
+        // band, render fixed-point with enough decimals for 15 significant digits, so 0.000001 stays
+        // "0.000001" (G15 gave "1E-06") and 1/3 keeps its 15 threes.
+        int exponent = (int)System.Math.Floor(System.Math.Log10(abs));
+        if (exponent is >= 15 or <= -11)
+        {
+            return value.ToString("G15", CultureInfo.InvariantCulture);
+        }
+
+        int decimals = System.Math.Max(0, 15 - 1 - exponent);
+        return value.ToString("0." + new string('#', decimals), CultureInfo.InvariantCulture);
     }
 }

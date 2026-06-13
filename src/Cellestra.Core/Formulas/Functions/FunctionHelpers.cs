@@ -85,14 +85,16 @@ internal static class H
     }
 
     /// <summary>
-    /// Collect numeric values from a list of arguments (flattening ranges). Numbers are added;
-    /// blanks, text, and booleans are skipped (the LibreOffice rule for references). Returns an
-    /// error value if any cell holds an error; otherwise null.
+    /// Collect numeric values from a list of arguments (flattening ranges). Values pulled from a
+    /// reference/range follow the LibreOffice rule — only numbers are added, blanks/text/booleans
+    /// ignored — but a value typed <i>directly</i> as an argument is coerced like arithmetic, so
+    /// SUM(TRUE,FALSE,5)=6 and SUM(1,"x")=#VALUE!. Returns an error value to propagate, else null.
     /// </summary>
     public static CellValue? CollectNumbers(IFunctionEvaluator ev, IReadOnlyList<Expr> args, List<double> destination)
     {
         foreach (var arg in args)
         {
+            bool fromReference = ev.TryEvaluateRange(arg, out _);
             foreach (var value in ev.EnumerateValues(arg))
             {
                 if (value.IsError)
@@ -100,9 +102,20 @@ internal static class H
                     return value;
                 }
 
-                if (value.IsNumber)
+                if (fromReference)
                 {
-                    destination.Add(value.AsNumber);
+                    if (value.IsNumber)
+                    {
+                        destination.Add(value.AsNumber);
+                    }
+                }
+                else if (!Coercion.TryToNumber(value, out double number, out var coercionError))
+                {
+                    return CellValue.FromError(coercionError!);
+                }
+                else
+                {
+                    destination.Add(number);
                 }
             }
         }

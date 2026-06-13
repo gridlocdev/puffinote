@@ -182,16 +182,24 @@ public static class MathFunctions
         int count = 0;
         foreach (var arg in args)
         {
+            // COUNT counts numbers from references, but a value typed directly as an argument also
+            // counts when it is a boolean or a numeric string — COUNT("x",1,TRUE)=2 (Excel/Calc).
+            bool fromReference = ev.TryEvaluateRange(arg, out _);
             foreach (var value in ev.EnumerateValues(arg))
             {
-                if (onlyNumbers)
+                if (!onlyNumbers)
                 {
-                    if (value.IsNumber)
+                    if (!value.IsEmpty)
                     {
                         count++;
                     }
                 }
-                else if (!value.IsEmpty)
+                else if (value.IsNumber)
+                {
+                    count++;
+                }
+                else if (!fromReference && !value.IsEmpty &&
+                    Evaluation.Coercion.TryToNumber(value, out _, out _))
                 {
                     count++;
                 }

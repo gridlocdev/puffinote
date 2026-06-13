@@ -69,6 +69,7 @@ public static class LogicalFunctions
         bool accumulator = requireAll;
         foreach (var arg in args)
         {
+            bool fromReference = ev.TryEvaluateRange(arg, out _);
             foreach (var value in ev.EnumerateValues(arg))
             {
                 if (value.IsError)
@@ -81,9 +82,14 @@ public static class LogicalFunctions
                     continue;
                 }
 
-                if (!Coercion.TryToBoolean(value, out bool b, out _))
+                if (!Coercion.TryToBoolean(value, out bool b, out var coercionError))
                 {
-                    continue; // non-logical text in a range is ignored, per Calc
+                    if (fromReference)
+                    {
+                        continue; // non-logical text in a range is ignored, per Calc
+                    }
+
+                    return CellValue.FromError(coercionError!); // a direct non-logical argument errors
                 }
 
                 any = true;
