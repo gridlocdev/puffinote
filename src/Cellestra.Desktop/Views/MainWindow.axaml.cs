@@ -9,6 +9,7 @@ using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Input.Platform;
+using Avalonia.Interactivity;
 using Avalonia.Layout;
 using Avalonia.Controls.Templates;
 using Avalonia.Markup.Xaml;
@@ -89,8 +90,34 @@ public partial class MainWindow : Window, IAppEnvironment
 
         Closing += OnWindowClosing;
 
+        // Esc closes any open overlay (command palette / sheet switcher / internal modal) no matter
+        // where focus sits inside it. Handled on the tunnelling route so it fires before any inner
+        // control (a TextBox, ListBox, default/cancel button) can swallow the key first.
+        AddHandler(KeyDownEvent, OnPreviewKeyDownForOverlay, RoutingStrategies.Tunnel);
+
         UpdateChrome();
         OnSelectionChanged();
+    }
+
+    /// <summary>Window-level Esc → dismiss whatever overlay is open: cancel an internal modal (so its
+    /// awaiter resolves to the cancel result) or close a palette-style overlay.</summary>
+    private void OnPreviewKeyDownForOverlay(object? sender, KeyEventArgs e)
+    {
+        if (e.Key != Key.Escape || !OverlayHost.IsVisible)
+        {
+            return;
+        }
+
+        if (_activeModal is { } modal)
+        {
+            modal.CancelFromHost();
+        }
+        else
+        {
+            CloseOverlay();
+        }
+
+        e.Handled = true;
     }
 
     /// <summary>Set once the user has answered the unsaved-changes prompt and chosen to close, so the
@@ -781,8 +808,14 @@ public partial class MainWindow : Window, IAppEnvironment
             }
         }
 
-        // ClearAll wipes value, formula, style, and hyperlink over the range (one undoable step).
-        _session.Execute(EditCommands.ClearAll(sheet.Name, used.Value));
+        // ClearAll wipes value, formula, style, and hyperlink over the range; ResetSheetLayout adds
+        // the sheet-level state ClearAll can't see — row/column fills, hidden flags, and any active
+        // AutoFilter/sort — so a reset truly clears background colours and filters. One undoable step.
+        _session.Execute(EditCommands.Composite("Reset Sheet Data", new IEditCommand[]
+        {
+            EditCommands.ClearAll(sheet.Name, used.Value),
+            DataEditCommands.ResetSheetLayout(sheet.Name),
+        }));
         Selection.MoveTo(0, 0);
         Refresh();
         Narrate($"Reset {sheet.Name}");
@@ -1321,12 +1354,9 @@ public partial class MainWindow : Window, IAppEnvironment
                 BuildCommandFlyout("sheet.rename", "insert.sheet", null, "sheet.delete").ShowAt(SheetTabs, showAtPointer: true);
                 e.Handled = true;
             };
-            // Double-click a tab to rename it inline, like editing a cell (no separate dialog).
-            tab.DoubleTapped += (_, e) =>
-            {
-                BeginInlineSheetRename(tab, captured);
-                e.Handled = true;
-            };
+            // Double-click renames inline — but that's driven from SheetTabsPointerPressed (ClickCount==2),
+            // not a per-tab DoubleTapped handler: the first click activates the sheet, which rebuilds the
+            // whole strip and orphans this Border before its gesture recognizer could see the second click.
             SheetTabs.Children.Add(tab);
         }
 
@@ -1470,6 +1500,18 @@ public partial class MainWindow : Window, IAppEnvironment
         if (index < 0)
         {
             return; // the ＋ button has its own Click
+        }
+
+        // Double-click anywhere on a tab → rename it inline (like editing a cell). Detected here, at
+        // the strip level, because the first click already rebuilt the strip via activation, so a
+        // per-tab DoubleTapped never fires. BeginInlineSheetRename re-finds the live tab by index.
+        if (e.ClickCount == 2 && SheetTabs.Children[index] is Border doubleClicked)
+        {
+            _tabDragFrom = -1; // cancel any pending click/drag gesture from the first press
+            BeginInlineSheetRename(doubleClicked, _session.Workbook.Worksheets[index]);
+            e.Pointer.Capture(null);
+            e.Handled = true;
+            return;
         }
 
         // Record the gesture but DON'T activate yet — activating rebuilds the strip, which would
@@ -1671,6 +1713,33 @@ public partial class MainWindow : Window, IAppEnvironment
             FormulaInput.CaretIndex = caret;
             e.Handled = true;
         }
+        else if (e.Key == Key.Delete &&
+                 (e.KeyModifiers & (KeyModifiers.Meta | KeyModifiers.Control | KeyModifiers.Alt)) == 0)
+        {
+            // Forward-delete the character (or selection) to the right of the caret. Handled here so the
+            // global "Clear Contents" shortcut (also Delete) can't preempt it and wipe the whole cell.
+            DeleteForwardInFormulaBar();
+            e.Handled = true;
+        }
+    }
+
+    /// <summary>Delete the selection (if any) or the single character to the right of the caret in the formula input.</summary>
+    private void DeleteForwardInFormulaBar()
+    {
+        string text = FormulaInput.Text ?? string.Empty;
+        int start = Math.Min(FormulaInput.SelectionStart, FormulaInput.SelectionEnd);
+        int end = Math.Max(FormulaInput.SelectionStart, FormulaInput.SelectionEnd);
+
+        if (start != end)
+        {
+            FormulaInput.Text = text.Remove(start, end - start);
+            FormulaInput.CaretIndex = start;
+        }
+        else if (start < text.Length)
+        {
+            FormulaInput.Text = text.Remove(start, 1);
+            FormulaInput.CaretIndex = start;
+        }
     }
 
     /// <summary>
@@ -1698,6 +1767,11 @@ public partial class MainWindow : Window, IAppEnvironment
     /// </summary>
     private void FormulaInputLostFocus(object? sender, Avalonia.Interactivity.RoutedEventArgs e)
     {
+        // Collapse any selection/caret so the bar doesn't keep showing a highlighted I-beam once focus
+        // returns to a cell — Avalonia leaves the selection brush drawn on an unfocused TextBox (#5).
+        FormulaInput.SelectionStart = FormulaInput.SelectionEnd = 0;
+        FormulaInput.CaretIndex = 0;
+
         if (_syncingFormulaBar)
         {
             return; // a programmatic refresh moved focus, not the user committing

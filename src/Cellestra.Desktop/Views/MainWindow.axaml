@@ -23,7 +23,7 @@
                         FontStyle="Italic" Width="30" VerticalAlignment="Top" />
                 <!-- Expand/collapse toggle: grows the formula input to several lines for more editing room.
                      Content (a Lucide chevron) is set in code-behind so the icon flips with the state. -->
-                <Button x:Name="FormulaExpandButton" DockPanel.Dock="Right" Margin="4,0,0,0" Width="28"
+                <Button x:Name="FormulaExpandButton" DockPanel.Dock="Right" Margin="4,0,0,0" Width="28" Height="28"
                         Padding="0" HorizontalContentAlignment="Center" VerticalContentAlignment="Center"
                         VerticalAlignment="Top" ToolTip.Tip="Expand formula bar" />
                 <TextBox x:Name="FormulaInput" VerticalContentAlignment="Center" Margin="2,0,0,0"

@@ -2,6 +2,7 @@ using System.Globalization;
 using Cellestra.Core.Data;
 using Cellestra.Core.Editing;
 using Cellestra.Core.Model;
+using Cellestra.Core.Styling;
 using Cellestra.Core.Values;
 using Xunit;
 
@@ -47,6 +48,35 @@ public class DataEditCommandTests
 
         history.Undo();
         Assert.False(sheet.IsRowHidden(1));
+    }
+
+    [Fact]
+    public void ResetSheetLayout_clears_row_column_fills_hidden_and_filter_and_undo_restores()
+    {
+        var (workbook, history, sheet) = New();
+
+        // A column fill (background), a hidden row, and an active AutoFilter — the sheet-level state a
+        // plain ClearAll over the used range can't reach.
+        int fillId = workbook.Styles.Intern(CellStyle.Default
+            .WithFill(Fill.Solid(ArgbColor.FromRgb(255, 0, 0))));
+        sheet.GetOrCreateColumn(1).StyleId = fillId;
+        sheet.GetOrCreateRow(2).Hidden = true;
+        sheet.ActiveFilter = CellRange.Parse("A1:B3");
+        sheet.ActiveFilterSpec = new FilterSpec(new Dictionary<int, ColumnFilter> { [0] = new ColumnFilter { Condition = ">0" } });
+
+        history.Execute(DataEditCommands.ResetSheetLayout(sheet.Name));
+
+        Assert.Equal(0, sheet.GetOrCreateColumn(1).StyleId); // fill cleared
+        Assert.False(sheet.IsRowHidden(2));                  // unhidden
+        Assert.Null(sheet.ActiveFilter);                     // filter dropped
+        Assert.Null(sheet.ActiveFilterSpec);
+
+        history.Undo();
+
+        Assert.Equal(fillId, sheet.GetOrCreateColumn(1).StyleId);
+        Assert.True(sheet.IsRowHidden(2));
+        Assert.Equal(CellRange.Parse("A1:B3"), sheet.ActiveFilter);
+        Assert.NotNull(sheet.ActiveFilterSpec);
     }
 
     [Fact]

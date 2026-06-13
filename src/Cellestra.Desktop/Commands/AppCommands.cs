@@ -92,6 +92,25 @@ public static class AppCommands
             e => StepDecimals(e, -1), "move-decimal-right", canExecute: CanStepDecimals),
         new("format.cells", "Format Cells…", "Open the full cell-formatting dialog.", e => e.ShowFormatCellsDialog(), "settings-2", new KeyGesture(Key.D1, Cmd)),
 
+        // "Format Selection As: <data-type>" — one entry per data type, surfaced in the Command Palette
+        // (PRD §6.7). Each sets a specific number format outright (vs. the command-bar toggles above).
+        new("format.asAutomatic", "Format Selection As: Automatic", "Use the general (automatic) number format.",
+            e => FormatSelectionAs(e, NumberFormat.General), "eraser"),
+        new("format.asNumber", "Format Selection As: Number", "Show as a number with thousands separators and two decimals.",
+            e => FormatSelectionAs(e, NumberFormatPreset), "a-large-small", canExecute: IsNumericContext),
+        new("format.asCurrency", "Format Selection As: Currency", "Show as currency.",
+            e => FormatSelectionAs(e, CurrencyFormat), "dollar-sign", canExecute: IsNumericContext),
+        new("format.asPercent", "Format Selection As: Percent", "Show as a percentage with two decimals.",
+            e => FormatSelectionAs(e, PercentFormatPreset), "percent", canExecute: IsNumericContext),
+        new("format.asScientific", "Format Selection As: Scientific", "Show in scientific (exponent) notation.",
+            e => FormatSelectionAs(e, ScientificFormatPreset), "sigma", canExecute: IsNumericContext),
+        new("format.asDate", "Format Selection As: Date", "Show as a date (YYYY-MM-DD).",
+            e => FormatSelectionAs(e, DateFormat), "calendar", canExecute: IsNumericContext),
+        new("format.asTime", "Format Selection As: Time", "Show as a time (HH:MM:SS).",
+            e => FormatSelectionAs(e, TimeFormatPreset), "calendar", canExecute: IsNumericContext),
+        new("format.asText", "Format Selection As: Text", "Treat the cell contents as plain text.",
+            e => FormatSelectionAs(e, NumberFormat.Text), "type"),
+
         // Borders — quick presets applied via the standard ApplyStyle path. The dropdown lives on the
         // command bar (see CommandBarModel "Border" group); Format Cells… covers per-edge control.
         new("format.borderAll", "All Borders", "Draw thin borders on every side of each selected cell.",
@@ -166,6 +185,12 @@ public static class AppCommands
     private static readonly NumberFormat CurrencyFormat = new("$#,##0.00");
     private static readonly NumberFormat DateFormat = new("yyyy-mm-dd");
 
+    // Presets behind the palette's "Format Selection As: …" commands — one per user-facing data type.
+    private static readonly NumberFormat NumberFormatPreset = new("#,##0.00");
+    private static readonly NumberFormat PercentFormatPreset = new("0.00%");
+    private static readonly NumberFormat ScientificFormatPreset = new("0.00E+00");
+    private static readonly NumberFormat TimeFormatPreset = new("hh:mm:ss");
+
     private static void MergeCells(IAppEnvironment e)
     {
         var sheet = e.Session.ActiveSheet;
@@ -232,7 +257,16 @@ public static class AppCommands
     private static void ClearAll(IAppEnvironment e)
     {
         var session = e.Session;
-        session.Execute(EditCommands.ClearAll(session.ActiveSheet.Name, e.Selection.Range));
+        string sheet = session.ActiveSheet.Name;
+        var range = e.Selection.Range;
+        // ClearAll wipes the cells; ClearRangeStructure adds the sheet-level structure overlapping the
+        // selection that cells don't carry — tables (filter dropdowns + header fill), the AutoFilter,
+        // merges, validations, and whole-row/column fills — so "Clear All" truly clears it all.
+        session.Execute(EditCommands.Composite("Clear All", new IEditCommand[]
+        {
+            EditCommands.ClearAll(sheet, range),
+            DataEditCommands.ClearRangeStructure(sheet, range),
+        }));
         e.Refresh();
     }
 
@@ -412,6 +446,21 @@ public static class AppCommands
         {
             e.AutofitColumns(e.Selection.Left, e.Selection.Right);
         }
+    }
+
+    /// <summary>
+    /// Apply (not toggle) <paramref name="format"/> to the whole selection — backs the palette's
+    /// "Format Selection As: …" commands, which set a specific data type outright rather than
+    /// flipping it on/off like the command-bar one-tap toggles.
+    /// </summary>
+    private static void FormatSelectionAs(IAppEnvironment e, NumberFormat format)
+    {
+        var session = e.Session;
+        session.Execute(EditCommands.ApplyStyle(session.Workbook, session.ActiveSheet.Name, e.Selection.Range,
+            s => s.WithNumberFormat(format), "Number Format"));
+        e.Refresh();
+        // A freshly applied format can be wider than the column — grow it so the result shows, not #####.
+        e.AutofitColumns(e.Selection.Left, e.Selection.Right);
     }
 
     /// <summary>

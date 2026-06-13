@@ -76,6 +76,264 @@ public static class DataEditCommands
     public static IEditCommand ClearFilter(string sheet, CellRange range) =>
         new RowVisibilityCommand("Clear Filter", sheet, range, ws => FilterEngine.Clear(ws, range));
 
+    /// <summary>
+    /// Clear the sheet-level structure that overlaps <paramref name="range"/> and which a cell-only
+    /// <see cref="EditCommands.ClearAll"/> can't see: any table (database range — its filter dropdowns
+    /// and header fill), merged regions, data validations, and the sheet AutoFilter when its region
+    /// intersects the selection. A whole-column or whole-row selection also drops that line's fill and
+    /// hidden flag (a background applied to an entire column/row lives there, not on the cells). Paired
+    /// with <c>ClearAll</c> so "Clear All" over a selection wipes background colours and filters too.
+    /// </summary>
+    public static IEditCommand ClearRangeStructure(string sheet, CellRange range)
+    {
+        var removedTables = new List<Table>();
+        var removedMerges = new List<MergedRegion>();
+        var removedValidations = new List<DataValidation>();
+        bool clearedFilter = false;
+        CellRange? filter = null;
+        FilterSpec? filterSpec = null;
+        SortSpec? sort = null;
+        var rowState = new List<(int Key, int StyleId, bool Hidden)>();
+        var columnState = new List<(int Key, int StyleId, bool Hidden)>();
+
+        return new ActionCommand("Clear All",
+            wb =>
+            {
+                var ws = Sheet(wb, sheet);
+
+                removedTables = ws.Tables.Where(t => t.Range.Intersects(range)).ToList();
+                foreach (var table in removedTables)
+                {
+                    ws.RemoveTable(table);
+                }
+
+                removedMerges = ws.MergedRegions.Where(m => m.Range.Intersects(range)).ToList();
+                if (removedMerges.Count > 0)
+                {
+                    ws.ReplaceMerges(ws.MergedRegions.Where(m => !m.Range.Intersects(range)).ToList());
+                }
+
+                removedValidations = ws.Validations.Where(v => v.Target.Intersects(range)).ToList();
+                foreach (var validation in removedValidations)
+                {
+                    ws.RemoveValidation(validation);
+                }
+
+                clearedFilter = ws.ActiveFilter is { } active && active.Intersects(range);
+                CellRange? filterRange = clearedFilter ? ws.ActiveFilter : null;
+                if (clearedFilter)
+                {
+                    filter = ws.ActiveFilter;
+                    filterSpec = ws.ActiveFilterSpec;
+                    sort = ws.ActiveSort;
+                }
+
+                // A whole-column/row selection spans the entire axis; clearing such a selection also
+                // resets that line's fill (background) and unhides it. Filtering hid rows via Row.Hidden,
+                // so unhide the cleared filter's rows too.
+                bool wholeColumns = range.Top == 0 && range.Bottom >= SheetDimensions.MaxRows - 1;
+                bool wholeRows = range.Left == 0 && range.Right >= SheetDimensions.MaxColumns - 1;
+
+                var touchedRows = new SortedSet<int>();
+                if (wholeRows)
+                {
+                    foreach (int r in ws.Rows.Keys.Where(r => r >= range.Top && r <= range.Bottom))
+                    {
+                        touchedRows.Add(r);
+                    }
+                }
+
+                if (filterRange is { } fr)
+                {
+                    foreach (int r in ws.Rows.Keys.Where(r => r >= fr.Top && r <= fr.Bottom && ws.IsRowHidden(r)))
+                    {
+                        touchedRows.Add(r);
+                    }
+                }
+
+                var touchedColumns = wholeColumns
+                    ? ws.Columns.Keys.Where(c => c >= range.Left && c <= range.Right).ToList()
+                    : new List<int>();
+
+                rowState = touchedRows.Select(r => { var row = ws.GetOrCreateRow(r); return (r, row.StyleId, row.Hidden); }).ToList();
+                columnState = touchedColumns.Select(c => { var col = ws.GetOrCreateColumn(c); return (c, col.StyleId, col.Hidden); }).ToList();
+
+                if (clearedFilter)
+                {
+                    ws.ActiveFilter = null;
+                    ws.ActiveFilterSpec = null;
+                    ws.ActiveSort = null;
+                }
+
+                foreach (int r in touchedRows)
+                {
+                    var row = ws.GetOrCreateRow(r);
+                    if (wholeRows)
+                    {
+                        row.StyleId = StylePool.DefaultId;
+                    }
+
+                    row.Hidden = false; // unhide (whole-row clear, or a filtered-away row)
+                }
+
+                foreach (int c in touchedColumns)
+                {
+                    var column = ws.GetOrCreateColumn(c);
+                    column.StyleId = StylePool.DefaultId;
+                    column.Hidden = false;
+                }
+
+                return EditResult.None;
+            },
+            wb =>
+            {
+                var ws = Sheet(wb, sheet);
+
+                foreach (var table in removedTables)
+                {
+                    ws.AddTable(table);
+                }
+
+                if (removedMerges.Count > 0)
+                {
+                    var merges = ws.MergedRegions.ToList();
+                    merges.AddRange(removedMerges);
+                    ws.ReplaceMerges(merges);
+                }
+
+                foreach (var validation in removedValidations)
+                {
+                    ws.AddValidation(validation);
+                }
+
+                if (clearedFilter)
+                {
+                    ws.ActiveFilter = filter;
+                    ws.ActiveFilterSpec = filterSpec;
+                    ws.ActiveSort = sort;
+                }
+
+                foreach (var (key, styleId, hidden) in rowState)
+                {
+                    var row = ws.GetOrCreateRow(key);
+                    row.StyleId = styleId;
+                    row.Hidden = hidden;
+                }
+
+                foreach (var (key, styleId, hidden) in columnState)
+                {
+                    var column = ws.GetOrCreateColumn(key);
+                    column.StyleId = styleId;
+                    column.Hidden = hidden;
+                }
+
+                return EditResult.None;
+            });
+    }
+
+    /// <summary>
+    /// Reset the sheet-level structure that <see cref="EditCommands.ClearAll"/> leaves behind:
+    /// row/column fills and hidden flags; any active AutoFilter, filter conditions, and sort;
+    /// every table (database range, which draws its own filter dropdowns and header fill); merged
+    /// regions; data validations; and frozen panes. Row/column <em>dimensions</em> (widths/heights)
+    /// are preserved — only fills and visibility are reset. Paired with <c>ClearAll</c> in the Reset
+    /// Sheet Data step so a reset truly wipes background colours and filters, not just cell contents.
+    /// </summary>
+    public static IEditCommand ResetSheetLayout(string sheet)
+    {
+        // Captured on Apply so redo re-snapshots correctly (ActionCommand contract).
+        var rowState = new List<(int Key, int StyleId, bool Hidden)>();
+        var columnState = new List<(int Key, int StyleId, bool Hidden)>();
+        CellRange? filter = null;
+        FilterSpec? filterSpec = null;
+        SortSpec? sort = null;
+        var tables = new List<Table>();
+        var merges = new List<MergedRegion>();
+        var validations = new List<DataValidation>();
+        int frozenRows = 0, frozenColumns = 0;
+
+        return new ActionCommand("Reset Sheet Data",
+            wb =>
+            {
+                var ws = Sheet(wb, sheet);
+                rowState = ws.Rows.Select(kv => (kv.Key, kv.Value.StyleId, kv.Value.Hidden)).ToList();
+                columnState = ws.Columns.Select(kv => (kv.Key, kv.Value.StyleId, kv.Value.Hidden)).ToList();
+                filter = ws.ActiveFilter;
+                filterSpec = ws.ActiveFilterSpec;
+                sort = ws.ActiveSort;
+                tables = ws.Tables.ToList();
+                merges = ws.MergedRegions.ToList();
+                validations = ws.Validations.ToList();
+                frozenRows = ws.FrozenRows;
+                frozenColumns = ws.FrozenColumns;
+
+                foreach (var row in ws.Rows.Values)
+                {
+                    row.StyleId = StylePool.DefaultId;
+                    row.Hidden = false;
+                }
+
+                foreach (var column in ws.Columns.Values)
+                {
+                    column.StyleId = StylePool.DefaultId;
+                    column.Hidden = false;
+                }
+
+                ws.ActiveFilter = null;
+                ws.ActiveFilterSpec = null;
+                ws.ActiveSort = null;
+                foreach (var table in tables)
+                {
+                    ws.RemoveTable(table);
+                }
+
+                foreach (var validation in validations)
+                {
+                    ws.RemoveValidation(validation);
+                }
+
+                ws.ReplaceMerges(Array.Empty<MergedRegion>());
+                ws.FrozenRows = 0;
+                ws.FrozenColumns = 0;
+                return EditResult.None;
+            },
+            wb =>
+            {
+                var ws = Sheet(wb, sheet);
+                foreach (var (key, styleId, hidden) in rowState)
+                {
+                    var row = ws.GetOrCreateRow(key);
+                    row.StyleId = styleId;
+                    row.Hidden = hidden;
+                }
+
+                foreach (var (key, styleId, hidden) in columnState)
+                {
+                    var column = ws.GetOrCreateColumn(key);
+                    column.StyleId = styleId;
+                    column.Hidden = hidden;
+                }
+
+                ws.ActiveFilter = filter;
+                ws.ActiveFilterSpec = filterSpec;
+                ws.ActiveSort = sort;
+                foreach (var table in tables)
+                {
+                    ws.AddTable(table);
+                }
+
+                foreach (var validation in validations)
+                {
+                    ws.AddValidation(validation);
+                }
+
+                ws.ReplaceMerges(merges);
+                ws.FrozenRows = frozenRows;
+                ws.FrozenColumns = frozenColumns;
+                return EditResult.None;
+            });
+    }
+
     // ---- Tables -----------------------------------------------------------
 
     public static IEditCommand CreateTable(string sheet, Table table) =>

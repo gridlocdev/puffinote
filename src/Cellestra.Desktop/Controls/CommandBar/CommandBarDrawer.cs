@@ -35,7 +35,10 @@ public static class CommandBarDrawer
 
     public static (Control Content, Action Refresh) Build(CommandBarGroup group, IAppEnvironment env, Action close)
     {
-        var panel = new StackPanel { Spacing = 3, MinWidth = 248 };
+        // Cap the width so a long description wraps onto the next line instead of stretching the drawer
+        // ever wider and pushing the shortcut (and the drawer's right edge) off-screen. TextWrapping on
+        // the description rows only engages once their container width is bounded.
+        var panel = new StackPanel { Spacing = 3, MinWidth = 248, MaxWidth = 360 };
         panel.Children.Add(new TextBlock
         {
             Text = group.Name,
