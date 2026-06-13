@@ -39,6 +39,25 @@ public static class CliApplication
             ExtraCommands.Apply(),
             ExtraCommands.Open(),
             ExtraCommands.Completions(),
+
+            // Data, structural, and layout edits — parity with the desktop app's Data/Insert menus.
+            DataCommands.Sort(),
+            DataCommands.RemoveDuplicates(),
+            DataCommands.Split(),
+            DataCommands.Table(),
+            DataCommands.Validation(),
+            DataCommands.Name(),
+            DataCommands.Hyperlink(),
+            DataCommands.InsertRows(),
+            DataCommands.DeleteRows(),
+            DataCommands.InsertColumns(),
+            DataCommands.DeleteColumns(),
+            DataCommands.HideRows(),
+            DataCommands.ShowRows(),
+            DataCommands.HideColumns(),
+            DataCommands.ShowColumns(),
+            DataCommands.Merge(),
+            DataCommands.Unmerge(),
         };
     }
 

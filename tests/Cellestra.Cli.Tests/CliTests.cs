@@ -245,4 +245,187 @@ public sealed class CliTests : IDisposable
         Assert.Equal(0, exit);
         Assert.Equal("x,y", output.Trim());
     }
+
+    // ---- Data, structural, and layout edits (desktop parity) --------------
+
+    private string ThreeRowBook()
+    {
+        string ods = Path2("data.ods");
+        Run("new", ods);
+        Run("set", ods, "A1", "Name", "--in-place");
+        Run("set", ods, "B1", "Score", "--in-place");
+        Run("set", ods, "A2", "Beta", "--in-place");
+        Run("set", ods, "B2", "2", "--in-place");
+        Run("set", ods, "A3", "Alpha", "--in-place");
+        Run("set", ods, "B3", "1", "--in-place");
+        return ods;
+    }
+
+    [Fact]
+    public void Sort_orders_rows_by_a_column_keeping_the_header()
+    {
+        string ods = ThreeRowBook();
+        Assert.Equal(0, Run("sort", ods, "A1:B3", "--by", "A", "--in-place").Exit);
+
+        Assert.Equal("Name", Run("get", ods, "A1").Out.Trim());   // header stays put
+        Assert.Equal("Alpha", Run("get", ods, "A2").Out.Trim());  // sorted ascending
+        Assert.Equal("Beta", Run("get", ods, "A3").Out.Trim());
+    }
+
+    [Fact]
+    public void Sort_descending_reverses_a_numeric_column()
+    {
+        string ods = ThreeRowBook();
+        Run("sort", ods, "A1:B3", "--by", "B:desc", "--in-place");
+        Assert.Equal("2", Run("get", ods, "B2").Out.Trim());
+        Assert.Equal("1", Run("get", ods, "B3").Out.Trim());
+    }
+
+    [Fact]
+    public void Remove_duplicates_drops_repeated_rows_and_reports_count()
+    {
+        string ods = ThreeRowBook();
+        Run("set", ods, "A4", "Beta", "--in-place");
+        Run("set", ods, "B4", "2", "--in-place"); // duplicate of row 2
+
+        var (exit, _, err) = Run("remove-duplicates", ods, "A1:B4", "--in-place");
+        Assert.Equal(0, exit);
+        Assert.Contains("Removed 1", err, StringComparison.Ordinal);
+        Assert.Equal("", Run("get", ods, "A4").Out.Trim()); // the duplicate row was cleared
+    }
+
+    [Fact]
+    public void Split_separates_a_delimited_column()
+    {
+        string ods = Path2("split.ods");
+        Run("new", ods);
+        Run("set", ods, "A1", "a;b;c", "--in-place");
+
+        Assert.Equal(0, Run("split", ods, "A1:A1", "-d", ";", "--in-place").Exit);
+        Assert.Equal("a", Run("get", ods, "A1").Out.Trim());
+        Assert.Equal("b", Run("get", ods, "B1").Out.Trim());
+        Assert.Equal("c", Run("get", ods, "C1").Out.Trim());
+    }
+
+    [Fact]
+    public void Table_creation_labels_empty_headers_and_round_trips()
+    {
+        string ods = Path2("table.ods");
+        Run("new", ods);
+        Run("set", ods, "A2", "1", "--in-place");
+
+        Assert.Equal(0, Run("table", ods, "A1:B2", "--in-place").Exit);
+        var reopened = OdsReader.Read(File.OpenRead(ods)).FindSheet("Sheet1")!;
+        Assert.Single(reopened.Tables);
+        Assert.Equal("Column 1", reopened.GetValue(0, 0).AsText); // placeholder header filled in
+    }
+
+    [Fact]
+    public void Data_validation_persists_a_list_rule()
+    {
+        string ods = Path2("dv.ods");
+        Run("new", ods);
+        Assert.Equal(0, Run("data-validation", ods, "A1:A5", "--list", "Red,Green,Blue", "--in-place").Exit);
+
+        var reopened = OdsReader.Read(File.OpenRead(ods)).FindSheet("Sheet1")!;
+        var rule = Assert.Single(reopened.Validations);
+        Assert.Equal(new[] { "Red", "Green", "Blue" }, rule.ListValues!);
+    }
+
+    [Fact]
+    public void Data_validation_persists_a_range_source_rule()
+    {
+        string ods = Path2("dvr.ods");
+        Run("new", ods);
+        Assert.Equal(0, Run("data-validation", ods, "A1:A5", "--source", "E1:E8", "--in-place").Exit);
+
+        var reopened = OdsReader.Read(File.OpenRead(ods)).FindSheet("Sheet1")!;
+        var rule = Assert.Single(reopened.Validations);
+        Assert.Null(rule.ListValues);
+        Assert.NotNull(rule.ListSource);
+    }
+
+    [Fact]
+    public void Named_range_add_list_and_remove()
+    {
+        string ods = Path2("names.ods");
+        Run("new", ods);
+        Assert.Equal(0, Run("name", "add", ods, "TaxRate", "B1:B10", "--in-place").Exit);
+
+        Assert.Contains("TaxRate", Run("name", "list", ods).Out, StringComparison.Ordinal);
+        Assert.Equal(0, Run("name", "remove", ods, "TaxRate", "--in-place").Exit);
+        Assert.DoesNotContain("TaxRate", Run("name", "list", ods).Out, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Hyperlink_sets_and_removes_a_link_without_mangling_the_value()
+    {
+        string ods = Path2("link.ods");
+        Run("new", ods);
+        Run("set", ods, "A1", "docs", "--in-place");
+        Assert.Equal(0, Run("hyperlink", ods, "A1", "https://example.com", "--in-place").Exit);
+
+        // The visible value is untouched (regression: a hyperlinked cell used to reopen wrapped in
+        // pretty-print whitespace).
+        Assert.Equal("docs", Run("get", ods, "A1").Out.Trim());
+        var reopened = OdsReader.Read(File.OpenRead(ods)).FindSheet("Sheet1")!;
+        Assert.Equal("https://example.com", reopened.Find(0, 0)!.Hyperlink!.Target);
+
+        Run("hyperlink", ods, "A1", "--remove", "--in-place");
+        var cleared = OdsReader.Read(File.OpenRead(ods)).FindSheet("Sheet1")!;
+        Assert.Null(cleared.Find(0, 0)!.Hyperlink);
+    }
+
+    [Fact]
+    public void Insert_and_delete_rows_shift_data()
+    {
+        string ods = ThreeRowBook();
+        Run("insert-rows", ods, "2", "--in-place"); // a blank row 2 pushes Beta down to row 3
+        Assert.Equal("", Run("get", ods, "A2").Out.Trim());
+        Assert.Equal("Beta", Run("get", ods, "A3").Out.Trim());
+
+        Run("delete-rows", ods, "2", "--in-place"); // remove it again
+        Assert.Equal("Beta", Run("get", ods, "A2").Out.Trim());
+    }
+
+    [Fact]
+    public void Insert_columns_accepts_a_letter()
+    {
+        string ods = ThreeRowBook();
+        Run("insert-cols", ods, "A", "--in-place"); // a blank column A shifts Name to B
+        Assert.Equal("Name", Run("get", ods, "B1").Out.Trim());
+    }
+
+    [Fact]
+    public void Hide_and_show_columns_round_trip_visibility()
+    {
+        string ods = ThreeRowBook();
+        Assert.Equal(0, Run("hide-cols", ods, "B", "--in-place").Exit);
+        Assert.True(OdsReader.Read(File.OpenRead(ods)).FindSheet("Sheet1")!.IsColumnHidden(1));
+
+        Assert.Equal(0, Run("show-cols", ods, "B", "--in-place").Exit);
+        Assert.False(OdsReader.Read(File.OpenRead(ods)).FindSheet("Sheet1")!.IsColumnHidden(1));
+    }
+
+    [Fact]
+    public void Merge_and_unmerge_a_region()
+    {
+        string ods = Path2("merge.ods");
+        Run("new", ods);
+        Run("set", ods, "A1", "wide", "--in-place");
+        Assert.Equal(0, Run("merge", ods, "A1:B2", "--in-place").Exit);
+        Assert.NotNull(OdsReader.Read(File.OpenRead(ods)).FindSheet("Sheet1")!.FindMerge(0, 0));
+
+        Assert.Equal(0, Run("unmerge", ods, "A1", "--in-place").Exit);
+        Assert.Null(OdsReader.Read(File.OpenRead(ods)).FindSheet("Sheet1")!.FindMerge(0, 0));
+    }
+
+    [Fact]
+    public void Data_edits_refuse_to_overwrite_without_in_place_or_output()
+    {
+        string ods = ThreeRowBook();
+        var (exit, _, err) = Run("sort", ods, "A1:B3", "--by", "A");
+        Assert.Equal(1, exit);
+        Assert.Contains("--in-place", err, StringComparison.Ordinal);
+    }
 }

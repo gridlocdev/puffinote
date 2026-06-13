@@ -1506,8 +1506,31 @@ public static class OdsContentXml
 
     private static string ReadText(XElement element)
     {
-        var paragraphs = element.Elements(Text + "p").Select(p => p.Value);
+        var paragraphs = element.Elements(Text + "p").Select(CellParagraphText);
         return string.Join("\n", paragraphs);
+    }
+
+    /// <summary>
+    /// The text of a single <c>text:p</c>. A plain paragraph's value is significant as-is (so leading/
+    /// trailing spaces in a string cell survive). A paragraph with child spans — e.g. a hyperlink
+    /// <c>text:a</c> — is mixed content: the meaningful text lives in the spans (and any non-blank text
+    /// between them), while whitespace-only text nodes around them are the serializer's pretty-print
+    /// indentation, not content, so they're dropped. Without this a hyperlinked cell reopened as
+    /// "\n  value\n" instead of "value".
+    /// </summary>
+    private static string CellParagraphText(XElement paragraph)
+    {
+        if (!paragraph.HasElements)
+        {
+            return paragraph.Value;
+        }
+
+        return string.Concat(paragraph.Nodes().Select(node => node switch
+        {
+            XElement span => span.Value,
+            XText text when text.Value.Trim().Length > 0 => text.Value,
+            _ => string.Empty,
+        }));
     }
 
     private static Hyperlink? ReadHyperlink(XElement element)

@@ -431,6 +431,8 @@ A second face on the same brain (`ARCHITECTURE.md` §1): the `cellestra` binary 
 
 **Extras:** `new`, `import`/`export`, `stats`, `find` (`--regex`, `--in values|formulas`), `diff` (**non-zero exit on differences**), `functions` (list / describe — same metadata as the in-app reference), `add-sheet` / `rename-sheet` / `delete-sheet`, `apply <file> <edits.json>` (batch edits, `-` for stdin), `open` (hand off to the GUI), `completions <shell>`.
 
+**Data, structural & layout edits (desktop parity):** the operations the Data/Insert menus expose, driving the same Core builders the GUI does (all honour `--in-place`/`-o`, write atomically, and preserve unmodeled content): `sort <range> --by B,A:desc [--no-header]`, `remove-duplicates <range> [--columns A,C]`, `split <column> -d <char>` (text-to-columns), `table <range> [--name N] [--no-header]`, `data-validation <range> (--list "a,b,c" | --source <range>)`, `name add|list|remove` (named ranges), `hyperlink <cell> <url> | --remove`, `insert-rows`/`delete-rows`/`insert-cols`/`delete-cols <at> [--count N]`, `hide-rows`/`show-rows`/`hide-cols`/`show-cols <lines>`, and `merge <range>`/`unmerge <cell>`.
+
 **Conventions (these matter more than any single command):**
 - **Pipe-friendly:** `--format table|csv|tsv|json`; read commands default to stdout; `-` means stdin/stdout.
 - **Edits are explicit and safe:** nothing overwrites without `--in-place` or `-o`; all writes are **atomic** (temp file + rename, matching the app's save rule §8.7).
