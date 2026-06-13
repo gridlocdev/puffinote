@@ -80,7 +80,12 @@ public sealed partial class SpreadsheetGrid : Panel
         // Arrow keys must be caught in the tunnel phase: the TextBox's own (bubbling) handler would
         // otherwise consume them for caret movement before point mode could poke at a cell.
         _editor.AddHandler(KeyDownEvent, EditorPreviewKeyDown, RoutingStrategies.Tunnel);
-        _editor.LostFocus += (_, _) => CommitEdit(moveRow: 0, moveColumn: 0);
+        // Commit on blur, but don't pull focus back to the grid: the editor is losing focus precisely
+        // because it's moving elsewhere (e.g. the user clicked the formula bar). Re-grabbing it here is
+        // a reentrant focus change *during* that transfer, which leaves Avalonia's focus manager pointing
+        // at the grid while the new control still shows as focused — so a later click can't dislodge it
+        // and the formula bar keeps its focus state. Let the focus go where it was headed.
+        _editor.LostFocus += (_, _) => CommitEdit(moveRow: 0, moveColumn: 0, refocus: false);
         _editor.TextChanged += (_, _) =>
         {
             // Compare by value (not a bool flag) so a TextChanged that arrives after SetEditorText
@@ -1495,7 +1500,12 @@ public sealed partial class SpreadsheetGrid : Panel
         _editor.CaretIndex = caret;
     }
 
-    private void CommitEdit(int moveRow, int moveColumn)
+    /// <param name="refocus">
+    /// When true (keyboard commits via Enter/Tab/Escape, or a click that lands on the grid) focus
+    /// returns to the grid so arrow keys keep working. The blur-driven commit passes false: focus is
+    /// already on its way to another control and stealing it back corrupts the transfer.
+    /// </param>
+    private void CommitEdit(int moveRow, int moveColumn, bool refocus = true)
     {
         if (!_editing || _session is null)
         {
@@ -1546,7 +1556,11 @@ public sealed partial class SpreadsheetGrid : Panel
             EnsureVisible(Selection.ActiveRow, Selection.ActiveColumn);
         }
 
-        Focus();
+        if (refocus)
+        {
+            Focus();
+        }
+
         Redraw();
         RaiseSelectionChanged();
     }
