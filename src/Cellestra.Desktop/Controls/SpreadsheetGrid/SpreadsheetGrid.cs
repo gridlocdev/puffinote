@@ -526,6 +526,8 @@ public sealed partial class SpreadsheetGrid : Panel
         // neighbours, never trimmed); the row grows to fit via EffectiveRowHeight (task 6). Numbers
         // ignore wrap (they ##### instead, handled above).
         bool wrap = style.Alignment.WrapText && !numeric;
+        bool clipped = false;
+        double drawableWidth = cellAvailable; // text-drawing width incl. any spill room, for the marker
         if (wrap)
         {
             formatted.MaxTextWidth = Math.Max(1, cellAvailable);
@@ -540,8 +542,22 @@ public sealed partial class SpreadsheetGrid : Panel
                 available += SpillRoom(sheet, row, column);
             }
 
-            formatted.MaxTextWidth = Math.Max(1, available);
-            formatted.Trimming = TextTrimming.CharacterEllipsis;
+            drawableWidth = available;
+
+            // When text still doesn't fit, Calc clips it hard (no ellipsis) and flags the hidden
+            // overflow with a small red double-chevron at the clipped edge. Reserve room for it so the
+            // glyph never sits on top of the trimmed text.
+            clipped = OverflowChevronSide(formatted.Width, available, horizontal == SAlign.Right) is not null;
+            if (clipped)
+            {
+                formatted.MaxTextWidth = Math.Max(1, available - OverflowMarkerWidth(typeface, fontSize));
+                formatted.Trimming = TextTrimming.None;
+            }
+            else
+            {
+                formatted.MaxTextWidth = Math.Max(1, available);
+                formatted.Trimming = TextTrimming.CharacterEllipsis;
+            }
         }
 
         double tx = horizontal switch
@@ -558,6 +574,35 @@ public sealed partial class SpreadsheetGrid : Panel
         };
 
         context.DrawText(formatted, new Point(tx, Math.Max(rect.Y, ty)));
+
+        if (clipped)
+        {
+            // Right-aligned text is cut off on its left; everything else on its right. The chevron
+            // sits at the actual clip edge — past any neighbours the text spilled into.
+            DrawOverflowMarker(context, rect, drawableWidth, typeface, fontSize, atRight: horizontal != SAlign.Right);
+        }
+    }
+
+    /// <summary>
+    /// The single rule for the clipped-text chevron: returns which side it sits on (true = right) when
+    /// the measured text is wider than the space it can draw in, or null when the text fits. The 0.5px
+    /// tolerance keeps sub-pixel rounding from flagging text that visually fits exactly.
+    /// </summary>
+    internal static bool? OverflowChevronSide(double textWidth, double availableWidth, bool isRightAligned) =>
+        textWidth > availableWidth + 0.5 ? !isRightAligned : null;
+
+    /// <summary>Width reserved for the clipped-overflow chevron, including a small gap from the text.</summary>
+    private static double OverflowMarkerWidth(Typeface typeface, double fontSize) =>
+        new FormattedText("»", CultureInfo.CurrentCulture, FlowDirection.LeftToRight, typeface, fontSize, Brushes.Black).Width + 2;
+
+    /// <summary>Draws the red double-chevron that flags text clipped by its cell box (Calc-style).</summary>
+    private void DrawOverflowMarker(DrawingContext context, Rect rect, double drawableWidth, Typeface typeface, double fontSize, bool atRight)
+    {
+        var glyph = new FormattedText(atRight ? "»" : "«", CultureInfo.CurrentCulture,
+            FlowDirection.LeftToRight, typeface, fontSize, _palette.OverflowMarker);
+        double mx = atRight ? rect.X + CellPadX + drawableWidth - glyph.Width : rect.X + CellPadX;
+        double my = rect.Y + (rect.Height - glyph.Height) / 2;
+        context.DrawText(glyph, new Point(mx, Math.Max(rect.Y, my)));
     }
 
     /// <summary>Extra width available to the right of a cell while the next columns are empty.</summary>
@@ -714,6 +759,61 @@ public sealed partial class SpreadsheetGrid : Panel
 
         rect = new Rect(x.Value, y.Value, w!.Value, h!.Value);
         return true;
+    }
+
+    /// <summary>
+    /// Test seam: whether the clipped-overflow chevron is drawn for a cell and, if so, on which side
+    /// (true = right). Measures the cell as <see cref="DrawCellContent"/> does, then applies the shared
+    /// <see cref="OverflowChevronSide"/> rule. Null when the text fits, wraps, or is a number (#####).
+    /// Call after a frame has been laid out so the visible columns/rows exist.
+    /// </summary>
+    internal bool? OverflowMarkerSideForTest(int row, int column)
+    {
+        var sheet = Sheet;
+        if (sheet is null || !TryGetCellRect(row, column, out var rect))
+        {
+            return null;
+        }
+
+        var cell = sheet.Find(row, column);
+        if (cell is null || cell.Value.IsEmpty)
+        {
+            return null;
+        }
+
+        var style = ResolveStyle(cell, row, column);
+        string text = NumberFormatter.Format(cell.Value, style.NumberFormat, Culture);
+        if (text.Length == 0)
+        {
+            return null;
+        }
+
+        bool numeric = cell.Value.IsNumber || cell.Value.IsBoolean || cell.Value.IsError;
+        if (numeric || style.Alignment.WrapText)
+        {
+            return null; // numbers show #####; wrapped text grows the row instead of clipping
+        }
+
+        var typeface = new Typeface(
+            style.Font.Family,
+            style.Font.Italic ? FontStyle.Italic : FontStyle.Normal,
+            style.Font.Bold ? FontWeight.Bold : FontWeight.Normal);
+        double fontSize = style.Font.SizePoints * 96.0 / 72.0 * _zoom;
+        var formatted = new FormattedText(text, CultureInfo.CurrentCulture, FlowDirection.LeftToRight, typeface, fontSize, Brushes.Black);
+
+        var horizontal = style.Alignment.Horizontal switch
+        {
+            SAlign.General => SAlign.Left,
+            var h => h,
+        };
+
+        double available = rect.Width - 2 * CellPadX;
+        if (horizontal == SAlign.Left && formatted.Width > available)
+        {
+            available += SpillRoom(sheet, row, column);
+        }
+
+        return OverflowChevronSide(formatted.Width, available, horizontal == SAlign.Right);
     }
 
     /// <summary>

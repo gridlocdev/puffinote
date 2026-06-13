@@ -41,6 +41,9 @@ internal sealed class GridPalette
     /// <summary>The colour a cell's hyperlinked text is drawn in — a blue that reads on both themes.</summary>
     public required IBrush Hyperlink { get; init; }
 
+    /// <summary>The red double-chevron flag drawn at the clipped edge of text too wide for its cell (à la Calc).</summary>
+    public required IBrush OverflowMarker { get; init; }
+
     public static GridPalette For(ThemeVariant variant) => variant == ThemeVariant.Dark ? Dark : Light;
 
     private static IBrush Brush(uint argb) => new ImmutableSolidColorBrush(Color.FromUInt32(argb));
@@ -63,6 +66,7 @@ internal sealed class GridPalette
         SelectionFill = Brush(0x222A7DE1),
         ActiveOutline = Pen(0xFF2A7DE1, 2),
         Hyperlink = Brush(0xFF0B5FCC),
+        OverflowMarker = Brush(0xFFE53935),
     };
 
     private static readonly GridPalette Dark = new()
@@ -80,5 +84,6 @@ internal sealed class GridPalette
         SelectionFill = Brush(0x332A7DE1),
         ActiveOutline = Pen(0xFF4A90E2, 2),
         Hyperlink = Brush(0xFF6BB0FF),
+        OverflowMarker = Brush(0xFFFF5252),
     };
 }
