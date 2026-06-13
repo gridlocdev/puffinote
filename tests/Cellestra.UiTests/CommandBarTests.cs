@@ -1,6 +1,7 @@
 using System.Linq;
 using Avalonia.Controls;
 using Avalonia.Headless.XUnit;
+using Avalonia.LogicalTree;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
 using Cellestra.Desktop.Commands;
@@ -156,6 +157,40 @@ public class CommandBarTests
 
         Assert.False(bar.IsOverflowing);
         Assert.Equal(total, bar.InlineGroupCount);
+    }
+
+    [AvaloniaFact]
+    public void Overflow_drawer_flattens_a_folded_group_into_rows_with_no_nested_submenu()
+    {
+        var window = new MainWindow();
+        var bar = new CommandBar(window);
+        var host = new Window { Content = bar, Width = 340, Height = 120 };
+        host.Show();
+        Pump(host);
+
+        Assert.True(bar.IsOverflowing);
+
+        // The Data group is rightmost, so it folds first. In the drawer it must appear flattened: its
+        // group header, its PRIMARY tools (e.g. Sort Ascending) AND its overflow tools (e.g. Custom
+        // Sort) all as rows in one menu — not behind a nested chevron submenu.
+        var labels = bar.OverflowDrawerPanels
+            .SelectMany(p => p.GetLogicalDescendants().OfType<TextBlock>())
+            .Select(t => t.Text)
+            .ToList();
+
+        Assert.Contains("Data", labels);             // group header
+        Assert.Contains("Sort Ascending", labels);   // a primary tool, now a flat row
+        Assert.Contains("Sort…", labels);            // an overflow tool, same flat menu
+
+        // No folded group keeps a chevron submenu in the drawer: the only flyouts hanging off drawer
+        // buttons are bespoke pickers (the colour "Custom…" picker), never a group's "More …" drawer.
+        foreach (var button in bar.OverflowDrawerPanels.SelectMany(p => p.GetLogicalDescendants().OfType<Button>()))
+        {
+            if (button.Flyout is not null)
+            {
+                Assert.DoesNotContain("tools", ToolTip.GetTip(button) as string ?? string.Empty);
+            }
+        }
     }
 
     // The reflow runs off the strip's SizeChanged and reparents groups, which queues another layout

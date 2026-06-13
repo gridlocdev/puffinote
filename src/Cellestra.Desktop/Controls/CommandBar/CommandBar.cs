@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Controls.Primitives;
@@ -18,6 +19,9 @@ namespace Cellestra.Desktop.Controls.CommandBar;
 /// Tools reflect the selection — disabled when they don't apply, lit when their toggle is on — and
 /// the whole bar collapses to a slim handle to give the grid more room. The drawer is enriched with
 /// swatches and a size stepper by <see cref="CommandBarDrawer"/>.
+/// When the window is too narrow to fit every group, the rightmost groups fold (in reading order)
+/// into a single overflow drawer behind a double-chevron button — each folded group flattened into
+/// one menu (its tools as rows, no nested submenu) rather than scrolling off behind a scrollbar.
 /// </summary>
 public sealed class CommandBar : UserControl
 {
@@ -39,6 +43,10 @@ public sealed class CommandBar : UserControl
     // is too narrow, the rightmost groups are the first to fold into the overflow drawer.
     private readonly List<Control> _groupControls = new();
     private readonly List<double> _groupWidths = new();
+    // The parallel flattened panels shown for folded groups in the overflow drawer (primary + overflow
+    // tools as flat rows, no nested submenu) and the action that refreshes each one's state.
+    private readonly List<Control> _overflowPanels = new();
+    private readonly List<Action> _overflowRefreshers = new();
     private readonly Panel _root;
     private readonly Control _full;
     private readonly Control _slim;
@@ -47,7 +55,7 @@ public sealed class CommandBar : UserControl
     // Adaptive overflow: groups that don't fit on the strip move into a drop-down drawer behind a
     // double-chevron button (Google-Sheets style) rather than scrolling off behind a scrollbar.
     private StackPanel _strip = null!;
-    private WrapPanel _overflowHost = null!;
+    private StackPanel _overflowHost = null!;
     private Button _overflowButton = null!;
     private Flyout _overflowFlyout = null!;
     private LucideIcon _overflowIcon = null!;
@@ -101,8 +109,12 @@ public sealed class CommandBar : UserControl
     /// <summary>Test hook: the number of groups currently shown inline on the strip.</summary>
     internal int InlineGroupCount => _strip.Children.Count;
 
-    /// <summary>Test hook: the number of groups currently tucked into the overflow drawer.</summary>
-    internal int OverflowGroupCount => _overflowHost.Children.Count;
+    /// <summary>Test hook: the number of flattened group panels currently mounted in the overflow drawer.</summary>
+    internal int OverflowGroupCount => _overflowHost.Children.Count(c => _overflowPanels.Contains(c));
+
+    /// <summary>Test hook: the flattened group panels currently mounted in the overflow drawer.</summary>
+    internal IReadOnlyList<Control> OverflowDrawerPanels =>
+        _overflowHost.Children.Where(c => _overflowPanels.Contains(c)).ToList();
 
     /// <summary>Re-evaluate every tool's enabled and toggle state against the current selection.</summary>
     public void RefreshState()
@@ -131,9 +143,9 @@ public sealed class CommandBar : UserControl
             VerticalAlignment = VerticalAlignment.Center,
             ClipToBounds = true,
         };
-        // Overflowed groups wrap inside the drawer, so a very narrow window stacks them into rows
-        // instead of one long line that runs off the screen edge.
-        _overflowHost = new WrapPanel { Orientation = Orientation.Horizontal, MaxWidth = 480, Margin = new Thickness(4) };
+        // A folded group shows its whole toolset flattened into one menu — no nested submenu — so the
+        // overflow drawer is a single vertical list of those panels (scrolled when it gets tall).
+        _overflowHost = new StackPanel { Orientation = Orientation.Vertical, Spacing = 2, Margin = new Thickness(6) };
 
         foreach (var group in CommandBarModel.For(CommandContext.Cell))
         {
@@ -144,6 +156,12 @@ public sealed class CommandBar : UserControl
             _groupControls.Add(control);
             _groupWidths.Add(control.DesiredSize.Width);
             _strip.Children.Add(control);
+
+            // The flattened counterpart used when this group folds away — built once, mounted on demand.
+            // Its close action dismisses the whole overflow drawer (the flyout), like the bar's other rows.
+            var (panel, refresh) = CommandBarDrawer.BuildFlat(group, _env, () => _overflowFlyout.Hide());
+            _overflowPanels.Add(panel);
+            _overflowRefreshers.Add(refresh);
         }
 
         _overflowButton = BuildOverflowButton();
@@ -209,11 +227,17 @@ public sealed class CommandBar : UserControl
         {
             _overflowIcon.IconKey = "chevrons-up";
             RefreshState();
+            // The flattened group panels carry their own rows/affordances — sync them to the selection
+            // on open, the same way an inline group's drawer refreshes when it opens.
+            foreach (var refresh in _overflowRefreshers)
+            {
+                refresh();
+            }
         };
         _overflowFlyout.Closed += (_, _) =>
         {
             _overflowIcon.IconKey = "chevrons-down";
-            // A nested group drawer may have been previewing a style — drop it when the drawer closes.
+            // A flattened panel may have been previewing a style on hover — drop it when the drawer closes.
             _env.PreviewCellStyle(null);
         };
         button.Flyout = _overflowFlyout;
@@ -265,7 +289,20 @@ public sealed class CommandBar : UserControl
             _overflowHost.Children.Clear();
             for (int i = 0; i < _groupControls.Count; i++)
             {
-                ((i < fit) ? (Panel)_strip : _overflowHost).Children.Add(_groupControls[i]);
+                if (i < fit)
+                {
+                    _strip.Children.Add(_groupControls[i]);
+                }
+                else
+                {
+                    // Hairline separator between flattened group panels so the menu reads as sections.
+                    if (_overflowHost.Children.Count > 0)
+                    {
+                        _overflowHost.Children.Add(new Border { Height = 1, Background = DividerBrush, Margin = new Thickness(6, 4) });
+                    }
+
+                    _overflowHost.Children.Add(_overflowPanels[i]);
+                }
             }
 
             _overflowButton.IsVisible = overflow;
