@@ -61,6 +61,12 @@ public sealed class GridSelection
         Changed?.Invoke(this, EventArgs.Empty);
     }
 
+    /// <summary>
+    /// Esc: collapse the selection back to a single cell at the position it was anchored from — the
+    /// cell the selection started growing from — and drop any disjoint Cmd+click ranges.
+    /// </summary>
+    public void CollapseToOrigin() => MoveTo(_anchorRow, _anchorColumn);
+
     /// <summary>Cmd+click a cell: commit the current rectangle and start a fresh one (#27).</summary>
     public void AddPoint(int row, int column)
     {

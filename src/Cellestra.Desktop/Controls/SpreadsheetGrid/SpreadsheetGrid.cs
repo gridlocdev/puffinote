@@ -1244,7 +1244,19 @@ public sealed partial class SpreadsheetGrid : Panel
                 break;
             case Key.F2: BeginEdit(null); break;
             case Key.Delete or Key.Back: ClearSelection(); break;
-            case Key.Escape: InvalidateClipboard(); break;
+            case Key.Escape:
+                // A first Esc cancels a pending copy/cut marquee (keeping the selection); once there's
+                // no marquee, Esc collapses a multi-cell or disjoint selection back to its origin cell.
+                if (HasMarquee)
+                {
+                    InvalidateClipboard();
+                }
+                else if (!Selection.IsSingleCell || Selection.IsDiscontiguous)
+                {
+                    Selection.CollapseToOrigin();
+                }
+
+                break;
             default:
                 if (IsTypingKey(e))
                 {
