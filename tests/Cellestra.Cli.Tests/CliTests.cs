@@ -428,4 +428,102 @@ public sealed class CliTests : IDisposable
         Assert.Equal(1, exit);
         Assert.Contains("--in-place", err, StringComparison.Ordinal);
     }
+
+    // ---- Chart sheets -----------------------------------------------------
+
+    private string ChartDataBook()
+    {
+        string ods = Path2("chartdata.ods");
+        Run("new", ods);
+        Run("set", ods, "A1", "Region", "--in-place");
+        Run("set", ods, "B1", "Q1", "--in-place");
+        Run("set", ods, "C1", "Q2", "--in-place");
+        Run("set", ods, "A2", "North", "--in-place");
+        Run("set", ods, "B2", "10", "--in-place");
+        Run("set", ods, "C2", "5", "--in-place");
+        Run("set", ods, "A3", "South", "--in-place");
+        Run("set", ods, "B3", "20", "--in-place");
+        Run("set", ods, "C3", "8", "--in-place");
+        return ods;
+    }
+
+    [Fact]
+    public void Chart_from_a_range_seeds_categories_and_a_series_per_column()
+    {
+        string ods = ChartDataBook();
+        Assert.Equal(0, Run("chart", ods, "--type", "column", "--title", "Sales", "--from", "Sheet1.A1:C3", "--in-place").Exit);
+
+        var sheet = OdsReader.Read(File.OpenRead(ods)).FindSheet("Chart1")!;
+        Assert.True(sheet.IsChartSheet);
+        var chart = sheet.Chart!;
+        Assert.Equal("Sales", chart.Title);
+        Assert.Equal(Cellestra.Charts.ChartType.Column, chart.Type);
+        Assert.Equal("Sheet1.A2:A3", chart.CategoriesReference); // first column → categories, header skipped
+        Assert.Equal(2, chart.Series.Count);                     // Q1 and Q2 columns → two series
+        Assert.Equal("Sheet1.B2:B3", chart.Series[0].ValuesReference);
+        Assert.Equal("Sheet1.B1", chart.Series[0].NameReference); // header row names the series
+    }
+
+    [Fact]
+    public void Chart_with_explicit_fields_round_trips()
+    {
+        string ods = ChartDataBook();
+        Assert.Equal(0, Run("chart", ods,
+            "--type", "bar", "--stacking", "percent",
+            "--categories", "Sheet1.A2:A3",
+            "--values", "Sheet1.B2:B3", "--names", "First",
+            "--values", "Sheet1.C2:C3", "--names", "Second",
+            "--y-title", "Sales", "--no-legend", "--in-place").Exit);
+
+        var chart = OdsReader.Read(File.OpenRead(ods)).FindSheet("Chart1")!.Chart!;
+        Assert.Equal(Cellestra.Charts.ChartType.Bar, chart.Type);
+        Assert.Equal(Cellestra.Charts.ChartStacking.Percent, chart.Stacking);
+        Assert.False(chart.ShowLegend);
+        Assert.Equal("Sales", chart.YAxisTitle);
+        Assert.Equal(2, chart.Series.Count);
+        Assert.Equal("First", chart.Series[0].Name);
+        Assert.Equal("Sheet1.C2:C3", chart.Series[1].ValuesReference);
+    }
+
+    [Fact]
+    public void Scatter_chart_keeps_its_x_values_per_series()
+    {
+        string ods = ChartDataBook();
+        Assert.Equal(0, Run("chart", ods, "--type", "scatter",
+            "--x-values", "Sheet1.B2:B3", "--values", "Sheet1.C2:C3", "--in-place").Exit);
+
+        var series = Assert.Single(OdsReader.Read(File.OpenRead(ods)).FindSheet("Chart1")!.Chart!.Series);
+        Assert.Equal("Sheet1.B2:B3", series.XValuesReference);
+        Assert.Equal("Sheet1.C2:C3", series.ValuesReference);
+    }
+
+    [Fact]
+    public void Bubble_chart_requires_bubble_sizes()
+    {
+        string ods = ChartDataBook();
+        var (exit, _, err) = Run("chart", ods, "--type", "bubble",
+            "--x-values", "Sheet1.A2:A3", "--values", "Sheet1.B2:B3", "--in-place");
+        Assert.Equal(1, exit);
+        Assert.Contains("--bubble-sizes", err, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Pie_chart_rejects_more_than_one_series()
+    {
+        string ods = ChartDataBook();
+        var (exit, _, err) = Run("chart", ods, "--type", "pie",
+            "--values", "Sheet1.B2:B3", "--values", "Sheet1.C2:C3", "--in-place");
+        Assert.Equal(1, exit);
+        Assert.Contains("single series", err, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Stacking_is_rejected_for_chart_types_that_cannot_stack()
+    {
+        string ods = ChartDataBook();
+        var (exit, _, err) = Run("chart", ods, "--type", "line",
+            "--from", "Sheet1.A1:C3", "--stacking", "stacked", "--in-place");
+        Assert.Equal(1, exit);
+        Assert.Contains("stacking", err, StringComparison.OrdinalIgnoreCase);
+    }
 }

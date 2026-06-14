@@ -58,6 +58,9 @@ public static class CliApplication
             DataCommands.ShowColumns(),
             DataCommands.Merge(),
             DataCommands.Unmerge(),
+
+            // Chart sheets — the headless face of Insert ▸ Chart Sheet.
+            ChartCommands.Chart(),
         };
     }
 
