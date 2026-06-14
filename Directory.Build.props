@@ -16,4 +16,17 @@
     <InvariantGlobalization>false</InvariantGlobalization>
   </PropertyGroup>
 
+  <!--
+    Keep build outputs OS-specific so artifacts built inside the Linux
+    .devcontainer never collide with native macOS/Windows builds on the host.
+    ($(OS) reports "Unix" for both macOS and Linux, so it can't be used here.)
+  -->
+  <PropertyGroup>
+    <BuildOSToken Condition="$([MSBuild]::IsOSPlatform('OSX'))">osx</BuildOSToken>
+    <BuildOSToken Condition="$([MSBuild]::IsOSPlatform('Linux'))">linux</BuildOSToken>
+    <BuildOSToken Condition="$([MSBuild]::IsOSPlatform('Windows'))">windows</BuildOSToken>
+    <BaseOutputPath>bin/$(BuildOSToken)/</BaseOutputPath>
+    <BaseIntermediateOutputPath>obj/$(BuildOSToken)/</BaseIntermediateOutputPath>
+  </PropertyGroup>
+
 </Project>
