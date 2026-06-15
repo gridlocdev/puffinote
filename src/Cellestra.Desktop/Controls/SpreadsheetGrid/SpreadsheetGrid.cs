@@ -1343,6 +1343,15 @@ public sealed partial class SpreadsheetGrid : Panel
             return;
         }
 
+        // Esc first dismisses an open filter/validation dropdown popup (a lightweight overlay, not a
+        // modal) before any marquee/selection/paint Esc behaviour kicks in.
+        if (e.Key == Key.Escape && _popupOpen)
+        {
+            ClosePopup();
+            e.Handled = true;
+            return;
+        }
+
         // Esc disarms the Format Painter (cancel without painting) before any other Esc behavior.
         if (e.Key == Key.Escape && TryCancelPaint())
         {

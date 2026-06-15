@@ -66,6 +66,23 @@ public class FilterDropdownSortTests
     }
 
     [AvaloniaFact]
+    public void Esc_closes_the_filter_dropdown_popup()
+    {
+        var window = TableWindow();
+        window.Grid.Focus();
+
+        var chevron = window.Grid.FilterButtonRectForTest(0);
+        Assert.NotNull(chevron);
+        ClickGridPoint(window, chevron!.Value.Center);
+        window.CaptureRenderedFrame();
+        Assert.True(window.Grid.PopupHasTextForTest("Sorting Score")); // the dropdown is open
+
+        window.KeyPressQwerty(PhysicalKey.Escape, RawInputModifiers.None);
+
+        Assert.False(window.Grid.PopupHasTextForTest("Sorting Score")); // Esc dismissed it
+    }
+
+    [AvaloniaFact]
     public void Filter_popup_is_titled_by_the_column_header()
     {
         var window = TableWindow(); // header "Score" in A1
