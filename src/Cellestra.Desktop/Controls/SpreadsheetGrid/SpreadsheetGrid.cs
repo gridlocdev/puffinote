@@ -51,8 +51,17 @@ public sealed partial class SpreadsheetGrid : Panel
 
     private readonly Surface _surface;
     private WorkbookSession? _session;
+
+    // Scroll position is an anchor cell (_scrollRow/_scrollColumn — the first scrollable row/column)
+    // plus a sub-cell pixel offset (_scrollRowOffset/_scrollColumnOffset) for how far that anchor is
+    // scrolled past the top/left fold. The offset is what makes scrolling glide instead of snapping to
+    // whole cells: the anchor is drawn partially clipped and advances/retreats as the offset crosses a
+    // cell boundary (see NormalizeVerticalScroll/NormalizeHorizontalScroll). Offsets are in post-zoom
+    // device pixels and kept in [0, size-of-anchor).
     private int _scrollRow;
     private int _scrollColumn;
+    private double _scrollRowOffset;
+    private double _scrollColumnOffset;
     private double _zoom = 1.0;
     private bool _editing;
     private bool _selecting;
@@ -238,6 +247,8 @@ public sealed partial class SpreadsheetGrid : Panel
         _session = session;
         _scrollRow = 0;
         _scrollColumn = 0;
+        _scrollRowOffset = 0;
+        _scrollColumnOffset = 0;
         Selection.MoveTo(0, 0);
         WireFormatPainter(session); // paintbrush cursor + drag-to-paint follow the session's armed stamp
         Redraw();
@@ -279,8 +290,21 @@ public sealed partial class SpreadsheetGrid : Panel
 
         RebuildRowFontMap(sheet); // so EffectiveRowHeight can grow rows to fit their tallest font
 
+        // Re-settle the anchor/offset against the current sizes (zoom, row growth, resize can shift them)
+        // so the partially-scrolled top row/column is always the right one before we lay anything out.
+        NormalizeVerticalScroll(sheet);
+        NormalizeHorizontalScroll(sheet);
+
         int frozenColumns = sheet.FrozenColumns;
         int frozenRows = sheet.FrozenRows;
+
+        // A scrollable row/column scrolled partway under a frozen band would bleed into it (the headers
+        // only cover the header strips, not the frozen-pane band). So on a frozen axis the draw snaps to
+        // a whole-cell boundary — the anchor still advances smoothly as the accumulated offset crosses a
+        // cell, but nothing is drawn half-clipped under the frozen rows/columns. Axes without a freeze
+        // keep full sub-cell smoothness.
+        double rowDrawOffset = frozenRows > 0 ? 0 : _scrollRowOffset;
+        double colDrawOffset = frozenColumns > 0 ? 0 : _scrollColumnOffset;
 
         // Frozen columns are always shown, pinned just right of the row header.
         double x = HeaderWidth;
@@ -297,6 +321,9 @@ public sealed partial class SpreadsheetGrid : Panel
         }
 
         _frozenRight = x;
+        // The first scrollable column is shifted left by its sub-cell offset, so it can be drawn
+        // partially clipped behind the frozen columns / row header (which repaint over the overhang).
+        x = _frozenRight - colDrawOffset;
         for (int col = Math.Max(_scrollColumn, frozenColumns); col < SheetDimensions.MaxColumns && x < bounds.Width; col++)
         {
             if (sheet.IsColumnHidden(col))
@@ -323,6 +350,9 @@ public sealed partial class SpreadsheetGrid : Panel
         }
 
         _frozenBottom = y;
+        // The first scrollable row is shifted up by its sub-cell offset, so it can be drawn partially
+        // clipped behind the frozen rows / column header (which repaint over the overhang).
+        y = _frozenBottom - rowDrawOffset;
         for (int row = Math.Max(_scrollRow, frozenRows); row < SheetDimensions.MaxRows && y < bounds.Height; row++)
         {
             if (sheet.IsRowHidden(row))
@@ -352,21 +382,44 @@ public sealed partial class SpreadsheetGrid : Panel
         var gridPen = _palette.GridLine;
 
         context.FillRectangle(_palette.Canvas, new Rect(Bounds.Size));
-        DrawTableBanding(context, sheet);
-        DrawSelection(context, _palette.SelectionFill);
-        DrawCells(context, sheet, gridPen);
-        DrawMerges(context, sheet, gridPen);
-        DrawCellBorders(context, sheet);
-        DrawTableChrome(context, sheet);
+
+        // Cell content is clipped to the area below/right of the headers. Smooth scrolling draws the
+        // first row/column partially off the top/left fold (by its sub-cell offset), and this clip keeps
+        // that overhang from painting into the header gutters.
+        using (context.PushClip(CellViewport()))
+        {
+            DrawTableBanding(context, sheet);
+            DrawSelection(context, _palette.SelectionFill);
+            DrawCells(context, sheet, gridPen);
+            DrawMerges(context, sheet, gridPen);
+            DrawCellBorders(context, sheet);
+            DrawTableChrome(context, sheet);
+        }
+
         DrawFreezeDividers(context);
         DrawHeaders(context, _palette.HeaderFill, _palette.HeaderText, gridPen);
-        DrawActiveOutline(context, _palette.ActiveOutline);
-        DrawReferenceHighlights(context);
-        DrawMarquee(context);
-        DrawFillPreview(context);
-        DrawFillHandle(context);
-        DrawPaintPreview(context);
+
+        // Selection/edit overlays draw on top of the headers, so re-apply the same clip to keep the
+        // active-cell outline, marquee, and fill handle of a partially-scrolled cell out of the gutters.
+        using (context.PushClip(CellViewport()))
+        {
+            DrawActiveOutline(context, _palette.ActiveOutline);
+            DrawReferenceHighlights(context);
+            DrawMarquee(context);
+            DrawFillPreview(context);
+            DrawFillHandle(context);
+            DrawPaintPreview(context);
+        }
     }
+
+    /// <summary>The rectangle holding cell content — everything below the column header and right of the
+    /// row header, out to the grid edge. Cell drawing is clipped to this so partial scroll rows/columns
+    /// never bleed into the headers.</summary>
+    private Rect CellViewport() => new(
+        HeaderWidth,
+        HeaderHeight,
+        Math.Max(0, Bounds.Width - HeaderWidth),
+        Math.Max(0, Bounds.Height - HeaderHeight));
 
     private void DrawCells(DrawingContext context, Worksheet sheet, IPen gridPen)
     {
@@ -733,22 +786,31 @@ public sealed partial class SpreadsheetGrid : Panel
         var typeface = new Typeface(Cellestra.Core.Defaults.FontFamily);
         // Header labels scale with the zoom level, like the cell text, but stay legible at small zoom.
         double headerFontSize = Math.Clamp(11 * _zoom, 8, HeaderHeight - 4);
-        foreach (var (col, x, w) in _visibleColumns)
+
+        // Clip each header strip to its own band so a partially-scrolled first column/row (drawn shifted
+        // by its sub-cell offset) doesn't bleed its label into the corner.
+        using (context.PushClip(new Rect(HeaderWidth, 0, Math.Max(0, Bounds.Width - HeaderWidth), HeaderHeight)))
         {
-            var rect = new Rect(x, 0, w, HeaderHeight);
-            bool active = col >= Selection.Left && col <= Selection.Right;
-            context.FillRectangle(active ? _palette.ActiveHeaderFill : headerBrush, rect);
-            context.DrawRectangle(null, gridPen, rect);
-            DrawCentered(context, SheetDimensions.ColumnToLetters(col), rect, typeface, textBrush, headerFontSize);
+            foreach (var (col, x, w) in _visibleColumns)
+            {
+                var rect = new Rect(x, 0, w, HeaderHeight);
+                bool active = col >= Selection.Left && col <= Selection.Right;
+                context.FillRectangle(active ? _palette.ActiveHeaderFill : headerBrush, rect);
+                context.DrawRectangle(null, gridPen, rect);
+                DrawCentered(context, SheetDimensions.ColumnToLetters(col), rect, typeface, textBrush, headerFontSize);
+            }
         }
 
-        foreach (var (row, y, h) in _visibleRows)
+        using (context.PushClip(new Rect(0, HeaderHeight, HeaderWidth, Math.Max(0, Bounds.Height - HeaderHeight))))
         {
-            var rect = new Rect(0, y, HeaderWidth, h);
-            bool active = row >= Selection.Top && row <= Selection.Bottom;
-            context.FillRectangle(active ? _palette.ActiveHeaderFill : headerBrush, rect);
-            context.DrawRectangle(null, gridPen, rect);
-            DrawCentered(context, (row + 1).ToString(CultureInfo.InvariantCulture), rect, typeface, textBrush, headerFontSize);
+            foreach (var (row, y, h) in _visibleRows)
+            {
+                var rect = new Rect(0, y, HeaderWidth, h);
+                bool active = row >= Selection.Top && row <= Selection.Bottom;
+                context.FillRectangle(active ? _palette.ActiveHeaderFill : headerBrush, rect);
+                context.DrawRectangle(null, gridPen, rect);
+                DrawCentered(context, (row + 1).ToString(CultureInfo.InvariantCulture), rect, typeface, textBrush, headerFontSize);
+            }
         }
     }
 
@@ -1216,22 +1278,51 @@ public sealed partial class SpreadsheetGrid : Panel
     protected override void OnPointerWheelChanged(PointerWheelEventArgs e)
     {
         base.OnPointerWheelChanged(e);
-        bool horizontal = e.KeyModifiers.HasFlag(KeyModifiers.Shift);
-        double delta = e.Delta.Y != 0 ? e.Delta.Y : e.Delta.X;
-        int steps = delta > 0 ? -3 : 3;
-
-        if (horizontal)
+        // Shift maps a vertical wheel onto the horizontal axis for mouse users; a trackpad already
+        // delivers a real Delta.X, so leave that alone.
+        double dx = e.Delta.X;
+        double dy = e.Delta.Y;
+        if (e.KeyModifiers.HasFlag(KeyModifiers.Shift) && dx == 0)
         {
-            _scrollColumn = Math.Clamp(_scrollColumn + steps, 0, SheetDimensions.MaxColumns - 1);
+            dx = dy;
+            dy = 0;
         }
-        else
+
+        if (ApplyWheelScroll(dx, dy))
         {
-            _scrollRow = Math.Clamp(_scrollRow + steps, 0, SheetDimensions.MaxRows - 1);
+            e.Handled = true;
+        }
+    }
+
+    /// <summary>
+    /// Scroll by raw wheel deltas, converted to pixels rather than whole cells, so a trackpad (which
+    /// delivers many small high-resolution deltas) glides smoothly and a mouse wheel moves a gentle,
+    /// predictable amount. Both axes move at once for two-finger gestures. A positive delta means
+    /// "toward the top/left", i.e. a smaller scroll offset. Returns whether anything moved.
+    /// </summary>
+    private bool ApplyWheelScroll(double deltaX, double deltaY)
+    {
+        var sheet = Sheet;
+        if (sheet is null || (deltaX == 0 && deltaY == 0))
+        {
+            return false;
+        }
+
+        if (deltaY != 0)
+        {
+            _scrollRowOffset -= deltaY * WheelPixelsPerNotch;
+            NormalizeVerticalScroll(sheet);
+        }
+
+        if (deltaX != 0)
+        {
+            _scrollColumnOffset -= deltaX * WheelPixelsPerNotch;
+            NormalizeHorizontalScroll(sheet);
         }
 
         Redraw();
         InvalidateArrange(); // keep the scroll bars in step with the new scroll position
-        e.Handled = true;
+        return true;
     }
 
     protected override void OnKeyDown(KeyEventArgs e)
@@ -1454,16 +1545,24 @@ public sealed partial class SpreadsheetGrid : Panel
         int frozenRows = sheet?.FrozenRows ?? 0;
         int frozenColumns = sheet?.FrozenColumns ?? 0;
 
-        // Frozen lines are always on screen; only scroll for cells beyond them.
+        // Frozen lines are always on screen; only scroll for cells beyond them. Any adjustment lands the
+        // target on a whole-cell boundary (offset reset to 0) so keyboard navigation never leaves the
+        // active cell half-clipped under the fold.
         if (row >= frozenRows)
         {
             if (row < _scrollRow)
             {
                 _scrollRow = row;
+                _scrollRowOffset = 0;
             }
-            else if (_visibleRows.Count > 0 && row > _visibleRows[^1].Index)
+            else if (row == _scrollRow && _scrollRowOffset > 0)
             {
-                _scrollRow += row - _visibleRows[^1].Index;
+                _scrollRowOffset = 0; // the anchor itself was partly scrolled off the top — reveal it
+            }
+            else if (_visibleRows.Count > 0 && (row > _visibleRows[^1].Index || RowPartlyBelowFold(row)))
+            {
+                _scrollRow += Math.Max(1, row - _visibleRows[^1].Index);
+                _scrollRowOffset = 0;
             }
         }
 
@@ -1472,17 +1571,53 @@ public sealed partial class SpreadsheetGrid : Panel
             if (column < _scrollColumn)
             {
                 _scrollColumn = column;
+                _scrollColumnOffset = 0;
             }
-            else if (_visibleColumns.Count > 0 && column > _visibleColumns[^1].Index)
+            else if (column == _scrollColumn && _scrollColumnOffset > 0)
             {
-                _scrollColumn += column - _visibleColumns[^1].Index;
+                _scrollColumnOffset = 0;
+            }
+            else if (_visibleColumns.Count > 0 && (column > _visibleColumns[^1].Index || ColumnPartlyPastFold(column)))
+            {
+                _scrollColumn += Math.Max(1, column - _visibleColumns[^1].Index);
+                _scrollColumnOffset = 0;
             }
         }
 
         _scrollRow = Math.Max(_scrollRow, frozenRows);
         _scrollColumn = Math.Max(_scrollColumn, frozenColumns);
+        if (sheet is not null)
+        {
+            NormalizeVerticalScroll(sheet);
+            NormalizeHorizontalScroll(sheet);
+        }
+
         Redraw();
         InvalidateArrange(); // keyboard navigation may have scrolled — refresh the bars
+    }
+
+    /// <summary>True when <paramref name="row"/> is the last visible row but the fold clips its bottom.</summary>
+    private bool RowPartlyBelowFold(int row)
+    {
+        if (_visibleRows.Count == 0 || _visibleRows[^1].Index != row)
+        {
+            return false;
+        }
+
+        var (_, y, h) = _visibleRows[^1];
+        return y + h > Bounds.Height + 0.5;
+    }
+
+    /// <summary>True when <paramref name="column"/> is the last visible column but the fold clips its right edge.</summary>
+    private bool ColumnPartlyPastFold(int column)
+    {
+        if (_visibleColumns.Count == 0 || _visibleColumns[^1].Index != column)
+        {
+            return false;
+        }
+
+        var (_, x, w) = _visibleColumns[^1];
+        return x + w > Bounds.Width + 0.5;
     }
 
     /// <summary>Freeze rows above and columns left of the active cell (or unfreeze if already frozen).</summary>

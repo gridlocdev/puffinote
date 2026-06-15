@@ -86,4 +86,66 @@ public class GridScrollBarTests
         grid.DragVerticalScrollForTest(50);
         Assert.Equal(50, grid.ScrollRowForTest);
     }
+
+    [AvaloniaFact]
+    public void A_small_trackpad_delta_scrolls_a_sub_cell_distance_without_snapping_to_a_row()
+    {
+        // A trackpad delivers small fractional deltas; each must move a few pixels, not jump a whole row
+        // (the old behaviour leapt three rows per event, which read as "extremely fast").
+        var (_, sheet, grid) = Open();
+        sheet.SetValue(300, 0, CellValue.Number(1));
+        Layout(grid);
+
+        grid.WheelScrollForTest(0, -0.25); // a gentle fractional nudge downward (toward later rows)
+
+        Assert.Equal(0, grid.ScrollRowForTest);        // still anchored on row 0 …
+        Assert.True(grid.ScrollRowOffsetForTest > 0);  // … but glided partway into it
+        Assert.True(grid.ScrollRowOffsetForTest < 20); // less than a default row height — a sub-cell move
+    }
+
+    [AvaloniaFact]
+    public void Accumulated_wheel_scrolling_advances_the_anchor_row_smoothly()
+    {
+        var (_, sheet, grid) = Open();
+        sheet.SetValue(300, 0, CellValue.Number(1));
+        Layout(grid);
+
+        // Several notches add up past a row boundary: the anchor advances and a remainder stays as the
+        // sub-cell offset, so scrolling is continuous rather than quantised to whole rows.
+        for (int i = 0; i < 5; i++)
+        {
+            grid.WheelScrollForTest(0, -1);
+        }
+
+        Assert.True(grid.ScrollRowForTest >= 1);
+        Assert.True(grid.ScrollRowOffsetForTest >= 0);
+    }
+
+    [AvaloniaFact]
+    public void Scrolling_back_up_returns_to_the_very_top()
+    {
+        var (_, sheet, grid) = Open();
+        sheet.SetValue(300, 0, CellValue.Number(1));
+        Layout(grid);
+
+        grid.WheelScrollForTest(0, -3); // down a bit
+        Layout(grid);
+        grid.WheelScrollForTest(0, 10); // and well back up
+
+        Assert.Equal(0, grid.ScrollRowForTest);
+        Assert.Equal(0, grid.ScrollRowOffsetForTest);
+    }
+
+    [AvaloniaFact]
+    public void Shift_wheel_scrolls_horizontally()
+    {
+        var (_, sheet, grid) = Open();
+        sheet.SetValue(0, 60, CellValue.Number(1));
+        Layout(grid);
+
+        grid.WheelScrollForTest(-2, 0); // a horizontal (e.g. Shift-mapped) delta
+
+        Assert.True(grid.ScrollColumnForTest > 0 || grid.ScrollColumnOffsetForTest > 0);
+        Assert.Equal(0, grid.ScrollRowForTest); // vertical axis untouched
+    }
 }

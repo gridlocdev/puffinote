@@ -20,6 +20,12 @@ public sealed partial class SpreadsheetGrid
     private const double ScrollThickness = 12;
     private const int OverflowScanCellCap = 5000; // skip the per-cell spill measure on very large sheets
 
+    // Pixels moved per unit of wheel delta. A wheel "notch" is delta 1.0 (≈ this many pixels, a little
+    // over two default rows); a trackpad delivers fractional deltas, so the same factor yields smooth
+    // pixel-precise gliding. Kept modest so positioning stays easy to control (the old code jumped three
+    // whole rows per event, which scrolled far too fast).
+    private const double WheelPixelsPerNotch = 40;
+
     private readonly ScrollBar _vScroll = new()
     {
         Orientation = Orientation.Vertical,
@@ -55,6 +61,15 @@ public sealed partial class SpreadsheetGrid
 
     internal int ScrollColumnForTest => _scrollColumn;
 
+    /// <summary>The sub-cell vertical scroll offset in pixels (how far the anchor row is scrolled off the top).</summary>
+    internal double ScrollRowOffsetForTest => _scrollRowOffset;
+
+    /// <summary>The sub-cell horizontal scroll offset in pixels (how far the anchor column is scrolled off the left).</summary>
+    internal double ScrollColumnOffsetForTest => _scrollColumnOffset;
+
+    /// <summary>Drive a wheel/trackpad gesture as the pointer handler would (deltas in wheel units).</summary>
+    internal void WheelScrollForTest(double deltaX, double deltaY) => ApplyWheelScroll(deltaX, deltaY);
+
     /// <summary>Drive the vertical bar as a user drag would (value is a scrollable-row offset).</summary>
     internal void DragVerticalScrollForTest(double value) =>
         ScrollToRow((int)Math.Round(value) + (Sheet?.FrozenRows ?? 0));
@@ -62,9 +77,11 @@ public sealed partial class SpreadsheetGrid
     private void InitScrollBars()
     {
         // Scroll fires only on user interaction (drag/track/buttons), never when we set Value
-        // ourselves — so there's no echo to guard against.
-        _vScroll.Scroll += (_, e) => ScrollToRow((int)Math.Round(e.NewValue) + (Sheet?.FrozenRows ?? 0));
-        _hScroll.Scroll += (_, e) => ScrollToColumn((int)Math.Round(e.NewValue) + (Sheet?.FrozenColumns ?? 0));
+        // ourselves — so there's no echo to guard against. The value is a fractional scrollable-row/
+        // column offset (whole part = anchor index past the frozen lines, fraction = sub-cell position),
+        // so dragging the thumb glides as smoothly as the trackpad.
+        _vScroll.Scroll += (_, e) => ScrollToRowFraction(e.NewValue);
+        _hScroll.Scroll += (_, e) => ScrollToColumnFraction(e.NewValue);
         Children.Add(_vScroll);
         Children.Add(_hScroll);
     }
@@ -78,9 +95,10 @@ public sealed partial class SpreadsheetGrid
     {
         int frozen = Sheet?.FrozenRows ?? 0;
         int clamped = Math.Clamp(row, frozen, SheetDimensions.MaxRows - 1);
-        if (clamped != _scrollRow)
+        if (clamped != _scrollRow || _scrollRowOffset != 0)
         {
             _scrollRow = clamped;
+            _scrollRowOffset = 0;
             Redraw();
             InvalidateArrange();
         }
@@ -90,11 +108,144 @@ public sealed partial class SpreadsheetGrid
     {
         int frozen = Sheet?.FrozenColumns ?? 0;
         int clamped = Math.Clamp(column, frozen, SheetDimensions.MaxColumns - 1);
-        if (clamped != _scrollColumn)
+        if (clamped != _scrollColumn || _scrollColumnOffset != 0)
         {
             _scrollColumn = clamped;
+            _scrollColumnOffset = 0;
             Redraw();
             InvalidateArrange();
+        }
+    }
+
+    /// <summary>
+    /// Scroll to a fractional vertical position (whole part = scrollable-row index past the frozen rows,
+    /// fraction = how far into that row, as a share of its height). This is what the vertical bar's thumb
+    /// reports, so dragging it lands on any sub-cell position rather than snapping to a row.
+    /// </summary>
+    private void ScrollToRowFraction(double value)
+    {
+        var sheet = Sheet;
+        if (sheet is null)
+        {
+            return;
+        }
+
+        int frozen = sheet.FrozenRows;
+        value = Math.Max(0, value);
+        int anchor = Math.Clamp(frozen + (int)Math.Floor(value), frozen, SheetDimensions.MaxRows - 1);
+        _scrollRow = anchor;
+        _scrollRowOffset = (value - Math.Floor(value)) * RowPixels(sheet, anchor);
+        NormalizeVerticalScroll(sheet);
+        Redraw();
+        InvalidateArrange();
+    }
+
+    /// <summary>Horizontal counterpart of <see cref="ScrollToRowFraction"/> for the horizontal bar.</summary>
+    private void ScrollToColumnFraction(double value)
+    {
+        var sheet = Sheet;
+        if (sheet is null)
+        {
+            return;
+        }
+
+        int frozen = sheet.FrozenColumns;
+        value = Math.Max(0, value);
+        int anchor = Math.Clamp(frozen + (int)Math.Floor(value), frozen, SheetDimensions.MaxColumns - 1);
+        _scrollColumn = anchor;
+        _scrollColumnOffset = (value - Math.Floor(value)) * ColumnPixels(sheet, anchor);
+        NormalizeHorizontalScroll(sheet);
+        Redraw();
+        InvalidateArrange();
+    }
+
+    /// <summary>The drawn (post-zoom) height of a row, or 0 if it's hidden and takes no space.</summary>
+    private double RowPixels(Worksheet sheet, int row) =>
+        sheet.IsRowHidden(row) ? 0 : EffectiveRowHeight(sheet, row) * _zoom;
+
+    /// <summary>The drawn (post-zoom) width of a column, or 0 if it's hidden and takes no space.</summary>
+    private double ColumnPixels(Worksheet sheet, int column) =>
+        sheet.IsColumnHidden(column) ? 0 : EffectiveColumnWidth(sheet, column) * _zoom;
+
+    /// <summary>
+    /// Settle the vertical anchor/offset so the offset sits within the anchor row's height: advance the
+    /// anchor while it's fully scrolled past, retreat it while we've scrolled above it (skipping hidden
+    /// rows, which take no space), and clamp at the frozen rows and the last row.
+    /// </summary>
+    private void NormalizeVerticalScroll(Worksheet sheet)
+    {
+        int frozen = sheet.FrozenRows;
+        if (_scrollRow < frozen)
+        {
+            _scrollRow = frozen;
+        }
+
+        while (_scrollRowOffset < 0 && _scrollRow > frozen)
+        {
+            _scrollRow--;
+            _scrollRowOffset += RowPixels(sheet, _scrollRow);
+        }
+
+        while (_scrollRow < SheetDimensions.MaxRows - 1)
+        {
+            double h = RowPixels(sheet, _scrollRow);
+            if (h <= 0) // hidden anchor: step over it without consuming offset
+            {
+                _scrollRow++;
+            }
+            else if (_scrollRowOffset >= h)
+            {
+                _scrollRowOffset -= h;
+                _scrollRow++;
+            }
+            else
+            {
+                break;
+            }
+        }
+
+        if (_scrollRowOffset < 0)
+        {
+            _scrollRowOffset = 0; // scrolled above the very first scrollable row — pin to the top
+        }
+    }
+
+    /// <summary>Horizontal counterpart of <see cref="NormalizeVerticalScroll"/>.</summary>
+    private void NormalizeHorizontalScroll(Worksheet sheet)
+    {
+        int frozen = sheet.FrozenColumns;
+        if (_scrollColumn < frozen)
+        {
+            _scrollColumn = frozen;
+        }
+
+        while (_scrollColumnOffset < 0 && _scrollColumn > frozen)
+        {
+            _scrollColumn--;
+            _scrollColumnOffset += ColumnPixels(sheet, _scrollColumn);
+        }
+
+        while (_scrollColumn < SheetDimensions.MaxColumns - 1)
+        {
+            double w = ColumnPixels(sheet, _scrollColumn);
+            if (w <= 0)
+            {
+                _scrollColumn++;
+            }
+            else if (_scrollColumnOffset >= w)
+            {
+                _scrollColumnOffset -= w;
+                _scrollColumn++;
+            }
+            else
+            {
+                break;
+            }
+        }
+
+        if (_scrollColumnOffset < 0)
+        {
+            _scrollColumnOffset = 0;
         }
     }
 
@@ -137,7 +288,9 @@ public sealed partial class SpreadsheetGrid
             _vScroll.ViewportSize = Math.Max(1, visibleRows);
             _vScroll.LargeChange = Math.Max(1, visibleRows);
             _vScroll.SmallChange = 1;
-            _vScroll.Value = Math.Clamp(_scrollRow - frozenRows, 0, maxRow);
+            double rowPixels = RowPixels(sheet, _scrollRow);
+            double rowFraction = rowPixels > 0 ? _scrollRowOffset / rowPixels : 0;
+            _vScroll.Value = Math.Clamp(_scrollRow - frozenRows + rowFraction, 0, maxRow);
             var rect = new Rect(bounds.Width - ScrollThickness, HeaderHeight, ScrollThickness, Math.Max(0, vBottom - HeaderHeight));
             _vScroll.Measure(rect.Size);
             _vScroll.Arrange(rect);
@@ -150,7 +303,9 @@ public sealed partial class SpreadsheetGrid
             _hScroll.ViewportSize = Math.Max(1, visibleColumns);
             _hScroll.LargeChange = Math.Max(1, visibleColumns);
             _hScroll.SmallChange = 1;
-            _hScroll.Value = Math.Clamp(_scrollColumn - frozenColumns, 0, maxColumn);
+            double colPixels = ColumnPixels(sheet, _scrollColumn);
+            double colFraction = colPixels > 0 ? _scrollColumnOffset / colPixels : 0;
+            _hScroll.Value = Math.Clamp(_scrollColumn - frozenColumns + colFraction, 0, maxColumn);
             var rect = new Rect(HeaderWidth, bounds.Height - ScrollThickness, Math.Max(0, hRight - HeaderWidth), ScrollThickness);
             _hScroll.Measure(rect.Size);
             _hScroll.Arrange(rect);
