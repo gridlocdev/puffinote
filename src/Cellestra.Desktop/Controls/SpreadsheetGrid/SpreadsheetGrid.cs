@@ -71,6 +71,7 @@ public sealed partial class SpreadsheetGrid : Panel
         Children.Add(_surface);            // draws the grid
         Children.Add(_editor);             // floats above for inline editing
         Children.Add(_editorDecorations);  // draws the editor's underline/strikethrough, above the editor
+        InitScrollBars();              // overlay scroll bars along the right/bottom edges (task 3)
         InitChrome();                  // popup layer for filter/validation dropdowns
         InitSignatureHelp();           // function argument hint while typing a formula
         ApplyTheme();                  // canvas/text colors follow the system light/dark theme
@@ -239,6 +240,7 @@ public sealed partial class SpreadsheetGrid : Panel
         Selection.MoveTo(0, 0);
         WireFormatPainter(session); // paintbrush cursor + drag-to-paint follow the session's armed stamp
         Redraw();
+        InvalidateArrange(); // size the scroll bars to the attached sheet
     }
 
     public void Refresh()
@@ -252,6 +254,7 @@ public sealed partial class SpreadsheetGrid : Panel
         }
 
         Redraw();
+        InvalidateArrange(); // an edit may have changed the content extent — resize the scroll bars
     }
 
     private Worksheet? Sheet => _session?.ActiveSheet;
@@ -1217,6 +1220,7 @@ public sealed partial class SpreadsheetGrid : Panel
         }
 
         Redraw();
+        InvalidateArrange(); // keep the scroll bars in step with the new scroll position
         e.Handled = true;
     }
 
@@ -1468,6 +1472,7 @@ public sealed partial class SpreadsheetGrid : Panel
         _scrollRow = Math.Max(_scrollRow, frozenRows);
         _scrollColumn = Math.Max(_scrollColumn, frozenColumns);
         Redraw();
+        InvalidateArrange(); // keyboard navigation may have scrolled — refresh the bars
     }
 
     /// <summary>Freeze rows above and columns left of the active cell (or unfreeze if already frozen).</summary>
@@ -1823,6 +1828,7 @@ public sealed partial class SpreadsheetGrid : Panel
             _signatureTip.Arrange(new Rect(0, 0, 0, 0));
         }
 
+        LayoutScrollBars(finalSize);
         return finalSize;
     }
 

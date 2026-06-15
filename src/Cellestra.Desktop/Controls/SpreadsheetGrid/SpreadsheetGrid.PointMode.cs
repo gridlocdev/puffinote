@@ -150,6 +150,11 @@ public sealed partial class SpreadsheetGrid
         }
 
         var point = e.GetPosition(this);
+        if (IsOverScrollBar(point))
+        {
+            return; // a click on an overlay scroll bar is for scrolling, not a point-mode reference
+        }
+
         bool onCell = HitTest(point, out int row, out int column, out bool rowHeader, out bool columnHeader)
             && !rowHeader && !columnHeader;
         if (onCell && TryPointModeInsert(point))
