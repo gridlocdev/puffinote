@@ -13,6 +13,13 @@ public sealed record Table(string Name, CellRange Range, bool HasHeader = true)
 
     public SortSpec? Sort { get; init; }
 
+    /// <summary>
+    /// When set, the table's first column is styled like the header row — bold, on the header fill —
+    /// to read as a row-label header (task 5). The styling lives on the cells (so it round-trips as
+    /// ordinary cell formatting); this flag tracks the designation for toggling and banding.
+    /// </summary>
+    public bool HasHeaderColumn { get; init; }
+
     /// <summary>The header row's column labels, when the table has a header.</summary>
     public IReadOnlyList<string> HeaderLabels(Worksheet sheet)
     {

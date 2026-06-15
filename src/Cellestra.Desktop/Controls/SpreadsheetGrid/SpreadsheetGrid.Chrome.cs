@@ -60,6 +60,14 @@ public sealed partial class SpreadsheetGrid
                 {
                     context.FillRectangle(_palette.TableRowBand, rowRect);
                 }
+
+                // A designated header column gets the header band on its first cell, mirroring the
+                // header row (task 5) — the cell's own header fill draws over it where styled.
+                if (table.HasHeaderColumn && !isHeader
+                    && TryGetCellRect(row, table.Range.Left, out var headerCell))
+                {
+                    context.FillRectangle(_palette.TableHeaderBand, headerCell);
+                }
             }
         }
     }

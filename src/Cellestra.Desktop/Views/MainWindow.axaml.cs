@@ -1056,6 +1056,22 @@ public partial class MainWindow : Window, IAppEnvironment
             return; // right-clicked the header corner — nothing to offer
         }
 
+        // Inside a table, offer the table-specific actions (task 5: designate a header column). The
+        // command's IsActive shows a check when the first column is already a header column.
+        if (target == Controls.SpreadsheetGrid.SpreadsheetGrid.ContextTarget.Cell && ActiveTable is not null
+            && AppCommands.ById("data.headerColumn") is { } headerColumn)
+        {
+            flyout.Items.Add(new Separator());
+            flyout.Items.Add(new MenuItem
+            {
+                Header = headerColumn.Label,
+                Icon = headerColumn.Icon is null ? null : new LucideIcon { IconKey = headerColumn.Icon, Size = 15 },
+                Command = new RelayCommand(() => headerColumn.Execute(this), () => headerColumn.IsEnabled(this)),
+                ToggleType = MenuItemToggleType.CheckBox,
+                IsChecked = headerColumn.IsToggleActive(this),
+            });
+        }
+
         flyout.ShowAt(Grid, showAtPointer: true);
         e.Handled = true;
     }
@@ -1090,6 +1106,23 @@ public partial class MainWindow : Window, IAppEnvironment
         }
 
         Refresh();
+    }
+
+    /// <summary>The table the active cell sits in, or null when it isn't inside one.</summary>
+    public Cellestra.Core.Data.Table? ActiveTable =>
+        _session.ActiveSheet.FindTable(Selection.ActiveRow, Selection.ActiveColumn);
+
+    public void ToggleTableHeaderColumn()
+    {
+        if (ActiveTable is not { } table)
+        {
+            return;
+        }
+
+        _session.Execute(DataEditCommands.SetTableHeaderColumn(
+            _session.Workbook, _session.ActiveSheet.Name, table, !table.HasHeaderColumn));
+        Refresh();
+        Narrate(table.HasHeaderColumn ? "Removed header column" : "Added header column");
     }
 
     public async void ShowSortDialog()

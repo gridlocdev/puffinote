@@ -395,6 +395,41 @@ public static class DataEditCommands
         return style.WithFill(fill).WithFont(font);
     }
 
+    /// <summary>Strip the header look back to the default (no fill, regular black text) — the inverse of <see cref="StyleTableHeader"/>.</summary>
+    public static CellStyle ClearTableHeader(CellStyle style)
+    {
+        var font = style.Font with { Bold = false, Color = ArgbColor.Black };
+        return style.WithFill(Fill.None).WithFont(font);
+    }
+
+    /// <summary>
+    /// Designate (or clear) a table's first column as a header column (task 5): the first column's
+    /// cells take the header look — bold, on the header fill, exactly like the header row — and the
+    /// table's <see cref="Table.HasHeaderColumn"/> flag flips. One undoable step. The header-row cell
+    /// at the corner is left to the row's own styling, so toggling the column never disturbs it.
+    /// </summary>
+    public static IEditCommand SetTableHeaderColumn(Workbook workbook, string sheet, Table table, bool enabled)
+    {
+        var replaced = table with { HasHeaderColumn = enabled };
+        var flip = new ActionCommand("Header Column",
+            wb => { Sheet(wb, sheet).ReplaceTable(table, replaced); return EditResult.None; },
+            wb => { Sheet(wb, sheet).ReplaceTable(replaced, table); return EditResult.None; });
+
+        // The header row already styles the corner cell, so the column's run starts just below it.
+        int top = table.Range.Top + (table.HasHeader ? 1 : 0);
+        if (top > table.Range.Bottom)
+        {
+            return flip; // header-only table — nothing to restyle, just record the flag
+        }
+
+        var columnRange = new CellRange(
+            new CellAddress(table.Range.Left, top),
+            new CellAddress(table.Range.Left, table.Range.Bottom));
+        var style = EditCommands.ApplyStyle(workbook, sheet, columnRange,
+            enabled ? StyleTableHeader : ClearTableHeader, "Header Column");
+        return EditCommands.Composite("Header Column", new[] { flip, style });
+    }
+
     public static IEditCommand RemoveTable(string sheet, Table table) =>
         new ActionCommand("Remove Table",
             wb =>

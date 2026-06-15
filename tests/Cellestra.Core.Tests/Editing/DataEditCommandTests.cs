@@ -34,6 +34,50 @@ public class DataEditCommandTests
     }
 
     [Fact]
+    public void Header_column_styles_the_first_column_like_the_header_and_undoes()
+    {
+        var (workbook, history, sheet) = New();
+        sheet.SetValue(0, 0, CellValue.Text("Team")); sheet.SetValue(0, 1, CellValue.Text("Pts"));
+        sheet.SetValue(1, 0, CellValue.Text("A")); sheet.SetValue(1, 1, CellValue.Number(3));
+        sheet.SetValue(2, 0, CellValue.Text("B")); sheet.SetValue(2, 1, CellValue.Number(1));
+        var table = new Table("T", CellRange.Parse("A1:B3"), HasHeader: true);
+        sheet.AddTable(table);
+
+        history.Execute(DataEditCommands.SetTableHeaderColumn(workbook, sheet.Name, table, enabled: true));
+
+        Assert.True(sheet.Tables[0].HasHeaderColumn);
+        // The first column's data cells (below the header row) take the bold header fill.
+        var a2 = workbook.Styles.Get(sheet.Find(1, 0)!.StyleId);
+        Assert.True(a2.Font.Bold);
+        Assert.Equal(new ArgbColor(Defaults.TableHeaderFillArgb), a2.Fill.Background);
+        // A data cell in another column is untouched.
+        Assert.False(workbook.Styles.Get(sheet.Find(1, 1)!.StyleId).Font.Bold);
+
+        history.Undo();
+        Assert.False(sheet.Tables[0].HasHeaderColumn);
+        Assert.False(workbook.Styles.Get(sheet.Find(1, 0)!.StyleId).Font.Bold); // styling reverted
+    }
+
+    [Fact]
+    public void Header_column_can_be_cleared_back_to_default()
+    {
+        var (workbook, history, sheet) = New();
+        sheet.SetValue(0, 0, CellValue.Text("Team"));
+        sheet.SetValue(1, 0, CellValue.Text("A"));
+        var table = new Table("T", CellRange.Parse("A1:A2"), HasHeader: true);
+        sheet.AddTable(table);
+
+        history.Execute(DataEditCommands.SetTableHeaderColumn(workbook, sheet.Name, table, enabled: true));
+        var on = sheet.Tables[0];
+        history.Execute(DataEditCommands.SetTableHeaderColumn(workbook, sheet.Name, on, enabled: false));
+
+        Assert.False(sheet.Tables[0].HasHeaderColumn);
+        var a2 = workbook.Styles.Get(sheet.Find(1, 0)!.StyleId);
+        Assert.False(a2.Font.Bold);
+        Assert.False(a2.Fill.HasBackground); // fill cleared
+    }
+
+    [Fact]
     public void Filter_hides_rows_and_undo_restores()
     {
         var (workbook, history, sheet) = New();

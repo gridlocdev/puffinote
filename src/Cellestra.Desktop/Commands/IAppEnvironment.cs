@@ -87,6 +87,12 @@ public interface IAppEnvironment
 
     void ShowDataValidationDialog();
 
+    /// <summary>Toggle whether the table under the active cell styles its first column as a header column.</summary>
+    void ToggleTableHeaderColumn();
+
+    /// <summary>The table the active cell sits in, or null when it isn't inside one (for menu state).</summary>
+    Cellestra.Core.Data.Table? ActiveTable { get; }
+
     void ShowFindReplace(bool replace);
 
     void ShowFormatCellsDialog();
