@@ -62,6 +62,24 @@ public class ChartSheetTests
     }
 
     [AvaloniaFact]
+    public void A_new_chart_autofills_from_the_only_table_on_the_sheet()
+    {
+        var window = WindowWithData();
+        IAppEnvironment env = window;
+        var sheet = env.Session.ActiveSheet;
+        sheet.AddTable(new Cellestra.Core.Data.Table("T", Cellestra.Core.Model.CellRange.Parse("A1:B3"), HasHeader: true));
+        env.Selection.MoveTo(8, 8); // selection sits away from the table — the table still drives the chart
+
+        env.AddChartSheet();
+
+        var chart = env.Session.ActiveSheet.Chart!;
+        Assert.Contains("A2:A3", chart.CategoriesReference);     // table's first column → labels
+        Assert.Single(chart.Series);                              // first numeric column → one series
+        Assert.Contains("B2:B3", chart.Series[0].ValuesReference);
+        Assert.NotNull(chart.Series[0].NameReference);            // header row → series name cell
+    }
+
+    [AvaloniaFact]
     public void The_chart_view_renders_without_throwing()
     {
         var window = WindowWithData();

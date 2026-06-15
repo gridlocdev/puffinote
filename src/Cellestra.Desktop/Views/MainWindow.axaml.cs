@@ -800,11 +800,79 @@ public partial class MainWindow : Window, IAppEnvironment
     public void AddChartSheet()
     {
         var definition = new ChartDefinition { Type = ChartType.Column, Title = "Chart" };
-        SeedChartFromSelection(definition);
+
+        // When the sheet has exactly one table, autofill the chart from it — first column for the
+        // category labels and the first numeric column for the values (task 6). Otherwise fall back to
+        // the current selection (and to the table if that seeding finds nothing usable).
+        var sheet = _session.ActiveSheet;
+        if (!(!sheet.IsChartSheet && sheet.Tables.Count == 1 && SeedChartFromTable(definition, sheet.Tables[0])))
+        {
+            SeedChartFromSelection(definition);
+        }
+
         _session.AddChartSheet(definition); // raises StructureChanged → RefreshSheetView swaps in the chart view
         BuildSheetTabs();
         UpdateChrome();
         Narrate("Added chart sheet");
+    }
+
+    /// <summary>
+    /// Pre-fill a new chart from the sheet's single table (task 6): the table's first column becomes
+    /// the category labels and its first numeric column becomes one series (named from the header row
+    /// when present). Returns false when the table can't be charted (too few rows, or no numeric
+    /// column), so the caller can fall back to selection-based seeding.
+    /// </summary>
+    private bool SeedChartFromTable(ChartDefinition definition, Cellestra.Core.Data.Table table)
+    {
+        var sheet = _session.ActiveSheet;
+        var range = table.Range;
+        int dataTop = table.HasHeader ? range.Top + 1 : range.Top;
+        if (dataTop > range.Bottom)
+        {
+            return false; // header-only or empty table — nothing to plot
+        }
+
+        int? valueColumn = null;
+        for (int column = range.Left + 1; column <= range.Right; column++)
+        {
+            if (ColumnHasNumber(sheet, column, dataTop, range.Bottom))
+            {
+                valueColumn = column;
+                break;
+            }
+        }
+
+        if (valueColumn is null)
+        {
+            return false; // no numeric column beside the labels to chart
+        }
+
+        string name = sheet.Name;
+        string Ref(int column) =>
+            $"{name}.{SheetDimensions.ColumnToLetters(column)}{dataTop + 1}:{SheetDimensions.ColumnToLetters(column)}{range.Bottom + 1}";
+
+        definition.CategoriesReference = Ref(range.Left); // first column = the label column
+        var series = new ChartSeries { ValuesReference = Ref(valueColumn.Value) };
+        if (table.HasHeader)
+        {
+            series.NameReference = $"{name}.{SheetDimensions.ColumnToLetters(valueColumn.Value)}{range.Top + 1}";
+        }
+
+        definition.Series.Add(series);
+        return true;
+    }
+
+    private static bool ColumnHasNumber(Worksheet sheet, int column, int fromRow, int toRow)
+    {
+        for (int row = fromRow; row <= toRow; row++)
+        {
+            if (sheet.GetValue(row, column).IsNumber)
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     /// <summary>
