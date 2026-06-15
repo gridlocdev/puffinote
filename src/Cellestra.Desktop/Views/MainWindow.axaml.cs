@@ -969,6 +969,17 @@ public partial class MainWindow : Window, IAppEnvironment
     /// <summary>The chart view currently hosted, or null on a data sheet.</summary>
     internal ChartSheetView? ActiveChartViewForTest => ChartHost.Content as ChartSheetView;
 
+    public void DuplicateActiveSheet()
+    {
+        // The tab's context menu activates the right-clicked sheet first, so the active sheet is the
+        // one to duplicate (works for data and chart sheets alike). StructureChanged rebuilds the tabs
+        // and swaps in the right view; reset to A1 so a duplicated data sheet reads cleanly.
+        var copy = _session.DuplicateSheet(_session.ActiveSheet);
+        Selection.MoveTo(0, 0);
+        OnSelectionChanged();
+        Narrate($"Duplicated sheet as “{copy.Name}”");
+    }
+
     public async void RenameActiveSheet()
     {
         var sheet = _session.ActiveSheet;
@@ -1617,7 +1628,7 @@ public partial class MainWindow : Window, IAppEnvironment
                 _session.SetActiveSheet(captured);
                 Grid.Refresh();
                 OnSelectionChanged();
-                BuildCommandFlyout("sheet.rename", "insert.sheet", "insert.chartSheet", null, "sheet.delete").ShowAt(SheetTabs, showAtPointer: true);
+                BuildCommandFlyout("sheet.rename", "sheet.duplicate", null, "insert.sheet", "insert.chartSheet", null, "sheet.delete").ShowAt(SheetTabs, showAtPointer: true);
                 e.Handled = true;
             };
             // Double-click renames inline — but that's driven from SheetTabsPointerPressed (ClickCount==2),

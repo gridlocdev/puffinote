@@ -35,6 +35,66 @@ public class WorkbookModelTests
     }
 
     [Fact]
+    public void DuplicateSheet_inserts_an_independent_copy_right_after_the_original()
+    {
+        var workbook = Workbook.CreateNew();
+        var source = workbook.ActiveSheet; // Sheet1
+        source.SetValue(0, 0, CellValue.Text("hello"));
+        source.FrozenRows = 1;
+        workbook.AddSheet("After"); // a sheet after Sheet1, to prove the copy lands between them
+
+        var copy = workbook.DuplicateSheet(source);
+
+        Assert.Equal("Sheet1 copy", copy.Name);
+        Assert.Equal(1, workbook.IndexOf(copy));            // immediately after the original
+        Assert.Equal("hello", copy.GetValue(0, 0).AsText);  // content copied
+        Assert.Equal(1, copy.FrozenRows);                    // layout copied
+
+        // The copy is fully detached: editing it leaves the original untouched.
+        copy.SetValue(0, 0, CellValue.Text("changed"));
+        Assert.Equal("hello", source.GetValue(0, 0).AsText);
+    }
+
+    [Fact]
+    public void DuplicateSheet_copies_a_chart_sheet_with_its_own_chart()
+    {
+        var workbook = Workbook.CreateNew();
+        var chart = new Cellestra.Charts.ChartDefinition { Title = "Sales" };
+        var source = workbook.AddChartSheet(chart);
+
+        var copy = workbook.DuplicateSheet(source);
+
+        Assert.True(copy.IsChartSheet);
+        Assert.Equal("Sales", copy.Chart!.Title);
+        Assert.NotSame(source.Chart, copy.Chart); // a deep copy, not a shared reference
+    }
+
+    [Fact]
+    public void DuplicateSheet_renames_copied_tables_so_they_stay_unique()
+    {
+        var workbook = Workbook.CreateNew();
+        var source = workbook.ActiveSheet;
+        source.SetValue(0, 0, CellValue.Text("H"));
+        source.SetValue(1, 0, CellValue.Number(1));
+        source.AddTable(new Cellestra.Core.Data.Table("Sales", CellRange.Parse("A1:A2")));
+
+        var copy = workbook.DuplicateSheet(source);
+
+        Assert.Equal("Sales", source.Tables[0].Name);     // original keeps its name
+        Assert.Equal("Sales_2", copy.Tables[0].Name);     // the copy's table is renamed unique
+    }
+
+    [Fact]
+    public void DuplicateSheet_name_avoids_collisions()
+    {
+        var workbook = Workbook.CreateNew();
+        var source = workbook.ActiveSheet;
+
+        Assert.Equal("Sheet1 copy", workbook.DuplicateSheet(source).Name);
+        Assert.Equal("Sheet1 copy 2", workbook.DuplicateSheet(source).Name);
+    }
+
+    [Fact]
     public void Cannot_remove_the_last_sheet()
     {
         var workbook = Workbook.CreateNew();

@@ -162,6 +162,20 @@ public sealed class WorkbookSession
         SetActiveSheet(next); // raises StructureChanged
     }
 
+    /// <summary>
+    /// Duplicate a worksheet (data or chart sheet): insert a deep copy after it, make it active, and
+    /// mark the workbook modified. Like other structural sheet changes this isn't undoable (PRD §8.5),
+    /// so the history is cleared.
+    /// </summary>
+    public Worksheet DuplicateSheet(Worksheet sheet)
+    {
+        var copy = _workbook.DuplicateSheet(sheet);
+        ClearHistory(); // older undo commands resolve sheets by name; a new sheet would desync replay
+        IsModified = true;
+        SetActiveSheet(copy); // raises StructureChanged so the tabs rebuild and the view swaps in
+        return copy;
+    }
+
     /// <summary>Rename a worksheet (throws on an invalid or duplicate name so the UI can explain it).</summary>
     public void RenameSheet(Worksheet sheet, string newName)
     {

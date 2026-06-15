@@ -67,6 +67,9 @@ public interface IAppEnvironment
     /// <summary>Rename the active worksheet (prompts for the new name).</summary>
     void RenameActiveSheet();
 
+    /// <summary>Insert a copy of the active worksheet (data or chart sheet) right after it, and select it.</summary>
+    void DuplicateActiveSheet();
+
     /// <summary>Delete the active worksheet (confirms first; refuses to delete the last one).</summary>
     void DeleteActiveSheet();
 

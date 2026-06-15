@@ -14,6 +14,23 @@ namespace Cellestra.UiTests;
 public class SheetCommandTests
 {
     [Fact]
+    public void Duplicate_sheet_inserts_a_copy_after_it_and_activates_it()
+    {
+        var session = WorkbookSession.NewBlank();
+        var source = session.ActiveSheet;
+        source.SetValue(0, 0, CellValue.Text("data"));
+
+        var copy = session.DuplicateSheet(source);
+
+        Assert.Equal(2, session.Workbook.Worksheets.Count);
+        Assert.Same(copy, session.ActiveSheet);                 // the copy becomes active
+        Assert.Equal("Sheet1 copy", copy.Name);
+        Assert.Equal("data", copy.GetValue(0, 0).AsText);       // content carried over
+        Assert.Equal(1, session.Workbook.IndexOf(copy));        // sits right after the original
+        Assert.True(session.IsModified);
+    }
+
+    [Fact]
     public void Delete_sheet_removes_it_activates_a_neighbour_and_refuses_the_last()
     {
         var session = WorkbookSession.NewBlank();

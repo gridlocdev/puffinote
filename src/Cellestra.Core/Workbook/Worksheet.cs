@@ -380,6 +380,44 @@ public sealed class Worksheet
         return new CellRange(new CellAddress(left, top), new CellAddress(right, bottom));
     }
 
+    /// <summary>
+    /// A deep, independent copy of this worksheet under <paramref name="newName"/> (task 7: Duplicate
+    /// Sheet). Copies the cells, per-row/column layout, merged regions, tables, data validations,
+    /// frozen panes, and AutoFilter state; a chart sheet also copies its chart definition. Cells keep
+    /// their <see cref="Cell.StyleId"/> — styles live in the shared workbook pool — so the duplicate
+    /// reads identically while being fully detached from the original.
+    /// </summary>
+    public Worksheet Clone(string newName)
+    {
+        var copy = new Worksheet(newName);
+        foreach (var (key, cell) in _cells)
+        {
+            copy._cells[key] = cell.Clone();
+        }
+
+        foreach (var (key, row) in _rows)
+        {
+            copy._rows[key] = row.Clone();
+        }
+
+        foreach (var (key, column) in _columns)
+        {
+            copy._columns[key] = column.Clone();
+        }
+
+        // MergedRegion, Table and DataValidation are immutable records — sharing them is a full copy.
+        copy._mergedRegions.AddRange(_mergedRegions);
+        copy._tables.AddRange(_tables);
+        copy._validations.AddRange(_validations);
+        copy.FrozenRows = FrozenRows;
+        copy.FrozenColumns = FrozenColumns;
+        copy.ActiveFilter = ActiveFilter;
+        copy.ActiveFilterSpec = ActiveFilterSpec;
+        copy.ActiveSort = ActiveSort;
+        copy.Chart = Chart?.Clone();
+        return copy;
+    }
+
     // ---- State capture (for structural undo) -----------------------------
 
     /// <summary>A deep snapshot of a worksheet's grid state, for undoing structural edits.</summary>

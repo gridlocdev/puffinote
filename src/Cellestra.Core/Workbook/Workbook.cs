@@ -117,6 +117,68 @@ public sealed class Workbook
         return sheet;
     }
 
+    /// <summary>
+    /// Duplicate a worksheet (task 7): insert a deep copy immediately after the original under a
+    /// fresh "<i>Name</i> copy" name and return it. Works for data sheets and chart sheets alike.
+    /// </summary>
+    public Worksheet DuplicateSheet(Worksheet source)
+    {
+        ArgumentNullException.ThrowIfNull(source);
+        int index = _worksheets.IndexOf(source);
+        if (index < 0)
+        {
+            throw new InvalidOperationException("The sheet to duplicate is not in this workbook.");
+        }
+
+        var copy = source.Clone(UniqueDuplicateName(source.Name));
+
+        // Tables persist as document-global ODF database ranges, so give the copies fresh names rather
+        // than letting two sheets share one (which is invalid in the saved file). Table names aren't
+        // used in formulas (Golden Rule #9), so renaming them is safe.
+        var takenTableNames = new HashSet<string>(
+            _worksheets.SelectMany(s => s.Tables).Select(t => t.Name), StringComparer.OrdinalIgnoreCase);
+        foreach (var table in copy.Tables.ToList())
+        {
+            if (!takenTableNames.Add(table.Name))
+            {
+                string fresh = UniqueTableName(table.Name, takenTableNames);
+                copy.ReplaceTable(table, table with { Name = fresh });
+                takenTableNames.Add(fresh);
+            }
+        }
+
+        _worksheets.Insert(index + 1, copy);
+        return copy;
+    }
+
+    private static string UniqueTableName(string baseName, ISet<string> taken)
+    {
+        for (int n = 2; ; n++)
+        {
+            string candidate = $"{baseName}_{n}";
+            if (!taken.Contains(candidate))
+            {
+                return candidate;
+            }
+        }
+    }
+
+    /// <summary>A unique "<i>base</i> copy" name (then "copy 2", "copy 3", …), trimmed to the length cap.</summary>
+    private string UniqueDuplicateName(string baseName)
+    {
+        for (int n = 0; ; n++)
+        {
+            string suffix = n == 0 ? " copy" : $" copy {n + 1}";
+            int headMax = Math.Max(1, SheetName.MaxLength - suffix.Length);
+            string head = baseName.Length > headMax ? baseName[..headMax] : baseName;
+            string candidate = head + suffix;
+            if (FindSheet(candidate) is null)
+            {
+                return candidate;
+            }
+        }
+    }
+
     public void InsertSheet(int index, Worksheet sheet)
     {
         ArgumentNullException.ThrowIfNull(sheet);

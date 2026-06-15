@@ -142,6 +142,7 @@ public static class AppCommands
         new("insert.hyperlink", "Hyperlink…", "Add, edit, or remove a hyperlink on the active cell.",
             e => e.ShowHyperlinkDialog(), "link", new KeyGesture(Key.K, CmdAlt)),
         new("sheet.rename", "Rename Sheet…", "Rename the active worksheet.", e => e.RenameActiveSheet(), "pencil"),
+        new("sheet.duplicate", "Duplicate Sheet", "Insert a copy of the active worksheet.", e => e.DuplicateActiveSheet(), "copy"),
         new("sheet.delete", "Delete Sheet", "Delete the active worksheet.", e => e.DeleteActiveSheet(), "trash-2",
             canExecute: e => e.Session.Workbook.Worksheets.Count > 1),
 
