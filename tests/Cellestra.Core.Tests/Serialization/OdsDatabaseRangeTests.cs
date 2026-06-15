@@ -143,6 +143,35 @@ public class OdsDatabaseRangeTests
     }
 
     [Fact]
+    public void Multi_level_sort_and_multi_column_filter_survive()
+    {
+        // The chained pipeline a Sort & Filter dialog produces: sort by two columns, filter on two.
+        var workbook = Workbook.CreateNew();
+        var sheet = workbook.ActiveSheet;
+        sheet.SetValue(0, 0, CellValue.Text("Region")); sheet.SetValue(0, 1, CellValue.Text("Status"));
+        sheet.SetValue(1, 0, CellValue.Text("West")); sheet.SetValue(1, 1, CellValue.Text("Open"));
+        sheet.SetValue(2, 0, CellValue.Text("East")); sheet.SetValue(2, 1, CellValue.Text("Done"));
+
+        var range = CellRange.Parse("A1:B3");
+        sheet.ActiveFilter = range;
+        sheet.ActiveFilterSpec = new FilterSpec(new Dictionary<int, ColumnFilter>
+        {
+            [0] = new ColumnFilter { AllowedValues = new HashSet<string> { "West", "East" } },
+            [1] = new ColumnFilter { Condition = "Open" },
+        });
+        sheet.ActiveSort = new SortSpec(new[] { new SortLevel(0, Ascending: true), new SortLevel(1, Ascending: false) });
+
+        var reopened = RoundTrip(workbook).FindSheet("Sheet1")!;
+
+        var sort = reopened.ActiveSort;
+        Assert.NotNull(sort);
+        Assert.Equal(new[] { 0, 1 }, sort!.Levels.Select(l => l.Column)); // both levels, in priority order
+        Assert.True(sort.Levels[0].Ascending);
+        Assert.False(sort.Levels[1].Ascending);
+        Assert.Equal(2, reopened.ActiveFilterSpec!.Columns.Count);
+    }
+
+    [Fact]
     public void No_filter_emits_no_database_range()
     {
         var workbook = Workbook.CreateNew();

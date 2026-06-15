@@ -220,7 +220,7 @@ public partial class MainWindow : Window, IAppEnvironment
         menu.Items.Add(format);
         menu.Items.Add(Submenu("Insert", "insert.rowsAbove", "insert.columnsLeft", "edit.deleteRows", "edit.deleteColumns", null,
             "insert.sheet", "data.createTable", "insert.function", "insert.namedRange", "insert.hyperlink", null, "sheet.rename", "sheet.delete"));
-        menu.Items.Add(Submenu("Data", "data.sortAsc", "data.sortDesc", "data.customSort", null,
+        menu.Items.Add(Submenu("Data", "data.sortAsc", "data.sortDesc", "data.customSort", "data.sortAndFilter", null,
             "data.toggleFilter", "data.clearFilter", null, "data.createTable", "data.removeDuplicates",
             "data.textToColumns", "data.validation", null, "formula.recalc"));
         menu.Items.Add(Submenu("View", "view.commandPalette", "view.goToSheet", null, "view.zoomIn", "view.zoomOut", "view.actualSize", null, "view.freezePanes"));
@@ -1141,6 +1141,19 @@ public partial class MainWindow : Window, IAppEnvironment
             && AppCommands.ById("data.headerColumn") is { } headerColumn)
         {
             flyout.Items.Add(new Separator());
+
+            // Right-clicking any cell in a table offers the Sort & Filter dialog for that table (#1).
+            if (AppCommands.ById("data.sortAndFilter") is { } sortAndFilter)
+            {
+                flyout.Items.Add(new MenuItem
+                {
+                    Header = sortAndFilter.Label,
+                    InputGesture = sortAndFilter.Shortcut,
+                    Icon = sortAndFilter.Icon is null ? null : new LucideIcon { IconKey = sortAndFilter.Icon, Size = 15 },
+                    Command = new RelayCommand(() => sortAndFilter.Execute(this), () => sortAndFilter.IsEnabled(this)),
+                });
+            }
+
             flyout.Items.Add(new MenuItem
             {
                 Header = headerColumn.Label,
@@ -1217,6 +1230,21 @@ public partial class MainWindow : Window, IAppEnvironment
             sheet.ActiveFilter ??= range;
             Refresh();
         }
+    }
+
+    public async void ShowSortFilterDialog()
+    {
+        var (sheet, range, header) = AppCommands.DataTarget(this);
+        var culture = _session.Workbook.Settings.EffectiveLocale;
+        var plan = await ShowModalAsync(new SortFilterDialog(sheet, range, header, culture));
+        if (plan is null)
+        {
+            return;
+        }
+
+        // Route to the table's own state or the sheet AutoFilter, as one undo step (see SortFilterCommit).
+        SortFilterCommit.Commit(_session, sheet, range, plan.Sort, plan.Filter, culture);
+        Refresh();
     }
 
     public async void ShowRemoveDuplicatesDialog()

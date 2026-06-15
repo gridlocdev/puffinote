@@ -150,7 +150,9 @@ public static class AppCommands
         new("data.sortAsc", "Sort Ascending", "Sort the column A→Z.", e => Sort(e, ascending: true), "sort-asc"),
         new("data.sortDesc", "Sort Descending", "Sort the column Z→A.", e => Sort(e, ascending: false), "sort-desc"),
         new("data.customSort", "Sort…", "Sort by one or more columns.", e => e.ShowSortDialog(), "sort"),
-        new("data.toggleFilter", "Filter", "Filter rows by a rule.", e => e.ToggleFilter(), "filter", new KeyGesture(Key.F, CmdShift),
+        new("data.sortAndFilter", "Sort & Filter…", "Build an ordered list of sort and filter steps over a data region.",
+            e => e.ShowSortFilterDialog(), "filter", new KeyGesture(Key.F, CmdShift)),
+        new("data.toggleFilter", "Filter", "Filter rows by a rule.", e => e.ToggleFilter(), "filter",
             isActive: e => e.Session.ActiveSheet.ActiveFilter is not null),
         new("data.clearFilter", "Clear Filter", "Remove the active filter.", ClearFilter, "filter-x"),
         new("data.createTable", "Table", "Turn the range into a table.", CreateTable, "table", new KeyGesture(Key.T, Cmd)),
@@ -564,6 +566,14 @@ public static class AppCommands
     public static (Cellestra.Core.Model.Worksheet Sheet, Cellestra.Core.Model.CellRange Range, bool Header) DataTarget(IAppEnvironment e)
     {
         var sheet = e.Session.ActiveSheet;
+
+        // Inside a table, data commands act on the whole table (its range + header), so sort/filter
+        // target — and the dialog reads — the table's own state rather than a guessed current region.
+        if (sheet.FindTable(e.Selection.ActiveRow, e.Selection.ActiveColumn) is { } table)
+        {
+            return (sheet, table.Range, table.HasHeader);
+        }
+
         var range = e.Selection.IsSingleCell
             ? Cellestra.Core.Data.DataRegion.CurrentRegion(sheet, e.Selection.ActiveRow, e.Selection.ActiveColumn)
             : e.Selection.Range;

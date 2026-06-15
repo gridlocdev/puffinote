@@ -10,6 +10,7 @@ using Cellestra.Core.Data;
 using Cellestra.Core.Editing;
 using Cellestra.Core.Model;
 using Cellestra.Core.Values;
+using Cellestra.Desktop.Commands;
 
 namespace Cellestra.Desktop.Controls.SpreadsheetGrid;
 
@@ -26,7 +27,6 @@ public sealed partial class SpreadsheetGrid
     private readonly List<(Rect Rect, int Column, CellRange Range, bool HasHeader)> _filterButtons = new();
     private (Rect Rect, DataValidation Rule)? _validationButton;
 
-    private readonly Dictionary<int, ColumnFilter> _columnFilters = new();
     private CellRange? _filterRange;
     private bool _popupOpen;
 
@@ -202,7 +202,7 @@ public sealed partial class SpreadsheetGrid
         return null;
     }
 
-    /// <summary>Test seam: apply a by-value filter to one column of a range, as the dropdown would.</summary>
+    /// <summary>Test seam: apply a by-value filter to one column of a range, as the dropdown would (single-column, replaces).</summary>
     internal void ApplyColumnFilterForTest(CellRange range, bool hasHeader, int column, params string[] allowed)
     {
         if (_session is null)
@@ -211,14 +211,18 @@ public sealed partial class SpreadsheetGrid
         }
 
         _filterRange = range;
-        _columnFilters[column] = new ColumnFilter { AllowedValues = allowed.ToHashSet(StringComparer.Ordinal) };
-        ApplyColumnFilters(_session.ActiveSheet, range, hasHeader);
+        var sheet = _session.ActiveSheet;
+        var filter = SortFilterCommit.SingleColumn(column, new ColumnFilter { AllowedValues = allowed.ToHashSet(StringComparer.Ordinal) }, hasHeader);
+        SortFilterCommit.Commit(_session, sheet, range, DataScope.EffectiveSort(sheet, range), filter, Culture);
+        Redraw();
     }
 
     /// <summary>Test seam: the columns with an active filter on the open range, ascending by index.</summary>
     internal System.Collections.Generic.IReadOnlyList<int> ActiveFilterColumnsForTest =>
-        _columnFilters.Where(kv => kv.Value.AllowedValues is not null || kv.Value.Condition is not null)
-            .Select(kv => kv.Key).OrderBy(c => c).ToList();
+        _session is null || _filterRange is null || DataScope.EffectiveFilter(_session.ActiveSheet, _filterRange.Value) is not { } filter
+            ? System.Array.Empty<int>()
+            : filter.Columns.Where(kv => kv.Value.AllowedValues is not null || kv.Value.Condition is not null)
+                .Select(kv => kv.Key).OrderBy(c => c).ToList();
 
     /// <summary>Test seam: how many open-popup buttons carry the given glyph/content.</summary>
     internal int PopupButtonCountForTest(string content) =>
@@ -263,23 +267,25 @@ public sealed partial class SpreadsheetGrid
         }
 
         var sheet = _session.ActiveSheet;
-        if (_filterRange != range)
+        _filterRange = range;
+
+        // The simple dropdown manages ONE column at a time (PRD §8.12): the checklist reflects only this
+        // column's current filter, and Apply/Clear replace it. Multi-column sort/filter pipelines belong
+        // to the Sort & Filter dialog (#3), so this control stays unambiguous.
+        var current = DataScope.EffectiveFilter(sheet, range);
+        var allowed = current is not null && current.Columns.TryGetValue(column, out var cf) ? cf.AllowedValues : null;
+
+        var distinct = FilterEngine.DistinctValues(sheet, range, column, hasHeader).ToList();
+
+        // Keep an already-allowed value visible even if it's no longer present in the data, so it can be unchecked.
+        if (allowed is not null)
         {
-            _columnFilters.Clear();
-            _filterRange = range;
-            // Reopened file: seed the checkbox state from the filter conditions restored by the ODS
-            // reader (#17b/#18) so the dropdown reflects what's actually filtering the rows.
-            if (sheet.ActiveFilter == range && sheet.ActiveFilterSpec is { } saved)
+            var present = distinct.Select(v => v.ToInvariantString()).ToHashSet(StringComparer.Ordinal);
+            foreach (var key in allowed.Where(k => !present.Contains(k)))
             {
-                foreach (var (savedColumn, savedFilter) in saved.Columns)
-                {
-                    _columnFilters[savedColumn] = savedFilter;
-                }
+                distinct.Add(CellValue.Text(key));
             }
         }
-
-        var distinct = FilterEngine.DistinctValues(sheet, range, column, hasHeader);
-        var allowed = _columnFilters.TryGetValue(column, out var existing) ? existing.AllowedValues : null;
 
         var checks = new List<CheckBox>();
         var list = new StackPanel { Spacing = 1 };
@@ -300,22 +306,17 @@ public sealed partial class SpreadsheetGrid
         apply.Click += (_, _) =>
         {
             var selected = checks.Where(c => c.IsChecked == true).Select(c => (string)c.Tag!).ToHashSet(StringComparer.Ordinal);
-            _columnFilters[column] = selected.Count == checks.Count
-                ? new ColumnFilter()                       // all checked → no constraint
-                : new ColumnFilter { AllowedValues = selected };
-            ApplyColumnFilters(sheet, range, hasHeader);
-            ClosePopup();
+            // All checked → no constraint → clear this region's filter; otherwise replace it with the picks.
+            FilterSpec? filter = selected.Count == checks.Count
+                ? null
+                : SortFilterCommit.SingleColumn(column, new ColumnFilter { AllowedValues = selected }, hasHeader);
+            CommitFromDropdown(sheet, range, DataScope.EffectiveSort(sheet, range), filter);
         };
         var clear = new Button { Content = "Clear" };
-        clear.Click += (_, _) =>
-        {
-            _columnFilters.Remove(column);
-            ApplyColumnFilters(sheet, range, hasHeader);
-            ClosePopup();
-        };
+        clear.Click += (_, _) => CommitFromDropdown(sheet, range, DataScope.EffectiveSort(sheet, range), filter: null);
 
-        // Sort controls sit above the filter checkbox list (task 14): sort the whole table/range
-        // by this column, then close. Wired to the existing sort engine via DataEditCommands.
+        // Single-level sort of the whole table/range by this column (replaces any prior sort). Multi-column
+        // "then by" ordering lives in the Sort & Filter dialog (#3).
         var sortAsc = new Button { Content = "Sort A→Z", HorizontalAlignment = HorizontalAlignment.Stretch };
         sortAsc.Click += (_, _) => SortByFilterColumn(sheet, range, column, ascending: true, hasHeader);
         var sortDesc = new Button { Content = "Sort Z→A", HorizontalAlignment = HorizontalAlignment.Stretch };
@@ -333,95 +334,26 @@ public sealed partial class SpreadsheetGrid
                 new TextBlock { Text = $"Sorting {headerLabel}", FontWeight = FontWeight.SemiBold },
                 sortAsc,
                 sortDesc,
+                new Border { Height = 1, Background = _palette.GridLine.Brush },
+                new ScrollViewer { MaxHeight = 180, Content = list },
+                new StackPanel { Orientation = Orientation.Horizontal, Spacing = 6, Children = { clear, apply } },
             },
         };
-
-        // Table-aware subfiltering (task 4): list every column currently filtered on this range, each
-        // with ascending/descending sort and a delete button, so you can see and adjust the stack of
-        // filters from any column's dropdown ("filter this column, then that one").
-        if (BuildActiveFiltersSection(sheet, range, hasHeader, anchor, column) is { } activeFilters)
-        {
-            body.Children.Add(new Border { Height = 1, Background = _palette.GridLine.Brush });
-            body.Children.Add(activeFilters);
-        }
-
-        body.Children.Add(new Border { Height = 1, Background = _palette.GridLine.Brush });
-        body.Children.Add(new ScrollViewer { MaxHeight = 180, Content = list });
-        body.Children.Add(new StackPanel { Orientation = Orientation.Horizontal, Spacing = 6, Children = { clear, apply } });
 
         OpenPopup(anchor, PopupBox(body));
     }
 
-    /// <summary>
-    /// The "Active filters" list shown in every column's dropdown: one row per column with an active
-    /// filter, carrying its header label, an ascending/descending sort toggle, and a delete button
-    /// that drops just that column's filter (task 4). Null when nothing is filtered on this range.
-    /// </summary>
-    private Control? BuildActiveFiltersSection(Worksheet sheet, CellRange range, bool hasHeader, Rect anchor, int popupColumn)
+    /// <summary>Commit a dropdown edit (single-column filter and/or single-level sort), routing to the table or sheet AutoFilter.</summary>
+    private void CommitFromDropdown(Worksheet sheet, CellRange range, SortSpec? sort, FilterSpec? filter)
     {
-        var columns = _columnFilters
-            .Where(kv => kv.Value.AllowedValues is not null || kv.Value.Condition is not null)
-            .Select(kv => kv.Key)
-            .OrderBy(c => c)
-            .ToList();
-        if (columns.Count == 0)
+        if (_session is null)
         {
-            return null;
+            return;
         }
 
-        var panel = new StackPanel { Spacing = 2 };
-        panel.Children.Add(new TextBlock { Text = "Active filters", FontWeight = FontWeight.SemiBold });
-
-        foreach (int col in columns)
-        {
-            bool? sorted = SortDirectionFor(sheet, col); // true=ascending, false=descending, null=unsorted
-
-            var asc = SubfilterButton("▲", "Sort ascending", active: sorted == true);
-            asc.Click += (_, _) => SortByFilterColumn(sheet, range, col, ascending: true, hasHeader);
-            var desc = SubfilterButton("▼", "Sort descending", active: sorted == false);
-            desc.Click += (_, _) => SortByFilterColumn(sheet, range, col, ascending: false, hasHeader);
-            var delete = SubfilterButton("✕", "Remove this filter", active: false);
-            delete.Click += (_, _) =>
-            {
-                _columnFilters.Remove(col);
-                ApplyColumnFilters(sheet, range, hasHeader);
-                ShowFilterPopup(anchor, popupColumn, range, hasHeader); // rebuild so the list updates
-            };
-
-            panel.Children.Add(new StackPanel
-            {
-                Orientation = Orientation.Horizontal,
-                Spacing = 4,
-                Children =
-                {
-                    new TextBlock
-                    {
-                        Text = ColumnHeaderLabel(sheet, range, col, hasHeader),
-                        Width = 110,
-                        VerticalAlignment = VerticalAlignment.Center,
-                        TextTrimming = TextTrimming.CharacterEllipsis,
-                    },
-                    asc,
-                    desc,
-                    delete,
-                },
-            });
-        }
-
-        return panel;
-    }
-
-    private static Button SubfilterButton(string glyph, string tip, bool active)
-    {
-        var button = new Button
-        {
-            Content = glyph,
-            Padding = new Thickness(6, 2),
-            MinWidth = 0,
-            FontWeight = active ? FontWeight.Bold : FontWeight.Normal,
-        };
-        ToolTip.SetTip(button, tip);
-        return button;
+        SortFilterCommit.Commit(_session, sheet, range, sort, filter, Culture);
+        ClosePopup();
+        Redraw();
     }
 
     /// <summary>The header label for a column, or its letter when the range has no header (#6/task 4).</summary>
@@ -433,50 +365,11 @@ public sealed partial class SpreadsheetGrid
             : $"Column {SheetDimensions.ColumnToLetters(column)}";
     }
 
-    /// <summary>The sort direction currently applied to a column (true=asc, false=desc), or null.</summary>
-    private static bool? SortDirectionFor(Worksheet sheet, int column)
-    {
-        if (sheet.ActiveSort is { } sort)
-        {
-            foreach (var level in sort.Levels)
-            {
-                if (level.Column == column)
-                {
-                    return level.Ascending;
-                }
-            }
-        }
-
-        return null;
-    }
-
-    /// <summary>Sort the table/filter range by the dropdown's column, then close the popup (task 14).</summary>
+    /// <summary>Sort the table/range by the dropdown's column, single-level, replacing any prior sort (#3).</summary>
     private void SortByFilterColumn(Worksheet sheet, CellRange range, int column, bool ascending, bool hasHeader)
     {
-        if (_session is null)
-        {
-            return;
-        }
-
-        _session.Execute(DataEditCommands.SortByColumn(sheet.Name, range, column, ascending, hasHeader));
-        // Persist the sort so it round-trips through table:database-range (#18).
-        sheet.ActiveSort = new SortSpec(new[] { new SortLevel(column, ascending) }, hasHeader);
-        sheet.ActiveFilter ??= range;
-        ClosePopup();
-        Redraw();
-    }
-
-    private void ApplyColumnFilters(Worksheet sheet, CellRange range, bool hasHeader)
-    {
-        var active = _columnFilters.Where(kv => kv.Value.AllowedValues is not null || kv.Value.Condition is not null)
-            .ToDictionary(kv => kv.Key, kv => kv.Value);
-        var spec = new FilterSpec(active, hasHeader);
-        _session!.Execute(DataEditCommands.ApplyFilter(sheet.Name, range, spec, Culture));
-        sheet.ActiveFilter ??= range;
-        // Persist the filter conditions in Core so save→reopen restores them (#17b/#18). No active
-        // conditions → drop the spec so an empty filter isn't written.
-        sheet.ActiveFilterSpec = active.Count > 0 ? spec : null;
-        Redraw();
+        var sort = new SortSpec(new[] { new SortLevel(column, ascending) }, hasHeader);
+        CommitFromDropdown(sheet, range, sort, DataScope.EffectiveFilter(sheet, range));
     }
 
     private void ShowValidationPopup(Rect anchor, DataValidation rule)

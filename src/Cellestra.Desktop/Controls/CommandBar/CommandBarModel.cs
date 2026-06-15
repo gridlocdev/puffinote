@@ -73,7 +73,7 @@ public static class CommandBarModel
             new[] { "insert.rowsAbove", "insert.columnsLeft" },
             new[] { "insert.sheet", "data.createTable" }),
         new CommandBarGroup("Data",
-            new[] { "data.sortAsc", "data.sortDesc", "data.toggleFilter" },
-            new[] { "data.customSort", "data.clearFilter", "data.removeDuplicates", "data.textToColumns", "data.validation" }),
+            new[] { "data.sortAsc", "data.sortDesc", "data.sortAndFilter" },
+            new[] { "data.customSort", "data.toggleFilter", "data.clearFilter", "data.removeDuplicates", "data.textToColumns", "data.validation" }),
     };
 }

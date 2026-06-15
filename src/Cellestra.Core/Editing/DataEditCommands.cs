@@ -77,6 +77,59 @@ public static class DataEditCommands
         new RowVisibilityCommand("Clear Filter", sheet, range, ws => FilterEngine.Clear(ws, range));
 
     /// <summary>
+    /// Apply a whole sort-and-filter pipeline to a region as one undoable step (the Sort &amp; Filter
+    /// dialog's commit). The visibility step runs <b>before</b> the sort so its <c>RowVisibilityCommand</c>
+    /// snapshots the original (pre-shuffle) hidden flags — undo then restores order and visibility
+    /// together. A null <paramref name="filter"/> clears filtering (unhides rows); a null/empty
+    /// <paramref name="sort"/> leaves row order untouched. The caller assigns
+    /// <see cref="Worksheet.ActiveSort"/>/<see cref="Worksheet.ActiveFilterSpec"/> before executing so
+    /// the sort's <c>ReapplyActiveFilter</c> re-hides against the new filter, not a stale one.
+    /// </summary>
+    public static IEditCommand ApplySortAndFilter(string sheet, CellRange range, SortSpec? sort, FilterSpec? filter, CultureInfo? culture = null)
+    {
+        culture ??= CultureInfo.CurrentCulture;
+        var steps = new List<IEditCommand>
+        {
+            filter is not null ? ApplyFilter(sheet, range, filter, culture) : ClearFilter(sheet, range),
+        };
+
+        if (sort is { Levels.Count: > 0 })
+        {
+            steps.Add(Sort(sheet, range, sort, culture));
+        }
+
+        return EditCommands.Composite("Sort & Filter", steps);
+    }
+
+    /// <summary>
+    /// Apply a sort-and-filter pipeline to a <b>table</b>, storing the filter/sort on the table's own
+    /// record (its database range) as the single source of truth — kept separate from the sheet-level
+    /// AutoFilter so the two never double-write the same region. One undoable step: the table record is
+    /// updated first (so the sort's <c>ReapplyActiveFilter</c>, which reads <see cref="Table.Filter"/>,
+    /// re-hides against the new filter), then rows are hidden, then reordered. The visibility step
+    /// snapshots the original hidden flags before the sort reshuffles them, so undo restores both.
+    /// </summary>
+    public static IEditCommand ApplyTableSortAndFilter(string sheet, Table table, SortSpec? sort, FilterSpec? filter, CultureInfo? culture = null)
+    {
+        ArgumentNullException.ThrowIfNull(table);
+        culture ??= CultureInfo.CurrentCulture;
+
+        var range = table.Range;
+        var steps = new List<IEditCommand>
+        {
+            ReplaceTable(sheet, table, table with { Filter = filter, Sort = sort }),
+            filter is not null ? ApplyFilter(sheet, range, filter, culture) : ClearFilter(sheet, range),
+        };
+
+        if (sort is { Levels.Count: > 0 })
+        {
+            steps.Add(Sort(sheet, range, sort, culture));
+        }
+
+        return EditCommands.Composite("Sort & Filter", steps);
+    }
+
+    /// <summary>
     /// Clear the sheet-level structure that overlaps <paramref name="range"/> and which a cell-only
     /// <see cref="EditCommands.ClearAll"/> can't see: any table (database range — its filter dropdowns
     /// and header fill), merged regions, data validations, and the sheet AutoFilter when its region

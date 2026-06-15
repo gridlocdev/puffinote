@@ -84,6 +84,9 @@ public interface IAppEnvironment
 
     void ShowSortDialog();
 
+    /// <summary>Open the unified Sort &amp; Filter dialog over the active data region.</summary>
+    void ShowSortFilterDialog();
+
     void ShowRemoveDuplicatesDialog();
 
     void ShowTextToColumnsDialog();

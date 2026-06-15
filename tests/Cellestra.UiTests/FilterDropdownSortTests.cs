@@ -62,7 +62,7 @@ public class FilterDropdownSortTests
         Assert.Equal(10, sheet.GetValue(1, 0).AsNumber);    // data sorted ascending below it
         Assert.Equal(20, sheet.GetValue(2, 0).AsNumber);
         Assert.Equal(30, sheet.GetValue(3, 0).AsNumber);
-        Assert.NotNull(sheet.ActiveSort); // sort persisted for round-trip
+        Assert.NotNull(sheet.Tables[0].Sort); // sort persisted on the table for round-trip
     }
 
     [AvaloniaFact]
@@ -100,6 +100,36 @@ public class FilterDropdownSortTests
 
         Assert.Equal(10, sheet.GetValue(1, 1).AsNumber);  // sorted by B ascending
         Assert.Equal("Ana", sheet.GetValue(1, 0).AsText); // column A moved with its row
+    }
+
+    [AvaloniaFact]
+    public void Sorting_a_second_column_replaces_the_first_single_level_in_the_dropdown()
+    {
+        var window = new MainWindow();
+        window.Show();
+        window.Grid.Zoom = 1.0;
+        var sheet = window.Session.ActiveSheet;
+        sheet.SetValue(0, 0, CellValue.Text("Team")); sheet.SetValue(0, 1, CellValue.Text("Score"));
+        sheet.SetValue(1, 0, CellValue.Text("A")); sheet.SetValue(1, 1, CellValue.Number(30));
+        sheet.SetValue(2, 0, CellValue.Text("B")); sheet.SetValue(2, 1, CellValue.Number(10));
+        sheet.AddTable(new Table("T", CellRange.Parse("A1:B3"), HasHeader: true));
+        window.Grid.Refresh();
+        window.CaptureRenderedFrame();
+
+        // Sort by column A, then by column B — the simple dropdown is single-column, so B replaces A.
+        ClickGridPoint(window, window.Grid.FilterButtonRectForTest(0)!.Value.Center);
+        window.CaptureRenderedFrame();
+        ClickGridPoint(window, window.Grid.PopupControlCenterForTest("Sort A→Z")!.Value);
+
+        ClickGridPoint(window, window.Grid.FilterButtonRectForTest(1)!.Value.Center);
+        window.CaptureRenderedFrame();
+        ClickGridPoint(window, window.Grid.PopupControlCenterForTest("Sort A→Z")!.Value);
+
+        // The table owns its sort; only column B remains (multi-column "then by" is the dialog's job).
+        var table = Assert.Single(sheet.Tables);
+        Assert.NotNull(table.Sort);
+        Assert.Equal(new[] { 1 }, table.Sort!.Levels.Select(l => l.Column));
+        Assert.Null(sheet.ActiveSort); // a table never leaks its sort to the sheet AutoFilter
     }
 
     [AvaloniaFact]

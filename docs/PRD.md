@@ -173,7 +173,7 @@ Everything reachable in the command bar is also reachable in the menu bar, the C
 | **Edit** | Undo (⌘Z) · Redo (⇧⌘Z) · Cut (⌘X) · Copy (⌘C) · Paste (⌘V) · Paste Special… (⌥⌘V) · Delete · Select All (⌘A) · Find → Find… (⌘F), Find & Replace… (⌥⌘F) · Fill → Down (⌘D), Right (⌘R) |
 | **Insert** | Rows Above · Rows Below · Columns Left · Columns Right · Sheet · Table (⌘T) · Function… (⌃⌥F) · Named Range… · Hyperlink… |
 | **Format** | Cells… (⌘1) · Number → … · Bold (⌘B), Italic (⌘I), Underline (⌘U), Strikethrough (⌘⇧X) · Alignment → … · Borders → … · Merge Cells · Rows → Height…, Hide (⌃9), Unhide (⌃⇧9) · Columns → Width…, Hide (⌃0), Unhide (⌃⇧0) |
-| **Data** | Sort… · Filter (⇧⌘F) · Clear Filter · Remove Duplicates… · Text to Columns… · Data Validation… · Recalculate (F9) · Calculation → Automatic / Manual · Named Ranges… · Import CSV… · Export CSV… |
+| **Data** | Sort… · Sort & Filter… (⇧⌘F) · Filter · Clear Filter · Remove Duplicates… · Text to Columns… · Data Validation… · Recalculate (F9) · Calculation → Automatic / Manual · Named Ranges… · Import CSV… · Export CSV… |
 | **View** | Command Palette… (⌘K) · Go to Sheet… (⌘⇧P) · Zoom In (⌘=) · Zoom Out (⌘−) · Actual Size (⌘0) · Gridlines · Headers · Formula Bar · Status Bar · Freeze Panes |
 | **Window** | Minimize (⌘M) · Zoom · (standard macOS window items) |
 | **Help** | Cellestra Help · Function Reference… |
@@ -193,7 +193,7 @@ One row, grouped by task. Each **group** shows its 2–3 most-used tools as icon
 | **Align** | Align Left · Center · Right | Wrap Text · Merge Cells | The active alignment is the lit one |
 | **Numbers** | Currency · Percent | Date | Disabled when the active cell holds text (error prevention) |
 | **Insert** | Rows Above · Columns Left | Sheet · Table (⌘T) | — |
-| **Data** | Sort Ascending · Filter (⇧⌘F) | Sort Descending · Sort… · Clear Filter · Remove Duplicates… · Text to Columns… · Data Validation… | Filter lights up while a filter is active |
+| **Data** | Sort Ascending · Sort & Filter… (⇧⌘F) | Sort Descending · Sort… · Filter · Clear Filter · Remove Duplicates… · Text to Columns… · Data Validation… | Filter lights up while a filter is active |
 
 On the right of the bar sit a **Find a tool…** affordance (opens the Command Palette, §6.7) and a **collapse** chevron.
 
@@ -262,7 +262,8 @@ Shortcuts use macOS modifiers (⌘ Command, ⇧ Shift, ⌥ Option, ⌃ Control).
 | Action | Shortcut |
 |---|---|
 | Create Table | ⌘T |
-| Toggle Filter (AutoFilter) | ⇧⌘F |
+| Sort & Filter… (chained pipeline dialog) | ⇧⌘F |
+| Toggle Filter (AutoFilter) | — |
 | Sort… (Custom Sort dialog) | — |
 
 **Formulas & view**
@@ -395,11 +396,17 @@ On open, cached values from the file are shown immediately. If calculation mode 
 - **Multi-level:** the Custom Sort dialog supports a primary "Sort by" plus additional "Then by" levels; each level is a column, a key (values), and a direction (ascending/descending). Sorting is **stable** across levels.
 - Sort order follows the active locale's collation; numbers, dates, and text sort in their natural orders, with empty cells last.
 - Sorting **moves cell content and styles together** and adjusts formula references per §8 (the same `ReferenceAdjuster` rules). Sort is undoable.
+- **The column dropdown sorts a single column** (Sort A→Z / Z→A), replacing any prior sort. Multi-level "then by" ordering lives in the Sort dialog and the Sort & Filter dialog (§8.12a), keeping the dropdown unambiguous.
 
 ### 8.12 Filtering (AutoFilter)
-- **⇧⌘F** toggles filter dropdowns on the header row of the range/table. Each dropdown filters **by value** (checklist of distinct values) or **by condition** (e.g. text contains, number/date comparisons).
+- **The column dropdown is single-column:** it filters one column **by value** (checklist of distinct values), and applying or clearing it **replaces** that one filter rather than stacking across columns. Multi-column filtering (and conditions like `>100` / `*text*`) lives in the Sort & Filter dialog (§8.12a), so the dropdown stays simple.
 - Filtering **hides** non-matching rows (row visibility), it never deletes them; **Clear Filter** shows all rows again. Filter state is saved in the `.ods` database range.
 - Hidden-by-filter rows behave like manually hidden rows for display and selection. (Aggregating only visible rows — Excel's `SUBTOTAL`/`AGGREGATE` — is **not** in the v1 function set per §8.2; it's a likely early addition.)
+
+### 8.12a Sort & Filter (chained pipeline)
+- **⇧⌘F** (and a table cell's right-click menu) opens the unified **Sort & Filter** dialog: one ordered, editable, reorderable list of steps over a data region — each step a **Sort** (column + direction) or a **Filter** (column + a comma-separated value list, or a condition like `>100` / `*text*`). It seeds from **that region's own** live sort/filter so it edits rather than replaces, and previews how many rows survive ("Showing X of N rows") without touching the sheet.
+- The step list is the user's mental model of a pipeline; it **compiles** to one multi-level `SortSpec` (sort steps top→bottom = tie-break priority) plus one ANDed `FilterSpec`. The visible-row **set** depends only on the filters, the **order** only on the sort levels — the engine is not a positional pipeline. Commit is a single undo step.
+- **Scope is per region.** A **table** owns its filter/sort on its own database range; a bare-range **AutoFilter** owns them at the sheet level. The dropdown and the dialog both read and write that one owner, so a dialog opened on a table shows only that table's state — never another region's. (Inside a table, sort/filter commands and the dialog target the whole table.)
 
 ### 8.13 Data validation
 - A cell or range can carry a **validation rule**: a **list** (literal values or a range reference, shown as an in-cell dropdown), or a **number / date / text-length** constraint with an operator (between, ≥, =, …).
