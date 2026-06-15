@@ -32,11 +32,9 @@ internal static class SortFilterCommit
             return;
         }
 
-        // Bare-range AutoFilter: assign the sheet state BEFORE executing so the sort's
-        // ReapplyActiveFilter re-hides against the new filter (see ApplySortAndFilter).
-        sheet.ActiveSort = sort;
-        sheet.ActiveFilterSpec = filter;
-        sheet.ActiveFilter = (sort is not null || filter is not null) ? range : null;
+        // Bare-range AutoFilter: the command's first step assigns the sheet state (before its sort's
+        // ReapplyActiveFilter reads it) and captures the prior values, so a single undo drops the
+        // filter and its chrome together with the rows it hid (see ApplySortAndFilter).
         session.Execute(DataEditCommands.ApplySortAndFilter(sheet.Name, range, sort, filter, culture));
     }
 

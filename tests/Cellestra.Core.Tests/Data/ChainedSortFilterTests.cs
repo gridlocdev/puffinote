@@ -165,6 +165,35 @@ public class ChainedSortFilterTests
     }
 
     [Fact]
+    public void ApplySortAndFilter_undo_restores_the_sheet_autofilter_state()
+    {
+        // Adding a filter via the column dropdown must undo as one step: not just the hidden rows but
+        // the sheet AutoFilter state (and its chrome) the command now owns, rather than leaving it stale.
+        var workbook = Workbook.CreateNew();
+        var history = new EditHistory(workbook);
+        var sheet = workbook.ActiveSheet;
+        sheet.SetValue(0, 0, CellValue.Text("S"));
+        sheet.SetValue(1, 0, CellValue.Text("Open"));
+        sheet.SetValue(2, 0, CellValue.Text("Done"));
+        var range = CellRange.Parse("A1:A3");
+        var filter = StatusFilter("Open");
+
+        Assert.Null(sheet.ActiveFilter); // no filter to start
+
+        history.Execute(DataEditCommands.ApplySortAndFilter(sheet.Name, range, sort: null, filter, Inv));
+
+        Assert.Equal(range, sheet.ActiveFilter);   // filter recorded by the command itself
+        Assert.NotNull(sheet.ActiveFilterSpec);
+        Assert.True(sheet.IsRowHidden(2));          // (Done) hidden
+
+        history.Undo();
+
+        Assert.Null(sheet.ActiveFilter);            // filter dropped, not left stale
+        Assert.Null(sheet.ActiveFilterSpec);
+        Assert.False(sheet.IsRowHidden(2));         // and the row is shown again
+    }
+
+    [Fact]
     public void ApplySortAndFilter_with_no_filter_unhides_previously_hidden_rows()
     {
         var workbook = Workbook.CreateNew();

@@ -78,18 +78,21 @@ public static class DataEditCommands
 
     /// <summary>
     /// Apply a whole sort-and-filter pipeline to a region as one undoable step (the Sort &amp; Filter
-    /// dialog's commit). The visibility step runs <b>before</b> the sort so its <c>RowVisibilityCommand</c>
-    /// snapshots the original (pre-shuffle) hidden flags — undo then restores order and visibility
-    /// together. A null <paramref name="filter"/> clears filtering (unhides rows); a null/empty
-    /// <paramref name="sort"/> leaves row order untouched. The caller assigns
-    /// <see cref="Worksheet.ActiveSort"/>/<see cref="Worksheet.ActiveFilterSpec"/> before executing so
-    /// the sort's <c>ReapplyActiveFilter</c> re-hides against the new filter, not a stale one.
+    /// dialog's commit, and the column dropdown). The sheet-level AutoFilter state
+    /// (<see cref="Worksheet.ActiveSort"/>/<see cref="Worksheet.ActiveFilterSpec"/>/<see cref="Worksheet.ActiveFilter"/>)
+    /// is assigned by the command's <b>first</b> step — before the visibility/sort steps so the sort's
+    /// <c>ReapplyActiveFilter</c> re-hides against the new filter, not a stale one — and is captured for
+    /// undo, so reverting drops the filter (and its chrome) together with the rows it hid. The visibility
+    /// step runs <b>before</b> the sort so its <c>RowVisibilityCommand</c> snapshots the original
+    /// (pre-shuffle) hidden flags. A null <paramref name="filter"/> clears filtering (unhides rows); a
+    /// null/empty <paramref name="sort"/> leaves row order untouched.
     /// </summary>
     public static IEditCommand ApplySortAndFilter(string sheet, CellRange range, SortSpec? sort, FilterSpec? filter, CultureInfo? culture = null)
     {
         culture ??= CultureInfo.CurrentCulture;
         var steps = new List<IEditCommand>
         {
+            SetSheetFilterState(sheet, (sort is not null || filter is not null) ? range : null, filter, sort),
             filter is not null ? ApplyFilter(sheet, range, filter, culture) : ClearFilter(sheet, range),
         };
 
@@ -99,6 +102,39 @@ public static class DataEditCommands
         }
 
         return EditCommands.Composite("Sort & Filter", steps);
+    }
+
+    /// <summary>
+    /// Swap the sheet-level AutoFilter state to a new sort/filter/range, capturing the prior values for
+    /// undo. Run as the first step of <see cref="ApplySortAndFilter"/> so the state is in place before
+    /// the filter/sort steps read it, and so undo restores the previous filter (and its chrome) together
+    /// with the row visibility those steps produced — rather than leaving a stale AutoFilter behind.
+    /// </summary>
+    private static IEditCommand SetSheetFilterState(string sheet, CellRange? filterRange, FilterSpec? filterSpec, SortSpec? sort)
+    {
+        CellRange? oldFilter = null;
+        FilterSpec? oldFilterSpec = null;
+        SortSpec? oldSort = null;
+        return new ActionCommand("Filter",
+            wb =>
+            {
+                var ws = Sheet(wb, sheet);
+                oldFilter = ws.ActiveFilter;
+                oldFilterSpec = ws.ActiveFilterSpec;
+                oldSort = ws.ActiveSort;
+                ws.ActiveFilter = filterRange;
+                ws.ActiveFilterSpec = filterSpec;
+                ws.ActiveSort = sort;
+                return EditResult.None;
+            },
+            wb =>
+            {
+                var ws = Sheet(wb, sheet);
+                ws.ActiveFilter = oldFilter;
+                ws.ActiveFilterSpec = oldFilterSpec;
+                ws.ActiveSort = oldSort;
+                return EditResult.None;
+            });
     }
 
     /// <summary>
