@@ -128,6 +128,77 @@ public class FormulaPointModeTests
     }
 
     [AvaloniaFact]
+    public void Shift_clicking_a_cell_while_typing_a_formula_extends_the_reference_to_a_range()
+    {
+        var window = new MainWindow();
+        window.Show();
+        window.Grid.Zoom = 1.0;
+        window.CaptureRenderedFrame();
+        var env = (IAppEnvironment)window;
+        env.Selection.MoveTo(0, 0); // A1
+        env.BeginEdit();
+        Pump();
+
+        window.KeyTextInput("=SUM(");
+        var b2 = window.Grid.TranslatePoint(CellCentre(1, 1), window) ?? default; // B2
+        var d4 = window.Grid.TranslatePoint(CellCentre(3, 3), window) ?? default; // D4
+        window.MouseDown(b2, MouseButton.Left); // anchor the reference at B2
+        window.MouseUp(b2, MouseButton.Left);
+        Pump();
+        Assert.Equal("=SUM(B2", window.Grid.EditorText);
+
+        // Shift+click D4 extends the B2 reference into the range B2:D4, like a normal Shift+click.
+        window.MouseDown(d4, MouseButton.Left, RawInputModifiers.Shift);
+        window.MouseUp(d4, MouseButton.Left, RawInputModifiers.Shift);
+        Pump();
+        Assert.Equal("=SUM(B2:D4", window.Grid.EditorText);
+        Assert.True(window.Grid.PointTargetForTest is { Top: 1, Left: 1, Bottom: 3, Right: 3 });
+
+        window.KeyTextInput(")");
+        window.KeyPressQwerty(PhysicalKey.Enter, RawInputModifiers.None);
+        Pump();
+        Assert.Equal("SUM(B2:D4)", env.Session.ActiveSheet.Find(0, 0)!.Formula);
+    }
+
+    [AvaloniaFact]
+    public void Clicking_and_dragging_a_range_while_typing_shows_normal_selection_chrome()
+    {
+        var window = new MainWindow();
+        window.Show();
+        window.Grid.Zoom = 1.0;
+        window.CaptureRenderedFrame();
+        var env = (IAppEnvironment)window;
+        env.Selection.MoveTo(0, 0); // A1
+        env.BeginEdit();
+        Pump();
+
+        window.KeyTextInput("=SUM(");
+
+        // A single click marks the clicked cell as the point target...
+        var c2 = window.Grid.TranslatePoint(CellCentre(2, 1), window) ?? default; // C2
+        window.MouseDown(c2, MouseButton.Left);
+        window.MouseUp(c2, MouseButton.Left);
+        Pump();
+        var single = window.Grid.PointTargetForTest;
+        Assert.True(single is { Top: 1, Left: 2, Bottom: 1, Right: 2 }, $"click target was {single}");
+
+        // ...and dragging extends the target to the dragged range, like the inserted reference.
+        var b2 = window.Grid.TranslatePoint(CellCentre(1, 1), window) ?? default; // B2
+        var d4 = window.Grid.TranslatePoint(CellCentre(3, 3), window) ?? default; // D4
+        window.MouseDown(b2, MouseButton.Left);
+        window.MouseMove(d4);
+        window.MouseUp(d4, MouseButton.Left);
+        Pump();
+        var dragged = window.Grid.PointTargetForTest;
+        Assert.True(dragged is { Top: 1, Left: 1, Bottom: 3, Right: 3 }, $"drag target was {dragged}");
+
+        // Typing ends the poke, so the point chrome clears.
+        window.KeyTextInput("0");
+        Pump();
+        Assert.Null(window.Grid.PointTargetForTest);
+    }
+
+    [AvaloniaFact]
     public void Clicking_a_cell_while_typing_in_the_formula_bar_inserts_a_reference()
     {
         var window = new MainWindow();

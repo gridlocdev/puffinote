@@ -1,6 +1,7 @@
 using System;
 using Avalonia;
 using Avalonia.Input;
+using Avalonia.Media;
 using Cellestra.Core.Model;
 
 namespace Cellestra.Desktop.Controls.SpreadsheetGrid;
@@ -28,11 +29,71 @@ public sealed partial class SpreadsheetGrid
     private bool _pointDragging;
     private int _pointDragAnchorRow, _pointDragAnchorColumn;
 
+    // The anchor corner of the last clicked reference, so a following Shift+click extends it into a
+    // range from there — just like Shift+click extends a normal grid selection from its anchor.
+    private bool _pointHasClickAnchor;
+    private int _pointClickAnchorRow, _pointClickAnchorColumn;
+
+    // The cell/range the point poke currently targets, drawn with the normal selection chrome so it's
+    // obvious what's being picked while composing a formula (the coloured ref outline alone is easy to
+    // miss, and only appears once the whole formula parses). Cleared when typing resumes.
+    private bool _pointHasTarget;
+    private CellRange _pointTarget;
+
     private void ResetPointMode()
     {
         _pointInsertStart = -1;
         _pointKeyboard = false;
         _pointDragging = false;
+        _pointHasTarget = false;
+        _pointHasClickAnchor = false;
+    }
+
+    /// <summary>The A1 reference for a cell, or a normalized A1:B2 range when the two corners differ.</summary>
+    private static string RangeReferenceText(int anchorRow, int anchorColumn, int row, int column)
+    {
+        int top = Math.Min(anchorRow, row), bottom = Math.Max(anchorRow, row);
+        int left = Math.Min(anchorColumn, column), right = Math.Max(anchorColumn, column);
+        return top == bottom && left == right
+            ? new CellAddress(left, top).ToString()
+            : new CellAddress(left, top) + ":" + new CellAddress(right, bottom);
+    }
+
+    /// <summary>Test seam: the cell/range the point poke currently draws normal selection chrome over, or null.</summary>
+    internal CellRange? PointTargetForTest => _editing && _pointHasTarget ? _pointTarget : null;
+
+    /// <summary>Mark the cell/range the latest poke points at so it gets the normal selection chrome.</summary>
+    private void SetPointTarget(int top, int left, int bottom, int right) =>
+        SetPointTarget(new CellRange(new CellAddress(left, top), new CellAddress(right, bottom)));
+
+    private void SetPointTarget(CellRange range)
+    {
+        _pointTarget = range;
+        _pointHasTarget = true;
+    }
+
+    /// <summary>
+    /// Paint the point-mode target with the same translucent fill the grid uses for a normal
+    /// selection. Drawn under the cells (like <see cref="DrawSelection"/>) so it tints the band
+    /// rather than the text.
+    /// </summary>
+    private void DrawPointSelectionFill(DrawingContext context)
+    {
+        if (_editing && _pointHasTarget
+            && TryGetRegionRect(_pointTarget.Top, _pointTarget.Left, _pointTarget.Bottom, _pointTarget.Right, out var rect))
+        {
+            context.FillRectangle(_palette.SelectionFill, rect);
+        }
+    }
+
+    /// <summary>Outline the point-mode target with the active-cell pen, drawn on top of the cells.</summary>
+    private void DrawPointSelectionOutline(DrawingContext context)
+    {
+        if (_editing && _pointHasTarget
+            && TryGetRegionRect(_pointTarget.Top, _pointTarget.Left, _pointTarget.Bottom, _pointTarget.Right, out var rect))
+        {
+            context.DrawRectangle(null, _palette.ActiveOutline, rect);
+        }
     }
 
     /// <summary>
@@ -81,6 +142,9 @@ public sealed partial class SpreadsheetGrid
         }
 
         ApplyPointReference(PointReferenceText(), caret);
+        SetPointTarget(
+            Math.Min(_pointAnchorRow, _pointRow), Math.Min(_pointAnchorColumn, _pointColumn),
+            Math.Max(_pointAnchorRow, _pointRow), Math.Max(_pointAnchorColumn, _pointColumn));
         EnsureVisible(_pointRow, _pointColumn);
         Redraw();
         return true;
@@ -101,15 +165,8 @@ public sealed partial class SpreadsheetGrid
     }
 
     /// <summary>The reference text for the current pointer: a single cell, or a normalized range when extended with Shift.</summary>
-    private string PointReferenceText()
-    {
-        int top = Math.Min(_pointAnchorRow, _pointRow), bottom = Math.Max(_pointAnchorRow, _pointRow);
-        int left = Math.Min(_pointAnchorColumn, _pointColumn), right = Math.Max(_pointAnchorColumn, _pointColumn);
-        string topLeft = new CellAddress(left, top).ToString();
-        return top == bottom && left == right
-            ? topLeft
-            : topLeft + ":" + new CellAddress(right, bottom);
-    }
+    private string PointReferenceText() =>
+        RangeReferenceText(_pointAnchorRow, _pointAnchorColumn, _pointRow, _pointColumn);
 
     /// <summary>Replace the previously poked reference (if it still abuts the caret) or insert a new one at the caret.</summary>
     private void ApplyPointReference(string reference, int caret)
@@ -155,14 +212,14 @@ public sealed partial class SpreadsheetGrid
             return; // a click on an overlay scroll bar is for scrolling, not a point-mode reference
         }
 
-        bool onCell = HitTest(point, out int row, out int column, out bool rowHeader, out bool columnHeader)
+        bool shift = e.KeyModifiers.HasFlag(KeyModifiers.Shift);
+        bool onCell = HitTest(point, out _, out _, out bool rowHeader, out bool columnHeader)
             && !rowHeader && !columnHeader;
-        if (onCell && TryPointModeInsert(point))
+        if (onCell && TryPointModeInsert(point, shift))
         {
-            // Reference inserted; arm a drag so the user can extend it into a range, and keep editing.
+            // Reference inserted; arm a drag so the user can keep extending it into a range from the
+            // same anchor (TryPointModeInsert set _pointDragAnchor), and keep editing.
             _pointDragging = true;
-            _pointDragAnchorRow = row;
-            _pointDragAnchorColumn = column;
             e.Pointer.Capture(this);
             e.Handled = true;
             return;
@@ -173,7 +230,7 @@ public sealed partial class SpreadsheetGrid
         CommitEdit(moveRow: 0, moveColumn: 0, refocus: false);
     }
 
-    private bool TryPointModeInsert(Point point)
+    private bool TryPointModeInsert(Point point, bool shift)
     {
         string text = _editor.Text ?? string.Empty;
         if (text.Length == 0 || text[0] != '=')
@@ -188,12 +245,19 @@ public sealed partial class SpreadsheetGrid
         }
 
         int caret = _editor.CaretIndex;
-        string reference = new CellAddress(column, row).ToString(); // relative A1, no sheet
+
+        // Shift+click extends the just-poked reference into a range from its anchor to the clicked cell,
+        // the way Shift+click extends a normal grid selection. Needs a live anchor and an inserted span.
+        bool extend = shift && _pointHasClickAnchor && _pointInsertStart >= 0
+            && _pointInsertStart + _pointInsertLength <= text.Length;
+        int anchorRow = extend ? _pointClickAnchorRow : row;
+        int anchorColumn = extend ? _pointClickAnchorColumn : column;
+        string reference = RangeReferenceText(anchorRow, anchorColumn, row, column);
 
         int insertedAt;
-        if (_pointInsertStart >= 0 && _pointInsertStart + _pointInsertLength == caret)
+        if (extend || (_pointInsertStart >= 0 && _pointInsertStart + _pointInsertLength == caret))
         {
-            // Replace the reference inserted by the previous click.
+            // Replace the reference inserted by the previous click (a Shift+click turns it into a range).
             insertedAt = _pointInsertStart;
             SetEditorText(text.Remove(_pointInsertStart, _pointInsertLength).Insert(_pointInsertStart, reference));
         }
@@ -210,6 +274,22 @@ public sealed partial class SpreadsheetGrid
         _pointInsertStart = insertedAt;
         _pointInsertLength = reference.Length;
         _editor.CaretIndex = insertedAt + reference.Length;
+
+        // A plain click moves the anchor to the clicked cell; a Shift+click keeps the existing anchor so
+        // further Shift+clicks re-extend from it. The drag anchor tracks the same corner so a drag begun
+        // now continues the range from the anchor, not the cell just pressed.
+        if (!extend)
+        {
+            _pointClickAnchorRow = row;
+            _pointClickAnchorColumn = column;
+            _pointHasClickAnchor = true;
+        }
+
+        _pointDragAnchorRow = anchorRow;
+        _pointDragAnchorColumn = anchorColumn;
+        SetPointTarget(
+            Math.Min(anchorRow, row), Math.Min(anchorColumn, column),
+            Math.Max(anchorRow, row), Math.Max(anchorColumn, column));
         _editor.Focus();
         Redraw();
         return true;
@@ -227,11 +307,7 @@ public sealed partial class SpreadsheetGrid
             return;
         }
 
-        int top = Math.Min(_pointDragAnchorRow, row), bottom = Math.Max(_pointDragAnchorRow, row);
-        int left = Math.Min(_pointDragAnchorColumn, column), right = Math.Max(_pointDragAnchorColumn, column);
-        string reference = top == bottom && left == right
-            ? new CellAddress(left, top).ToString()
-            : new CellAddress(left, top) + ":" + new CellAddress(right, bottom);
+        string reference = RangeReferenceText(_pointDragAnchorRow, _pointDragAnchorColumn, row, column);
 
         string text = _editor.Text ?? string.Empty;
         if (_pointInsertStart + _pointInsertLength > text.Length)
@@ -242,6 +318,9 @@ public sealed partial class SpreadsheetGrid
         SetEditorText(text.Remove(_pointInsertStart, _pointInsertLength).Insert(_pointInsertStart, reference));
         _pointInsertLength = reference.Length;
         _editor.CaretIndex = _pointInsertStart + reference.Length;
+        SetPointTarget(
+            Math.Min(_pointDragAnchorRow, row), Math.Min(_pointDragAnchorColumn, column),
+            Math.Max(_pointDragAnchorRow, row), Math.Max(_pointDragAnchorColumn, column));
         EnsureVisible(row, column);
         Redraw();
     }

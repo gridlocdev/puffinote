@@ -390,6 +390,7 @@ public sealed partial class SpreadsheetGrid : Panel
         {
             DrawTableBanding(context, sheet);
             DrawSelection(context, _palette.SelectionFill);
+            DrawPointSelectionFill(context); // show the formula point-mode target with normal chrome
             DrawCells(context, sheet, gridPen);
             DrawMerges(context, sheet, gridPen);
             DrawCellBorders(context, sheet);
@@ -404,6 +405,7 @@ public sealed partial class SpreadsheetGrid : Panel
         using (context.PushClip(CellViewport()))
         {
             DrawActiveOutline(context, _palette.ActiveOutline);
+            DrawPointSelectionOutline(context);
             DrawReferenceHighlights(context);
             DrawMarquee(context);
             DrawFillPreview(context);
