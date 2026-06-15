@@ -61,6 +61,31 @@ public class OverflowMarkerTests
     }
 
     [AvaloniaFact]
+    public void Long_text_overflows_rightwards_into_empty_neighbours_without_a_marker()
+    {
+        // Far longer than one column, but every cell to the right is empty: the text spills across
+        // them (no clip, no chevron) instead of being cut off at the cell edge (PRD §10.1 text-spill).
+        var (window, sheet, grid) = Open();
+        sheet.SetValue(0, 0, CellValue.Text("Wednesday the seventeenth of September")); // B1.. all empty
+        window.CaptureRenderedFrame();
+
+        Assert.Null(grid.OverflowMarkerSideForTest(0, 0));
+    }
+
+    [AvaloniaFact]
+    public void Spill_stops_at_the_first_occupied_neighbour_and_clips()
+    {
+        // The same long text, but with a value a few columns over: it spills up to that cell, then
+        // clips with a right chevron rather than overwriting or running past the occupied neighbour.
+        var (window, sheet, grid) = Open();
+        sheet.SetValue(0, 0, CellValue.Text("Wednesday the seventeenth of September"));
+        sheet.SetValue(0, 2, CellValue.Text("X")); // C1 occupied — limited spill room
+        window.CaptureRenderedFrame();
+
+        Assert.Equal(true, grid.OverflowMarkerSideForTest(0, 0));
+    }
+
+    [AvaloniaFact]
     public void Clipped_render_does_not_throw()
     {
         var (window, sheet, _) = Open();
