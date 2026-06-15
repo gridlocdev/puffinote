@@ -85,6 +85,17 @@ public class SortFilterDialogTests
     }
 
     [AvaloniaFact]
+    public void Step_reorder_and_remove_buttons_have_tooltips()
+    {
+        var sheet = TaskSheet(sort: new SortSpec(new[] { new SortLevel(0, Ascending: true) }));
+        var dialog = new SortFilterDialog(sheet, TableRange, hasHeader: true, Inv);
+
+        Assert.Equal(new[] { "Move step up" }, dialog.StepButtonTooltipsForTest("▲"));
+        Assert.Equal(new[] { "Move step down" }, dialog.StepButtonTooltipsForTest("▼"));
+        Assert.Equal(new[] { "Remove step" }, dialog.StepButtonTooltipsForTest("✕"));
+    }
+
+    [AvaloniaFact]
     public void Preview_counts_surviving_rows_without_hiding_them()
     {
         var sheet = TaskSheet(

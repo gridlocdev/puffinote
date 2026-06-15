@@ -166,8 +166,11 @@ public sealed class SortFilterDialog : ModalDialog<SortFilterPlan?>
         filterBox.TextChanged += (_, _) => UpdateCount();
 
         var up = new Button { Content = "▲" };
+        ToolTip.SetTip(up, "Move step up");
         var down = new Button { Content = "▼" };
+        ToolTip.SetTip(down, "Move step down");
         var remove = new Button { Content = "✕" };
+        ToolTip.SetTip(remove, "Remove step");
 
         var row = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 6 };
         up.Click += (_, _) => MoveStep(row, -1);
@@ -298,6 +301,14 @@ public sealed class SortFilterDialog : ModalDialog<SortFilterPlan?>
 
     /// <summary>Parse one filter cell's text the way a filter row does.</summary>
     internal static ColumnFilter? ParseFilterForTest(string? text) => ParseFilter(text);
+
+    /// <summary>The tooltips on every step's button carrying <paramref name="glyph"/> (▲/▼/✕).</summary>
+    internal IReadOnlyList<string?> StepButtonTooltipsForTest(string glyph) =>
+        _steps.Children.OfType<StackPanel>()
+            .SelectMany(row => row.Children.OfType<Button>())
+            .Where(b => b.Content as string == glyph)
+            .Select(b => ToolTip.GetTip(b) as string)
+            .ToList();
 
     /// <summary>
     /// Parse a filter cell: a condition (leading comparison operator or a <c>*</c>/<c>?</c> wildcard)
