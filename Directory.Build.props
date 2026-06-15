@@ -27,6 +27,13 @@
     <BuildOSToken Condition="$([MSBuild]::IsOSPlatform('Windows'))">windows</BuildOSToken>
     <BaseOutputPath>bin/$(BuildOSToken)/</BaseOutputPath>
     <BaseIntermediateOutputPath>obj/$(BuildOSToken)/</BaseIntermediateOutputPath>
+    <!--
+      The SDK only excludes the *current* BaseIntermediateOutputPath (obj/<os>/) from the default
+      source glob. Exclude the whole obj/ and bin/ trees so stale generated files left in the plain
+      obj/ (e.g. from a build before these OS-specific paths, or other tooling) are never compiled —
+      otherwise their AssemblyInfo.cs collides with the live one (CS0579 duplicate attributes).
+    -->
+    <DefaultItemExcludes>$(DefaultItemExcludes);obj/**;bin/**</DefaultItemExcludes>
   </PropertyGroup>
 
 </Project>
