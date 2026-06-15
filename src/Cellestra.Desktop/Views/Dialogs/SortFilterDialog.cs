@@ -118,10 +118,9 @@ public sealed class SortFilterDialog : ModalDialog<SortFilterPlan?>
             }
         }
 
-        if (_steps.Children.Count == 0)
-        {
-            AddStep(StepKind.Sort, _range.Left, ascending: true, filterText: string.Empty);
-        }
+        // No fallback step: an unsorted, unfiltered region opens with an empty list (just the Add
+        // buttons), so the dialog never implies a sort that isn't there — applying it would otherwise
+        // silently sort by the first column. The user adds steps explicitly via "+ Add sort/filter".
     }
 
     private IEnumerable<(int Column, string Label)> ColumnChoices()

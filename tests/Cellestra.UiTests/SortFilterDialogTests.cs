@@ -56,6 +56,20 @@ public class SortFilterDialogTests
     }
 
     [AvaloniaFact]
+    public void Opens_with_no_steps_when_the_region_is_unsorted_and_unfiltered()
+    {
+        // A freshly created table must not show a phantom "Sort by the first column" step — applying it
+        // would otherwise silently sort the data that wasn't sorted.
+        var sheet = TaskSheet();
+
+        var dialog = new SortFilterDialog(sheet, TableRange, hasHeader: true, Inv);
+        var plan = dialog.BuildPlanForTest();
+
+        Assert.Null(plan.Sort);
+        Assert.Null(plan.Filter);
+    }
+
+    [AvaloniaFact]
     public void Does_not_seed_a_different_regions_filter()
     {
         // A sheet-level AutoFilter on a DIFFERENT range must not leak into a table's dialog (#2).
