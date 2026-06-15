@@ -123,6 +123,7 @@ public sealed partial class SpreadsheetGrid : Panel
             }
 
             Redraw(); // keep live reference highlights in step with the formula (#18)
+            InvalidateArrange(); // grow the editor rightwards as the text widens (Google Sheets feel)
             UpdateSignatureHelp(); // refresh the argument hint as the formula changes
 
             // Task-9 hook: notify external listeners (the formula bar) of edits so they can mirror
@@ -595,13 +596,22 @@ public sealed partial class SpreadsheetGrid : Panel
             _ => rect.Bottom - formatted.Height - CellPadY, // Bottom (the default)
         };
 
-        context.DrawText(formatted, new Point(tx, Math.Max(rect.Y, ty)));
-
-        if (clipped)
+        // Content overflows only rightwards, never downwards: clip the text to its own row so a font
+        // taller than the row (or a font whose real line height exceeds the row-growth estimate) is
+        // truncated at the cell's bottom edge instead of bleeding into the cell below. The clip spans
+        // the full drawable width (incl. any spill room) so rightward overflow into empty neighbours is
+        // preserved.
+        var clip = new Rect(rect.X, rect.Y, 2 * CellPadX + drawableWidth, rect.Height);
+        using (context.PushClip(clip))
         {
-            // Right-aligned text is cut off on its left; everything else on its right. The chevron
-            // sits at the actual clip edge — past any neighbours the text spilled into.
-            DrawOverflowMarker(context, rect, drawableWidth, typeface, fontSize, atRight: horizontal != SAlign.Right);
+            context.DrawText(formatted, new Point(tx, Math.Max(rect.Y, ty)));
+
+            if (clipped)
+            {
+                // Right-aligned text is cut off on its left; everything else on its right. The chevron
+                // sits at the actual clip edge — past any neighbours the text spilled into.
+                DrawOverflowMarker(context, rect, drawableWidth, typeface, fontSize, atRight: horizontal != SAlign.Right);
+            }
         }
     }
 
@@ -1513,6 +1523,9 @@ public sealed partial class SpreadsheetGrid : Panel
     /// <summary>Test seams: the live editor's text and selected substring, to verify select-all-on-open.</summary>
     internal string EditorText => _editor.Text ?? string.Empty;
 
+    /// <summary>Test seam: the inline editor's actual arranged bounds (so its rightward growth can be verified).</summary>
+    internal Rect EditorBoundsForTest => _editor.Bounds;
+
     internal bool EditorTextIsAllSelected =>
         _editor.SelectionStart == 0 && _editor.SelectionEnd == (_editor.Text?.Length ?? 0) && (_editor.Text?.Length ?? 0) > 0;
 
@@ -1817,6 +1830,7 @@ public sealed partial class SpreadsheetGrid : Panel
         BuildVisible(finalSize);
         if (_editing && TryGetActiveCellRect(out var rect))
         {
+            rect = ExpandedEditorRect(rect, finalSize); // grow rightward over neighbours as the text widens
             _editor.Arrange(rect);
             _editorDecorations.Arrange(rect); // the decoration overlay tracks the editor exactly
             ArrangeSignatureTip(rect, finalSize);
@@ -1830,6 +1844,28 @@ public sealed partial class SpreadsheetGrid : Panel
 
         LayoutScrollBars(finalSize);
         return finalSize;
+    }
+
+    /// <summary>
+    /// The rectangle the inline editor should occupy: the cell, widened rightward to fit the text as
+    /// it grows (covering the cells to its right), like Google Sheets/Excel. Never narrower than the
+    /// cell, never past the grid's right edge; height stays the cell's so it never grows downward.
+    /// </summary>
+    private Rect ExpandedEditorRect(Rect cell, Size finalSize)
+    {
+        string text = _editor.Text ?? string.Empty;
+        if (text.Length == 0)
+        {
+            return cell;
+        }
+
+        var typeface = new Typeface(_editor.FontFamily, _editor.FontStyle, _editor.FontWeight);
+        var measured = new FormattedText(text, CultureInfo.CurrentCulture, FlowDirection.LeftToRight,
+            typeface, _editor.FontSize, Brushes.Black);
+        // Room for the text, the editor's own horizontal padding, and a little slack for the caret.
+        double needed = measured.Width + 2 * EditorPadX + 6;
+        double width = Math.Clamp(needed, cell.Width, Math.Max(cell.Width, finalSize.Width - cell.X));
+        return new Rect(cell.X, cell.Y, width, cell.Height);
     }
 
     /// <summary>Place the argument hint just above the cell editor, dropping below it when there's no room.</summary>
