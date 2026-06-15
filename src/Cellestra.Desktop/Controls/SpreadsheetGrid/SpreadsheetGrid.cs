@@ -76,6 +76,10 @@ public sealed partial class SpreadsheetGrid : Panel
         ApplyTheme();                  // canvas/text colors follow the system light/dark theme
         ActualThemeVariantChanged += (_, _) => ApplyTheme();
         Selection.Changed += (_, _) => Redraw();
+        // Point-mode clicks must be caught in the tunnel phase, before the focus class handler moves
+        // focus to the grid and blurs the inline editor: that blur would commit the formula before
+        // the click could insert a reference into it (#17 / task 1).
+        AddHandler(PointerPressedEvent, PointModePreviewPressed, RoutingStrategies.Tunnel);
         _editor.KeyDown += EditorKeyDown;
         // Arrow keys must be caught in the tunnel phase: the TextBox's own (bubbling) handler would
         // otherwise consume them for caret movement before point mode could poke at a cell.
@@ -85,7 +89,22 @@ public sealed partial class SpreadsheetGrid : Panel
         // a reentrant focus change *during* that transfer, which leaves Avalonia's focus manager pointing
         // at the grid while the new control still shows as focused — so a later click can't dislodge it
         // and the formula bar keeps its focus state. Let the focus go where it was headed.
-        _editor.LostFocus += (_, _) => CommitEdit(moveRow: 0, moveColumn: 0, refocus: false);
+        _editor.LostFocus += (_, _) =>
+        {
+            // Avalonia moves focus on a pointer press *before* routing the press event, so the blur
+            // fires ahead of any pointer handler. When focus is moving to the grid itself during a
+            // formula edit, the press that caused it is a point-mode reference click (task 1): defer
+            // the commit to PointModePreviewPressed, which inserts the reference (and keeps editing)
+            // or commits explicitly if the press wasn't an operand position. Any other blur (the
+            // formula bar, another control) commits here as before.
+            var focused = TopLevel.GetTopLevel(this)?.FocusManager?.GetFocusedElement();
+            if (IsFormulaEdit() && ReferenceEquals(focused, this))
+            {
+                return;
+            }
+
+            CommitEdit(moveRow: 0, moveColumn: 0, refocus: false);
+        };
         _editor.TextChanged += (_, _) =>
         {
             // Compare by value (not a bool flag) so a TextChanged that arrives after SetEditorText
@@ -874,6 +893,13 @@ public sealed partial class SpreadsheetGrid : Panel
         base.OnPointerPressed(e);
         var point = e.GetPosition(this);
 
+        // A point-mode press was already consumed in the tunnel preview (it inserts a reference and
+        // keeps the editor focused); nothing more to do here.
+        if (e.Handled)
+        {
+            return;
+        }
+
         // Right-click is for the context menu (raised separately as ContextRequested); don't let it
         // start a selection. Commit any in-progress edit first so the menu acts on a settled cell,
         // and focus the grid so typing works once the menu closes.
@@ -885,14 +911,6 @@ public sealed partial class SpreadsheetGrid : Panel
             }
 
             Focus();
-            return;
-        }
-
-        // Point mode: clicking a cell while typing a formula inserts its reference instead of
-        // committing (#17). Checked before stealing focus so the editor stays active.
-        if (_editing && TryPointModeInsert(point))
-        {
-            e.Handled = true;
             return;
         }
 
@@ -1098,6 +1116,12 @@ public sealed partial class SpreadsheetGrid : Panel
         base.OnPointerMoved(e);
         var point = e.GetPosition(this);
 
+        if (_pointDragging)
+        {
+            UpdatePointDrag(point); // extend the point-mode reference into a range as the pointer drags
+            return;
+        }
+
         if (IsResizing)
         {
             UpdateResize(point);
@@ -1140,6 +1164,15 @@ public sealed partial class SpreadsheetGrid : Panel
     protected override void OnPointerReleased(PointerReleasedEventArgs e)
     {
         base.OnPointerReleased(e);
+        if (_pointDragging)
+        {
+            // The point-mode drag is done; the inserted range stays in the formula. Keep
+            // _pointInsertStart set so a following click replaces it, like Excel.
+            _pointDragging = false;
+            e.Pointer.Capture(null);
+            return;
+        }
+
         if (IsResizing)
         {
             EndResize();

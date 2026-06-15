@@ -23,10 +23,16 @@ public sealed partial class SpreadsheetGrid
     private bool _pointKeyboard;
     private int _pointRow, _pointColumn, _pointAnchorRow, _pointAnchorColumn;
 
+    // Mouse point mode: a drag started on a cell while composing a formula extends the just-inserted
+    // reference into a range (A1:B2), like dragging across cells in Excel's point mode (task 1).
+    private bool _pointDragging;
+    private int _pointDragAnchorRow, _pointDragAnchorColumn;
+
     private void ResetPointMode()
     {
         _pointInsertStart = -1;
         _pointKeyboard = false;
+        _pointDragging = false;
     }
 
     /// <summary>
@@ -126,6 +132,42 @@ public sealed partial class SpreadsheetGrid
         _editor.CaretIndex = start + reference.Length;
     }
 
+    /// <summary>True when the inline editor currently holds a formula (its text starts with '=').</summary>
+    private bool IsFormulaEdit() => (_editor.Text ?? string.Empty).StartsWith('=');
+
+    /// <summary>
+    /// Tunnel handler: a left-press on a cell while composing a formula inserts that cell's reference
+    /// (and a drag from there extends it to a range), instead of committing the edit. Handled here so
+    /// it runs before the focus class handler — moving focus to the grid would blur and commit the
+    /// editor first. <see cref="_suppressBlurCommit"/> guards against any blur that still slips through.
+    /// </summary>
+    private void PointModePreviewPressed(object? sender, PointerPressedEventArgs e)
+    {
+        // The blur-commit was deferred to us (see the editor's LostFocus); _editing is still true.
+        if (!_editing || !IsFormulaEdit() || !e.GetCurrentPoint(this).Properties.IsLeftButtonPressed)
+        {
+            return;
+        }
+
+        var point = e.GetPosition(this);
+        bool onCell = HitTest(point, out int row, out int column, out bool rowHeader, out bool columnHeader)
+            && !rowHeader && !columnHeader;
+        if (onCell && TryPointModeInsert(point))
+        {
+            // Reference inserted; arm a drag so the user can extend it into a range, and keep editing.
+            _pointDragging = true;
+            _pointDragAnchorRow = row;
+            _pointDragAnchorColumn = column;
+            e.Pointer.Capture(this);
+            e.Handled = true;
+            return;
+        }
+
+        // A header press, or a press where a reference isn't expected: this is a real commit. Finish
+        // the edit now (LostFocus deferred it) so the press falls through to normal selection.
+        CommitEdit(moveRow: 0, moveColumn: 0, refocus: false);
+    }
+
     private bool TryPointModeInsert(Point point)
     {
         string text = _editor.Text ?? string.Empty;
@@ -166,6 +208,37 @@ public sealed partial class SpreadsheetGrid
         _editor.Focus();
         Redraw();
         return true;
+    }
+
+    /// <summary>
+    /// Drag-extend the reference inserted by the press into a range spanning the press-anchor cell to
+    /// the cell now under the pointer (task 1). A single cell collapses back to a plain reference.
+    /// </summary>
+    private void UpdatePointDrag(Point point)
+    {
+        if (_pointInsertStart < 0 || !HitTest(point, out int row, out int column, out bool rowHeader, out bool columnHeader)
+            || rowHeader || columnHeader)
+        {
+            return;
+        }
+
+        int top = Math.Min(_pointDragAnchorRow, row), bottom = Math.Max(_pointDragAnchorRow, row);
+        int left = Math.Min(_pointDragAnchorColumn, column), right = Math.Max(_pointDragAnchorColumn, column);
+        string reference = top == bottom && left == right
+            ? new CellAddress(left, top).ToString()
+            : new CellAddress(left, top) + ":" + new CellAddress(right, bottom);
+
+        string text = _editor.Text ?? string.Empty;
+        if (_pointInsertStart + _pointInsertLength > text.Length)
+        {
+            return; // the inserted span no longer fits the text (defensive); leave it untouched
+        }
+
+        SetEditorText(text.Remove(_pointInsertStart, _pointInsertLength).Insert(_pointInsertStart, reference));
+        _pointInsertLength = reference.Length;
+        _editor.CaretIndex = _pointInsertStart + reference.Length;
+        EnsureVisible(row, column);
+        Redraw();
     }
 
     private void SetEditorText(string text)

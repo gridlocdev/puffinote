@@ -1944,6 +1944,15 @@ public partial class MainWindow : Window, IAppEnvironment
 
         if (Grid.IsInlineEditing)
         {
+            // Focus moving to the grid while a formula is open is a point-mode reference click
+            // (task 1): let the grid insert the reference instead of committing here. Any other blur
+            // (e.g. clicking a toolbar button) still commits the edit in place.
+            var focused = TopLevel.GetTopLevel(this)?.FocusManager?.GetFocusedElement();
+            if (Grid.IsInlineFormulaEdit && ReferenceEquals(focused, Grid))
+            {
+                return;
+            }
+
             Grid.CommitInlineEdit(0, 0); // commit in place, no selection move
         }
     }

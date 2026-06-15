@@ -25,6 +25,9 @@ public sealed partial class SpreadsheetGrid
     /// <summary>Whether an inline cell edit is currently in progress.</summary>
     public bool IsInlineEditing => _editing;
 
+    /// <summary>Whether an inline edit is in progress and its text is a formula (starts with '=').</summary>
+    public bool IsInlineFormulaEdit => _editing && IsFormulaEdit();
+
     /// <summary>
     /// Commit the active inline edit through the grid's normal path (validation, SetInput, selection
     /// move), so the formula bar's Enter shares one commit lifecycle with in-cell editing (task 9).
