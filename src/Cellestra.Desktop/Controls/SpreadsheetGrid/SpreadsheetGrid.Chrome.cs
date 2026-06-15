@@ -194,6 +194,29 @@ public sealed partial class SpreadsheetGrid
         return null;
     }
 
+    /// <summary>Test seam: apply a by-value filter to one column of a range, as the dropdown would.</summary>
+    internal void ApplyColumnFilterForTest(CellRange range, bool hasHeader, int column, params string[] allowed)
+    {
+        if (_session is null)
+        {
+            return;
+        }
+
+        _filterRange = range;
+        _columnFilters[column] = new ColumnFilter { AllowedValues = allowed.ToHashSet(StringComparer.Ordinal) };
+        ApplyColumnFilters(_session.ActiveSheet, range, hasHeader);
+    }
+
+    /// <summary>Test seam: the columns with an active filter on the open range, ascending by index.</summary>
+    internal System.Collections.Generic.IReadOnlyList<int> ActiveFilterColumnsForTest =>
+        _columnFilters.Where(kv => kv.Value.AllowedValues is not null || kv.Value.Condition is not null)
+            .Select(kv => kv.Key).OrderBy(c => c).ToList();
+
+    /// <summary>Test seam: how many open-popup buttons carry the given glyph/content.</summary>
+    internal int PopupButtonCountForTest(string content) =>
+        Avalonia.LogicalTree.LogicalExtensions.GetLogicalDescendants(_popupLayer)
+            .OfType<Button>().Count(b => b.Content as string == content);
+
     /// <summary>True when the open popup contains a text block with the given text (e.g. its title).</summary>
     internal bool PopupHasTextForTest(string text) =>
         Avalonia.LogicalTree.LogicalExtensions.GetLogicalDescendants(_popupLayer)
@@ -292,12 +315,9 @@ public sealed partial class SpreadsheetGrid
 
         // Title the popup by the column's header so it's clear which column is being acted on; fall
         // back to the column letter when there's no header (#6, user wording "Sorting <HEADER_NAME>").
-        var headerValue = sheet.GetValue(range.Top, column);
-        string headerLabel = hasHeader && !headerValue.IsEmpty
-            ? headerValue.ToInvariantString()
-            : $"Column {SheetDimensions.ColumnToLetters(column)}";
+        string headerLabel = ColumnHeaderLabel(sheet, range, column, hasHeader);
 
-        OpenPopup(anchor, PopupBox(new StackPanel
+        var body = new StackPanel
         {
             Spacing = 6,
             Children =
@@ -305,11 +325,121 @@ public sealed partial class SpreadsheetGrid
                 new TextBlock { Text = $"Sorting {headerLabel}", FontWeight = FontWeight.SemiBold },
                 sortAsc,
                 sortDesc,
-                new Border { Height = 1, Background = _palette.GridLine.Brush },
-                new ScrollViewer { MaxHeight = 180, Content = list },
-                new StackPanel { Orientation = Orientation.Horizontal, Spacing = 6, Children = { clear, apply } },
             },
-        }));
+        };
+
+        // Table-aware subfiltering (task 4): list every column currently filtered on this range, each
+        // with ascending/descending sort and a delete button, so you can see and adjust the stack of
+        // filters from any column's dropdown ("filter this column, then that one").
+        if (BuildActiveFiltersSection(sheet, range, hasHeader, anchor, column) is { } activeFilters)
+        {
+            body.Children.Add(new Border { Height = 1, Background = _palette.GridLine.Brush });
+            body.Children.Add(activeFilters);
+        }
+
+        body.Children.Add(new Border { Height = 1, Background = _palette.GridLine.Brush });
+        body.Children.Add(new ScrollViewer { MaxHeight = 180, Content = list });
+        body.Children.Add(new StackPanel { Orientation = Orientation.Horizontal, Spacing = 6, Children = { clear, apply } });
+
+        OpenPopup(anchor, PopupBox(body));
+    }
+
+    /// <summary>
+    /// The "Active filters" list shown in every column's dropdown: one row per column with an active
+    /// filter, carrying its header label, an ascending/descending sort toggle, and a delete button
+    /// that drops just that column's filter (task 4). Null when nothing is filtered on this range.
+    /// </summary>
+    private Control? BuildActiveFiltersSection(Worksheet sheet, CellRange range, bool hasHeader, Rect anchor, int popupColumn)
+    {
+        var columns = _columnFilters
+            .Where(kv => kv.Value.AllowedValues is not null || kv.Value.Condition is not null)
+            .Select(kv => kv.Key)
+            .OrderBy(c => c)
+            .ToList();
+        if (columns.Count == 0)
+        {
+            return null;
+        }
+
+        var panel = new StackPanel { Spacing = 2 };
+        panel.Children.Add(new TextBlock { Text = "Active filters", FontWeight = FontWeight.SemiBold });
+
+        foreach (int col in columns)
+        {
+            bool? sorted = SortDirectionFor(sheet, col); // true=ascending, false=descending, null=unsorted
+
+            var asc = SubfilterButton("▲", "Sort ascending", active: sorted == true);
+            asc.Click += (_, _) => SortByFilterColumn(sheet, range, col, ascending: true, hasHeader);
+            var desc = SubfilterButton("▼", "Sort descending", active: sorted == false);
+            desc.Click += (_, _) => SortByFilterColumn(sheet, range, col, ascending: false, hasHeader);
+            var delete = SubfilterButton("✕", "Remove this filter", active: false);
+            delete.Click += (_, _) =>
+            {
+                _columnFilters.Remove(col);
+                ApplyColumnFilters(sheet, range, hasHeader);
+                ShowFilterPopup(anchor, popupColumn, range, hasHeader); // rebuild so the list updates
+            };
+
+            panel.Children.Add(new StackPanel
+            {
+                Orientation = Orientation.Horizontal,
+                Spacing = 4,
+                Children =
+                {
+                    new TextBlock
+                    {
+                        Text = ColumnHeaderLabel(sheet, range, col, hasHeader),
+                        Width = 110,
+                        VerticalAlignment = VerticalAlignment.Center,
+                        TextTrimming = TextTrimming.CharacterEllipsis,
+                    },
+                    asc,
+                    desc,
+                    delete,
+                },
+            });
+        }
+
+        return panel;
+    }
+
+    private static Button SubfilterButton(string glyph, string tip, bool active)
+    {
+        var button = new Button
+        {
+            Content = glyph,
+            Padding = new Thickness(6, 2),
+            MinWidth = 0,
+            FontWeight = active ? FontWeight.Bold : FontWeight.Normal,
+        };
+        ToolTip.SetTip(button, tip);
+        return button;
+    }
+
+    /// <summary>The header label for a column, or its letter when the range has no header (#6/task 4).</summary>
+    private static string ColumnHeaderLabel(Worksheet sheet, CellRange range, int column, bool hasHeader)
+    {
+        var headerValue = sheet.GetValue(range.Top, column);
+        return hasHeader && !headerValue.IsEmpty
+            ? headerValue.ToInvariantString()
+            : $"Column {SheetDimensions.ColumnToLetters(column)}";
+    }
+
+    /// <summary>The sort direction currently applied to a column (true=asc, false=desc), or null.</summary>
+    private static bool? SortDirectionFor(Worksheet sheet, int column)
+    {
+        if (sheet.ActiveSort is { } sort)
+        {
+            foreach (var level in sort.Levels)
+            {
+                if (level.Column == column)
+                {
+                    return level.Ascending;
+                }
+            }
+        }
+
+        return null;
     }
 
     /// <summary>Sort the table/filter range by the dropdown's column, then close the popup (task 14).</summary>
