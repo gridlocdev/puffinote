@@ -16,18 +16,18 @@ public class MarqueeTests
     {
         var window = new MainWindow();
         window.Show();
-        IAppEnvironment env = window;
+        IAppEnvironment env = window.Editor;
         var sheet = env.Session.ActiveSheet;
 
         env.Session.Execute(EditCommands.SetValue(sheet.Name, 0, 0, CellValue.Number(5)));
         env.Selection.MoveTo(0, 0);
 
         // Copy sets the marquee; rendering exercises DrawMarquee through real Skia.
-        window.Copy();
+        window.Editor.Copy();
         Assert.NotNull(window.CaptureRenderedFrame());
 
         // Starting an edit must clear the marquee/clipboard without error.
-        window.BeginEdit();
+        window.Editor.BeginEdit();
         Assert.NotNull(window.CaptureRenderedFrame());
     }
 }

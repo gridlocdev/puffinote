@@ -17,10 +17,10 @@ public class FormulaBarSyncHookTests
     {
         var window = new MainWindow();
         window.Show();
-        var grid = window.Grid;
+        var grid = window.Editor.Grid;
 
         Assert.False(grid.IsInlineEditing);
-        ((IAppEnvironment)window).Selection.MoveTo(0, 0);
+        ((IAppEnvironment)window.Editor).Selection.MoveTo(0, 0);
         grid.BeginEdit("abc");
         Assert.True(grid.IsInlineEditing);
     }
@@ -30,8 +30,8 @@ public class FormulaBarSyncHookTests
     {
         var window = new MainWindow();
         window.Show();
-        var grid = window.Grid;
-        ((IAppEnvironment)window).Selection.MoveTo(0, 0);
+        var grid = window.Editor.Grid;
+        ((IAppEnvironment)window.Editor).Selection.MoveTo(0, 0);
 
         int echoes = 0;
         grid.InlineEditTextChanged += _ => echoes++;
@@ -47,8 +47,8 @@ public class FormulaBarSyncHookTests
     {
         var window = new MainWindow();
         window.Show();
-        var grid = window.Grid;
-        ((IAppEnvironment)window).Selection.MoveTo(0, 0);
+        var grid = window.Editor.Grid;
+        ((IAppEnvironment)window.Editor).Selection.MoveTo(0, 0);
         grid.BeginEdit("a");
 
         int echoes = 0;

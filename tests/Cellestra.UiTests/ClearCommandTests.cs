@@ -16,7 +16,7 @@ public class ClearCommandTests
     {
         var window = new MainWindow();
         window.Show();
-        IAppEnvironment env = window;
+        IAppEnvironment env = window.Editor;
         var sheet = env.Session.ActiveSheet;
 
         sheet.SetValue(0, 0, CellValue.Text("keep"));
@@ -35,7 +35,7 @@ public class ClearCommandTests
     {
         var window = new MainWindow();
         window.Show();
-        IAppEnvironment env = window;
+        IAppEnvironment env = window.Editor;
         var sheet = env.Session.ActiveSheet;
 
         sheet.SetValue(0, 0, CellValue.Text("gone"));
@@ -51,7 +51,7 @@ public class ClearCommandTests
     {
         var window = new MainWindow();
         window.Show();
-        IAppEnvironment env = window;
+        IAppEnvironment env = window.Editor;
         var sheet = env.Session.ActiveSheet;
 
         sheet.SetValue(0, 0, CellValue.Text("Name"));
@@ -77,7 +77,7 @@ public class ClearCommandTests
     {
         var window = new MainWindow();
         window.Show();
-        IAppEnvironment env = window;
+        IAppEnvironment env = window.Editor;
         var sheet = env.Session.ActiveSheet;
 
         // A cell with a background fill, a whole-column fill, and an active AutoFilter — the things the
@@ -101,7 +101,7 @@ public class ClearCommandTests
     {
         var window = new MainWindow();
         window.Show();
-        IAppEnvironment env = window;
+        IAppEnvironment env = window.Editor;
         var sheet = env.Session.ActiveSheet;
 
         // A ⌘T table: its header row gets a colored fill and it draws its own filter dropdowns — the

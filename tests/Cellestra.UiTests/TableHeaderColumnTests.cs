@@ -19,12 +19,12 @@ public class TableHeaderColumnTests
     {
         var window = new MainWindow();
         window.Show();
-        window.Grid.Zoom = 1.0;
-        var sheet = window.Session.ActiveSheet;
+        window.Editor.Grid.Zoom = 1.0;
+        var sheet = window.Editor.Session.ActiveSheet;
         sheet.SetValue(0, 0, CellValue.Text("Team")); sheet.SetValue(0, 1, CellValue.Text("Pts"));
         sheet.SetValue(1, 0, CellValue.Text("A")); sheet.SetValue(1, 1, CellValue.Number(3));
         sheet.AddTable(new Table("T", CellRange.Parse("A1:B2"), HasHeader: true));
-        window.Grid.Refresh();
+        window.Editor.Grid.Refresh();
         window.CaptureRenderedFrame();
         return window;
     }
@@ -33,7 +33,7 @@ public class TableHeaderColumnTests
     public void The_command_is_enabled_only_inside_a_table()
     {
         var window = TableWindow();
-        var env = (IAppEnvironment)window;
+        var env = (IAppEnvironment)window.Editor;
         var command = AppCommands.ById("data.headerColumn")!;
 
         env.Selection.MoveTo(0, 0); // inside the table
@@ -47,7 +47,7 @@ public class TableHeaderColumnTests
     public void Toggling_designates_then_clears_the_header_column()
     {
         var window = TableWindow();
-        var env = (IAppEnvironment)window;
+        var env = (IAppEnvironment)window.Editor;
         env.Selection.MoveTo(1, 0); // a data cell inside the table
 
         Assert.False(env.ActiveTable!.HasHeaderColumn);

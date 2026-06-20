@@ -21,7 +21,7 @@ public class GridHyperlinkTests
     {
         var window = new MainWindow();
         window.Show();
-        return (window, window.Session.ActiveSheet, window.Grid);
+        return (window, window.Editor.Session.ActiveSheet, window.Editor.Grid);
     }
 
     [AvaloniaFact]

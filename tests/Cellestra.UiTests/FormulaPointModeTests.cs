@@ -22,7 +22,7 @@ public class FormulaPointModeTests
     {
         var window = new MainWindow();
         window.Show();
-        env = window;
+        env = window.Editor;
         env.Selection.MoveTo(0, 0); // A1
         env.BeginEdit();
         Pump();
@@ -52,7 +52,7 @@ public class FormulaPointModeTests
         var window = Editing(out _);
 
         string? last = null;
-        window.Grid.InlineEditTextChanged += t => last = t;
+        window.Editor.Grid.InlineEditTextChanged += t => last = t;
 
         window.KeyTextInput("=");
         window.KeyPressQwerty(PhysicalKey.ArrowDown, RawInputModifiers.None); // poke A2 into the formula
@@ -81,21 +81,21 @@ public class FormulaPointModeTests
     {
         var window = new MainWindow();
         window.Show();
-        window.Grid.Zoom = 1.0;
+        window.Editor.Grid.Zoom = 1.0;
         window.CaptureRenderedFrame();
-        var env = (IAppEnvironment)window;
+        var env = (IAppEnvironment)window.Editor;
         env.Selection.MoveTo(0, 0); // A1
         env.BeginEdit();
         Pump();
 
         window.KeyTextInput("=");
         // Click C2 (column 2, row 1): its centre in grid space.
-        var c2 = window.Grid.TranslatePoint(CellCentre(2, 1), window) ?? default;
+        var c2 = window.Editor.Grid.TranslatePoint(CellCentre(2, 1), window) ?? default;
         window.MouseDown(c2, MouseButton.Left);
         window.MouseUp(c2, MouseButton.Left);
         Pump();
-        Assert.True(window.Grid.IsInlineEditing, "the click should insert a reference, not commit the edit");
-        Assert.Equal("=C2", window.Grid.EditorText);
+        Assert.True(window.Editor.Grid.IsInlineEditing, "the click should insert a reference, not commit the edit");
+        Assert.Equal("=C2", window.Editor.Grid.EditorText);
         window.KeyPressQwerty(PhysicalKey.Enter, RawInputModifiers.None);
         Pump();
 
@@ -107,16 +107,16 @@ public class FormulaPointModeTests
     {
         var window = new MainWindow();
         window.Show();
-        window.Grid.Zoom = 1.0;
+        window.Editor.Grid.Zoom = 1.0;
         window.CaptureRenderedFrame();
-        var env = (IAppEnvironment)window;
+        var env = (IAppEnvironment)window.Editor;
         env.Selection.MoveTo(0, 0); // A1
         env.BeginEdit();
         Pump();
 
         window.KeyTextInput("=SUM(");
-        var b2 = window.Grid.TranslatePoint(CellCentre(1, 1), window) ?? default; // B2
-        var d4 = window.Grid.TranslatePoint(CellCentre(3, 3), window) ?? default; // D4
+        var b2 = window.Editor.Grid.TranslatePoint(CellCentre(1, 1), window) ?? default; // B2
+        var d4 = window.Editor.Grid.TranslatePoint(CellCentre(3, 3), window) ?? default; // D4
         window.MouseDown(b2, MouseButton.Left);
         window.MouseMove(d4);
         window.MouseUp(d4, MouseButton.Left);
@@ -132,27 +132,27 @@ public class FormulaPointModeTests
     {
         var window = new MainWindow();
         window.Show();
-        window.Grid.Zoom = 1.0;
+        window.Editor.Grid.Zoom = 1.0;
         window.CaptureRenderedFrame();
-        var env = (IAppEnvironment)window;
+        var env = (IAppEnvironment)window.Editor;
         env.Selection.MoveTo(0, 0); // A1
         env.BeginEdit();
         Pump();
 
         window.KeyTextInput("=SUM(");
-        var b2 = window.Grid.TranslatePoint(CellCentre(1, 1), window) ?? default; // B2
-        var d4 = window.Grid.TranslatePoint(CellCentre(3, 3), window) ?? default; // D4
+        var b2 = window.Editor.Grid.TranslatePoint(CellCentre(1, 1), window) ?? default; // B2
+        var d4 = window.Editor.Grid.TranslatePoint(CellCentre(3, 3), window) ?? default; // D4
         window.MouseDown(b2, MouseButton.Left); // anchor the reference at B2
         window.MouseUp(b2, MouseButton.Left);
         Pump();
-        Assert.Equal("=SUM(B2", window.Grid.EditorText);
+        Assert.Equal("=SUM(B2", window.Editor.Grid.EditorText);
 
         // Shift+click D4 extends the B2 reference into the range B2:D4, like a normal Shift+click.
         window.MouseDown(d4, MouseButton.Left, RawInputModifiers.Shift);
         window.MouseUp(d4, MouseButton.Left, RawInputModifiers.Shift);
         Pump();
-        Assert.Equal("=SUM(B2:D4", window.Grid.EditorText);
-        Assert.True(window.Grid.PointTargetForTest is { Top: 1, Left: 1, Bottom: 3, Right: 3 });
+        Assert.Equal("=SUM(B2:D4", window.Editor.Grid.EditorText);
+        Assert.True(window.Editor.Grid.PointTargetForTest is { Top: 1, Left: 1, Bottom: 3, Right: 3 });
 
         window.KeyTextInput(")");
         window.KeyPressQwerty(PhysicalKey.Enter, RawInputModifiers.None);
@@ -165,9 +165,9 @@ public class FormulaPointModeTests
     {
         var window = new MainWindow();
         window.Show();
-        window.Grid.Zoom = 1.0;
+        window.Editor.Grid.Zoom = 1.0;
         window.CaptureRenderedFrame();
-        var env = (IAppEnvironment)window;
+        var env = (IAppEnvironment)window.Editor;
         env.Selection.MoveTo(0, 0); // A1
         env.BeginEdit();
         Pump();
@@ -175,27 +175,27 @@ public class FormulaPointModeTests
         window.KeyTextInput("=SUM(");
 
         // A single click marks the clicked cell as the point target...
-        var c2 = window.Grid.TranslatePoint(CellCentre(2, 1), window) ?? default; // C2
+        var c2 = window.Editor.Grid.TranslatePoint(CellCentre(2, 1), window) ?? default; // C2
         window.MouseDown(c2, MouseButton.Left);
         window.MouseUp(c2, MouseButton.Left);
         Pump();
-        var single = window.Grid.PointTargetForTest;
+        var single = window.Editor.Grid.PointTargetForTest;
         Assert.True(single is { Top: 1, Left: 2, Bottom: 1, Right: 2 }, $"click target was {single}");
 
         // ...and dragging extends the target to the dragged range, like the inserted reference.
-        var b2 = window.Grid.TranslatePoint(CellCentre(1, 1), window) ?? default; // B2
-        var d4 = window.Grid.TranslatePoint(CellCentre(3, 3), window) ?? default; // D4
+        var b2 = window.Editor.Grid.TranslatePoint(CellCentre(1, 1), window) ?? default; // B2
+        var d4 = window.Editor.Grid.TranslatePoint(CellCentre(3, 3), window) ?? default; // D4
         window.MouseDown(b2, MouseButton.Left);
         window.MouseMove(d4);
         window.MouseUp(d4, MouseButton.Left);
         Pump();
-        var dragged = window.Grid.PointTargetForTest;
+        var dragged = window.Editor.Grid.PointTargetForTest;
         Assert.True(dragged is { Top: 1, Left: 1, Bottom: 3, Right: 3 }, $"drag target was {dragged}");
 
         // Typing ends the poke, so the point chrome clears.
         window.KeyTextInput("0");
         Pump();
-        Assert.Null(window.Grid.PointTargetForTest);
+        Assert.Null(window.Editor.Grid.PointTargetForTest);
     }
 
     [AvaloniaFact]
@@ -203,24 +203,24 @@ public class FormulaPointModeTests
     {
         var window = new MainWindow();
         window.Show();
-        window.Grid.Zoom = 1.0;
+        window.Editor.Grid.Zoom = 1.0;
         window.CaptureRenderedFrame();
-        var env = (IAppEnvironment)window;
+        var env = (IAppEnvironment)window.Editor;
         env.Selection.MoveTo(0, 0); // A1
 
-        window.FormulaInput.Focus();
-        window.FormulaInput.Text = "="; // typing in the bar mirrors into the inline editor
+        window.Editor.FormulaInput.Focus();
+        window.Editor.FormulaInput.Text = "="; // typing in the bar mirrors into the inline editor
         Pump();
-        Assert.True(window.Grid.IsInlineEditing);
+        Assert.True(window.Editor.Grid.IsInlineEditing);
 
-        var c2 = window.Grid.TranslatePoint(CellCentre(2, 1), window) ?? default;
+        var c2 = window.Editor.Grid.TranslatePoint(CellCentre(2, 1), window) ?? default;
         window.MouseDown(c2, MouseButton.Left);
         window.MouseUp(c2, MouseButton.Left);
         Pump();
 
         // The click inserted the reference into the formula instead of committing the bar's edit.
-        Assert.True(window.Grid.IsInlineEditing);
-        Assert.Equal("=C2", window.FormulaInput.Text);
+        Assert.True(window.Editor.Grid.IsInlineEditing);
+        Assert.Equal("=C2", window.Editor.FormulaInput.Text);
     }
 
     /// <summary>Centre of a cell (zoom 1, default sizes), in the grid's own coordinate space.</summary>

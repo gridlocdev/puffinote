@@ -19,7 +19,7 @@ public class ValidationListSourceTests
     {
         var window = new MainWindow();
         window.Show();
-        var sheet = window.Session.ActiveSheet;
+        var sheet = window.Editor.Session.ActiveSheet;
 
         // E1:E4 holds the allowed values, with a duplicate and a blank to prove de-dup/skip.
         sheet.SetValue(0, 4, CellValue.Text("Red"));
@@ -31,7 +31,7 @@ public class ValidationListSourceTests
             ListSource = CellRange.Parse("E1:E4"),
         });
 
-        var items = window.Grid.ValidationDropdownItemsForTest(0, 0);
+        var items = window.Editor.Grid.ValidationDropdownItemsForTest(0, 0);
 
         Assert.Equal(new[] { "Red", "Green" }, items);
     }
@@ -41,18 +41,18 @@ public class ValidationListSourceTests
     {
         var window = new MainWindow();
         window.Show();
-        var workbook = window.Session.Workbook;
+        var workbook = window.Editor.Session.Workbook;
         var lists = workbook.AddSheet("Lists");
         lists.SetValue(0, 0, CellValue.Text("Yes"));
         lists.SetValue(1, 0, CellValue.Text("No"));
 
-        var sheet = window.Session.ActiveSheet;
+        var sheet = window.Editor.Session.ActiveSheet;
         sheet.AddValidation(new DataValidation(ValidationKind.List, CellRange.Parse("A1:A3"))
         {
             ListSource = CellRange.Parse("Lists.A1:A2"),
         });
 
-        var items = window.Grid.ValidationDropdownItemsForTest(0, 0);
+        var items = window.Editor.Grid.ValidationDropdownItemsForTest(0, 0);
 
         Assert.Equal(new[] { "Yes", "No" }, items);
     }

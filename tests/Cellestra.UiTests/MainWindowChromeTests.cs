@@ -4,6 +4,7 @@ using Cellestra.Core.Editing;
 using Cellestra.Core.Values;
 using Cellestra.Desktop.Commands;
 using Cellestra.Desktop.Views;
+using Cellestra.Editor;
 using Xunit;
 
 namespace Cellestra.UiTests;
@@ -41,8 +42,8 @@ public class MainWindowChromeTests
     public void Plain_Delete_yields_to_a_focused_text_input()
     {
         var delete = new KeyGesture(Key.Delete);
-        Assert.True(MainWindow.ShouldYieldToTextInput(delete, textInputFocused: true));
-        Assert.False(MainWindow.ShouldYieldToTextInput(delete, textInputFocused: false));
+        Assert.True(SpreadsheetEditorView.ShouldYieldToTextInput(delete, textInputFocused: true));
+        Assert.False(SpreadsheetEditorView.ShouldYieldToTextInput(delete, textInputFocused: false));
     }
 
     [Theory]
@@ -57,8 +58,8 @@ public class MainWindowChromeTests
     public void Text_editing_chords_yield_to_a_focused_text_input(Key key, KeyModifiers mods)
     {
         var gesture = new KeyGesture(key, mods);
-        Assert.True(MainWindow.ShouldYieldToTextInput(gesture, textInputFocused: true));
-        Assert.False(MainWindow.ShouldYieldToTextInput(gesture, textInputFocused: false));
+        Assert.True(SpreadsheetEditorView.ShouldYieldToTextInput(gesture, textInputFocused: true));
+        Assert.False(SpreadsheetEditorView.ShouldYieldToTextInput(gesture, textInputFocused: false));
     }
 
     [Theory]
@@ -72,13 +73,13 @@ public class MainWindowChromeTests
     [InlineData(Key.V, KeyModifiers.Meta | KeyModifiers.Alt)]
     public void Non_text_modifier_shortcuts_still_fire_while_a_text_input_is_focused(Key key, KeyModifiers mods)
     {
-        Assert.False(MainWindow.ShouldYieldToTextInput(new KeyGesture(key, mods), textInputFocused: true));
+        Assert.False(SpreadsheetEditorView.ShouldYieldToTextInput(new KeyGesture(key, mods), textInputFocused: true));
     }
 
     [Fact]
     public void Commands_without_a_shortcut_are_never_blocked()
     {
-        Assert.False(MainWindow.ShouldYieldToTextInput(gesture: null, textInputFocused: true));
+        Assert.False(SpreadsheetEditorView.ShouldYieldToTextInput(gesture: null, textInputFocused: true));
     }
 
     // ---- launch focus: the grid is keyboard-ready without a priming click ----
@@ -91,7 +92,7 @@ public class MainWindowChromeTests
         var window = new MainWindow();
         window.Show();
 
-        Assert.True(window.Grid.IsFocused);
+        Assert.True(window.Editor.Grid.IsFocused);
     }
 
     // ---- #12: Reset Sheet Data clears values and formatting, undoably ----
@@ -101,7 +102,7 @@ public class MainWindowChromeTests
     {
         var window = new MainWindow();
         window.Show();
-        IAppEnvironment env = window;
+        IAppEnvironment env = window.Editor;
         var sheet = env.Session.ActiveSheet;
 
         env.Session.Execute(EditCommands.SetValue(sheet.Name, 0, 0, CellValue.Text("hello")));
@@ -109,7 +110,7 @@ public class MainWindowChromeTests
             new Cellestra.Core.Model.CellRange(new Cellestra.Core.Model.CellAddress(0, 0), new Cellestra.Core.Model.CellAddress(0, 0)),
             s => s.WithFont(s.Font.WithBold(true)), "Bold"));
 
-        window.ResetSheetData();
+        window.Editor.ResetSheetData();
 
         Assert.True(sheet.GetValue(0, 0).IsEmpty);
         var styleId = sheet.Find(0, 0)?.StyleId ?? Cellestra.Core.Styling.StylePool.DefaultId;
@@ -124,7 +125,7 @@ public class MainWindowChromeTests
         window.Show();
         var command = AppCommands.ById("sheet.resetData");
         Assert.NotNull(command);
-        Assert.True(command!.IsEnabled(window));
+        Assert.True(command!.IsEnabled(window.Editor));
     }
 
     // ---- #7: a new sheet resets the active cell and clears the formula bar ----
@@ -134,10 +135,10 @@ public class MainWindowChromeTests
     {
         var window = new MainWindow();
         window.Show();
-        IAppEnvironment env = window;
+        IAppEnvironment env = window.Editor;
 
         env.Selection.MoveTo(5, 3); // move away from A1 on the first sheet
-        window.AddSheet();
+        window.Editor.AddSheet();
 
         Assert.Equal(0, env.Selection.ActiveRow);
         Assert.Equal(0, env.Selection.ActiveColumn);

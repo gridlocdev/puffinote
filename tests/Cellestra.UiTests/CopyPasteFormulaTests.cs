@@ -20,7 +20,7 @@ public class CopyPasteFormulaTests
     {
         var window = new MainWindow();
         window.Show();
-        IAppEnvironment env = window;
+        IAppEnvironment env = window.Editor;
         var sheet = env.Session.ActiveSheet;
 
         sheet.SetValue(0, 0, CellValue.Number(10));                 // A1

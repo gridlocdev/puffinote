@@ -22,13 +22,13 @@ public class GridBorderTests
     {
         var window = new MainWindow();
         window.Show();
-        return (window, window.Session.ActiveSheet, window.Grid);
+        return (window, window.Editor.Session.ActiveSheet, window.Editor.Grid);
     }
 
     private static int BorderedStyleId(MainWindow window, Border border)
     {
-        var style = window.Session.Workbook.Styles.Get(StylePool.DefaultId).WithBorder(border);
-        return window.Session.Workbook.Styles.Intern(style);
+        var style = window.Editor.Session.Workbook.Styles.Get(StylePool.DefaultId).WithBorder(border);
+        return window.Editor.Session.Workbook.Styles.Intern(style);
     }
 
     [AvaloniaFact]

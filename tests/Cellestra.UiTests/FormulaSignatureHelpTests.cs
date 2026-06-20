@@ -20,23 +20,23 @@ public class FormulaSignatureHelpTests
     {
         var window = new MainWindow();
         window.Show();
-        IAppEnvironment env = window;
+        IAppEnvironment env = window.Editor;
         env.Selection.MoveTo(0, 0);
         env.BeginEdit();
         Pump();
 
         window.KeyTextInput("=ROUND(");
         Pump();
-        Assert.True(window.Grid.IsSignatureHelpVisible);
-        Assert.Equal("number", window.Grid.ActiveSignatureArgument);
+        Assert.True(window.Editor.Grid.IsSignatureHelpVisible);
+        Assert.Equal("number", window.Editor.Grid.ActiveSignatureArgument);
 
         window.KeyTextInput("A1, ");
         Pump();
-        Assert.Equal("[digits]", window.Grid.ActiveSignatureArgument); // second, optional argument
+        Assert.Equal("[digits]", window.Editor.Grid.ActiveSignatureArgument); // second, optional argument
 
         window.KeyTextInput(")");
         Pump();
-        Assert.False(window.Grid.IsSignatureHelpVisible); // caret past the call — hint gone
+        Assert.False(window.Editor.Grid.IsSignatureHelpVisible); // caret past the call — hint gone
     }
 
     [AvaloniaFact]
@@ -44,13 +44,13 @@ public class FormulaSignatureHelpTests
     {
         var window = new MainWindow();
         window.Show();
-        IAppEnvironment env = window;
+        IAppEnvironment env = window.Editor;
         env.Selection.MoveTo(0, 0);
         env.BeginEdit();
         Pump();
 
         window.KeyTextInput("hello");
         Pump();
-        Assert.False(window.Grid.IsSignatureHelpVisible);
+        Assert.False(window.Editor.Grid.IsSignatureHelpVisible);
     }
 }

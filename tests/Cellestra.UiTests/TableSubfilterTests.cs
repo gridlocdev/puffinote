@@ -22,22 +22,22 @@ public class TableSubfilterTests
     {
         var window = new MainWindow();
         window.Show();
-        window.Grid.Zoom = 1.0;
-        var sheet = window.Session.ActiveSheet;
+        window.Editor.Grid.Zoom = 1.0;
+        var sheet = window.Editor.Session.ActiveSheet;
         sheet.SetValue(0, 0, CellValue.Text("Team")); sheet.SetValue(0, 1, CellValue.Text("City"));
         sheet.SetValue(1, 0, CellValue.Text("A")); sheet.SetValue(1, 1, CellValue.Text("X"));
         sheet.SetValue(2, 0, CellValue.Text("A")); sheet.SetValue(2, 1, CellValue.Text("Y"));
         sheet.SetValue(3, 0, CellValue.Text("B")); sheet.SetValue(3, 1, CellValue.Text("X"));
         var range = CellRange.Parse("A1:B4");
         sheet.AddTable(new Table("T", range, HasHeader: true));
-        window.Grid.Refresh();
+        window.Editor.Grid.Refresh();
         window.CaptureRenderedFrame();
         return (window, sheet, range);
     }
 
     private static void ClickGridPoint(MainWindow window, Point gridLocal)
     {
-        var p = window.Grid.TranslatePoint(gridLocal, window) ?? default;
+        var p = window.Editor.Grid.TranslatePoint(gridLocal, window) ?? default;
         window.MouseDown(p, MouseButton.Left);
         window.MouseUp(p, MouseButton.Left);
     }
@@ -47,21 +47,21 @@ public class TableSubfilterTests
     {
         var (window, sheet, range) = TwoColumnTable();
 
-        window.Grid.ApplyColumnFilterForTest(range, hasHeader: true, column: 0, "A"); // Team = A
-        window.Grid.ApplyColumnFilterForTest(range, hasHeader: true, column: 1, "X"); // then City = X replaces it
+        window.Editor.Grid.ApplyColumnFilterForTest(range, hasHeader: true, column: 0, "A"); // Team = A
+        window.Editor.Grid.ApplyColumnFilterForTest(range, hasHeader: true, column: 1, "X"); // then City = X replaces it
 
         // Only City=X constrains now: rows 1 (A,X) and 3 (B,X) show; row 2 (A,Y) hides.
         Assert.False(sheet.IsRowHidden(1));
         Assert.True(sheet.IsRowHidden(2));  // A,Y rejected by City=X
         Assert.False(sheet.IsRowHidden(3)); // B,X passes (Team filter no longer applies)
-        Assert.Equal(new[] { 1 }, window.Grid.ActiveFilterColumnsForTest); // a single active filter column
+        Assert.Equal(new[] { 1 }, window.Editor.Grid.ActiveFilterColumnsForTest); // a single active filter column
     }
 
     [AvaloniaFact]
     public void The_table_owns_its_filter_not_the_sheet_autofilter()
     {
         var (window, sheet, range) = TwoColumnTable();
-        window.Grid.ApplyColumnFilterForTest(range, hasHeader: true, column: 0, "A");
+        window.Editor.Grid.ApplyColumnFilterForTest(range, hasHeader: true, column: 0, "A");
 
         var table = Assert.Single(sheet.Tables);
         Assert.NotNull(table.Filter);
@@ -74,15 +74,15 @@ public class TableSubfilterTests
     public void The_dropdown_no_longer_lists_other_columns_filters()
     {
         var (window, _, range) = TwoColumnTable();
-        window.Grid.ApplyColumnFilterForTest(range, hasHeader: true, column: 0, "A");
+        window.Editor.Grid.ApplyColumnFilterForTest(range, hasHeader: true, column: 0, "A");
 
         // Open column B's dropdown — it is purely about column B; no cross-column "Active filters" stack.
-        var chevron = window.Grid.FilterButtonRectForTest(1);
+        var chevron = window.Editor.Grid.FilterButtonRectForTest(1);
         Assert.NotNull(chevron);
         ClickGridPoint(window, chevron!.Value.Center);
         window.CaptureRenderedFrame();
 
-        Assert.False(window.Grid.PopupHasTextForTest("Active filters"));
-        Assert.False(window.Grid.PopupHasTextForTest("Team")); // the other column isn't shown
+        Assert.False(window.Editor.Grid.PopupHasTextForTest("Active filters"));
+        Assert.False(window.Editor.Grid.PopupHasTextForTest("Team")); // the other column isn't shown
     }
 }

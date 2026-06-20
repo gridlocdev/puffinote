@@ -19,9 +19,9 @@ public class GridScrollBarTests
     {
         var window = new MainWindow();
         window.Show();
-        window.Grid.Zoom = 1.0;
-        Layout(window.Grid);
-        return (window, window.Session.ActiveSheet, window.Grid);
+        window.Editor.Grid.Zoom = 1.0;
+        Layout(window.Editor.Grid);
+        return (window, window.Editor.Session.ActiveSheet, window.Editor.Grid);
     }
 
     private static void Layout(SpreadsheetGrid grid)

@@ -14,7 +14,7 @@ public class UndoSelectionTests
     {
         var window = new MainWindow();
         window.Show();
-        IAppEnvironment env = window;
+        IAppEnvironment env = window.Editor;
         var sheet = env.Session.ActiveSheet;
 
         env.Selection.MoveTo(0, 0);

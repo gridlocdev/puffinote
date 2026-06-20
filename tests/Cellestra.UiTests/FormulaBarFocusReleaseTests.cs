@@ -19,23 +19,23 @@ public class FormulaBarFocusReleaseTests
     {
         var window = new MainWindow();
         window.Show();
-        window.Session.ActiveSheet.SetValue(0, 0, CellValue.Text("hello"));
-        window.Selection.MoveTo(0, 0);
-        window.Refresh();
+        window.Editor.Session.ActiveSheet.SetValue(0, 0, CellValue.Text("hello"));
+        window.Editor.Selection.MoveTo(0, 0);
+        window.Editor.Refresh();
 
         // Double-click a cell: inline editor takes focus.
-        window.Grid.BeginEdit(null);
-        Assert.True(window.Grid.IsInlineEditing);
+        window.Editor.Grid.BeginEdit(null);
+        Assert.True(window.Editor.Grid.IsInlineEditing);
 
         // Click the formula bar: the editor blurs and commits, but focus settles on the bar.
-        window.FormulaInput.Focus();
-        Assert.True(window.FormulaInput.IsFocused);
-        Assert.False(window.Grid.IsInlineEditing);
+        window.Editor.FormulaInput.Focus();
+        Assert.True(window.Editor.FormulaInput.IsFocused);
+        Assert.False(window.Editor.Grid.IsInlineEditing);
 
         // Click back to a cell: focus must actually move to the grid (this was the broken case — the
         // formula bar used to retain focus because the blur-commit had stolen focus reentrantly).
-        window.Grid.Focus();
-        Assert.True(window.Grid.IsFocused);
-        Assert.False(window.FormulaInput.IsFocused);
+        window.Editor.Grid.Focus();
+        Assert.True(window.Editor.Grid.IsFocused);
+        Assert.False(window.Editor.FormulaInput.IsFocused);
     }
 }

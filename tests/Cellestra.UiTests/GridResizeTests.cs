@@ -15,15 +15,15 @@ public class GridResizeTests
     {
         var window = new MainWindow();
         window.Show();
-        window.Grid.Zoom = 1.0;          // pin zoom so border coordinates are deterministic
+        window.Editor.Grid.Zoom = 1.0;          // pin zoom so border coordinates are deterministic
         window.CaptureRenderedFrame();   // rebuild the visible columns at this zoom
 
-        var sheet = window.Session.ActiveSheet;
+        var sheet = window.Editor.Session.ActiveSheet;
         double before = sheet.GetColumnWidth(0);
 
         // Column 0's right border sits at HeaderWidth + its (zoom-1) width, inside the header strip.
         var border = new Point(SpreadsheetGrid.HeaderWidth + before, SpreadsheetGrid.HeaderHeight / 2);
-        var start = window.Grid.TranslatePoint(border, window) ?? default;
+        var start = window.Editor.Grid.TranslatePoint(border, window) ?? default;
 
         window.MouseDown(start, MouseButton.Left);
         window.MouseMove(start + new Vector(40, 0));
@@ -37,15 +37,15 @@ public class GridResizeTests
     {
         var window = new MainWindow();
         window.Show();
-        window.Grid.Zoom = 1.0;
+        window.Editor.Grid.Zoom = 1.0;
         window.CaptureRenderedFrame();
 
-        var sheet = window.Session.ActiveSheet;
+        var sheet = window.Editor.Session.ActiveSheet;
         double before = sheet.GetRowHeight(0);
 
         // Row 0's bottom border sits at HeaderHeight + its height, inside the row-header strip.
         var border = new Point(SpreadsheetGrid.HeaderWidth / 2, SpreadsheetGrid.HeaderHeight + before);
-        var start = window.Grid.TranslatePoint(border, window) ?? default;
+        var start = window.Editor.Grid.TranslatePoint(border, window) ?? default;
 
         window.MouseDown(start, MouseButton.Left);
         window.MouseMove(start + new Vector(0, 24));

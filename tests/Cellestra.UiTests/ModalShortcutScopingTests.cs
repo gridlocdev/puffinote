@@ -18,11 +18,11 @@ public class ModalShortcutScopingTests
 {
     private static bool IsBold(MainWindow window)
     {
-        var sheet = ((IAppEnvironment)window).Session.ActiveSheet;
-        var sel = ((IAppEnvironment)window).Selection;
+        var sheet = ((IAppEnvironment)window.Editor).Session.ActiveSheet;
+        var sel = ((IAppEnvironment)window.Editor).Selection;
         var cell = sheet.Find(sel.ActiveRow, sel.ActiveColumn);
         var styleId = cell?.StyleId ?? StylePool.DefaultId;
-        return window.Session.Workbook.Styles.Get(styleId).Font.Bold;
+        return window.Editor.Session.Workbook.Styles.Get(styleId).Font.Bold;
     }
 
     [AvaloniaFact]
@@ -30,7 +30,7 @@ public class ModalShortcutScopingTests
     {
         var window = new MainWindow();
         window.Show();
-        IAppEnvironment env = window;
+        IAppEnvironment env = window.Editor;
 
         Assert.False(env.IsModalOpen);
 
@@ -46,24 +46,24 @@ public class ModalShortcutScopingTests
     {
         var window = new MainWindow();
         window.Show();
-        IAppEnvironment env = window;
+        IAppEnvironment env = window.Editor;
         env.Selection.MoveTo(0, 0);
-        Assert.False(window.Grid.InputBlocked);
+        Assert.False(window.Editor.Grid.InputBlocked);
 
         env.ShowCommandPalette();
-        Assert.True(window.Grid.InputBlocked);
+        Assert.True(window.Editor.Grid.InputBlocked);
 
         // Even with focus forced back onto the grid behind the palette, arrow keys must not move the
         // selection (they previously leaked to the hidden grid). The key is left for the overlay.
-        window.Grid.Focus();
+        window.Editor.Grid.Focus();
         window.KeyPressQwerty(PhysicalKey.ArrowDown, RawInputModifiers.None);
         Assert.Equal(0, env.Selection.ActiveRow);
 
         window.KeyPressQwerty(PhysicalKey.Escape, RawInputModifiers.None);
-        Assert.False(window.Grid.InputBlocked);
+        Assert.False(window.Editor.Grid.InputBlocked);
 
         // With the overlay gone, navigation works again.
-        window.Grid.Focus();
+        window.Editor.Grid.Focus();
         window.KeyPressQwerty(PhysicalKey.ArrowDown, RawInputModifiers.None);
         Assert.Equal(1, env.Selection.ActiveRow);
     }
@@ -73,7 +73,7 @@ public class ModalShortcutScopingTests
     {
         var window = new MainWindow();
         window.Show();
-        IAppEnvironment env = window;
+        IAppEnvironment env = window.Editor;
         env.Session.ActiveSheet.SetValue(0, 0, CellValue.Text("x"));
         env.Selection.MoveTo(0, 0);
 
@@ -92,7 +92,7 @@ public class ModalShortcutScopingTests
     {
         var window = new MainWindow();
         window.Show();
-        IAppEnvironment env = window;
+        IAppEnvironment env = window.Editor;
         env.Session.ActiveSheet.SetValue(0, 0, CellValue.Text("x"));
         env.Selection.MoveTo(0, 0);
         Assert.False(IsBold(window));

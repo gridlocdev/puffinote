@@ -16,16 +16,16 @@ public class GridNavigationTests
     {
         var window = new MainWindow();
         window.Show();
-        var sheet = window.Session.ActiveSheet;
+        var sheet = window.Editor.Session.ActiveSheet;
         sheet.SetValue(0, 0, CellValue.Number(1));
         sheet.SetValue(1, 0, CellValue.Number(2));
         sheet.SetValue(2, 0, CellValue.Number(3));
-        window.Selection.MoveTo(0, 0);
+        window.Editor.Selection.MoveTo(0, 0);
 
-        window.Grid.JumpEdgeForTest(1, 0, extend: false); // ⌘+Down
+        window.Editor.Grid.JumpEdgeForTest(1, 0, extend: false); // ⌘+Down
 
-        Assert.Equal(2, window.Selection.ActiveRow); // jumped to the bottom of the run (A3)
-        Assert.Equal(0, window.Selection.ActiveColumn);
+        Assert.Equal(2, window.Editor.Selection.ActiveRow); // jumped to the bottom of the run (A3)
+        Assert.Equal(0, window.Editor.Selection.ActiveColumn);
     }
 
     [AvaloniaFact]
@@ -33,16 +33,16 @@ public class GridNavigationTests
     {
         var window = new MainWindow();
         window.Show();
-        var sheet = window.Session.ActiveSheet;
+        var sheet = window.Editor.Session.ActiveSheet;
         sheet.SetValue(0, 0, CellValue.Number(1));
         sheet.SetValue(1, 0, CellValue.Number(2));
         sheet.SetValue(2, 0, CellValue.Number(3));
-        window.Selection.MoveTo(0, 0);
+        window.Editor.Selection.MoveTo(0, 0);
 
-        window.Grid.JumpEdgeForTest(1, 0, extend: true); // ⌘+Shift+Down
+        window.Editor.Grid.JumpEdgeForTest(1, 0, extend: true); // ⌘+Shift+Down
 
-        Assert.Equal(0, window.Selection.Top);
-        Assert.Equal(2, window.Selection.Bottom); // selection now spans A1:A3
+        Assert.Equal(0, window.Editor.Selection.Top);
+        Assert.Equal(2, window.Editor.Selection.Bottom); // selection now spans A1:A3
     }
 
     [Fact]

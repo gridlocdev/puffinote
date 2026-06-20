@@ -34,9 +34,9 @@ public partial class App : Application
         {
             Command = new RelayCommand(() =>
             {
-                if (ApplicationLifetime is IClassicDesktopStyleApplicationLifetime { MainWindow: IAppEnvironment env })
+                if (ApplicationLifetime is IClassicDesktopStyleApplicationLifetime { MainWindow: MainWindow { Editor: { } editor } })
                 {
-                    about.Execute(env);
+                    about.Execute(editor);
                 }
             }),
         });

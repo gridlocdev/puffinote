@@ -20,10 +20,10 @@ public class OverflowMarkerTests
     {
         var window = new MainWindow();
         window.Show();
-        window.Grid.Measure(new Size(800, 600));
-        window.Grid.Arrange(new Rect(0, 0, 800, 600));
+        window.Editor.Grid.Measure(new Size(800, 600));
+        window.Editor.Grid.Arrange(new Rect(0, 0, 800, 600));
         window.CaptureRenderedFrame(); // build the visible column/row layout
-        return (window, window.Session.ActiveSheet, window.Grid);
+        return (window, window.Editor.Session.ActiveSheet, window.Editor.Grid);
     }
 
     [AvaloniaFact]

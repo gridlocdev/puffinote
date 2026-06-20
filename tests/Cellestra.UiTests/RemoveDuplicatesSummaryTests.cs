@@ -1,4 +1,5 @@
 using Cellestra.Desktop.Views;
+using Cellestra.Editor;
 using Xunit;
 
 namespace Cellestra.UiTests;
@@ -10,20 +11,20 @@ public class RemoveDuplicatesSummaryTests
     public void Reports_removed_and_remaining_counts()
     {
         Assert.Equal("Removed 3 duplicate rows; 5 unique rows remain.",
-            MainWindow.RemoveDuplicatesSummary(removed: 3, remaining: 5));
+            SpreadsheetEditorView.RemoveDuplicatesSummary(removed: 3, remaining: 5));
     }
 
     [Fact]
     public void Uses_singular_wording_for_one()
     {
         Assert.Equal("Removed 1 duplicate row; 1 unique row remains.",
-            MainWindow.RemoveDuplicatesSummary(removed: 1, remaining: 1));
+            SpreadsheetEditorView.RemoveDuplicatesSummary(removed: 1, remaining: 1));
     }
 
     [Fact]
     public void Reports_when_nothing_was_removed()
     {
         Assert.Equal("No duplicates found — all 4 rows are unique.",
-            MainWindow.RemoveDuplicatesSummary(removed: 0, remaining: 4));
+            SpreadsheetEditorView.RemoveDuplicatesSummary(removed: 0, remaining: 4));
     }
 }

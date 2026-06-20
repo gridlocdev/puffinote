@@ -22,9 +22,9 @@ public class InlineEditorFontTests
     {
         var window = new MainWindow();
         window.Show();
-        IAppEnvironment env = window;
+        IAppEnvironment env = window.Editor;
         var sheet = env.Session.ActiveSheet;
-        var grid = window.Grid;
+        var grid = window.Editor.Grid;
 
         // A cell at the default font size.
         sheet.SetValue(0, 0, CellValue.Text("test"));
@@ -47,8 +47,8 @@ public class InlineEditorFontTests
     {
         var window = new MainWindow();
         window.Show();
-        IAppEnvironment env = window;
-        var grid = window.Grid;
+        IAppEnvironment env = window.Editor;
+        var grid = window.Editor.Grid;
 
         env.Selection.MoveTo(0, 0);
         grid.BeginEdit("hello");
@@ -57,8 +57,8 @@ public class InlineEditorFontTests
 
         // Clicking Bold / Align Right mid-edit must immediately restyle the text being typed
         // (the toolbar buttons don't take focus, so the edit stays live).
-        AppCommands.ById("format.bold")!.Execute(window);
-        AppCommands.ById("format.alignRight")!.Execute(window);
+        AppCommands.ById("format.bold")!.Execute(window.Editor);
+        AppCommands.ById("format.alignRight")!.Execute(window.Editor);
 
         Assert.True(grid.EditorIsBold);
         Assert.Equal(Avalonia.Media.TextAlignment.Right, grid.EditorTextAlignment);

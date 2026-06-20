@@ -16,7 +16,7 @@ public class GridAutomationPeerTests
         var window = new MainWindow();
         window.Show();
 
-        var peer = ControlAutomationPeer.CreatePeerForElement(window.Grid);
+        var peer = ControlAutomationPeer.CreatePeerForElement(window.Editor.Grid);
 
         Assert.IsType<SpreadsheetGridAutomationPeer>(peer);
         Assert.Equal(AutomationControlType.DataGrid, peer.GetAutomationControlType());
@@ -27,17 +27,17 @@ public class GridAutomationPeerTests
     {
         var window = new MainWindow();
         window.Show();
-        var sheet = window.Session.ActiveSheet;
+        var sheet = window.Editor.Session.ActiveSheet;
         sheet.SetValue(0, 0, CellValue.Number(1250));
         sheet.SetValue(1, 1, CellValue.Text("Hello"));
 
-        var peer = ControlAutomationPeer.CreatePeerForElement(window.Grid);
+        var peer = ControlAutomationPeer.CreatePeerForElement(window.Editor.Grid);
 
-        window.Selection.MoveTo(0, 0);
+        window.Editor.Selection.MoveTo(0, 0);
         Assert.Contains("A1", peer.GetName());
         Assert.Contains("1250", peer.GetName());
 
-        window.Selection.MoveTo(1, 1);
+        window.Editor.Selection.MoveTo(1, 1);
         Assert.Contains("B2", peer.GetName());
         Assert.Contains("Hello", peer.GetName());
     }
@@ -48,8 +48,8 @@ public class GridAutomationPeerTests
         var window = new MainWindow();
         window.Show();
 
-        var peer = ControlAutomationPeer.CreatePeerForElement(window.Grid);
-        window.Selection.MoveTo(2, 2);
+        var peer = ControlAutomationPeer.CreatePeerForElement(window.Editor.Grid);
+        window.Editor.Selection.MoveTo(2, 2);
 
         Assert.Contains("C3", peer.GetName());
         Assert.Contains("empty", peer.GetName());

@@ -15,7 +15,7 @@ public class SpreadsheetGridTests
     {
         var window = new MainWindow();
         window.Show();
-        IAppEnvironment env = window;
+        IAppEnvironment env = window.Editor;
         var sheet = env.Session.ActiveSheet;
 
         env.Session.Execute(EditCommands.SetInput(sheet.Name, 0, 0, "10", CultureInfo.InvariantCulture));
@@ -30,7 +30,7 @@ public class SpreadsheetGridTests
     {
         var window = new MainWindow();
         window.Show();
-        IAppEnvironment env = window;
+        IAppEnvironment env = window.Editor;
 
         env.Selection.MoveTo(3, 4);
         Assert.Equal(3, env.Selection.ActiveRow);
@@ -48,7 +48,7 @@ public class SpreadsheetGridTests
     {
         var window = new MainWindow();
         window.Show();
-        IAppEnvironment env = window;
+        IAppEnvironment env = window.Editor;
         var sheet = env.Session.ActiveSheet;
 
         env.Session.Execute(EditCommands.SetValue(sheet.Name, 0, 0, CellValue.Number(7)));

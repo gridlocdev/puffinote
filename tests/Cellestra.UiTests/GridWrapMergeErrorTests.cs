@@ -21,14 +21,14 @@ public class GridWrapMergeErrorTests
     {
         var window = new MainWindow();
         window.Show();
-        return (window, window.Session.ActiveSheet, window.Grid);
+        return (window, window.Editor.Session.ActiveSheet, window.Editor.Grid);
     }
 
     private static int WrappedStyleId(MainWindow window)
     {
-        var style = window.Session.Workbook.Styles.Get(StylePool.DefaultId)
+        var style = window.Editor.Session.Workbook.Styles.Get(StylePool.DefaultId)
             .WithAlignment(new Alignment(WrapText: true));
-        return window.Session.Workbook.Styles.Intern(style);
+        return window.Editor.Session.Workbook.Styles.Intern(style);
     }
 
     [AvaloniaFact]
@@ -73,9 +73,9 @@ public class GridWrapMergeErrorTests
         sheet.SetValue(1, 1, CellValue.Text("merged"));
 
         // Give the anchor a red fill — DrawMerges must paint it across the region (task 7).
-        var styled = window.Session.Workbook.Styles.Get(StylePool.DefaultId)
+        var styled = window.Editor.Session.Workbook.Styles.Get(StylePool.DefaultId)
             .WithFill(new Fill(ArgbColor.FromRgb(0xE0, 0x10, 0x10)));
-        sheet.GetOrCreate(1, 1).StyleId = window.Session.Workbook.Styles.Intern(styled);
+        sheet.GetOrCreate(1, 1).StyleId = window.Editor.Session.Workbook.Styles.Intern(styled);
 
         grid.Measure(new Size(800, 600));
         grid.Arrange(new Rect(0, 0, 800, 600));

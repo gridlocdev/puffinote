@@ -5,6 +5,7 @@ using Cellestra.Core.Model;
 using Cellestra.Core.Values;
 using Cellestra.Desktop.Commands;
 using Cellestra.Desktop.Views;
+using Cellestra.Editor;
 using Xunit;
 
 namespace Cellestra.UiTests;
@@ -44,7 +45,7 @@ public class MainWindowSaveAndDataTests
         sheet.SetValue(0, 0, CellValue.Text("a,b,c"));
         var source = new CellRange(new CellAddress(0, 0), new CellAddress(0, 0));
 
-        Assert.False(MainWindow.HasDataToRight(sheet, source));
+        Assert.False(SpreadsheetEditorView.HasDataToRight(sheet, source));
     }
 
     [Fact]
@@ -55,7 +56,7 @@ public class MainWindowSaveAndDataTests
         sheet.SetValue(1, 1, CellValue.Text("existing")); // column B, within the source rows
         var source = new CellRange(new CellAddress(0, 0), new CellAddress(0, 2));
 
-        Assert.True(MainWindow.HasDataToRight(sheet, source));
+        Assert.True(SpreadsheetEditorView.HasDataToRight(sheet, source));
     }
 
     [Fact]
@@ -66,7 +67,7 @@ public class MainWindowSaveAndDataTests
         sheet.SetValue(9, 1, CellValue.Text("far below")); // column B but well below the source row
         var source = new CellRange(new CellAddress(0, 0), new CellAddress(0, 0));
 
-        Assert.False(MainWindow.HasDataToRight(sheet, source));
+        Assert.False(SpreadsheetEditorView.HasDataToRight(sheet, source));
     }
 
     // ---- Toggle Filter off clears the lingering filter spec and sort ----
@@ -76,21 +77,21 @@ public class MainWindowSaveAndDataTests
     {
         var window = new MainWindow();
         window.Show();
-        IAppEnvironment env = window;
+        IAppEnvironment env = window.Editor;
         var sheet = env.Session.ActiveSheet;
         sheet.SetValue(0, 0, CellValue.Text("Header"));
         sheet.SetValue(1, 0, CellValue.Text("a"));
         sheet.SetValue(2, 0, CellValue.Text("b"));
 
         env.Selection.SetRange(0, 0, 2, 0);
-        window.ToggleFilter(); // on
+        window.Editor.ToggleFilter(); // on
         Assert.NotNull(sheet.ActiveFilter);
 
         // Simulate conditions/sort having been applied while the filter was on.
         sheet.ActiveFilterSpec = new FilterSpec(new Dictionary<int, ColumnFilter>());
         sheet.ActiveSort = new SortSpec(new[] { new SortLevel(0) });
 
-        window.ToggleFilter(); // off
+        window.Editor.ToggleFilter(); // off
 
         Assert.Null(sheet.ActiveFilter);
         Assert.Null(sheet.ActiveFilterSpec);

@@ -1,84 +1,27 @@
 <Window xmlns="https://github.com/avaloniaui"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        xmlns:grid="clr-namespace:Cellestra.Desktop.Controls.SpreadsheetGrid;assembly=Cellestra.Editor"
+        xmlns:editor="clr-namespace:Cellestra.Editor;assembly=Cellestra.Editor"
         x:Class="Cellestra.Desktop.Views.MainWindow"
         Title="Cellestra"
         Width="1100" Height="720"
         MinWidth="640" MinHeight="400">
 
-    <!-- Outer panel layers the main content under the overlay host so an internal modal can blur
-         the chrome/grid behind it (the overlay sits above the blurred ContentRoot). -->
+    <!-- The window is a thin shell around the embeddable editor: it owns the native menu, file dialogs,
+         document lock, recent files, settings, and this file-progress overlay; the editor owns the rest. -->
     <Panel>
-    <Grid x:Name="ContentRoot" RowDefinitions="Auto,Auto,*,Auto,Auto">
+        <editor:SpreadsheetEditorView x:Name="Editor" />
 
-        <!-- Adaptive command bar — always present, collapses to a slim handle (PRD §6) -->
-        <ContentControl x:Name="CommandBarHost" Grid.Row="0" />
-
-        <!-- Formula bar: Name Box, fx, formula input, expand toggle. Hidden on chart sheets. -->
-        <Border x:Name="FormulaBarPanel" Grid.Row="1" Background="{DynamicResource ChromeBackground}" BorderBrush="{DynamicResource ChromeBorder}" BorderThickness="0,0,0,1" Padding="4">
-            <DockPanel>
-                <TextBox x:Name="NameBox" Width="92" DockPanel.Dock="Left" PlaceholderText="A1"
-                         VerticalContentAlignment="Center" VerticalAlignment="Top" />
-                <Button x:Name="FxButton" DockPanel.Dock="Left" Content="fx" Margin="4,0"
-                        FontStyle="Italic" Width="30" VerticalAlignment="Top" />
-                <!-- Expand/collapse toggle: grows the formula input to several lines for more editing room.
-                     Content (a Lucide chevron) is set in code-behind so the icon flips with the state. -->
-                <Button x:Name="FormulaExpandButton" DockPanel.Dock="Right" Margin="4,0,0,0" Width="28" Height="28"
-                        Padding="0" HorizontalContentAlignment="Center" VerticalContentAlignment="Center"
-                        VerticalAlignment="Top" ToolTip.Tip="Expand formula bar" />
-                <TextBox x:Name="FormulaInput" VerticalContentAlignment="Center" Margin="2,0,0,0"
-                         AcceptsReturn="False" />
-            </DockPanel>
-        </Border>
-
-        <!-- The custom grid (data sheets) and the chart view (chart sheets) share row 2; only one is
-             visible at a time, chosen by the active sheet's type. -->
-        <grid:SpreadsheetGrid x:Name="Grid" Grid.Row="2" />
-        <ContentControl x:Name="ChartHost" Grid.Row="2" IsVisible="False" />
-
-        <!-- Sheet tab strip -->
-        <Border Grid.Row="3" Background="{DynamicResource ChromeAltBackground}" BorderBrush="{DynamicResource ChromeBorder}" BorderThickness="0,1,0,0" Padding="4,2">
-            <Panel>
-                <StackPanel x:Name="SheetTabs" Orientation="Horizontal" Spacing="2" />
-                <!-- Insertion marker shown while dragging a tab, positioned via its left margin. -->
-                <Rectangle x:Name="TabDropIndicator" Width="2" Fill="#15734F" RadiusX="1" RadiusY="1"
-                           HorizontalAlignment="Left" VerticalAlignment="Stretch" IsVisible="False" />
-            </Panel>
-        </Border>
-
-        <!-- Status bar -->
-        <Border Grid.Row="4" Background="{DynamicResource ChromeBackground}" BorderBrush="{DynamicResource ChromeBorder}" BorderThickness="0,1,0,0" Padding="8,3">
-            <DockPanel>
-                <!-- Last action performed (a quick reference, per the mockup) -->
-                <StackPanel DockPanel.Dock="Left" Orientation="Horizontal" Spacing="6" VerticalAlignment="Center" Margin="0,0,16,0">
-                    <Ellipse Width="7" Height="7" Fill="#15734F" VerticalAlignment="Center" />
-                    <TextBlock x:Name="StatusAction" VerticalAlignment="Center" />
+        <!-- Blocking busy indicator shown while a file open/save runs off the UI thread (#A). Sits on
+             top of everything and intercepts input so the document can't be edited mid-load/save. -->
+        <Panel x:Name="BusyOverlay" IsVisible="False" Background="#40000000">
+            <Border Background="{DynamicResource ChromeBackground}" BorderBrush="{DynamicResource ChromeBorder}"
+                    BorderThickness="1" CornerRadius="6" Padding="24,18"
+                    HorizontalAlignment="Center" VerticalAlignment="Center">
+                <StackPanel Spacing="12" MinWidth="200">
+                    <ProgressBar IsIndeterminate="True" />
+                    <TextBlock x:Name="BusyText" HorizontalAlignment="Center" Text="Working…" />
                 </StackPanel>
-                <TextBlock x:Name="StatusCell" DockPanel.Dock="Left" Width="72" VerticalAlignment="Center" Foreground="{DynamicResource ChromeBorder}" />
-                <TextBlock x:Name="StatusSaved" DockPanel.Dock="Right" Margin="16,0,0,0" VerticalAlignment="Center" />
-                <TextBlock x:Name="StatusZoom" DockPanel.Dock="Right" VerticalAlignment="Center" />
-                <TextBlock x:Name="StatusCalc" DockPanel.Dock="Right" Margin="0,0,16,0" VerticalAlignment="Center" />
-                <TextBlock x:Name="StatusStats" VerticalAlignment="Center" />
-            </DockPanel>
-        </Border>
-
-    </Grid>
-
-    <!-- Command palette / sheet switcher / internal-modal overlay. Sits above ContentRoot so its
-         own (sharp) content layers over the blurred grid behind it. -->
-    <Panel x:Name="OverlayHost" IsVisible="False" Background="#40000000" />
-
-    <!-- Blocking busy indicator shown while a file open/save runs off the UI thread (#A). Sits on
-         top of everything and intercepts input so the document can't be edited mid-load/save. -->
-    <Panel x:Name="BusyOverlay" IsVisible="False" Background="#40000000">
-        <Border Background="{DynamicResource ChromeBackground}" BorderBrush="{DynamicResource ChromeBorder}"
-                BorderThickness="1" CornerRadius="6" Padding="24,18"
-                HorizontalAlignment="Center" VerticalAlignment="Center">
-            <StackPanel Spacing="12" MinWidth="200">
-                <ProgressBar IsIndeterminate="True" />
-                <TextBlock x:Name="BusyText" HorizontalAlignment="Center" Text="Working…" />
-            </StackPanel>
-        </Border>
-    </Panel>
+            </Border>
+        </Panel>
     </Panel>
 </Window>

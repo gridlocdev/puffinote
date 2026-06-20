@@ -29,7 +29,7 @@ public class CommandBarTests
     public void Command_bar_builds_refreshes_and_collapses()
     {
         var window = new MainWindow();
-        var bar = new CommandBar(window);
+        var bar = new CommandBar(window.Editor);
 
         bar.RefreshState(); // every referenced command id resolved; state evaluation doesn't throw
         Assert.False(bar.Collapsed); // expanded by default
@@ -48,17 +48,17 @@ public class CommandBarTests
         var window = new MainWindow();
         window.Show();
 
-        Assert.False(window.Session.CanUndo);
+        Assert.False(window.Editor.Session.CanUndo);
 
         // Hovering a swatch/size previews without touching the model or undo stack (PRD §8.5).
-        window.PreviewCellStyle(s => s.WithFont(s.Font with { Bold = true }));
-        Assert.False(window.Session.CanUndo);
-        window.PreviewCellStyle(null);
-        Assert.False(window.Session.CanUndo);
+        window.Editor.PreviewCellStyle(s => s.WithFont(s.Font with { Bold = true }));
+        Assert.False(window.Editor.Session.CanUndo);
+        window.Editor.PreviewCellStyle(null);
+        Assert.False(window.Editor.Session.CanUndo);
 
         // Clicking it commits exactly one undoable edit.
-        window.ApplyCellStyle(s => s.WithFont(s.Font with { Bold = true }), "Bold");
-        Assert.True(window.Session.CanUndo);
+        window.Editor.ApplyCellStyle(s => s.WithFont(s.Font with { Bold = true }), "Bold");
+        Assert.True(window.Editor.Session.CanUndo);
     }
 
     [AvaloniaFact]
@@ -67,11 +67,11 @@ public class CommandBarTests
         var window = new MainWindow();
         window.Show();
 
-        Assert.Equal("Sort Ascending · A1", CommandBar.Describe(AppCommands.ById("data.sortAsc")!, window));
-        Assert.Equal("Bold off · A1", CommandBar.Describe(AppCommands.ById("format.bold")!, window));
+        Assert.Equal("Sort Ascending · A1", CommandBar.Describe(AppCommands.ById("data.sortAsc")!, window.Editor));
+        Assert.Equal("Bold off · A1", CommandBar.Describe(AppCommands.ById("format.bold")!, window.Editor));
 
-        window.ApplyCellStyle(s => s.WithFont(s.Font with { Bold = true }), "Bold");
-        Assert.Equal("Bold on · A1", CommandBar.Describe(AppCommands.ById("format.bold")!, window));
+        window.Editor.ApplyCellStyle(s => s.WithFont(s.Font with { Bold = true }), "Bold");
+        Assert.Equal("Bold on · A1", CommandBar.Describe(AppCommands.ById("format.bold")!, window.Editor));
     }
 
     [AvaloniaFact]
@@ -80,12 +80,12 @@ public class CommandBarTests
         var window = new MainWindow();
         window.Show();
 
-        var session = window.Session;
+        var session = window.Editor.Session;
         session.Execute(Cellestra.Core.Editing.EditCommands.SetInput(
             session.Workbook, session.ActiveSheet.Name, 0, 0, "1234567.89", session.Workbook.Settings.EffectiveLocale));
 
         double before = session.ActiveSheet.GetColumnWidth(0);
-        AppCommands.ById("format.currency")!.Execute(window); // "$1,234,567.89" overflows the default width
+        AppCommands.ById("format.currency")!.Execute(window.Editor); // "$1,234,567.89" overflows the default width
 
         Assert.True(session.ActiveSheet.GetColumnWidth(0) > before, "column should grow to fit the formatted value");
     }
@@ -120,7 +120,7 @@ public class CommandBarTests
         // format-as); building each and running its open-time refresh must not throw.
         foreach (var group in CommandBarModel.For(CommandContext.Cell).Where(g => g.HasDrawer))
         {
-            var (content, refresh) = CommandBarDrawer.Build(group, window, () => { });
+            var (content, refresh) = CommandBarDrawer.Build(group, window.Editor, () => { });
             Assert.NotNull(content);
             refresh(); // mirrors Flyout.Opened
         }
@@ -130,7 +130,7 @@ public class CommandBarTests
     public void Narrow_bar_folds_groups_into_the_overflow_drawer_instead_of_scrolling()
     {
         var window = new MainWindow();
-        var bar = new CommandBar(window);
+        var bar = new CommandBar(window.Editor);
         // Host the bar in a window we can resize, so the strip gets a real arranged width to fit against.
         var host = new Window { Content = bar, Width = 1400, Height = 120 };
         host.Show();
@@ -163,7 +163,7 @@ public class CommandBarTests
     public void Overflow_drawer_shows_a_folded_group_as_an_icon_grid_with_no_nested_submenu()
     {
         var window = new MainWindow();
-        var bar = new CommandBar(window);
+        var bar = new CommandBar(window.Editor);
         var host = new Window { Content = bar, Width = 340, Height = 120 };
         host.Show();
         Pump(host);
@@ -188,7 +188,7 @@ public class CommandBarTests
     public void Overflow_sections_are_ordered_by_usefulness_not_bar_order()
     {
         var window = new MainWindow();
-        var bar = new CommandBar(window);
+        var bar = new CommandBar(window.Editor);
         // Narrow enough that several groups fold, so their relative order is observable.
         var host = new Window { Content = bar, Width = 300, Height = 120 };
         host.Show();
@@ -221,13 +221,13 @@ public class CommandBarTests
         var window = new MainWindow();
         window.Show();
 
-        window.ApplyCellStyle(s => s.WithAlignment(s.Alignment with { Vertical = Cellestra.Core.Styling.VerticalAlignment.Middle }), "Vertical align");
-        var sheet = window.Session.ActiveSheet;
-        var style = window.Session.Workbook.Styles.Get(sheet.Find(0, 0)?.StyleId ?? Cellestra.Core.Styling.StylePool.DefaultId);
+        window.Editor.ApplyCellStyle(s => s.WithAlignment(s.Alignment with { Vertical = Cellestra.Core.Styling.VerticalAlignment.Middle }), "Vertical align");
+        var sheet = window.Editor.Session.ActiveSheet;
+        var style = window.Editor.Session.Workbook.Styles.Get(sheet.Find(0, 0)?.StyleId ?? Cellestra.Core.Styling.StylePool.DefaultId);
         Assert.Equal(Cellestra.Core.Styling.VerticalAlignment.Middle, style.Alignment.Vertical);
 
-        window.ApplyCellStyle(s => s.WithFont(s.Font with { SizePoints = 22 }), "Font size 22");
-        style = window.Session.Workbook.Styles.Get(sheet.Find(0, 0)?.StyleId ?? Cellestra.Core.Styling.StylePool.DefaultId);
+        window.Editor.ApplyCellStyle(s => s.WithFont(s.Font with { SizePoints = 22 }), "Font size 22");
+        style = window.Editor.Session.Workbook.Styles.Get(sheet.Find(0, 0)?.StyleId ?? Cellestra.Core.Styling.StylePool.DefaultId);
         Assert.Equal(22, style.Font.SizePoints);
     }
 }

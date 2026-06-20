@@ -56,19 +56,19 @@ public class DeleteKeyClearContentsTests
     {
         var window = new MainWindow();
         window.Show();
-        window.Session.ActiveSheet.SetValue(0, 0, CellValue.Text("hello"));
-        window.Selection.MoveTo(0, 0);
-        window.Refresh();
+        window.Editor.Session.ActiveSheet.SetValue(0, 0, CellValue.Text("hello"));
+        window.Editor.Selection.MoveTo(0, 0);
+        window.Editor.Refresh();
 
         var clear = ClearContentsItem(window);
 
         // Grid focused (not editing): Delete clears the cell — the menu command is live.
-        window.Grid.Focus();
+        window.Editor.Grid.Focus();
         Assert.True(clear.Command!.CanExecute(null));
 
         // Formula bar focused for editing: the same key equivalent must back off so the keypress
         // falls through to the TextBox and forward-deletes one character instead of wiping the cell.
-        window.FormulaInput.Focus();
+        window.Editor.FormulaInput.Focus();
         Assert.False(clear.Command!.CanExecute(null));
     }
 
@@ -77,12 +77,12 @@ public class DeleteKeyClearContentsTests
     {
         var window = new MainWindow();
         window.Show();
-        window.Session.ActiveSheet.SetValue(0, 0, CellValue.Text("hello"));
-        window.Selection.MoveTo(0, 0);
-        window.Refresh();
+        window.Editor.Session.ActiveSheet.SetValue(0, 0, CellValue.Text("hello"));
+        window.Editor.Selection.MoveTo(0, 0);
+        window.Editor.Refresh();
 
-        window.Grid.Focus();
-        window.Grid.BeginEdit(null); // inline cell editor takes focus
+        window.Editor.Grid.Focus();
+        window.Editor.Grid.BeginEdit(null); // inline cell editor takes focus
 
         var clear = ClearContentsItem(window);
         Assert.False(clear.Command!.CanExecute(null));
@@ -93,17 +93,17 @@ public class DeleteKeyClearContentsTests
     {
         var window = new MainWindow();
         window.Show();
-        window.Session.ActiveSheet.SetValue(0, 0, CellValue.Text("hello"));
-        window.Selection.MoveTo(0, 0);
-        window.Refresh();
+        window.Editor.Session.ActiveSheet.SetValue(0, 0, CellValue.Text("hello"));
+        window.Editor.Selection.MoveTo(0, 0);
+        window.Editor.Refresh();
 
         // The formula-bar mirror seeds a focus-less inline edit (BeginEdit(focus: false)). That yields
         // the real "editing, but no TextBox holds focus" state — the editing flag alone must keep the
         // plain-Delete command inert, so focus-detection wobble can't let it wipe the cell mid-edit.
-        window.Grid.Focus();
-        window.Grid.SetInlineEditorText("hel");
-        Assert.True(window.Grid.IsInlineEditing);
-        Assert.False(window.IsTextInputFocused);
+        window.Editor.Grid.Focus();
+        window.Editor.Grid.SetInlineEditorText("hel");
+        Assert.True(window.Editor.Grid.IsInlineEditing);
+        Assert.False(window.Editor.IsTextInputFocused);
 
         var clear = ClearContentsItem(window);
         Assert.False(clear.Command!.CanExecute(null));
@@ -121,14 +121,14 @@ public class DeleteKeyClearContentsTests
     {
         var window = new MainWindow();
         window.Show();
-        window.Session.ActiveSheet.SetValue(0, 0, CellValue.Text("hello"));
-        window.Selection.MoveTo(0, 0);
-        window.Refresh();
-        window.Grid.Focus();
+        window.Editor.Session.ActiveSheet.SetValue(0, 0, CellValue.Text("hello"));
+        window.Editor.Selection.MoveTo(0, 0);
+        window.Editor.Refresh();
+        window.Editor.Grid.Focus();
 
         window.KeyPressQwerty(PhysicalKey.Delete, RawInputModifiers.None);
 
-        Assert.Equal(string.Empty, window.Session.ActiveSheet.Find(0, 0)?.Value.ToInvariantString() ?? string.Empty);
+        Assert.Equal(string.Empty, window.Editor.Session.ActiveSheet.Find(0, 0)?.Value.ToInvariantString() ?? string.Empty);
     }
 
     [AvaloniaFact]
@@ -136,19 +136,19 @@ public class DeleteKeyClearContentsTests
     {
         var window = new MainWindow();
         window.Show();
-        window.Session.ActiveSheet.SetValue(0, 0, CellValue.Text("hello"));
-        window.Selection.MoveTo(0, 0);
-        window.Refresh();
+        window.Editor.Session.ActiveSheet.SetValue(0, 0, CellValue.Text("hello"));
+        window.Editor.Selection.MoveTo(0, 0);
+        window.Editor.Refresh();
 
-        window.Grid.Focus();
+        window.Editor.Grid.Focus();
         window.KeyPressQwerty(PhysicalKey.F2, RawInputModifiers.None); // begin inline edit
-        var editor = Editor(window.Grid);
+        var editor = Editor(window.Editor.Grid);
         editor.CaretIndex = 1; // I-beam after 'h'
 
         window.KeyPressQwerty(PhysicalKey.Delete, RawInputModifiers.None);
 
         Assert.Equal("hllo", editor.Text); // 'e' removed, cell still uncommitted
-        Assert.Equal("hello", window.Session.ActiveSheet.Find(0, 0)?.Value.ToInvariantString());
+        Assert.Equal("hello", window.Editor.Session.ActiveSheet.Find(0, 0)?.Value.ToInvariantString());
     }
 
     [AvaloniaFact]
@@ -156,17 +156,17 @@ public class DeleteKeyClearContentsTests
     {
         var window = new MainWindow();
         window.Show();
-        window.Session.ActiveSheet.SetValue(0, 0, CellValue.Text("hello"));
-        window.Selection.MoveTo(0, 0);
-        window.Refresh();
+        window.Editor.Session.ActiveSheet.SetValue(0, 0, CellValue.Text("hello"));
+        window.Editor.Selection.MoveTo(0, 0);
+        window.Editor.Refresh();
 
-        window.FormulaInput.Focus();
-        window.FormulaInput.Text = "hello";
-        window.FormulaInput.CaretIndex = 1; // I-beam after 'h'
-        window.FormulaInput.SelectionStart = window.FormulaInput.SelectionEnd = 1;
+        window.Editor.FormulaInput.Focus();
+        window.Editor.FormulaInput.Text = "hello";
+        window.Editor.FormulaInput.CaretIndex = 1; // I-beam after 'h'
+        window.Editor.FormulaInput.SelectionStart = window.Editor.FormulaInput.SelectionEnd = 1;
 
         window.KeyPressQwerty(PhysicalKey.Delete, RawInputModifiers.None);
 
-        Assert.Equal("hllo", window.FormulaInput.Text);
+        Assert.Equal("hllo", window.Editor.FormulaInput.Text);
     }
 }

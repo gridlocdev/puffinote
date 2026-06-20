@@ -15,7 +15,7 @@ public class GridChromeTests
     {
         var window = new MainWindow();
         window.Show();
-        IAppEnvironment env = window;
+        IAppEnvironment env = window.Editor;
         var sheet = env.Session.ActiveSheet;
 
         sheet.SetValue(0, 0, CellValue.Text("merged"));
@@ -31,7 +31,7 @@ public class GridChromeTests
     {
         var window = new MainWindow();
         window.Show();
-        IAppEnvironment env = window;
+        IAppEnvironment env = window.Editor;
         var sheet = env.Session.ActiveSheet;
 
         env.Selection.MoveTo(2, 3);

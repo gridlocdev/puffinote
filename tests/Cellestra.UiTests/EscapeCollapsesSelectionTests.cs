@@ -19,7 +19,7 @@ public class EscapeCollapsesSelectionTests
     {
         var window = new MainWindow();
         window.Show();
-        window.Grid.Focus();
+        window.Editor.Grid.Focus();
         return window;
     }
 
@@ -27,38 +27,38 @@ public class EscapeCollapsesSelectionTests
     public void Esc_collapses_a_dragged_selection_back_to_its_origin()
     {
         var window = OpenFocused();
-        window.Grid.SelectForTest(2, 1);                 // anchor at the start cell
-        window.Grid.NavigateForTest(2, 2, extend: true); // extend out to a block
-        Assert.False(window.Selection.IsSingleCell);
+        window.Editor.Grid.SelectForTest(2, 1);                 // anchor at the start cell
+        window.Editor.Grid.NavigateForTest(2, 2, extend: true); // extend out to a block
+        Assert.False(window.Editor.Selection.IsSingleCell);
 
         window.KeyPressQwerty(PhysicalKey.Escape, RawInputModifiers.None);
 
-        Assert.True(window.Selection.IsSingleCell);
-        Assert.Equal(2, window.Selection.ActiveRow);
-        Assert.Equal(1, window.Selection.ActiveColumn);
+        Assert.True(window.Editor.Selection.IsSingleCell);
+        Assert.Equal(2, window.Editor.Selection.ActiveRow);
+        Assert.Equal(1, window.Editor.Selection.ActiveColumn);
     }
 
     [AvaloniaFact]
     public void First_Esc_clears_the_marquee_and_keeps_the_selection()
     {
         var window = OpenFocused();
-        var sheet = window.Session.ActiveSheet;
+        var sheet = window.Editor.Session.ActiveSheet;
         sheet.SetValue(0, 0, CellValue.Text("x"));
 
-        window.Grid.SelectForTest(2, 1);
-        window.Grid.NavigateForTest(2, 2, extend: true);
-        window.Grid.ShowMarquee(CellRange.Parse("A1"), isCut: false, sheetName: sheet.Name);
-        Assert.True(window.Grid.HasMarquee);
+        window.Editor.Grid.SelectForTest(2, 1);
+        window.Editor.Grid.NavigateForTest(2, 2, extend: true);
+        window.Editor.Grid.ShowMarquee(CellRange.Parse("A1"), isCut: false, sheetName: sheet.Name);
+        Assert.True(window.Editor.Grid.HasMarquee);
 
         // First Esc: the marquee goes, the selection stays.
         window.KeyPressQwerty(PhysicalKey.Escape, RawInputModifiers.None);
-        Assert.False(window.Grid.HasMarquee);
-        Assert.False(window.Selection.IsSingleCell);
+        Assert.False(window.Editor.Grid.HasMarquee);
+        Assert.False(window.Editor.Selection.IsSingleCell);
 
         // Second Esc: now the selection collapses to its origin.
         window.KeyPressQwerty(PhysicalKey.Escape, RawInputModifiers.None);
-        Assert.True(window.Selection.IsSingleCell);
-        Assert.Equal(2, window.Selection.ActiveRow);
-        Assert.Equal(1, window.Selection.ActiveColumn);
+        Assert.True(window.Editor.Selection.IsSingleCell);
+        Assert.Equal(2, window.Editor.Selection.ActiveRow);
+        Assert.Equal(1, window.Editor.Selection.ActiveColumn);
     }
 }

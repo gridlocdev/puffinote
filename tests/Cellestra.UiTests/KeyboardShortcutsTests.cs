@@ -23,7 +23,7 @@ public class KeyboardShortcutsTests
     {
         var window = new MainWindow();
         window.Show();
-        IAppEnvironment env = window;
+        IAppEnvironment env = window.Editor;
 
         // Grid has focus by default: the "?" shortcut is live.
         Assert.False(env.IsTextInputFocused);

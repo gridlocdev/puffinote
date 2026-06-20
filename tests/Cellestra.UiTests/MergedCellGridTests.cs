@@ -19,7 +19,7 @@ public class MergedCellGridTests
     {
         var window = new MainWindow();
         window.Show();
-        return (window.Session.ActiveSheet, window.Grid);
+        return (window.Editor.Session.ActiveSheet, window.Editor.Grid);
     }
 
     [AvaloniaFact]

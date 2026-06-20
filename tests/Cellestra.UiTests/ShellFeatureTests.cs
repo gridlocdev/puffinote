@@ -25,7 +25,7 @@ public class ShellFeatureTests
     {
         var window = new MainWindow();
         window.Show();
-        IAppEnvironment env = window;
+        IAppEnvironment env = window.Editor;
         var sheet = env.Session.ActiveSheet;
         sheet.SetValue(1, 0, CellValue.Number(1)); // body data; the header row (A1) is empty
         sheet.SetValue(2, 0, CellValue.Number(2));
@@ -33,14 +33,14 @@ public class ShellFeatureTests
 
         AppCommands.ById("data.createTable")!.Execute(env);
 
-        Assert.True(window.Grid.IsInlineEditing);              // editing started automatically (#2)
+        Assert.True(window.Editor.Grid.IsInlineEditing);              // editing started automatically (#2)
         Assert.Equal(0, env.Selection.ActiveRow);              // on the first header cell
         Assert.Equal(0, env.Selection.ActiveColumn);
         Assert.Equal("Column 1", sheet.GetValue(0, 0).AsText); // placeholder pre-filled
 
         // The placeholder opens fully selected, so the next keystroke overtypes it (#2).
-        Assert.Equal("Column 1", window.Grid.EditorText);
-        Assert.True(window.Grid.EditorTextIsAllSelected);
+        Assert.Equal("Column 1", window.Editor.Grid.EditorText);
+        Assert.True(window.Editor.Grid.EditorTextIsAllSelected);
     }
 
     [AvaloniaFact]
@@ -48,7 +48,7 @@ public class ShellFeatureTests
     {
         var window = new MainWindow();
         window.Show();
-        var sheet = window.Session.ActiveSheet;
+        var sheet = window.Editor.Session.ActiveSheet;
         sheet.AddValidation(new DataValidation(ValidationKind.WholeNumber, CellRange.Parse("A1:A1"))
         {
             Operator = ValidationOperator.Between,
@@ -59,12 +59,12 @@ public class ShellFeatureTests
 
         var block = ClipboardBlock.Capture(sheet, CellRange.Parse("C1"), isCut: false);
         var blocked = new PasteBlockCommand(sheet.Name, CellRange.Parse("A1"), block);
-        Assert.False(window.Grid.TryEnforceValidation(blocked)); // rejected before execute
+        Assert.False(window.Editor.Grid.TryEnforceValidation(blocked)); // rejected before execute
 
         sheet.SetValue(0, 3, CellValue.Number(5)); // D1 holds an allowed value
         var ok = new PasteBlockCommand(sheet.Name, CellRange.Parse("A1"),
             ClipboardBlock.Capture(sheet, CellRange.Parse("D1"), isCut: false));
-        Assert.True(window.Grid.TryEnforceValidation(ok));
+        Assert.True(window.Editor.Grid.TryEnforceValidation(ok));
     }
 
     [Fact]
@@ -93,13 +93,13 @@ public class ShellFeatureTests
     {
         var window = new MainWindow();
         window.Show();
-        var sheet = window.Session.ActiveSheet;
+        var sheet = window.Editor.Session.ActiveSheet;
         sheet.SetValue(0, 0, CellValue.Text("hi"));
 
         string path = Path.Combine(Path.GetTempPath(), $"cellestra-{Guid.NewGuid():N}.ods");
         try
         {
-            window.Session.SaveToFile(path); // exercises the same atomic write the async path runs in Task.Run
+            window.Editor.Session.SaveToFile(path); // exercises the same atomic write the async path runs in Task.Run
             Assert.True(File.Exists(path));
 
             var reopened = WorkbookSession.NewBlank();

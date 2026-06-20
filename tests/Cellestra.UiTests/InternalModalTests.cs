@@ -19,7 +19,7 @@ public class InternalModalTests
     {
         var window = new MainWindow();
         window.Show();
-        IAppEnvironment env = window;
+        IAppEnvironment env = window.Editor;
 
         Assert.False(env.IsModalOpen);
 

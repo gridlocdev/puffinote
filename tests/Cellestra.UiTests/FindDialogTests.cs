@@ -14,14 +14,14 @@ public class FindDialogTests
     {
         var window = new MainWindow();
         window.Show();
-        IAppEnvironment env = window;
+        IAppEnvironment env = window.Editor;
         var sheet = env.Session.ActiveSheet;
         var locale = env.Session.Workbook.Settings.EffectiveLocale;
 
         env.Session.Execute(EditCommands.SetInput(sheet.Name, 0, 0, "apple", locale));
         env.Session.Execute(EditCommands.SetInput(sheet.Name, 2, 1, "pineapple", locale));
 
-        var dialog = new FindReplaceDialog(window, showReplace: false);
+        var dialog = new FindReplaceDialog(window.Editor, showReplace: false);
 
         Assert.Equal(2, dialog.SearchForTest("apple")); // "apple" and "pineapple"
 
@@ -37,14 +37,14 @@ public class FindDialogTests
     {
         var window = new MainWindow();
         window.Show();
-        IAppEnvironment env = window;
+        IAppEnvironment env = window.Editor;
         var sheet = env.Session.ActiveSheet;
         var locale = env.Session.Workbook.Settings.EffectiveLocale;
 
         // A plain number whose display contains "2"; replacing 2→9 turns 123 into 193 (still a number).
         env.Session.Execute(EditCommands.SetInput(sheet.Name, 0, 0, "123", locale));
 
-        var dialog = new FindReplaceDialog(window, showReplace: true);
+        var dialog = new FindReplaceDialog(window.Editor, showReplace: true);
         Assert.Equal(1, dialog.SearchForTest("2"));   // the numeric cell matches on its displayed value
         dialog.ReplaceAllForTest("2", "9");
 
@@ -58,7 +58,7 @@ public class FindDialogTests
     {
         var window = new MainWindow();
         window.Show();
-        IAppEnvironment env = window;
+        IAppEnvironment env = window.Editor;
         var sheet = env.Session.ActiveSheet;
         var locale = env.Session.Workbook.Settings.EffectiveLocale;
 
@@ -67,7 +67,7 @@ public class FindDialogTests
         env.Session.Execute(EditCommands.SetInput(sheet.Name, 2, 0, "30", locale));   // A3
         env.Session.Execute(EditCommands.SetFormula(sheet.Name, 4, 0, "A1+A2"));      // A5 = =A1+A2 → 30
 
-        var dialog = new FindReplaceDialog(window, showReplace: true);
+        var dialog = new FindReplaceDialog(window.Editor, showReplace: true);
 
         // The formula cell matches on its SOURCE text "=A1+A2" (not on its computed display "30").
         Assert.Equal(1, dialog.SearchForTest("A2"));
@@ -86,14 +86,14 @@ public class FindDialogTests
     {
         var window = new MainWindow();
         window.Show();
-        IAppEnvironment env = window;
+        IAppEnvironment env = window.Editor;
         var sheet = env.Session.ActiveSheet;
 
         // =1+2 displays "3", but Find scopes a formula cell to its source text, so the digit "3"
         // doesn't match the formula; searching the source ("1+2") does.
         env.Session.Execute(EditCommands.SetFormula(sheet.Name, 0, 0, "1+2"));
 
-        var dialog = new FindReplaceDialog(window, showReplace: true);
+        var dialog = new FindReplaceDialog(window.Editor, showReplace: true);
         Assert.Equal(0, dialog.SearchForTest("3"));
         Assert.Equal(1, dialog.SearchForTest("1+2"));
     }

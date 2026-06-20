@@ -31,20 +31,20 @@ public class InlineEditorGrowthTests
     {
         var window = new MainWindow();
         window.Show();
-        window.Grid.Zoom = 1.0;
-        Layout(window.Grid);
-        var env = (IAppEnvironment)window;
+        window.Editor.Grid.Zoom = 1.0;
+        Layout(window.Editor.Grid);
+        var env = (IAppEnvironment)window.Editor;
         env.Selection.MoveTo(0, 0); // A1
         env.BeginEdit();
         Pump();
 
-        window.Grid.SetInlineEditorText("x");
-        Layout(window.Grid);
-        double narrow = window.Grid.EditorBoundsForTest.Width;
+        window.Editor.Grid.SetInlineEditorText("x");
+        Layout(window.Editor.Grid);
+        double narrow = window.Editor.Grid.EditorBoundsForTest.Width;
 
-        window.Grid.SetInlineEditorText("this is a very long cell value that runs well past one column");
-        Layout(window.Grid);
-        double wide = window.Grid.EditorBoundsForTest.Width;
+        window.Editor.Grid.SetInlineEditorText("this is a very long cell value that runs well past one column");
+        Layout(window.Editor.Grid);
+        double wide = window.Editor.Grid.EditorBoundsForTest.Width;
 
         Assert.True(wide > narrow, $"expected the editor to widen ({narrow} → {wide})");
         Assert.True(wide > Cellestra.Core.Defaults.ColumnWidth, "the editor should grow past a single column");
@@ -55,21 +55,21 @@ public class InlineEditorGrowthTests
     {
         var window = new MainWindow();
         window.Show();
-        window.Grid.Zoom = 1.0;
-        Layout(window.Grid);
-        var env = (IAppEnvironment)window;
+        window.Editor.Grid.Zoom = 1.0;
+        Layout(window.Editor.Grid);
+        var env = (IAppEnvironment)window.Editor;
         env.Selection.MoveTo(0, 0);
         env.BeginEdit();
         Pump();
 
-        window.Grid.SetInlineEditorText("hi"); // short text
-        Layout(window.Grid);
-        var shortBounds = window.Grid.EditorBoundsForTest;
+        window.Editor.Grid.SetInlineEditorText("hi"); // short text
+        Layout(window.Editor.Grid);
+        var shortBounds = window.Editor.Grid.EditorBoundsForTest;
         Assert.True(shortBounds.Width >= Cellestra.Core.Defaults.ColumnWidth - 0.5); // never below the cell width
 
-        window.Grid.SetInlineEditorText("a much longer value than the cell can hold on its own");
-        Layout(window.Grid);
-        var longBounds = window.Grid.EditorBoundsForTest;
+        window.Editor.Grid.SetInlineEditorText("a much longer value than the cell can hold on its own");
+        Layout(window.Editor.Grid);
+        var longBounds = window.Editor.Grid.EditorBoundsForTest;
 
         // Growing the text widens the editor but never makes it taller — it never grows downward.
         Assert.True(longBounds.Width > shortBounds.Width);

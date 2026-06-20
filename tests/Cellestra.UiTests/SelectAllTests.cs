@@ -26,19 +26,19 @@ public class SelectAllTests
     {
         var window = new MainWindow();
         window.Show();
-        window.Session.ActiveSheet.SetValue(0, 0, CellValue.Text("hello"));
-        window.Selection.MoveTo(0, 0);
-        window.Refresh();
+        window.Editor.Session.ActiveSheet.SetValue(0, 0, CellValue.Text("hello"));
+        window.Editor.Selection.MoveTo(0, 0);
+        window.Editor.Refresh();
 
         var selectAll = SelectAllMenuItem(window);
 
         // Grid focused (selection mode): ⌘A is live — it selects cells.
-        window.Grid.Focus();
+        window.Editor.Grid.Focus();
         Assert.True(selectAll.Command!.CanExecute(null));
 
         // Formula bar focused (editing text): the command backs off so ⌘A reaches the TextBox and
         // selects the text being edited instead of every cell.
-        window.FormulaInput.Focus();
+        window.Editor.FormulaInput.Focus();
         Assert.False(selectAll.Command!.CanExecute(null));
     }
 
@@ -47,9 +47,9 @@ public class SelectAllTests
     {
         var window = new MainWindow();
         window.Show();
-        window.Selection.MoveTo(0, 0);
-        window.Grid.Focus();
-        window.Grid.BeginEdit("typing"); // inline cell editor takes focus
+        window.Editor.Selection.MoveTo(0, 0);
+        window.Editor.Grid.Focus();
+        window.Editor.Grid.BeginEdit("typing"); // inline cell editor takes focus
 
         Assert.False(SelectAllMenuItem(window).Command!.CanExecute(null));
     }
@@ -59,7 +59,7 @@ public class SelectAllTests
     {
         var window = new MainWindow();
         window.Show();
-        IAppEnvironment env = window;
+        IAppEnvironment env = window.Editor;
         var sheet = env.Session.ActiveSheet;
 
         // A 2x2 data block at A1:B2, with the active cell inside it.

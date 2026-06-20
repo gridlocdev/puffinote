@@ -20,7 +20,7 @@ public class CommandIndicatorTests
     {
         var window = new MainWindow();
         window.Show();
-        IAppEnvironment env = window;
+        IAppEnvironment env = window.Editor;
         var sheet = env.Session.ActiveSheet;
         var merge = AppCommands.ById("format.merge")!;
 
@@ -40,7 +40,7 @@ public class CommandIndicatorTests
     {
         var window = new MainWindow();
         window.Show();
-        IAppEnvironment env = window;
+        IAppEnvironment env = window.Editor;
         var sheet = env.Session.ActiveSheet;
         var inc = AppCommands.ById("format.increaseDecimal")!;
         var dec = AppCommands.ById("format.decreaseDecimal")!;

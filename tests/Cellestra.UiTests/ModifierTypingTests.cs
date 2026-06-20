@@ -17,15 +17,15 @@ public class ModifierTypingTests
     {
         var window = new MainWindow();
         window.Show();
-        window.Selection.MoveTo(0, 0);
-        window.Grid.Focus();
+        window.Editor.Selection.MoveTo(0, 0);
+        window.Editor.Grid.Focus();
 
         // ⌘J: the keydown carries the Meta modifier; even if a 'j' text-input follows, no edit starts.
         window.KeyPressQwerty(PhysicalKey.J, RawInputModifiers.Meta);
         window.KeyTextInput("j");
 
-        Assert.False(window.Grid.IsInlineEditing);
-        Assert.True(window.Session.ActiveSheet.GetValue(0, 0).IsEmpty);
+        Assert.False(window.Editor.Grid.IsInlineEditing);
+        Assert.True(window.Editor.Session.ActiveSheet.GetValue(0, 0).IsEmpty);
     }
 
     [AvaloniaFact]
@@ -33,13 +33,13 @@ public class ModifierTypingTests
     {
         var window = new MainWindow();
         window.Show();
-        window.Selection.MoveTo(0, 0);
-        window.Grid.Focus();
+        window.Editor.Selection.MoveTo(0, 0);
+        window.Editor.Grid.Focus();
 
         // No modifier: typing a character begins an inline edit as usual.
         window.KeyPressQwerty(PhysicalKey.K, RawInputModifiers.None);
         window.KeyTextInput("k");
 
-        Assert.True(window.Grid.IsInlineEditing);
+        Assert.True(window.Editor.Grid.IsInlineEditing);
     }
 }

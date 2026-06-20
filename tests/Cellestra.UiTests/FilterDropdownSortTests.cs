@@ -20,23 +20,23 @@ public class FilterDropdownSortTests
     {
         var window = new MainWindow();
         window.Show();
-        window.Grid.Zoom = 1.0;
+        window.Editor.Grid.Zoom = 1.0;
 
-        var sheet = window.Session.ActiveSheet;
+        var sheet = window.Editor.Session.ActiveSheet;
         sheet.SetValue(0, 0, CellValue.Text("Score")); // header
         sheet.SetValue(1, 0, CellValue.Number(30));
         sheet.SetValue(2, 0, CellValue.Number(10));
         sheet.SetValue(3, 0, CellValue.Number(20));
         sheet.AddTable(new Table("T", CellRange.Parse("A1:A4"), HasHeader: true));
 
-        window.Grid.Refresh();
+        window.Editor.Grid.Refresh();
         window.CaptureRenderedFrame(); // populate the rendered filter-button rects
         return window;
     }
 
     private static void ClickGridPoint(MainWindow window, Point gridLocal)
     {
-        var p = window.Grid.TranslatePoint(gridLocal, window) ?? default;
+        var p = window.Editor.Grid.TranslatePoint(gridLocal, window) ?? default;
         window.MouseDown(p, MouseButton.Left);
         window.MouseUp(p, MouseButton.Left);
     }
@@ -45,16 +45,16 @@ public class FilterDropdownSortTests
     public void Filter_dropdown_sort_ascending_reorders_data_and_keeps_header()
     {
         var window = TableWindow();
-        var sheet = window.Session.ActiveSheet;
+        var sheet = window.Editor.Session.ActiveSheet;
 
         // Open the dropdown by clicking column A's chevron.
-        var chevron = window.Grid.FilterButtonRectForTest(0);
+        var chevron = window.Editor.Grid.FilterButtonRectForTest(0);
         Assert.NotNull(chevron);
         ClickGridPoint(window, chevron!.Value.Center);
         window.CaptureRenderedFrame(); // lay out the popup so its buttons have bounds
 
         // Click "Sort A→Z" in the popup.
-        var sortCenter = window.Grid.PopupControlCenterForTest("Sort A→Z");
+        var sortCenter = window.Editor.Grid.PopupControlCenterForTest("Sort A→Z");
         Assert.NotNull(sortCenter);
         ClickGridPoint(window, sortCenter!.Value);
 
@@ -69,28 +69,28 @@ public class FilterDropdownSortTests
     public void Esc_closes_the_filter_dropdown_popup()
     {
         var window = TableWindow();
-        window.Grid.Focus();
+        window.Editor.Grid.Focus();
 
-        var chevron = window.Grid.FilterButtonRectForTest(0);
+        var chevron = window.Editor.Grid.FilterButtonRectForTest(0);
         Assert.NotNull(chevron);
         ClickGridPoint(window, chevron!.Value.Center);
         window.CaptureRenderedFrame();
-        Assert.True(window.Grid.PopupHasTextForTest("Sorting Score")); // the dropdown is open
+        Assert.True(window.Editor.Grid.PopupHasTextForTest("Sorting Score")); // the dropdown is open
 
         window.KeyPressQwerty(PhysicalKey.Escape, RawInputModifiers.None);
 
-        Assert.False(window.Grid.PopupHasTextForTest("Sorting Score")); // Esc dismissed it
+        Assert.False(window.Editor.Grid.PopupHasTextForTest("Sorting Score")); // Esc dismissed it
     }
 
     [AvaloniaFact]
     public void Filter_popup_is_titled_by_the_column_header()
     {
         var window = TableWindow(); // header "Score" in A1
-        var chevron = window.Grid.FilterButtonRectForTest(0);
+        var chevron = window.Editor.Grid.FilterButtonRectForTest(0);
         ClickGridPoint(window, chevron!.Value.Center);
         window.CaptureRenderedFrame();
 
-        Assert.True(window.Grid.PopupHasTextForTest("Sorting Score")); // #6: titled by the header
+        Assert.True(window.Editor.Grid.PopupHasTextForTest("Sorting Score")); // #6: titled by the header
     }
 
     [AvaloniaFact]
@@ -98,22 +98,22 @@ public class FilterDropdownSortTests
     {
         var window = new MainWindow();
         window.Show();
-        window.Grid.Zoom = 1.0;
-        var sheet = window.Session.ActiveSheet;
+        window.Editor.Grid.Zoom = 1.0;
+        var sheet = window.Editor.Session.ActiveSheet;
         // Two-column table; sort by column B should carry column A's cells along with each row.
         sheet.SetValue(0, 0, CellValue.Text("Name"));
         sheet.SetValue(0, 1, CellValue.Text("Score"));
         sheet.SetValue(1, 0, CellValue.Text("Cara")); sheet.SetValue(1, 1, CellValue.Number(30));
         sheet.SetValue(2, 0, CellValue.Text("Ana")); sheet.SetValue(2, 1, CellValue.Number(10));
         sheet.AddTable(new Table("T", CellRange.Parse("A1:B3"), HasHeader: true));
-        window.Grid.Refresh();
+        window.Editor.Grid.Refresh();
         window.CaptureRenderedFrame();
 
-        var chevron = window.Grid.FilterButtonRectForTest(1); // column B's dropdown
+        var chevron = window.Editor.Grid.FilterButtonRectForTest(1); // column B's dropdown
         Assert.NotNull(chevron);
         ClickGridPoint(window, chevron!.Value.Center);
         window.CaptureRenderedFrame();
-        ClickGridPoint(window, window.Grid.PopupControlCenterForTest("Sort A→Z")!.Value);
+        ClickGridPoint(window, window.Editor.Grid.PopupControlCenterForTest("Sort A→Z")!.Value);
 
         Assert.Equal(10, sheet.GetValue(1, 1).AsNumber);  // sorted by B ascending
         Assert.Equal("Ana", sheet.GetValue(1, 0).AsText); // column A moved with its row
@@ -124,23 +124,23 @@ public class FilterDropdownSortTests
     {
         var window = new MainWindow();
         window.Show();
-        window.Grid.Zoom = 1.0;
-        var sheet = window.Session.ActiveSheet;
+        window.Editor.Grid.Zoom = 1.0;
+        var sheet = window.Editor.Session.ActiveSheet;
         sheet.SetValue(0, 0, CellValue.Text("Team")); sheet.SetValue(0, 1, CellValue.Text("Score"));
         sheet.SetValue(1, 0, CellValue.Text("A")); sheet.SetValue(1, 1, CellValue.Number(30));
         sheet.SetValue(2, 0, CellValue.Text("B")); sheet.SetValue(2, 1, CellValue.Number(10));
         sheet.AddTable(new Table("T", CellRange.Parse("A1:B3"), HasHeader: true));
-        window.Grid.Refresh();
+        window.Editor.Grid.Refresh();
         window.CaptureRenderedFrame();
 
         // Sort by column A, then by column B — the simple dropdown is single-column, so B replaces A.
-        ClickGridPoint(window, window.Grid.FilterButtonRectForTest(0)!.Value.Center);
+        ClickGridPoint(window, window.Editor.Grid.FilterButtonRectForTest(0)!.Value.Center);
         window.CaptureRenderedFrame();
-        ClickGridPoint(window, window.Grid.PopupControlCenterForTest("Sort A→Z")!.Value);
+        ClickGridPoint(window, window.Editor.Grid.PopupControlCenterForTest("Sort A→Z")!.Value);
 
-        ClickGridPoint(window, window.Grid.FilterButtonRectForTest(1)!.Value.Center);
+        ClickGridPoint(window, window.Editor.Grid.FilterButtonRectForTest(1)!.Value.Center);
         window.CaptureRenderedFrame();
-        ClickGridPoint(window, window.Grid.PopupControlCenterForTest("Sort A→Z")!.Value);
+        ClickGridPoint(window, window.Editor.Grid.PopupControlCenterForTest("Sort A→Z")!.Value);
 
         // The table owns its sort; only column B remains (multi-column "then by" is the dialog's job).
         var table = Assert.Single(sheet.Tables);
@@ -153,14 +153,14 @@ public class FilterDropdownSortTests
     public void Filter_dropdown_sort_descending_reorders_data()
     {
         var window = TableWindow();
-        var sheet = window.Session.ActiveSheet;
+        var sheet = window.Editor.Session.ActiveSheet;
 
-        var chevron = window.Grid.FilterButtonRectForTest(0);
+        var chevron = window.Editor.Grid.FilterButtonRectForTest(0);
         Assert.NotNull(chevron);
         ClickGridPoint(window, chevron!.Value.Center);
         window.CaptureRenderedFrame();
 
-        var sortCenter = window.Grid.PopupControlCenterForTest("Sort Z→A");
+        var sortCenter = window.Editor.Grid.PopupControlCenterForTest("Sort Z→A");
         Assert.NotNull(sortCenter);
         ClickGridPoint(window, sortCenter!.Value);
 

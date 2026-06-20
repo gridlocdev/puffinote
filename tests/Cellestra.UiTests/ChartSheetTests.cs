@@ -15,7 +15,7 @@ public class ChartSheetTests
     {
         var window = new MainWindow();
         window.Show();
-        IAppEnvironment env = window;
+        IAppEnvironment env = window.Editor;
         string sheet = env.Session.ActiveSheet.Name;
 
         // A small tabular block: header row + two label rows × two value columns.
@@ -32,14 +32,14 @@ public class ChartSheetTests
     public void Adding_a_chart_sheet_shows_the_chart_view_and_hides_the_grid()
     {
         var window = WindowWithData();
-        IAppEnvironment env = window;
+        IAppEnvironment env = window.Editor;
 
         env.AddChartSheet();
 
         Assert.True(env.Session.ActiveSheet.IsChartSheet);
-        Assert.True(window.ChartViewVisibleForTest);
-        Assert.False(window.FormulaBarVisibleForTest);
-        Assert.NotNull(window.ActiveChartViewForTest);
+        Assert.True(window.Editor.ChartViewVisibleForTest);
+        Assert.False(window.Editor.FormulaBarVisibleForTest);
+        Assert.NotNull(window.Editor.ActiveChartViewForTest);
         Assert.Equal("Chart1", env.Session.ActiveSheet.Name);
         Assert.True(env.Session.IsModified);
     }
@@ -48,7 +48,7 @@ public class ChartSheetTests
     public void A_new_chart_sheet_seeds_categories_and_series_from_the_selection()
     {
         var window = WindowWithData();
-        IAppEnvironment env = window;
+        IAppEnvironment env = window.Editor;
         env.Selection.MoveTo(0, 0);
         env.Selection.ExtendTo(2, 1); // A1:B3
 
@@ -65,7 +65,7 @@ public class ChartSheetTests
     public void A_new_chart_autofills_from_the_only_table_on_the_sheet()
     {
         var window = WindowWithData();
-        IAppEnvironment env = window;
+        IAppEnvironment env = window.Editor;
         var sheet = env.Session.ActiveSheet;
         sheet.AddTable(new Cellestra.Core.Data.Table("T", Cellestra.Core.Model.CellRange.Parse("A1:B3"), HasHeader: true));
         env.Selection.MoveTo(8, 8); // selection sits away from the table — the table still drives the chart
@@ -83,7 +83,7 @@ public class ChartSheetTests
     public void The_chart_view_renders_without_throwing()
     {
         var window = WindowWithData();
-        IAppEnvironment env = window;
+        IAppEnvironment env = window.Editor;
         env.Selection.MoveTo(0, 0);
         env.Selection.ExtendTo(2, 1);
         env.AddChartSheet();
@@ -92,7 +92,7 @@ public class ChartSheetTests
         var frame = window.CaptureRenderedFrame();
         Assert.NotNull(frame);
 
-        var resolved = window.ActiveChartViewForTest!.ResolvedForTest;
+        var resolved = window.Editor.ActiveChartViewForTest!.ResolvedForTest;
         Assert.NotNull(resolved);
         Assert.Equal(new[] { 10d, 20d }, resolved!.Series[0].Values);
     }
@@ -101,11 +101,11 @@ public class ChartSheetTests
     public void Editing_the_source_data_updates_the_chart_live()
     {
         var window = WindowWithData();
-        IAppEnvironment env = window;
+        IAppEnvironment env = window.Editor;
         env.Selection.MoveTo(0, 0);
         env.Selection.ExtendTo(2, 1);
         env.AddChartSheet();
-        var view = window.ActiveChartViewForTest!;
+        var view = window.Editor.ActiveChartViewForTest!;
 
         // Change a source value on the data sheet; the session's Changed event drives a live refresh.
         env.Session.Execute(EditCommands.SetInput("Sheet1", 1, 1, "99", CultureInfo.InvariantCulture));
@@ -117,27 +117,27 @@ public class ChartSheetTests
     public void Switching_back_to_a_data_sheet_restores_the_grid()
     {
         var window = WindowWithData();
-        IAppEnvironment env = window;
+        IAppEnvironment env = window.Editor;
         var dataSheet = env.Session.ActiveSheet;
         env.AddChartSheet();
-        Assert.True(window.ChartViewVisibleForTest);
+        Assert.True(window.Editor.ChartViewVisibleForTest);
 
         env.Session.SetActiveSheet(dataSheet);
 
-        Assert.False(window.ChartViewVisibleForTest);
-        Assert.True(window.FormulaBarVisibleForTest);
-        Assert.Null(window.ActiveChartViewForTest);
+        Assert.False(window.Editor.ChartViewVisibleForTest);
+        Assert.True(window.Editor.FormulaBarVisibleForTest);
+        Assert.Null(window.Editor.ActiveChartViewForTest);
     }
 
     [AvaloniaFact]
     public void The_sidebar_shows_only_the_fields_each_chart_type_needs()
     {
         var window = WindowWithData();
-        IAppEnvironment env = window;
+        IAppEnvironment env = window.Editor;
         env.Selection.MoveTo(0, 0);
         env.Selection.ExtendTo(2, 1);
         env.AddChartSheet();
-        var view = window.ActiveChartViewForTest!;
+        var view = window.Editor.ActiveChartViewForTest!;
 
         // Column (cartesian): categories, axis titles, stacking, and the per-series combo override.
         view.SetTypeForTest(Cellestra.Charts.ChartType.Column);
@@ -186,7 +186,7 @@ public class ChartSheetTests
     public void Chart_sheet_appears_as_a_tab_and_can_be_listed_with_the_grid_sheets()
     {
         var window = WindowWithData();
-        IAppEnvironment env = window;
+        IAppEnvironment env = window.Editor;
         env.AddChartSheet();
 
         var names = env.Session.Workbook.Worksheets.Select(s => s.Name).ToList();

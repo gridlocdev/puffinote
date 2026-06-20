@@ -16,7 +16,7 @@ public class TableChromeTests
     {
         var window = new MainWindow();
         window.Show();
-        IAppEnvironment env = window;
+        IAppEnvironment env = window.Editor;
         var sheet = env.Session.ActiveSheet;
 
         // A table (banding + header band + filter buttons).

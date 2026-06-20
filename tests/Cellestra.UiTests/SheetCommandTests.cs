@@ -82,9 +82,9 @@ public class SheetCommandTests
         window.Show();
         var delete = AppCommands.ById("sheet.delete")!;
 
-        Assert.False(delete.IsEnabled(window)); // one sheet
-        window.AddSheet();
-        Assert.True(delete.IsEnabled(window));
+        Assert.False(delete.IsEnabled(window.Editor)); // one sheet
+        window.Editor.AddSheet();
+        Assert.True(delete.IsEnabled(window.Editor));
     }
 
     [Fact]
@@ -106,14 +106,14 @@ public class SheetCommandTests
     {
         var window = new MainWindow();
         window.Show();
-        IAppEnvironment env = window;
+        IAppEnvironment env = window.Editor;
         var sheet = env.Session.ActiveSheet;
 
         env.Session.Execute(EditCommands.SetValue(sheet.Name, 0, 0, CellValue.Text("a")));
         env.Session.Execute(EditCommands.SetValue(sheet.Name, 1, 0, CellValue.Text("b")));
         env.Selection.MoveTo(0, 0);
 
-        AppCommands.ById("edit.deleteRows")!.Execute(window);
+        AppCommands.ById("edit.deleteRows")!.Execute(window.Editor);
 
         Assert.Equal("b", sheet.GetValue(0, 0).AsText); // row 0 deleted, "b" shifted up
     }
@@ -123,12 +123,12 @@ public class SheetCommandTests
     {
         var window = new MainWindow();
         window.Show();
-        IAppEnvironment env = window;
+        IAppEnvironment env = window.Editor;
         var sheet = env.Session.ActiveSheet;
         env.Session.Execute(EditCommands.SetValue(sheet.Name, 0, 0, CellValue.Text("keep")));
 
         env.Selection.SetRange(0, 0, SheetDimensions.MaxRows - 1, SheetDimensions.MaxColumns - 1); // Select All
-        AppCommands.ById("edit.deleteColumns")!.Execute(window);
+        AppCommands.ById("edit.deleteColumns")!.Execute(window.Editor);
 
         Assert.Equal("keep", sheet.GetValue(0, 0).AsText); // refused — deleting every column would wipe the sheet
     }

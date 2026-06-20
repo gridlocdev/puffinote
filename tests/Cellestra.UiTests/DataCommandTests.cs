@@ -14,7 +14,7 @@ public class DataCommandTests
     {
         var window = new MainWindow();
         window.Show();
-        IAppEnvironment env = window;
+        IAppEnvironment env = window.Editor;
         var sheet = env.Session.ActiveSheet;
 
         sheet.SetValue(0, 0, CellValue.Text("Name"));
@@ -37,7 +37,7 @@ public class DataCommandTests
     {
         var window = new MainWindow();
         window.Show();
-        IAppEnvironment env = window;
+        IAppEnvironment env = window.Editor;
         var sheet = env.Session.ActiveSheet;
 
         sheet.SetValue(0, 0, CellValue.Text("H"));
@@ -55,7 +55,7 @@ public class DataCommandTests
     {
         var window = new MainWindow();
         window.Show();
-        IAppEnvironment env = window;
+        IAppEnvironment env = window.Editor;
         var sheet = env.Session.ActiveSheet;
 
         sheet.SetValue(0, 0, CellValue.Text("H"));
@@ -76,7 +76,7 @@ public class DataCommandTests
     {
         var window = new MainWindow();
         window.Show();
-        IAppEnvironment env = window;
+        IAppEnvironment env = window.Editor;
         var sheet = env.Session.ActiveSheet;
 
         sheet.SetValue(0, 0, CellValue.Text("H"));
@@ -95,7 +95,7 @@ public class DataCommandTests
     {
         var window = new MainWindow();
         window.Show();
-        IAppEnvironment env = window;
+        IAppEnvironment env = window.Editor;
         var sheet = env.Session.ActiveSheet;
 
         sheet.SetValue(0, 0, CellValue.Text("H"));
