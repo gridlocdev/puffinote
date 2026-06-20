@@ -1,0 +1,41 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    The embeddable spreadsheet editor: the custom grid, formula/command/status chrome,
+    sheet tabs, dialogs, and the command catalog — everything needed to edit ONE workbook,
+    packaged as an Avalonia control library so both the standalone Cellestra.Desktop app and
+    a host application (e.g. a notes-app shell consuming this repo as a submodule) can embed
+    the SpreadsheetEditorView. App-shell concerns (window, native menu, file dialogs, settings)
+    stay in Cellestra.Desktop.
+  -->
+  <PropertyGroup>
+    <RootNamespace>Cellestra.Editor</RootNamespace>
+    <AssemblyName>Cellestra.Editor</AssemblyName>
+    <AvaloniaUseCompiledBindingsByDefault>true</AvaloniaUseCompiledBindingsByDefault>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Avalonia" />
+    <!-- First-party Avalonia color picker (MIT). Used by the format dialogs and command-bar drawers. -->
+    <PackageReference Include="Avalonia.Controls.ColorPicker" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Cellestra.Core\Cellestra.Core.csproj" />
+    <!-- The chart store: chart-sheet model used by the chart view and its custom renderer. -->
+    <ProjectReference Include="..\Cellestra.Charts\Cellestra.Charts.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- The standalone app shell (assembly name "Cellestra") and the headless UI tests reach a few
+         internal seams on the editor controls/session. -->
+    <InternalsVisibleTo Include="Cellestra" />
+    <InternalsVisibleTo Include="Cellestra.UiTests" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- The vendored Lucide SVG glyphs (avares://Cellestra.Editor/Assets/icons/...). -->
+    <AvaloniaResource Include="Assets\**" />
+  </ItemGroup>
+
+</Project>

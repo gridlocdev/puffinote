@@ -4,6 +4,7 @@
     <Project Path="src/Cellestra.Cli/Cellestra.Cli.csproj" />
     <Project Path="src/Cellestra.Core/Cellestra.Core.csproj" />
     <Project Path="src/Cellestra.Desktop/Cellestra.Desktop.csproj" />
+    <Project Path="src/Cellestra.Editor/Cellestra.Editor.csproj" />
   </Folder>
   <Folder Name="/tests/">
     <Project Path="tests/Cellestra.Benchmarks/Cellestra.Benchmarks.csproj" />

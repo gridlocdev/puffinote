@@ -39,9 +39,10 @@ public static class LucideIcons
 
     private static Geometry? Load(string key)
     {
-        // The desktop assembly name is "Cellestra" (see Cellestra.Desktop.csproj), which is the
-        // authority an avares URI resolves against — not the project/namespace "Cellestra.Desktop".
-        var uri = new Uri($"avares://Cellestra/Assets/icons/{key}.svg");
+        // The icons ship in this control library (assembly name "Cellestra.Editor"), which is the
+        // authority an avares URI resolves against — so the standalone app and any host that embeds
+        // the editor both find them, regardless of the host assembly's name.
+        var uri = new Uri($"avares://Cellestra.Editor/Assets/icons/{key}.svg");
         if (!AssetLoader.Exists(uri))
         {
             return null;

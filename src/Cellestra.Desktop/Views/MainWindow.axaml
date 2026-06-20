@@ -1,6 +1,6 @@
 <Window xmlns="https://github.com/avaloniaui"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        xmlns:grid="clr-namespace:Cellestra.Desktop.Controls.SpreadsheetGrid"
+        xmlns:grid="clr-namespace:Cellestra.Desktop.Controls.SpreadsheetGrid;assembly=Cellestra.Editor"
         x:Class="Cellestra.Desktop.Views.MainWindow"
         Title="Cellestra"
         Width="1100" Height="720"
