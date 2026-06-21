@@ -14,7 +14,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\..\src\Cellestra.Desktop\Cellestra.Desktop.csproj" />
+    <ProjectReference Include="..\Cellestra.Desktop\Cellestra.Desktop.csproj" />
   </ItemGroup>
 
 </Project>

@@ -13,8 +13,8 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\..\src\Cellestra.Cli\Cellestra.Cli.csproj" />
-    <ProjectReference Include="..\..\src\Cellestra.Core\Cellestra.Core.csproj" />
+    <ProjectReference Include="..\Cellestra.Cli\Cellestra.Cli.csproj" />
+    <ProjectReference Include="..\Cellestra.Core\Cellestra.Core.csproj" />
   </ItemGroup>
 
 </Project>

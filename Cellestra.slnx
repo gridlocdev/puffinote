@@ -5,11 +5,9 @@
     <Project Path="src/Cellestra.Core/Cellestra.Core.csproj" />
     <Project Path="src/Cellestra.Desktop/Cellestra.Desktop.csproj" />
     <Project Path="src/Cellestra.Editor/Cellestra.Editor.csproj" />
-  </Folder>
-  <Folder Name="/tests/">
-    <Project Path="tests/Cellestra.Benchmarks/Cellestra.Benchmarks.csproj" />
-    <Project Path="tests/Cellestra.Cli.Tests/Cellestra.Cli.Tests.csproj" />
-    <Project Path="tests/Cellestra.Core.Tests/Cellestra.Core.Tests.csproj" />
-    <Project Path="tests/Cellestra.UiTests/Cellestra.UiTests.csproj" />
+    <Project Path="src/Cellestra.Benchmarks/Cellestra.Benchmarks.csproj" />
+    <Project Path="src/Cellestra.Cli.Tests/Cellestra.Cli.Tests.csproj" />
+    <Project Path="src/Cellestra.Core.Tests/Cellestra.Core.Tests.csproj" />
+    <Project Path="src/Cellestra.UiTests/Cellestra.UiTests.csproj" />
   </Folder>
 </Solution>
