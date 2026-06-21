@@ -57,15 +57,20 @@ These are common places to improvise — don't. The spec is fixed:
 
 ## Everyday commands
 
+Run these from this feature folder (`features/EditSpreadsheets/`) — that's where the
+solution (`Cellestra.slnx`) and every project live. Shared .NET tooling
+(`Directory.Build.props`, `Directory.Packages.props`, `global.json`, `nuget.config`)
+sits at the repo root and is picked up automatically.
+
 ```bash
 dotnet restore
 dotnet build
-dotnet run    --project src/Cellestra.Desktop      # launch the app
-dotnet run    --project src/Cellestra.Cli -- <args>  # the cellestra CLI (see below)
+dotnet run    --project Cellestra.Desktop      # launch the app
+dotnet run    --project Cellestra.Cli -- <args>  # the cellestra CLI (see below)
 dotnet test                                          # all tests
-dotnet test tests/Cellestra.Core.Tests               # fast, no UI
-dotnet test tests/Cellestra.Cli.Tests                # end-to-end CLI, in-process
-dotnet test tests/Cellestra.UiTests                  # headless Avalonia (xUnit v3)
+dotnet test Cellestra.Core.Tests               # fast, no UI
+dotnet test Cellestra.Cli.Tests                # end-to-end CLI, in-process
+dotnet test Cellestra.UiTests                  # headless Avalonia (xUnit v3)
 ./build/package-mac.sh                                # notarized .app bundle
 ```
 
@@ -73,9 +78,9 @@ dotnet test tests/Cellestra.UiTests                  # headless Avalonia (xUnit 
 
 ## Debugging with the `cellestra` CLI
 
-`src/Cellestra.Cli/` is a **third consumer of `Cellestra.Core`** (no Avalonia, no network) — the same brain as the app. Reach for it to inspect a workbook, check the engine, or diff a serialization change **without launching the GUI** (which you usually can't headlessly). Because it reuses the engine, what it prints is what the app would compute. Full spec: **PRD §8.16**; design: **ARCHITECTURE §1/§3**.
+`Cellestra.Cli/` is a **third consumer of `Cellestra.Core`** (no Avalonia, no network) — the same brain as the app. Reach for it to inspect a workbook, check the engine, or diff a serialization change **without launching the GUI** (which you usually can't headlessly). Because it reuses the engine, what it prints is what the app would compute. Full spec: **PRD §8.16**; design: **ARCHITECTURE §1/§3**.
 
-Run it via `dotnet run --project src/Cellestra.Cli -- <command>`, or build once and call the binary at `src/Cellestra.Cli/bin/Debug/net10.0/cellestra`. Addressing matches the app (`Sheet1.B2`, ranges `Sheet1.A1:C10`; omit the sheet for the active/first one). No args, `-h`, or `--help` lists everything.
+Run it via `dotnet run --project Cellestra.Cli -- <command>`, or build once and call the binary at `Cellestra.Cli/bin/Debug/net10.0/cellestra`. Addressing matches the app (`Sheet1.B2`, ranges `Sheet1.A1:C10`; omit the sheet for the active/first one). No args, `-h`, or `--help` lists everything.
 
 ```bash
 cellestra cat budget.ods --sheet Q1 --range A1:D20    # see a sheet (table|csv|tsv|json)
@@ -98,10 +103,10 @@ CLI conventions that matter while debugging: **reads go to stdout**; `--format t
 
 Authoritative tree: **[ARCHITECTURE.md §12](docs/ARCHITECTURE.md#12-folder-structure)**. Quick orientation:
 
-- **Spreadsheet logic** → `src/Cellestra.Core/`.
-- **UI** → `src/Cellestra.Desktop/` (Commands, Menu, Controls incl. `CommandBar`, `Icons`, and `SpreadsheetGrid`, Views, ViewModels, Services).
-- **CLI** → `src/Cellestra.Cli/` (`Infrastructure/` + `Commands/`; references only Core + `System.CommandLine`, no Avalonia).
-- **Tests** → `tests/Cellestra.Core.Tests/`, `tests/Cellestra.UiTests/`, `tests/Cellestra.Cli.Tests/`, `tests/Cellestra.Benchmarks/`.
+- **Spreadsheet logic** → `Cellestra.Core/`.
+- **UI** → `Cellestra.Desktop/` (Commands, Menu, Controls incl. `CommandBar`, `Icons`, and `SpreadsheetGrid`, Views, ViewModels, Services).
+- **CLI** → `Cellestra.Cli/` (`Infrastructure/` + `Commands/`; references only Core + `System.CommandLine`, no Avalonia).
+- **Tests** → `Cellestra.Core.Tests/`, `Cellestra.UiTests/`, `Cellestra.Cli.Tests/`, `Cellestra.Benchmarks/`.
 - Don't invent new top-level folders; extend the existing structure. If a new home seems necessary, note it and ask.
 
 ## Working in this codebase (verified gotchas)
@@ -116,8 +121,8 @@ Hard-won facts from building the app and CLI — they'll save you a failed build
 
 **Verifying changes (you usually can't run the GUI):**
 
-- **`dotnet run --project src/Cellestra.Desktop` fails from a detached/CI shell** with `Avalonia.Native … RenderTimer … -6661` — that's *environmental* (no display link), **not** a regression. Don't chase it; verify with headless tests or the `cellestra` CLI.
-- **Headless UI tests draw with real Skia** (`UseHeadlessDrawing=false` + `.UseSkia()` in `tests/Cellestra.UiTests/TestAppBuilder.cs`), so `window.Show()` runs the real render path and `CaptureRenderedFrame()` returns a real frame — handy to smoke-test that rendering doesn't throw.
+- **`dotnet run --project Cellestra.Desktop` fails from a detached/CI shell** with `Avalonia.Native … RenderTimer … -6661` — that's *environmental* (no display link), **not** a regression. Don't chase it; verify with headless tests or the `cellestra` CLI.
+- **Headless UI tests draw with real Skia** (`UseHeadlessDrawing=false` + `.UseSkia()` in `Cellestra.UiTests/TestAppBuilder.cs`), so `window.Show()` runs the real render path and `CaptureRenderedFrame()` returns a real frame — handy to smoke-test that rendering doesn't throw.
 - **Pointer/focus-driven UI is hard to drive headlessly** (point mode, autocomplete, fill-drag, marquee, Tab-then-Enter). Put the real logic in Core or a pure helper (`ReferenceCycler`, `PastePlanner`, `FillCommand`, `DataRegion`, …) and unit-test **that**; keep the UI a thin call. `Cellestra.Cli.Tests` redirect the **process-global `Console`**, so they live in one class and run sequentially.
 
 ## Conventions

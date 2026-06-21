@@ -20,8 +20,8 @@ set -euo pipefail
 
 APP_NAME="Cellestra"
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-PROJECT="$ROOT/src/Cellestra.Desktop/Cellestra.Desktop.csproj"
-PLIST="$ROOT/src/Cellestra.Desktop/Info.plist"
+PROJECT="$ROOT/Cellestra.Desktop/Cellestra.Desktop.csproj"
+PLIST="$ROOT/Cellestra.Desktop/Info.plist"
 
 CONFIG="${CONFIG:-Release}"
 case "$(uname -m)" in

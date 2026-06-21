@@ -64,7 +64,7 @@ cd cellestra
 dotnet restore
 
 # 3. Run the app
-dotnet run --project src/Cellestra.Desktop
+dotnet run --project Cellestra.Desktop
 ```
 
 ## The `cellestra` command-line tool
@@ -73,10 +73,10 @@ dotnet run --project src/Cellestra.Desktop
 
 ```bash
 # Run it straight from source...
-dotnet run --project src/Cellestra.Cli -- info budget.ods
+dotnet run --project Cellestra.Cli -- info budget.ods
 
 # ...or build a standalone `cellestra` binary and call it directly
-dotnet build src/Cellestra.Cli
+dotnet build Cellestra.Cli
 cellestra cat budget.ods --sheet Q3 --range A1:D10
 ```
 
@@ -104,13 +104,13 @@ That's the core; the full surface also covers `new`/`import`/`export`, batch edi
 dotnet test
 
 # Just the core logic (fast, no UI)
-dotnet test tests/Cellestra.Core.Tests
+dotnet test Cellestra.Core.Tests
 
 # Just the headless UI tests
-dotnet test tests/Cellestra.UiTests
+dotnet test Cellestra.UiTests
 
 # Just the CLI tests (drive the command surface in-process)
-dotnet test tests/Cellestra.Cli.Tests
+dotnet test Cellestra.Cli.Tests
 ```
 
 Both test projects use **xUnit v3**. The headless UI tests run on Avalonia 12's in-memory headless platform (`Avalonia.Headless.XUnit`), using `[AvaloniaFact]`/`[AvaloniaTheory]` instead of the usual xUnit attributes. The core library is where most of the important logic — and most of the tests — live; the round-trip tests are the safety net for "save a file, reopen it in LibreOffice, lose nothing."
@@ -121,10 +121,10 @@ The `Cellestra.Benchmarks` project is a [BenchmarkDotNet](https://benchmarkdotne
 
 ```bash
 # Run every benchmark
-dotnet run -c Release --project tests/Cellestra.Benchmarks
+dotnet run -c Release --project Cellestra.Benchmarks
 
 # ...or pick one interactively / by filter
-dotnet run -c Release --project tests/Cellestra.Benchmarks -- --filter '*Recalc*'
+dotnet run -c Release --project Cellestra.Benchmarks -- --filter '*Recalc*'
 ```
 
 ## Building a macOS app bundle
@@ -138,21 +138,24 @@ This produces a notarized `.app` you can launch without security warnings. (See 
 ## Project layout (quick map)
 
 ```
-src/
-  Cellestra.Core/       # the brain: model, formulas, recalc, .ods + CSV  (no UI)
-  Cellestra.Charts/     # chart-sheet model + from-scratch ODF chart serializer
-  Cellestra.Desktop/    # the face: Avalonia window, grid, dialogs, services
-  Cellestra.Cli/        # the `cellestra` console tool  (Core + System.CommandLine)
-tests/
-  Cellestra.Core.Tests/ # fast unit tests for the brain (xUnit v3)
-  Cellestra.UiTests/    # headless UI tests (xUnit v3 + Avalonia.Headless)
-  Cellestra.Cli.Tests/  # in-process tests of the CLI command surface
-  Cellestra.Benchmarks/ # BenchmarkDotNet speed checks for recalc and file I/O
-build/                  # macOS packaging
-docs/
-  PRD.md                # what & why
-  ARCHITECTURE.md       # how
+features/EditSpreadsheets/   # this feature; one folder per .NET project
+  Cellestra.Core/            # the brain: model, formulas, recalc, .ods + CSV  (no UI)
+  Cellestra.Charts/          # chart-sheet model + from-scratch ODF chart serializer
+  Cellestra.Editor/          # embeddable Avalonia editor cluster (grid, command bar, dialogs)
+  Cellestra.Desktop/         # the face: Avalonia window host wrapping the editor
+  Cellestra.Cli/             # the `cellestra` console tool  (Core + System.CommandLine)
+  Cellestra.Core.Tests/      # fast unit tests for the brain (xUnit v3)
+  Cellestra.UiTests/         # headless UI tests (xUnit v3 + Avalonia.Headless)
+  Cellestra.Cli.Tests/       # in-process tests of the CLI command surface
+  Cellestra.Benchmarks/      # BenchmarkDotNet speed checks for recalc and file I/O
+  Cellestra.slnx             # the solution
+  build/                     # macOS packaging
+  docs/
+    PRD.md                   # what & why
+    ARCHITECTURE.md          # how
 ```
+
+Shared, feature-agnostic .NET tooling stays at the repository root: `Directory.Build.props`, `Directory.Packages.props`, `global.json`, `nuget.config`, `.editorconfig`, and `.devcontainer/`.
 
 The full, annotated tree is in [ARCHITECTURE.md](docs/ARCHITECTURE.md#11-folder-structure).
 

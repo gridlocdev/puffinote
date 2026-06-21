@@ -424,7 +424,7 @@ On open, cached values from the file are shown immediately. If calculation mode 
 
 ### 8.16 Command-line interface (`cellestra`)
 
-A second face on the same brain (`ARCHITECTURE.md` §1): the `cellestra` binary makes Cellestra useful in scripts, CI, and build pipelines. It lives in `src/Cellestra.Cli/`, references only Core + `System.CommandLine`, and has **no Avalonia and no network**. Because it reuses the engine, `convert` shares the serializers, `eval` shares the formula engine, and `functions` reads the same `FunctionRegistry` as the app's autocomplete — so CLI output and GUI behaviour can't drift. Cell addressing matches the app (`Sheet1.B2`, ranges `Sheet1.A1:C10`; omit the sheet for the active/first one). No args, `-h`, or `--help` shows help.
+A second face on the same brain (`ARCHITECTURE.md` §1): the `cellestra` binary makes Cellestra useful in scripts, CI, and build pipelines. It lives in `Cellestra.Cli/`, references only Core + `System.CommandLine`, and has **no Avalonia and no network**. Because it reuses the engine, `convert` shares the serializers, `eval` shares the formula engine, and `functions` reads the same `FunctionRegistry` as the app's autocomplete — so CLI output and GUI behaviour can't drift. Cell addressing matches the app (`Sheet1.B2`, ranges `Sheet1.A1:C10`; omit the sheet for the active/first one). No args, `-h`, or `--help` shows help.
 
 **Baseline (the genuinely useful core):**
 - `convert <in> <out>` — `.ods ⇄ CSV`, both directions (`--from/--to`, `--sheet`, `--delimiter`).

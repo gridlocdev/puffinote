@@ -205,17 +205,21 @@ The authoritative tree (build to match it):
 > `Workbook/` per this tree; only the namespace differs. IDE0130 (namespace/folder
 > match) is disabled in `.editorconfig` for this reason.
 
+The repository follows a **feature-folder** layout. The repo root holds only
+shared, feature-agnostic .NET tooling — `Directory.Build.props`,
+`Directory.Packages.props` (the §2.1 pins), `global.json` (SDK 10.0.x),
+`nuget.config`, `.editorconfig`, `.gitignore`, `LICENSE`, and `.devcontainer/`.
+These are discovered automatically by walking up from each project, so they apply
+to every feature. Everything specific to the spreadsheet editor lives under
+`features/EditSpreadsheets/`, which is the root of the tree below. Within it the
+projects are **flat sibling folders** (the `src/`/`tests/` headings are logical
+groupings, not physical directories).
+
 ```
-cellestra/
-├── Cellestra.sln
-├── Directory.Build.props          # shared build settings
-├── Directory.Packages.props       # EXACT version pins (see §2.1)
-├── global.json                    # pin the .NET SDK (10.0.x)
-├── nuget.config
-├── .editorconfig
-├── .gitignore
-├── LICENSE                        # MIT
+features/EditSpreadsheets/          # the spreadsheet-editor feature (the whole app today)
+├── Cellestra.slnx                  # the solution
 ├── README.md
+├── AGENTS.md
 │
 ├── src/
 │   ├── Cellestra.Core/                      # PURE .NET — no Avalonia

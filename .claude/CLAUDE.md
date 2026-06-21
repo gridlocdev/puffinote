@@ -1,1 +1,1 @@
-@AGENTS.md
+@features/EditSpreadsheets/AGENTS.md

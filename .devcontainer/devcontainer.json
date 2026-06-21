@@ -10,7 +10,7 @@
   // first `dotnet build` are fast. The desktop GUI itself can't run headlessly
   // (Avalonia.Native RenderTimer -6661 without a display link), so this targets
   // the build, the `cellestra` CLI, and the headless test suites.
-  "postCreateCommand": "dotnet restore",
+  "postCreateCommand": "dotnet restore features/EditSpreadsheets/Cellestra.slnx",
   "customizations": {
     "vscode": {
       "extensions": [
@@ -20,7 +20,7 @@
         "editorconfig.editorconfig"
       ],
       "settings": {
-        "dotnet.defaultSolution": "Cellestra.slnx"
+        "dotnet.defaultSolution": "features/EditSpreadsheets/Cellestra.slnx"
       }
     }
   },
