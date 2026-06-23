@@ -47,7 +47,7 @@ public class MainWindow : Window
         Content = root;
 
         _editorView.TextChanged += (_, _) => UpdateChrome();
-        _editorView.SelectionChanged += (_, _) => UpdateStatus();
+        _editorView.SelectionChanged += (_, _) => UpdateCaretStatus();
         Closing += OnClosing;
 
         UpdateChrome();
@@ -476,7 +476,8 @@ public class MainWindow : Window
     private void UpdateChrome()
     {
         UpdateTitle();
-        UpdateStatus();
+        UpdateDocumentStatus();
+        UpdateCaretStatus();
     }
 
     private void UpdateTitle()
@@ -485,14 +486,23 @@ public class MainWindow : Window
         Title = (_editorView.IsDirty ? "• " : string.Empty) + name + " — Typage";
     }
 
-    private void UpdateStatus()
+    /// <summary>Document-level status — recomputed only on text change (not on every caret move).</summary>
+    private void UpdateDocumentStatus()
+    {
+        var stats = _editorView.Stats; // cached; whole-document scan only on text change
+        _statusState.Text = _editorView.IsDirty ? "Modified" : "Saved";
+        _statusCounts.Text =
+            $"{stats.Words} words · {stats.Characters} chars · ~{stats.ReadingMinutes} min · {_format.DisplayName} · {stats.NewlineLabel}";
+    }
+
+    /// <summary>Caret/selection status — cheap, updated on every selection change.</summary>
+    private void UpdateCaretStatus()
     {
         var pos = _editorView.CaretPosition;
-        var stats = _editorView.Stats;
-        _statusState.Text = _editorView.IsDirty ? "Modified" : "Saved";
-        _statusPosition.Text = $"Ln {pos.DisplayLine}, Col {pos.DisplayColumn}";
-        _statusCounts.Text = $"{stats.Words} words · {stats.Characters} chars · ~{stats.ReadingMinutes} min";
-        UpdateTitle();
+        var selected = _editorView.SelectedCharacterCount;
+        _statusPosition.Text = selected > 0
+            ? $"Ln {pos.DisplayLine}, Col {pos.DisplayColumn}  ({selected} selected)"
+            : $"Ln {pos.DisplayLine}, Col {pos.DisplayColumn}";
     }
 
     private const string HelpText =

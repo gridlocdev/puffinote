@@ -85,6 +85,16 @@ public class MarkdownEditor : Avalonia.Controls.Control, ILogicalScrollable
     /// <summary>The caret position as a 1-based line:column for the status bar.</summary>
     public LinePosition CaretPosition => _buffer.Document.GetPosition(_buffer.Selection.Caret);
 
+    /// <summary>The number of grapheme clusters currently selected (0 when the selection is empty).</summary>
+    public int SelectedCharacterCount
+    {
+        get
+        {
+            var sel = _buffer.Selection;
+            return sel.IsEmpty ? 0 : Grapheme.Count(_buffer.Document.GetText(sel.Start, sel.Length));
+        }
+    }
+
     /// <summary>The editable model, exposed for the host (save/load/dirty) and tests.</summary>
     internal DocumentBuffer Buffer => _buffer;
 

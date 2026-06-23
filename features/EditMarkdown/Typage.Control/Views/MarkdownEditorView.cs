@@ -51,6 +51,9 @@ public class MarkdownEditorView : UserControl
 
     public LinePosition CaretPosition => _editor.CaretPosition;
 
+    /// <summary>Number of grapheme clusters currently selected (0 when empty).</summary>
+    public int SelectedCharacterCount => _editor.SelectedCharacterCount;
+
     public bool CanUndo => _editor.CanUndo;
 
     public bool CanRedo => _editor.CanRedo;
