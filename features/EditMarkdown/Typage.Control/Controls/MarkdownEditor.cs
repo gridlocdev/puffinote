@@ -28,6 +28,8 @@ public class MarkdownEditor : Avalonia.Controls.Control
     private MarkdownModel _model;
     private MarkdownTheme _theme = MarkdownTheme.Default;
     private IBrush _dimMarker = new SolidColorBrush(Color.FromArgb(0x55, 0xA0, 0xA6, 0xAE));
+    private double _contentWidth;
+    private bool _contentWidthDirty = true;
 
     public MarkdownEditor()
     {
@@ -36,6 +38,7 @@ public class MarkdownEditor : Avalonia.Controls.Control
         _buffer.TextChanged += (_, _) =>
         {
             _model = MarkdownModel.Build(_buffer.Document);
+            _contentWidthDirty = true;
             InvalidateMeasure();
             InvalidateVisual();
             TextChanged?.Invoke(this, EventArgs.Empty);
@@ -85,6 +88,7 @@ public class MarkdownEditor : Avalonia.Controls.Control
         set
         {
             _theme = value;
+            _contentWidthDirty = true;
             InvalidateMeasure();
             InvalidateVisual();
         }
@@ -145,8 +149,37 @@ public class MarkdownEditor : Avalonia.Controls.Control
 
     protected override Size MeasureOverride(Size availableSize)
     {
-        var width = double.IsFinite(availableSize.Width) ? availableSize.Width : 800;
+        if (_contentWidthDirty)
+        {
+            _contentWidth = ComputeContentWidth();
+            _contentWidthDirty = false;
+        }
+
+        // Report the widest line so a hosting ScrollViewer (which offers infinite width) can scroll
+        // horizontally; never shrink below the available viewport width. The pad keeps the caret at
+        // a line's end visible.
+        var minWidth = double.IsFinite(availableSize.Width) ? availableSize.Width : 0;
+        var width = Math.Max(minWidth, _contentWidth + 12);
         return new Size(width, Math.Max(_theme.LineHeight, _buffer.Document.LineCount * _theme.LineHeight));
+    }
+
+    private double ComputeContentWidth()
+    {
+        var doc = _buffer.Document;
+        var max = 0d;
+        for (var line = 0; line < doc.LineCount; line++)
+        {
+            var start = doc.GetLineStart(line);
+            var text = doc.GetText(start, doc.GetLineEnd(line) - start).TrimEnd('\r');
+            if (text.Length == 0)
+            {
+                continue;
+            }
+
+            max = Math.Max(max, ColumnX(line, text.Length, HeadingLevel(line), text, text.Length));
+        }
+
+        return max;
     }
 
     // ----- rendering -----
