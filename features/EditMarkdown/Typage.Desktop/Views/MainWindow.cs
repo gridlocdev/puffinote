@@ -84,6 +84,12 @@ public class MainWindow : Window
         var edit = new MenuItem { Header = "_Edit" };
         edit.Items.Add(Item("_Undo", () => _editorView.Undo(), "Ctrl+Z"));
         edit.Items.Add(Item("_Redo", () => _editorView.Redo(), "Ctrl+Y"));
+        edit.Items.Add(new Separator());
+        // The editor owns these shortcuts; show the gesture for discoverability without a second binding.
+        edit.Items.Add(EditorItem("Cu_t", "Ctrl+X", () => _ = _editorView.Editor.CutAsync()));
+        edit.Items.Add(EditorItem("_Copy", "Ctrl+C", () => _ = _editorView.Editor.CopyAsync()));
+        edit.Items.Add(EditorItem("_Paste", "Ctrl+V", () => _ = _editorView.Editor.PasteAsync()));
+        edit.Items.Add(EditorItem("Select _All", "Ctrl+A", () => _editorView.Editor.SelectAll()));
 
         var format = new MenuItem { Header = "F_ormat" };
         format.Items.Add(Item("_Bold", () => _editorView.Editor.ToggleBold(), "Ctrl+B"));
@@ -141,6 +147,15 @@ public class MainWindow : Window
             KeyBindings.Add(new KeyBinding { Gesture = kg, Command = command });
         }
 
+        return item;
+    }
+
+    /// <summary>A menu item whose shortcut is shown for discoverability but handled by the focused editor
+    /// (so it is not registered as a second window-level key binding).</summary>
+    private static MenuItem EditorItem(string header, string gesture, Action action)
+    {
+        var item = new MenuItem { Header = header, InputGesture = KeyGesture.Parse(gesture) };
+        item.Click += (_, _) => action();
         return item;
     }
 
