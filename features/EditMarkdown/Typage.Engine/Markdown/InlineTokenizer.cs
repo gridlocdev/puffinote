@@ -156,15 +156,16 @@ internal sealed class InlineTokenizer
                 if (urlClose > 0)
                 {
                     var altStart = i + 2;
-                    var urlStart = altClose + 2;
+                    var (urlStart, urlLen) = Destination(altClose + 2, urlClose);
                     FlushText(i);
                     Emit(i, 2, TokenType.Marker, TokenRole.Marker); // ![
                     var alt = _text.Substring(altStart, altClose - altStart);
                     Emit(altStart, altClose - altStart, TokenType.ImageAlt, TokenRole.Content, alt);
                     Emit(altClose, 2, TokenType.Marker, TokenRole.Marker); // ](
-                    var url = _text.Substring(urlStart, urlClose - urlStart);
-                    Emit(urlStart, urlClose - urlStart, TokenType.ImageUrl, TokenRole.Marker, url);
-                    Emit(urlClose, 1, TokenType.Marker, TokenRole.Marker); // )
+                    var url = _text.Substring(urlStart, urlLen);
+                    Emit(urlStart, urlLen, TokenType.ImageUrl, TokenRole.Marker, url);
+                    // Closing marker covers any title (e.g. "alt") plus the ')'.
+                    Emit(urlStart + urlLen, urlClose + 1 - (urlStart + urlLen), TokenType.Marker, TokenRole.Marker);
                     return urlClose + 1 - i;
                 }
             }
@@ -200,14 +201,15 @@ internal sealed class InlineTokenizer
             if (urlClose > 0)
             {
                 var textStart = i + 1;
-                var urlStart = textClose + 2;
+                var (urlStart, urlLen) = Destination(textClose + 2, urlClose);
                 FlushText(i);
                 Emit(i, 1, TokenType.Marker, TokenRole.Marker); // [
                 Tokenize(_text, _absStart, textStart, textClose, _out); // recurse into link text
                 Emit(textClose, 2, TokenType.Marker, TokenRole.Marker); // ](
-                var url = _text.Substring(urlStart, urlClose - urlStart);
-                Emit(urlStart, urlClose - urlStart, TokenType.LinkUrl, TokenRole.Marker, url);
-                Emit(urlClose, 1, TokenType.Marker, TokenRole.Marker); // )
+                var url = _text.Substring(urlStart, urlLen);
+                Emit(urlStart, urlLen, TokenType.LinkUrl, TokenRole.Marker, url);
+                // Closing marker covers any title (e.g. "title") plus the ')'.
+                Emit(urlStart + urlLen, urlClose + 1 - (urlStart + urlLen), TokenType.Marker, TokenRole.Marker);
                 return urlClose + 1 - i;
             }
         }
@@ -366,6 +368,29 @@ internal sealed class InlineTokenizer
     }
 
     // ----- scanning helpers -----
+
+    /// <summary>
+    /// The URL destination span inside a link/image's parentheses <c>[from, to)</c>: leading
+    /// whitespace is skipped and the destination ends at the first whitespace (an unbracketed
+    /// CommonMark destination can't contain spaces), so an optional <c>"title"</c> after it is
+    /// excluded from the URL rather than corrupting it.
+    /// </summary>
+    private (int Start, int Length) Destination(int from, int to)
+    {
+        var s = from;
+        while (s < to && char.IsWhiteSpace(_text[s]))
+        {
+            s++;
+        }
+
+        var e = s;
+        while (e < to && !char.IsWhiteSpace(_text[e]))
+        {
+            e++;
+        }
+
+        return (s, e - s);
+    }
 
     private int RunLength(int i, int to, char c)
     {

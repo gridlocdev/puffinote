@@ -70,6 +70,19 @@ public class InlineTokenizerTests
     }
 
     [Fact]
+    public void Link_WithTitle_ExcludesTitleFromUrl()
+    {
+        // The title must not leak into the destination (it would corrupt the href on export).
+        Assert.Equal(new[] { "http://y" }, TextsOfType("[x](http://y \"a title\")", TokenType.LinkUrl));
+    }
+
+    [Fact]
+    public void Image_WithTitle_ExcludesTitleFromUrl()
+    {
+        Assert.Equal(new[] { "pic.png" }, TextsOfType("![alt](pic.png 'caption')", TokenType.ImageUrl));
+    }
+
+    [Fact]
     public void Autolink_Bracketed()
     {
         Assert.Equal(new[] { "https://x.com" }, TextsOfType("<https://x.com>", TokenType.Autolink));
