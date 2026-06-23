@@ -52,6 +52,32 @@ public class HtmlRendererTests
     }
 
     [Fact]
+    public void OrderedList_PreservesStartNumber()
+    {
+        Assert.Contains("<ol start=\"3\">", Body("3. three\n4. four"));
+    }
+
+    [Fact]
+    public void NestedList_Nests()
+    {
+        var html = Body("- a\n  - b\n  - c\n- d");
+        // The nested <ul> opens inside the first item, before that item closes.
+        var firstItem = html.IndexOf("<li>a", StringComparison.Ordinal);
+        var nested = html.IndexOf("<ul>", firstItem, StringComparison.Ordinal);
+        var firstClose = html.IndexOf("</li>", firstItem, StringComparison.Ordinal);
+        Assert.True(nested > firstItem && nested < firstClose);
+        Assert.Contains("<li>b</li>", html);
+        Assert.Contains("<li>d</li>", html);
+    }
+
+    [Fact]
+    public void LooseList_StaysOneListAcrossBlankLine()
+    {
+        var html = Body("1. one\n\n2. two");
+        Assert.Single(System.Text.RegularExpressions.Regex.Matches(html, "<ol"));
+    }
+
+    [Fact]
     public void TaskList_RendersCheckboxes()
     {
         var html = Body("- [ ] todo\n- [x] done");

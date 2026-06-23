@@ -1,3 +1,4 @@
+using System.Linq;
 using System.Text;
 using Typage.Engine.Document;
 using Typage.Engine.Markdown;
@@ -165,13 +166,63 @@ public static class HtmlRenderer
     }
 
     private static int RenderList(TextDocument doc, MarkdownModel model, int line, StringBuilder sb)
+        => RenderListLevel(doc, model, line, ListIndent(doc, model, line), sb);
+
+    /// <summary>
+    /// Render one list level: items at <paramref name="levelIndent"/> are siblings, a deeper-indented
+    /// run becomes a nested list inside the preceding item, and a shallower item returns to the caller.
+    /// A single blank line between items keeps them in the same list (so ordered numbering continues).
+    /// </summary>
+    private static int RenderListLevel(TextDocument doc, MarkdownModel model, int line, int levelIndent, StringBuilder sb)
     {
         var n = doc.LineCount;
         var ordered = IsOrdered(doc, model, line);
-        sb.Append(ordered ? "<ol>\n" : "<ul>\n");
-        var i = line;
-        while (i < n && FirstToken(model, i) is { Type: TokenType.ListMarker })
+        var start = ordered ? StartNumber(doc, model, line) : 1;
+        sb.Append(ordered ? "<ol" : "<ul");
+        if (ordered && start != 1)
         {
+            sb.Append(" start=\"").Append(start).Append('"');
+        }
+
+        sb.Append(">\n");
+
+        var i = line;
+        while (i < n)
+        {
+            if (IsBlank(doc, i))
+            {
+                // Skip a run of blank lines if a list item at this level or deeper follows (loose list).
+                var j = i;
+                while (j < n && IsBlank(doc, j))
+                {
+                    j++;
+                }
+
+                if (j < n && IsListLine(model, j) && ListIndent(doc, model, j) >= levelIndent)
+                {
+                    i = j;
+                    continue;
+                }
+
+                break;
+            }
+
+            if (!IsListLine(model, i))
+            {
+                break;
+            }
+
+            var indent = ListIndent(doc, model, i);
+            if (indent < levelIndent)
+            {
+                break; // belongs to an outer list
+            }
+
+            if (indent > levelIndent)
+            {
+                break; // safety: a deeper item with no preceding sibling — let the caller handle it
+            }
+
             var tokens = model.LineTokens(i);
             var hasTask = tokens.Count > 1 && tokens[1].Type == TokenType.TaskMarker;
             if (hasTask)
@@ -187,12 +238,42 @@ public static class HtmlRenderer
             }
 
             RenderInline(doc, tokens, sb);
-            sb.Append("</li>\n");
             i++;
+
+            // A deeper-indented run immediately below is a nested list inside this item.
+            if (i < n && IsListLine(model, i) && ListIndent(doc, model, i) > levelIndent)
+            {
+                sb.Append('\n');
+                i = RenderListLevel(doc, model, i, ListIndent(doc, model, i), sb);
+            }
+
+            sb.Append("</li>\n");
         }
 
         sb.Append(ordered ? "</ol>\n" : "</ul>\n");
         return i;
+    }
+
+    private static bool IsListLine(MarkdownModel model, int line) =>
+        FirstToken(model, line) is { Type: TokenType.ListMarker };
+
+    private static int ListIndent(TextDocument doc, MarkdownModel model, int line)
+    {
+        var first = FirstToken(model, line);
+        return first is null ? 0 : first.Value.Start - doc.GetLineStart(line);
+    }
+
+    private static int StartNumber(TextDocument doc, MarkdownModel model, int line)
+    {
+        var first = FirstToken(model, line);
+        if (first is null)
+        {
+            return 1;
+        }
+
+        var marker = doc.GetText(first.Value.Start, first.Value.Length);
+        var digits = new string(marker.TakeWhile(char.IsAsciiDigit).ToArray());
+        return int.TryParse(digits, out var value) ? value : 1;
     }
 
     private static int RenderTable(TextDocument doc, MarkdownModel model, int line, StringBuilder sb)
