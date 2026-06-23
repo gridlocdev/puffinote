@@ -27,6 +27,7 @@ public class MainWindow : Window
     private string? _currentPath;
     private TextFileFormat _format = TextFileFormat.Utf8NoBom;
     private readonly MenuItem _recentMenu = new() { Header = "Open _Recent" };
+    private Border? _toolbar;
 
     private static readonly FilePickerFileType MarkdownType = new("Markdown")
     {
@@ -42,7 +43,9 @@ public class MainWindow : Window
 
         var root = new DockPanel();
         root.Children.Add(BuildMenu());
-        root.Children.Add(BuildToolbar());
+        _toolbar = BuildToolbar();
+        _toolbar.IsVisible = _settings.Settings.ShowToolbar; // restore the persisted toolbar visibility
+        root.Children.Add(_toolbar);
         root.Children.Add(BuildStatusBar());
         root.Children.Add(_editorView);
         Content = root;
@@ -90,6 +93,26 @@ public class MainWindow : Window
             format.Items.Add(Item($"Heading {l}", () => _editorView.Editor.ApplyHeading(l), $"Ctrl+{l}"));
         }
 
+        var view = new MenuItem { Header = "_View" };
+        var toggleToolbar = new MenuItem
+        {
+            Header = "Show _Toolbar",
+            ToggleType = MenuItemToggleType.CheckBox,
+            IsChecked = _settings.Settings.ShowToolbar,
+        };
+        toggleToolbar.Click += (_, _) =>
+        {
+            var show = toggleToolbar.IsChecked;
+            _settings.Settings.ShowToolbar = show;
+            if (_toolbar is not null)
+            {
+                _toolbar.IsVisible = show;
+            }
+
+            _settings.Save();
+        };
+        view.Items.Add(toggleToolbar);
+
         var help = new MenuItem { Header = "_Help" };
         help.Items.Add(Item("Markdown _Reference", ShowHelp));
 
@@ -97,6 +120,7 @@ public class MainWindow : Window
         menu.Items.Add(file);
         menu.Items.Add(edit);
         menu.Items.Add(format);
+        menu.Items.Add(view);
         menu.Items.Add(help);
         DockPanel.SetDock(menu, Dock.Top);
         return menu;
