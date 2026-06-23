@@ -1,5 +1,6 @@
 using Avalonia;
 using Avalonia.Controls.ApplicationLifetimes;
+using Avalonia.Styling;
 using Avalonia.Themes.Fluent;
 using Typage.Desktop.Services;
 using Typage.Desktop.Views;
@@ -15,6 +16,7 @@ public class App : Application
     public override void Initialize()
     {
         Styles.Add(new FluentTheme());
+        RequestedThemeVariant = ThemeVariant.Dark; // a dark shell to sit alongside the dark editor
     }
 
     public override void OnFrameworkInitializationCompleted()

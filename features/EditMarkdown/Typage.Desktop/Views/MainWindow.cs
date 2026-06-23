@@ -29,6 +29,10 @@ public class MainWindow : Window
     private readonly MenuItem _recentMenu = new() { Header = "Open _Recent" };
     private Border? _toolbar;
 
+    private static readonly IBrush ChromeBackground = new SolidColorBrush(Color.FromRgb(0x25, 0x25, 0x26));
+    private static readonly IBrush ChromeBorder = new SolidColorBrush(Color.FromRgb(0x33, 0x33, 0x36));
+    private static readonly IBrush MutedText = new SolidColorBrush(Color.FromRgb(0x9A, 0x9E, 0xA6));
+
     private static readonly FilePickerFileType MarkdownType = new("Markdown")
     {
         Patterns = new[] { "*.md", "*.markdown", "*.mdown", "*.txt" },
@@ -142,7 +146,7 @@ public class MainWindow : Window
 
     private Border BuildToolbar()
     {
-        var panel = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 4, Margin = new Avalonia.Thickness(6, 3) };
+        var panel = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 2, Margin = new Avalonia.Thickness(8, 5) };
         panel.Children.Add(ToolButton("B", "Bold", () => _editorView.Editor.ToggleBold(), bold: true));
         panel.Children.Add(ToolButton("I", "Italic", () => _editorView.Editor.ToggleItalic(), italic: true));
         panel.Children.Add(ToolButton("</>", "Inline code", () => _editorView.Editor.ToggleInlineCode()));
@@ -151,8 +155,9 @@ public class MainWindow : Window
         var border = new Border
         {
             Child = panel,
+            Background = ChromeBackground,
             BorderThickness = new Avalonia.Thickness(0, 0, 0, 1),
-            BorderBrush = new SolidColorBrush(Color.FromRgb(0xE0, 0xE0, 0xE0)),
+            BorderBrush = ChromeBorder,
         };
         DockPanel.SetDock(border, Dock.Top);
         return border;
@@ -163,7 +168,10 @@ public class MainWindow : Window
         var button = new Button
         {
             Content = label,
-            Padding = new Avalonia.Thickness(8, 2),
+            Padding = new Avalonia.Thickness(9, 3),
+            Background = Brushes.Transparent,
+            BorderThickness = new Avalonia.Thickness(0),
+            CornerRadius = new Avalonia.CornerRadius(5),
             FontWeight = bold ? FontWeight.Bold : FontWeight.Normal,
             FontStyle = italic ? FontStyle.Italic : FontStyle.Normal,
             Command = new RelayCommand(action),
@@ -174,16 +182,33 @@ public class MainWindow : Window
 
     private Border BuildStatusBar()
     {
-        var panel = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 18, Margin = new Avalonia.Thickness(8, 3) };
-        panel.Children.Add(_statusState);
-        panel.Children.Add(_statusPosition);
-        panel.Children.Add(_statusCounts);
+        foreach (var block in new[] { _statusState, _statusPosition, _statusCounts })
+        {
+            block.Foreground = MutedText;
+            block.FontSize = 12;
+            block.VerticalAlignment = VerticalAlignment.Center;
+        }
+
+        // State on the left; counts/encoding pushed to the right (like Cellestra's status bar).
+        _statusCounts.HorizontalAlignment = HorizontalAlignment.Right;
+        var grid = new Grid
+        {
+            Margin = new Avalonia.Thickness(12, 4),
+            ColumnDefinitions = new ColumnDefinitions("Auto,16,Auto,*,Auto"),
+        };
+        Grid.SetColumn(_statusState, 0);
+        Grid.SetColumn(_statusPosition, 2);
+        Grid.SetColumn(_statusCounts, 4);
+        grid.Children.Add(_statusState);
+        grid.Children.Add(_statusPosition);
+        grid.Children.Add(_statusCounts);
+
         var border = new Border
         {
-            Child = panel,
+            Child = grid,
             BorderThickness = new Avalonia.Thickness(0, 1, 0, 0),
-            BorderBrush = new SolidColorBrush(Color.FromRgb(0xE0, 0xE0, 0xE0)),
-            Background = new SolidColorBrush(Color.FromRgb(0xFA, 0xFA, 0xFA)),
+            BorderBrush = ChromeBorder,
+            Background = ChromeBackground,
         };
         DockPanel.SetDock(border, Dock.Bottom);
         return border;

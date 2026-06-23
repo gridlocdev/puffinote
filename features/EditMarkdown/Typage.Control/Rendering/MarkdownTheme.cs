@@ -11,8 +11,9 @@ public readonly record struct RunStyle(
 /// <summary>
 /// Maps semantic token types to visual treatments (PRD §10.1 — the presentation-side seam that
 /// lets the notes app re-theme without touching the engine). The engine stays styling-free; all
-/// fonts and colors live here. This is a light/default theme; dark and high-contrast variants
-/// would subclass or parameterize it (PRD §7.2).
+/// fonts and colors live here. This is the default dark theme (tuned to sit alongside the
+/// Cellestra-style chrome); light and high-contrast variants would parameterize these init
+/// properties (PRD §7.2).
 /// </summary>
 public class MarkdownTheme
 {
@@ -22,23 +23,30 @@ public class MarkdownTheme
 
     public double LineHeight { get; init; } = 30;
 
-    public IBrush Foreground { get; init; } = new SolidColorBrush(Color.FromRgb(0x24, 0x29, 0x2E));
+    /// <summary>Left inset of the text column from the editor edge (PRD §7.5 — breathing room).</summary>
+    public double PaddingLeft { get; init; } = 20;
 
-    public IBrush MarkerForeground { get; init; } = new SolidColorBrush(Color.FromRgb(0xA0, 0xA6, 0xAE));
+    /// <summary>Top inset of the first line from the editor edge.</summary>
+    public double PaddingTop { get; init; } = 14;
 
-    public IBrush LinkForeground { get; init; } = new SolidColorBrush(Color.FromRgb(0x1A, 0x6F, 0xD4));
+    // Dark palette, tuned to sit alongside the Cellestra chrome.
+    public IBrush Foreground { get; init; } = new SolidColorBrush(Color.FromRgb(0xD4, 0xD7, 0xDC));
 
-    public IBrush CodeForeground { get; init; } = new SolidColorBrush(Color.FromRgb(0x9A, 0x34, 0x12));
+    public IBrush MarkerForeground { get; init; } = new SolidColorBrush(Color.FromRgb(0x6E, 0x76, 0x81));
 
-    public IBrush CodeBackground { get; init; } = new SolidColorBrush(Color.FromArgb(0x20, 0x80, 0x80, 0x80));
+    public IBrush LinkForeground { get; init; } = new SolidColorBrush(Color.FromRgb(0x57, 0x9D, 0xF6));
 
-    public IBrush HighlightBackground { get; init; } = new SolidColorBrush(Color.FromRgb(0xFD, 0xF6, 0xB2));
+    public IBrush CodeForeground { get; init; } = new SolidColorBrush(Color.FromRgb(0xCE, 0x91, 0x78));
 
-    public IBrush Caret { get; init; } = new SolidColorBrush(Color.FromRgb(0x1A, 0x6F, 0xD4));
+    public IBrush CodeBackground { get; init; } = new SolidColorBrush(Color.FromArgb(0x33, 0x6E, 0x76, 0x81));
 
-    public IBrush SelectionBackground { get; init; } = new SolidColorBrush(Color.FromArgb(0x40, 0x1A, 0x6F, 0xD4));
+    public IBrush HighlightBackground { get; init; } = new SolidColorBrush(Color.FromArgb(0x55, 0xD2, 0xA8, 0x06));
 
-    public IBrush Background { get; init; } = Brushes.White;
+    public IBrush Caret { get; init; } = new SolidColorBrush(Color.FromRgb(0x57, 0x9D, 0xF6));
+
+    public IBrush SelectionBackground { get; init; } = new SolidColorBrush(Color.FromArgb(0x55, 0x2F, 0x68, 0xC4));
+
+    public IBrush Background { get; init; } = new SolidColorBrush(Color.FromRgb(0x1E, 0x1E, 0x1E));
 
     private readonly FontFamily _body = FontFamily.Default;
     private readonly FontFamily _mono = new("Cascadia Code,Consolas,Menlo,monospace");

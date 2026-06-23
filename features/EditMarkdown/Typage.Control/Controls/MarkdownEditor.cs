@@ -29,7 +29,7 @@ public class MarkdownEditor : Avalonia.Controls.Control, ILogicalScrollable
     private readonly DocumentBuffer _buffer = new();
     private MarkdownModel _model;
     private MarkdownTheme _theme = MarkdownTheme.Default;
-    private IBrush _dimMarker = new SolidColorBrush(Color.FromArgb(0x55, 0xA0, 0xA6, 0xAE));
+    private IBrush _dimMarker = new SolidColorBrush(Color.FromArgb(0x46, 0x6E, 0x76, 0x81));
 
     // Virtualized logical-scroll state: only the lines inside the viewport are drawn, and the
     // horizontal extent grows as wide lines are encountered (no whole-document width scan).
@@ -192,8 +192,8 @@ public class MarkdownEditor : Avalonia.Controls.Control, ILogicalScrollable
     }
 
     Size IScrollable.Extent => new(
-        Math.Max(_extentWidth + 12, _viewport.Width),
-        Math.Max(_theme.LineHeight, _buffer.Document.LineCount * _theme.LineHeight));
+        Math.Max(_theme.PaddingLeft * 2 + _extentWidth, _viewport.Width),
+        Math.Max(_theme.LineHeight, _buffer.Document.LineCount * _theme.LineHeight) + _theme.PaddingTop * 2);
 
     Size IScrollable.Viewport => _viewport;
 
@@ -267,10 +267,12 @@ public class MarkdownEditor : Avalonia.Controls.Control, ILogicalScrollable
         // offset. The viewport height is 0 until the control is arranged in a scroll viewer.
         var lineH = _theme.LineHeight;
         var viewportH = _viewport.Height > 0 ? _viewport.Height : Bounds.Height;
-        var first = Math.Max(0, (int)(_offset.Y / lineH));
-        var last = Math.Min(doc.LineCount, (int)((_offset.Y + viewportH) / lineH) + 1);
+        var contentTop = _offset.Y - _theme.PaddingTop;
+        var first = Math.Max(0, (int)(contentTop / lineH));
+        var last = Math.Min(doc.LineCount, (int)((contentTop + viewportH) / lineH) + 1);
 
-        using (context.PushTransform(Matrix.CreateTranslation(-_offset.X, -_offset.Y)))
+        // Content is drawn in document space, inset by the padding and shifted by the scroll offset.
+        using (context.PushTransform(Matrix.CreateTranslation(_theme.PaddingLeft - _offset.X, _theme.PaddingTop - _offset.Y)))
         {
             var maxWidth = _extentWidth;
             for (var line = first; line < last; line++)
@@ -430,9 +432,9 @@ public class MarkdownEditor : Avalonia.Controls.Control, ILogicalScrollable
     {
         Focus();
         var point = e.GetPosition(this);
-        // The viewport is translated by the scroll offset, so map back to content coordinates.
-        var contentY = point.Y + _offset.Y;
-        var contentX = point.X + _offset.X;
+        // The viewport is inset by the padding and translated by the scroll offset; map back.
+        var contentY = point.Y - _theme.PaddingTop + _offset.Y;
+        var contentX = point.X - _theme.PaddingLeft + _offset.X;
         var line = Math.Clamp((int)(contentY / _theme.LineHeight), 0, _buffer.Document.LineCount - 1);
         var offset = OffsetAt(line, contentX);
         var extend = e.KeyModifiers.HasFlag(KeyModifiers.Shift);
@@ -454,29 +456,31 @@ public class MarkdownEditor : Avalonia.Controls.Control, ILogicalScrollable
         var lineStart = doc.GetLineStart(pos.Line);
         var text = doc.GetText(lineStart, doc.GetLineEnd(pos.Line) - lineStart).TrimEnd('\r');
         var x = ColumnX(pos.Line, text.Length, HeadingLevel(pos.Line), text, Math.Min(pos.Column, text.Length));
-        var y = pos.Line * _theme.LineHeight;
+        _extentWidth = Math.Max(_extentWidth, x + 12); // ensure we can scroll to a caret on a wide line
 
-        const double pad = 12;
-        _extentWidth = Math.Max(_extentWidth, x + pad); // ensure we can scroll to a caret on a wide line
+        // Caret position in scroll-content space (which includes the padding).
+        var px = x + _theme.PaddingLeft;
+        var py = pos.Line * _theme.LineHeight + _theme.PaddingTop;
+        const double margin = 8;
 
         var newY = _offset.Y;
-        if (y < _offset.Y)
+        if (py < _offset.Y)
         {
-            newY = y;
+            newY = py;
         }
-        else if (y + _theme.LineHeight > _offset.Y + _viewport.Height)
+        else if (py + _theme.LineHeight > _offset.Y + _viewport.Height)
         {
-            newY = y + _theme.LineHeight - _viewport.Height;
+            newY = py + _theme.LineHeight - _viewport.Height;
         }
 
         var newX = _offset.X;
-        if (x < _offset.X)
+        if (px < _offset.X + margin)
         {
-            newX = Math.Max(0, x - pad);
+            newX = Math.Max(0, px - margin);
         }
-        else if (x + pad > _offset.X + _viewport.Width)
+        else if (px + margin > _offset.X + _viewport.Width)
         {
-            newX = x + pad - _viewport.Width;
+            newX = px + margin - _viewport.Width;
         }
 
         var target = ClampOffset(new Vector(newX, newY));
