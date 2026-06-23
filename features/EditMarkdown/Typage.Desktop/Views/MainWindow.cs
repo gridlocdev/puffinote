@@ -26,6 +26,7 @@ public class MainWindow : Window
     private readonly TextBlock _statusState = new();
     private string? _currentPath;
     private TextFileFormat _format = TextFileFormat.Utf8NoBom;
+    private readonly MenuItem _recentMenu = new() { Header = "Open _Recent" };
 
     private static readonly FilePickerFileType MarkdownType = new("Markdown")
     {
@@ -50,6 +51,7 @@ public class MainWindow : Window
         _editorView.SelectionChanged += (_, _) => UpdateCaretStatus();
         Closing += OnClosing;
 
+        RefreshRecentMenu();
         UpdateChrome();
     }
 
@@ -63,6 +65,7 @@ public class MainWindow : Window
         var file = new MenuItem { Header = "_File" };
         file.Items.Add(Item("_New", () => _ = NewDocumentAsync(), "Ctrl+N"));
         file.Items.Add(Item("_Open…", () => _ = OpenAsync(), "Ctrl+O"));
+        file.Items.Add(_recentMenu);
         file.Items.Add(Item("_Save", () => _ = SaveAsync(), "Ctrl+S"));
         file.Items.Add(Item("Save _As…", () => _ = SaveAsAsync(), "Ctrl+Shift+S"));
         file.Items.Add(Item("_Revert to Saved", () => _ = RevertAsync()));
@@ -174,6 +177,7 @@ public class MainWindow : Window
             _currentPath = path;
             _settings.Settings.PushRecent(path);
             _settings.Save();
+            RefreshRecentMenu();
             UpdateChrome();
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
@@ -181,6 +185,42 @@ public class MainWindow : Window
             // Heuristic 9: state the OS reason; a real dialog would offer a recovery action.
             _statusState.Text = $"Could not open: {ex.Message}";
         }
+    }
+
+    /// <summary>Rebuild the File ▸ Open Recent submenu from the persisted MRU list (heuristic 7).</summary>
+    private void RefreshRecentMenu()
+    {
+        _recentMenu.Items.Clear();
+        var recent = _settings.Settings.RecentFiles;
+        if (recent.Count == 0)
+        {
+            _recentMenu.Items.Add(new MenuItem { Header = "(no recent files)", IsEnabled = false });
+            return;
+        }
+
+        foreach (var entry in recent)
+        {
+            var path = entry;
+            _recentMenu.Items.Add(new MenuItem { Header = path, Command = new RelayCommand(() => _ = OpenRecentAsync(path)) });
+        }
+
+        _recentMenu.Items.Add(new Separator());
+        _recentMenu.Items.Add(new MenuItem { Header = "_Clear Recent", Command = new RelayCommand(ClearRecent) });
+    }
+
+    private async Task OpenRecentAsync(string path)
+    {
+        if (await EnsureCanDiscardAsync())
+        {
+            OpenPath(path);
+        }
+    }
+
+    private void ClearRecent()
+    {
+        _settings.Settings.RecentFiles.Clear();
+        _settings.Save();
+        RefreshRecentMenu();
     }
 
     private async Task NewDocumentAsync()
@@ -243,6 +283,7 @@ public class MainWindow : Window
                 _currentPath = path;
                 _settings.Settings.PushRecent(path);
                 _settings.Save();
+                RefreshRecentMenu();
                 UpdateChrome();
                 return true;
             }
