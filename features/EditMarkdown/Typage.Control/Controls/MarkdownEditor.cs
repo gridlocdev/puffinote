@@ -1,7 +1,9 @@
 using System.Globalization;
 using Avalonia;
+using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Media;
+using Avalonia.VisualTree;
 using Typage.Control.Rendering;
 using Typage.Engine.Document;
 using Typage.Engine.Editing;
@@ -46,6 +48,7 @@ public class MarkdownEditor : Avalonia.Controls.Control
         _buffer.Changed += (_, _) =>
         {
             InvalidateVisual();
+            ScrollCaretIntoView();
             SelectionChanged?.Invoke(this, EventArgs.Empty);
         };
         GotFocus += (_, _) => InvalidateVisual();
@@ -349,6 +352,50 @@ public class MarkdownEditor : Avalonia.Controls.Control
         MoveCaret(offset, extend);
         e.Handled = true;
         base.OnPointerPressed(e);
+    }
+
+    /// <summary>Scroll the hosting viewport so the caret stays visible after an edit or navigation.</summary>
+    private void ScrollCaretIntoView()
+    {
+        if (this.FindAncestorOfType<ScrollViewer>() is not { } scroller)
+        {
+            return; // not hosted in a scroll viewer (e.g. headless construction) — nothing to scroll
+        }
+
+        var doc = _buffer.Document;
+        var pos = doc.GetPosition(_buffer.Selection.Caret);
+        var lineStart = doc.GetLineStart(pos.Line);
+        var text = doc.GetText(lineStart, doc.GetLineEnd(pos.Line) - lineStart).TrimEnd('\r');
+        var x = ColumnX(pos.Line, text.Length, HeadingLevel(pos.Line), text, Math.Min(pos.Column, text.Length));
+        var y = pos.Line * _theme.LineHeight;
+
+        var offset = scroller.Offset;
+        var viewport = scroller.Viewport;
+        var newY = offset.Y;
+        if (y < offset.Y)
+        {
+            newY = y;
+        }
+        else if (y + _theme.LineHeight > offset.Y + viewport.Height)
+        {
+            newY = y + _theme.LineHeight - viewport.Height;
+        }
+
+        var newX = offset.X;
+        const double pad = 12;
+        if (x < offset.X)
+        {
+            newX = Math.Max(0, x - pad);
+        }
+        else if (x + pad > offset.X + viewport.Width)
+        {
+            newX = x + pad - viewport.Width;
+        }
+
+        if (newX != offset.X || newY != offset.Y)
+        {
+            scroller.Offset = new Vector(Math.Max(0, newX), Math.Max(0, newY));
+        }
     }
 
     private void MoveCaret(int newCaret, bool extend)
