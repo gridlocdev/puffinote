@@ -6,6 +6,7 @@ using Avalonia.Media;
 using Avalonia.Platform.Storage;
 using Typage.Control.Views;
 using Typage.Desktop.Services;
+using Typage.Engine.Document;
 using Typage.Engine.Html;
 
 namespace Typage.Desktop.Views;
@@ -24,6 +25,7 @@ public class MainWindow : Window
     private readonly TextBlock _statusCounts = new();
     private readonly TextBlock _statusState = new();
     private string? _currentPath;
+    private TextFileFormat _format = TextFileFormat.Utf8NoBom;
 
     private static readonly FilePickerFileType MarkdownType = new("Markdown")
     {
@@ -166,7 +168,8 @@ public class MainWindow : Window
     {
         try
         {
-            var text = File.ReadAllText(path);
+            var (text, format) = TextFileCodec.Decode(File.ReadAllBytes(path));
+            _format = format; // remember the encoding/BOM so a save round-trips it
             _editorView.LoadText(text);
             _currentPath = path;
             _settings.Settings.PushRecent(path);
@@ -189,6 +192,7 @@ public class MainWindow : Window
 
         _editorView.LoadText(string.Empty);
         _currentPath = null;
+        _format = TextFileFormat.Utf8NoBom; // new documents default to UTF-8 (no BOM)
         UpdateChrome();
     }
 
@@ -251,7 +255,7 @@ public class MainWindow : Window
     {
         try
         {
-            AtomicWrite(path, _editorView.Text);
+            AtomicWrite(path, TextFileCodec.Encode(_editorView.Text, _format));
             _editorView.MarkSaved();
             UpdateChrome();
             return true;
@@ -292,7 +296,7 @@ public class MainWindow : Window
             var html = HtmlRenderer.RenderDocument(Engine.Document.TextDocument.FromString(_editorView.Text), title);
             try
             {
-                AtomicWrite(path, html);
+                AtomicWrite(path, new UTF8Encoding(false).GetBytes(html)); // HTML export is always UTF-8
             }
             catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
             {
@@ -301,14 +305,14 @@ public class MainWindow : Window
         }
     }
 
-    private static void AtomicWrite(string path, string content)
+    private static void AtomicWrite(string path, byte[] content)
     {
         var full = Path.GetFullPath(path);
         var dir = Path.GetDirectoryName(full) ?? ".";
         var temp = Path.Combine(dir, $".{Path.GetFileName(full)}.{Guid.NewGuid():N}.tmp");
         try
         {
-            File.WriteAllText(temp, content, new UTF8Encoding(false));
+            File.WriteAllBytes(temp, content);
             File.Move(temp, full, overwrite: true); // atomic on the same volume (PRD §7.1)
         }
         catch
