@@ -352,16 +352,13 @@ public class MarkdownEditor : Avalonia.Controls.Control, ILogicalScrollable
 
         context.DrawText(ft, new Point(x, y));
 
-        // Caret X if it falls within this run.
+        // Caret X if it falls within this run (measured with trailing whitespace included).
         if (caretCol >= from && caretCol <= to && double.IsNaN(caretX))
         {
-            var prefix = lineText.Substring(from, caretCol - from);
-            var pft = new FormattedText(prefix, CultureInfo.CurrentCulture, FlowDirection.LeftToRight,
-                style.Typeface, style.FontSize, brush);
-            caretX = x + pft.Width;
+            caretX = x + MeasureWidth(lineText.Substring(from, caretCol - from), style);
         }
 
-        return ft.Width;
+        return MeasureWidth(text, style); // advance includes trailing whitespace, unlike ft.Width
     }
 
     private void DrawSelection(DrawingContext context, int line, int lineStart, int contentLen, Selection sel, string lineText)
@@ -600,6 +597,13 @@ public class MarkdownEditor : Avalonia.Controls.Control, ILogicalScrollable
         return x;
     }
 
+    /// <summary>
+    /// The advance width of <paramref name="text"/> in <paramref name="style"/>, <b>including any
+    /// trailing whitespace</b>. <see cref="FormattedText.Width"/> omits trailing whitespace, which
+    /// made a run ending in a space (e.g. a heading marker <c>"## "</c> or a word before emphasis)
+    /// advance too little so the next run drew on top of the space — the missing-space bug. Appending
+    /// a non-space sentinel makes those spaces interior (and thus measured) and is then subtracted out.
+    /// </summary>
     private double MeasureWidth(string text, RunStyle style)
     {
         if (text.Length == 0)
@@ -607,9 +611,17 @@ public class MarkdownEditor : Avalonia.Controls.Control, ILogicalScrollable
             return 0;
         }
 
-        return new FormattedText(text, CultureInfo.CurrentCulture, FlowDirection.LeftToRight,
-            style.Typeface, style.FontSize, style.Foreground).Width;
+        if (char.IsWhiteSpace(text[^1]))
+        {
+            return RawWidth(text + ".", style) - RawWidth(".", style);
+        }
+
+        return RawWidth(text, style);
     }
+
+    private static double RawWidth(string text, RunStyle style) =>
+        new FormattedText(text, CultureInfo.CurrentCulture, FlowDirection.LeftToRight,
+            style.Typeface, style.FontSize, style.Foreground).Width;
 
     private int OffsetAt(int line, double x)
     {
