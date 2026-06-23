@@ -65,8 +65,8 @@ public class MarkdownEditor : Avalonia.Controls.Control
     /// <summary>True when the buffer differs from the last-saved snapshot.</summary>
     public bool IsDirty => _buffer.IsDirty;
 
-    /// <summary>Live document statistics for the host's status bar.</summary>
-    public DocumentStats Stats => DocumentStats.Compute(_buffer.Document);
+    /// <summary>Live document statistics for the host's status bar (cached; recomputed on text change only).</summary>
+    public DocumentStats Stats => _buffer.Stats;
 
     /// <summary>The caret position as a 1-based line:column for the status bar.</summary>
     public LinePosition CaretPosition => _buffer.Document.GetPosition(_buffer.Selection.Caret);

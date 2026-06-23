@@ -14,6 +14,7 @@ public sealed class DocumentBuffer
     private readonly EditHistory _history = new();
     private TextDocument _document;
     private Selection _selection;
+    private DocumentStats? _stats;
 
     public DocumentBuffer(string? text = null)
     {
@@ -168,11 +169,57 @@ public sealed class DocumentBuffer
     /// <summary>Mark the current snapshot as the saved baseline (after a successful save).</summary>
     public void MarkSaved() => SavedDocument = _document;
 
-    /// <summary>The caret-legal offset one grapheme after <paramref name="offset"/>.</summary>
-    public int NextCaret(int offset) => Grapheme.NextBoundary(_document.GetText(), offset);
+    /// <summary>
+    /// The caret-legal offset one grapheme after <paramref name="offset"/>. Operates on the
+    /// containing line's text (including its trailing newline) rather than materializing the whole
+    /// document, so a caret move is O(line), not O(document). The window includes the <c>\n</c> so
+    /// <c>\r\n</c> is still treated as one grapheme when crossing a line boundary.
+    /// </summary>
+    public int NextCaret(int offset)
+    {
+        offset = Math.Clamp(offset, 0, _document.Length);
+        if (offset >= _document.Length)
+        {
+            return _document.Length;
+        }
 
-    /// <summary>The caret-legal offset one grapheme before <paramref name="offset"/>.</summary>
-    public int PreviousCaret(int offset) => Grapheme.PreviousBoundary(_document.GetText(), offset);
+        var line = _document.GetPosition(offset).Line;
+        var start = _document.GetLineStart(line);
+        var end = line + 1 < _document.LineCount ? _document.GetLineStart(line + 1) : _document.Length;
+        var window = _document.GetText(start, end - start);
+        return start + Grapheme.NextBoundary(window, offset - start);
+    }
+
+    /// <summary>The caret-legal offset one grapheme before <paramref name="offset"/> (O(line), see <see cref="NextCaret"/>).</summary>
+    public int PreviousCaret(int offset)
+    {
+        offset = Math.Clamp(offset, 0, _document.Length);
+        if (offset <= 0)
+        {
+            return 0;
+        }
+
+        var line = _document.GetPosition(offset).Line;
+        var start = _document.GetLineStart(line);
+        if (offset == start)
+        {
+            // At a line start, step back over the previous line's newline (kept whole for \r\n).
+            var prevStart = _document.GetLineStart(line - 1);
+            var prevWindow = _document.GetText(prevStart, start - prevStart);
+            return prevStart + Grapheme.PreviousBoundary(prevWindow, start - prevStart);
+        }
+
+        var end = line + 1 < _document.LineCount ? _document.GetLineStart(line + 1) : _document.Length;
+        var window = _document.GetText(start, end - start);
+        return start + Grapheme.PreviousBoundary(window, offset - start);
+    }
+
+    /// <summary>
+    /// Live document statistics, cached and recomputed only when the text changes — not on every
+    /// caret move. The status bar reads this on every selection change, so computing it eagerly
+    /// would scan the whole document on each arrow keypress.
+    /// </summary>
+    public DocumentStats Stats => _stats ??= DocumentStats.Compute(_document);
 
     private Selection Clamp(Selection sel)
     {
@@ -182,6 +229,7 @@ public sealed class DocumentBuffer
 
     private void RaiseTextChanged()
     {
+        _stats = null; // invalidate the cached stats; recomputed lazily on next read
         TextChanged?.Invoke(this, EventArgs.Empty);
         Changed?.Invoke(this, EventArgs.Empty);
     }
