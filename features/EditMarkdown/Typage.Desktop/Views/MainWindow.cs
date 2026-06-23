@@ -182,8 +182,8 @@ public class MainWindow : Window
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
-            // Heuristic 9: state the OS reason; a real dialog would offer a recovery action.
-            _statusState.Text = $"Could not open: {ex.Message}";
+            ShowError($"Couldn't open “{Path.GetFileName(path)}”.",
+                $"{ex.Message}\n\nCheck that the file still exists and that you have permission to read it.");
         }
     }
 
@@ -303,7 +303,8 @@ public class MainWindow : Window
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
-            _statusState.Text = $"Could not save: {ex.Message}";
+            ShowError("Couldn't save the document.",
+                $"{ex.Message}\n\nTry File ▸ Save As to write to a different location.");
             return false;
         }
     }
@@ -341,7 +342,8 @@ public class MainWindow : Window
             }
             catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
             {
-                _statusState.Text = $"Could not export: {ex.Message}";
+                ShowError("Couldn't export HTML.",
+                    $"{ex.Message}\n\nCheck that the destination folder is writable.");
             }
         }
     }
@@ -457,6 +459,47 @@ public class MainWindow : Window
         cancel.Click += (_, _) => dialog.Close();
         await dialog.ShowDialog(this);
         return await tcs.Task;
+    }
+
+    /// <summary>
+    /// Show a modal error stating the OS reason and a suggested action (heuristic 9; PRD §7.1).
+    /// Falls back to the status bar only if there is no visible window to own a dialog.
+    /// </summary>
+    private void ShowError(string message, string detail)
+    {
+        if (!IsVisible)
+        {
+            _statusState.Text = message;
+            return;
+        }
+
+        var ok = new Button { Content = "OK", IsDefault = true, IsCancel = true };
+        var dialog = new Window
+        {
+            Title = "Typage",
+            Width = 420,
+            SizeToContent = SizeToContent.Height,
+            CanResize = false,
+            WindowStartupLocation = WindowStartupLocation.CenterOwner,
+            Content = new StackPanel
+            {
+                Margin = new Avalonia.Thickness(16),
+                Spacing = 12,
+                Children =
+                {
+                    new TextBlock { Text = message, FontWeight = FontWeight.Bold, TextWrapping = TextWrapping.Wrap },
+                    new TextBlock { Text = detail, TextWrapping = TextWrapping.Wrap },
+                    new StackPanel
+                    {
+                        Orientation = Orientation.Horizontal,
+                        HorizontalAlignment = HorizontalAlignment.Right,
+                        Children = { ok },
+                    },
+                },
+            },
+        };
+        ok.Click += (_, _) => dialog.Close();
+        _ = dialog.ShowDialog(this);
     }
 
     private async Task<bool> ConfirmAsync(string message)
