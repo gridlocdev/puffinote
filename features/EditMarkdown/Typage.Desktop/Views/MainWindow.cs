@@ -182,7 +182,7 @@ public class MainWindow : Window
 
     private async Task NewDocumentAsync()
     {
-        if (!await ConfirmDiscardAsync())
+        if (!await EnsureCanDiscardAsync())
         {
             return;
         }
@@ -194,7 +194,7 @@ public class MainWindow : Window
 
     private async Task OpenAsync()
     {
-        if (!await ConfirmDiscardAsync())
+        if (!await EnsureCanDiscardAsync())
         {
             return;
         }
@@ -329,7 +329,7 @@ public class MainWindow : Window
         if (_editorView.IsDirty && !_closingConfirmed)
         {
             e.Cancel = true;
-            if (await ConfirmDiscardAsync())
+            if (await EnsureCanDiscardAsync())
             {
                 _closingConfirmed = true;
                 Close();
@@ -339,15 +339,79 @@ public class MainWindow : Window
 
     private bool _closingConfirmed;
 
-    /// <summary>Returns true if it is safe to discard the current document (saved, clean, or user agreed).</summary>
-    private async Task<bool> ConfirmDiscardAsync()
+    private enum UnsavedChoice
+    {
+        Save,
+        Discard,
+        Cancel,
+    }
+
+    /// <summary>
+    /// Guard an action that abandons the current document (new/open/close). Returns true only if it
+    /// is safe to proceed: the document is clean, the user chose Don't Save, or the user chose Save
+    /// and the save succeeded. Offers Save / Don't Save / Cancel (PRD §7.1; heuristics 3 & 5) so the
+    /// user is never forced to lose work or to cancel and save by hand.
+    /// </summary>
+    private async Task<bool> EnsureCanDiscardAsync()
     {
         if (!_editorView.IsDirty)
         {
             return true;
         }
 
-        return await ConfirmAsync("You have unsaved changes. Discard them?");
+        return await PromptUnsavedAsync() switch
+        {
+            UnsavedChoice.Discard => true,
+            UnsavedChoice.Save => await SaveAsync(), // proceed only if the save actually completed
+            _ => false,                              // Cancel
+        };
+    }
+
+    private async Task<UnsavedChoice> PromptUnsavedAsync()
+    {
+        var tcs = new TaskCompletionSource<UnsavedChoice>();
+        var save = new Button { Content = "Save", IsDefault = true };
+        var discard = new Button { Content = "Don't Save" };
+        var cancel = new Button { Content = "Cancel", IsCancel = true };
+        save.Click += (_, _) => tcs.TrySetResult(UnsavedChoice.Save);
+        discard.Click += (_, _) => tcs.TrySetResult(UnsavedChoice.Discard);
+        cancel.Click += (_, _) => tcs.TrySetResult(UnsavedChoice.Cancel);
+
+        var name = _currentPath is null ? "this document" : Path.GetFileName(_currentPath);
+        var dialog = new Window
+        {
+            Title = "Typage",
+            Width = 400,
+            SizeToContent = SizeToContent.Height,
+            WindowStartupLocation = WindowStartupLocation.CenterOwner,
+            CanResize = false,
+            Content = new StackPanel
+            {
+                Margin = new Avalonia.Thickness(16),
+                Spacing = 16,
+                Children =
+                {
+                    new TextBlock
+                    {
+                        Text = $"Save changes to {name} before closing?",
+                        TextWrapping = TextWrapping.Wrap,
+                    },
+                    new StackPanel
+                    {
+                        Orientation = Orientation.Horizontal,
+                        HorizontalAlignment = HorizontalAlignment.Right,
+                        Spacing = 8,
+                        Children = { discard, cancel, save },
+                    },
+                },
+            },
+        };
+        dialog.Closed += (_, _) => tcs.TrySetResult(UnsavedChoice.Cancel);
+        save.Click += (_, _) => dialog.Close();
+        discard.Click += (_, _) => dialog.Close();
+        cancel.Click += (_, _) => dialog.Close();
+        await dialog.ShowDialog(this);
+        return await tcs.Task;
     }
 
     private async Task<bool> ConfirmAsync(string message)
