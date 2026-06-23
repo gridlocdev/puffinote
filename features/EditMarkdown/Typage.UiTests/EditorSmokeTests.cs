@@ -60,6 +60,33 @@ public class EditorSmokeTests
     }
 
     [AvaloniaFact]
+    public void Editor_InsertLink_WrapsSelection()
+    {
+        var editor = new MarkdownEditor { Text = string.Empty };
+        editor.Buffer.Insert("site");
+        editor.Buffer.Selection = new Engine.Document.Selection(0, 4);
+        editor.InsertLink();
+        Assert.Equal("[site]()", editor.Text);
+    }
+
+    [AvaloniaFact]
+    public void Editor_SetParagraph_StripsHeadingMarker()
+    {
+        var editor = new MarkdownEditor { Text = "### Title" };
+        editor.SetParagraph();
+        Assert.Equal("Title", editor.Text);
+    }
+
+    [AvaloniaFact]
+    public void Editor_SelectAll_SelectsWholeDocument()
+    {
+        var editor = new MarkdownEditor { Text = "abc\ndef" };
+        editor.SelectAll();
+        Assert.Equal(0, editor.Buffer.Selection.Start);
+        Assert.Equal(editor.Text.Length, editor.Buffer.Selection.End);
+    }
+
+    [AvaloniaFact]
     public void Editor_UndoRedo_Works()
     {
         var editor = new MarkdownEditor { Text = string.Empty };

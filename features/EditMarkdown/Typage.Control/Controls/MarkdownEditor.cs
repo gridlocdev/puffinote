@@ -1,7 +1,9 @@
 using System.Globalization;
 using Avalonia;
+using Avalonia.Controls;
 using Avalonia.Controls.Primitives;
 using Avalonia.Input;
+using Avalonia.Input.Platform;
 using Avalonia.Media;
 using Typage.Control.Rendering;
 using Typage.Engine.Document;
@@ -61,6 +63,7 @@ public class MarkdownEditor : Avalonia.Controls.Control, ILogicalScrollable
         };
         GotFocus += (_, _) => InvalidateVisual();
         LostFocus += (_, _) => InvalidateVisual();
+        ContextMenu = BuildContextMenu();
     }
 
     /// <summary>Raised after the document text changes.</summary>
@@ -165,6 +168,99 @@ public class MarkdownEditor : Avalonia.Controls.Control, ILogicalScrollable
         }
 
         Focus();
+    }
+
+    /// <summary>Wrap the selection as a link <c>[text](url)</c>, leaving the caret in the URL slot.</summary>
+    public void InsertLink()
+    {
+        var sel = _buffer.Selection;
+        var text = sel.IsEmpty ? string.Empty : _buffer.Document.GetText(sel.Start, sel.Length);
+        var replacement = $"[{text}]()";
+        _buffer.ReplaceRange(sel.Start, sel.Length, replacement);
+        _buffer.Selection = Selection.At(sel.Start + replacement.Length - 1); // inside ()
+        Focus();
+    }
+
+    /// <summary>Strip any heading marker from the caret's line, turning it back into a paragraph.</summary>
+    public void SetParagraph()
+    {
+        var doc = _buffer.Document;
+        var line = doc.GetPosition(_buffer.Selection.Caret).Line;
+        var lineStart = doc.GetLineStart(line);
+        var text = doc.GetLineText(line).TrimEnd('\r');
+        var trimmed = text.TrimStart('#', ' ');
+        if (trimmed.Length != text.Length)
+        {
+            _buffer.ReplaceRange(lineStart, text.Length, trimmed);
+        }
+    }
+
+    /// <summary>Select the whole document.</summary>
+    public void SelectAll() => _buffer.Selection = new Selection(0, _buffer.Document.Length);
+
+    // ----- clipboard (PRD §7.2 — copy yields Markdown source) -----
+
+    public async Task CopyAsync()
+    {
+        var sel = _buffer.Selection;
+        if (sel.IsEmpty || TopLevel.GetTopLevel(this)?.Clipboard is not { } clipboard)
+        {
+            return;
+        }
+
+        await clipboard.SetTextAsync(_buffer.Document.GetText(sel.Start, sel.Length));
+    }
+
+    public async Task CutAsync()
+    {
+        if (_buffer.Selection.IsEmpty)
+        {
+            return;
+        }
+
+        await CopyAsync();
+        _buffer.Insert(string.Empty); // replaces (deletes) the selection
+    }
+
+    public async Task PasteAsync()
+    {
+        if (TopLevel.GetTopLevel(this)?.Clipboard is not { } clipboard)
+        {
+            return;
+        }
+
+        var text = await clipboard.TryGetTextAsync();
+        if (!string.IsNullOrEmpty(text))
+        {
+            _buffer.Insert(text);
+        }
+    }
+
+    private ContextMenu BuildContextMenu()
+    {
+        MenuItem Item(string header, Action action)
+        {
+            var item = new MenuItem { Header = header };
+            item.Click += (_, _) => action();
+            return item;
+        }
+
+        var menu = new ContextMenu();
+        menu.Items.Add(Item("Cut", () => _ = CutAsync()));
+        menu.Items.Add(Item("Copy", () => _ = CopyAsync()));
+        menu.Items.Add(Item("Paste", () => _ = PasteAsync()));
+        menu.Items.Add(new Separator());
+        menu.Items.Add(Item("Select All", SelectAll));
+        menu.Items.Add(new Separator());
+        menu.Items.Add(Item("Bold", ToggleBold));
+        menu.Items.Add(Item("Italic", ToggleItalic));
+        menu.Items.Add(Item("Inline Code", ToggleInlineCode));
+        menu.Items.Add(Item("Strikethrough", ToggleStrikethrough));
+        menu.Items.Add(Item("Link…", InsertLink));
+        menu.Items.Add(new Separator());
+        menu.Items.Add(Item("Undo", () => _buffer.Undo()));
+        menu.Items.Add(Item("Redo", () => _buffer.Redo()));
+        return menu;
     }
 
     // ----- layout & logical scrolling -----
@@ -388,17 +484,23 @@ public class MarkdownEditor : Avalonia.Controls.Control, ILogicalScrollable
 
     protected override void OnTextInput(TextInputEventArgs e)
     {
-        if (!string.IsNullOrEmpty(e.Text) && !char.IsControl(e.Text[0]))
+        // A Cmd/Ctrl+key combination is a command, not text — don't type the letter. (Ctrl+Alt is
+        // left alone so AltGr characters still work.)
+        var command = _modifiers.HasFlag(KeyModifiers.Meta)
+            || (_modifiers.HasFlag(KeyModifiers.Control) && !_modifiers.HasFlag(KeyModifiers.Alt));
+
+        if (!command && !string.IsNullOrEmpty(e.Text) && !char.IsControl(e.Text[0]))
         {
             _buffer.Insert(e.Text);
-            e.Handled = true;
         }
 
+        e.Handled = true;
         base.OnTextInput(e);
     }
 
     protected override void OnKeyDown(KeyEventArgs e)
     {
+        _modifiers = e.KeyModifiers;
         var ctrl = e.KeyModifiers.HasFlag(KeyModifiers.Control) || e.KeyModifiers.HasFlag(KeyModifiers.Meta);
         var shift = e.KeyModifiers.HasFlag(KeyModifiers.Shift);
         var doc = _buffer.Document;
@@ -417,7 +519,21 @@ public class MarkdownEditor : Avalonia.Controls.Control, ILogicalScrollable
             case Key.Down: MoveCaretByLine(1, shift); break;
             case Key.Home: MoveCaret(doc.GetLineStart(doc.GetPosition(caret).Line), shift); break;
             case Key.End: MoveCaret(doc.GetLineEnd(doc.GetPosition(caret).Line), shift); break;
-            case Key.A when ctrl: _buffer.Selection = new Selection(0, doc.Length); break;
+
+            // Clipboard.
+            case Key.C when ctrl: _ = CopyAsync(); break;
+            case Key.X when ctrl: _ = CutAsync(); break;
+            case Key.V when ctrl: _ = PasteAsync(); break;
+
+            // Formatting (the shortcuts a Markdown editor is expected to have).
+            case Key.B when ctrl: ToggleBold(); break;
+            case Key.I when ctrl: ToggleItalic(); break;
+            case Key.E when ctrl: ToggleInlineCode(); break;
+            case Key.K when ctrl: InsertLink(); break;
+            case Key.D0 when ctrl: SetParagraph(); break;
+            case >= Key.D1 and <= Key.D6 when ctrl: ApplyHeading(e.Key - Key.D1 + 1); break;
+
+            case Key.A when ctrl: SelectAll(); break;
             case Key.Z when ctrl && shift: _buffer.Redo(); break;
             case Key.Z when ctrl: _buffer.Undo(); break;
             case Key.Y when ctrl: _buffer.Redo(); break;
@@ -428,8 +544,17 @@ public class MarkdownEditor : Avalonia.Controls.Control, ILogicalScrollable
         base.OnKeyDown(e);
     }
 
+    private KeyModifiers _modifiers;
+
     protected override void OnPointerPressed(PointerPressedEventArgs e)
     {
+        // Let a right-click through so the context menu can open; only the left button moves the caret.
+        if (!e.GetCurrentPoint(this).Properties.IsLeftButtonPressed)
+        {
+            base.OnPointerPressed(e);
+            return;
+        }
+
         Focus();
         var point = e.GetPosition(this);
         // The viewport is inset by the padding and translated by the scroll offset; map back.
@@ -529,7 +654,9 @@ public class MarkdownEditor : Avalonia.Controls.Control, ILogicalScrollable
     private RunStyle StyleFor(TokenType type, int headingLevel)
     {
         var style = _theme.Resolve(type, headingLevel);
-        if (headingLevel > 0 && !style.IsMarker)
+        // On a heading line, scale everything — including the leading '#' marker — to the heading
+        // size so the markers sit at the same size as the heading text on that line.
+        if (headingLevel > 0)
         {
             style = style with { FontSize = _theme.HeadingSize(headingLevel) };
         }
