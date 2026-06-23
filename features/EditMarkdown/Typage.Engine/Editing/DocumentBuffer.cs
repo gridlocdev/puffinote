@@ -35,6 +35,13 @@ public sealed class DocumentBuffer
     /// <summary>The snapshot last marked saved; the dirty flag compares against it.</summary>
     public TextDocument SavedDocument { get; private set; }
 
+    /// <summary>
+    /// The first line affected by the most recent text change — the seam for incremental
+    /// re-tokenization. Lines above it are unchanged, so a consumer can reuse their tokens and
+    /// only re-run <see cref="Markdown.MarkdownModel.Update"/> from here down.
+    /// </summary>
+    public int LastChangedLine { get; private set; }
+
     /// <summary>The caret/selection.</summary>
     public Selection Selection
     {
@@ -119,7 +126,7 @@ public sealed class DocumentBuffer
         _document = edit.Apply(_document);
         _selection = Selection.At(edit.CaretAfter);
         _history.Record(edit, before, _selection);
-        RaiseTextChanged();
+        RaiseTextChanged(_document.GetPosition(edit.Start).Line);
     }
 
     /// <summary>Undo the most recent step. Returns false if there was nothing to undo.</summary>
@@ -133,7 +140,7 @@ public sealed class DocumentBuffer
 
         _document = entry.Value.Edit.Invert().Apply(_document);
         _selection = Clamp(entry.Value.Before);
-        RaiseTextChanged();
+        RaiseTextChanged(_document.GetPosition(entry.Value.Edit.Start).Line);
         return true;
     }
 
@@ -148,7 +155,7 @@ public sealed class DocumentBuffer
 
         _document = entry.Value.Edit.Apply(_document);
         _selection = Clamp(entry.Value.After);
-        RaiseTextChanged();
+        RaiseTextChanged(_document.GetPosition(entry.Value.Edit.Start).Line);
         return true;
     }
 
@@ -163,7 +170,7 @@ public sealed class DocumentBuffer
 
         _selection = Selection.At(0);
         _history.Clear();
-        RaiseTextChanged();
+        RaiseTextChanged(0); // whole document replaced
     }
 
     /// <summary>Mark the current snapshot as the saved baseline (after a successful save).</summary>
@@ -227,8 +234,9 @@ public sealed class DocumentBuffer
         return new Selection(Math.Clamp(sel.Anchor, 0, len), Math.Clamp(sel.Caret, 0, len));
     }
 
-    private void RaiseTextChanged()
+    private void RaiseTextChanged(int firstChangedLine)
     {
+        LastChangedLine = firstChangedLine;
         _stats = null; // invalidate the cached stats; recomputed lazily on next read
         TextChanged?.Invoke(this, EventArgs.Empty);
         Changed?.Invoke(this, EventArgs.Empty);

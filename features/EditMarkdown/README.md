@@ -96,9 +96,10 @@ incremental tokenizer with its checkpoint cache and an *incremental-equals-full-
 and the HTML renderer all pass a green suite, and the `typage` CLI exercises them end to end.
 
 The **UI is an early surface**: it renders the token stream with the theme, handles
-caret/selection/keyboard/mouse, and dims markers near the caret — but it keeps document offsets 1:1
-with the visual model rather than truly collapsing concealed glyphs. The PRD's full live-preview
-behavior (glyph-hiding with a bidirectional offset map), line virtualization, IME, accessibility peer,
+caret/selection/keyboard/mouse, dims markers near the caret, re-tokenizes **incrementally** from the
+first changed line, and is **line-virtualized** (only the visible slice is drawn) — but it keeps
+document offsets 1:1 with the visual model rather than truly collapsing concealed glyphs. The PRD's
+full live-preview behavior (glyph-hiding with a bidirectional offset map), IME, accessibility peer,
 smart paste, find/replace, spell check, and the OS print/PDF path are the dedicated later phases
 (PRD §11) and are not built yet. See [AGENTS.md](AGENTS.md) for the honest status and the layering to
 build them on.

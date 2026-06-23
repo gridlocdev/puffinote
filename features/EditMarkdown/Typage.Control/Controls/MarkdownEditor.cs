@@ -1,9 +1,8 @@
 using System.Globalization;
 using Avalonia;
-using Avalonia.Controls;
+using Avalonia.Controls.Primitives;
 using Avalonia.Input;
 using Avalonia.Media;
-using Avalonia.VisualTree;
 using Typage.Control.Rendering;
 using Typage.Engine.Document;
 using Typage.Engine.Editing;
@@ -20,18 +19,26 @@ namespace Typage.Control.Controls;
 /// <remarks>
 /// This is an early Phase 3/4 surface: rendering uses <see cref="FormattedText"/> per line and
 /// offsets stay 1:1 with the visual model (markers dim rather than collapse), so caret mapping is
-/// exact and simple. Full glyph-hiding with an offset↔visual map, line virtualization, IME, and an
-/// automation peer are the dedicated later phases (PRD §11) and are documented as not-yet-built.
-/// The public API and the engine seam below are stable so that work slots in without a rewrite.
+/// exact and simple. The surface is line-virtualized (only the visible slice is drawn, via
+/// <see cref="ILogicalScrollable"/>) and re-tokenizes incrementally from the first changed line.
+/// Full glyph-hiding with an offset↔visual map, IME, and an automation peer are the dedicated later
+/// phases (PRD §11). The public API and the engine seam below are stable so that work slots in.
 /// </remarks>
-public class MarkdownEditor : Avalonia.Controls.Control
+public class MarkdownEditor : Avalonia.Controls.Control, ILogicalScrollable
 {
     private readonly DocumentBuffer _buffer = new();
     private MarkdownModel _model;
     private MarkdownTheme _theme = MarkdownTheme.Default;
     private IBrush _dimMarker = new SolidColorBrush(Color.FromArgb(0x55, 0xA0, 0xA6, 0xAE));
-    private double _contentWidth;
-    private bool _contentWidthDirty = true;
+
+    // Virtualized logical-scroll state: only the lines inside the viewport are drawn, and the
+    // horizontal extent grows as wide lines are encountered (no whole-document width scan).
+    private Vector _offset;
+    private Size _viewport;
+    private double _extentWidth;
+    private bool _canHorizontallyScroll = true;
+    private bool _canVerticallyScroll = true;
+    private EventHandler? _scrollInvalidated;
 
     public MarkdownEditor()
     {
@@ -39,9 +46,10 @@ public class MarkdownEditor : Avalonia.Controls.Control
         _model = MarkdownModel.Build(_buffer.Document);
         _buffer.TextChanged += (_, _) =>
         {
-            _model = MarkdownModel.Build(_buffer.Document);
-            _contentWidthDirty = true;
-            InvalidateMeasure();
+            // Incremental re-tokenization: reuse the unchanged prefix and re-run only from the first
+            // changed line down (PRD §8.2). Equivalent to a full rebuild — see IncrementalTokenizerTests.
+            _model = _model.Update(_buffer.Document, _buffer.LastChangedLine, out _);
+            RaiseScrollInvalidated(EventArgs.Empty); // line count / extent may have changed
             InvalidateVisual();
             TextChanged?.Invoke(this, EventArgs.Empty);
         };
@@ -91,7 +99,8 @@ public class MarkdownEditor : Avalonia.Controls.Control
         set
         {
             _theme = value;
-            _contentWidthDirty = true;
+            _extentWidth = 0; // fonts changed — let the horizontal extent regrow as lines redraw
+            RaiseScrollInvalidated(EventArgs.Empty);
             InvalidateMeasure();
             InvalidateVisual();
         }
@@ -148,41 +157,90 @@ public class MarkdownEditor : Avalonia.Controls.Control
         Focus();
     }
 
-    // ----- layout -----
+    // ----- layout & logical scrolling -----
 
     protected override Size MeasureOverride(Size availableSize)
     {
-        if (_contentWidthDirty)
-        {
-            _contentWidth = ComputeContentWidth();
-            _contentWidthDirty = false;
-        }
-
-        // Report the widest line so a hosting ScrollViewer (which offers infinite width) can scroll
-        // horizontally; never shrink below the available viewport width. The pad keeps the caret at
-        // a line's end visible.
-        var minWidth = double.IsFinite(availableSize.Width) ? availableSize.Width : 0;
-        var width = Math.Max(minWidth, _contentWidth + 12);
-        return new Size(width, Math.Max(_theme.LineHeight, _buffer.Document.LineCount * _theme.LineHeight));
+        // Under logical scrolling the presenter constrains us to the viewport; report that. When a
+        // dimension is unconstrained (not in a scroll viewer), fall back to the content size.
+        var w = double.IsFinite(availableSize.Width) ? availableSize.Width : _extentWidth;
+        var h = double.IsFinite(availableSize.Height)
+            ? availableSize.Height
+            : Math.Max(_theme.LineHeight, _buffer.Document.LineCount * _theme.LineHeight);
+        return new Size(w, h);
     }
 
-    private double ComputeContentWidth()
+    protected override Size ArrangeOverride(Size finalSize)
     {
-        var doc = _buffer.Document;
-        var max = 0d;
-        for (var line = 0; line < doc.LineCount; line++)
+        if (_viewport != finalSize)
         {
-            var start = doc.GetLineStart(line);
-            var text = doc.GetText(start, doc.GetLineEnd(line) - start).TrimEnd('\r');
-            if (text.Length == 0)
-            {
-                continue;
-            }
-
-            max = Math.Max(max, ColumnX(line, text.Length, HeadingLevel(line), text, text.Length));
+            _viewport = finalSize;
+            RaiseScrollInvalidated(EventArgs.Empty);
         }
 
-        return max;
+        return finalSize;
+    }
+
+    Size IScrollable.Extent => new(
+        Math.Max(_extentWidth + 12, _viewport.Width),
+        Math.Max(_theme.LineHeight, _buffer.Document.LineCount * _theme.LineHeight));
+
+    Size IScrollable.Viewport => _viewport;
+
+    Vector IScrollable.Offset
+    {
+        get => _offset;
+        set
+        {
+            var clamped = ClampOffset(value);
+            if (clamped != _offset)
+            {
+                _offset = clamped;
+                InvalidateVisual();
+            }
+        }
+    }
+
+    /// <summary>Whether horizontal scrolling is enabled (set by the hosting scroll viewer).</summary>
+    public bool CanHorizontallyScroll
+    {
+        get => _canHorizontallyScroll;
+        set => _canHorizontallyScroll = value;
+    }
+
+    /// <summary>Whether vertical scrolling is enabled (set by the hosting scroll viewer).</summary>
+    public bool CanVerticallyScroll
+    {
+        get => _canVerticallyScroll;
+        set => _canVerticallyScroll = value;
+    }
+
+    bool ILogicalScrollable.IsLogicalScrollEnabled => true;
+
+    Size ILogicalScrollable.ScrollSize => new(_theme.BaseFontSize, _theme.LineHeight);
+
+    Size ILogicalScrollable.PageScrollSize => new(_viewport.Width, _viewport.Height);
+
+    event EventHandler? ILogicalScrollable.ScrollInvalidated
+    {
+        add => _scrollInvalidated += value;
+        remove => _scrollInvalidated -= value;
+    }
+
+    bool ILogicalScrollable.BringIntoView(Avalonia.Controls.Control target, Rect targetRect) => false;
+
+    Avalonia.Controls.Control? ILogicalScrollable.GetControlInDirection(NavigationDirection direction, Avalonia.Controls.Control? from) => null;
+
+    void ILogicalScrollable.RaiseScrollInvalidated(EventArgs e) => RaiseScrollInvalidated(e);
+
+    private void RaiseScrollInvalidated(EventArgs e) => _scrollInvalidated?.Invoke(this, e);
+
+    private Vector ClampOffset(Vector value)
+    {
+        var extent = ((IScrollable)this).Extent;
+        var maxX = Math.Max(0, extent.Width - _viewport.Width);
+        var maxY = Math.Max(0, extent.Height - _viewport.Height);
+        return new Vector(Math.Clamp(value.X, 0, maxX), Math.Clamp(value.Y, 0, maxY));
     }
 
     // ----- rendering -----
@@ -195,13 +253,30 @@ public class MarkdownEditor : Avalonia.Controls.Control
         var caret = _buffer.Selection;
         var caretLine = doc.GetPosition(caret.Caret).Line;
 
-        for (var line = 0; line < doc.LineCount; line++)
+        // Draw only the lines intersecting the viewport (virtualization), translated by the scroll
+        // offset. The viewport height is 0 until the control is arranged in a scroll viewer.
+        var lineH = _theme.LineHeight;
+        var viewportH = _viewport.Height > 0 ? _viewport.Height : Bounds.Height;
+        var first = Math.Max(0, (int)(_offset.Y / lineH));
+        var last = Math.Min(doc.LineCount, (int)((_offset.Y + viewportH) / lineH) + 1);
+
+        using (context.PushTransform(Matrix.CreateTranslation(-_offset.X, -_offset.Y)))
         {
-            RenderLine(context, doc, line, caret, caretLine);
+            var maxWidth = _extentWidth;
+            for (var line = first; line < last; line++)
+            {
+                maxWidth = Math.Max(maxWidth, RenderLine(context, doc, line, caret, caretLine));
+            }
+
+            if (maxWidth > _extentWidth)
+            {
+                _extentWidth = maxWidth; // grow the horizontal extent as wide lines come into view
+                RaiseScrollInvalidated(EventArgs.Empty);
+            }
         }
     }
 
-    private void RenderLine(DrawingContext context, TextDocument doc, int line, Selection sel, int caretLine)
+    private double RenderLine(DrawingContext context, TextDocument doc, int line, Selection sel, int caretLine)
     {
         var lineTop = line * _theme.LineHeight;
         var lineStart = doc.GetLineStart(line);
@@ -240,6 +315,8 @@ public class MarkdownEditor : Avalonia.Controls.Control
             var y = lineTop + (_theme.LineHeight - h) / 2;
             context.FillRectangle(_theme.Caret, new Rect(caretX, y, 1.5, h));
         }
+
+        return x; // total content width of this line (drives the horizontal extent)
     }
 
     /// <summary>Draw one styled run; returns its advance width and records the caret X if it lands inside.</summary>
@@ -346,20 +423,23 @@ public class MarkdownEditor : Avalonia.Controls.Control
     {
         Focus();
         var point = e.GetPosition(this);
-        var line = Math.Clamp((int)(point.Y / _theme.LineHeight), 0, _buffer.Document.LineCount - 1);
-        var offset = OffsetAt(line, point.X);
+        // The viewport is translated by the scroll offset, so map back to content coordinates.
+        var contentY = point.Y + _offset.Y;
+        var contentX = point.X + _offset.X;
+        var line = Math.Clamp((int)(contentY / _theme.LineHeight), 0, _buffer.Document.LineCount - 1);
+        var offset = OffsetAt(line, contentX);
         var extend = e.KeyModifiers.HasFlag(KeyModifiers.Shift);
         MoveCaret(offset, extend);
         e.Handled = true;
         base.OnPointerPressed(e);
     }
 
-    /// <summary>Scroll the hosting viewport so the caret stays visible after an edit or navigation.</summary>
+    /// <summary>Scroll so the caret stays visible after an edit or navigation (we are the scrollable).</summary>
     private void ScrollCaretIntoView()
     {
-        if (this.FindAncestorOfType<ScrollViewer>() is not { } scroller)
+        if (_viewport.Width <= 0 || _viewport.Height <= 0)
         {
-            return; // not hosted in a scroll viewer (e.g. headless construction) — nothing to scroll
+            return; // not arranged in a viewport yet (e.g. headless construction)
         }
 
         var doc = _buffer.Document;
@@ -369,32 +449,35 @@ public class MarkdownEditor : Avalonia.Controls.Control
         var x = ColumnX(pos.Line, text.Length, HeadingLevel(pos.Line), text, Math.Min(pos.Column, text.Length));
         var y = pos.Line * _theme.LineHeight;
 
-        var offset = scroller.Offset;
-        var viewport = scroller.Viewport;
-        var newY = offset.Y;
-        if (y < offset.Y)
+        const double pad = 12;
+        _extentWidth = Math.Max(_extentWidth, x + pad); // ensure we can scroll to a caret on a wide line
+
+        var newY = _offset.Y;
+        if (y < _offset.Y)
         {
             newY = y;
         }
-        else if (y + _theme.LineHeight > offset.Y + viewport.Height)
+        else if (y + _theme.LineHeight > _offset.Y + _viewport.Height)
         {
-            newY = y + _theme.LineHeight - viewport.Height;
+            newY = y + _theme.LineHeight - _viewport.Height;
         }
 
-        var newX = offset.X;
-        const double pad = 12;
-        if (x < offset.X)
+        var newX = _offset.X;
+        if (x < _offset.X)
         {
             newX = Math.Max(0, x - pad);
         }
-        else if (x + pad > offset.X + viewport.Width)
+        else if (x + pad > _offset.X + _viewport.Width)
         {
-            newX = x + pad - viewport.Width;
+            newX = x + pad - _viewport.Width;
         }
 
-        if (newX != offset.X || newY != offset.Y)
+        var target = ClampOffset(new Vector(newX, newY));
+        if (target != _offset)
         {
-            scroller.Offset = new Vector(Math.Max(0, newX), Math.Max(0, newY));
+            _offset = target;
+            InvalidateVisual();
+            RaiseScrollInvalidated(EventArgs.Empty);
         }
     }
 

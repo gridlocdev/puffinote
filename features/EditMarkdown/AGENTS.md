@@ -149,14 +149,18 @@ extend it, keep the layering and update the docs.
 - **Built and tested:** the immutable document model + line/offset services, grapheme navigation,
   undo/redo with coalescing, the incremental tokenizer + checkpoint cache (block state machine, inline
   constructs, GFM tables, tolerant/malformed handling) with an *incremental-equals-full-rebuild* test
-  suite, the HTML renderer, the `typage` CLI, and the shared `DocumentStats`.
+  suite, the HTML renderer, the `typage` CLI, and the shared `DocumentStats`. The surface drives the
+  engine **incrementally** (re-tokenizes from `DocumentBuffer.LastChangedLine` via `MarkdownModel.Update`)
+  and is **line-virtualized** (`ILogicalScrollable`: only the lines in the viewport are drawn).
 - **Early / approximate:** the `MarkdownEditor` surface renders the token stream with the theme, handles
   caret/selection/keyboard/mouse, and **dims** markers when the caret is away — but it keeps offsets
   **1:1** with the visual model rather than collapsing concealed glyphs. The PRD's full §7.4 behavior
   (true glyph-hiding with a bidirectional offset↔visual map, atomic caret traversal of concealed markers),
-  **line virtualization**, **IME**, the **automation peer (accessibility)**, smart paste, find/replace,
-  spell check, external-change/conflict handling, and the OS print/PDF path are **the dedicated later
-  phases (PRD §11)** and are not built yet. Don't claim them done; build them on the layering that's here.
+  **IME**, the **automation peer (accessibility)**, smart paste, find/replace, spell check,
+  external-change/conflict handling, and the OS print/PDF path are **the dedicated later phases
+  (PRD §11)** and are not built yet. Don't claim them done; build them on the layering that's here.
+  (Rendering can't be exercised by the headless CI here — no GPU — so the surface's draw path is
+  verified structurally and by the engine's incremental tests, not by pixel tests.)
 
 ## Conventions
 

@@ -132,7 +132,10 @@ every edit's incremental update must produce token-for-token the same result as 
   `MarkdownModel` on text change, and draws each line's tokens with `FormattedText` styled by the theme.
   It owns caret, selection, keyboard and mouse input, grapheme-aware navigation, and basic formatting
   commands. Markers **dim** when the caret is off their line; offsets stay **1:1** with the visual model,
-  so caret hit-testing and mapping are exact and simple.
+  so caret hit-testing and mapping are exact and simple. It re-tokenizes **incrementally** on edit
+  (`MarkdownModel.Update` from `DocumentBuffer.LastChangedLine`) and is **line-virtualized**: it
+  implements `ILogicalScrollable` and draws only the lines inside the viewport, translated by the scroll
+  offset, with the horizontal extent growing as wide lines come into view (no whole-document scan).
 - **`MarkdownTheme`** (`Rendering/`) — the presentation seam mapping `TokenType` → typeface/size/colors.
   The engine stays styling-free; re-theming never touches it.
 - **`IEmbedResolver`** — the seam that turns an engine-detected embed *reference* into an Avalonia
@@ -143,9 +146,8 @@ every edit's incremental update must produce token-for-token the same result as 
   file/app assumptions. Built in code (no XAML) so it carries no resource dependencies.
 
 This layer is an **early Phase 3/4 implementation**. The PRD's full §7.4 concealment (true glyph-hiding
-with a bidirectional offset↔visual map), line virtualization, IME, and the accessibility automation peer
-are the dedicated later phases (PRD §11). The public API and engine seam are stable so that work slots in
-without a rewrite.
+with a bidirectional offset↔visual map), IME, and the accessibility automation peer are the dedicated
+later phases (PRD §11). The public API and engine seam are stable so that work slots in without a rewrite.
 
 ## 6. The shell (`Typage.Desktop`)
 
@@ -168,8 +170,9 @@ loads text (`-` = stdin) and writes atomically (`-` = stdout). Commands: `html`,
 
 The UI thread owns edits. Because `TextDocument` snapshots are immutable, a background tokenizer can read
 a snapshot without locks and never race the editor; results marshal back to the UI thread (PRD §9.2). The
-current surface tokenizes synchronously on edit (simple and correct); moving the tail to the background is
-a performance phase, and the immutable-snapshot design already supports it.
+current surface tokenizes incrementally but synchronously on edit (it re-runs only from the first changed
+line, and only the visible lines are drawn); moving the re-tokenization of the off-screen tail to a
+background thread is a further performance phase, and the immutable-snapshot design already supports it.
 
 ## 9. Folder structure
 

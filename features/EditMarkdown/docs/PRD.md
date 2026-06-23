@@ -303,7 +303,8 @@ Dependency direction is strictly **shell → control → engine**; no upward ref
 
 > **Implementation status (this repo).** Phases 0–2 are substantially built and unit-tested in
 > `Typage.Engine`; HTML export (Phase 8) and a baseline shell/CLI exist. The surface is an early Phase 3/4
-> approximation (marker dimming with 1:1 offsets, no virtualization/IME/automation peer yet). See
+> approximation: marker dimming with 1:1 offsets, but it does drive the engine **incrementally** (§8.2)
+> and is **line-virtualized** (§9.1). IME and the automation peer are not built yet. See
 > [../README.md](../README.md) and [../AGENTS.md](../AGENTS.md) for the honest built/not-built breakdown.
 
 ---
