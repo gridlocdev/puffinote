@@ -80,6 +80,20 @@ public class HtmlRendererTests
     }
 
     [Fact]
+    public void HardBreak_RendersBr()
+    {
+        Assert.Contains("first<br>\nsecond", Body("first  \nsecond"));
+    }
+
+    [Fact]
+    public void SoftWrap_DoesNotRenderBr()
+    {
+        var html = Body("first\nsecond");
+        Assert.Contains("first\nsecond", html);
+        Assert.DoesNotContain("<br>", html);
+    }
+
+    [Fact]
     public void Table()
     {
         var html = Body("| A | B |\n| - | - |\n| 1 | 2 |");

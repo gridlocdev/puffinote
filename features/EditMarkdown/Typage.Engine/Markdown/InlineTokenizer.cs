@@ -27,10 +27,47 @@ internal sealed class InlineTokenizer
         _out = output;
     }
 
-    /// <summary>Tokenize <c>text[from, to)</c>, appending tokens (absolute offsets) to <paramref name="output"/>.</summary>
-    public static void Tokenize(string text, int absStart, int from, int to, List<Token> output)
+    /// <summary>
+    /// Tokenize <c>text[from, to)</c>, appending tokens (absolute offsets) to <paramref name="output"/>.
+    /// When <paramref name="detectHardBreak"/> is set (line-level content, not nested link text), a
+    /// trailing run of two-or-more spaces or a trailing backslash is emitted as a <see cref="TokenType.HardBreak"/>.
+    /// </summary>
+    public static void Tokenize(string text, int absStart, int from, int to, List<Token> output, bool detectHardBreak = false)
     {
-        new InlineTokenizer(text, absStart, output).Run(from, to);
+        var contentTo = to;
+        var breakStart = -1;
+        if (detectHardBreak && to > from)
+        {
+            if (text[to - 1] == '\\')
+            {
+                breakStart = to - 1; // trailing backslash hard break
+            }
+            else
+            {
+                var s = to;
+                while (s > from && text[s - 1] == ' ')
+                {
+                    s--;
+                }
+
+                if (to - s >= 2 && s > from)
+                {
+                    breakStart = s; // two-or-more trailing spaces, with content before them
+                }
+            }
+        }
+
+        if (breakStart >= 0)
+        {
+            contentTo = breakStart;
+        }
+
+        var tokenizer = new InlineTokenizer(text, absStart, output);
+        tokenizer.Run(from, contentTo);
+        if (breakStart >= 0)
+        {
+            output.Add(new Token(absStart + breakStart, to - breakStart, TokenType.HardBreak, TokenRole.Marker));
+        }
     }
 
     private void Run(int from, int to)

@@ -255,14 +255,17 @@ public static class HtmlRenderer
         sb.Append("<p>");
         var i = line;
         var firstLine = true;
+        var prevHardBreak = false;
         while (i < n && !IsBlank(doc, i) && IsParagraphLine(doc, model, i))
         {
             if (!firstLine)
             {
-                sb.Append('\n');
+                // A hard break at the end of the previous line becomes a <br>; otherwise a soft join.
+                sb.Append(prevHardBreak ? "<br>\n" : "\n");
             }
 
             RenderInline(doc, model.LineTokens(i), sb);
+            prevHardBreak = EndsWithHardBreak(model, i);
             firstLine = false;
             i++;
         }
@@ -419,6 +422,12 @@ public static class HtmlRenderer
     }
 
     private static bool IsBlank(TextDocument doc, int line) => doc.GetLineText(line).TrimEnd('\r').Length == 0;
+
+    private static bool EndsWithHardBreak(MarkdownModel model, int line)
+    {
+        var tokens = model.LineTokens(line);
+        return tokens.Count > 0 && tokens[^1].Type == TokenType.HardBreak;
+    }
 
     private static bool IsParagraphLine(TextDocument doc, MarkdownModel model, int line)
     {

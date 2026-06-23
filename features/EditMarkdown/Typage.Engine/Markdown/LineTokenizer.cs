@@ -109,7 +109,7 @@ internal static class LineTokenizer
             }
 
             output.Add(new Token(lineStart + indent, p - indent, TokenType.BlockquoteMarker, TokenRole.Marker));
-            InlineTokenizer.Tokenize(line, lineStart, p, len, output);
+            InlineTokenizer.Tokenize(line, lineStart, p, len, output, detectHardBreak: true);
             return BlockState.Normal;
         }
 
@@ -124,12 +124,12 @@ internal static class LineTokenizer
                 contentStart = taskEnd;
             }
 
-            InlineTokenizer.Tokenize(line, lineStart, contentStart, len, output);
+            InlineTokenizer.Tokenize(line, lineStart, contentStart, len, output, detectHardBreak: true);
             return BlockState.Normal;
         }
 
         // Plain paragraph line -> inline only.
-        InlineTokenizer.Tokenize(line, lineStart, 0, len, output);
+        InlineTokenizer.Tokenize(line, lineStart, 0, len, output, detectHardBreak: true);
         return BlockState.Normal;
     }
 

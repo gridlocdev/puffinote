@@ -122,6 +122,30 @@ public class InlineTokenizerTests
         Assert.Equal(new[] { "image.png" }, TextsOfType("![[image.png]]", TokenType.Embed));
     }
 
+    [Fact]
+    public void HardBreak_TwoTrailingSpaces()
+    {
+        Assert.True(HasType("line one  \nline two", TokenType.HardBreak));
+    }
+
+    [Fact]
+    public void HardBreak_TrailingBackslash()
+    {
+        Assert.True(HasType("line one\\\nline two", TokenType.HardBreak));
+    }
+
+    [Fact]
+    public void HardBreak_SingleTrailingSpace_IsNotABreak()
+    {
+        Assert.False(HasType("line one \nline two", TokenType.HardBreak));
+    }
+
+    [Fact]
+    public void HardBreak_NotInHeadings()
+    {
+        Assert.False(HasType("# heading  \ntext", TokenType.HardBreak));
+    }
+
     // ----- tolerant / malformed (PRD §7.4) -----
 
     [Fact]
