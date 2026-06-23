@@ -1,0 +1,11 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="Typage.Engine/Typage.Engine.csproj" />
+    <Project Path="Typage.Control/Typage.Control.csproj" />
+    <Project Path="Typage.Desktop/Typage.Desktop.csproj" />
+    <Project Path="Typage.Cli/Typage.Cli.csproj" />
+    <Project Path="Typage.Engine.Tests/Typage.Engine.Tests.csproj" />
+    <Project Path="Typage.Cli.Tests/Typage.Cli.Tests.csproj" />
+    <Project Path="Typage.UiTests/Typage.UiTests.csproj" />
+  </Folder>
+</Solution>

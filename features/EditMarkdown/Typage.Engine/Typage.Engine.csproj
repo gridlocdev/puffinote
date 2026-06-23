@@ -1,0 +1,21 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    The pure brain: document model (immutable piece table), grapheme-aware
+    navigation, undo/redo, the incremental Markdown tokenizer + checkpoint cache,
+    and the HTML renderer. GOLDEN RULE #1: ZERO UI dependencies. No Avalonia.* here,
+    ever. Only the .NET BCL (System.Globalization for grapheme clusters / text
+    elements). Headless-testable without a window.
+  -->
+  <PropertyGroup>
+    <RootNamespace>Typage.Engine</RootNamespace>
+    <AssemblyName>Typage.Engine</AssemblyName>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- The CLI and the headless engine tests reach a few internal helpers. -->
+    <InternalsVisibleTo Include="Typage.Engine.Tests" />
+    <InternalsVisibleTo Include="typage" />
+  </ItemGroup>
+
+</Project>

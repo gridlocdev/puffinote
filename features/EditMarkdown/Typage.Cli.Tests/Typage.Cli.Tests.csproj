@@ -1,0 +1,20 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- End-to-end tests that drive the CLI in-process (CliApplication.Run). -->
+  <PropertyGroup>
+    <IsPackable>false</IsPackable>
+    <RootNamespace>Typage.Cli.Tests</RootNamespace>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.NET.Test.Sdk" />
+    <PackageReference Include="xunit.v3" />
+    <PackageReference Include="xunit.runner.visualstudio" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Typage.Cli\Typage.Cli.csproj" />
+    <ProjectReference Include="..\Typage.Engine\Typage.Engine.csproj" />
+  </ItemGroup>
+
+</Project>

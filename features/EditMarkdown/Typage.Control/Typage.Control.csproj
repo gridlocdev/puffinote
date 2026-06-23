@@ -1,0 +1,34 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    The embeddable Markdown editing surface: the custom live-preview control built on
+    Avalonia.Media.TextFormatting, its MarkdownTheme (token type -> visual treatment) and
+    IEmbedResolver seams, and the MarkdownEditorView that wraps it. Packaged as an Avalonia
+    control library so both the standalone Typage.Desktop app and a host application (e.g. the
+    future notes-app shell consuming this repo) can embed the surface unchanged. App-shell
+    concerns (window, native menu, file dialogs, settings) stay in Typage.Desktop.
+
+    Dependency direction is strictly shell -> control -> engine; no upward references.
+  -->
+  <PropertyGroup>
+    <RootNamespace>Typage.Control</RootNamespace>
+    <AssemblyName>Typage.Control</AssemblyName>
+    <AvaloniaUseCompiledBindingsByDefault>true</AvaloniaUseCompiledBindingsByDefault>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Avalonia" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Typage.Engine\Typage.Engine.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- The standalone app shell (assembly name "Typage") and the headless UI tests reach a few
+         internal seams on the surface control. -->
+    <InternalsVisibleTo Include="Typage" />
+    <InternalsVisibleTo Include="Typage.UiTests" />
+  </ItemGroup>
+
+</Project>

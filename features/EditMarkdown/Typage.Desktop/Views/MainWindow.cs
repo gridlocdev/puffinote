@@ -1,0 +1,442 @@
+using System.Text;
+using Avalonia.Controls;
+using Avalonia.Input;
+using Avalonia.Layout;
+using Avalonia.Media;
+using Avalonia.Platform.Storage;
+using Typage.Control.Views;
+using Typage.Desktop.Services;
+using Typage.Engine.Html;
+
+namespace Typage.Desktop.Views;
+
+/// <summary>
+/// The standalone shell's single window (PRD §5 — one window, one document, one process). A thin
+/// host around the embeddable <see cref="MarkdownEditorView"/>: it owns the menu, file dialogs,
+/// recent files, the dirty-state guard, the status bar, and HTML export. All editing logic lives
+/// in the control and engine; this layer is replaceable by the future notes-app shell.
+/// </summary>
+public class MainWindow : Window
+{
+    private readonly SettingsService _settings;
+    private readonly MarkdownEditorView _editorView = new();
+    private readonly TextBlock _statusPosition = new();
+    private readonly TextBlock _statusCounts = new();
+    private readonly TextBlock _statusState = new();
+    private string? _currentPath;
+
+    private static readonly FilePickerFileType MarkdownType = new("Markdown")
+    {
+        Patterns = new[] { "*.md", "*.markdown", "*.mdown", "*.txt" },
+    };
+
+    public MainWindow(SettingsService settings)
+    {
+        _settings = settings;
+        Width = 900;
+        Height = 680;
+        Title = "Typage";
+
+        var root = new DockPanel();
+        root.Children.Add(BuildMenu());
+        root.Children.Add(BuildToolbar());
+        root.Children.Add(BuildStatusBar());
+        root.Children.Add(_editorView);
+        Content = root;
+
+        _editorView.TextChanged += (_, _) => UpdateChrome();
+        _editorView.SelectionChanged += (_, _) => UpdateStatus();
+        Closing += OnClosing;
+
+        UpdateChrome();
+    }
+
+    /// <summary>The embedded editor view, exposed for the headless UI tests.</summary>
+    internal MarkdownEditorView EditorView => _editorView;
+
+    // ----- chrome -----
+
+    private Menu BuildMenu()
+    {
+        var file = new MenuItem { Header = "_File" };
+        file.Items.Add(Item("_New", () => _ = NewDocumentAsync(), "Ctrl+N"));
+        file.Items.Add(Item("_Open…", () => _ = OpenAsync(), "Ctrl+O"));
+        file.Items.Add(Item("_Save", () => _ = SaveAsync(), "Ctrl+S"));
+        file.Items.Add(Item("Save _As…", () => _ = SaveAsAsync(), "Ctrl+Shift+S"));
+        file.Items.Add(Item("_Revert to Saved", () => _ = RevertAsync()));
+        file.Items.Add(new Separator());
+        file.Items.Add(Item("_Export HTML…", () => _ = ExportHtmlAsync()));
+        file.Items.Add(new Separator());
+        file.Items.Add(Item("E_xit", Close));
+
+        var edit = new MenuItem { Header = "_Edit" };
+        edit.Items.Add(Item("_Undo", () => _editorView.Undo(), "Ctrl+Z"));
+        edit.Items.Add(Item("_Redo", () => _editorView.Redo(), "Ctrl+Y"));
+
+        var format = new MenuItem { Header = "F_ormat" };
+        format.Items.Add(Item("_Bold", () => _editorView.Editor.ToggleBold(), "Ctrl+B"));
+        format.Items.Add(Item("_Italic", () => _editorView.Editor.ToggleItalic(), "Ctrl+I"));
+        format.Items.Add(Item("Inline _Code", () => _editorView.Editor.ToggleInlineCode(), "Ctrl+E"));
+        format.Items.Add(Item("_Strikethrough", () => _editorView.Editor.ToggleStrikethrough()));
+        format.Items.Add(new Separator());
+        for (var level = 1; level <= 3; level++)
+        {
+            var l = level;
+            format.Items.Add(Item($"Heading {l}", () => _editorView.Editor.ApplyHeading(l), $"Ctrl+{l}"));
+        }
+
+        var help = new MenuItem { Header = "_Help" };
+        help.Items.Add(Item("Markdown _Reference", ShowHelp));
+
+        var menu = new Menu();
+        menu.Items.Add(file);
+        menu.Items.Add(edit);
+        menu.Items.Add(format);
+        menu.Items.Add(help);
+        DockPanel.SetDock(menu, Dock.Top);
+        return menu;
+    }
+
+    private MenuItem Item(string header, Action action, string? gesture = null)
+    {
+        var command = new RelayCommand(action);
+        var item = new MenuItem { Header = header, Command = command };
+        if (gesture is not null)
+        {
+            var kg = KeyGesture.Parse(gesture);
+            item.InputGesture = kg;
+            KeyBindings.Add(new KeyBinding { Gesture = kg, Command = command });
+        }
+
+        return item;
+    }
+
+    private Border BuildToolbar()
+    {
+        var panel = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 4, Margin = new Avalonia.Thickness(6, 3) };
+        panel.Children.Add(ToolButton("B", "Bold", () => _editorView.Editor.ToggleBold(), bold: true));
+        panel.Children.Add(ToolButton("I", "Italic", () => _editorView.Editor.ToggleItalic(), italic: true));
+        panel.Children.Add(ToolButton("</>", "Inline code", () => _editorView.Editor.ToggleInlineCode()));
+        panel.Children.Add(ToolButton("H1", "Heading 1", () => _editorView.Editor.ApplyHeading(1)));
+        panel.Children.Add(ToolButton("H2", "Heading 2", () => _editorView.Editor.ApplyHeading(2)));
+        var border = new Border
+        {
+            Child = panel,
+            BorderThickness = new Avalonia.Thickness(0, 0, 0, 1),
+            BorderBrush = new SolidColorBrush(Color.FromRgb(0xE0, 0xE0, 0xE0)),
+        };
+        DockPanel.SetDock(border, Dock.Top);
+        return border;
+    }
+
+    private Button ToolButton(string label, string tooltip, Action action, bool bold = false, bool italic = false)
+    {
+        var button = new Button
+        {
+            Content = label,
+            Padding = new Avalonia.Thickness(8, 2),
+            FontWeight = bold ? FontWeight.Bold : FontWeight.Normal,
+            FontStyle = italic ? FontStyle.Italic : FontStyle.Normal,
+            Command = new RelayCommand(action),
+        };
+        ToolTip.SetTip(button, tooltip);
+        return button;
+    }
+
+    private Border BuildStatusBar()
+    {
+        var panel = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 18, Margin = new Avalonia.Thickness(8, 3) };
+        panel.Children.Add(_statusState);
+        panel.Children.Add(_statusPosition);
+        panel.Children.Add(_statusCounts);
+        var border = new Border
+        {
+            Child = panel,
+            BorderThickness = new Avalonia.Thickness(0, 1, 0, 0),
+            BorderBrush = new SolidColorBrush(Color.FromRgb(0xE0, 0xE0, 0xE0)),
+            Background = new SolidColorBrush(Color.FromRgb(0xFA, 0xFA, 0xFA)),
+        };
+        DockPanel.SetDock(border, Dock.Bottom);
+        return border;
+    }
+
+    // ----- file operations -----
+
+    public void OpenPath(string path)
+    {
+        try
+        {
+            var text = File.ReadAllText(path);
+            _editorView.LoadText(text);
+            _currentPath = path;
+            _settings.Settings.PushRecent(path);
+            _settings.Save();
+            UpdateChrome();
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            // Heuristic 9: state the OS reason; a real dialog would offer a recovery action.
+            _statusState.Text = $"Could not open: {ex.Message}";
+        }
+    }
+
+    private async Task NewDocumentAsync()
+    {
+        if (!await ConfirmDiscardAsync())
+        {
+            return;
+        }
+
+        _editorView.LoadText(string.Empty);
+        _currentPath = null;
+        UpdateChrome();
+    }
+
+    private async Task OpenAsync()
+    {
+        if (!await ConfirmDiscardAsync())
+        {
+            return;
+        }
+
+        var files = await StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
+        {
+            Title = "Open Markdown",
+            AllowMultiple = false,
+            FileTypeFilter = new[] { MarkdownType, FilePickerFileTypes.All },
+        });
+
+        if (files.Count > 0 && files[0].TryGetLocalPath() is { } path)
+        {
+            OpenPath(path);
+        }
+    }
+
+    private async Task<bool> SaveAsync()
+    {
+        if (_currentPath is null)
+        {
+            return await SaveAsAsync();
+        }
+
+        return WriteToPath(_currentPath);
+    }
+
+    private async Task<bool> SaveAsAsync()
+    {
+        var file = await StorageProvider.SaveFilePickerAsync(new FilePickerSaveOptions
+        {
+            Title = "Save Markdown",
+            DefaultExtension = "md",
+            SuggestedFileName = Path.GetFileName(_currentPath) ?? "Untitled.md",
+            FileTypeChoices = new[] { MarkdownType },
+        });
+
+        if (file?.TryGetLocalPath() is { } path)
+        {
+            if (WriteToPath(path))
+            {
+                _currentPath = path;
+                _settings.Settings.PushRecent(path);
+                _settings.Save();
+                UpdateChrome();
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private bool WriteToPath(string path)
+    {
+        try
+        {
+            AtomicWrite(path, _editorView.Text);
+            _editorView.MarkSaved();
+            UpdateChrome();
+            return true;
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            _statusState.Text = $"Could not save: {ex.Message}";
+            return false;
+        }
+    }
+
+    private async Task RevertAsync()
+    {
+        if (_currentPath is null || !_editorView.IsDirty)
+        {
+            return;
+        }
+
+        if (await ConfirmAsync("Revert to the last saved version? Unsaved changes will be lost."))
+        {
+            OpenPath(_currentPath);
+        }
+    }
+
+    private async Task ExportHtmlAsync()
+    {
+        var file = await StorageProvider.SaveFilePickerAsync(new FilePickerSaveOptions
+        {
+            Title = "Export HTML",
+            DefaultExtension = "html",
+            SuggestedFileName = (Path.GetFileNameWithoutExtension(_currentPath) ?? "Untitled") + ".html",
+            FileTypeChoices = new[] { new FilePickerFileType("HTML") { Patterns = new[] { "*.html", "*.htm" } } },
+        });
+
+        if (file?.TryGetLocalPath() is { } path)
+        {
+            var title = Path.GetFileNameWithoutExtension(path);
+            var html = HtmlRenderer.RenderDocument(Engine.Document.TextDocument.FromString(_editorView.Text), title);
+            try
+            {
+                AtomicWrite(path, html);
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            {
+                _statusState.Text = $"Could not export: {ex.Message}";
+            }
+        }
+    }
+
+    private static void AtomicWrite(string path, string content)
+    {
+        var full = Path.GetFullPath(path);
+        var dir = Path.GetDirectoryName(full) ?? ".";
+        var temp = Path.Combine(dir, $".{Path.GetFileName(full)}.{Guid.NewGuid():N}.tmp");
+        try
+        {
+            File.WriteAllText(temp, content, new UTF8Encoding(false));
+            File.Move(temp, full, overwrite: true); // atomic on the same volume (PRD §7.1)
+        }
+        catch
+        {
+            if (File.Exists(temp))
+            {
+                File.Delete(temp);
+            }
+
+            throw;
+        }
+    }
+
+    // ----- unsaved-changes guard (heuristics 3, 5) -----
+
+    private async void OnClosing(object? sender, WindowClosingEventArgs e)
+    {
+        if (_editorView.IsDirty && !_closingConfirmed)
+        {
+            e.Cancel = true;
+            if (await ConfirmDiscardAsync())
+            {
+                _closingConfirmed = true;
+                Close();
+            }
+        }
+    }
+
+    private bool _closingConfirmed;
+
+    /// <summary>Returns true if it is safe to discard the current document (saved, clean, or user agreed).</summary>
+    private async Task<bool> ConfirmDiscardAsync()
+    {
+        if (!_editorView.IsDirty)
+        {
+            return true;
+        }
+
+        return await ConfirmAsync("You have unsaved changes. Discard them?");
+    }
+
+    private async Task<bool> ConfirmAsync(string message)
+    {
+        var tcs = new TaskCompletionSource<bool>();
+        var yes = new Button { Content = "Discard", IsDefault = false };
+        var no = new Button { Content = "Cancel", IsCancel = true };
+        yes.Click += (_, _) => tcs.TrySetResult(true);
+        no.Click += (_, _) => tcs.TrySetResult(false);
+
+        var dialog = new Window
+        {
+            Title = "Typage",
+            Width = 360,
+            SizeToContent = SizeToContent.Height,
+            WindowStartupLocation = WindowStartupLocation.CenterOwner,
+            CanResize = false,
+            Content = new StackPanel
+            {
+                Margin = new Avalonia.Thickness(16),
+                Spacing = 16,
+                Children =
+                {
+                    new TextBlock { Text = message, TextWrapping = TextWrapping.Wrap },
+                    new StackPanel
+                    {
+                        Orientation = Orientation.Horizontal,
+                        HorizontalAlignment = HorizontalAlignment.Right,
+                        Spacing = 8,
+                        Children = { no, yes },
+                    },
+                },
+            },
+        };
+        dialog.Closed += (_, _) => tcs.TrySetResult(false);
+        await dialog.ShowDialog(this);
+        return await tcs.Task;
+    }
+
+    private void ShowHelp()
+    {
+        var help = new Window
+        {
+            Title = "Markdown Reference",
+            Width = 420,
+            Height = 480,
+            Content = new ScrollViewer
+            {
+                Padding = new Avalonia.Thickness(16),
+                Content = new TextBlock { Text = HelpText, TextWrapping = TextWrapping.Wrap, FontFamily = new FontFamily("monospace") },
+            },
+        };
+        help.Show(this);
+    }
+
+    // ----- status / title -----
+
+    private void UpdateChrome()
+    {
+        UpdateTitle();
+        UpdateStatus();
+    }
+
+    private void UpdateTitle()
+    {
+        var name = _currentPath is null ? "Untitled" : Path.GetFileName(_currentPath);
+        Title = (_editorView.IsDirty ? "• " : string.Empty) + name + " — Typage";
+    }
+
+    private void UpdateStatus()
+    {
+        var pos = _editorView.CaretPosition;
+        var stats = _editorView.Stats;
+        _statusState.Text = _editorView.IsDirty ? "Modified" : "Saved";
+        _statusPosition.Text = $"Ln {pos.DisplayLine}, Col {pos.DisplayColumn}";
+        _statusCounts.Text = $"{stats.Words} words · {stats.Characters} chars · ~{stats.ReadingMinutes} min";
+        UpdateTitle();
+    }
+
+    private const string HelpText =
+        "Markdown quick reference\n\n" +
+        "# H1 … ###### H6   headings\n" +
+        "**bold**  *italic*  ~~strike~~  ==highlight==\n" +
+        "`inline code`   ```fenced code```\n" +
+        "- bullet   1. number   - [ ] task / - [x] done\n" +
+        "> blockquote\n" +
+        "[text](url)   ![alt](image)   <https://url>\n" +
+        "| table | header |  with a |---|---| delimiter row\n" +
+        "---   horizontal rule\n\n" +
+        "Shortcuts: Ctrl+B bold · Ctrl+I italic · Ctrl+E code · Ctrl+1/2/3 heading\n" +
+        "Ctrl+S save · Ctrl+O open · Ctrl+N new · Ctrl+Z/Y undo/redo";
+}
