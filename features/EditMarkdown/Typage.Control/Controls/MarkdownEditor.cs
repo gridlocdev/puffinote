@@ -184,27 +184,12 @@ public class MarkdownEditor : Avalonia.Controls.Control
 
         // Tile the line with styled segments (filling gaps between tokens with default style).
         var x = 0d;
-        var pos = 0;
         var caretX = double.NaN;
         var caretCol = sel.Caret - lineStart;
 
-        foreach (var (segStart, segEnd, type) in Segments(line, contentLen))
+        foreach (var (from, to, style) in StyledSegments(line, contentLen, headingLevel))
         {
-            if (segStart > pos)
-            {
-                x += DrawSegment(context, lineText, pos, segStart, lineTop, DefaultStyle(headingLevel), revealMarkers,
-                    ref caretX, caretCol, x);
-            }
-
-            x += DrawSegment(context, lineText, segStart, segEnd, lineTop, StyleFor(type, headingLevel), revealMarkers,
-                ref caretX, caretCol, x);
-            pos = segEnd;
-        }
-
-        if (pos < contentLen)
-        {
-            x += DrawSegment(context, lineText, pos, contentLen, lineTop, DefaultStyle(headingLevel), revealMarkers,
-                ref caretX, caretCol, x);
+            x += DrawSegment(context, lineText, from, to, lineTop, style, revealMarkers, ref caretX, caretCol, x);
         }
 
         // Caret.
@@ -271,8 +256,9 @@ public class MarkdownEditor : Avalonia.Controls.Control
             return;
         }
 
-        var x1 = MeasurePrefixWidth(lineText, selStartCol);
-        var x2 = MeasurePrefixWidth(lineText, selEndCol);
+        var headingLevel = HeadingLevel(line);
+        var x1 = ColumnX(line, contentLen, headingLevel, lineText, selStartCol);
+        var x2 = ColumnX(line, contentLen, headingLevel, lineText, selEndCol);
         context.FillRectangle(_theme.SelectionBackground, new Rect(x1, line * _theme.LineHeight + 2, x2 - x1, _theme.LineHeight - 4));
     }
 
@@ -380,32 +366,76 @@ public class MarkdownEditor : Avalonia.Controls.Control
     private static Typeface HeadingTypeface(RunStyle baseStyle) =>
         new(baseStyle.Typeface.FontFamily, FontStyle.Normal, FontWeight.Bold);
 
-    /// <summary>The token spans on <paramref name="line"/>, clamped to <paramref name="contentLen"/> and line-relative.</summary>
-    private IEnumerable<(int Start, int End, TokenType Type)> Segments(int line, int contentLen)
+    /// <summary>
+    /// The full styled tiling of a line: every token span resolved to a <see cref="RunStyle"/>,
+    /// with the gaps between tokens (e.g. leading indent) filled by the default style. The single
+    /// source of truth used by both rendering and width measurement, so the caret, the selection
+    /// rectangle, and mouse hit-testing all agree with the drawn glyphs even on styled lines.
+    /// </summary>
+    private IEnumerable<(int From, int To, RunStyle Style)> StyledSegments(int line, int contentLen, int headingLevel)
     {
         var lineStart = _buffer.Document.GetLineStart(line);
+        var pos = 0;
         foreach (var t in _model.LineTokens(line))
         {
             var s = Math.Clamp(t.Start - lineStart, 0, contentLen);
             var en = Math.Clamp(t.End - lineStart, 0, contentLen);
-            if (en > s)
+            if (en <= s)
             {
-                yield return (s, en, t.Type);
+                continue;
             }
+
+            if (s > pos)
+            {
+                yield return (pos, s, DefaultStyle(headingLevel));
+            }
+
+            yield return (s, en, StyleFor(t.Type, headingLevel));
+            pos = en;
+        }
+
+        if (pos < contentLen)
+        {
+            yield return (pos, contentLen, DefaultStyle(headingLevel));
         }
     }
 
-    private double MeasurePrefixWidth(string lineText, int col)
+    /// <summary>The x-offset of column <paramref name="col"/> on <paramref name="line"/>, measured with each run's real font.</summary>
+    private double ColumnX(int line, int contentLen, int headingLevel, string lineText, int col)
     {
         if (col <= 0)
         {
             return 0;
         }
 
-        var prefix = lineText.Substring(0, Math.Min(col, lineText.Length));
-        var ft = new FormattedText(prefix, CultureInfo.CurrentCulture, FlowDirection.LeftToRight,
-            _theme.Resolve(TokenType.Text).Typeface, _theme.BaseFontSize, _theme.Foreground);
-        return ft.Width;
+        var x = 0d;
+        foreach (var (from, to, style) in StyledSegments(line, contentLen, headingLevel))
+        {
+            if (col <= from)
+            {
+                break;
+            }
+
+            var end = Math.Min(col, to);
+            x += MeasureWidth(lineText.Substring(from, end - from), style);
+            if (col <= to)
+            {
+                break;
+            }
+        }
+
+        return x;
+    }
+
+    private double MeasureWidth(string text, RunStyle style)
+    {
+        if (text.Length == 0)
+        {
+            return 0;
+        }
+
+        return new FormattedText(text, CultureInfo.CurrentCulture, FlowDirection.LeftToRight,
+            style.Typeface, style.FontSize, style.Foreground).Width;
     }
 
     private int OffsetAt(int line, double x)
@@ -414,13 +444,14 @@ public class MarkdownEditor : Avalonia.Controls.Control
         var lineStart = doc.GetLineStart(line);
         var lineEnd = doc.GetLineEnd(line);
         var text = doc.GetText(lineStart, lineEnd - lineStart).TrimEnd('\r');
-        // Walk grapheme boundaries, picking the one whose prefix width is closest to x.
+        var headingLevel = HeadingLevel(line);
+        // Walk grapheme boundaries, picking the one whose styled prefix width is closest to x.
         var best = 0;
         var bestDist = double.MaxValue;
         var col = 0;
         while (true)
         {
-            var w = MeasurePrefixWidth(text, col);
+            var w = ColumnX(line, text.Length, headingLevel, text, col);
             var d = Math.Abs(w - x);
             if (d < bestDist)
             {
