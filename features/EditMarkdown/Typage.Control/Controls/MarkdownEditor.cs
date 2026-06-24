@@ -126,7 +126,8 @@ public class MarkdownEditor : Avalonia.Controls.Control, ILogicalScrollable
         {
             _theme = value;
             UpdateDerivedBrushes();
-            _extentWidth = 0; // fonts changed — let the horizontal extent regrow as lines redraw
+            _widthCache.Clear(); // cached widths assume the old fonts/sizes
+            _extentWidth = 0;    // fonts changed — let the horizontal extent regrow as lines redraw
             RaiseScrollInvalidated(EventArgs.Empty);
             InvalidateMeasure();
             InvalidateVisual();
@@ -850,17 +851,46 @@ public class MarkdownEditor : Avalonia.Controls.Control, ILogicalScrollable
             return 0;
         }
 
-        if (char.IsWhiteSpace(text[^1]))
+        // Width is fully determined by (text, font family/style/weight, size). Cache it so caret
+        // moves, clicks, selection, and per-frame advances stop reconstructing/shaping FormattedText
+        // for runs they've already measured (the cache is cleared when the theme/fonts change).
+        var tf = style.Typeface;
+        var key = new WidthKey(text, tf.FontFamily, tf.Style, tf.Weight, style.FontSize);
+        if (_widthCache.TryGetValue(key, out var cached))
         {
-            return RawWidth(text + ".", style) - RawWidth(".", style);
+            return cached;
         }
 
-        return RawWidth(text, style);
+        var width = char.IsWhiteSpace(text[^1])
+            ? RawWidth(text + ".", style) - RawWidth(".", style)
+            : RawWidth(text, style);
+
+        if (_widthCache.Count >= 16384)
+        {
+            _widthCache.Clear(); // bound the cache; it rebuilds on demand
+        }
+
+        _widthCache[key] = width;
+        return width;
     }
 
-    private static double RawWidth(string text, RunStyle style) =>
-        new FormattedText(text, CultureInfo.CurrentCulture, FlowDirection.LeftToRight,
+    private double RawWidth(string text, RunStyle style)
+    {
+        _rawMeasures++; // counts actual FormattedText shaping (cache misses) — used by perf tests
+        return new FormattedText(text, CultureInfo.CurrentCulture, FlowDirection.LeftToRight,
             style.Typeface, style.FontSize, style.Foreground).Width;
+    }
+
+    private readonly Dictionary<WidthKey, double> _widthCache = new();
+    private int _rawMeasures;
+
+    /// <summary>Number of real text-shaping measurements performed (cache misses); for perf tests.</summary>
+    internal int RawMeasureCount => _rawMeasures;
+
+    /// <summary>Measure a run with the default text style, exercising the width cache; for perf tests.</summary>
+    internal double MeasureWidthForTest(string text) => MeasureWidth(text, _theme.Resolve(TokenType.Text));
+
+    private readonly record struct WidthKey(string Text, FontFamily Family, FontStyle Style, FontWeight Weight, double Size);
 
     private int OffsetAt(int line, double x)
     {

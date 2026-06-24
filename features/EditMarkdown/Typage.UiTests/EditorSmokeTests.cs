@@ -138,6 +138,28 @@ public class EditorSmokeTests
     }
 
     [AvaloniaFact]
+    public void WidthCache_AvoidsReshapingMeasuredRuns()
+    {
+        var editor = new MarkdownEditor();
+        var start = editor.RawMeasureCount;
+
+        editor.MeasureWidthForTest("hello world");
+        var afterFirst = editor.RawMeasureCount;
+        Assert.True(afterFirst > start); // shaped once
+
+        editor.MeasureWidthForTest("hello world");
+        Assert.Equal(afterFirst, editor.RawMeasureCount); // cache hit — no new shaping
+
+        editor.MeasureWidthForTest("a different run");
+        Assert.True(editor.RawMeasureCount > afterFirst); // a new run is shaped
+
+        editor.EditorTheme = Control.Rendering.MarkdownTheme.Light; // theme change invalidates the cache
+        var afterTheme = editor.RawMeasureCount;
+        editor.MeasureWidthForTest("hello world");
+        Assert.True(editor.RawMeasureCount > afterTheme); // re-shaped under the new fonts
+    }
+
+    [AvaloniaFact]
     public void ThemeVariants_DifferByBackground()
     {
         var light = (Avalonia.Media.ISolidColorBrush)Control.Rendering.MarkdownTheme.Light.Background;
