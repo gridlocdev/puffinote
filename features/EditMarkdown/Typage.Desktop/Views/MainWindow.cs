@@ -1203,6 +1203,10 @@ public class MainWindow : Window
             },
         };
         dialog.Closed += (_, _) => tcs.TrySetResult(false);
+        // The button clicks record the choice (above) AND close the dialog — without this the window
+        // stays open and ShowDialog never returns, so clicking appears to do nothing until you close it.
+        yes.Click += (_, _) => dialog.Close();
+        no.Click += (_, _) => dialog.Close();
         await dialog.ShowDialog(this);
         return await tcs.Task;
     }
