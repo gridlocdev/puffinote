@@ -36,6 +36,7 @@ public class MarkdownTheme
         SearchMatch = new SolidColorBrush(Color.FromArgb(0x66, 0xF5, 0xC2, 0x11)),
         SearchMatchCurrent = new SolidColorBrush(Color.FromArgb(0xAA, 0xF0, 0xA8, 0x00)),
         Background = new SolidColorBrush(Color.FromRgb(0xFD, 0xFD, 0xFD)),
+        PropertiesBackground = new SolidColorBrush(Color.FromArgb(0x0E, 0x00, 0x00, 0x00)),
     };
 
     /// <summary>A high-contrast palette: pure black/white with vivid accents (PRD §7.2, §9.6).</summary>
@@ -52,6 +53,7 @@ public class MarkdownTheme
         SearchMatch = new SolidColorBrush(Color.FromArgb(0x77, 0xFF, 0xD4, 0x00)),
         SearchMatchCurrent = new SolidColorBrush(Color.FromArgb(0xCC, 0xFF, 0xD4, 0x00)),
         Background = new SolidColorBrush(Colors.Black),
+        PropertiesBackground = new SolidColorBrush(Color.FromArgb(0x33, 0xFF, 0xFF, 0xFF)),
     };
 
     public double BaseFontSize { get; init; } = 15;
@@ -86,6 +88,9 @@ public class MarkdownTheme
     public IBrush SearchMatchCurrent { get; init; } = new SolidColorBrush(Color.FromArgb(0x99, 0xE3, 0xA8, 0x2B));
 
     public IBrush Background { get; init; } = new SolidColorBrush(Color.FromRgb(0x1E, 0x1E, 0x1E));
+
+    /// <summary>The panel tint behind the leading front-matter "Properties" block (PRD §7.4).</summary>
+    public IBrush PropertiesBackground { get; init; } = new SolidColorBrush(Color.FromArgb(0x16, 0x6E, 0x76, 0x81));
 
     private readonly FontFamily _body = FontFamily.Default;
     private readonly FontFamily _mono = new("Cascadia Code,Consolas,Menlo,monospace");

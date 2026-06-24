@@ -489,6 +489,8 @@ public class MarkdownEditor : Avalonia.Controls.Control, ILogicalScrollable
         // Content is drawn in document space, inset by the padding and shifted by the scroll offset.
         using (context.PushTransform(Matrix.CreateTranslation(_theme.PaddingLeft - _offset.X, _theme.PaddingTop - _offset.Y)))
         {
+            DrawPropertiesPanel(context, first, last); // front-matter "Properties" backdrop, under the text
+
             var maxWidth = _extentWidth;
             for (var line = first; line < last; line++)
             {
@@ -503,6 +505,66 @@ public class MarkdownEditor : Avalonia.Controls.Control, ILogicalScrollable
                 Dispatcher.UIThread.Post(() => RaiseScrollInvalidated(EventArgs.Empty));
             }
         }
+    }
+
+    /// <summary>
+    /// The leading front-matter block (PRD §7.4): line 0's opening <c>---</c> through its closing
+    /// fence, or null when the document has none. Front matter exists only when a closing fence is
+    /// present (a lone <c>---</c> tokenizes as a horizontal rule), so a found opening implies a close.
+    /// </summary>
+    private (int Start, int End)? FrontMatterBlock()
+    {
+        var doc = _buffer.Document;
+        if (doc.LineCount == 0)
+        {
+            return null;
+        }
+
+        var first = _model.LineTokens(0);
+        if (first.Count == 0 || first[0].Type != TokenType.FrontMatterFence)
+        {
+            return null;
+        }
+
+        for (var line = 1; line < doc.LineCount; line++)
+        {
+            var tokens = _model.LineTokens(line);
+            if (tokens.Count > 0 && tokens[0].Type == TokenType.FrontMatterFence)
+            {
+                return (0, line);
+            }
+        }
+
+        return null;
+    }
+
+    /// <summary>The detected front-matter block range; for tests.</summary>
+    internal (int Start, int End)? FrontMatterBlockForTest() => FrontMatterBlock();
+
+    /// <summary>
+    /// Draw the "Properties" panel behind the front-matter block: a tinted backdrop spanning its
+    /// rows plus a right-aligned label on the opening-fence row. Drawn under the text and without
+    /// changing any glyph layout, so caret/selection/hit-testing stay exact (offsets remain 1:1).
+    /// True folding of the block belongs with the §7.4 concealment work (the offset↔visual map).
+    /// </summary>
+    private void DrawPropertiesPanel(DrawingContext context, int firstVisible, int lastVisible)
+    {
+        if (FrontMatterBlock() is not { } block || block.End < firstVisible || block.Start >= lastVisible)
+        {
+            return;
+        }
+
+        var lineH = _theme.LineHeight;
+        var viewportW = _viewport.Width > 0 ? _viewport.Width : Bounds.Width;
+        var panelRight = Math.Max(220, viewportW - _theme.PaddingLeft * 2);
+        var top = block.Start * lineH + 2;
+        var height = (block.End - block.Start + 1) * lineH - 4;
+        context.FillRectangle(_theme.PropertiesBackground, new Rect(-8, top, panelRight + 8, height), 6);
+
+        // "Properties" label on the opening-fence row (its source is only "---", so no text overlap).
+        var label = GetFormattedText("Properties", _theme.Resolve(TokenType.FrontMatterFence), _dimMarker);
+        var labelY = block.Start * lineH + (lineH - label.Height) / 2;
+        context.DrawText(label, new Point(panelRight - label.Width - 6, labelY));
     }
 
     private double RenderLine(DrawingContext context, TextDocument doc, int line, Selection sel, int caretLine)
