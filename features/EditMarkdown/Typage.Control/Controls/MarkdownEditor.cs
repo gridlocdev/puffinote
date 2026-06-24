@@ -38,6 +38,8 @@ public class MarkdownEditor : Avalonia.Controls.Control, ILogicalScrollable
     private Vector _offset;
     private Size _viewport;
     private double _extentWidth;
+    private IReadOnlyList<SearchMatch> _searchMatches = Array.Empty<SearchMatch>();
+    private int _currentMatch = -1;
     private bool _canHorizontallyScroll = true;
     private bool _canVerticallyScroll = true;
     private EventHandler? _scrollInvalidated;
@@ -87,6 +89,16 @@ public class MarkdownEditor : Avalonia.Controls.Control, ILogicalScrollable
 
     /// <summary>The caret position as a 1-based line:column for the status bar.</summary>
     public LinePosition CaretPosition => _buffer.Document.GetPosition(_buffer.Selection.Caret);
+
+    /// <summary>The currently selected text (empty when there is no selection).</summary>
+    public string SelectedText
+    {
+        get
+        {
+            var sel = _buffer.Selection;
+            return sel.IsEmpty ? string.Empty : _buffer.Document.GetText(sel.Start, sel.Length);
+        }
+    }
 
     /// <summary>The number of grapheme clusters currently selected (0 when the selection is empty).</summary>
     public int SelectedCharacterCount
@@ -197,6 +209,35 @@ public class MarkdownEditor : Avalonia.Controls.Control, ILogicalScrollable
 
     /// <summary>Select the whole document.</summary>
     public void SelectAll() => _buffer.Selection = new Selection(0, _buffer.Document.Length);
+
+    // ----- find / replace support (the find bar lives in the shell) -----
+
+    /// <summary>Highlight the given search matches, marking <paramref name="current"/> as the active one.</summary>
+    public void SetSearchMatches(IReadOnlyList<SearchMatch> matches, int current)
+    {
+        _searchMatches = matches;
+        _currentMatch = current;
+        InvalidateVisual();
+    }
+
+    public void ClearSearchMatches()
+    {
+        _searchMatches = Array.Empty<SearchMatch>();
+        _currentMatch = -1;
+        InvalidateVisual();
+    }
+
+    /// <summary>Select <c>[start, start+length)</c> and scroll it into view (used by find navigation).</summary>
+    public void Select(int start, int length)
+    {
+        var len = _buffer.Document.Length;
+        start = Math.Clamp(start, 0, len);
+        var end = Math.Clamp(start + length, 0, len);
+        _buffer.Selection = new Selection(start, end);
+    }
+
+    /// <summary>Replace <c>[start, start+length)</c> with <paramref name="replacement"/> (used by find &amp; replace).</summary>
+    public void Replace(int start, int length, string replacement) => _buffer.ReplaceRange(start, length, replacement);
 
     // ----- clipboard (PRD §7.2 — copy yields Markdown source) -----
 
@@ -395,7 +436,12 @@ public class MarkdownEditor : Avalonia.Controls.Control, ILogicalScrollable
         var headingLevel = HeadingLevel(line);
         var revealMarkers = caretLine == line || sel.Intersects(lineStart, Math.Max(1, lineEnd - lineStart));
 
-        // Selection highlight for this line.
+        // Search-match highlights (under the text), then the selection on top.
+        if (_searchMatches.Count > 0)
+        {
+            DrawSearchMatches(context, line, lineStart, contentLen, lineText, headingLevel);
+        }
+
         if (sel.Length > 0)
         {
             DrawSelection(context, line, lineStart, contentLen, sel, lineText);
@@ -457,6 +503,31 @@ public class MarkdownEditor : Avalonia.Controls.Control, ILogicalScrollable
         }
 
         return MeasureWidth(text, style); // advance includes trailing whitespace, unlike ft.Width
+    }
+
+    private void DrawSearchMatches(DrawingContext context, int line, int lineStart, int contentLen, string lineText, int headingLevel)
+    {
+        var lineEnd = lineStart + contentLen;
+        for (var i = 0; i < _searchMatches.Count; i++)
+        {
+            var m = _searchMatches[i];
+            if (m.Start >= lineEnd || m.End <= lineStart)
+            {
+                continue; // match not on this line
+            }
+
+            var s = Math.Clamp(m.Start - lineStart, 0, contentLen);
+            var e = Math.Clamp(m.End - lineStart, 0, contentLen);
+            if (e <= s)
+            {
+                continue;
+            }
+
+            var x1 = ColumnX(line, contentLen, headingLevel, lineText, s);
+            var x2 = ColumnX(line, contentLen, headingLevel, lineText, e);
+            var brush = i == _currentMatch ? _theme.SearchMatchCurrent : _theme.SearchMatch;
+            context.FillRectangle(brush, new Rect(x1, line * _theme.LineHeight + 2, x2 - x1, _theme.LineHeight - 4), 2);
+        }
     }
 
     private void DrawSelection(DrawingContext context, int line, int lineStart, int contentLen, Selection sel, string lineText)

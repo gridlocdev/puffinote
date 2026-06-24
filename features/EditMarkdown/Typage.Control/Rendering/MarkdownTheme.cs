@@ -46,6 +46,10 @@ public class MarkdownTheme
 
     public IBrush SelectionBackground { get; init; } = new SolidColorBrush(Color.FromArgb(0x55, 0x2F, 0x68, 0xC4));
 
+    public IBrush SearchMatch { get; init; } = new SolidColorBrush(Color.FromArgb(0x55, 0xC2, 0x8A, 0x12));
+
+    public IBrush SearchMatchCurrent { get; init; } = new SolidColorBrush(Color.FromArgb(0x99, 0xE3, 0xA8, 0x2B));
+
     public IBrush Background { get; init; } = new SolidColorBrush(Color.FromRgb(0x1E, 0x1E, 0x1E));
 
     private readonly FontFamily _body = FontFamily.Default;

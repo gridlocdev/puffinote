@@ -29,6 +29,7 @@ public class MainWindow : Window
     private TextFileFormat _format = TextFileFormat.Utf8NoBom;
     private readonly MenuItem _recentMenu = new() { Header = "Open _Recent" };
     private readonly CommandPalette _palette = new();
+    private FindBar? _findBar;
     private Border? _toolbar;
     private MenuItem? _toggleToolbarItem;
 
@@ -53,6 +54,9 @@ public class MainWindow : Window
         _toolbar = BuildToolbar();
         _toolbar.IsVisible = _settings.Settings.ShowToolbar; // restore the persisted toolbar visibility
         root.Children.Add(_toolbar);
+        _findBar = new FindBar(_editorView);
+        DockPanel.SetDock(_findBar, Dock.Top);
+        root.Children.Add(_findBar);
         root.Children.Add(BuildStatusBar());
         root.Children.Add(_editorView);
 
@@ -70,6 +74,17 @@ public class MainWindow : Window
             Gesture = new KeyGesture(Key.P, KeyModifiers.Control | KeyModifiers.Shift),
             Command = new RelayCommand(OpenPalette),
         });
+
+        // Find (⌘F / Ctrl+F) and Find & Replace (⌘⌥F / Ctrl+H).
+        foreach (var g in new[] { new KeyGesture(Key.F, KeyModifiers.Meta), new KeyGesture(Key.F, KeyModifiers.Control) })
+        {
+            KeyBindings.Add(new KeyBinding { Gesture = g, Command = new RelayCommand(() => _findBar?.Show(replace: false)) });
+        }
+
+        foreach (var g in new[] { new KeyGesture(Key.F, KeyModifiers.Meta | KeyModifiers.Alt), new KeyGesture(Key.H, KeyModifiers.Control) })
+        {
+            KeyBindings.Add(new KeyBinding { Gesture = g, Command = new RelayCommand(() => _findBar?.Show(replace: true)) });
+        }
 
         _editorView.TextChanged += (_, _) => UpdateChrome();
         _editorView.SelectionChanged += (_, _) => UpdateCaretStatus();
@@ -107,6 +122,9 @@ public class MainWindow : Window
         edit.Items.Add(EditorItem("_Copy", "Ctrl+C", () => _ = _editorView.Editor.CopyAsync()));
         edit.Items.Add(EditorItem("_Paste", "Ctrl+V", () => _ = _editorView.Editor.PasteAsync()));
         edit.Items.Add(EditorItem("Select _All", "Ctrl+A", () => _editorView.Editor.SelectAll()));
+        edit.Items.Add(new Separator());
+        edit.Items.Add(EditorItem("_Find…", "Ctrl+F", () => _findBar?.Show(replace: false)));
+        edit.Items.Add(EditorItem("Find & _Replace…", "Ctrl+H", () => _findBar?.Show(replace: true)));
 
         var format = new MenuItem { Header = "F_ormat" };
         format.Items.Add(Item("_Bold", () => _editorView.Editor.ToggleBold(), "Ctrl+B"));
@@ -309,6 +327,8 @@ public class MainWindow : Window
             new("edit.copy", "Copy", "Copy the selection to the clipboard.", "⌘C", () => _ = ed.CopyAsync()),
             new("edit.paste", "Paste", "Paste from the clipboard.", "⌘V", () => _ = ed.PasteAsync()),
             new("edit.selectAll", "Select All", "Select the whole document.", "⌘A", ed.SelectAll),
+            new("edit.find", "Find…", "Find text in the document.", "⌘F", () => _findBar?.Show(replace: false)),
+            new("edit.replace", "Find & Replace…", "Find text and replace it (plain or regex).", "⌘⌥F", () => _findBar?.Show(replace: true)),
 
             new("format.bold", "Bold", "Make the selection bold.", "⌘B", ed.ToggleBold),
             new("format.italic", "Italic", "Make the selection italic.", "⌘I", ed.ToggleItalic),

@@ -75,8 +75,10 @@ xUnit/test packages already pinned there. That zero-additions fact *is* the supp
   movement, selection, and deletion treat emoji, combining marks, surrogate pairs, and `\r\n` as single
   units (PRD §7.2, §9.7).
 - **`Selection`** / **`LinePosition`** — caret/anchor pair and 1-based line:col for the status bar.
-- **`DocumentStats`** — words, grapheme characters, lines, reading time. One source of truth shared by
-  the status bar and the CLI's `stats` command.
+- **`DocumentStats`** — words, grapheme characters, lines, reading time, line-ending style. One source
+  of truth shared by the status bar and the CLI's `stats` command.
+- **`DocumentSearch`** — plain/regex find returning source ranges (drives Find & Replace and match
+  highlighting). **`TextFileCodec`** — BOM/encoding detection and byte-for-byte round-trip on save.
 
 ### 4.2 `Editing/` — reversible edits and undo
 
@@ -152,10 +154,16 @@ later phases (PRD §11). The public API and engine seam are stable so that work 
 ## 6. The shell (`Typage.Desktop`)
 
 - **`App`** — built in code; adds the Fluent theme and creates the single `MainWindow`.
-- **`MainWindow`** — a thin host: menu (File/Edit/Format/Help), a formatting toolbar, the editor view,
-  and a status bar (modified state, line:col, word/char counts, reading time). Owns file operations
-  (open/save/save-as/revert with `StorageProvider` dialogs and **atomic temp-then-rename writes**), the
-  unsaved-changes guard, recent files, HTML export, and a Markdown help reference.
+- **`MainWindow`** — a thin host: menu (File/Edit/Format/View/Help), a formatting toolbar, the editor
+  view, and a status bar (modified state, line:col, counts, encoding, line-ending, selection). Owns file
+  operations (open/save/save-as/revert with `StorageProvider` dialogs and **atomic temp-then-rename
+  writes**, encoding/BOM round-trip via `TextFileCodec`), the unsaved-changes guard, recent files, HTML
+  export, modal error dialogs, and a Markdown help reference.
+- **`Commands/`** — `AppCommand` + a single `BuildCommands()` catalog (Cellestra's golden rule #4): the
+  menu/toolbar and the **`CommandPalette`** (⌘⇧P, fuzzy-filtered via `FuzzyMatcher`) invoke the same
+  actions.
+- **`FindBar`** — plain/regex Find & Replace over the engine's `DocumentSearch`, highlighting matches in
+  the editor (`SetSearchMatches`) and selecting each hit.
 - **`Services/`** — `AppSettings` + `SettingsService` persist preferences (recent files, tab width,
   toolbar visibility) as JSON in the OS app-config location; failures are non-fatal.
 
@@ -181,7 +189,7 @@ features/EditMarkdown/
   Typage.slnx
   AGENTS.md  README.md  docs/{PRD,ARCHITECTURE}.md
   Typage.Engine/
-    Document/   TextDocument, Grapheme, Selection, LinePosition, DocumentStats
+    Document/   TextDocument, Grapheme, Selection, LinePosition, DocumentStats, DocumentSearch, TextFileCodec
     Editing/    TextEdit, EditHistory, DocumentBuffer
     Markdown/   TokenType, Token, BlockState, LineTokenizer, InlineTokenizer, MarkdownModel
     Html/       HtmlRenderer
