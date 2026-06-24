@@ -104,6 +104,21 @@ public class DecorationTests
         Assert.Equal(DecorationKind.CheckboxChecked, DecorationOn(CaretOffLine0("- [x] done\nx"), 0));
     }
 
+    private static double CheckboxWidth(MarkdownEditor e) =>
+        e.BuildVisualLineForTest(0).Runs
+            .First(r => r.Decoration is DecorationKind.CheckboxChecked or DecorationKind.CheckboxUnchecked)
+            .Width;
+
+    [AvaloniaFact]
+    public void CheckboxGutter_IsEqualForCheckedAndUnchecked_AndLeavesAGapBeforeTheText()
+    {
+        var unticked = CheckboxWidth(new MarkdownEditor { Text = "- [ ] todo" });
+        var ticked = CheckboxWidth(new MarkdownEditor { Text = "- [x] done" });
+        Assert.Equal(unticked, ticked, precision: 6); // text indents identically whether ticked or not
+        // The gutter is wider than the drawn box (~BaseFontSize*0.95), i.e. there is a real gap before the text.
+        Assert.True(unticked > MarkdownTheme.Dark.BaseFontSize, "the checkbox gutter should leave a gap before the text");
+    }
+
     [AvaloniaFact]
     public void ClickingTheCheckboxGlyph_TogglesTheTask()
     {

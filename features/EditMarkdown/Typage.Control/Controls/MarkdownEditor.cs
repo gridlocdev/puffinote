@@ -1871,8 +1871,10 @@ public class MarkdownEditor : Avalonia.Controls.Control, ILogicalScrollable
                     : (DecorationKind.None, 0);
 
             case TokenType.TaskMarker:
+                // A fixed gutter (box + gap) regardless of "[ ]" vs "[x]", so the text after the checkbox sits
+                // at the same place whether it's checked or not, with a clear space before it.
                 var ticked = text.Length > 1 && text[1] is 'x' or 'X';
-                return (ticked ? DecorationKind.CheckboxChecked : DecorationKind.CheckboxUnchecked, MeasureWidth(text, style));
+                return (ticked ? DecorationKind.CheckboxChecked : DecorationKind.CheckboxUnchecked, CheckboxGutter);
 
             case TokenType.BlockquoteMarker:
                 return (DecorationKind.QuoteBar, MeasureWidth(text, style));
@@ -1974,6 +1976,17 @@ public class MarkdownEditor : Avalonia.Controls.Control, ILogicalScrollable
         return _model.EnteringState(line).Kind is BlockKind.FencedCode or BlockKind.IndentedCode;
     }
 
+    // Task-checkbox geometry, shared between the gutter width and the drawn glyph so they stay in sync.
+    private const double CheckboxLeftPad = 1;   // small inset before the box
+    private double CheckboxBoxSize => _theme.BaseFontSize * 0.95;
+    private double CheckboxGap => _theme.BaseFontSize * 0.45; // space between the box and the following text
+
+    /// <summary>
+    /// The checkbox gutter width — the box plus a fixed gap before the text. Deliberately independent of the
+    /// source "[ ]"/"[x]" punctuation, so a checked and an unchecked item indent their text by the same amount.
+    /// </summary>
+    private double CheckboxGutter => CheckboxLeftPad + CheckboxBoxSize + CheckboxGap;
+
     /// <summary>The right edge of the text column in content space (for full-width adornments).</summary>
     private double ContentRight()
     {
@@ -2038,8 +2051,8 @@ public class MarkdownEditor : Avalonia.Controls.Control, ILogicalScrollable
             case DecorationKind.CheckboxUnchecked:
             case DecorationKind.CheckboxChecked:
             {
-                var size = _theme.BaseFontSize * 0.95;
-                var box = new Rect(run.X + 1, cy - size / 2, size, size);
+                var size = CheckboxBoxSize;
+                var box = new Rect(run.X + CheckboxLeftPad, cy - size / 2, size, size);
                 var ticked = run.Decoration == DecorationKind.CheckboxChecked;
                 context.DrawRectangle(ticked ? _theme.CheckboxForeground : null, new Pen(_theme.CheckboxForeground, 1.4), box, 3, 3);
                 if (ticked)
