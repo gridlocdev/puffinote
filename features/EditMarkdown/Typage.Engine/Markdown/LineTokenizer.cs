@@ -47,7 +47,8 @@ internal static class LineTokenizer
             return BlockState.IndentedCode; // a blank line may be interior; stay open
         }
 
-        if (LeadingSpaces(line, len) >= 4)
+        LeadingWhitespace(line, len, out var columns);
+        if (columns >= 4)
         {
             output.Add(new Token(lineStart, len, TokenType.CodeText, TokenRole.Content));
             return BlockState.IndentedCode;
@@ -92,7 +93,9 @@ internal static class LineTokenizer
 
     private static BlockState TokenizeNormal(string line, int lineStart, int len, int lineIndex, bool allowFrontMatterOpen, bool afterBlank, List<Token> output)
     {
-        var indent = LeadingSpaces(line, len);
+        // Both spaces and tabs are indentation. `indent` is the char count of the leading whitespace (used
+        // for marker positions), `indentCols` its width in columns (used for the CommonMark <=3 / >=4 rules).
+        var indent = LeadingWhitespace(line, len, out var indentCols);
 
         // Front matter opens only as the very first line, and only when a closing fence exists
         // below it (otherwise a lone "---" is a horizontal rule — decided in MarkdownModel).
@@ -102,31 +105,31 @@ internal static class LineTokenizer
             return BlockState.FrontMatter;
         }
 
-        // Indented code block: a non-blank line indented >= 4 spaces at a fresh block position (after a
+        // Indented code block: a non-blank line indented >= 4 columns at a fresh block position (after a
         // blank line or the top of the document) opens one. It cannot interrupt a paragraph, hence the
-        // afterBlank gate (CommonMark §4.4).
-        if (afterBlank && indent >= 4 && len > indent)
+        // afterBlank gate (CommonMark §4.4). A single leading tab is 4 columns, so it qualifies too.
+        if (afterBlank && indentCols >= 4 && len > indent)
         {
             output.Add(new Token(lineStart, len, TokenType.CodeText, TokenRole.Content));
             return BlockState.IndentedCode;
         }
 
-        // Fenced code opens with >=3 backticks or tildes (indent <= 3).
-        if (indent <= 3 && TryFenceOpen(line, indent, len, out var fenceChar, out var fenceLen, out var lang))
+        // Fenced code opens with >=3 backticks or tildes (indent <= 3 columns).
+        if (indentCols <= 3 && TryFenceOpen(line, indent, len, out var fenceChar, out var fenceLen, out var lang))
         {
             output.Add(new Token(lineStart, len, TokenType.CodeFence, TokenRole.Marker, lang));
             return BlockState.Fenced(fenceChar, fenceLen, lang);
         }
 
         // Horizontal rule.
-        if (indent <= 3 && IsHorizontalRule(line, indent, len))
+        if (indentCols <= 3 && IsHorizontalRule(line, indent, len))
         {
             output.Add(new Token(lineStart, len, TokenType.HorizontalRule, TokenRole.Marker));
             return BlockState.Normal;
         }
 
         // ATX heading.
-        if (indent <= 3 && TryHeading(line, indent, len, out var hashCount, out var afterMarker))
+        if (indentCols <= 3 && TryHeading(line, indent, len, out var hashCount, out var afterMarker))
         {
             output.Add(new Token(lineStart + indent, afterMarker - indent, TokenType.HeadingMarker, TokenRole.Marker, hashCount.ToString()));
             InlineTokenizer.Tokenize(line, lineStart, afterMarker, len, output);
@@ -134,10 +137,10 @@ internal static class LineTokenizer
         }
 
         // Blockquote: consume one or more '>' prefixes, then inline-tokenize the remainder.
-        if (indent <= 3 && afterMarkerIsQuote(line, indent, len))
+        if (indentCols <= 3 && afterMarkerIsQuote(line, indent, len))
         {
             var p = indent;
-            while (p < len && (line[p] == '>' || line[p] == ' '))
+            while (p < len && (line[p] == '>' || line[p] == ' ' || line[p] == '\t'))
             {
                 p++;
             }
@@ -170,11 +173,18 @@ internal static class LineTokenizer
 
     // ----- recognizers -----
 
-    private static int LeadingSpaces(string line, int len)
+    /// <summary>
+    /// The number of leading whitespace characters (spaces and tabs) on the line; <paramref name="columns"/>
+    /// returns their width in columns, a tab advancing to the next 4-column tab stop (CommonMark). Both
+    /// spaces and tabs count as indentation.
+    /// </summary>
+    private static int LeadingWhitespace(string line, int len, out int columns)
     {
         var n = 0;
-        while (n < len && line[n] == ' ')
+        columns = 0;
+        while (n < len && (line[n] == ' ' || line[n] == '\t'))
         {
+            columns += line[n] == '\t' ? 4 - (columns % 4) : 1;
             n++;
         }
 
@@ -241,8 +251,8 @@ internal static class LineTokenizer
 
     private static bool IsClosingFence(string line, int len, char fenceChar, int fenceLen)
     {
-        var indent = LeadingSpaces(line, len);
-        if (indent > 3)
+        var indent = LeadingWhitespace(line, len, out var columns);
+        if (columns > 3)
         {
             return false;
         }

@@ -47,7 +47,8 @@ public readonly record struct LinePrefix(
     bool HasTask,
     bool TaskChecked,
     int MarkerStart,
-    int Length)
+    int Length,
+    string IndentText = "")
 {
     /// <summary>True when the line carries a list marker.</summary>
     public bool HasList => List != ListKind.None;
@@ -64,20 +65,23 @@ public readonly record struct LinePrefix(
             len--;
         }
 
+        // Leading indentation is any run of spaces and tabs (both count). Indent is its char length;
+        // IndentText is the literal whitespace so a continued line reproduces the same tabs/spaces.
         var i = 0;
-        while (i < len && line[i] == ' ')
+        while (i < len && (line[i] == ' ' || line[i] == '\t'))
         {
             i++;
         }
 
         var indent = i;
+        var indentText = line.Substring(0, i);
 
-        // Blockquote: one or more '>' each optionally followed by spaces, captured verbatim.
+        // Blockquote: one or more '>' each optionally followed by spaces/tabs, captured verbatim.
         var quoteStart = i;
         while (i < len && line[i] == '>')
         {
             i++;
-            while (i < len && line[i] == ' ')
+            while (i < len && (line[i] == ' ' || line[i] == '\t'))
             {
                 i++;
             }
@@ -137,13 +141,13 @@ public readonly record struct LinePrefix(
             }
         }
 
-        return new LinePrefix(indent, quote, kind, bullet, number, delim, digitCount, hasTask, taskChecked, markerStart, prefixEnd);
+        return new LinePrefix(indent, quote, kind, bullet, number, delim, digitCount, hasTask, taskChecked, markerStart, prefixEnd, indentText);
     }
 
     /// <summary>The prefix to begin the next sibling item/line with (after a newline) — PRD §7.2.</summary>
     public string ContinuationPrefix()
     {
-        var prefix = new string(' ', Indent) + Quote;
+        var prefix = IndentText + Quote;
         prefix += List switch
         {
             ListKind.Unordered => $"{Bullet} ",
@@ -176,10 +180,12 @@ public readonly record struct LinePrefix(
 
         if (!p.HasList && !p.HasQuote)
         {
-            // Auto-indent: carry the leading whitespace down, but only what precedes the caret.
-            var indent = Math.Min(p.Indent, caretColumn);
-            return indent > 0
-                ? new EnterResult(EnterKind.Continue, "\n" + new string(' ', indent), 0, 0)
+            // Auto-indent: carry the leading whitespace (tabs/spaces, verbatim) down, but only what
+            // precedes the caret.
+            var keep = Math.Min(p.IndentText.Length, caretColumn);
+            var carried = p.IndentText[..Math.Max(0, keep)];
+            return carried.Length > 0
+                ? new EnterResult(EnterKind.Continue, "\n" + carried, 0, 0)
                 : new EnterResult(EnterKind.Plain, "\n", 0, 0);
         }
 

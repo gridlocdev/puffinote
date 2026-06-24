@@ -1071,14 +1071,45 @@ public class MarkdownEditor : Avalonia.Controls.Control, ILogicalScrollable
         var multiLine = endLine > startLine;
         var onList = LinePrefix.Parse(doc.GetLineText(caretLine)).HasList;
 
-        // Plain text, single caret, not on a list item → a Tab just inserts spaces (the old behavior).
+        // Plain text, single caret, not on a list item → a Tab inserts one indent unit (a tab where the
+        // line already uses tabs, otherwise spaces).
         if (!shift && !multiLine && sel.IsEmpty && !onList)
         {
-            _buffer.Insert(new string(' ', Math.Max(1, IndentWidth)));
+            _buffer.Insert(IndentUnit(caretLine, caretLine));
             return;
         }
 
         IndentLines(startLine, endLine, outdent: shift);
+    }
+
+    /// <summary>
+    /// The indentation unit to add — a tab when the region (or the line above it) already uses tab
+    /// indentation, otherwise <see cref="IndentWidth"/> spaces — so indenting preserves whichever style was
+    /// entered in the text.
+    /// </summary>
+    private string IndentUnit(int startLine, int endLine)
+    {
+        var doc = _buffer.Document;
+        bool StartsWithTab(int l)
+        {
+            var t = doc.GetLineText(l);
+            return t.Length > 0 && t[0] == '\t';
+        }
+
+        if (startLine > 0 && StartsWithTab(startLine - 1))
+        {
+            return "\t";
+        }
+
+        for (var l = startLine; l <= endLine; l++)
+        {
+            if (StartsWithTab(l))
+            {
+                return "\t";
+            }
+        }
+
+        return new string(' ', Math.Max(1, IndentWidth));
     }
 
     /// <summary>Add or remove one indent level on lines <paramref name="startLine"/>..<paramref name="endLine"/> as one edit.</summary>
@@ -1086,7 +1117,8 @@ public class MarkdownEditor : Avalonia.Controls.Control, ILogicalScrollable
     {
         var doc = _buffer.Document;
         var sel = _buffer.Selection;
-        var indent = new string(' ', Math.Max(1, IndentWidth));
+        var unit = IndentUnit(startLine, endLine);
+        var maxSpaces = Math.Max(1, IndentWidth);
         var regionStart = doc.GetLineStart(startLine);
         var regionEnd = doc.GetLineEnd(endLine);
 
@@ -1099,10 +1131,18 @@ public class MarkdownEditor : Avalonia.Controls.Control, ILogicalScrollable
             int delta;
             if (outdent)
             {
+                // Remove one indent level: a single leading tab, or up to IndentWidth leading spaces.
                 var remove = 0;
-                while (remove < indent.Length && remove < text.Length && text[remove] == ' ')
+                if (text.Length > 0 && text[0] == '\t')
                 {
-                    remove++;
+                    remove = 1;
+                }
+                else
+                {
+                    while (remove < maxSpaces && remove < text.Length && text[remove] == ' ')
+                    {
+                        remove++;
+                    }
                 }
 
                 newLines.Add(text[remove..]);
@@ -1115,8 +1155,8 @@ public class MarkdownEditor : Avalonia.Controls.Control, ILogicalScrollable
             }
             else
             {
-                newLines.Add(indent + text);
-                delta = indent.Length;
+                newLines.Add(unit + text);
+                delta = unit.Length;
             }
 
             if (l == startLine)
@@ -1218,12 +1258,12 @@ public class MarkdownEditor : Avalonia.Controls.Control, ILogicalScrollable
         _goalX = double.NaN;
     }
 
-    /// <summary>The number of leading spaces on <paramref name="line"/> (its nesting indent).</summary>
+    /// <summary>The number of leading whitespace characters (spaces and tabs) on <paramref name="line"/> — its nesting depth.</summary>
     private int LineIndent(int line)
     {
         var t = _buffer.Document.GetLineText(line);
         var n = 0;
-        while (n < t.Length && t[n] == ' ')
+        while (n < t.Length && (t[n] == ' ' || t[n] == '\t'))
         {
             n++;
         }
@@ -2210,7 +2250,7 @@ public class MarkdownEditor : Avalonia.Controls.Control, ILogicalScrollable
         }
 
         _formattedBuilds++; // counts FormattedText construction (cache misses); used by perf tests
-        var ft = new FormattedText(text, CultureInfo.CurrentCulture, FlowDirection.LeftToRight,
+        var ft = new FormattedText(ExpandTabs(text), CultureInfo.CurrentCulture, FlowDirection.LeftToRight,
             style.Typeface, style.FontSize, brush);
         if (style.Decorations is not null)
         {
@@ -2244,9 +2284,17 @@ public class MarkdownEditor : Avalonia.Controls.Control, ILogicalScrollable
     private double RawWidth(string text, RunStyle style)
     {
         _rawMeasures++; // counts actual FormattedText shaping (cache misses) — used by perf tests
-        return new FormattedText(text, CultureInfo.CurrentCulture, FlowDirection.LeftToRight,
+        return new FormattedText(ExpandTabs(text), CultureInfo.CurrentCulture, FlowDirection.LeftToRight,
             style.Typeface, style.FontSize, style.Foreground).Width;
     }
+
+    /// <summary>
+    /// A copy of <paramref name="text"/> with each tab expanded to <see cref="IndentWidth"/> spaces, for
+    /// measuring and drawing only — the run still covers the source tab as one column, so a tab indents by a
+    /// consistent width while the 1:1 offset↔visual map (which indexes the un-expanded run text) is preserved.
+    /// </summary>
+    private string ExpandTabs(string text) =>
+        text.IndexOf('\t') < 0 ? text : text.Replace("\t", new string(' ', Math.Max(1, IndentWidth)));
 
     private readonly Dictionary<WidthKey, double> _widthCache = new();
     private int _rawMeasures;
