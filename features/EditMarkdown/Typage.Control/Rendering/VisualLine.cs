@@ -190,4 +190,23 @@ public sealed class VisualLine
 
         return false;
     }
+
+    /// <summary>
+    /// True when the <b>character</b> at column <paramref name="col"/> is hidden — i.e. it belongs to a
+    /// concealed marker run or a decoration's source span. Unlike <see cref="IsInsideConcealed"/> (which
+    /// excludes run boundaries so the caret can stop there), this covers the whole hidden span, so edits
+    /// can step over hidden marker punctuation to reach the next visible grapheme.
+    /// </summary>
+    public bool IsColumnHidden(int col)
+    {
+        foreach (var r in Runs)
+        {
+            if (r.Kind != VisualRunKind.Text && col >= r.Col && col < r.Col + r.Len)
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
 }

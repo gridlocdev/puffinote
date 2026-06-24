@@ -733,12 +733,12 @@ public class MarkdownEditor : Avalonia.Controls.Control, ILogicalScrollable
 
         switch (e.Key)
         {
-            case Key.Back: if (!TryBackspacePair()) { _buffer.Backspace(); } break;
-            case Key.Delete: _buffer.Delete(); break;
+            case Key.Back: if (!TryBackspacePair() && !TryVisualBackspace()) { _buffer.Backspace(); } break;
+            case Key.Delete: if (!TryVisualDelete()) { _buffer.Delete(); } break;
             case Key.Enter: HandleEnter(); break;
             case Key.Tab: HandleTab(shift); break;
-            case Key.Left: MoveCaret(_buffer.PreviousCaret(caret), shift); break;
-            case Key.Right: MoveCaret(_buffer.NextCaret(caret), shift); break;
+            case Key.Left: MoveCaret(VisualStep(caret, -1), shift); break;
+            case Key.Right: MoveCaret(VisualStep(caret, 1), shift); break;
             case Key.Up: MoveCaretByLine(-1, shift); break;
             case Key.Down: MoveCaretByLine(1, shift); break;
             case Key.Home: MoveCaret(doc.GetLineStart(doc.GetPosition(caret).Line), shift); break;
@@ -1009,9 +1009,17 @@ public class MarkdownEditor : Avalonia.Controls.Control, ILogicalScrollable
 
     internal void BackspaceForTest()
     {
-        if (!TryBackspacePair())
+        if (!TryBackspacePair() && !TryVisualBackspace())
         {
             _buffer.Backspace();
+        }
+    }
+
+    internal void DeleteForTest()
+    {
+        if (!TryVisualDelete())
+        {
+            _buffer.Delete();
         }
     }
 
@@ -1249,6 +1257,125 @@ public class MarkdownEditor : Avalonia.Controls.Control, ILogicalScrollable
         }
     }
 
+    /// <summary>The laid-out visual line for <paramref name="line"/> (concealment is caret-independent in WYSIWYG mode).</summary>
+    private VisualLine LineVisual(int line) => BuildVisualLine(line, _buffer.Selection, line);
+
+    /// <summary>
+    /// One caret step in <paramref name="dir"/> (+1 right, -1 left) that treats a concealed marker run as
+    /// atomic: a raw grapheme step landing strictly inside hidden punctuation keeps going until it reaches
+    /// a real stop, so the caret glides over hidden markers like a normal document editor (PRD §7.4).
+    /// </summary>
+    private int VisualStep(int caret, int dir)
+    {
+        var doc = _buffer.Document;
+        var next = Math.Clamp(dir > 0 ? _buffer.NextCaret(caret) : _buffer.PreviousCaret(caret), 0, doc.Length);
+        var pos = doc.GetPosition(next);
+        var visual = LineVisual(pos.Line);
+        var guard = 0;
+        while (visual.IsInsideConcealed(pos.Column) && guard++ <= doc.Length)
+        {
+            var stepped = Math.Clamp(dir > 0 ? _buffer.NextCaret(next) : _buffer.PreviousCaret(next), 0, doc.Length);
+            if (stepped == next)
+            {
+                break;
+            }
+
+            next = stepped;
+            var p2 = doc.GetPosition(next);
+            if (p2.Line != pos.Line)
+            {
+                visual = LineVisual(p2.Line);
+            }
+
+            pos = p2;
+        }
+
+        return next;
+    }
+
+    /// <summary>Move the caret atomically in <paramref name="dir"/>; for tests.</summary>
+    internal void VisualStepForTest(int dir, bool extend = false) => MoveCaret(VisualStep(_buffer.Selection.Caret, dir), extend);
+
+    /// <summary>
+    /// Backspace in WYSIWYG mode: delete the previous <b>visible</b> grapheme, stepping over any concealed
+    /// marker punctuation between it and the caret so hidden markers stay balanced (backspacing at the end
+    /// of a bold word removes a letter, not an invisible <c>*</c>). When only hidden markers precede the
+    /// caret on the line, the whole marker prefix is removed instead (un-list / un-quote / un-heading the
+    /// line). Returns false at a true line start so the buffer's plain backspace can join lines.
+    /// </summary>
+    private bool TryVisualBackspace()
+    {
+        var sel = _buffer.Selection;
+        if (!sel.IsEmpty)
+        {
+            return false; // a selection deletes normally
+        }
+
+        var doc = _buffer.Document;
+        var pos = doc.GetPosition(sel.Caret);
+        if (pos.Column == 0)
+        {
+            return false; // line start: let plain backspace join with the previous line
+        }
+
+        var visual = LineVisual(pos.Line);
+        var lineStart = doc.GetLineStart(pos.Line);
+        var col = pos.Column;
+        while (col > 0 && visual.IsColumnHidden(col - 1))
+        {
+            col--;
+        }
+
+        var lineText = doc.GetText(lineStart, doc.GetLineEnd(pos.Line) - lineStart).TrimEnd('\r');
+        if (col == 0)
+        {
+            // Only hidden marker punctuation precedes the caret — strip the whole marker prefix.
+            _buffer.ReplaceRange(lineStart, pos.Column, string.Empty);
+            _buffer.Selection = Selection.At(lineStart);
+            return true;
+        }
+
+        var start = Grapheme.PreviousBoundary(lineText, col);
+        _buffer.ReplaceRange(lineStart + start, col - start, string.Empty);
+        _buffer.Selection = Selection.At(lineStart + start);
+        return true;
+    }
+
+    /// <summary>
+    /// Forward Delete in WYSIWYG mode: delete the next <b>visible</b> grapheme, stepping over concealed
+    /// marker punctuation ahead of the caret. Returns false when only hidden markers (or end-of-line)
+    /// follow, letting the buffer's plain delete handle the line join.
+    /// </summary>
+    private bool TryVisualDelete()
+    {
+        var sel = _buffer.Selection;
+        if (!sel.IsEmpty)
+        {
+            return false;
+        }
+
+        var doc = _buffer.Document;
+        var pos = doc.GetPosition(sel.Caret);
+        var lineStart = doc.GetLineStart(pos.Line);
+        var lineText = doc.GetText(lineStart, doc.GetLineEnd(pos.Line) - lineStart).TrimEnd('\r');
+        var visual = LineVisual(pos.Line);
+        var col = pos.Column;
+        while (col < lineText.Length && visual.IsColumnHidden(col))
+        {
+            col++;
+        }
+
+        if (col >= lineText.Length)
+        {
+            return false; // nothing visible ahead on this line: let plain delete join the next line
+        }
+
+        var end = Grapheme.NextBoundary(lineText, col);
+        _buffer.ReplaceRange(lineStart + col, end - col, string.Empty);
+        _buffer.Selection = Selection.At(lineStart + col);
+        return true;
+    }
+
     /// <summary>
     /// Move the caret up/down by <paramref name="delta"/> lines, holding a <b>sticky goal column</b>:
     /// the caret's x is remembered on the first vertical move and reused, so passing through shorter
@@ -1335,11 +1462,9 @@ public class MarkdownEditor : Avalonia.Controls.Control, ILogicalScrollable
         var contentLen = lineText.Length;
         var headingLevel = HeadingLevel(line);
 
-        // A line is "revealed" (line-prefix markers shown at full strength) when raw-source mode is on,
-        // the caret is on it, or a selection touches it. Inline nodes reveal individually (below).
-        var lineRevealed = _showRawSource || caretLine == line
-            || sel.Intersects(lineStart, Math.Max(1, lineEnd - lineStart));
-        var spans = NodeSpans(line);
+        // Full WYSIWYG (PRD §7.4, revised): markers are always concealed in normal mode — never revealed
+        // by the caret or a selection — and shown only in raw-source mode. The laid-out line, and hence
+        // the offset↔visual map, is therefore independent of where the caret is.
         var hasTask = _model.LineTokens(line).Any(t => t.Type == TokenType.TaskMarker);
 
         var segments = new List<VisualLine.Segment>();
@@ -1359,7 +1484,7 @@ public class MarkdownEditor : Avalonia.Controls.Control, ILogicalScrollable
             }
 
             var style = StyleFor(t.Type, headingLevel);
-            var concealed = MarkerConcealed(t, lineRevealed, sel, spans);
+            var concealed = MarkerConcealed(t);
 
             // An ordered-list number stays visible (it's informative); only unordered bullets hide.
             if (t.Type == TokenType.ListMarker && IsOrderedMarker(lineText, s, en))
@@ -1465,71 +1590,22 @@ public class MarkdownEditor : Avalonia.Controls.Control, ILogicalScrollable
     /// <summary>Document offset the visual line resolves <paramref name="x"/> to (hit-test); for tests.</summary>
     internal int OffsetAtForTest(int line, double x) => OffsetAt(line, x);
 
-    /// <summary>The source span [start, end] of each inline node id (&gt;0) on <paramref name="line"/>.</summary>
-    private Dictionary<int, (int Start, int End)> NodeSpans(int line)
-    {
-        var spans = new Dictionary<int, (int Start, int End)>();
-        foreach (var t in _model.LineTokens(line))
-        {
-            if (t.Node <= 0)
-            {
-                continue;
-            }
-
-            spans[t.Node] = spans.TryGetValue(t.Node, out var span)
-                ? (Math.Min(span.Start, t.Start), Math.Max(span.End, t.End))
-                : (t.Start, t.End);
-        }
-
-        return spans;
-    }
-
     /// <summary>
-    /// Whether <paramref name="t"/>'s marker punctuation should be hidden in the current reveal state
-    /// (PRD §7.4). Only <see cref="TokenRole.Marker"/> tokens ever conceal — content is always shown.
-    /// Inline markers conceal per inline node; line-prefix markers (heading/quote/list/task/HR) conceal
-    /// off the caret line; whole-line block fences stay revealed (collapsing their row is deferred).
+    /// Whether <paramref name="t"/>'s marker punctuation is hidden (PRD §7.4, revised to full WYSIWYG).
+    /// Only <see cref="TokenRole.Marker"/> tokens ever conceal — content is always shown — and in normal
+    /// mode every marker conceals regardless of the caret, except whole-line block fences whose row would
+    /// blank out if hidden (collapsing their row is deferred, PRD §11). Raw-source mode reveals all.
     /// </summary>
-    private bool MarkerConcealed(Token t, bool lineRevealed, Selection sel, Dictionary<int, (int Start, int End)> spans)
+    private bool MarkerConcealed(Token t)
     {
         if (_showRawSource || t.Role != TokenRole.Marker)
         {
             return false;
         }
 
-        switch (t.Type)
-        {
-            // Whole-line fences would blank their row if hidden; row-collapse is deferred (PRD §11), so
-            // keep them visible. Front matter additionally carries its "Properties" backdrop.
-            case TokenType.CodeFence or TokenType.FrontMatterFence or TokenType.TableDelimiter:
-                return false;
-
-            // Line-prefix markers (and the HR) reveal with their line.
-            case TokenType.HeadingMarker or TokenType.BlockquoteMarker or TokenType.ListMarker
-                or TokenType.TaskMarker or TokenType.HorizontalRule:
-                return !lineRevealed;
-
-            // Inline markers (emphasis/code/link/image/escape/url…) reveal per inline node.
-            default:
-                if (t.Node > 0 && spans.TryGetValue(t.Node, out var span))
-                {
-                    return !NodeRevealed(span, sel);
-                }
-
-                return !lineRevealed; // ungrouped inline markers (e.g. a hard break) follow the line
-        }
-    }
-
-    /// <summary>An inline node reveals when the caret is within its span (inclusive) or a selection overlaps it (PRD §7.4).</summary>
-    private static bool NodeRevealed((int Start, int End) span, Selection sel)
-    {
-        var caret = sel.Caret;
-        if (caret >= span.Start && caret <= span.End)
-        {
-            return true;
-        }
-
-        return sel.Length > 0 && sel.Start < span.End && sel.End > span.Start;
+        // Whole-line fences (fenced code / front matter / table delimiter) stay visible; everything else
+        // — heading/quote/list/task/HR prefixes and all inline emphasis/code/link/escape markers — hides.
+        return t.Type is not (TokenType.CodeFence or TokenType.FrontMatterFence or TokenType.TableDelimiter);
     }
 
     /// <summary>Draw a synthetic decoration that stands in for a concealed marker (PRD §7.4).</summary>

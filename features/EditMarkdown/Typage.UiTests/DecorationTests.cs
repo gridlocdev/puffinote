@@ -81,10 +81,13 @@ public class DecorationTests
     }
 
     [AvaloniaFact]
-    public void OnTheCaretLine_MarkersAreRawWithNoDecoration()
+    public void OnTheCaretLine_DecorationStillShows_ButRawSourceModeRestoresMarkers()
     {
         var editor = new MarkdownEditor { Text = "- item" };
         editor.Buffer.Selection = Selection.At(2); // caret on the list line
+        Assert.Equal(DecorationKind.Bullet, DecorationOn(editor, 0)); // WYSIWYG: the bullet shows even here
+
+        editor.ShowRawSource = true;
         Assert.Null(DecorationOn(editor, 0)); // raw "- " shown, no bullet
     }
 }

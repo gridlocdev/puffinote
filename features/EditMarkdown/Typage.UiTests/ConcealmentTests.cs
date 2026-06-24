@@ -8,9 +8,9 @@ using Xunit;
 namespace Typage.UiTests;
 
 /// <summary>
-/// Obsidian-style live-preview concealment (PRD §7.4): markers are truly hidden (zero-width) except on
-/// the caret line / inside the inline node under the caret, and raw-source mode reveals everything.
-/// These drive the real editor and inspect the laid-out <see cref="VisualLine"/> it builds.
+/// Full-WYSIWYG concealment (PRD §7.4, revised): markers are truly hidden (zero-width) <b>always</b> in
+/// normal mode — the caret and selections never reveal raw Markdown — and raw-source mode reveals
+/// everything. These drive the real editor and inspect the laid-out <see cref="VisualLine"/> it builds.
 /// </summary>
 public class ConcealmentTests
 {
@@ -30,14 +30,14 @@ public class ConcealmentTests
         editor.BuildVisualLineForTest(line).Runs.Any(r => r.Kind == VisualRunKind.Text && r.Text.Contains(text));
 
     [AvaloniaFact]
-    public void HeadingMarker_HiddenOffTheCaretLine_ShownOnIt()
+    public void HeadingMarker_StaysHidden_EvenWithTheCaretOnTheLine()
     {
         var editor = At("# Title\nbody", caret: 9); // caret on line 1 ("body")
         Assert.True(Concealed(editor, 0, 0));  // the "# " is hidden
         Assert.True(ShowsText(editor, 0, "Title"));
 
         editor.Buffer.Selection = Selection.At(2); // move caret onto the heading line
-        Assert.False(Concealed(editor, 0, 0));     // now the "# " is revealed
+        Assert.True(Concealed(editor, 0, 0));      // still hidden — WYSIWYG never reveals the raw marker
     }
 
     [AvaloniaFact]
@@ -50,7 +50,7 @@ public class ConcealmentTests
     }
 
     [AvaloniaFact]
-    public void Emphasis_RevealsPerNode_OnlyWhereTheCaretIs()
+    public void Emphasis_StaysHidden_EvenWithTheCaretInside()
     {
         // "**a** and **b**": node 1 = [0,5], node 2 = [10,15].
         var editor = At("**a** and **b**\nx", caret: 16); // caret on line 1
@@ -58,8 +58,8 @@ public class ConcealmentTests
         Assert.True(Concealed(editor, 0, 10));  // second ** hidden
 
         editor.Buffer.Selection = Selection.At(2); // caret inside the first bold
-        Assert.False(Concealed(editor, 0, 0));  // first  ** revealed
-        Assert.True(Concealed(editor, 0, 10));  // second ** still hidden (per-node)
+        Assert.True(Concealed(editor, 0, 0));   // still hidden — the caret never reveals raw markup
+        Assert.True(Concealed(editor, 0, 10));  // and the other node stays hidden too
     }
 
     [AvaloniaFact]
@@ -72,11 +72,11 @@ public class ConcealmentTests
     }
 
     [AvaloniaFact]
-    public void Selection_ForcesReveal_OfIntersectedNode()
+    public void Selection_DoesNotReveal_InWysiwygMode()
     {
         var editor = At("**a** and **b**\nx", caret: 16);
         editor.Buffer.Selection = new Selection(11, 14); // overlaps the second bold node
-        Assert.False(Concealed(editor, 0, 10));          // second ** revealed by the selection
+        Assert.True(Concealed(editor, 0, 10));           // still hidden — selecting doesn't reveal raw markup
     }
 
     [AvaloniaFact]
