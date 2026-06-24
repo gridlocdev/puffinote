@@ -129,6 +129,7 @@ public class MarkdownEditor : Avalonia.Controls.Control, ILogicalScrollable
             _theme = value;
             UpdateDerivedBrushes();
             _widthCache.Clear(); // cached widths assume the old fonts/sizes
+            _formattedCache.Clear(); // cached glyph runs were built with the old theme's brushes/fonts
             _extentWidth = 0;    // fonts changed — let the horizontal extent regrow as lines redraw
             RaiseScrollInvalidated(EventArgs.Empty);
             InvalidateMeasure();
@@ -534,13 +535,7 @@ public class MarkdownEditor : Avalonia.Controls.Control, ILogicalScrollable
     {
         var text = lineText.Substring(from, to - from);
         var brush = style.IsMarker ? (revealMarkers ? _theme.MarkerForeground : _dimMarker) : style.Foreground;
-        var ft = new FormattedText(text, CultureInfo.CurrentCulture, FlowDirection.LeftToRight,
-            style.Typeface, style.FontSize, brush);
-        if (style.Decorations is not null)
-        {
-            ft.SetTextDecorations(style.Decorations);
-        }
-
+        var ft = GetFormattedText(text, style, brush);
         var y = lineTop + (_theme.LineHeight - ft.Height) / 2;
 
         if (style.Background is not null)
@@ -1319,6 +1314,53 @@ public class MarkdownEditor : Avalonia.Controls.Control, ILogicalScrollable
 
         _widthCache[key] = width;
         return width;
+    }
+
+    /// <summary>
+    /// The drawable <see cref="FormattedText"/> for a run, cached on its full visual identity (text,
+    /// font, size, brush, decorations). The draw path builds one <see cref="FormattedText"/> per
+    /// visible run per frame; for a static viewport every run is identical frame to frame, so caching
+    /// the objects removes the last per-frame allocation/shaping (the cache is invalidated on a theme
+    /// change, and a marker run is rebuilt only when it flips between revealed and dimmed).
+    /// </summary>
+    private FormattedText GetFormattedText(string text, RunStyle style, IBrush brush)
+    {
+        var key = new FormattedKey(text, style.Typeface, style.FontSize, brush, style.Decorations);
+        if (_formattedCache.TryGetValue(key, out var cached))
+        {
+            return cached;
+        }
+
+        _formattedBuilds++; // counts FormattedText construction (cache misses); used by perf tests
+        var ft = new FormattedText(text, CultureInfo.CurrentCulture, FlowDirection.LeftToRight,
+            style.Typeface, style.FontSize, brush);
+        if (style.Decorations is not null)
+        {
+            ft.SetTextDecorations(style.Decorations);
+        }
+
+        if (_formattedCache.Count >= 8192)
+        {
+            _formattedCache.Clear(); // bound the cache; it rebuilds on demand
+        }
+
+        _formattedCache[key] = ft;
+        return ft;
+    }
+
+    private readonly Dictionary<FormattedKey, FormattedText> _formattedCache = new();
+    private int _formattedBuilds;
+
+    private readonly record struct FormattedKey(string Text, Typeface Typeface, double Size, IBrush Brush, TextDecorationCollection? Decorations);
+
+    /// <summary>Number of <see cref="FormattedText"/> objects built (cache misses); for perf tests.</summary>
+    internal int FormattedBuildCount => _formattedBuilds;
+
+    /// <summary>Fetch a run's <see cref="FormattedText"/> through the cache, exercising it; for perf tests.</summary>
+    internal void GetFormattedTextForTest(string text)
+    {
+        var style = _theme.Resolve(TokenType.Text);
+        GetFormattedText(text, style, style.Foreground);
     }
 
     private double RawWidth(string text, RunStyle style)

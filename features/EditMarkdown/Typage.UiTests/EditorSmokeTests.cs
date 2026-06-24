@@ -160,6 +160,25 @@ public class EditorSmokeTests
     }
 
     [AvaloniaFact]
+    public void FormattedTextCache_ReusesGlyphRunsAcrossDraws()
+    {
+        var editor = new MarkdownEditor();
+        var start = editor.FormattedBuildCount;
+
+        editor.GetFormattedTextForTest("hello world");
+        var afterFirst = editor.FormattedBuildCount;
+        Assert.True(afterFirst > start); // built once
+
+        editor.GetFormattedTextForTest("hello world");
+        Assert.Equal(afterFirst, editor.FormattedBuildCount); // cache hit — no rebuild
+
+        editor.EditorTheme = Control.Rendering.MarkdownTheme.Light; // theme change invalidates the cache
+        var afterTheme = editor.FormattedBuildCount;
+        editor.GetFormattedTextForTest("hello world");
+        Assert.True(editor.FormattedBuildCount > afterTheme); // rebuilt under the new theme
+    }
+
+    [AvaloniaFact]
     public void ThemeVariants_DifferByBackground()
     {
         var light = (Avalonia.Media.ISolidColorBrush)Control.Rendering.MarkdownTheme.Light.Background;
