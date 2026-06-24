@@ -5,6 +5,7 @@ using Avalonia.Layout;
 using Avalonia.Media;
 using Avalonia.Platform.Storage;
 using Typage.Control.Views;
+using Typage.Desktop.Commands;
 using Typage.Desktop.Services;
 using Typage.Engine.Document;
 using Typage.Engine.Html;
@@ -27,7 +28,9 @@ public class MainWindow : Window
     private string? _currentPath;
     private TextFileFormat _format = TextFileFormat.Utf8NoBom;
     private readonly MenuItem _recentMenu = new() { Header = "Open _Recent" };
+    private readonly CommandPalette _palette = new();
     private Border? _toolbar;
+    private MenuItem? _toggleToolbarItem;
 
     private static readonly IBrush ChromeBackground = new SolidColorBrush(Color.FromRgb(0x25, 0x25, 0x26));
     private static readonly IBrush ChromeBorder = new SolidColorBrush(Color.FromRgb(0x33, 0x33, 0x36));
@@ -52,7 +55,21 @@ public class MainWindow : Window
         root.Children.Add(_toolbar);
         root.Children.Add(BuildStatusBar());
         root.Children.Add(_editorView);
-        Content = root;
+
+        // The command palette floats over everything as a collapsed overlay.
+        Content = new Panel { Children = { root, _palette } };
+
+        // ⌘⇧P / Ctrl+Shift+P opens the palette (bind both so it works on macOS and elsewhere).
+        KeyBindings.Add(new KeyBinding
+        {
+            Gesture = new KeyGesture(Key.P, KeyModifiers.Meta | KeyModifiers.Shift),
+            Command = new RelayCommand(OpenPalette),
+        });
+        KeyBindings.Add(new KeyBinding
+        {
+            Gesture = new KeyGesture(Key.P, KeyModifiers.Control | KeyModifiers.Shift),
+            Command = new RelayCommand(OpenPalette),
+        });
 
         _editorView.TextChanged += (_, _) => UpdateChrome();
         _editorView.SelectionChanged += (_, _) => UpdateCaretStatus();
@@ -104,24 +121,16 @@ public class MainWindow : Window
         }
 
         var view = new MenuItem { Header = "_View" };
-        var toggleToolbar = new MenuItem
+        view.Items.Add(Item("Command _Palette…", OpenPalette, "Ctrl+Shift+P"));
+        view.Items.Add(new Separator());
+        _toggleToolbarItem = new MenuItem
         {
             Header = "Show _Toolbar",
             ToggleType = MenuItemToggleType.CheckBox,
             IsChecked = _settings.Settings.ShowToolbar,
         };
-        toggleToolbar.Click += (_, _) =>
-        {
-            var show = toggleToolbar.IsChecked;
-            _settings.Settings.ShowToolbar = show;
-            if (_toolbar is not null)
-            {
-                _toolbar.IsVisible = show;
-            }
-
-            _settings.Save();
-        };
-        view.Items.Add(toggleToolbar);
+        _toggleToolbarItem.Click += (_, _) => ToggleToolbar();
+        view.Items.Add(_toggleToolbarItem);
 
         var help = new MenuItem { Header = "_Help" };
         help.Items.Add(Item("Markdown _Reference", ShowHelp));
@@ -167,9 +176,35 @@ public class MainWindow : Window
         panel.Children.Add(ToolButton("</>", "Inline code", () => _editorView.Editor.ToggleInlineCode()));
         panel.Children.Add(ToolButton("H1", "Heading 1", () => _editorView.Editor.ApplyHeading(1)));
         panel.Children.Add(ToolButton("H2", "Heading 2", () => _editorView.Editor.ApplyHeading(2)));
+
+        // A "Find a tool…" entry on the right opens the Command Palette (mirrors Cellestra).
+        var findTool = new Button
+        {
+            Content = "Find a tool…    ⌘⇧P",
+            Margin = new Avalonia.Thickness(8, 4),
+            Padding = new Avalonia.Thickness(10, 3),
+            HorizontalAlignment = HorizontalAlignment.Right,
+            HorizontalContentAlignment = HorizontalAlignment.Left,
+            Width = 200,
+            FontSize = 12,
+            Foreground = MutedText,
+            Background = new SolidColorBrush(Color.FromRgb(0x1E, 0x1E, 0x1E)),
+            BorderBrush = ChromeBorder,
+            BorderThickness = new Avalonia.Thickness(1),
+            CornerRadius = new Avalonia.CornerRadius(6),
+            Command = new RelayCommand(OpenPalette),
+        };
+        ToolTip.SetTip(findTool, "Run any command by name (⌘⇧P)");
+
+        var grid = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto") };
+        Grid.SetColumn(panel, 0);
+        Grid.SetColumn(findTool, 1);
+        grid.Children.Add(panel);
+        grid.Children.Add(findTool);
+
         var border = new Border
         {
-            Child = panel,
+            Child = grid,
             Background = ChromeBackground,
             BorderThickness = new Avalonia.Thickness(0, 0, 0, 1),
             BorderBrush = ChromeBorder,
@@ -227,6 +262,67 @@ public class MainWindow : Window
         };
         DockPanel.SetDock(border, Dock.Bottom);
         return border;
+    }
+
+    // ----- command catalog & palette -----
+
+    private void OpenPalette() => _palette.Open(BuildCommands());
+
+    private void ToggleToolbar()
+    {
+        var show = !(_toolbar?.IsVisible ?? true);
+        if (_toolbar is not null)
+        {
+            _toolbar.IsVisible = show;
+        }
+
+        if (_toggleToolbarItem is not null)
+        {
+            _toggleToolbarItem.IsChecked = show;
+        }
+
+        _settings.Settings.ShowToolbar = show;
+        _settings.Save();
+    }
+
+    /// <summary>
+    /// The one command catalog (mirroring Cellestra's golden rule #4): the palette reads it, and the
+    /// menu/toolbar invoke the same underlying actions. Built per open so CanExecute reflects the
+    /// current state.
+    /// </summary>
+    private List<AppCommand> BuildCommands()
+    {
+        var ed = _editorView.Editor;
+        return new List<AppCommand>
+        {
+            new("file.new", "New", "Start a new, empty document.", "⌘N", () => _ = NewDocumentAsync()),
+            new("file.open", "Open…", "Open a Markdown file from disk.", "⌘O", () => _ = OpenAsync()),
+            new("file.save", "Save", "Save changes to the current file.", "⌘S", () => _ = SaveAsync()),
+            new("file.saveAs", "Save As…", "Save a copy under a new name.", "⇧⌘S", () => _ = SaveAsAsync()),
+            new("file.revert", "Revert to Saved", "Discard changes since the last save.", null,
+                () => _ = RevertAsync(), () => _currentPath is not null && _editorView.IsDirty),
+            new("file.exportHtml", "Export HTML…", "Render the document to a self-contained HTML file.", null, () => _ = ExportHtmlAsync()),
+
+            new("edit.undo", "Undo", "Step backward through your changes.", "⌘Z", () => _editorView.Undo(), () => _editorView.CanUndo),
+            new("edit.redo", "Redo", "Re-apply a change you undid.", "⇧⌘Z", () => _editorView.Redo(), () => _editorView.CanRedo),
+            new("edit.cut", "Cut", "Move the selection to the clipboard.", "⌘X", () => _ = ed.CutAsync()),
+            new("edit.copy", "Copy", "Copy the selection to the clipboard.", "⌘C", () => _ = ed.CopyAsync()),
+            new("edit.paste", "Paste", "Paste from the clipboard.", "⌘V", () => _ = ed.PasteAsync()),
+            new("edit.selectAll", "Select All", "Select the whole document.", "⌘A", ed.SelectAll),
+
+            new("format.bold", "Bold", "Make the selection bold.", "⌘B", ed.ToggleBold),
+            new("format.italic", "Italic", "Make the selection italic.", "⌘I", ed.ToggleItalic),
+            new("format.code", "Inline Code", "Format the selection as inline code.", "⌘E", ed.ToggleInlineCode),
+            new("format.strike", "Strikethrough", "Strike through the selection.", null, ed.ToggleStrikethrough),
+            new("format.link", "Insert Link", "Wrap the selection as a link.", "⌘K", ed.InsertLink),
+            new("format.h1", "Heading 1", "Make this line a level-1 heading.", "⌘1", () => ed.ApplyHeading(1)),
+            new("format.h2", "Heading 2", "Make this line a level-2 heading.", "⌘2", () => ed.ApplyHeading(2)),
+            new("format.h3", "Heading 3", "Make this line a level-3 heading.", "⌘3", () => ed.ApplyHeading(3)),
+            new("format.paragraph", "Paragraph", "Remove the heading from this line.", "⌘0", ed.SetParagraph),
+
+            new("view.toggleToolbar", "Toggle Toolbar", "Show or hide the formatting toolbar.", null, ToggleToolbar),
+            new("help.reference", "Markdown Reference", "Open the offline syntax & shortcut reference.", null, ShowHelp),
+        };
     }
 
     // ----- file operations -----
