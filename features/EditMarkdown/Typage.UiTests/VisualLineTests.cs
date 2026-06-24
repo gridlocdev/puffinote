@@ -93,4 +93,52 @@ public class VisualLineTests
         Assert.Equal(0, v.Width);
         Assert.False(v.IsInsideConcealed(v.XToColumn(50))); // a click resolves to a valid (edge) stop
     }
+
+    // ----- word wrap (1 unit per char, wrapWidth in the same units) -----
+
+    private static VisualLine Wrapped(string text, double wrapWidth) =>
+        VisualLine.Build(text, new[] { new VisualLine.Segment(0, text.Length, Plain, false) }, Unit, wrapWidth);
+
+    [Fact]
+    public void NoWrapWidth_KeepsASingleRow()
+    {
+        var v = Wrapped("aaa bbb ccc ddd", 0);
+        Assert.Equal(1, v.RowCount);
+    }
+
+    [Fact]
+    public void LongLine_WrapsAtWordBoundaries()
+    {
+        // "aaa bbb ccc": "aaa bbb" (width 7) fits; "ccc" overflows and starts a new row.
+        var v = Wrapped("aaa bbb ccc", 7);
+        Assert.Equal(2, v.RowCount);
+        Assert.Equal(0, v.RowOf(0));   // "aaa" on row 0
+        Assert.Equal(1, v.RowOf(8));   // "ccc" begins on row 1
+    }
+
+    [Fact]
+    public void WrappedRow_RestartsXAtTheLeft()
+    {
+        var v = Wrapped("aaa bbb ccc", 7);
+        Assert.Equal(0, v.ColumnToX(8)); // "ccc" starts at x=0 on its own row
+    }
+
+    [Fact]
+    public void XToColumn_IsScopedToTheGivenRow()
+    {
+        var v = Wrapped("aaa bbb ccc", 7);
+        // x=0 on row 1 resolves to the start of "ccc" (column 8), not column 0.
+        Assert.Equal(8, v.XToColumn(1, 0));
+        Assert.Equal(0, v.XToColumn(0, 0));
+    }
+
+    [Fact]
+    public void Spans_BreakAcrossRows_ForASelection()
+    {
+        var v = Wrapped("aaa bbb ccc", 7);
+        var rows = new List<(int Row, double X1, double X2)>(v.Spans(0, 11));
+        Assert.Equal(2, rows.Count); // the selection covers both wrapped rows
+        Assert.Equal(0, rows[0].Row);
+        Assert.Equal(1, rows[1].Row);
+    }
 }
