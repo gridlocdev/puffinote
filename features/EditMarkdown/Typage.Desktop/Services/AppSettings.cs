@@ -26,6 +26,9 @@ public sealed class AppSettings
     /// <summary>The default for the per-document raw-source view (markers always shown; PRD §7.4).</summary>
     public bool ShowRawSource { get; set; }
 
+    /// <summary>Seconds between crash-recovery autosaves; 0 disables it (PRD §9.4).</summary>
+    public int AutosaveSeconds { get; set; } = 30;
+
     public const int MaxRecentFiles = 10;
 
     public void PushRecent(string path)

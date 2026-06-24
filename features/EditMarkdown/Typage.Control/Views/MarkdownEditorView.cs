@@ -79,6 +79,9 @@ public class MarkdownEditorView : UserControl
 
     public void MarkSaved() => _editor.MarkSaved();
 
+    /// <summary>Load recovered text, leaving it marked dirty (unsaved) for crash recovery (PRD §9.4).</summary>
+    public void LoadRecovered(string text) => _editor.LoadDirty(text);
+
     public void Undo() => _editor.Undo();
 
     public void Redo() => _editor.Redo();

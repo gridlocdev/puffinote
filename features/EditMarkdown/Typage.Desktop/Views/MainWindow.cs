@@ -46,6 +46,10 @@ public class MainWindow : Window
     private FileSystemWatcher? _watcher;
     private string? _lastKnownDiskText;
     private bool _conflictPromptOpen;
+
+    // Crash recovery (PRD §9.4): autosave the dirty buffer to a sidecar snapshot; clear it on a clean save.
+    private readonly RecoveryService _recovery = new();
+    private DispatcherTimer? _autosaveTimer;
     private readonly List<(AppTheme Theme, MenuItem Item)> _themeItems = new();
 
     // Chrome brushes are mutated live on a theme change; the borders/text share these instances.
@@ -107,7 +111,12 @@ public class MainWindow : Window
         _editorView.TextChanged += (_, _) => UpdateChrome();
         _editorView.SelectionChanged += (_, _) => UpdateCaretStatus();
         Closing += OnClosing;
-        Closed += (_, _) => _watcher?.Dispose();
+        Closed += (_, _) =>
+        {
+            _autosaveTimer?.Stop();
+            _recovery.Clear(); // a clean exit means there is nothing to recover next launch
+            _watcher?.Dispose();
+        };
 
         if (Application.Current is { } app)
         {
@@ -126,6 +135,9 @@ public class MainWindow : Window
 
         // Focus / distraction-free mode (F11): hide the toolbar and status bar to maximize the text.
         KeyBindings.Add(new KeyBinding { Gesture = new KeyGesture(Key.F11), Command = new RelayCommand(ToggleFocusMode) });
+
+        SetupAutosave();
+        Opened += async (_, _) => await CheckForRecoveryAsync(); // offer recovery once the window is up
 
         // Preferences (⌘, / Ctrl+,).
         foreach (var g in new[] { new KeyGesture(Key.OemComma, KeyModifiers.Meta), new KeyGesture(Key.OemComma, KeyModifiers.Control) })
@@ -702,6 +714,7 @@ public class MainWindow : Window
             AtomicWrite(path, TextFileCodec.Encode(_editorView.Text, _format));
             _lastKnownDiskText = _editorView.Text; // so the watcher recognises this as our own save
             _editorView.MarkSaved();
+            _recovery.Clear(); // the save is durable now; drop the crash-recovery snapshot
             UpdateChrome();
             return true;
         }
@@ -774,6 +787,84 @@ public class MainWindow : Window
             }
 
             throw;
+        }
+    }
+
+    // ----- crash recovery (PRD §9.4) -----
+
+    private void SetupAutosave()
+    {
+        _autosaveTimer?.Stop();
+        var seconds = _settings.Settings.AutosaveSeconds;
+        if (seconds <= 0)
+        {
+            _autosaveTimer = null; // autosave disabled
+            return;
+        }
+
+        _autosaveTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(seconds) };
+        _autosaveTimer.Tick += (_, _) => AutosaveTick();
+        _autosaveTimer.Start();
+    }
+
+    /// <summary>Snapshot the buffer if it has unsaved changes, else drop any stale snapshot.</summary>
+    private void AutosaveTick()
+    {
+        if (_editorView.IsDirty)
+        {
+            _recovery.Save(_currentPath, _editorView.Text);
+        }
+        else
+        {
+            _recovery.Clear();
+        }
+    }
+
+    /// <summary>Run one autosave cycle; for tests (the timer can't tick headlessly).</summary>
+    internal void AutosaveTickForTest() => AutosaveTick();
+
+    private bool _recoveryChecked;
+
+    /// <summary>On startup, if a snapshot from an unclean shutdown exists, offer to recover it (PRD §9.4).</summary>
+    private async Task CheckForRecoveryAsync()
+    {
+        if (_recoveryChecked)
+        {
+            return;
+        }
+
+        _recoveryChecked = true;
+        if (_recovery.TryLoad() is not { } snapshot)
+        {
+            return;
+        }
+
+        if (await ConfirmAsync($"Recover unsaved changes from {snapshot.SavedAtUtc.ToLocalTime():g}?"))
+        {
+            // Re-adopt the original file (encoding + disk baseline), then overlay the recovered text as dirty.
+            if (snapshot.Path is not null && File.Exists(snapshot.Path))
+            {
+                try
+                {
+                    var (diskText, format) = TextFileCodec.Decode(File.ReadAllBytes(snapshot.Path));
+                    _format = format;
+                    _lastKnownDiskText = diskText;
+                }
+                catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+                {
+                    // The original is gone or unreadable — recover the text as an Untitled buffer.
+                }
+
+                _currentPath = snapshot.Path;
+            }
+
+            _editorView.LoadRecovered(snapshot.Text);
+            UpdateChrome();
+            WatchCurrentFile();
+        }
+        else
+        {
+            _recovery.Clear();
         }
     }
 

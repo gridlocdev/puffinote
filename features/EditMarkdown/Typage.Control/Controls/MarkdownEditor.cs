@@ -176,6 +176,9 @@ public class MarkdownEditor : Avalonia.Controls.Control, ILogicalScrollable
 
     public void MarkSaved() => _buffer.MarkSaved();
 
+    /// <summary>Replace the document but leave it marked dirty (used for crash recovery, PRD §9.4).</summary>
+    public void LoadDirty(string text) => _buffer.Load(text, markSaved: false);
+
     public void Undo() => _buffer.Undo();
 
     public void Redo() => _buffer.Redo();
