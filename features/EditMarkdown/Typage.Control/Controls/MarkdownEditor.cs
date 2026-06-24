@@ -54,6 +54,7 @@ public class MarkdownEditor : Avalonia.Controls.Control, ILogicalScrollable
             // Incremental re-tokenization: reuse the unchanged prefix and re-run only from the first
             // changed line down (PRD §8.2). Equivalent to a full rebuild — see IncrementalTokenizerTests.
             _model = _model.Update(_buffer.Document, _buffer.LastChangedLine, out _);
+            _goalX = double.NaN; // an edit moves the caret; the next Up/Down recomputes the goal column
             RaiseScrollInvalidated(EventArgs.Empty); // line count / extent may have changed
             InvalidateVisual();
             TextChanged?.Invoke(this, EventArgs.Empty);
@@ -942,6 +943,8 @@ public class MarkdownEditor : Avalonia.Controls.Control, ILogicalScrollable
     }
 
     private KeyModifiers _modifiers;
+    private bool _dragging;
+    private double _goalX = double.NaN; // remembered caret x for sticky up/down movement (NaN = recompute)
 
     protected override void OnPointerPressed(PointerPressedEventArgs e)
     {
@@ -955,24 +958,107 @@ public class MarkdownEditor : Avalonia.Controls.Control, ILogicalScrollable
         Focus();
         var point = e.GetPosition(this);
         // The viewport is inset by the padding and translated by the scroll offset; map back.
-        var contentY = point.Y - _theme.PaddingTop + _offset.Y;
-        var contentX = point.X - _theme.PaddingLeft + _offset.X;
-        var line = Math.Clamp((int)(contentY / _theme.LineHeight), 0, _buffer.Document.LineCount - 1);
-        var offset = OffsetAt(line, contentX);
+        var line = Math.Clamp((int)((point.Y - _theme.PaddingTop + _offset.Y) / _theme.LineHeight), 0, _buffer.Document.LineCount - 1);
+        var offset = OffsetAtPoint(point);
+        var shift = e.KeyModifiers.HasFlag(KeyModifiers.Shift);
+
+        // A double-click selects the word (or run) under the cursor.
+        if (e.ClickCount == 2)
+        {
+            SelectWordAt(line, offset);
+            e.Handled = true;
+            base.OnPointerPressed(e);
+            return;
+        }
 
         // A click on a task-list checkbox toggles it (PRD §7.2) rather than moving the caret.
-        if (!e.KeyModifiers.HasFlag(KeyModifiers.Shift) && TryToggleTaskAt(line, offset))
+        if (!shift && TryToggleTaskAt(line, offset))
         {
             e.Handled = true;
             base.OnPointerPressed(e);
             return;
         }
 
-        var extend = e.KeyModifiers.HasFlag(KeyModifiers.Shift);
-        MoveCaret(offset, extend);
+        MoveCaret(offset, shift);
+        _dragging = true; // begin a drag-select; OnPointerMoved extends the selection
+        e.Pointer.Capture(this);
         e.Handled = true;
         base.OnPointerPressed(e);
     }
+
+    protected override void OnPointerMoved(PointerEventArgs e)
+    {
+        if (_dragging && e.GetCurrentPoint(this).Properties.IsLeftButtonPressed)
+        {
+            MoveCaret(OffsetAtPoint(e.GetPosition(this)), extend: true); // hold the anchor, move the caret
+            e.Handled = true;
+        }
+
+        base.OnPointerMoved(e);
+    }
+
+    protected override void OnPointerReleased(PointerReleasedEventArgs e)
+    {
+        if (_dragging)
+        {
+            _dragging = false;
+            e.Pointer.Capture(null);
+            e.Handled = true;
+        }
+
+        base.OnPointerReleased(e);
+    }
+
+    /// <summary>
+    /// Select the run under <paramref name="offset"/> on <paramref name="line"/>: a word (letters /
+    /// digits / underscore), a whitespace run, or a punctuation run — the standard double-click word
+    /// select. Snaps the selection ends to grapheme boundaries so it never splits a cluster.
+    /// </summary>
+    private void SelectWordAt(int line, int offset)
+    {
+        var doc = _buffer.Document;
+        var lineStart = doc.GetLineStart(line);
+        var text = doc.GetText(lineStart, doc.GetLineEnd(line) - lineStart).TrimEnd('\r');
+        if (text.Length == 0)
+        {
+            MoveCaret(lineStart, extend: false);
+            return;
+        }
+
+        var col = Math.Clamp(offset - lineStart, 0, text.Length);
+        var probe = col < text.Length ? col : col - 1;
+        var cls = CharClass(text[probe]);
+
+        var start = probe;
+        while (start > 0 && CharClass(text[start - 1]) == cls)
+        {
+            start--;
+        }
+
+        var end = probe + 1;
+        while (end < text.Length && CharClass(text[end]) == cls)
+        {
+            end++;
+        }
+
+        // Snap to grapheme boundaries (a surrogate pair / combining sequence stays whole).
+        start = Grapheme.PreviousBoundary(text, Math.Min(start + 1, text.Length));
+        end = Grapheme.NextBoundary(text, Math.Max(0, end - 1));
+        _buffer.Selection = new Selection(lineStart + start, lineStart + end);
+        _goalX = double.NaN;
+    }
+
+    private static int CharClass(char c) =>
+        char.IsLetterOrDigit(c) || c == '_' ? 0 : char.IsWhiteSpace(c) ? 1 : 2;
+
+    /// <summary>Select the word/run at <paramref name="offset"/> on <paramref name="line"/>; for tests.</summary>
+    internal void SelectWordForTest(int line, int offset) => SelectWordAt(line, offset);
+
+    /// <summary>Move the caret up/down by <paramref name="delta"/> lines (sticky goal column); for tests.</summary>
+    internal void MoveCaretByLineForTest(int delta) => MoveCaretByLine(delta, extend: false);
+
+    /// <summary>Set the caret to <paramref name="offset"/> as a plain click would; for tests.</summary>
+    internal void ClickAtForTest(int offset) => MoveCaret(offset, extend: false);
 
     /// <summary>
     /// If <paramref name="offset"/> lands on a task-list checkbox on <paramref name="line"/>, flip it
@@ -1055,19 +1141,51 @@ public class MarkdownEditor : Avalonia.Controls.Control, ILogicalScrollable
         }
     }
 
-    private void MoveCaret(int newCaret, bool extend)
+    private void MoveCaret(int newCaret, bool extend, bool keepGoalColumn = false)
     {
         newCaret = Math.Clamp(newCaret, 0, _buffer.Document.Length);
         var anchor = extend ? _buffer.Selection.Anchor : newCaret;
         _buffer.Selection = new Selection(anchor, newCaret);
+        if (!keepGoalColumn)
+        {
+            _goalX = double.NaN; // a horizontal move resets the remembered column
+        }
     }
 
+    /// <summary>
+    /// Move the caret up/down by <paramref name="delta"/> lines, holding a <b>sticky goal column</b>:
+    /// the caret's x is remembered on the first vertical move and reused, so passing through shorter
+    /// lines doesn't permanently snap the column inward (the behavior every editor has).
+    /// </summary>
     private void MoveCaretByLine(int delta, bool extend)
     {
         var doc = _buffer.Document;
         var pos = doc.GetPosition(_buffer.Selection.Caret);
+        if (double.IsNaN(_goalX))
+        {
+            _goalX = CaretX(pos);
+        }
+
         var targetLine = Math.Clamp(pos.Line + delta, 0, doc.LineCount - 1);
-        MoveCaret(doc.GetOffset(targetLine, pos.Column), extend);
+        MoveCaret(OffsetAt(targetLine, _goalX), extend, keepGoalColumn: true);
+    }
+
+    /// <summary>The x-offset of the caret at <paramref name="pos"/>, measured with each run's real font.</summary>
+    private double CaretX(LinePosition pos)
+    {
+        var doc = _buffer.Document;
+        var lineStart = doc.GetLineStart(pos.Line);
+        var text = doc.GetText(lineStart, doc.GetLineEnd(pos.Line) - lineStart).TrimEnd('\r');
+        return ColumnX(pos.Line, text.Length, HeadingLevel(pos.Line), text, Math.Min(pos.Column, text.Length));
+    }
+
+    /// <summary>Map a pointer position to the nearest caret offset (accounting for padding + scroll).</summary>
+    private int OffsetAtPoint(Point point)
+    {
+        var contentY = point.Y - _theme.PaddingTop + _offset.Y;
+        var contentX = point.X - _theme.PaddingLeft + _offset.X;
+        var line = Math.Clamp((int)(contentY / _theme.LineHeight), 0, _buffer.Document.LineCount - 1);
+        return OffsetAt(line, contentX);
     }
 
     // ----- helpers -----
