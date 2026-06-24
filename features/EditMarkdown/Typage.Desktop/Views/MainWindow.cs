@@ -839,7 +839,7 @@ public class MainWindow : Window
             return;
         }
 
-        if (await ConfirmAsync($"Recover unsaved changes from {snapshot.SavedAtUtc.ToLocalTime():g}?"))
+        if (await ConfirmAsync($"Recover unsaved changes from {snapshot.SavedAtUtc.ToLocalTime():g}?", confirmLabel: "Restore", denyLabel: "Discard"))
         {
             // Re-adopt the original file (encoding + disk baseline), then overlay the recovered text as dirty.
             if (snapshot.Path is not null && File.Exists(snapshot.Path))
@@ -1170,11 +1170,11 @@ public class MainWindow : Window
         _ = dialog.ShowDialog(this);
     }
 
-    private async Task<bool> ConfirmAsync(string message)
+    private async Task<bool> ConfirmAsync(string message, string confirmLabel = "Discard", string denyLabel = "Cancel")
     {
         var tcs = new TaskCompletionSource<bool>();
-        var yes = new Button { Content = "Discard", IsDefault = false };
-        var no = new Button { Content = "Cancel", IsCancel = true };
+        var yes = new Button { Content = confirmLabel, IsDefault = false };
+        var no = new Button { Content = denyLabel, IsCancel = true };
         yes.Click += (_, _) => tcs.TrySetResult(true);
         no.Click += (_, _) => tcs.TrySetResult(false);
 
