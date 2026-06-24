@@ -38,27 +38,28 @@ public class MouseAndCaretTests
     [AvaloniaFact]
     public void GoalColumn_SurvivesAShortLine()
     {
-        // Down through a short line then down again returns to the original column.
-        var editor = new MarkdownEditor { Text = "abcdefghij\nxy\nabcdefghij" };
-        editor.Buffer.Selection = Selection.At(6); // column 6 on line 0
-        editor.MoveCaretByLineForTest(1); // line 1 ("xy") — caret clamps inward
+        // Down through a short line then down again returns to the original column. Headings are used so
+        // the three lines stay separate blocks (plain paragraphs would join into one flowing paragraph).
+        var editor = new MarkdownEditor { Text = "# abcdefghij\n# xy\n# abcdefghij" };
+        editor.Buffer.Selection = Selection.At(8); // column 8 on line 0 (inside the heading text)
+        editor.MoveCaretByLineForTest(1); // line 1 ("# xy") — caret clamps inward
         var onShort = editor.Buffer.Document.GetPosition(editor.Buffer.Selection.Caret);
         Assert.Equal(1, onShort.Line);
 
         editor.MoveCaretByLineForTest(1); // line 2 — goal column restored
         var onLong = editor.Buffer.Document.GetPosition(editor.Buffer.Selection.Caret);
         Assert.Equal(2, onLong.Line);
-        Assert.Equal(6, onLong.Column);
+        Assert.Equal(8, onLong.Column);
     }
 
     [AvaloniaFact]
     public void GoalColumn_ResetsAfterAHorizontalMove()
     {
-        var editor = new MarkdownEditor { Text = "abcdefghij\nxy\nabcdefghij" };
-        editor.Buffer.Selection = Selection.At(6);
-        editor.MoveCaretByLineForTest(1); // to short line, goal = column 6
-        editor.ClickAtForTest(editor.Buffer.Document.GetLineStart(1)); // a click resets the goal
-        editor.MoveCaretByLineForTest(1); // to line 2 — column should track the click (0), not 6
-        Assert.Equal(0, editor.Buffer.Document.GetPosition(editor.Buffer.Selection.Caret).Column);
+        var editor = new MarkdownEditor { Text = "# abcdefghij\n# xy\n# abcdefghij" };
+        editor.Buffer.Selection = Selection.At(8);
+        editor.MoveCaretByLineForTest(1); // to short line, goal = column 8
+        editor.ClickAtForTest(editor.Buffer.Document.GetLineStart(1) + 2); // a click resets the goal (at "xy" start)
+        editor.MoveCaretByLineForTest(1); // to line 2 — column should track the click (2), not 8
+        Assert.Equal(2, editor.Buffer.Document.GetPosition(editor.Buffer.Selection.Caret).Column);
     }
 }

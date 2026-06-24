@@ -46,9 +46,13 @@ public class MarkdownEditor : Avalonia.Controls.Control, ILogicalScrollable
     private bool _canVerticallyScroll = true;
     private EventHandler? _scrollInvalidated;
 
-    // Wrapped-layout cache: each document line occupies one or more visual rows (word wrap), so heights
-    // vary. _rowCounts[l] is line l's row count and _rowPrefix is its running sum (the first visual row of
-    // each line); both are rebuilt when the text, theme, or wrap width changes (PRD §7.3 soft wrap).
+    // Wrapped-layout cache, keyed by *paragraph block* — a maximal run of consecutive plain-paragraph
+    // source lines that flow together (their newlines render as spaces, PRD §7.3); every other line is its
+    // own singleton block. _blockStartLine[b] is block b's first document line (with a trailing sentinel =
+    // LineCount), _blockOfLine[l] is line l's block, and _rowCounts/_rowPrefix hold each block's wrapped
+    // row count and running sum. All are rebuilt when the text, theme, or wrap width changes.
+    private int[] _blockStartLine = { 0, 0 };
+    private int[] _blockOfLine = Array.Empty<int>();
     private int[] _rowCounts = Array.Empty<int>();
     private int[] _rowPrefix = new int[1];
     private bool _layoutDirty = true;
@@ -534,39 +538,127 @@ public class MarkdownEditor : Avalonia.Controls.Control, ILogicalScrollable
     }
 
     /// <summary>
-    /// Rebuild the per-line row-count cache (and its prefix sums) when the text, theme, or wrap width has
-    /// changed. Each line's row count comes from laying it out at the current wrap width — measurement is
-    /// cached, so an unchanged line costs only its width-cache lookups.
+    /// Rebuild the paragraph-block grouping and per-block row-count cache (with prefix sums) when the text,
+    /// theme, or wrap width has changed. Consecutive plain-paragraph lines are merged into one flowing
+    /// block; every other line is a singleton. Measurement is cached, so an unchanged block is cheap.
     /// </summary>
     private void EnsureLayout()
     {
         var n = _buffer.Document.LineCount;
         var width = WrapWidth();
-        if (!_layoutDirty && _layoutWidth == width && _rowCounts.Length == n)
+        if (!_layoutDirty && _layoutWidth == width && _blockOfLine.Length == n)
         {
             return;
         }
 
-        _rowCounts = new int[n];
-        _rowPrefix = new int[n + 1];
+        // Group lines into blocks: a line joins the previous block only if it and the line above are both
+        // plain paragraph text and the line above doesn't end in a hard break.
+        var starts = new List<int>();
+        var ofLine = new int[n];
         for (var l = 0; l < n; l++)
         {
-            _rowCounts[l] = LineVisual(l).RowCount;
-            _rowPrefix[l + 1] = _rowPrefix[l] + _rowCounts[l];
+            var joins = l > 0 && IsFlowLine(l) && IsFlowLine(l - 1) && !EndsWithHardBreak(l - 1);
+            if (!joins)
+            {
+                starts.Add(l);
+            }
+
+            ofLine[l] = starts.Count - 1;
+        }
+
+        _blockStartLine = new int[starts.Count + 1];
+        for (var b = 0; b < starts.Count; b++)
+        {
+            _blockStartLine[b] = starts[b];
+        }
+
+        _blockStartLine[starts.Count] = n;
+        _blockOfLine = ofLine;
+
+        _rowCounts = new int[starts.Count];
+        _rowPrefix = new int[starts.Count + 1];
+        for (var b = 0; b < starts.Count; b++)
+        {
+            _rowCounts[b] = BlockVisual(b).RowCount;
+            _rowPrefix[b + 1] = _rowPrefix[b] + _rowCounts[b];
         }
 
         _layoutWidth = width;
         _layoutDirty = false;
     }
 
+    /// <summary>
+    /// Whether <paramref name="line"/> is a plain-paragraph line that flows with its neighbours — non-blank,
+    /// ordinary block state (not code/front matter), no leading block/list/quote/heading marker, and not a
+    /// table row. Headings, lists, quotes, rules, code, and blank lines all break the flow.
+    /// </summary>
+    private bool IsFlowLine(int line)
+    {
+        var doc = _buffer.Document;
+        if (doc.GetLineText(line).Trim().Length == 0)
+        {
+            return false; // a blank line separates paragraphs
+        }
+
+        if (_model.EnteringState(line).Kind != BlockKind.Normal)
+        {
+            return false; // inside fenced/indented code or front matter
+        }
+
+        var toks = _model.LineTokens(line);
+        if (toks.Count == 0)
+        {
+            return false;
+        }
+
+        if (toks[0].Type is TokenType.HeadingMarker or TokenType.BlockquoteMarker or TokenType.ListMarker
+            or TokenType.TaskMarker or TokenType.HorizontalRule or TokenType.CodeFence or TokenType.CodeText
+            or TokenType.FrontMatterFence or TokenType.FrontMatterText or TokenType.TableDelimiter)
+        {
+            return false;
+        }
+
+        // A pipe-table body/header row carries single-'|' Marker tokens (only the table tokenizer emits
+        // those); keep it out of paragraph flow.
+        foreach (var t in toks)
+        {
+            if (t.Type == TokenType.Marker && t.Length == 1 && doc[t.Start] == '|')
+            {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    /// <summary>Whether <paramref name="line"/> ends in a hard line break (so the next line shouldn't flow into it).</summary>
+    private bool EndsWithHardBreak(int line)
+    {
+        var toks = _model.LineTokens(line);
+        return toks.Count > 0 && toks[^1].Type == TokenType.HardBreak;
+    }
+
+    /// <summary>The block <paramref name="line"/> belongs to.</summary>
+    private int BlockOf(int line)
+    {
+        EnsureLayout();
+        return _blockOfLine[Math.Clamp(line, 0, _blockOfLine.Length - 1)];
+    }
+
+    /// <summary>The document offset of <paramref name="block"/>'s first character.</summary>
+    private int BlockStartOffset(int block) => _buffer.Document.GetLineStart(_blockStartLine[block]);
+
+    /// <summary>The document offset just past <paramref name="block"/>'s last content character.</summary>
+    private int BlockEndOffset(int block) => _buffer.Document.GetLineEnd(_blockStartLine[block + 1] - 1);
+
     /// <summary>Total number of visual rows across the whole document.</summary>
     private int TotalRows => _rowPrefix.Length > 0 ? _rowPrefix[^1] : 0;
 
-    /// <summary>The top of <paramref name="line"/>'s first row in content space (before padding/offset).</summary>
-    private double RowTop(int line) => _rowPrefix[Math.Clamp(line, 0, _rowPrefix.Length - 1)] * _theme.LineHeight;
+    /// <summary>The top of <paramref name="block"/>'s first row in content space (before padding/offset).</summary>
+    private double RowTop(int block) => _rowPrefix[Math.Clamp(block, 0, _rowPrefix.Length - 1)] * _theme.LineHeight;
 
-    /// <summary>The document line containing global visual <paramref name="row"/> (binary search over the prefix sums).</summary>
-    private int LineAtRow(int row)
+    /// <summary>The block containing global visual <paramref name="row"/> (binary search over the prefix sums).</summary>
+    private int BlockAtRow(int row)
     {
         var n = _rowCounts.Length;
         if (n == 0)
@@ -592,6 +684,18 @@ public class MarkdownEditor : Avalonia.Controls.Control, ILogicalScrollable
         return lo;
     }
 
+    /// <summary>The caret's block, its start offset, laid-out block, and block-relative column for <paramref name="offset"/>.</summary>
+    private (int Block, int BlockStart, VisualLine Visual, int Col) ResolveCaret(int offset)
+    {
+        EnsureLayout();
+        var doc = _buffer.Document;
+        var block = BlockOf(doc.GetPosition(offset).Line);
+        var blockStart = BlockStartOffset(block);
+        var visual = BlockVisual(block);
+        var col = Math.Clamp(offset - blockStart, 0, visual.RawLength);
+        return (block, blockStart, visual, col);
+    }
+
     // ----- rendering -----
 
     public override void Render(DrawingContext context)
@@ -603,15 +707,15 @@ public class MarkdownEditor : Avalonia.Controls.Control, ILogicalScrollable
         var caret = _buffer.Selection;
         var caretLine = doc.GetPosition(caret.Caret).Line;
 
-        // Draw only the document lines whose wrapped rows intersect the viewport (virtualization over
-        // variable line heights). The viewport height is 0 until the control is arranged in a scroll viewer.
+        // Draw only the paragraph blocks whose wrapped rows intersect the viewport (virtualization over
+        // variable block heights). The viewport height is 0 until the control is arranged in a scroll viewer.
         var lineH = _theme.LineHeight;
         var viewportH = _viewport.Height > 0 ? _viewport.Height : Bounds.Height;
         var contentTop = _offset.Y - _theme.PaddingTop;
         var firstRow = Math.Max(0, (int)(contentTop / lineH));
         var lastRow = (int)((contentTop + viewportH) / lineH) + 1;
-        var first = LineAtRow(firstRow);
-        var last = Math.Min(doc.LineCount, LineAtRow(lastRow) + 1);
+        var first = BlockAtRow(firstRow);
+        var last = Math.Min(_rowCounts.Length, BlockAtRow(lastRow) + 1);
 
         // Content is drawn in document space, inset by the padding and shifted by the scroll offset.
         using (context.PushTransform(Matrix.CreateTranslation(_theme.PaddingLeft - _offset.X, _theme.PaddingTop - _offset.Y)))
@@ -619,9 +723,9 @@ public class MarkdownEditor : Avalonia.Controls.Control, ILogicalScrollable
             DrawPropertiesPanel(context, first, last); // front-matter "Properties" backdrop, under the text
 
             var maxWidth = _extentWidth;
-            for (var line = first; line < last; line++)
+            for (var block = first; block < last; block++)
             {
-                maxWidth = Math.Max(maxWidth, RenderLine(context, doc, line, caret, caretLine));
+                maxWidth = Math.Max(maxWidth, RenderBlock(context, doc, block, caret, caretLine));
             }
 
             // Only relevant when wrapping is off: grow the horizontal extent as wide lines come into view.
@@ -675,9 +779,16 @@ public class MarkdownEditor : Avalonia.Controls.Control, ILogicalScrollable
     /// changing any glyph layout, so caret/selection/hit-testing stay exact (offsets remain 1:1).
     /// True folding of the block belongs with the §7.4 concealment work (the offset↔visual map).
     /// </summary>
-    private void DrawPropertiesPanel(DrawingContext context, int firstVisible, int lastVisible)
+    private void DrawPropertiesPanel(DrawingContext context, int firstVisibleBlock, int lastVisibleBlock)
     {
-        if (FrontMatterBlock() is not { } block || block.End < firstVisible || block.Start >= lastVisible)
+        if (FrontMatterBlock() is not { } fm)
+        {
+            return;
+        }
+
+        var startBlock = BlockOf(fm.Start);
+        var endBlock = BlockOf(fm.End);
+        if (endBlock < firstVisibleBlock || startBlock >= lastVisibleBlock)
         {
             return;
         }
@@ -685,8 +796,8 @@ public class MarkdownEditor : Avalonia.Controls.Control, ILogicalScrollable
         var lineH = _theme.LineHeight;
         var viewportW = _viewport.Width > 0 ? _viewport.Width : Bounds.Width;
         var panelRight = Math.Max(220, viewportW - _theme.PaddingLeft * 2);
-        var startTop = RowTop(block.Start);
-        var endBottom = RowTop(block.End) + _rowCounts[block.End] * lineH;
+        var startTop = RowTop(startBlock);
+        var endBottom = RowTop(endBlock) + _rowCounts[endBlock] * lineH;
         context.FillRectangle(_theme.PropertiesBackground, new Rect(-8, startTop + 2, panelRight + 8, endBottom - startTop - 4), 6);
 
         // "Properties" label on the opening-fence row (its source is only "---", so no text overlap).
@@ -695,35 +806,36 @@ public class MarkdownEditor : Avalonia.Controls.Control, ILogicalScrollable
         context.DrawText(label, new Point(panelRight - label.Width - 6, labelY));
     }
 
-    private double RenderLine(DrawingContext context, TextDocument doc, int line, Selection sel, int caretLine)
+    private double RenderBlock(DrawingContext context, TextDocument doc, int block, Selection sel, int caretLine)
     {
         var lineH = _theme.LineHeight;
-        var lineTop = RowTop(line);
-        var lineStart = doc.GetLineStart(line);
-        var visual = BuildVisualLine(line, sel, caretLine);
+        var blockTop = RowTop(block);
+        var startLine = _blockStartLine[block];
+        var blockStart = doc.GetLineStart(startLine);
+        var visual = BlockVisual(block);
 
-        // A code block gets a subtle background panel (under everything else), spanning all its rows.
-        if (IsCodeLine(line))
+        // A code block (always a singleton block) gets a subtle background panel spanning all its rows.
+        if (IsCodeLine(startLine))
         {
-            context.FillRectangle(_theme.CodeBlockBackground, new Rect(-8, lineTop, ContentRight() + 16, visual.RowCount * lineH));
+            context.FillRectangle(_theme.CodeBlockBackground, new Rect(-8, blockTop, ContentRight() + 16, visual.RowCount * lineH));
         }
 
         // Search-match highlights (under the text), then the selection on top.
         if (_searchMatches.Count > 0)
         {
-            DrawSearchMatches(context, line, lineStart, lineTop, visual);
+            DrawSearchMatches(context, blockStart, blockTop, visual);
         }
 
         if (sel.Length > 0)
         {
-            DrawSelection(context, line, lineStart, lineTop, sel, visual);
+            DrawSelection(context, blockStart, blockTop, sel, visual);
         }
 
         // Draw every visual run on its wrapped row: concealed marker runs vanish (zero width, not drawn);
         // text and decorations advance the cursor exactly as the offset↔visual map measured them.
         foreach (var run in visual.Runs)
         {
-            var rowTop = lineTop + run.Row * lineH;
+            var rowTop = blockTop + run.Row * lineH;
             switch (run.Kind)
             {
                 case VisualRunKind.Text:
@@ -736,12 +848,12 @@ public class MarkdownEditor : Avalonia.Controls.Control, ILogicalScrollable
         }
 
         // Caret — placed through the map (correct amid hidden markers) on its wrapped row.
-        if (caretLine == line && IsFocused)
+        if (BlockOf(caretLine) == block && IsFocused)
         {
-            var col = Math.Clamp(sel.Caret - lineStart, 0, visual.RawLength);
+            var col = Math.Clamp(sel.Caret - blockStart, 0, visual.RawLength);
             var caretX = visual.ColumnToX(col);
             var h = _theme.BaseFontSize * 1.3;
-            var y = lineTop + visual.RowOf(col) * lineH + (lineH - h) / 2;
+            var y = blockTop + visual.RowOf(col) * lineH + (lineH - h) / 2;
             context.FillRectangle(_theme.Caret, new Rect(caretX, y, 1.5, h));
         }
 
@@ -762,23 +874,23 @@ public class MarkdownEditor : Avalonia.Controls.Control, ILogicalScrollable
         context.DrawText(ft, new Point(run.X, y));
     }
 
-    private void DrawSearchMatches(DrawingContext context, int line, int lineStart, double lineTop, VisualLine visual)
+    private void DrawSearchMatches(DrawingContext context, int blockStart, double blockTop, VisualLine visual)
     {
         var lineH = _theme.LineHeight;
-        var lineEnd = lineStart + visual.RawLength;
+        var blockEnd = blockStart + visual.RawLength;
         // Matches are sorted, non-overlapping → both Start and End ascend. Binary-search the first
-        // match that could touch this line, then walk forward, so a line only touches its own matches
-        // (not all of them) — O(log M + matches-on-line) instead of O(M) per line.
-        for (var i = FirstMatchReaching(lineStart); i < _searchMatches.Count; i++)
+        // match that could touch this block, then walk forward, so a block only touches its own matches
+        // (not all of them) — O(log M + matches-in-block) instead of O(M) per block.
+        for (var i = FirstMatchReaching(blockStart); i < _searchMatches.Count; i++)
         {
             var m = _searchMatches[i];
-            if (m.Start >= lineEnd)
+            if (m.Start >= blockEnd)
             {
-                break; // all later matches start past this line
+                break; // all later matches start past this block
             }
 
-            var s = Math.Clamp(m.Start - lineStart, 0, visual.RawLength);
-            var e = Math.Clamp(m.End - lineStart, 0, visual.RawLength);
+            var s = Math.Clamp(m.Start - blockStart, 0, visual.RawLength);
+            var e = Math.Clamp(m.End - blockStart, 0, visual.RawLength);
             if (e <= s)
             {
                 continue;
@@ -787,7 +899,7 @@ public class MarkdownEditor : Avalonia.Controls.Control, ILogicalScrollable
             var brush = i == _currentMatch ? _theme.SearchMatchCurrent : _theme.SearchMatch;
             foreach (var (row, x1, x2) in visual.Spans(s, e))
             {
-                context.FillRectangle(brush, new Rect(x1, lineTop + row * lineH + 2, x2 - x1, lineH - 4), 2);
+                context.FillRectangle(brush, new Rect(x1, blockTop + row * lineH + 2, x2 - x1, lineH - 4), 2);
             }
         }
     }
@@ -812,18 +924,18 @@ public class MarkdownEditor : Avalonia.Controls.Control, ILogicalScrollable
         return lo;
     }
 
-    private void DrawSelection(DrawingContext context, int line, int lineStart, double lineTop, Selection sel, VisualLine visual)
+    private void DrawSelection(DrawingContext context, int blockStart, double blockTop, Selection sel, VisualLine visual)
     {
         var lineH = _theme.LineHeight;
         var contentLen = visual.RawLength;
-        var lineEnd = lineStart + contentLen;
-        if (sel.Start > lineEnd || sel.End < lineStart)
+        var blockEnd = blockStart + contentLen;
+        if (sel.Start > blockEnd || sel.End < blockStart)
         {
-            return; // selection doesn't touch this line
+            return; // selection doesn't touch this block
         }
 
-        var selStartCol = Math.Clamp(sel.Start - lineStart, 0, contentLen);
-        var selEndCol = Math.Clamp(sel.End - lineStart, 0, contentLen);
+        var selStartCol = Math.Clamp(sel.Start - blockStart, 0, contentLen);
+        var selEndCol = Math.Clamp(sel.End - blockStart, 0, contentLen);
         if (selEndCol <= selStartCol)
         {
             return;
@@ -831,7 +943,7 @@ public class MarkdownEditor : Avalonia.Controls.Control, ILogicalScrollable
 
         foreach (var (row, x1, x2) in visual.Spans(selStartCol, selEndCol))
         {
-            context.FillRectangle(_theme.SelectionBackground, new Rect(x1, lineTop + row * lineH + 2, x2 - x1, lineH - 4));
+            context.FillRectangle(_theme.SelectionBackground, new Rect(x1, blockTop + row * lineH + 2, x2 - x1, lineH - 4));
         }
     }
 
@@ -1234,11 +1346,10 @@ public class MarkdownEditor : Avalonia.Controls.Control, ILogicalScrollable
 
         Focus();
         var point = e.GetPosition(this);
-        // The viewport is inset by the padding and translated by the scroll offset; map the pointer's
-        // global visual row back to a document line (lines have variable, wrapped heights).
-        EnsureLayout();
-        var line = LineAtRow((int)((point.Y - _theme.PaddingTop + _offset.Y) / _theme.LineHeight));
+        // Resolve the click to a document offset (hit-testing handles padding, scroll, and wrapped rows),
+        // then take its document line for word-select / checkbox hit-testing.
         var offset = OffsetAtPoint(point);
+        var line = _buffer.Document.GetPosition(offset).Line;
         var shift = e.KeyModifiers.HasFlag(KeyModifiers.Shift);
 
         // A double-click selects the word (or run) under the cursor.
@@ -1346,15 +1457,17 @@ public class MarkdownEditor : Avalonia.Controls.Control, ILogicalScrollable
     /// </summary>
     private bool TryToggleTaskClick(int line, Point point, int offset)
     {
-        var visual = BuildVisualLine(line, _buffer.Selection, _buffer.Document.GetPosition(_buffer.Selection.Caret).Line);
+        // A task line carries a list marker, so it's always a singleton block (block start == line start).
+        var block = BlockOf(line);
+        var visual = BlockVisual(block);
         var contentX = point.X - _theme.PaddingLeft + _offset.X;
-        var lineStart = _buffer.Document.GetLineStart(line);
+        var blockStart = BlockStartOffset(block);
         foreach (var run in visual.Runs)
         {
             if (run.Decoration is DecorationKind.CheckboxChecked or DecorationKind.CheckboxUnchecked
                 && contentX >= run.X && contentX <= run.X + run.Width)
             {
-                return TryToggleTaskAt(line, lineStart + run.Col); // run.Col is the task marker's column
+                return TryToggleTaskAt(line, blockStart + run.Col); // run.Col is the task marker's column
             }
         }
 
@@ -1405,12 +1518,9 @@ public class MarkdownEditor : Avalonia.Controls.Control, ILogicalScrollable
             return; // not arranged in a viewport yet (e.g. headless construction)
         }
 
-        var doc = _buffer.Document;
         EnsureLayout();
-        var pos = doc.GetPosition(_buffer.Selection.Caret);
-        var visual = LineVisual(pos.Line);
-        var col = Math.Min(pos.Column, visual.RawLength);
-        var x = visual.ColumnToX(col); // through the offset↔visual map, so hidden markers don't skew the scroll
+        var r = ResolveCaret(_buffer.Selection.Caret);
+        var x = r.Visual.ColumnToX(r.Col); // through the offset↔visual map, so hidden markers don't skew the scroll
         if (!_wordWrap)
         {
             _extentWidth = Math.Max(_extentWidth, x + 12); // ensure we can scroll to a caret on a wide line
@@ -1418,7 +1528,7 @@ public class MarkdownEditor : Avalonia.Controls.Control, ILogicalScrollable
 
         // Caret position in scroll-content space (which includes the padding), on its wrapped row.
         var px = x + _theme.PaddingLeft;
-        var py = RowTop(pos.Line) + visual.RowOf(col) * _theme.LineHeight + _theme.PaddingTop;
+        var py = RowTop(r.Block) + r.Visual.RowOf(r.Col) * _theme.LineHeight + _theme.PaddingTop;
         const double margin = 8;
 
         var newY = _offset.Y;
@@ -1462,7 +1572,7 @@ public class MarkdownEditor : Avalonia.Controls.Control, ILogicalScrollable
     }
 
     /// <summary>The laid-out visual line for <paramref name="line"/> (concealment is caret-independent in WYSIWYG mode).</summary>
-    private VisualLine LineVisual(int line) => BuildVisualLine(line, _buffer.Selection, line);
+    private VisualLine LineVisual(int line) => BlockVisual(BlockOf(line));
 
     /// <summary>
     /// One caret step in <paramref name="dir"/> (+1 right, -1 left) that treats a concealed marker run as
@@ -1473,10 +1583,9 @@ public class MarkdownEditor : Avalonia.Controls.Control, ILogicalScrollable
     {
         var doc = _buffer.Document;
         var next = Math.Clamp(dir > 0 ? _buffer.NextCaret(caret) : _buffer.PreviousCaret(caret), 0, doc.Length);
-        var pos = doc.GetPosition(next);
-        var visual = LineVisual(pos.Line);
+        var r = ResolveCaret(next);
         var guard = 0;
-        while (visual.IsInsideConcealed(pos.Column) && guard++ <= doc.Length)
+        while (r.Visual.IsInsideConcealed(r.Col) && guard++ <= doc.Length)
         {
             var stepped = Math.Clamp(dir > 0 ? _buffer.NextCaret(next) : _buffer.PreviousCaret(next), 0, doc.Length);
             if (stepped == next)
@@ -1485,13 +1594,7 @@ public class MarkdownEditor : Avalonia.Controls.Control, ILogicalScrollable
             }
 
             next = stepped;
-            var p2 = doc.GetPosition(next);
-            if (p2.Line != pos.Line)
-            {
-                visual = LineVisual(p2.Line);
-            }
-
-            pos = p2;
+            r = ResolveCaret(next);
         }
 
         return next;
@@ -1516,32 +1619,32 @@ public class MarkdownEditor : Avalonia.Controls.Control, ILogicalScrollable
         }
 
         var doc = _buffer.Document;
-        var pos = doc.GetPosition(sel.Caret);
-        if (pos.Column == 0)
+        var r = ResolveCaret(sel.Caret);
+        if (r.Col == 0)
         {
-            return false; // line start: let plain backspace join with the previous line
+            return false; // block start: let plain backspace join with the previous block
         }
 
-        var visual = LineVisual(pos.Line);
-        var lineStart = doc.GetLineStart(pos.Line);
-        var col = pos.Column;
-        while (col > 0 && visual.IsColumnHidden(col - 1))
+        var col = r.Col;
+        while (col > 0 && r.Visual.IsColumnHidden(col - 1))
         {
             col--;
         }
 
-        var lineText = doc.GetText(lineStart, doc.GetLineEnd(pos.Line) - lineStart).TrimEnd('\r');
         if (col == 0)
         {
             // Only hidden marker punctuation precedes the caret — strip the whole marker prefix.
-            _buffer.ReplaceRange(lineStart, pos.Column, string.Empty);
-            _buffer.Selection = Selection.At(lineStart);
+            _buffer.ReplaceRange(r.BlockStart, r.Col, string.Empty);
+            _buffer.Selection = Selection.At(r.BlockStart);
             return true;
         }
 
-        var start = Grapheme.PreviousBoundary(lineText, col);
-        _buffer.ReplaceRange(lineStart + start, col - start, string.Empty);
-        _buffer.Selection = Selection.At(lineStart + start);
+        // Grapheme boundaries are taken over the real document text (interior newlines included), so a
+        // backspace at a soft-joined line boundary deletes the joining newline and merges the lines.
+        var realText = doc.GetText(r.BlockStart, BlockEndOffset(r.Block) - r.BlockStart);
+        var start = Grapheme.PreviousBoundary(realText, col);
+        _buffer.ReplaceRange(r.BlockStart + start, col - start, string.Empty);
+        _buffer.Selection = Selection.At(r.BlockStart + start);
         return true;
     }
 
@@ -1559,24 +1662,22 @@ public class MarkdownEditor : Avalonia.Controls.Control, ILogicalScrollable
         }
 
         var doc = _buffer.Document;
-        var pos = doc.GetPosition(sel.Caret);
-        var lineStart = doc.GetLineStart(pos.Line);
-        var lineText = doc.GetText(lineStart, doc.GetLineEnd(pos.Line) - lineStart).TrimEnd('\r');
-        var visual = LineVisual(pos.Line);
-        var col = pos.Column;
-        while (col < lineText.Length && visual.IsColumnHidden(col))
+        var r = ResolveCaret(sel.Caret);
+        var col = r.Col;
+        while (col < r.Visual.RawLength && r.Visual.IsColumnHidden(col))
         {
             col++;
         }
 
-        if (col >= lineText.Length)
+        if (col >= r.Visual.RawLength)
         {
-            return false; // nothing visible ahead on this line: let plain delete join the next line
+            return false; // nothing visible ahead in this block: let plain delete join the next block
         }
 
-        var end = Grapheme.NextBoundary(lineText, col);
-        _buffer.ReplaceRange(lineStart + col, end - col, string.Empty);
-        _buffer.Selection = Selection.At(lineStart + col);
+        var realText = doc.GetText(r.BlockStart, BlockEndOffset(r.Block) - r.BlockStart);
+        var end = Grapheme.NextBoundary(realText, col);
+        _buffer.ReplaceRange(r.BlockStart + col, end - col, string.Empty);
+        _buffer.Selection = Selection.At(r.BlockStart + col);
         return true;
     }
 
@@ -1587,23 +1688,20 @@ public class MarkdownEditor : Avalonia.Controls.Control, ILogicalScrollable
     /// </summary>
     private void MoveCaretByLine(int delta, bool extend)
     {
-        var doc = _buffer.Document;
         EnsureLayout();
-        var pos = doc.GetPosition(_buffer.Selection.Caret);
-        var visual = LineVisual(pos.Line);
-        var col = Math.Min(pos.Column, visual.RawLength);
+        var r = ResolveCaret(_buffer.Selection.Caret);
         if (double.IsNaN(_goalX))
         {
-            _goalX = visual.ColumnToX(col);
+            _goalX = r.Visual.ColumnToX(r.Col);
         }
 
         // Move by one wrapped visual row, not a whole document line, so Up/Down step through a long
-        // wrapped paragraph the way a normal document editor does.
-        var globalRow = _rowPrefix[pos.Line] + visual.RowOf(col);
+        // wrapped paragraph (and across joined source lines) the way a normal document editor does.
+        var globalRow = _rowPrefix[r.Block] + r.Visual.RowOf(r.Col);
         var targetRow = Math.Clamp(globalRow + delta, 0, Math.Max(0, TotalRows - 1));
-        var targetLine = LineAtRow(targetRow);
-        var localRow = targetRow - _rowPrefix[targetLine];
-        MoveCaret(OffsetAt(targetLine, localRow, _goalX), extend, keepGoalColumn: true);
+        var targetBlock = BlockAtRow(targetRow);
+        var localRow = targetRow - _rowPrefix[targetBlock];
+        MoveCaret(OffsetAt(targetBlock, localRow, _goalX), extend, keepGoalColumn: true);
     }
 
     /// <summary>Map a pointer position to the nearest caret offset (accounting for padding, scroll, and wrapped rows).</summary>
@@ -1613,9 +1711,9 @@ public class MarkdownEditor : Avalonia.Controls.Control, ILogicalScrollable
         var contentY = point.Y - _theme.PaddingTop + _offset.Y;
         var contentX = point.X - _theme.PaddingLeft + _offset.X;
         var globalRow = Math.Max(0, (int)(contentY / _theme.LineHeight));
-        var line = LineAtRow(globalRow);
-        var localRow = Math.Clamp(globalRow - _rowPrefix[line], 0, Math.Max(0, _rowCounts[line] - 1));
-        return OffsetAt(line, localRow, contentX);
+        var block = BlockAtRow(globalRow);
+        var localRow = Math.Clamp(globalRow - _rowPrefix[block], 0, Math.Max(0, _rowCounts[block] - 1));
+        return OffsetAt(block, localRow, contentX);
     }
 
     // ----- helpers -----
@@ -1661,72 +1759,98 @@ public class MarkdownEditor : Avalonia.Controls.Control, ILogicalScrollable
     /// truth for drawing, caret placement, hit-testing, and selection — they all read the same
     /// offset↔visual map, so hidden markers stay consistent everywhere.
     /// </summary>
-    private VisualLine BuildVisualLine(int line, Selection sel, int caretLine)
+    /// <summary>
+    /// Lay out one paragraph <paramref name="block"/> as a single (possibly wrapped) <see cref="VisualLine"/>.
+    /// A flow block joins its member source lines into one paragraph — the block's text is the contiguous
+    /// document range with interior line breaks shown as spaces, so a block column is simply
+    /// <c>offset − blockStart</c> and the whole offset↔visual map carries over unchanged. Markers are always
+    /// concealed (full WYSIWYG), so the layout is caret-independent.
+    /// </summary>
+    private VisualLine BlockVisual(int block)
     {
         var doc = _buffer.Document;
-        var lineStart = doc.GetLineStart(line);
-        var lineEnd = doc.GetLineEnd(line);
-        var lineText = doc.GetText(lineStart, lineEnd - lineStart).TrimEnd('\r');
-        var contentLen = lineText.Length;
-        var headingLevel = HeadingLevel(line);
+        var startLine = _blockStartLine[block];
+        var endLine = _blockStartLine[block + 1] - 1;
+        var blockStart = doc.GetLineStart(startLine);
+        var blockEnd = doc.GetLineEnd(endLine);
 
-        // Full WYSIWYG (PRD §7.4, revised): markers are always concealed in normal mode — never revealed
-        // by the caret or a selection — and shown only in raw-source mode. The laid-out line, and hence
-        // the offset↔visual map, is therefore independent of where the caret is.
-        var hasTask = _model.LineTokens(line).Any(t => t.Type == TokenType.TaskMarker);
+        // Interior newlines render as spaces so the paragraph flows; the last line's trailing CR is dropped
+        // (matching the old single-line path). Replacement is char-for-char so columns stay 1:1 with offsets.
+        var raw = doc.GetText(blockStart, blockEnd - blockStart).Replace('\n', ' ');
+        if (raw.Length > 0 && raw[^1] == '\r')
+        {
+            raw = raw[..^1];
+        }
+
+        var text = raw.Replace('\r', ' ');
+        var contentLen = text.Length;
 
         var segments = new List<VisualLine.Segment>();
         var pos = 0;
-        foreach (var t in _model.LineTokens(line))
+        var lastHeading = 0;
+        for (var line = startLine; line <= endLine; line++)
         {
-            var s = Math.Clamp(t.Start - lineStart, 0, contentLen);
-            var en = Math.Clamp(t.End - lineStart, 0, contentLen);
-            if (en <= s)
+            var lineStart = doc.GetLineStart(line);
+            var lineText = doc.GetText(lineStart, doc.GetLineEnd(line) - lineStart).TrimEnd('\r');
+            var headingLevel = HeadingLevel(line);
+            lastHeading = headingLevel;
+            var hasTask = _model.LineTokens(line).Any(t => t.Type == TokenType.TaskMarker);
+
+            foreach (var t in _model.LineTokens(line))
             {
-                continue;
-            }
-
-            if (s > pos)
-            {
-                segments.Add(new VisualLine.Segment(pos, s, DefaultStyle(headingLevel), false));
-            }
-
-            var style = StyleFor(t.Type, headingLevel);
-            var concealed = MarkerConcealed(t);
-
-            if (concealed)
-            {
-                // A concealed line-prefix marker may render as a synthetic decoration (bullet, checkbox,
-                // quote bar, rule) that keeps the content's hanging indent; otherwise it just vanishes.
-                var (deco, width) = DecorationFor(t, lineText, s, en, hasTask, style);
-                var decoText = string.Empty;
-
-                // An ordered-list marker hides its literal digits and shows a number computed from the
-                // list's structure: each nesting level restarts and resumes; a blank or non-list line
-                // starts a fresh list (items 4 & 5). Raw-source mode shows the literal source digits.
-                if (t.Type == TokenType.ListMarker && !hasTask && IsOrderedMarker(lineText, s, en))
+                var s = Math.Clamp(t.Start - blockStart, 0, contentLen);
+                var en = Math.Clamp(t.End - blockStart, 0, contentLen);
+                if (en <= s)
                 {
-                    decoText = OrderedOrdinal(line) + OrderedDelimiter(lineText, s, en) + " ";
-                    deco = DecorationKind.OrderedNumber;
-                    width = MeasureWidth(decoText, style);
+                    continue;
                 }
 
-                segments.Add(new VisualLine.Segment(s, en, style, true, deco, deco == DecorationKind.None ? 0 : width, decoText));
-            }
-            else
-            {
-                segments.Add(new VisualLine.Segment(s, en, style, false));
-            }
+                if (s > pos)
+                {
+                    // The gap (including a joined newline) is plain text.
+                    segments.Add(new VisualLine.Segment(pos, s, DefaultStyle(headingLevel), false));
+                }
 
-            pos = en;
+                // The decoration helpers index into the *line* text, so keep line-relative offsets for them;
+                // the segment itself is placed at block-relative columns.
+                var sLine = Math.Clamp(t.Start - lineStart, 0, lineText.Length);
+                var enLine = Math.Clamp(t.End - lineStart, 0, lineText.Length);
+                var style = StyleFor(t.Type, headingLevel);
+                var concealed = MarkerConcealed(t);
+
+                if (concealed)
+                {
+                    // A concealed line-prefix marker may render as a synthetic decoration (bullet, checkbox,
+                    // quote bar, rule) that keeps the content's hanging indent; otherwise it just vanishes.
+                    var (deco, width) = DecorationFor(t, lineText, sLine, enLine, hasTask, style);
+                    var decoText = string.Empty;
+
+                    // An ordered-list marker hides its literal digits and shows a number computed from the
+                    // list's structure (items 4 & 5). Raw-source mode shows the literal source digits.
+                    if (t.Type == TokenType.ListMarker && !hasTask && IsOrderedMarker(lineText, sLine, enLine))
+                    {
+                        decoText = OrderedOrdinal(line) + OrderedDelimiter(lineText, sLine, enLine) + " ";
+                        deco = DecorationKind.OrderedNumber;
+                        width = MeasureWidth(decoText, style);
+                    }
+
+                    segments.Add(new VisualLine.Segment(s, en, style, true, deco, deco == DecorationKind.None ? 0 : width, decoText));
+                }
+                else
+                {
+                    segments.Add(new VisualLine.Segment(s, en, style, false));
+                }
+
+                pos = en;
+            }
         }
 
         if (pos < contentLen)
         {
-            segments.Add(new VisualLine.Segment(pos, contentLen, DefaultStyle(headingLevel), false));
+            segments.Add(new VisualLine.Segment(pos, contentLen, DefaultStyle(lastHeading), false));
         }
 
-        return VisualLine.Build(lineText, segments, MeasureWidth, WrapWidth());
+        return VisualLine.Build(text, segments, MeasureWidth, WrapWidth());
     }
 
     /// <summary>The synthetic decoration (and its gutter width) that replaces concealed marker <paramref name="t"/>, if any.</summary>
@@ -1857,15 +1981,20 @@ public class MarkdownEditor : Avalonia.Controls.Control, ILogicalScrollable
         return Math.Max(120, w - _theme.PaddingLeft * 2);
     }
 
-    /// <summary>The laid-out visual line under the current caret/selection (for concealment + offset-map tests).</summary>
-    internal VisualLine BuildVisualLineForTest(int line) =>
-        BuildVisualLine(line, _buffer.Selection, _buffer.Document.GetPosition(_buffer.Selection.Caret).Line);
+    /// <summary>The laid-out visual line (its paragraph block) for <paramref name="line"/>; for concealment + offset-map tests.</summary>
+    internal VisualLine BuildVisualLineForTest(int line) => BlockVisual(BlockOf(line));
 
-    /// <summary>Document offset the visual line resolves <paramref name="x"/> to (hit-test); for tests.</summary>
-    internal int OffsetAtForTest(int line, double x) => OffsetAt(line, 0, x);
+    /// <summary>Document offset the visual line resolves <paramref name="x"/> to on <paramref name="line"/>'s block (hit-test); for tests.</summary>
+    internal int OffsetAtForTest(int line, double x) => OffsetAt(BlockOf(line), 0, x);
 
-    /// <summary>The number of wrapped visual rows <paramref name="line"/> occupies at the current width; for tests.</summary>
+    /// <summary>The number of wrapped visual rows <paramref name="line"/>'s block occupies at the current width; for tests.</summary>
     internal int RowCountForTest(int line) => LineVisual(line).RowCount;
+
+    /// <summary>The paragraph-block index <paramref name="line"/> belongs to; for tests.</summary>
+    internal int BlockOfLineForTest(int line) => BlockOf(line);
+
+    /// <summary>The source-content length (columns) of <paramref name="line"/>'s block; for tests.</summary>
+    internal int BlockLengthForTest(int line) => LineVisual(line).RawLength;
 
     /// <summary>The total visual-row count across the document at the current width; for tests.</summary>
     internal int TotalRowsForTest()
@@ -2048,14 +2177,12 @@ public class MarkdownEditor : Avalonia.Controls.Control, ILogicalScrollable
 
     private readonly record struct WidthKey(string Text, FontFamily Family, FontStyle Style, FontWeight Weight, double Size);
 
-    private int OffsetAt(int line, int row, double x)
+    private int OffsetAt(int block, int row, double x)
     {
-        var doc = _buffer.Document;
-        var lineStart = doc.GetLineStart(line);
-        // Hit-test against the visual map on the clicked wrapped row (concealed markers are zero-width and
-        // never a caret stop), so a click resolves to the right document offset even on a line whose
-        // markers are hidden or whose text wraps across rows.
-        var visual = LineVisual(line);
-        return lineStart + visual.XToColumn(row, x);
+        // Hit-test against the block's visual map on the clicked wrapped row (concealed markers are
+        // zero-width and never a caret stop), so a click resolves to the right document offset even where
+        // markers are hidden, the paragraph is joined from several source lines, or the text wraps.
+        var visual = BlockVisual(block);
+        return BlockStartOffset(block) + visual.XToColumn(row, x);
     }
 }
