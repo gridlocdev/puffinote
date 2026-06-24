@@ -152,6 +152,28 @@ public class MarkdownEditor : Avalonia.Controls.Control, ILogicalScrollable
     /// <summary>Number of spaces inserted by Tab (PRD §7.2 — default 4, configurable in Settings).</summary>
     public int IndentWidth { get; set; } = 4;
 
+    /// <summary>
+    /// When true the surface shows the raw Markdown source: syntax markers are always revealed at full
+    /// strength instead of dimming away from the caret (PRD §7.4 raw-source view). A per-document
+    /// session toggle whose default comes from Settings.
+    /// </summary>
+    public bool ShowRawSource
+    {
+        get => _showRawSource;
+        set
+        {
+            if (_showRawSource == value)
+            {
+                return;
+            }
+
+            _showRawSource = value;
+            InvalidateVisual();
+        }
+    }
+
+    private bool _showRawSource;
+
     public void MarkSaved() => _buffer.MarkSaved();
 
     public void Undo() => _buffer.Undo();
@@ -489,7 +511,7 @@ public class MarkdownEditor : Avalonia.Controls.Control, ILogicalScrollable
         var contentLen = lineText.Length;
 
         var headingLevel = HeadingLevel(line);
-        var revealMarkers = caretLine == line || sel.Intersects(lineStart, Math.Max(1, lineEnd - lineStart));
+        var revealMarkers = _showRawSource || caretLine == line || sel.Intersects(lineStart, Math.Max(1, lineEnd - lineStart));
 
         // Search-match highlights (under the text), then the selection on top.
         if (_searchMatches.Count > 0)

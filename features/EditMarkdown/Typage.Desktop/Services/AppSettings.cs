@@ -23,6 +23,9 @@ public sealed class AppSettings
 
     public bool ShowToolbar { get; set; } = true;
 
+    /// <summary>The default for the per-document raw-source view (markers always shown; PRD §7.4).</summary>
+    public bool ShowRawSource { get; set; }
+
     public const int MaxRecentFiles = 10;
 
     public void PushRecent(string path)

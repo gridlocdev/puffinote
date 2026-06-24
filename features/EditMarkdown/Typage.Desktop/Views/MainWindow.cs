@@ -35,7 +35,11 @@ public class MainWindow : Window
     private readonly CommandPalette _palette = new();
     private FindBar? _findBar;
     private Border? _toolbar;
+    private Border? _statusBar;
     private MenuItem? _toggleToolbarItem;
+    private MenuItem? _toggleRawSourceItem;
+    private MenuItem? _toggleFocusItem;
+    private bool _focusMode;
     private readonly List<(AppTheme Theme, MenuItem Item)> _themeItems = new();
 
     // Chrome brushes are mutated live on a theme change; the borders/text share these instances.
@@ -64,7 +68,8 @@ public class MainWindow : Window
         _findBar = new FindBar(_editorView, _chromeBg, _chromeBorder);
         DockPanel.SetDock(_findBar, Dock.Top);
         root.Children.Add(_findBar);
-        root.Children.Add(BuildStatusBar());
+        _statusBar = BuildStatusBar();
+        root.Children.Add(_statusBar);
         root.Children.Add(_editorView);
 
         // The command palette floats over everything as a collapsed overlay.
@@ -110,6 +115,10 @@ public class MainWindow : Window
 
         ApplyTheme(_settings.Settings.Theme);
         _editorView.Editor.IndentWidth = _settings.Settings.TabWidth;
+        _editorView.Editor.ShowRawSource = _settings.Settings.ShowRawSource; // restore the raw-source default
+
+        // Focus / distraction-free mode (F11): hide the toolbar and status bar to maximize the text.
+        KeyBindings.Add(new KeyBinding { Gesture = new KeyGesture(Key.F11), Command = new RelayCommand(ToggleFocusMode) });
 
         // Preferences (⌘, / Ctrl+,).
         foreach (var g in new[] { new KeyGesture(Key.OemComma, KeyModifiers.Meta), new KeyGesture(Key.OemComma, KeyModifiers.Control) })
@@ -123,6 +132,15 @@ public class MainWindow : Window
 
     /// <summary>The embedded editor view, exposed for the headless UI tests.</summary>
     internal MarkdownEditorView EditorView => _editorView;
+
+    // Test hooks for the view toggles (the chrome controls are private).
+    internal bool StatusBarVisibleForTest => _statusBar?.IsVisible ?? false;
+
+    internal bool ToolbarVisibleForTest => _toolbar?.IsVisible ?? false;
+
+    internal void ToggleFocusModeForTest() => ToggleFocusMode();
+
+    internal void ToggleRawSourceForTest() => ToggleRawSource();
 
     // ----- chrome -----
 
@@ -176,6 +194,25 @@ public class MainWindow : Window
         };
         _toggleToolbarItem.Click += (_, _) => ToggleToolbar();
         view.Items.Add(_toggleToolbarItem);
+
+        _toggleRawSourceItem = new MenuItem
+        {
+            Header = "Show Raw _Source",
+            ToggleType = MenuItemToggleType.CheckBox,
+            IsChecked = _settings.Settings.ShowRawSource,
+        };
+        _toggleRawSourceItem.Click += (_, _) => ToggleRawSource();
+        view.Items.Add(_toggleRawSourceItem);
+
+        _toggleFocusItem = new MenuItem
+        {
+            Header = "_Focus Mode",
+            ToggleType = MenuItemToggleType.CheckBox,
+            IsChecked = _focusMode,
+            InputGesture = new KeyGesture(Key.F11),
+        };
+        _toggleFocusItem.Click += (_, _) => ToggleFocusMode();
+        view.Items.Add(_toggleFocusItem);
         view.Items.Add(new Separator());
 
         var themeMenu = new MenuItem { Header = "T_heme" };
@@ -431,6 +468,41 @@ public class MainWindow : Window
         _settings.Save();
     }
 
+    /// <summary>Toggle the raw-source view; the new state also becomes the persisted default (PRD §7.4).</summary>
+    private void ToggleRawSource()
+    {
+        var raw = !_editorView.Editor.ShowRawSource;
+        _editorView.Editor.ShowRawSource = raw;
+        if (_toggleRawSourceItem is not null)
+        {
+            _toggleRawSourceItem.IsChecked = raw;
+        }
+
+        _settings.Settings.ShowRawSource = raw;
+        _settings.Save();
+    }
+
+    /// <summary>Toggle distraction-free mode: hide the toolbar and status bar (session-only).</summary>
+    private void ToggleFocusMode()
+    {
+        _focusMode = !_focusMode;
+        if (_toolbar is not null)
+        {
+            // In focus mode the toolbar is hidden; otherwise restore the user's toolbar preference.
+            _toolbar.IsVisible = !_focusMode && _settings.Settings.ShowToolbar;
+        }
+
+        if (_statusBar is not null)
+        {
+            _statusBar.IsVisible = !_focusMode;
+        }
+
+        if (_toggleFocusItem is not null)
+        {
+            _toggleFocusItem.IsChecked = _focusMode;
+        }
+    }
+
     /// <summary>
     /// The one command catalog (mirroring Cellestra's golden rule #4): the palette reads it, and the
     /// menu/toolbar invoke the same underlying actions. Built per open so CanExecute reflects the
@@ -469,6 +541,8 @@ public class MainWindow : Window
             new("format.paragraph", "Paragraph", "Remove the heading from this line.", "⌘0", ed.SetParagraph),
 
             new("view.toggleToolbar", "Toggle Toolbar", "Show or hide the formatting toolbar.", null, ToggleToolbar),
+            new("view.toggleRawSource", "Toggle Raw Source", "Show the raw Markdown source (markers always visible).", null, ToggleRawSource),
+            new("view.toggleFocus", "Toggle Focus Mode", "Distraction-free: hide the toolbar and status bar.", "F11", ToggleFocusMode),
             new("app.preferences", "Preferences…", "Theme, tab width, and toolbar settings.", "⌘,", ShowSettings),
             new("help.reference", "Markdown Reference", "Open the offline syntax & shortcut reference.", null, ShowHelp),
         };
