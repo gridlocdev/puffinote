@@ -959,11 +959,52 @@ public class MarkdownEditor : Avalonia.Controls.Control, ILogicalScrollable
         var contentX = point.X - _theme.PaddingLeft + _offset.X;
         var line = Math.Clamp((int)(contentY / _theme.LineHeight), 0, _buffer.Document.LineCount - 1);
         var offset = OffsetAt(line, contentX);
+
+        // A click on a task-list checkbox toggles it (PRD §7.2) rather than moving the caret.
+        if (!e.KeyModifiers.HasFlag(KeyModifiers.Shift) && TryToggleTaskAt(line, offset))
+        {
+            e.Handled = true;
+            base.OnPointerPressed(e);
+            return;
+        }
+
         var extend = e.KeyModifiers.HasFlag(KeyModifiers.Shift);
         MoveCaret(offset, extend);
         e.Handled = true;
         base.OnPointerPressed(e);
     }
+
+    /// <summary>
+    /// If <paramref name="offset"/> lands on a task-list checkbox on <paramref name="line"/>, flip it
+    /// between <c>[ ]</c> and <c>[x]</c> (leaving the caret where it was) and return true (PRD §7.2).
+    /// </summary>
+    private bool TryToggleTaskAt(int line, int offset)
+    {
+        foreach (var t in _model.LineTokens(line))
+        {
+            if (t.Type != TokenType.TaskMarker || offset < t.Start || offset > t.Start + 3)
+            {
+                continue;
+            }
+
+            var box = t.Start + 1; // the character between the brackets
+            if (box >= _buffer.Document.Length)
+            {
+                return false;
+            }
+
+            var replacement = _buffer.Document[box] == ' ' ? "x" : " ";
+            var caret = _buffer.Selection;
+            _buffer.ReplaceRange(box, 1, replacement);
+            _buffer.Selection = caret; // a checkbox click shouldn't move the caret
+            return true;
+        }
+
+        return false;
+    }
+
+    /// <summary>Toggle the task checkbox covering <paramref name="offset"/> on <paramref name="line"/>; for tests.</summary>
+    internal bool ToggleTaskForTest(int line, int offset) => TryToggleTaskAt(line, offset);
 
     /// <summary>Scroll so the caret stays visible after an edit or navigation (we are the scrollable).</summary>
     private void ScrollCaretIntoView()
