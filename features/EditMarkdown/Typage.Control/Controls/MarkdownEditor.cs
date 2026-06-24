@@ -1,4 +1,5 @@
 using System.Globalization;
+using System.Linq;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Controls.Primitives;
@@ -573,6 +574,12 @@ public class MarkdownEditor : Avalonia.Controls.Control, ILogicalScrollable
         var lineStart = doc.GetLineStart(line);
         var visual = BuildVisualLine(line, sel, caretLine);
 
+        // A fenced-code block gets a subtle background band (under everything else on the row).
+        if (IsCodeLine(line))
+        {
+            context.FillRectangle(_theme.CodeBlockBackground, new Rect(-8, lineTop, ContentRight() + 16, _theme.LineHeight));
+        }
+
         // Search-match highlights (under the text), then the selection on top.
         if (_searchMatches.Count > 0)
         {
@@ -1037,8 +1044,9 @@ public class MarkdownEditor : Avalonia.Controls.Control, ILogicalScrollable
             return;
         }
 
-        // A click on a task-list checkbox toggles it (PRD §7.2) rather than moving the caret.
-        if (!shift && TryToggleTaskAt(line, offset))
+        // A click on a task-list checkbox toggles it (PRD §7.2) rather than moving the caret — whether
+        // it's the raw "[ ]" (caret line) or the drawn checkbox glyph (concealed line).
+        if (!shift && TryToggleTaskClick(line, point, offset))
         {
             e.Handled = true;
             base.OnPointerPressed(e);
@@ -1127,6 +1135,27 @@ public class MarkdownEditor : Avalonia.Controls.Control, ILogicalScrollable
     internal void ClickAtForTest(int offset) => MoveCaret(offset, extend: false);
 
     /// <summary>
+    /// Toggle a task checkbox hit by a click on <paramref name="line"/>: first the drawn checkbox glyph
+    /// (when the marker is concealed), then the raw <c>[ ]</c> at <paramref name="offset"/> (caret line).
+    /// </summary>
+    private bool TryToggleTaskClick(int line, Point point, int offset)
+    {
+        var visual = BuildVisualLine(line, _buffer.Selection, _buffer.Document.GetPosition(_buffer.Selection.Caret).Line);
+        var contentX = point.X - _theme.PaddingLeft + _offset.X;
+        var lineStart = _buffer.Document.GetLineStart(line);
+        foreach (var run in visual.Runs)
+        {
+            if (run.Decoration is DecorationKind.CheckboxChecked or DecorationKind.CheckboxUnchecked
+                && contentX >= run.X && contentX <= run.X + run.Width)
+            {
+                return TryToggleTaskAt(line, lineStart + run.Col); // run.Col is the task marker's column
+            }
+        }
+
+        return TryToggleTaskAt(line, offset);
+    }
+
+    /// <summary>
     /// If <paramref name="offset"/> lands on a task-list checkbox on <paramref name="line"/>, flip it
     /// between <c>[ ]</c> and <c>[x]</c> (leaving the caret where it was) and return true (PRD §7.2).
     /// </summary>
@@ -1157,6 +1186,10 @@ public class MarkdownEditor : Avalonia.Controls.Control, ILogicalScrollable
 
     /// <summary>Toggle the task checkbox covering <paramref name="offset"/> on <paramref name="line"/>; for tests.</summary>
     internal bool ToggleTaskForTest(int line, int offset) => TryToggleTaskAt(line, offset);
+
+    /// <summary>Simulate a click at content-space x <paramref name="contentX"/> on a checkbox glyph; for tests.</summary>
+    internal bool ToggleTaskClickForTest(int line, double contentX) =>
+        TryToggleTaskClick(line, new Point(contentX + _theme.PaddingLeft - _offset.X, 0), _buffer.Document.GetLineStart(line));
 
     /// <summary>Scroll so the caret stays visible after an edit or navigation (we are the scrollable).</summary>
     private void ScrollCaretIntoView()
@@ -1307,6 +1340,7 @@ public class MarkdownEditor : Avalonia.Controls.Control, ILogicalScrollable
         var lineRevealed = _showRawSource || caretLine == line
             || sel.Intersects(lineStart, Math.Max(1, lineEnd - lineStart));
         var spans = NodeSpans(line);
+        var hasTask = _model.LineTokens(line).Any(t => t.Type == TokenType.TaskMarker);
 
         var segments = new List<VisualLine.Segment>();
         var pos = 0;
@@ -1324,7 +1358,27 @@ public class MarkdownEditor : Avalonia.Controls.Control, ILogicalScrollable
                 segments.Add(new VisualLine.Segment(pos, s, DefaultStyle(headingLevel), false));
             }
 
-            segments.Add(new VisualLine.Segment(s, en, StyleFor(t.Type, headingLevel), MarkerConcealed(t, lineRevealed, sel, spans)));
+            var style = StyleFor(t.Type, headingLevel);
+            var concealed = MarkerConcealed(t, lineRevealed, sel, spans);
+
+            // An ordered-list number stays visible (it's informative); only unordered bullets hide.
+            if (t.Type == TokenType.ListMarker && IsOrderedMarker(lineText, s, en))
+            {
+                concealed = false;
+            }
+
+            if (concealed)
+            {
+                // A concealed line-prefix marker may render as a synthetic decoration (bullet, checkbox,
+                // quote bar, rule) that keeps the content's hanging indent; otherwise it just vanishes.
+                var (deco, width) = DecorationFor(t, lineText, s, en, hasTask, style);
+                segments.Add(new VisualLine.Segment(s, en, style, true, deco, deco == DecorationKind.None ? 0 : width));
+            }
+            else
+            {
+                segments.Add(new VisualLine.Segment(s, en, style, false));
+            }
+
             pos = en;
         }
 
@@ -1334,6 +1388,71 @@ public class MarkdownEditor : Avalonia.Controls.Control, ILogicalScrollable
         }
 
         return VisualLine.Build(lineText, segments, MeasureWidth);
+    }
+
+    /// <summary>The synthetic decoration (and its gutter width) that replaces concealed marker <paramref name="t"/>, if any.</summary>
+    private (DecorationKind Kind, double Width) DecorationFor(Token t, string lineText, int s, int en, bool hasTask, RunStyle style)
+    {
+        var text = lineText.Substring(s, en - s);
+        switch (t.Type)
+        {
+            case TokenType.ListMarker:
+                if (hasTask)
+                {
+                    return (DecorationKind.None, 0); // the checkbox represents the whole item
+                }
+
+                var bullet = text.TrimStart(' ');
+                return bullet.Length > 0 && bullet[0] is '-' or '*' or '+'
+                    ? (DecorationKind.Bullet, MeasureWidth(text, style))
+                    : (DecorationKind.None, 0);
+
+            case TokenType.TaskMarker:
+                var ticked = text.Length > 1 && text[1] is 'x' or 'X';
+                return (ticked ? DecorationKind.CheckboxChecked : DecorationKind.CheckboxUnchecked, MeasureWidth(text, style));
+
+            case TokenType.BlockquoteMarker:
+                return (DecorationKind.QuoteBar, MeasureWidth(text, style));
+
+            case TokenType.HorizontalRule:
+                return (DecorationKind.HorizontalRule, 0); // an overlay rule; no advance (the line is otherwise empty)
+
+            default:
+                return (DecorationKind.None, 0);
+        }
+    }
+
+    /// <summary>Whether the list marker spanning columns <c>[s, en)</c> is an ordered (numbered) one.</summary>
+    private static bool IsOrderedMarker(string lineText, int s, int en)
+    {
+        for (var k = s; k < en && k < lineText.Length; k++)
+        {
+            if (lineText[k] != ' ')
+            {
+                return char.IsAsciiDigit(lineText[k]);
+            }
+        }
+
+        return false;
+    }
+
+    /// <summary>Whether <paramref name="line"/> is part of a fenced-code block (for the background band).</summary>
+    private bool IsCodeLine(int line)
+    {
+        if (_model.EnteringState(line).Kind == BlockKind.FencedCode)
+        {
+            return true; // inside the fence (content or the closing fence row)
+        }
+
+        var tokens = _model.LineTokens(line);
+        return tokens.Count > 0 && tokens[0].Type == TokenType.CodeFence; // the opening fence row
+    }
+
+    /// <summary>The right edge of the text column in content space (for full-width adornments).</summary>
+    private double ContentRight()
+    {
+        var w = _viewport.Width > 0 ? _viewport.Width : Bounds.Width;
+        return Math.Max(120, w - _theme.PaddingLeft * 2);
     }
 
     /// <summary>The laid-out visual line under the current caret/selection (for concealment + offset-map tests).</summary>
@@ -1410,10 +1529,49 @@ public class MarkdownEditor : Avalonia.Controls.Control, ILogicalScrollable
         return sel.Length > 0 && sel.Start < span.End && sel.End > span.Start;
     }
 
-    /// <summary>Draw a synthetic decoration glyph (bullet, checkbox). Geometry is added in the decorations phase.</summary>
+    /// <summary>Draw a synthetic decoration that stands in for a concealed marker (PRD §7.4).</summary>
     private void DrawDecoration(DrawingContext context, VisualRun run, double lineTop)
     {
-        // Stage 3 fills this in (bullets, checkboxes). No decoration runs are produced yet.
+        var lineH = _theme.LineHeight;
+        var cy = lineTop + lineH / 2;
+        switch (run.Decoration)
+        {
+            case DecorationKind.Bullet:
+            {
+                var r = Math.Max(2, _theme.BaseFontSize * 0.14);
+                context.DrawEllipse(_theme.BulletForeground, null, new Point(run.X + run.Width / 2, cy), r, r);
+                break;
+            }
+
+            case DecorationKind.CheckboxUnchecked:
+            case DecorationKind.CheckboxChecked:
+            {
+                var size = _theme.BaseFontSize * 0.95;
+                var box = new Rect(run.X + 1, cy - size / 2, size, size);
+                var ticked = run.Decoration == DecorationKind.CheckboxChecked;
+                context.DrawRectangle(ticked ? _theme.CheckboxForeground : null, new Pen(_theme.CheckboxForeground, 1.4), box, 3, 3);
+                if (ticked)
+                {
+                    // A check mark in the editor background colour so it reads on the filled box.
+                    var pen = new Pen(_theme.Background, 1.6);
+                    var a = new Point(box.X + size * 0.24, cy);
+                    var b = new Point(box.X + size * 0.43, cy + size * 0.22);
+                    var c = new Point(box.X + size * 0.78, cy - size * 0.24);
+                    context.DrawLine(pen, a, b);
+                    context.DrawLine(pen, b, c);
+                }
+
+                break;
+            }
+
+            case DecorationKind.QuoteBar:
+                context.FillRectangle(_theme.QuoteBar, new Rect(run.X + 2, lineTop + 2, 2.5, lineH - 4));
+                break;
+
+            case DecorationKind.HorizontalRule:
+                context.DrawLine(new Pen(_theme.RuleForeground, _theme.RuleThickness), new Point(run.X, cy), new Point(ContentRight(), cy));
+                break;
+        }
     }
 
     /// <summary>

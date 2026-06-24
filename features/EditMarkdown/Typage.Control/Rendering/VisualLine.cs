@@ -30,6 +30,8 @@ public enum DecorationKind
     Bullet,
     CheckboxUnchecked,
     CheckboxChecked,
+    QuoteBar,
+    HorizontalRule,
 }
 
 /// <summary>
@@ -81,7 +83,10 @@ public sealed class VisualLine
         {
             if (s.Decoration != DecorationKind.None)
             {
-                runs.Add(new VisualRun(VisualRunKind.Decoration, s.From, 0, x, s.DecorationWidth, "", s.Style, s.Decoration));
+                // A decoration replaces a concealed marker: it owns that marker's source columns
+                // [From, To) (so the caret treats them atomically, like a concealed run) but advances a
+                // gutter of DecorationWidth, giving the content a hanging indent.
+                runs.Add(new VisualRun(VisualRunKind.Decoration, s.From, s.To - s.From, x, s.DecorationWidth, "", s.Style, s.Decoration));
                 x += s.DecorationWidth;
                 continue;
             }
@@ -106,30 +111,34 @@ public sealed class VisualLine
         return new VisualLine(lineText, runs, x, measure);
     }
 
-    /// <summary>The x of source column <paramref name="col"/> (concealed runs add 0; a col inside one snaps to its left edge).</summary>
+    /// <summary>
+    /// The x of source column <paramref name="col"/>. A concealed/decoration run is atomic: an interior
+    /// column maps to its left edge; the run's end-boundary maps past its width (0 for a hidden marker,
+    /// the gutter for a decoration), so content keeps its hanging indent.
+    /// </summary>
     public double ColumnToX(int col)
     {
         foreach (var r in Runs)
         {
             if (r.Len == 0)
             {
-                continue; // a decoration covers no columns; its width is already baked into later runs' X
+                continue; // a column-less overlay; its width (if any) is already baked into later runs' X
             }
 
+            var end = r.Col + r.Len;
             if (col <= r.Col)
             {
-                return r.X; // column 0 lands after any leading decoration gutter
+                return r.X;
             }
 
-            if (col <= r.Col + r.Len)
+            if (col < end)
             {
-                if (r.Kind != VisualRunKind.Text)
-                {
-                    return r.X; // concealed run is atomic: any interior column maps to its left edge
-                }
+                return r.Kind == VisualRunKind.Text ? r.X + _measure(r.Text[..(col - r.Col)], r.Style) : r.X;
+            }
 
-                var take = col - r.Col;
-                return take >= r.Len ? r.X + r.Width : r.X + _measure(r.Text[..take], r.Style);
+            if (col == end)
+            {
+                return r.X + r.Width; // just past the run: text full width, decoration gutter, or 0
             }
         }
 
@@ -168,12 +177,12 @@ public sealed class VisualLine
         return best;
     }
 
-    /// <summary>True when <paramref name="col"/> is strictly inside a concealed marker run (not a valid caret stop).</summary>
+    /// <summary>True when <paramref name="col"/> is strictly inside an atomic (concealed or decoration) run — not a valid caret stop.</summary>
     public bool IsInsideConcealed(int col)
     {
         foreach (var r in Runs)
         {
-            if (r.Kind == VisualRunKind.Concealed && col > r.Col && col < r.Col + r.Len)
+            if (r.Kind != VisualRunKind.Text && col > r.Col && col < r.Col + r.Len)
             {
                 return true;
             }

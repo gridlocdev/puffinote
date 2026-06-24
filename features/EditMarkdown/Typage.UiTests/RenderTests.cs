@@ -25,4 +25,20 @@ public class RenderTests
 
         Assert.True(view.Editor.RawMeasureCount > 0); // confirms Render actually executed
     }
+
+    [AvaloniaFact]
+    public void RendersRichConstructs_WithoutThrowing()
+    {
+        var view = new MarkdownEditorView();
+        var window = new Window { Width = 400, Height = 320, Content = view };
+        window.Show();
+
+        // Every concealment + decoration path on one screen (caret on line 0, the rest concealed):
+        // heading, bullets, checkboxes, a quote bar, a rule, a code band, and inline bold/link.
+        view.Text = "# Heading\n\n- bullet\n- [ ] task\n- [x] done\n\n> quote\n\n---\n\n```\ncode\n```\n\n**bold** and [link](http://x.com)\n";
+
+        window.CaptureRenderedFrame(); // exercises DrawDecoration (ellipse/rect/line) + the code band
+
+        Assert.True(view.Editor.RawMeasureCount > 0);
+    }
 }

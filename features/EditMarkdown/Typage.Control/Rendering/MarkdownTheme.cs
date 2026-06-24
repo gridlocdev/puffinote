@@ -37,6 +37,11 @@ public class MarkdownTheme
         SearchMatchCurrent = new SolidColorBrush(Color.FromArgb(0xAA, 0xF0, 0xA8, 0x00)),
         Background = new SolidColorBrush(Color.FromRgb(0xFD, 0xFD, 0xFD)),
         PropertiesBackground = new SolidColorBrush(Color.FromArgb(0x0E, 0x00, 0x00, 0x00)),
+        BulletForeground = new SolidColorBrush(Color.FromRgb(0x6B, 0x72, 0x7B)),
+        QuoteBar = new SolidColorBrush(Color.FromRgb(0xCB, 0xD2, 0xDA)),
+        RuleForeground = new SolidColorBrush(Color.FromRgb(0xD0, 0xD7, 0xDE)),
+        CheckboxForeground = new SolidColorBrush(Color.FromRgb(0x09, 0x69, 0xDA)),
+        CodeBlockBackground = new SolidColorBrush(Color.FromArgb(0x14, 0xAF, 0xB8, 0xC1)),
     };
 
     /// <summary>A high-contrast palette: pure black/white with vivid accents (PRD §7.2, §9.6).</summary>
@@ -54,6 +59,11 @@ public class MarkdownTheme
         SearchMatchCurrent = new SolidColorBrush(Color.FromArgb(0xCC, 0xFF, 0xD4, 0x00)),
         Background = new SolidColorBrush(Colors.Black),
         PropertiesBackground = new SolidColorBrush(Color.FromArgb(0x33, 0xFF, 0xFF, 0xFF)),
+        BulletForeground = new SolidColorBrush(Color.FromRgb(0xFF, 0xD4, 0x00)),
+        QuoteBar = new SolidColorBrush(Color.FromRgb(0xFF, 0xD4, 0x00)),
+        RuleForeground = new SolidColorBrush(Colors.White),
+        CheckboxForeground = new SolidColorBrush(Color.FromRgb(0x58, 0xC0, 0xFF)),
+        CodeBlockBackground = new SolidColorBrush(Color.FromArgb(0x44, 0xFF, 0xFF, 0xFF)),
     };
 
     public double BaseFontSize { get; init; } = 15;
@@ -91,6 +101,26 @@ public class MarkdownTheme
 
     /// <summary>The panel tint behind the leading front-matter "Properties" block (PRD §7.4).</summary>
     public IBrush PropertiesBackground { get; init; } = new SolidColorBrush(Color.FromArgb(0x16, 0x6E, 0x76, 0x81));
+
+    // ----- live-preview decoration treatments (PRD §7.4): the synthetic UI that replaces hidden markers -----
+
+    /// <summary>The bullet glyph drawn in place of a concealed unordered-list marker.</summary>
+    public IBrush BulletForeground { get; init; } = new SolidColorBrush(Color.FromRgb(0x8A, 0x93, 0x9E));
+
+    /// <summary>The vertical bar drawn in the gutter of a concealed blockquote.</summary>
+    public IBrush QuoteBar { get; init; } = new SolidColorBrush(Color.FromRgb(0x4A, 0x52, 0x5C));
+
+    /// <summary>The rule drawn in place of a concealed horizontal-rule line.</summary>
+    public IBrush RuleForeground { get; init; } = new SolidColorBrush(Color.FromRgb(0x40, 0x47, 0x50));
+
+    /// <summary>The box (and check) of a drawn task checkbox.</summary>
+    public IBrush CheckboxForeground { get; init; } = new SolidColorBrush(Color.FromRgb(0x57, 0x9D, 0xF6));
+
+    /// <summary>The panel tint behind a fenced-code block.</summary>
+    public IBrush CodeBlockBackground { get; init; } = new SolidColorBrush(Color.FromArgb(0x1F, 0x6E, 0x76, 0x81));
+
+    /// <summary>Thickness of the drawn horizontal rule.</summary>
+    public double RuleThickness { get; init; } = 1.5;
 
     private readonly FontFamily _body = FontFamily.Default;
     private readonly FontFamily _mono = new("Cascadia Code,Consolas,Menlo,monospace");
