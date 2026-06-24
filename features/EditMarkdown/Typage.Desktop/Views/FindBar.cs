@@ -1,3 +1,4 @@
+using System.Text;
 using Avalonia.Controls;
 using Avalonia.Controls.Primitives;
 using Avalonia.Input;
@@ -25,6 +26,7 @@ public sealed class FindBar : Border
 
     private IReadOnlyList<SearchMatch> _matches = System.Array.Empty<SearchMatch>();
     private int _current = -1;
+    private bool _suppressReindex; // true while the bar itself is editing the document
 
     public FindBar(MarkdownEditorView view, IBrush background, IBrush border)
     {
@@ -55,10 +57,21 @@ public sealed class FindBar : Border
 
         Child = new StackPanel { Spacing = 6, Children = { findRow, _replaceRow } };
 
-        _find.TextChanged += (_, _) => Recompute(resetCurrent: true);
-        _matchCase.IsCheckedChanged += (_, _) => Recompute(resetCurrent: true);
-        _regex.IsCheckedChanged += (_, _) => Recompute(resetCurrent: true);
+        _find.TextChanged += (_, _) => Recompute(resetCurrent: true, selectMatch: true);
+        _matchCase.IsCheckedChanged += (_, _) => Recompute(resetCurrent: true, selectMatch: true);
+        _regex.IsCheckedChanged += (_, _) => Recompute(resetCurrent: true, selectMatch: true);
         _find.KeyDown += OnFindKeyDown;
+
+        // Keep matches fresh when the document changes underneath the bar (e.g. the user edits the
+        // text while find is open). Don't move the caret on these external edits, and skip the
+        // bar's own replace-driven changes (handled explicitly).
+        _view.TextChanged += (_, _) =>
+        {
+            if (IsVisible && !_suppressReindex)
+            {
+                Recompute(resetCurrent: false, selectMatch: false);
+            }
+        };
         _replace.KeyDown += (_, e) =>
         {
             if (e.Key == Key.Enter) { ReplaceCurrent(); e.Handled = true; }
@@ -78,7 +91,7 @@ public sealed class FindBar : Border
             _find.Text = selected;
         }
 
-        Recompute(resetCurrent: true);
+        Recompute(resetCurrent: true, selectMatch: true);
         _find.Focus();
         _find.SelectAll();
     }
@@ -109,7 +122,7 @@ public sealed class FindBar : Border
         }
     }
 
-    private void Recompute(bool resetCurrent)
+    private void Recompute(bool resetCurrent, bool selectMatch)
     {
         var query = _find.Text ?? string.Empty;
         var useRegex = _regex.IsChecked == true;
@@ -128,7 +141,10 @@ public sealed class FindBar : Border
         }
 
         _view.Editor.SetSearchMatches(_matches, _current);
-        SelectCurrent();
+        if (selectMatch)
+        {
+            SelectCurrent();
+        }
     }
 
     private void FindNext() => Step(1);
@@ -148,6 +164,20 @@ public sealed class FindBar : Border
         SelectCurrent();
     }
 
+    /// <summary>Apply a document edit the bar itself made, without the external-edit reindex firing.</summary>
+    private void SelfEdit(System.Action edit)
+    {
+        _suppressReindex = true;
+        try
+        {
+            edit();
+        }
+        finally
+        {
+            _suppressReindex = false;
+        }
+    }
+
     private void SelectCurrent()
     {
         if (_current >= 0 && _current < _matches.Count)
@@ -165,23 +195,50 @@ public sealed class FindBar : Border
         }
 
         var m = _matches[_current];
-        _view.Editor.Replace(m.Start, m.Length, _replace.Text ?? string.Empty);
-        Recompute(resetCurrent: false); // offsets shifted; re-find and keep position
+        SelfEdit(() => _view.Editor.Replace(m.Start, m.Length, _replace.Text ?? string.Empty));
+        Recompute(resetCurrent: false, selectMatch: true); // offsets shifted; re-find and keep position
     }
 
     private void ReplaceAll()
     {
-        var replacement = _replace.Text ?? string.Empty;
-        // Replace from the end backward so earlier offsets stay valid.
-        for (var i = _matches.Count - 1; i >= 0; i--)
+        if (_matches.Count == 0)
         {
-            var m = _matches[i];
-            _view.Editor.Replace(m.Start, m.Length, replacement);
+            return;
         }
 
-        Recompute(resetCurrent: true);
+        var replacement = _replace.Text ?? string.Empty;
+        var text = _view.Text;
+
+        // Build the whole replaced span once and apply it as a single undoable edit, so Replace All
+        // is one operation (one undo step) instead of N — and offsets can't drift mid-loop.
+        var first = _matches[0].Start;
+        var last = _matches[^1].End;
+        var sb = new StringBuilder(last - first);
+        var pos = first;
+        foreach (var m in _matches)
+        {
+            sb.Append(text, pos, m.Start - pos);
+            sb.Append(replacement);
+            pos = m.End;
+        }
+
+        SelfEdit(() => _view.Editor.Replace(first, last - first, sb.ToString()));
+        Recompute(resetCurrent: true, selectMatch: false);
         _find.Focus();
     }
+
+    // ----- internal test hooks -----
+    internal IReadOnlyList<SearchMatch> Matches => _matches;
+
+    internal void SetQuery(string query)
+    {
+        _find.Text = query;
+        Recompute(resetCurrent: true, selectMatch: true); // TextChanged isn't raised for programmatic sets headlessly
+    }
+
+    internal void SetReplacement(string replacement) => _replace.Text = replacement;
+
+    internal void ReplaceAllForTest() => ReplaceAll();
 
     private static StackPanel Row(params Avalonia.Controls.Control[] children)
     {
