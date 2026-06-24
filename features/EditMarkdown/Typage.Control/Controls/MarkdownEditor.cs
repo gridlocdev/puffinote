@@ -471,7 +471,9 @@ public class MarkdownEditor : Avalonia.Controls.Control, ILogicalScrollable
             if (maxWidth > _extentWidth)
             {
                 _extentWidth = maxWidth; // grow the horizontal extent as wide lines come into view
-                RaiseScrollInvalidated(EventArgs.Empty);
+                // Notify the scroll viewer AFTER this render pass — invalidating a visual (the scroll
+                // bar) during render throws ("Visual was invalidated during the render pass").
+                Dispatcher.UIThread.Post(() => RaiseScrollInvalidated(EventArgs.Empty));
             }
         }
     }
