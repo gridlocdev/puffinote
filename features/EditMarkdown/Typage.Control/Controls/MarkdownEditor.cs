@@ -5,6 +5,7 @@ using Avalonia.Controls.Primitives;
 using Avalonia.Input;
 using Avalonia.Input.Platform;
 using Avalonia.Media;
+using Avalonia.Threading;
 using Typage.Control.Rendering;
 using Typage.Engine.Document;
 using Typage.Engine.Editing;
@@ -255,6 +256,11 @@ public class MarkdownEditor : Avalonia.Controls.Control, ILogicalScrollable
     public void Replace(int start, int length, string replacement) => _buffer.ReplaceRange(start, length, replacement);
 
     // ----- clipboard (PRD §7.2 — copy yields Markdown source) -----
+    //
+    // The continuation after a clipboard await can resume off the UI thread, and the document edit
+    // it performs raises events that call InvalidateVisual()/scroll — which Avalonia rejects from a
+    // non-UI thread (that was the "paste crashes the app" bug). So every edit here is marshalled back
+    // to the UI thread, and clipboard calls are guarded so a clipboard failure degrades to a no-op.
 
     public async Task CopyAsync()
     {
@@ -264,7 +270,15 @@ public class MarkdownEditor : Avalonia.Controls.Control, ILogicalScrollable
             return;
         }
 
-        await clipboard.SetTextAsync(_buffer.Document.GetText(sel.Start, sel.Length));
+        var text = _buffer.Document.GetText(sel.Start, sel.Length); // read before the await (UI thread)
+        try
+        {
+            await clipboard.SetTextAsync(text);
+        }
+        catch (Exception)
+        {
+            // A clipboard write failure shouldn't crash the editor.
+        }
     }
 
     public async Task CutAsync()
@@ -275,7 +289,7 @@ public class MarkdownEditor : Avalonia.Controls.Control, ILogicalScrollable
         }
 
         await CopyAsync();
-        _buffer.Insert(string.Empty); // replaces (deletes) the selection
+        RunOnUiThread(() => _buffer.Insert(string.Empty)); // delete the selection on the UI thread
     }
 
     public async Task PasteAsync()
@@ -285,10 +299,32 @@ public class MarkdownEditor : Avalonia.Controls.Control, ILogicalScrollable
             return;
         }
 
-        var text = await clipboard.TryGetTextAsync();
+        string? text;
+        try
+        {
+            text = await clipboard.TryGetTextAsync();
+        }
+        catch (Exception)
+        {
+            return; // a clipboard read failure shouldn't crash the editor
+        }
+
         if (!string.IsNullOrEmpty(text))
         {
-            _buffer.Insert(text);
+            RunOnUiThread(() => _buffer.Insert(text));
+        }
+    }
+
+    /// <summary>Run a document edit on the UI thread (clipboard awaits may resume off it).</summary>
+    private static void RunOnUiThread(Action action)
+    {
+        if (Dispatcher.UIThread.CheckAccess())
+        {
+            action();
+        }
+        else
+        {
+            Dispatcher.UIThread.Post(action);
         }
     }
 
