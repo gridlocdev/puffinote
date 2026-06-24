@@ -84,8 +84,10 @@ Don't hardcode versions in `.csproj` files.
   wiki-links/embeds). Adding constructs is a separate, later task.
 - **Reveal scopes (PRD §7.4):** inline marks reveal when the caret/selection intersects that node;
   line-prefix marks reveal when the caret is on the line; block constructs reveal when the caret/selection
-  intersects the block range; selection forces reveal. *(The current surface implements a line-level
-  reveal approximation with offsets kept 1:1 — see "What is and isn't built yet".)*
+  intersects the block range; selection forces reveal. *(Implemented: markers are truly **hidden** via a
+  per-line offset↔visual map — inline marks reveal **per node**, line-prefix marks per line — and
+  concealed markers render as rich decorations. Whole-line block fences and table rows still render their
+  row; row-collapse / true block folding is deferred — see "What is and isn't built yet".)*
 - **Tabs:** default inserts **spaces, width 4** (configurable in Settings). Indentation is interpreted
   on 4-space tab stops.
 - **Front matter:** leading `---`…`---` only when a closing fence exists below; a lone `---` is a
@@ -166,15 +168,24 @@ extend it, keep the layering and update the docs.
   (FileSystemWatcher + three-way conflict prompt + self-save suppression, §7.1), **autosave/crash
   recovery** sidecar snapshots (§9.4), and a **dependency-allowlist CI gate** (`Directory.Build.targets`,
   §5/§9.3) + a `Typage.Benchmarks` BenchmarkDotNet harness.
-- **Early / approximate / not built:** the surface still keeps offsets **1:1** with the visual model
-  (markers **dim** rather than collapse), so the PRD's full §7.4 behavior (true glyph-hiding with a
-  bidirectional offset↔visual map, atomic caret traversal of concealed markers — and the front-matter
-  *fold* and a true "Properties" header that depend on it), **IME**, the **automation peer
-  (accessibility)**, **smart paste** (HTML→MD, image paste, paste-as-plain), **block objects** (inline
-  images / rendered tables / embeds), **spell check**, and the OS **print/PDF** path are the dedicated
-  later phases (PRD §11) and are **not built yet**. Don't claim them done; build them on the layering
-  that's here. (Rendering can't be exercised by the headless CI here — no GPU — so the surface's draw
-  path is verified structurally and by the engine's incremental tests, not by pixel tests.)
+- **Also built — §7.4 live-preview concealment:** markers are now **truly hidden** (not dimmed). The
+  engine tags each inline construct's tokens with a per-line `Token.Node`; the control builds a per-line
+  **`VisualLine`** (`Typage.Control/Rendering`) whose concealed marker runs collapse to **zero width**,
+  giving the **bidirectional offset↔visual map** (`ColumnToX`/`XToColumn`) that drawing, caret, hit-test,
+  and selection all read. Inline marks reveal **per node** (caret within the node span / selection
+  overlap); line-prefix marks reveal per line; clicks are atomic over hidden markers. Concealed markers
+  render as **rich decorations** — list bullets, drawn task checkboxes (click-to-toggle), a blockquote
+  bar, a horizontal rule, and a fenced-code background band — with the content kept on a hanging indent.
+  Raw-source mode reveals everything.
+- **Early / approximate / not built:** **whole-line block folding** (collapsing a fenced-code/front-matter
+  fence row or rendering a real table grid — they still occupy their row), the front-matter **fold** and a
+  true "Properties" header, **block objects** (inline images / rendered tables / embeds), **IME**, the
+  **automation peer (accessibility)**, **smart paste** (HTML→MD, image paste, paste-as-plain), **spell
+  check**, and the OS **print/PDF** path are the dedicated later phases (PRD §11) and are **not built
+  yet**. Don't claim them done; build them on the layering that's here. (Pixel output can't be exercised
+  by the headless CI here — no GPU — so the draw path is verified structurally, by `FormattedText`
+  measurement under the headless stub font manager, and by the engine's incremental tests, not by pixel
+  tests.)
 
 ## Conventions
 

@@ -147,6 +147,8 @@ A custom Avalonia `Control` built **on top of `Avalonia.Media.TextFormatting`** 
 
 **Front matter** (YAML between leading `---` delimiters) renders as a **dimmed, collapsible "Properties" block** at the top, collapsed by default; expanding (or moving the caret in) shows the raw YAML. No structured key/value editor in v1.
 
+**Status (implemented).** Concealment is built: the engine tags each inline construct's tokens with a per-line node id, and the control's per-line `VisualLine` collapses concealed marker runs to zero width — the bidirectional offset↔visual map that keeps caret/click/selection correct. Inline marks reveal per node, line-prefix marks per line, and concealed markers render as rich decorations (bullets, drawn checkboxes, a blockquote bar, a horizontal rule, a fenced-code band). Still deferred to a later phase: collapsing *whole-line* block rows (fenced-code/front-matter fences, real table grids) — i.e. the front-matter *fold* and a true "Properties" header — plus inline-image/embed block objects.
+
 ### 7.5 Commands, UI chrome, and status
 
 - **Menu bar** (platform-native): File, Edit, Format, View, Help.
