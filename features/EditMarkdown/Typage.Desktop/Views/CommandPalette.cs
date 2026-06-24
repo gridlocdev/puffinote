@@ -128,7 +128,7 @@ public sealed class CommandPalette : Panel
                 continue;
             }
 
-            rows.Add((new PaletteRow(c.Title, c.Shortcut ?? string.Empty, c.Description, c), score));
+            rows.Add((new PaletteRow(c.Title, c.ShortcutText, c.Description, c), score));
         }
 
         rows.Sort((a, b) => b.Score != a.Score

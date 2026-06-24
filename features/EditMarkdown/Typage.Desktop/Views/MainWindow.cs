@@ -1,3 +1,4 @@
+using System.Linq;
 using System.Text;
 using Avalonia;
 using Avalonia.Controls;
@@ -32,13 +33,15 @@ public class MainWindow : Window
     private string? _currentPath;
     private TextFileFormat _format = TextFileFormat.Utf8NoBom;
     private readonly MenuItem _recentMenu = new() { Header = "Open _Recent" };
+    private NativeMenuItem? _nativeRecentItem; // the macOS "Open Recent" submenu (when the native bar is used)
     private readonly CommandPalette _palette = new();
+    private Dictionary<string, AppCommand> _commandsById = new();
     private FindBar? _findBar;
     private Border? _toolbar;
     private Border? _statusBar;
-    private MenuItem? _toggleToolbarItem;
-    private MenuItem? _toggleRawSourceItem;
-    private MenuItem? _toggleFocusItem;
+    private CheckItem? _toggleToolbarItem;
+    private CheckItem? _toggleRawSourceItem;
+    private CheckItem? _toggleFocusItem;
     private bool _focusMode;
 
     // External-change detection (PRD §7.1): watch the open file, and remember the exact text last
@@ -50,7 +53,38 @@ public class MainWindow : Window
     // Crash recovery (PRD §9.4): autosave the dirty buffer to a sidecar snapshot; clear it on a clean save.
     private readonly RecoveryService _recovery = new();
     private DispatcherTimer? _autosaveTimer;
-    private readonly List<(AppTheme Theme, MenuItem Item)> _themeItems = new();
+    private readonly List<(AppTheme Theme, CheckItem Item)> _themeItems = new();
+
+    /// <summary>
+    /// A checkable/radio menu item that may live in either the in-window menu (Windows/Linux) or the
+    /// macOS native menu bar, so the toggle/theme state-sync code stays platform-agnostic — it just
+    /// sets <see cref="IsChecked"/> on whichever item the active platform built.
+    /// </summary>
+    private sealed class CheckItem
+    {
+        private readonly MenuItem? _menu;
+        private readonly NativeMenuItem? _native;
+
+        public CheckItem(MenuItem menu) => _menu = menu;
+
+        public CheckItem(NativeMenuItem native) => _native = native;
+
+        public bool IsChecked
+        {
+            set
+            {
+                if (_menu is not null)
+                {
+                    _menu.IsChecked = value;
+                }
+
+                if (_native is not null)
+                {
+                    _native.IsChecked = value;
+                }
+            }
+        }
+    }
 
     // Chrome brushes are mutated live on a theme change; the borders/text share these instances.
     private readonly SolidColorBrush _chromeBg = new(Color.FromRgb(0x25, 0x25, 0x26));
@@ -71,7 +105,7 @@ public class MainWindow : Window
         Title = "Typage";
 
         var root = new DockPanel();
-        root.Children.Add(BuildMenu());
+        InstallMenu(root); // macOS native menu bar, or the in-window menu elsewhere; plus key bindings
         _toolbar = BuildToolbar();
         _toolbar.IsVisible = _settings.Settings.ShowToolbar; // restore the persisted toolbar visibility
         root.Children.Add(_toolbar);
@@ -84,29 +118,6 @@ public class MainWindow : Window
 
         // The command palette floats over everything as a collapsed overlay.
         Content = new Panel { Children = { root, _palette } };
-
-        // ⌘⇧P / Ctrl+Shift+P opens the palette (bind both so it works on macOS and elsewhere).
-        KeyBindings.Add(new KeyBinding
-        {
-            Gesture = new KeyGesture(Key.P, KeyModifiers.Meta | KeyModifiers.Shift),
-            Command = new RelayCommand(OpenPalette),
-        });
-        KeyBindings.Add(new KeyBinding
-        {
-            Gesture = new KeyGesture(Key.P, KeyModifiers.Control | KeyModifiers.Shift),
-            Command = new RelayCommand(OpenPalette),
-        });
-
-        // Find (⌘F / Ctrl+F) and Find & Replace (⌘⌥F / Ctrl+H).
-        foreach (var g in new[] { new KeyGesture(Key.F, KeyModifiers.Meta), new KeyGesture(Key.F, KeyModifiers.Control) })
-        {
-            KeyBindings.Add(new KeyBinding { Gesture = g, Command = new RelayCommand(() => _findBar?.Show(replace: false)) });
-        }
-
-        foreach (var g in new[] { new KeyGesture(Key.F, KeyModifiers.Meta | KeyModifiers.Alt), new KeyGesture(Key.H, KeyModifiers.Control) })
-        {
-            KeyBindings.Add(new KeyBinding { Gesture = g, Command = new RelayCommand(() => _findBar?.Show(replace: true)) });
-        }
 
         _editorView.TextChanged += (_, _) => UpdateChrome();
         _editorView.SelectionChanged += (_, _) => UpdateCaretStatus();
@@ -133,17 +144,8 @@ public class MainWindow : Window
         _editorView.Editor.IndentWidth = _settings.Settings.TabWidth;
         _editorView.Editor.ShowRawSource = _settings.Settings.ShowRawSource; // restore the raw-source default
 
-        // Focus / distraction-free mode (F11): hide the toolbar and status bar to maximize the text.
-        KeyBindings.Add(new KeyBinding { Gesture = new KeyGesture(Key.F11), Command = new RelayCommand(ToggleFocusMode) });
-
         SetupAutosave();
         Opened += async (_, _) => await CheckForRecoveryAsync(); // offer recovery once the window is up
-
-        // Preferences (⌘, / Ctrl+,).
-        foreach (var g in new[] { new KeyGesture(Key.OemComma, KeyModifiers.Meta), new KeyGesture(Key.OemComma, KeyModifiers.Control) })
-        {
-            KeyBindings.Add(new KeyBinding { Gesture = g, Command = new RelayCommand(ShowSettings) });
-        }
 
         RefreshRecentMenu();
         UpdateChrome();
@@ -163,75 +165,105 @@ public class MainWindow : Window
 
     // ----- chrome -----
 
-    private Menu BuildMenu()
+    /// <summary>
+    /// Build the command catalog, register one key binding per command (per-platform gesture), and install
+    /// the menu: the macOS native menu bar (system bar, ⌘ key-equivalents) on macOS, or the in-window menu
+    /// elsewhere (PRD §7.5 — a platform-native menu bar).
+    /// </summary>
+    private void InstallMenu(DockPanel root)
     {
-        var file = new MenuItem { Header = "_File" };
-        file.Items.Add(Item("_New", () => _ = NewDocumentAsync(), "Ctrl+N"));
-        file.Items.Add(Item("_Open…", () => _ = OpenAsync(), "Ctrl+O"));
-        file.Items.Add(_recentMenu);
-        file.Items.Add(Item("_Save", () => _ = SaveAsync(), "Ctrl+S"));
-        file.Items.Add(Item("Save _As…", () => _ = SaveAsAsync(), "Ctrl+Shift+S"));
-        file.Items.Add(Item("_Revert to Saved", () => _ = RevertAsync()));
-        file.Items.Add(new Separator());
-        file.Items.Add(Item("_Export HTML…", () => _ = ExportHtmlAsync()));
-        file.Items.Add(new Separator());
-        file.Items.Add(Item("E_xit", Close));
+        _commandsById = BuildCommands().ToDictionary(c => c.Id);
+        RegisterCommandKeyBindings();
 
-        var edit = new MenuItem { Header = "_Edit" };
-        edit.Items.Add(Item("_Undo", () => _editorView.Undo(), "Ctrl+Z"));
-        edit.Items.Add(Item("_Redo", () => _editorView.Redo(), "Ctrl+Y"));
-        edit.Items.Add(new Separator());
-        // The editor owns these shortcuts; show the gesture for discoverability without a second binding.
-        edit.Items.Add(EditorItem("Cu_t", "Ctrl+X", () => _ = _editorView.Editor.CutAsync()));
-        edit.Items.Add(EditorItem("_Copy", "Ctrl+C", () => _ = _editorView.Editor.CopyAsync()));
-        edit.Items.Add(EditorItem("_Paste", "Ctrl+V", () => _ = _editorView.Editor.PasteAsync()));
-        edit.Items.Add(EditorItem("Select _All", "Ctrl+A", () => _editorView.Editor.SelectAll()));
-        edit.Items.Add(new Separator());
-        edit.Items.Add(EditorItem("_Find…", "Ctrl+F", () => _findBar?.Show(replace: false)));
-        edit.Items.Add(EditorItem("Find & _Replace…", "Ctrl+H", () => _findBar?.Show(replace: true)));
-
-        var format = new MenuItem { Header = "F_ormat" };
-        format.Items.Add(Item("_Bold", () => _editorView.Editor.ToggleBold(), "Ctrl+B"));
-        format.Items.Add(Item("_Italic", () => _editorView.Editor.ToggleItalic(), "Ctrl+I"));
-        format.Items.Add(Item("Inline _Code", () => _editorView.Editor.ToggleInlineCode(), "Ctrl+E"));
-        format.Items.Add(Item("_Strikethrough", () => _editorView.Editor.ToggleStrikethrough()));
-        format.Items.Add(new Separator());
-        for (var level = 1; level <= 3; level++)
+        if (OperatingSystem.IsMacOS())
         {
-            var l = level;
-            format.Items.Add(Item($"Heading {l}", () => _editorView.Editor.ApplyHeading(l), $"Ctrl+{l}"));
+            BuildNativeMenu();
+        }
+        else
+        {
+            var menu = BuildInWindowMenu();
+            DockPanel.SetDock(menu, Dock.Top);
+            root.Children.Add(menu);
+        }
+    }
+
+    /// <summary>
+    /// One window key binding per command, using its platform gesture (⌘ on macOS, Ctrl elsewhere). The
+    /// standard text-editing chords (⌘/Ctrl + A/C/V/X/Z/Y) are skipped — the focused editor or dialog text
+    /// field owns them — and the Windows/Linux "Ctrl+H = Replace" alias is kept since those platforms expect
+    /// it. On macOS the native menu's key-equivalents also fire these; the bindings are the cross-platform path.
+    /// </summary>
+    private void RegisterCommandKeyBindings()
+    {
+        foreach (var command in _commandsById.Values)
+        {
+            if (command.Shortcut is not { } shortcut || shortcut.YieldsToTextInput)
+            {
+                continue;
+            }
+
+            KeyBindings.Add(new KeyBinding
+            {
+                Gesture = shortcut.ToGesture(),
+                Command = new RelayCommand(command.Execute, () => command.IsEnabled),
+            });
         }
 
+        if (!OperatingSystem.IsMacOS())
+        {
+            KeyBindings.Add(new KeyBinding
+            {
+                Gesture = new KeyGesture(Key.H, KeyModifiers.Control), // Windows/Linux convention for Replace
+                Command = new RelayCommand(() => _findBar?.Show(replace: true)),
+            });
+        }
+    }
+
+    // ----- in-window menu (Windows/Linux) -----
+
+    private Menu BuildInWindowMenu()
+    {
+        var file = new MenuItem { Header = "_File" };
+        file.Items.Add(InWindowItem("file.new"));
+        file.Items.Add(InWindowItem("file.open"));
+        file.Items.Add(_recentMenu);
+        file.Items.Add(InWindowItem("file.save"));
+        file.Items.Add(InWindowItem("file.saveAs"));
+        file.Items.Add(InWindowItem("file.revert"));
+        file.Items.Add(new Separator());
+        file.Items.Add(InWindowItem("file.exportHtml"));
+        file.Items.Add(new Separator());
+        file.Items.Add(MenuLeaf("E_xit", Close));
+
+        var edit = new MenuItem { Header = "_Edit" };
+        edit.Items.Add(InWindowItem("edit.undo"));
+        edit.Items.Add(InWindowItem("edit.redo"));
+        edit.Items.Add(new Separator());
+        edit.Items.Add(InWindowItem("edit.cut"));
+        edit.Items.Add(InWindowItem("edit.copy"));
+        edit.Items.Add(InWindowItem("edit.paste"));
+        edit.Items.Add(InWindowItem("edit.selectAll"));
+        edit.Items.Add(new Separator());
+        edit.Items.Add(InWindowItem("edit.find"));
+        edit.Items.Add(InWindowItem("edit.replace"));
+
+        var format = new MenuItem { Header = "F_ormat" };
+        format.Items.Add(InWindowItem("format.bold"));
+        format.Items.Add(InWindowItem("format.italic"));
+        format.Items.Add(InWindowItem("format.code"));
+        format.Items.Add(InWindowItem("format.strike"));
+        format.Items.Add(InWindowItem("format.link"));
+        format.Items.Add(new Separator());
+        format.Items.Add(InWindowItem("format.h1"));
+        format.Items.Add(InWindowItem("format.h2"));
+        format.Items.Add(InWindowItem("format.h3"));
+
         var view = new MenuItem { Header = "_View" };
-        view.Items.Add(Item("Command _Palette…", OpenPalette, "Ctrl+Shift+P"));
+        view.Items.Add(InWindowItem("view.commandPalette"));
         view.Items.Add(new Separator());
-        _toggleToolbarItem = new MenuItem
-        {
-            Header = "Show _Toolbar",
-            ToggleType = MenuItemToggleType.CheckBox,
-            IsChecked = _settings.Settings.ShowToolbar,
-        };
-        _toggleToolbarItem.Click += (_, _) => ToggleToolbar();
-        view.Items.Add(_toggleToolbarItem);
-
-        _toggleRawSourceItem = new MenuItem
-        {
-            Header = "Show Raw _Source",
-            ToggleType = MenuItemToggleType.CheckBox,
-            IsChecked = _settings.Settings.ShowRawSource,
-        };
-        _toggleRawSourceItem.Click += (_, _) => ToggleRawSource();
-        view.Items.Add(_toggleRawSourceItem);
-
-        _toggleFocusItem = new MenuItem
-        {
-            Header = "_Focus Mode",
-            ToggleType = MenuItemToggleType.CheckBox,
-            IsChecked = _focusMode,
-            InputGesture = new KeyGesture(Key.F11),
-        };
-        _toggleFocusItem.Click += (_, _) => ToggleFocusMode();
-        view.Items.Add(_toggleFocusItem);
+        _toggleToolbarItem = new CheckItem(AddInWindowCheck(view, "Show _Toolbar", _settings.Settings.ShowToolbar, ToggleToolbar));
+        _toggleRawSourceItem = new CheckItem(AddInWindowCheck(view, "Show Raw _Source", _settings.Settings.ShowRawSource, ToggleRawSource));
+        _toggleFocusItem = new CheckItem(AddInWindowCheck(view, "_Focus Mode", _focusMode, ToggleFocusMode, _commandsById["view.toggleFocus"].Gesture));
         view.Items.Add(new Separator());
 
         var themeMenu = new MenuItem { Header = "T_heme" };
@@ -246,18 +278,16 @@ public class MainWindow : Window
                 IsChecked = _settings.Settings.Theme == t,
             };
             item.Click += (_, _) => SetTheme(choice);
-            _themeItems.Add((t, item));
+            _themeItems.Add((t, new CheckItem(item)));
             themeMenu.Items.Add(item);
         }
 
         view.Items.Add(themeMenu);
         view.Items.Add(new Separator());
-        var prefs = new MenuItem { Header = "_Preferences…", InputGesture = new KeyGesture(Key.OemComma, KeyModifiers.Meta) };
-        prefs.Click += (_, _) => ShowSettings();
-        view.Items.Add(prefs);
+        view.Items.Add(InWindowItem("app.preferences"));
 
         var help = new MenuItem { Header = "_Help" };
-        help.Items.Add(Item("Markdown _Reference", ShowHelp));
+        help.Items.Add(InWindowItem("help.reference"));
 
         var menu = new Menu();
         menu.Items.Add(file);
@@ -265,30 +295,140 @@ public class MainWindow : Window
         menu.Items.Add(format);
         menu.Items.Add(view);
         menu.Items.Add(help);
-        DockPanel.SetDock(menu, Dock.Top);
         return menu;
     }
 
-    private MenuItem Item(string header, Action action, string? gesture = null)
+    /// <summary>An in-window menu item from the catalog: its title, action (gated by IsEnabled), and displayed gesture.</summary>
+    private MenuItem InWindowItem(string id)
     {
-        var command = new RelayCommand(action);
-        var item = new MenuItem { Header = header, Command = command };
-        if (gesture is not null)
+        var c = _commandsById[id];
+        var item = new MenuItem { Header = c.Title, Command = new RelayCommand(c.Execute, () => c.IsEnabled) };
+        if (c.Gesture is { } g)
         {
-            var kg = KeyGesture.Parse(gesture);
-            item.InputGesture = kg;
-            KeyBindings.Add(new KeyBinding { Gesture = kg, Command = command });
+            item.InputGesture = g;
         }
 
         return item;
     }
 
-    /// <summary>A menu item whose shortcut is shown for discoverability but handled by the focused editor
-    /// (so it is not registered as a second window-level key binding).</summary>
-    private static MenuItem EditorItem(string header, string gesture, Action action)
+    private static MenuItem MenuLeaf(string header, Action action)
     {
-        var item = new MenuItem { Header = header, InputGesture = KeyGesture.Parse(gesture) };
+        var item = new MenuItem { Header = header };
         item.Click += (_, _) => action();
+        return item;
+    }
+
+    private static MenuItem AddInWindowCheck(MenuItem parent, string header, bool initial, Action onClick, KeyGesture? gesture = null)
+    {
+        var item = new MenuItem { Header = header, ToggleType = MenuItemToggleType.CheckBox, IsChecked = initial };
+        if (gesture is not null)
+        {
+            item.InputGesture = gesture;
+        }
+
+        item.Click += (_, _) => onClick();
+        parent.Items.Add(item);
+        return item;
+    }
+
+    // ----- macOS native menu bar -----
+
+    private void BuildNativeMenu()
+    {
+        var menu = new NativeMenu();
+
+        var file = NativeSubmenu("File");
+        file.Menu!.Items.Add(NativeItem("file.new"));
+        file.Menu.Items.Add(NativeItem("file.open"));
+        _nativeRecentItem = new NativeMenuItem("Open Recent") { Menu = new NativeMenu() };
+        file.Menu.Items.Add(_nativeRecentItem);
+        file.Menu.Items.Add(NativeItem("file.save"));
+        file.Menu.Items.Add(NativeItem("file.saveAs"));
+        file.Menu.Items.Add(NativeItem("file.revert"));
+        file.Menu.Items.Add(new NativeMenuItemSeparator());
+        file.Menu.Items.Add(NativeItem("file.exportHtml"));
+        menu.Items.Add(file);
+
+        var edit = NativeSubmenu("Edit");
+        foreach (var id in new[] { "edit.undo", "edit.redo", null, "edit.cut", "edit.copy", "edit.paste", "edit.selectAll", null, "edit.find", "edit.replace" })
+        {
+            edit.Menu!.Items.Add(id is null ? new NativeMenuItemSeparator() : NativeItem(id));
+        }
+
+        menu.Items.Add(edit);
+
+        var format = NativeSubmenu("Format");
+        foreach (var id in new[] { "format.bold", "format.italic", "format.code", "format.strike", "format.link", null, "format.h1", "format.h2", "format.h3" })
+        {
+            format.Menu!.Items.Add(id is null ? new NativeMenuItemSeparator() : NativeItem(id));
+        }
+
+        menu.Items.Add(format);
+
+        var view = NativeSubmenu("View");
+        view.Menu!.Items.Add(NativeItem("view.commandPalette"));
+        view.Menu.Items.Add(new NativeMenuItemSeparator());
+        _toggleToolbarItem = new CheckItem(AddNativeCheck(view.Menu, "Show Toolbar", _settings.Settings.ShowToolbar, ToggleToolbar));
+        _toggleRawSourceItem = new CheckItem(AddNativeCheck(view.Menu, "Show Raw Source", _settings.Settings.ShowRawSource, ToggleRawSource));
+        _toggleFocusItem = new CheckItem(AddNativeCheck(view.Menu, "Focus Mode", _focusMode, ToggleFocusMode, _commandsById["view.toggleFocus"].Gesture));
+        view.Menu.Items.Add(new NativeMenuItemSeparator());
+
+        var themeMenu = NativeSubmenu("Theme");
+        foreach (var t in System.Enum.GetValues<AppTheme>())
+        {
+            var choice = t;
+            var item = new NativeMenuItem(ThemeLabel(t))
+            {
+                ToggleType = MenuItemToggleType.Radio,
+                IsChecked = _settings.Settings.Theme == t,
+                Command = new RelayCommand(() => SetTheme(choice)),
+            };
+            _themeItems.Add((t, new CheckItem(item)));
+            themeMenu.Menu!.Items.Add(item);
+        }
+
+        view.Menu.Items.Add(themeMenu);
+        view.Menu.Items.Add(new NativeMenuItemSeparator());
+        view.Menu.Items.Add(NativeItem("app.preferences"));
+        menu.Items.Add(view);
+
+        var help = NativeSubmenu("Help");
+        help.Menu!.Items.Add(NativeItem("help.reference"));
+        menu.Items.Add(help);
+
+        NativeMenu.SetMenu(this, menu);
+    }
+
+    /// <summary>A native menu item from the catalog. Standard editing chords get no key-equivalent so the
+    /// focused text field/editor keeps them (otherwise macOS swallows ⌘C/⌘A/⌘Z mid-edit); they still work.</summary>
+    private NativeMenuItem NativeItem(string id)
+    {
+        var c = _commandsById[id];
+        var item = new NativeMenuItem(c.Title) { Command = new RelayCommand(c.Execute, () => c.IsEnabled) };
+        if (c.Shortcut is { } s && !s.YieldsToTextInput)
+        {
+            item.Gesture = s.ToGesture(mac: true);
+        }
+
+        return item;
+    }
+
+    private static NativeMenuItem NativeSubmenu(string header) => new(header) { Menu = new NativeMenu() };
+
+    private static NativeMenuItem AddNativeCheck(NativeMenu parent, string header, bool initial, Action onClick, KeyGesture? gesture = null)
+    {
+        var item = new NativeMenuItem(header)
+        {
+            ToggleType = MenuItemToggleType.CheckBox,
+            IsChecked = initial,
+            Command = new RelayCommand(onClick),
+        };
+        if (gesture is not null)
+        {
+            item.Gesture = gesture;
+        }
+
+        parent.Items.Add(item);
         return item;
     }
 
@@ -302,9 +442,10 @@ public class MainWindow : Window
         panel.Children.Add(ToolButton("H2", "Heading 2", () => _editorView.Editor.ApplyHeading(2)));
 
         // A "Find a tool…" entry on the right opens the Command Palette (mirrors Cellestra).
+        var paletteShortcut = ShortcutFormatter.Format(Shortcut.Cmd(Key.P, KeyModifiers.Shift));
         var findTool = new Button
         {
-            Content = "Find a tool…    ⌘⇧P",
+            Content = $"Find a tool…    {paletteShortcut}",
             Margin = new Avalonia.Thickness(8, 4),
             Padding = new Avalonia.Thickness(10, 3),
             HorizontalAlignment = HorizontalAlignment.Right,
@@ -318,7 +459,7 @@ public class MainWindow : Window
             CornerRadius = new Avalonia.CornerRadius(6),
             Command = new RelayCommand(OpenPalette),
         };
-        ToolTip.SetTip(findTool, "Run any command by name (⌘⇧P)");
+        ToolTip.SetTip(findTool, $"Run any command by name ({paletteShortcut})");
 
         var grid = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto") };
         Grid.SetColumn(panel, 0);
@@ -532,37 +673,38 @@ public class MainWindow : Window
         var ed = _editorView.Editor;
         return new List<AppCommand>
         {
-            new("file.new", "New", "Start a new, empty document.", "⌘N", () => _ = NewDocumentAsync()),
-            new("file.open", "Open…", "Open a Markdown file from disk.", "⌘O", () => _ = OpenAsync()),
-            new("file.save", "Save", "Save changes to the current file.", "⌘S", () => _ = SaveAsync()),
-            new("file.saveAs", "Save As…", "Save a copy under a new name.", "⇧⌘S", () => _ = SaveAsAsync()),
+            new("file.new", "New", "Start a new, empty document.", Shortcut.Cmd(Key.N), () => _ = NewDocumentAsync()),
+            new("file.open", "Open…", "Open a Markdown file from disk.", Shortcut.Cmd(Key.O), () => _ = OpenAsync()),
+            new("file.save", "Save", "Save changes to the current file.", Shortcut.Cmd(Key.S), () => _ = SaveAsync()),
+            new("file.saveAs", "Save As…", "Save a copy under a new name.", Shortcut.Cmd(Key.S, KeyModifiers.Shift), () => _ = SaveAsAsync()),
             new("file.revert", "Revert to Saved", "Discard changes since the last save.", null,
                 () => _ = RevertAsync(), () => _currentPath is not null && _editorView.IsDirty),
             new("file.exportHtml", "Export HTML…", "Render the document to a self-contained HTML file.", null, () => _ = ExportHtmlAsync()),
 
-            new("edit.undo", "Undo", "Step backward through your changes.", "⌘Z", () => _editorView.Undo(), () => _editorView.CanUndo),
-            new("edit.redo", "Redo", "Re-apply a change you undid.", "⇧⌘Z", () => _editorView.Redo(), () => _editorView.CanRedo),
-            new("edit.cut", "Cut", "Move the selection to the clipboard.", "⌘X", () => _ = ed.CutAsync()),
-            new("edit.copy", "Copy", "Copy the selection to the clipboard.", "⌘C", () => _ = ed.CopyAsync()),
-            new("edit.paste", "Paste", "Paste from the clipboard.", "⌘V", () => _ = ed.PasteAsync()),
-            new("edit.selectAll", "Select All", "Select the whole document.", "⌘A", ed.SelectAll),
-            new("edit.find", "Find…", "Find text in the document.", "⌘F", () => _findBar?.Show(replace: false)),
-            new("edit.replace", "Find & Replace…", "Find text and replace it (plain or regex).", "⌘⌥F", () => _findBar?.Show(replace: true)),
+            new("edit.undo", "Undo", "Step backward through your changes.", Shortcut.Cmd(Key.Z), () => _editorView.Undo(), () => _editorView.CanUndo),
+            new("edit.redo", "Redo", "Re-apply a change you undid.", Shortcut.Cmd(Key.Z, KeyModifiers.Shift), () => _editorView.Redo(), () => _editorView.CanRedo),
+            new("edit.cut", "Cut", "Move the selection to the clipboard.", Shortcut.Cmd(Key.X), () => _ = ed.CutAsync()),
+            new("edit.copy", "Copy", "Copy the selection to the clipboard.", Shortcut.Cmd(Key.C), () => _ = ed.CopyAsync()),
+            new("edit.paste", "Paste", "Paste from the clipboard.", Shortcut.Cmd(Key.V), () => _ = ed.PasteAsync()),
+            new("edit.selectAll", "Select All", "Select the whole document.", Shortcut.Cmd(Key.A), ed.SelectAll),
+            new("edit.find", "Find…", "Find text in the document.", Shortcut.Cmd(Key.F), () => _findBar?.Show(replace: false)),
+            new("edit.replace", "Find & Replace…", "Find text and replace it (plain or regex).", Shortcut.Cmd(Key.F, KeyModifiers.Alt), () => _findBar?.Show(replace: true)),
 
-            new("format.bold", "Bold", "Make the selection bold.", "⌘B", ed.ToggleBold),
-            new("format.italic", "Italic", "Make the selection italic.", "⌘I", ed.ToggleItalic),
-            new("format.code", "Inline Code", "Format the selection as inline code.", "⌘E", ed.ToggleInlineCode),
+            new("format.bold", "Bold", "Make the selection bold.", Shortcut.Cmd(Key.B), ed.ToggleBold),
+            new("format.italic", "Italic", "Make the selection italic.", Shortcut.Cmd(Key.I), ed.ToggleItalic),
+            new("format.code", "Inline Code", "Format the selection as inline code.", Shortcut.Cmd(Key.E), ed.ToggleInlineCode),
             new("format.strike", "Strikethrough", "Strike through the selection.", null, ed.ToggleStrikethrough),
-            new("format.link", "Insert Link", "Wrap the selection as a link.", "⌘K", ed.InsertLink),
-            new("format.h1", "Heading 1", "Make this line a level-1 heading.", "⌘1", () => ed.ApplyHeading(1)),
-            new("format.h2", "Heading 2", "Make this line a level-2 heading.", "⌘2", () => ed.ApplyHeading(2)),
-            new("format.h3", "Heading 3", "Make this line a level-3 heading.", "⌘3", () => ed.ApplyHeading(3)),
-            new("format.paragraph", "Paragraph", "Remove the heading from this line.", "⌘0", ed.SetParagraph),
+            new("format.link", "Insert Link", "Wrap the selection as a link.", Shortcut.Cmd(Key.K), ed.InsertLink),
+            new("format.h1", "Heading 1", "Make this line a level-1 heading.", Shortcut.Cmd(Key.D1), () => ed.ApplyHeading(1)),
+            new("format.h2", "Heading 2", "Make this line a level-2 heading.", Shortcut.Cmd(Key.D2), () => ed.ApplyHeading(2)),
+            new("format.h3", "Heading 3", "Make this line a level-3 heading.", Shortcut.Cmd(Key.D3), () => ed.ApplyHeading(3)),
+            new("format.paragraph", "Paragraph", "Remove the heading from this line.", Shortcut.Cmd(Key.D0), ed.SetParagraph),
 
+            new("view.commandPalette", "Command Palette…", "Search and run any command.", Shortcut.Cmd(Key.P, KeyModifiers.Shift), OpenPalette),
             new("view.toggleToolbar", "Toggle Toolbar", "Show or hide the formatting toolbar.", null, ToggleToolbar),
             new("view.toggleRawSource", "Toggle Raw Source", "Show the raw Markdown source (markers always visible).", null, ToggleRawSource),
-            new("view.toggleFocus", "Toggle Focus Mode", "Distraction-free: hide the toolbar and status bar.", "F11", ToggleFocusMode),
-            new("app.preferences", "Preferences…", "Theme, tab width, and toolbar settings.", "⌘,", ShowSettings),
+            new("view.toggleFocus", "Toggle Focus Mode", "Distraction-free: hide the toolbar and status bar.", Shortcut.Bare(Key.F11), ToggleFocusMode),
+            new("app.preferences", "Preferences…", "Theme, tab width, and toolbar settings.", Shortcut.Cmd(Key.OemComma), ShowSettings),
             new("help.reference", "Markdown Reference", "Open the offline syntax & shortcut reference.", null, ShowHelp),
         };
     }
@@ -594,8 +736,30 @@ public class MainWindow : Window
     /// <summary>Rebuild the File ▸ Open Recent submenu from the persisted MRU list (heuristic 7).</summary>
     private void RefreshRecentMenu()
     {
-        _recentMenu.Items.Clear();
         var recent = _settings.Settings.RecentFiles;
+
+        // macOS native menu: refresh the submenu items in place (re-SetMenu while mounted throws on macOS).
+        if (_nativeRecentItem?.Menu is { } nativeSub)
+        {
+            nativeSub.Items.Clear();
+            if (recent.Count == 0)
+            {
+                nativeSub.Items.Add(new NativeMenuItem("(no recent files)") { IsEnabled = false });
+                return;
+            }
+
+            foreach (var entry in recent)
+            {
+                var path = entry;
+                nativeSub.Items.Add(new NativeMenuItem(path) { Command = new RelayCommand(() => _ = OpenRecentAsync(path)) });
+            }
+
+            nativeSub.Items.Add(new NativeMenuItemSeparator());
+            nativeSub.Items.Add(new NativeMenuItem("Clear Recent") { Command = new RelayCommand(ClearRecent) });
+            return;
+        }
+
+        _recentMenu.Items.Clear();
         if (recent.Count == 0)
         {
             _recentMenu.Items.Add(new MenuItem { Header = "(no recent files)", IsEnabled = false });

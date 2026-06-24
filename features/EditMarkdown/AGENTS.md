@@ -157,7 +157,10 @@ extend it, keep the layering and update the docs.
   shell adds Cellestra-style patterns: a single **command catalog** + **Command Palette** (⌘⇧P,
   fuzzy-filtered), **Find/Replace** (plain + regex via the engine's `DocumentSearch`, with in-editor
   match highlighting), recent-files menu, **light/dark/high-contrast themes** (View ▸ Theme,
-  OS-following), a **Preferences dialog** (theme, tab width, toolbar), and modal error dialogs.
+  OS-following), a **Preferences dialog** (theme, tab width, toolbar), and modal error dialogs. The menu
+  is **platform-native** (PRD §7.5): a macOS `NativeMenu` (system bar, ⌘ key-equivalents) on macOS and
+  the in-window menu elsewhere, both built from the one catalog; shortcuts are defined abstractly
+  (`Commands/Shortcut.cs`) so they bind/render as ⌘ on macOS and Ctrl elsewhere (`ShortcutFormatter`).
 - **Also built (later additions):** §7.2 **editing assists** (list/blockquote continuation + exit,
   ordered-list renumber, auto-indent, auto-pairing/wrap-selection, Tab/Shift+Tab indent/outdent — pure
   helpers in `Engine/Editing/LinePrefix.cs` + `OrderedListRenumber.cs`), **interactive task checkboxes**
