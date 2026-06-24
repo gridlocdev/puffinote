@@ -183,17 +183,18 @@ extend it, keep the layering and update the docs.
   rule, and a fenced-code panel — on a hanging indent. **Ordered-list numbers are computed from list
   structure** (each nesting level restarts and resumes; a blank/non-list line starts a fresh list), not
   the literal source digits. Raw-source mode reveals everything (including the literal digits).
-- **Also built — §7.3 word wrap + layout:** long lines **soft-wrap to the viewport width** by default and
-  there is **no horizontal scrolling** (toggle via `MarkdownEditor.WordWrap`). `VisualLine` lays a line out
-  into wrapped **rows**; the offset map is 2-D (`ColumnToX`/`RowOf` for caret placement, `XToColumn`/`Spans`
-  row-local for hit-testing and multi-row selection), the surface virtualizes over **variable line heights**
-  (a per-line row-count cache + prefix sums), and Up/Down move by **visual row**. Indented (4-space) code
-  blocks are recognized (engine), code text has **no per-line background** (one block panel), and
-  **Alt+Shift+Up/Down reorders lines** (incl. checklist items).
-- **Early / approximate / not built:** **paragraph join / soft-line flow** (rendering consecutive plain
-  paragraph source lines as one flowing, wrapped paragraph with the newline shown as a space — it needs the
-  layout unit to become a multi-line *paragraph block*; today each source line is still its own block),
-  **whole-line block folding** (collapsing a fenced-code/front-matter
+- **Also built — §7.3 word wrap + paragraph flow:** long lines **soft-wrap to the viewport width** by default
+  with **no horizontal scrolling** (toggle via `MarkdownEditor.WordWrap`), and **consecutive plain-paragraph
+  source lines join into one flowing paragraph** (the interior newline renders as a space). The layout unit
+  is a **paragraph block** — a contiguous document range, so a block column is `offset − blockStart` and the
+  whole offset map carries over; blank lines, headings, lists, quotes, code, tables, and hard breaks break
+  the flow. `VisualLine` lays a block out into wrapped **rows**; the map is 2-D (`ColumnToX`/`RowOf` for the
+  caret, row-local `XToColumn`/`Spans` for hit-testing and multi-row selection); the surface virtualizes over
+  **variable block heights** (a per-block row-count cache + prefix sums, rebuilt on text/theme/width change —
+  O(n) per edit, fine for note-sized docs); Up/Down move by **visual row**. Indented (4-space) code blocks
+  are recognized (engine), code text has **no per-line background** (one block panel), and **Alt+Shift+Up/Down
+  reorders lines** (incl. checklist items).
+- **Early / approximate / not built:** **whole-line block folding** (collapsing a fenced-code/front-matter
   fence row or rendering a real table grid — they still occupy their row), the front-matter **fold** and a
   true "Properties" header, **block objects** (inline images / rendered tables / embeds), **IME**, the
   **automation peer (accessibility)**, **smart paste** (HTML→MD, image paste, paste-as-plain), **spell
