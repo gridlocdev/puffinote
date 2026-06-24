@@ -1,0 +1,43 @@
+name: Typage CI
+
+# Build, test, and enforce the dependency-allowlist gate for the Typage feature
+# (features/EditMarkdown). The gate (features/EditMarkdown/Directory.Build.targets,
+# PRD §5/§9.3) fails the build on any NuGet outside the trusted base, so a normal
+# `dotnet build` is the gate — no separate step needed.
+
+on:
+  push:
+    paths:
+      - 'features/EditMarkdown/**'
+      - 'Directory.Packages.props'
+      - 'Directory.Build.props'
+      - '.github/workflows/typage-ci.yml'
+  pull_request:
+    paths:
+      - 'features/EditMarkdown/**'
+      - 'Directory.Packages.props'
+      - 'Directory.Build.props'
+
+jobs:
+  build-test:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: features/EditMarkdown
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Restore
+        run: dotnet restore Typage.slnx
+
+      # The dependency-allowlist gate runs as part of every project build and fails
+      # on any non-allowlisted NuGet (Directory.Build.targets / PRD §5/§9.3).
+      - name: Build (includes dependency-allowlist gate)
+        run: dotnet build Typage.slnx -c Release --no-restore
+
+      - name: Test
+        run: dotnet test Typage.slnx -c Release --no-build
