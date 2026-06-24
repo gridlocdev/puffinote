@@ -171,16 +171,29 @@ extend it, keep the layering and update the docs.
   (FileSystemWatcher + three-way conflict prompt + self-save suppression, §7.1), **autosave/crash
   recovery** sidecar snapshots (§9.4), and a **dependency-allowlist CI gate** (`Directory.Build.targets`,
   §5/§9.3) + a `Typage.Benchmarks` BenchmarkDotNet harness.
-- **Also built — §7.4 live-preview concealment:** markers are now **truly hidden** (not dimmed). The
-  engine tags each inline construct's tokens with a per-line `Token.Node`; the control builds a per-line
-  **`VisualLine`** (`Typage.Control/Rendering`) whose concealed marker runs collapse to **zero width**,
-  giving the **bidirectional offset↔visual map** (`ColumnToX`/`XToColumn`) that drawing, caret, hit-test,
-  and selection all read. Inline marks reveal **per node** (caret within the node span / selection
-  overlap); line-prefix marks reveal per line; clicks are atomic over hidden markers. Concealed markers
-  render as **rich decorations** — list bullets, drawn task checkboxes (click-to-toggle), a blockquote
-  bar, a horizontal rule, and a fenced-code background band — with the content kept on a hanging indent.
-  Raw-source mode reveals everything.
-- **Early / approximate / not built:** **whole-line block folding** (collapsing a fenced-code/front-matter
+- **Also built — §7.4 live-preview, now full WYSIWYG:** markers are **truly hidden** (not dimmed) and stay
+  hidden **always** in normal mode — the caret and selections **never** reveal raw Markdown (a deliberate
+  divergence from Obsidian toward a normal document editor). The control builds a per-line **`VisualLine`**
+  (`Typage.Control/Rendering`) whose concealed marker runs collapse to **zero width**, giving the
+  **bidirectional offset↔visual map** that drawing, caret, hit-test, and selection all read; the map is
+  caret-independent. The caret **glides over hidden markers atomically** (Left/Right), and backspace/delete
+  act on the **visible grapheme** (backspacing at the end of a bold word removes a letter, not an invisible
+  `*`; at list-content start it strips the whole marker prefix). Concealed markers render as **rich
+  decorations** — list bullets, drawn task checkboxes (click-to-toggle), a blockquote bar, a horizontal
+  rule, and a fenced-code panel — on a hanging indent. **Ordered-list numbers are computed from list
+  structure** (each nesting level restarts and resumes; a blank/non-list line starts a fresh list), not
+  the literal source digits. Raw-source mode reveals everything (including the literal digits).
+- **Also built — §7.3 word wrap + layout:** long lines **soft-wrap to the viewport width** by default and
+  there is **no horizontal scrolling** (toggle via `MarkdownEditor.WordWrap`). `VisualLine` lays a line out
+  into wrapped **rows**; the offset map is 2-D (`ColumnToX`/`RowOf` for caret placement, `XToColumn`/`Spans`
+  row-local for hit-testing and multi-row selection), the surface virtualizes over **variable line heights**
+  (a per-line row-count cache + prefix sums), and Up/Down move by **visual row**. Indented (4-space) code
+  blocks are recognized (engine), code text has **no per-line background** (one block panel), and
+  **Alt+Shift+Up/Down reorders lines** (incl. checklist items).
+- **Early / approximate / not built:** **paragraph join / soft-line flow** (rendering consecutive plain
+  paragraph source lines as one flowing, wrapped paragraph with the newline shown as a space — it needs the
+  layout unit to become a multi-line *paragraph block*; today each source line is still its own block),
+  **whole-line block folding** (collapsing a fenced-code/front-matter
   fence row or rendering a real table grid — they still occupy their row), the front-matter **fold** and a
   true "Properties" header, **block objects** (inline images / rendered tables / embeds), **IME**, the
   **automation peer (accessibility)**, **smart paste** (HTML→MD, image paste, paste-as-plain), **spell
