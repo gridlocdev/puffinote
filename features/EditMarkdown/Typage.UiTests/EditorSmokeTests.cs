@@ -107,4 +107,24 @@ public class EditorSmokeTests
         Assert.True(window.EditorView.Stats.Words >= 4);
         Assert.StartsWith("Untitled", (window.Title ?? string.Empty).Replace("• ", string.Empty, System.StringComparison.Ordinal));
     }
+
+    [AvaloniaFact]
+    public void MainWindow_AppliesSettings_WithoutThrowing()
+    {
+        var settings = new SettingsService();
+        settings.Settings.Theme = AppTheme.Light;
+        settings.Settings.TabWidth = 2;
+        var window = new MainWindow(settings);
+        Assert.Equal(2, window.EditorView.Editor.IndentWidth);
+    }
+
+    [AvaloniaFact]
+    public void ThemeVariants_DifferByBackground()
+    {
+        var light = (Avalonia.Media.ISolidColorBrush)Control.Rendering.MarkdownTheme.Light.Background;
+        var dark = (Avalonia.Media.ISolidColorBrush)Control.Rendering.MarkdownTheme.Dark.Background;
+        var hc = (Avalonia.Media.ISolidColorBrush)Control.Rendering.MarkdownTheme.HighContrast.Background;
+        Assert.NotEqual(light.Color, dark.Color);
+        Assert.NotEqual(dark.Color, hc.Color);
+    }
 }

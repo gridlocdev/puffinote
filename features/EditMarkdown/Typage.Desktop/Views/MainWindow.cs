@@ -108,6 +108,14 @@ public class MainWindow : Window
         }
 
         ApplyTheme(_settings.Settings.Theme);
+        _editorView.Editor.IndentWidth = _settings.Settings.TabWidth;
+
+        // Preferences (⌘, / Ctrl+,).
+        foreach (var g in new[] { new KeyGesture(Key.OemComma, KeyModifiers.Meta), new KeyGesture(Key.OemComma, KeyModifiers.Control) })
+        {
+            KeyBindings.Add(new KeyBinding { Gesture = g, Command = new RelayCommand(ShowSettings) });
+        }
+
         RefreshRecentMenu();
         UpdateChrome();
     }
@@ -186,6 +194,10 @@ public class MainWindow : Window
         }
 
         view.Items.Add(themeMenu);
+        view.Items.Add(new Separator());
+        var prefs = new MenuItem { Header = "_Preferences…", InputGesture = new KeyGesture(Key.OemComma, KeyModifiers.Meta) };
+        prefs.Click += (_, _) => ShowSettings();
+        view.Items.Add(prefs);
 
         var help = new MenuItem { Header = "_Help" };
         help.Items.Add(Item("Markdown _Reference", ShowHelp));
@@ -456,6 +468,7 @@ public class MainWindow : Window
             new("format.paragraph", "Paragraph", "Remove the heading from this line.", "⌘0", ed.SetParagraph),
 
             new("view.toggleToolbar", "Toggle Toolbar", "Show or hide the formatting toolbar.", null, ToggleToolbar),
+            new("app.preferences", "Preferences…", "Theme, tab width, and toolbar settings.", "⌘,", ShowSettings),
             new("help.reference", "Markdown Reference", "Open the offline syntax & shortcut reference.", null, ShowHelp),
         };
     }
@@ -832,6 +845,98 @@ public class MainWindow : Window
         dialog.Closed += (_, _) => tcs.TrySetResult(false);
         await dialog.ShowDialog(this);
         return await tcs.Task;
+    }
+
+    /// <summary>The Preferences dialog (PRD §7.9): theme, tab width, and toolbar visibility.</summary>
+    private void ShowSettings()
+    {
+        var s = _settings.Settings;
+
+        var themeCombo = new ComboBox
+        {
+            ItemsSource = new[] { ThemeLabel(AppTheme.System), ThemeLabel(AppTheme.Light), ThemeLabel(AppTheme.Dark), ThemeLabel(AppTheme.HighContrast) },
+            SelectedIndex = (int)s.Theme,
+            HorizontalAlignment = HorizontalAlignment.Stretch,
+        };
+        var tabWidth = new NumericUpDown { Minimum = 1, Maximum = 8, Increment = 1, Value = s.TabWidth, FormatString = "0" };
+        var showToolbar = new CheckBox { Content = "Show the formatting toolbar", IsChecked = s.ShowToolbar };
+
+        var ok = new Button { Content = "OK", IsDefault = true };
+        var cancel = new Button { Content = "Cancel", IsCancel = true };
+
+        var grid = new Grid
+        {
+            RowDefinitions = new RowDefinitions("Auto,Auto,Auto"),
+            ColumnDefinitions = new ColumnDefinitions("Auto,*"),
+            Margin = new Avalonia.Thickness(0, 0, 0, 12),
+        };
+        AddSettingRow(grid, 0, "Theme", themeCombo);
+        AddSettingRow(grid, 1, "Tab width", tabWidth);
+        Grid.SetRow(showToolbar, 2);
+        Grid.SetColumnSpan(showToolbar, 2);
+        showToolbar.Margin = new Avalonia.Thickness(0, 8, 0, 0);
+        grid.Children.Add(showToolbar);
+
+        var dialog = new Window
+        {
+            Title = "Preferences",
+            Width = 380,
+            SizeToContent = SizeToContent.Height,
+            CanResize = false,
+            WindowStartupLocation = WindowStartupLocation.CenterOwner,
+            Content = new StackPanel
+            {
+                Margin = new Avalonia.Thickness(18),
+                Spacing = 8,
+                Children =
+                {
+                    grid,
+                    new StackPanel
+                    {
+                        Orientation = Orientation.Horizontal,
+                        HorizontalAlignment = HorizontalAlignment.Right,
+                        Spacing = 8,
+                        Children = { cancel, ok },
+                    },
+                },
+            },
+        };
+
+        ok.Click += (_, _) =>
+        {
+            var theme = (AppTheme)System.Math.Clamp(themeCombo.SelectedIndex, 0, 3);
+            s.Theme = theme;
+            ApplyTheme(theme);
+            s.TabWidth = (int)(tabWidth.Value ?? 4);
+            _editorView.Editor.IndentWidth = s.TabWidth;
+            s.ShowToolbar = showToolbar.IsChecked == true;
+            if (_toolbar is not null)
+            {
+                _toolbar.IsVisible = s.ShowToolbar;
+            }
+
+            if (_toggleToolbarItem is not null)
+            {
+                _toggleToolbarItem.IsChecked = s.ShowToolbar;
+            }
+
+            _settings.Save();
+            dialog.Close();
+        };
+        cancel.Click += (_, _) => dialog.Close();
+        _ = dialog.ShowDialog(this);
+    }
+
+    private static void AddSettingRow(Grid grid, int row, string label, Avalonia.Controls.Control control)
+    {
+        var text = new TextBlock { Text = label, VerticalAlignment = VerticalAlignment.Center, Margin = new Avalonia.Thickness(0, 6, 12, 0), MinWidth = 90 };
+        Grid.SetRow(text, row);
+        Grid.SetColumn(text, 0);
+        Grid.SetRow(control, row);
+        Grid.SetColumn(control, 1);
+        control.Margin = new Avalonia.Thickness(0, 6, 0, 0);
+        grid.Children.Add(text);
+        grid.Children.Add(control);
     }
 
     private void ShowHelp()

@@ -164,8 +164,11 @@ later phases (PRD §11). The public API and engine seam are stable so that work 
   actions.
 - **`FindBar`** — plain/regex Find & Replace over the engine's `DocumentSearch`, highlighting matches in
   the editor (`SetSearchMatches`) and selecting each hit.
-- **`Services/`** — `AppSettings` + `SettingsService` persist preferences (recent files, tab width,
-  toolbar visibility) as JSON in the OS app-config location; failures are non-fatal.
+- **Theme & Preferences** — `MarkdownTheme.{Dark,Light,HighContrast}` variants; `ApplyTheme` sets the
+  Fluent variant for the chrome and the editor palette, re-tinting the shared chrome brushes (System
+  follows the OS). A code-built Preferences dialog edits theme, tab width, and toolbar visibility.
+- **`Services/`** — `AppSettings` + `SettingsService` persist preferences (theme, recent files, tab
+  width, toolbar visibility) as JSON in the OS app-config location; failures are non-fatal.
 
 ## 7. The CLI (`Typage.Cli`)
 

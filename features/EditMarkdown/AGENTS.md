@@ -154,7 +154,8 @@ extend it, keep the layering and update the docs.
   and is **line-virtualized** (`ILogicalScrollable`: only the lines in the viewport are drawn). The
   shell adds Cellestra-style patterns: a single **command catalog** + **Command Palette** (⌘⇧P,
   fuzzy-filtered), **Find/Replace** (plain + regex via the engine's `DocumentSearch`, with in-editor
-  match highlighting), recent-files menu, a dark theme, and modal error dialogs.
+  match highlighting), recent-files menu, **light/dark/high-contrast themes** (View ▸ Theme,
+  OS-following), a **Preferences dialog** (theme, tab width, toolbar), and modal error dialogs.
 - **Early / approximate:** the `MarkdownEditor` surface renders the token stream with the theme, handles
   caret/selection/keyboard/mouse, and **dims** markers when the caret is away — but it keeps offsets
   **1:1** with the visual model rather than collapsing concealed glyphs. The PRD's full §7.4 behavior

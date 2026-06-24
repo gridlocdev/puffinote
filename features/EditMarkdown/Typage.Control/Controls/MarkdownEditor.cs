@@ -145,6 +145,9 @@ public class MarkdownEditor : Avalonia.Controls.Control, ILogicalScrollable
     /// <summary>Resolves embed targets to controls; defaults to <see cref="NullEmbedResolver"/> (embeds show as source).</summary>
     public IEmbedResolver EmbedResolver { get; set; } = NullEmbedResolver.Instance;
 
+    /// <summary>Number of spaces inserted by Tab (PRD §7.2 — default 4, configurable in Settings).</summary>
+    public int IndentWidth { get; set; } = 4;
+
     public void MarkSaved() => _buffer.MarkSaved();
 
     public void Undo() => _buffer.Undo();
@@ -594,7 +597,7 @@ public class MarkdownEditor : Avalonia.Controls.Control, ILogicalScrollable
             case Key.Back: _buffer.Backspace(); break;
             case Key.Delete: _buffer.Delete(); break;
             case Key.Enter: _buffer.Insert("\n"); break;
-            case Key.Tab: _buffer.Insert("    "); break;
+            case Key.Tab: _buffer.Insert(new string(' ', Math.Max(1, IndentWidth))); break;
             case Key.Left: MoveCaret(_buffer.PreviousCaret(caret), shift); break;
             case Key.Right: MoveCaret(_buffer.NextCaret(caret), shift); break;
             case Key.Up: MoveCaretByLine(-1, shift); break;
