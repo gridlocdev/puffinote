@@ -1436,16 +1436,19 @@ public class MarkdownEditor : Avalonia.Controls.Control, ILogicalScrollable
         return false;
     }
 
-    /// <summary>Whether <paramref name="line"/> is part of a fenced-code block (for the background band).</summary>
+    /// <summary>Whether <paramref name="line"/> is part of a code block — fenced or indented (for the background panel).</summary>
     private bool IsCodeLine(int line)
     {
-        if (_model.EnteringState(line).Kind == BlockKind.FencedCode)
+        var tokens = _model.LineTokens(line);
+        if (tokens.Count > 0)
         {
-            return true; // inside the fence (content or the closing fence row)
+            // A code row begins with the fence marker or carries code text; the dedent line that ends an
+            // indented block tokenizes normally and is correctly excluded here.
+            return tokens[0].Type is TokenType.CodeFence or TokenType.CodeText;
         }
 
-        var tokens = _model.LineTokens(line);
-        return tokens.Count > 0 && tokens[0].Type == TokenType.CodeFence; // the opening fence row
+        // A blank row is code only while inside a fenced or indented block (keeps the panel continuous).
+        return _model.EnteringState(line).Kind is BlockKind.FencedCode or BlockKind.IndentedCode;
     }
 
     /// <summary>The right edge of the text column in content space (for full-width adornments).</summary>

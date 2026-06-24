@@ -137,7 +137,10 @@ public class MarkdownTheme
             TokenType.StrongEmphasis => new RunStyle(BoldItalic(), BaseFontSize, Foreground, null, false),
             TokenType.Strikethrough => new RunStyle(Body(), BaseFontSize, Foreground, null, false, Strike()),
             TokenType.Highlight => new RunStyle(Body(), BaseFontSize, Foreground, HighlightBackground, false),
-            TokenType.InlineCode or TokenType.CodeText => new RunStyle(Mono(), BaseFontSize, CodeForeground, CodeBackground, false),
+            // Inline code gets a tight "pill" background; code-block text does not — the continuous
+            // block panel behind the whole fence/indent provides its background instead (no per-line box).
+            TokenType.InlineCode => new RunStyle(Mono(), BaseFontSize, CodeForeground, CodeBackground, false),
+            TokenType.CodeText => new RunStyle(Mono(), BaseFontSize, CodeForeground, null, false),
             TokenType.LinkText or TokenType.Autolink or TokenType.WikiLink => new RunStyle(Body(), BaseFontSize, LinkForeground, null, false),
             TokenType.LinkUrl or TokenType.ImageUrl or TokenType.Embed => Marker(),
             TokenType.BlockquoteMarker or TokenType.ListMarker or TokenType.TaskMarker
