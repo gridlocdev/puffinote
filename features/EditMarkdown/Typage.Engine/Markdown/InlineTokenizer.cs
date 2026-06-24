@@ -19,6 +19,7 @@ internal sealed class InlineTokenizer
     private readonly int _absStart;
     private readonly List<Token> _out;
     private int _pendingTextStart = -1;
+    private int _nextNode = 1; // per-line node id; each construct claims one (shared across link-text recursion)
 
     private InlineTokenizer(string text, int absStart, List<Token> output)
     {
@@ -122,9 +123,10 @@ internal sealed class InlineTokenizer
             return 0;
         }
 
+        var node = _nextNode++;
         FlushText(i);
-        Emit(i, 1, TokenType.Escape, TokenRole.Marker);     // the backslash
-        Emit(i + 1, 1, TokenType.Escape, TokenRole.Content); // the literal char
+        Emit(i, 1, TokenType.Escape, TokenRole.Marker, node: node);     // the backslash
+        Emit(i + 1, 1, TokenType.Escape, TokenRole.Content, node: node); // the literal char
         return 2;
     }
 
@@ -146,10 +148,11 @@ internal sealed class InlineTokenizer
                         return 0; // empty `` `` — treat as literal
                     }
 
+                    var node = _nextNode++;
                     FlushText(i);
-                    Emit(i, run, TokenType.Marker, TokenRole.Marker);
-                    Emit(contentStart, j - contentStart, TokenType.InlineCode, TokenRole.Content);
-                    Emit(j, run, TokenType.Marker, TokenRole.Marker);
+                    Emit(i, run, TokenType.Marker, TokenRole.Marker, node: node);
+                    Emit(contentStart, j - contentStart, TokenType.InlineCode, TokenRole.Content, node: node);
+                    Emit(j, run, TokenType.Marker, TokenRole.Marker, node: node);
                     return j + run - i;
                 }
 
@@ -172,11 +175,12 @@ internal sealed class InlineTokenizer
             var close = IndexOf("]]", i + 3, to);
             if (close > i + 3)
             {
+                var node = _nextNode++;
                 FlushText(i);
-                Emit(i, 3, TokenType.Marker, TokenRole.Marker);
+                Emit(i, 3, TokenType.Marker, TokenRole.Marker, node: node);
                 var target = _text.Substring(i + 3, close - (i + 3));
-                Emit(i + 3, close - (i + 3), TokenType.Embed, TokenRole.Content, target);
-                Emit(close, 2, TokenType.Marker, TokenRole.Marker);
+                Emit(i + 3, close - (i + 3), TokenType.Embed, TokenRole.Content, target, node);
+                Emit(close, 2, TokenType.Marker, TokenRole.Marker, node: node);
                 return close + 2 - i;
             }
 
@@ -192,17 +196,18 @@ internal sealed class InlineTokenizer
                 var urlClose = MatchParen(altClose + 1, to);
                 if (urlClose > 0)
                 {
+                    var node = _nextNode++;
                     var altStart = i + 2;
                     var (urlStart, urlLen) = Destination(altClose + 2, urlClose);
                     FlushText(i);
-                    Emit(i, 2, TokenType.Marker, TokenRole.Marker); // ![
+                    Emit(i, 2, TokenType.Marker, TokenRole.Marker, node: node); // ![
                     var alt = _text.Substring(altStart, altClose - altStart);
-                    Emit(altStart, altClose - altStart, TokenType.ImageAlt, TokenRole.Content, alt);
-                    Emit(altClose, 2, TokenType.Marker, TokenRole.Marker); // ](
+                    Emit(altStart, altClose - altStart, TokenType.ImageAlt, TokenRole.Content, alt, node);
+                    Emit(altClose, 2, TokenType.Marker, TokenRole.Marker, node: node); // ](
                     var url = _text.Substring(urlStart, urlLen);
-                    Emit(urlStart, urlLen, TokenType.ImageUrl, TokenRole.Marker, url);
+                    Emit(urlStart, urlLen, TokenType.ImageUrl, TokenRole.Marker, url, node);
                     // Closing marker covers any title (e.g. "alt") plus the ')'.
-                    Emit(urlStart + urlLen, urlClose + 1 - (urlStart + urlLen), TokenType.Marker, TokenRole.Marker);
+                    Emit(urlStart + urlLen, urlClose + 1 - (urlStart + urlLen), TokenType.Marker, TokenRole.Marker, node: node);
                     return urlClose + 1 - i;
                 }
             }
@@ -219,11 +224,12 @@ internal sealed class InlineTokenizer
             var close = IndexOf("]]", i + 2, to);
             if (close > i + 2)
             {
+                var node = _nextNode++;
                 FlushText(i);
-                Emit(i, 2, TokenType.Marker, TokenRole.Marker);
+                Emit(i, 2, TokenType.Marker, TokenRole.Marker, node: node);
                 var target = _text.Substring(i + 2, close - (i + 2));
-                Emit(i + 2, close - (i + 2), TokenType.WikiLink, TokenRole.Content, target);
-                Emit(close, 2, TokenType.Marker, TokenRole.Marker);
+                Emit(i + 2, close - (i + 2), TokenType.WikiLink, TokenRole.Content, target, node);
+                Emit(close, 2, TokenType.Marker, TokenRole.Marker, node: node);
                 return close + 2 - i;
             }
 
@@ -237,16 +243,17 @@ internal sealed class InlineTokenizer
             var urlClose = MatchParen(textClose + 1, to);
             if (urlClose > 0)
             {
+                var node = _nextNode++;
                 var textStart = i + 1;
                 var (urlStart, urlLen) = Destination(textClose + 2, urlClose);
                 FlushText(i);
-                Emit(i, 1, TokenType.Marker, TokenRole.Marker); // [
-                Tokenize(_text, _absStart, textStart, textClose, _out); // recurse into link text
-                Emit(textClose, 2, TokenType.Marker, TokenRole.Marker); // ](
+                Emit(i, 1, TokenType.Marker, TokenRole.Marker, node: node); // [
+                Run(textStart, textClose); // recurse into link text, sharing this tokenizer's node counter
+                Emit(textClose, 2, TokenType.Marker, TokenRole.Marker, node: node); // ](
                 var url = _text.Substring(urlStart, urlLen);
-                Emit(urlStart, urlLen, TokenType.LinkUrl, TokenRole.Marker, url);
+                Emit(urlStart, urlLen, TokenType.LinkUrl, TokenRole.Marker, url, node);
                 // Closing marker covers any title (e.g. "title") plus the ')'.
-                Emit(urlStart + urlLen, urlClose + 1 - (urlStart + urlLen), TokenType.Marker, TokenRole.Marker);
+                Emit(urlStart + urlLen, urlClose + 1 - (urlStart + urlLen), TokenType.Marker, TokenRole.Marker, node: node);
                 return urlClose + 1 - i;
             }
         }
@@ -268,10 +275,11 @@ internal sealed class InlineTokenizer
             return 0;
         }
 
+        var node = _nextNode++;
         FlushText(i);
-        Emit(i, 1, TokenType.Marker, TokenRole.Marker);
-        Emit(i + 1, close - (i + 1), TokenType.Autolink, TokenRole.Content, inner);
-        Emit(close, 1, TokenType.Marker, TokenRole.Marker);
+        Emit(i, 1, TokenType.Marker, TokenRole.Marker, node: node);
+        Emit(i + 1, close - (i + 1), TokenType.Autolink, TokenRole.Content, inner, node);
+        Emit(close, 1, TokenType.Marker, TokenRole.Marker, node: node);
         return close + 1 - i;
     }
 
@@ -356,10 +364,11 @@ internal sealed class InlineTokenizer
                 var closeRun = RunLength(j, to, c);
                 if (closeRun >= count)
                 {
+                    var node = _nextNode++;
                     FlushText(i);
-                    Emit(i, count, TokenType.Marker, TokenRole.Marker);
-                    Emit(contentStart, j - contentStart, type, TokenRole.Content);
-                    Emit(j, count, TokenType.Marker, TokenRole.Marker);
+                    Emit(i, count, TokenType.Marker, TokenRole.Marker, node: node);
+                    Emit(contentStart, j - contentStart, type, TokenRole.Content, node: node);
+                    Emit(j, count, TokenType.Marker, TokenRole.Marker, node: node);
                     return j + count - i;
                 }
 
@@ -394,14 +403,14 @@ internal sealed class InlineTokenizer
         _pendingTextStart = -1;
     }
 
-    private void Emit(int start, int length, TokenType type, TokenRole role, string? meta = null)
+    private void Emit(int start, int length, TokenType type, TokenRole role, string? meta = null, int node = 0)
     {
         if (length <= 0)
         {
             return;
         }
 
-        _out.Add(new Token(_absStart + start, length, type, role, meta));
+        _out.Add(new Token(_absStart + start, length, type, role, meta, node));
     }
 
     // ----- scanning helpers -----

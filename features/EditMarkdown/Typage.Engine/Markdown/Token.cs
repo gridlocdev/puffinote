@@ -20,7 +20,15 @@ public enum TokenRole
 /// construct-specific data (heading level as a string, code-fence language, a link/embed
 /// target) when relevant; it is null otherwise.
 /// </summary>
-public readonly record struct Token(int Start, int Length, TokenType Type, TokenRole Role, string? Meta = null)
+/// <remarks>
+/// <see cref="Node"/> groups the tokens of one inline construct (e.g. the <c>**</c>, the bold
+/// content, and the closing <c>**</c> all share an id) so the live-preview layer can reveal or
+/// atomically skip a construct as a unit (PRD §7.4). It is a per-line-local id (constructs never
+/// cross a line), starts at 1 within a line, and is <c>0</c> for tokens that aren't part of a
+/// groupable inline node (plain text, line-prefix/block markers, bare URLs). Grouping is identity
+/// only; the engine assigns no concealment policy — that stays in the control.
+/// </remarks>
+public readonly record struct Token(int Start, int Length, TokenType Type, TokenRole Role, string? Meta = null, int Node = 0)
 {
     /// <summary>Offset just past the token.</summary>
     public int End => Start + Length;
