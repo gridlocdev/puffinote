@@ -638,7 +638,10 @@ public class MarkdownEditor : Avalonia.Controls.Control, ILogicalScrollable
 
         if (!command && !string.IsNullOrEmpty(e.Text) && !char.IsControl(e.Text[0]))
         {
-            _buffer.Insert(e.Text);
+            if (e.Text.Length != 1 || !TryAutoPair(e.Text[0]))
+            {
+                _buffer.Insert(e.Text);
+            }
         }
 
         e.Handled = true;
@@ -656,10 +659,10 @@ public class MarkdownEditor : Avalonia.Controls.Control, ILogicalScrollable
 
         switch (e.Key)
         {
-            case Key.Back: _buffer.Backspace(); break;
+            case Key.Back: if (!TryBackspacePair()) { _buffer.Backspace(); } break;
             case Key.Delete: _buffer.Delete(); break;
-            case Key.Enter: _buffer.Insert("\n"); break;
-            case Key.Tab: _buffer.Insert(new string(' ', Math.Max(1, IndentWidth))); break;
+            case Key.Enter: HandleEnter(); break;
+            case Key.Tab: HandleTab(shift); break;
             case Key.Left: MoveCaret(_buffer.PreviousCaret(caret), shift); break;
             case Key.Right: MoveCaret(_buffer.NextCaret(caret), shift); break;
             case Key.Up: MoveCaretByLine(-1, shift); break;
@@ -689,6 +692,253 @@ public class MarkdownEditor : Avalonia.Controls.Control, ILogicalScrollable
 
         e.Handled = handled;
         base.OnKeyDown(e);
+    }
+
+    // ----- editing assists (PRD §7.2): list/quote continuation, indent, auto-pairing -----
+
+    /// <summary>The pairs auto-inserted/closed and used to wrap a selection (opener → closer).</summary>
+    private static readonly IReadOnlyDictionary<char, char> AutoPairs = new Dictionary<char, char>
+    {
+        ['('] = ')',
+        ['['] = ']',
+        ['`'] = '`',
+        ['*'] = '*',
+        ['_'] = '_',
+    };
+
+    /// <summary>Enter: continue or exit a list/blockquote, auto-indent, or insert a plain newline (PRD §7.2).</summary>
+    private void HandleEnter()
+    {
+        var sel = _buffer.Selection;
+        if (!sel.IsEmpty)
+        {
+            _buffer.Insert("\n"); // a selection is replaced by the newline; no continuation
+            return;
+        }
+
+        var doc = _buffer.Document;
+        var line = doc.GetPosition(sel.Caret).Line;
+        var lineStart = doc.GetLineStart(line);
+        var lineText = doc.GetLineText(line);
+        var result = LinePrefix.ComputeEnter(lineText, sel.Caret - lineStart);
+
+        switch (result.Kind)
+        {
+            case EnterKind.Exit:
+                _buffer.ReplaceRange(lineStart + result.ExitStart, result.ExitLength, string.Empty);
+                break;
+            case EnterKind.Continue:
+                _buffer.ReplaceRange(sel.Caret, 0, result.Text);
+                RenumberOrderedFrom(line + 1); // resequence following items if we split an ordered list
+                break;
+            default:
+                _buffer.Insert("\n");
+                break;
+        }
+    }
+
+    /// <summary>Tab/Shift+Tab: indent or outdent list items / selected lines; otherwise insert spaces.</summary>
+    private void HandleTab(bool shift)
+    {
+        var sel = _buffer.Selection;
+        var doc = _buffer.Document;
+        var startLine = doc.GetPosition(sel.Start).Line;
+        var endLine = doc.GetPosition(sel.End).Line;
+        var caretLine = doc.GetPosition(sel.Caret).Line;
+        var multiLine = endLine > startLine;
+        var onList = LinePrefix.Parse(doc.GetLineText(caretLine)).HasList;
+
+        // Plain text, single caret, not on a list item → a Tab just inserts spaces (the old behavior).
+        if (!shift && !multiLine && sel.IsEmpty && !onList)
+        {
+            _buffer.Insert(new string(' ', Math.Max(1, IndentWidth)));
+            return;
+        }
+
+        IndentLines(startLine, endLine, outdent: shift);
+    }
+
+    /// <summary>Add or remove one indent level on lines <paramref name="startLine"/>..<paramref name="endLine"/> as one edit.</summary>
+    private void IndentLines(int startLine, int endLine, bool outdent)
+    {
+        var doc = _buffer.Document;
+        var sel = _buffer.Selection;
+        var indent = new string(' ', Math.Max(1, IndentWidth));
+        var regionStart = doc.GetLineStart(startLine);
+        var regionEnd = doc.GetLineEnd(endLine);
+
+        var newLines = new List<string>();
+        var startDelta = 0;
+        var totalDelta = 0;
+        for (var l = startLine; l <= endLine; l++)
+        {
+            var text = doc.GetLineText(l);
+            int delta;
+            if (outdent)
+            {
+                var remove = 0;
+                while (remove < indent.Length && remove < text.Length && text[remove] == ' ')
+                {
+                    remove++;
+                }
+
+                newLines.Add(text[remove..]);
+                delta = -remove;
+            }
+            else if (text.Length == 0 && startLine != endLine)
+            {
+                newLines.Add(text); // don't indent blank lines inside a multi-line block
+                delta = 0;
+            }
+            else
+            {
+                newLines.Add(indent + text);
+                delta = indent.Length;
+            }
+
+            if (l == startLine)
+            {
+                startDelta = delta;
+            }
+
+            totalDelta += delta;
+        }
+
+        _buffer.ReplaceRange(regionStart, regionEnd - regionStart, string.Join("\n", newLines));
+        var newStart = Math.Max(regionStart, sel.Start + startDelta);
+        var newEnd = Math.Max(newStart, sel.End + totalDelta);
+        _buffer.Selection = new Selection(sel.Anchor <= sel.Caret ? newStart : newEnd, sel.Anchor <= sel.Caret ? newEnd : newStart);
+    }
+
+    /// <summary>Resequence the ordered-list run starting at <paramref name="fromLine"/> as one edit (PRD §7.2).</summary>
+    private void RenumberOrderedFrom(int fromLine)
+    {
+        var doc = _buffer.Document;
+        if (fromLine < 0 || fromLine >= doc.LineCount)
+        {
+            return;
+        }
+
+        var first = LinePrefix.Parse(doc.GetLineText(fromLine));
+        if (first.List != ListKind.Ordered)
+        {
+            return;
+        }
+
+        // Read only as far as the same-level ordered run extends (not the whole document).
+        var lines = new List<string>();
+        for (var l = fromLine; l < doc.LineCount; l++)
+        {
+            var text = doc.GetLineText(l);
+            if (l > fromLine)
+            {
+                var p = LinePrefix.Parse(text);
+                if (p.List != ListKind.Ordered || p.Indent != first.Indent || p.Quote != first.Quote)
+                {
+                    break;
+                }
+            }
+
+            lines.Add(text);
+        }
+
+        if (OrderedListRenumber.Compute(lines, 0) is not { } result)
+        {
+            return; // already sequential — common when appending at the end of a list
+        }
+
+        // The first line (the just-inserted item) never changes, so the caret offset stays valid.
+        var caret = _buffer.Selection;
+        var lastLine = fromLine + result.EndLineExclusive - 1;
+        var regionStart = doc.GetLineStart(fromLine);
+        var regionEnd = doc.GetLineEnd(lastLine);
+        _buffer.ReplaceRange(regionStart, regionEnd - regionStart, string.Join("\n", result.Lines));
+        _buffer.Selection = caret;
+    }
+
+    /// <summary>Wrap a selection in a pair, type through a closer, or auto-close a bracket. Returns true if it consumed the key.</summary>
+    private bool TryAutoPair(char c)
+    {
+        var sel = _buffer.Selection;
+        var doc = _buffer.Document;
+
+        // Wrap a non-empty selection in the typed pair, keeping the original text selected inside it.
+        if (!sel.IsEmpty && AutoPairs.TryGetValue(c, out var closeWrap))
+        {
+            var inner = doc.GetText(sel.Start, sel.Length);
+            _buffer.ReplaceRange(sel.Start, sel.Length, c + inner + closeWrap);
+            _buffer.Selection = new Selection(sel.Start + 1, sel.Start + 1 + inner.Length);
+            return true;
+        }
+
+        if (!sel.IsEmpty)
+        {
+            return false;
+        }
+
+        var caret = sel.Caret;
+        var next = caret < doc.Length ? doc[caret] : '\0';
+
+        // Type-through: typing a ')'/']' already sitting under the caret just steps over it.
+        if ((c == ')' || c == ']') && next == c)
+        {
+            _buffer.Selection = Selection.At(caret + 1);
+            return true;
+        }
+
+        // Auto-close a bracket/backtick when the caret is at a boundary (end of line, whitespace, or a
+        // closer). Emphasis (* and _) is deliberately not auto-closed — too noisy mid-word.
+        if ((c == '(' || c == '[' || c == '`')
+            && (next is '\0' or '\r' or '\n' or ')' or ']' or '}' || char.IsWhiteSpace(next)))
+        {
+            _buffer.ReplaceRange(caret, 0, $"{c}{AutoPairs[c]}");
+            _buffer.Selection = Selection.At(caret + 1);
+            return true;
+        }
+
+        return false;
+    }
+
+    /// <summary>Backspace between an empty auto-pair (e.g. <c>(|)</c>) removes both halves. Returns true if it did.</summary>
+    private bool TryBackspacePair()
+    {
+        var sel = _buffer.Selection;
+        var doc = _buffer.Document;
+        if (!sel.IsEmpty || sel.Caret == 0 || sel.Caret >= doc.Length)
+        {
+            return false;
+        }
+
+        var prev = doc[sel.Caret - 1];
+        var next = doc[sel.Caret];
+        if (prev is '(' or '[' or '`' && AutoPairs.TryGetValue(prev, out var close) && next == close)
+        {
+            _buffer.ReplaceRange(sel.Caret - 1, 2, string.Empty);
+            return true;
+        }
+
+        return false;
+    }
+
+    // Test hooks: drive the same editing-assist paths the key handlers use, without a focused window.
+    internal void EnterForTest() => HandleEnter();
+
+    internal void TabForTest(bool shift) => HandleTab(shift);
+
+    internal void TypeForTest(char c)
+    {
+        if (c < ' ' || !TryAutoPair(c))
+        {
+            _buffer.Insert(c.ToString());
+        }
+    }
+
+    internal void BackspaceForTest()
+    {
+        if (!TryBackspacePair())
+        {
+            _buffer.Backspace();
+        }
     }
 
     private KeyModifiers _modifiers;
