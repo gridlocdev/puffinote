@@ -1134,9 +1134,11 @@ public class MarkdownEditor : Avalonia.Controls.Control, ILogicalScrollable
     }
 
     /// <summary>
-    /// Move the selected line(s) up (<paramref name="dir"/> = -1) or down (+1) by one row, swapping with
-    /// the adjacent line, as a single undoable edit (Alt+Shift+Up/Down). The selection travels with the
-    /// moved block, and a no-op at the document edge is silently ignored.
+    /// Move the selected line(s) up (<paramref name="dir"/> = -1) or down (+1), swapping with the adjacent
+    /// <b>sibling subtree</b>, as a single undoable edit (Alt+Shift+Up/Down). The moved unit includes any
+    /// deeper-indented descendants of the last selected line — so a list item or task carries its sub-items
+    /// with it — and it swaps with the neighbouring item at the same indent (skipping that item's own
+    /// descendants). The selection travels with the moved block; a no-op at a boundary is silently ignored.
     /// </summary>
     private void MoveLines(int dir)
     {
@@ -1151,45 +1153,112 @@ public class MarkdownEditor : Avalonia.Controls.Control, ILogicalScrollable
             endLine--;
         }
 
-        var target = dir < 0 ? startLine - 1 : endLine + 1;
-        if (target < 0 || target >= doc.LineCount)
+        // Extend the moved unit over the descendants (deeper-indented, non-blank lines) of the last line.
+        var baseIndent = LineIndent(startLine);
+        while (endLine + 1 < doc.LineCount && !IsBlankLine(endLine + 1) && LineIndent(endLine + 1) > baseIndent)
         {
-            return; // already at the top / bottom
+            endLine++;
         }
 
-        var regionStartLine = Math.Min(startLine, target);
-        var regionEndLine = Math.Max(endLine, target);
-        var lines = new List<string>();
-        for (var l = regionStartLine; l <= regionEndLine; l++)
-        {
-            lines.Add(doc.GetLineText(l));
-        }
-
-        // Rotate the adjacent line to the far side of the block.
+        int regionStartLine, regionEndLine, delta;
+        var newOrder = new List<string>();
         if (dir < 0)
         {
-            var moved = lines[0];        // the line above the block
-            lines.RemoveAt(0);
-            lines.Add(moved);            // ...now goes below it
+            if (startLine == 0)
+            {
+                return; // already at the top
+            }
+
+            // Walk back over the previous sibling's descendants to its start.
+            var p = startLine - 1;
+            while (p > 0 && !IsBlankLine(p) && LineIndent(p) > baseIndent)
+            {
+                p--;
+            }
+
+            if (!IsBlankLine(p) && LineIndent(p) < baseIndent)
+            {
+                return; // reached a shallower parent — no previous sibling at this level
+            }
+
+            regionStartLine = p;
+            regionEndLine = endLine;
+            newOrder.AddRange(LinesOf(doc, startLine, endLine));    // the moved subtree first...
+            newOrder.AddRange(LinesOf(doc, p, startLine - 1));      // ...then the previous sibling subtree
+            delta = -BlockChars(doc, p, startLine - 1);
         }
         else
         {
-            var moved = lines[^1];       // the line below the block
-            lines.RemoveAt(lines.Count - 1);
-            lines.Insert(0, moved);      // ...now goes above it
+            var s = endLine + 1;
+            if (s >= doc.LineCount || (!IsBlankLine(s) && LineIndent(s) < baseIndent))
+            {
+                return; // at the bottom, or the next line is a shallower parent — no next sibling
+            }
+
+            // Extend over the next sibling's descendants.
+            var swapEnd = s;
+            while (swapEnd + 1 < doc.LineCount && !IsBlankLine(swapEnd + 1) && LineIndent(swapEnd + 1) > baseIndent)
+            {
+                swapEnd++;
+            }
+
+            regionStartLine = startLine;
+            regionEndLine = swapEnd;
+            newOrder.AddRange(LinesOf(doc, s, swapEnd));            // the next sibling subtree first...
+            newOrder.AddRange(LinesOf(doc, startLine, endLine));   // ...then the moved subtree
+            delta = BlockChars(doc, s, swapEnd);
         }
 
         var regionStart = doc.GetLineStart(regionStartLine);
         var regionEnd = doc.GetLineEnd(regionEndLine);
-        var delta = (doc.GetLineEnd(target) - doc.GetLineStart(target)) + 1; // adjacent line length + its '\n'
-        _buffer.ReplaceRange(regionStart, regionEnd - regionStart, string.Join("\n", lines));
+        _buffer.ReplaceRange(regionStart, regionEnd - regionStart, string.Join("\n", newOrder));
 
-        // The block shifted by one adjacent line in the move direction; carry the selection with it.
-        _buffer.Selection = new Selection(sel.Anchor + dir * delta, sel.Caret + dir * delta);
+        // The moved subtree shifted by the swapped sibling's size; carry the selection with it.
+        _buffer.Selection = new Selection(sel.Anchor + delta, sel.Caret + delta);
         _goalX = double.NaN;
     }
 
-    /// <summary>Move the selected line(s) up/down by one row; for tests.</summary>
+    /// <summary>The number of leading spaces on <paramref name="line"/> (its nesting indent).</summary>
+    private int LineIndent(int line)
+    {
+        var t = _buffer.Document.GetLineText(line);
+        var n = 0;
+        while (n < t.Length && t[n] == ' ')
+        {
+            n++;
+        }
+
+        return n;
+    }
+
+    /// <summary>Whether <paramref name="line"/> is blank (only whitespace).</summary>
+    private bool IsBlankLine(int line) => _buffer.Document.GetLineText(line).Trim().Length == 0;
+
+    /// <summary>The text of lines <c>[from, to]</c> (inclusive).</summary>
+    private static List<string> LinesOf(TextDocument doc, int from, int to)
+    {
+        var list = new List<string>(Math.Max(0, to - from + 1));
+        for (var l = from; l <= to; l++)
+        {
+            list.Add(doc.GetLineText(l));
+        }
+
+        return list;
+    }
+
+    /// <summary>Total characters of lines <c>[from, to]</c> including each line's trailing newline.</summary>
+    private static int BlockChars(TextDocument doc, int from, int to)
+    {
+        var sum = 0;
+        for (var l = from; l <= to; l++)
+        {
+            sum += (doc.GetLineEnd(l) - doc.GetLineStart(l)) + 1;
+        }
+
+        return sum;
+    }
+
+    /// <summary>Move the selected line(s) / subtree up/down; for tests.</summary>
     internal void MoveLinesForTest(int dir) => MoveLines(dir);
 
     /// <summary>Resequence the ordered-list run starting at <paramref name="fromLine"/> as one edit (PRD §7.2).</summary>
