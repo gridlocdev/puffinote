@@ -1,11 +1,22 @@
 namespace Typage.Desktop.Services;
 
+/// <summary>The appearance mode (PRD §7.2). <see cref="System"/> follows the OS light/dark setting.</summary>
+public enum AppTheme
+{
+    System,
+    Light,
+    Dark,
+    HighContrast,
+}
+
 /// <summary>
 /// User preferences persisted as JSON in the OS app-config location (PRD §7.9). A small subset
-/// for v1: recent files, tab width, and the formatting-toolbar visibility.
+/// for v1: theme, recent files, tab width, and the formatting-toolbar visibility.
 /// </summary>
 public sealed class AppSettings
 {
+    public AppTheme Theme { get; set; } = AppTheme.Dark;
+
     public List<string> RecentFiles { get; set; } = new();
 
     public int TabWidth { get; set; } = 4;

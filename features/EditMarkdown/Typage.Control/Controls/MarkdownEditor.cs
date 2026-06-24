@@ -66,6 +66,7 @@ public class MarkdownEditor : Avalonia.Controls.Control, ILogicalScrollable
         GotFocus += (_, _) => InvalidateVisual();
         LostFocus += (_, _) => InvalidateVisual();
         ContextMenu = BuildContextMenu();
+        UpdateDerivedBrushes();
     }
 
     /// <summary>Raised after the document text changes.</summary>
@@ -124,10 +125,20 @@ public class MarkdownEditor : Avalonia.Controls.Control, ILogicalScrollable
         set
         {
             _theme = value;
+            UpdateDerivedBrushes();
             _extentWidth = 0; // fonts changed — let the horizontal extent regrow as lines redraw
             RaiseScrollInvalidated(EventArgs.Empty);
             InvalidateMeasure();
             InvalidateVisual();
+        }
+    }
+
+    /// <summary>The faded marker brush is derived from the theme's marker color so it tracks light/dark/HC.</summary>
+    private void UpdateDerivedBrushes()
+    {
+        if (_theme.MarkerForeground is ISolidColorBrush b)
+        {
+            _dimMarker = new SolidColorBrush(b.Color, 0.32);
         }
     }
 

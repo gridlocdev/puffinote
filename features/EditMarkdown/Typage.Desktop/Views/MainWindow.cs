@@ -1,9 +1,12 @@
 using System.Text;
+using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Layout;
 using Avalonia.Media;
 using Avalonia.Platform.Storage;
+using Avalonia.Styling;
+using Typage.Control.Rendering;
 using Typage.Control.Views;
 using Typage.Desktop.Commands;
 using Typage.Desktop.Services;
@@ -32,10 +35,13 @@ public class MainWindow : Window
     private FindBar? _findBar;
     private Border? _toolbar;
     private MenuItem? _toggleToolbarItem;
+    private readonly List<(AppTheme Theme, MenuItem Item)> _themeItems = new();
 
-    private static readonly IBrush ChromeBackground = new SolidColorBrush(Color.FromRgb(0x25, 0x25, 0x26));
-    private static readonly IBrush ChromeBorder = new SolidColorBrush(Color.FromRgb(0x33, 0x33, 0x36));
-    private static readonly IBrush MutedText = new SolidColorBrush(Color.FromRgb(0x9A, 0x9E, 0xA6));
+    // Chrome brushes are mutated live on a theme change; the borders/text share these instances.
+    private readonly SolidColorBrush _chromeBg = new(Color.FromRgb(0x25, 0x25, 0x26));
+    private readonly SolidColorBrush _chromeBorder = new(Color.FromRgb(0x33, 0x33, 0x36));
+    private readonly SolidColorBrush _mutedText = new(Color.FromRgb(0x9A, 0x9E, 0xA6));
+    private readonly SolidColorBrush _chromeInset = new(Color.FromRgb(0x1E, 0x1E, 0x1E));
 
     private static readonly FilePickerFileType MarkdownType = new("Markdown")
     {
@@ -54,7 +60,7 @@ public class MainWindow : Window
         _toolbar = BuildToolbar();
         _toolbar.IsVisible = _settings.Settings.ShowToolbar; // restore the persisted toolbar visibility
         root.Children.Add(_toolbar);
-        _findBar = new FindBar(_editorView);
+        _findBar = new FindBar(_editorView, _chromeBg, _chromeBorder);
         DockPanel.SetDock(_findBar, Dock.Top);
         root.Children.Add(_findBar);
         root.Children.Add(BuildStatusBar());
@@ -90,6 +96,18 @@ public class MainWindow : Window
         _editorView.SelectionChanged += (_, _) => UpdateCaretStatus();
         Closing += OnClosing;
 
+        if (Application.Current is { } app)
+        {
+            app.ActualThemeVariantChanged += (_, _) =>
+            {
+                if (_settings.Settings.Theme == AppTheme.System)
+                {
+                    ApplyTheme(AppTheme.System); // follow live OS light/dark changes
+                }
+            };
+        }
+
+        ApplyTheme(_settings.Settings.Theme);
         RefreshRecentMenu();
         UpdateChrome();
     }
@@ -149,6 +167,25 @@ public class MainWindow : Window
         };
         _toggleToolbarItem.Click += (_, _) => ToggleToolbar();
         view.Items.Add(_toggleToolbarItem);
+        view.Items.Add(new Separator());
+
+        var themeMenu = new MenuItem { Header = "T_heme" };
+        foreach (var t in System.Enum.GetValues<AppTheme>())
+        {
+            var choice = t;
+            var item = new MenuItem
+            {
+                Header = ThemeLabel(t),
+                ToggleType = MenuItemToggleType.Radio,
+                GroupName = "theme",
+                IsChecked = _settings.Settings.Theme == t,
+            };
+            item.Click += (_, _) => SetTheme(choice);
+            _themeItems.Add((t, item));
+            themeMenu.Items.Add(item);
+        }
+
+        view.Items.Add(themeMenu);
 
         var help = new MenuItem { Header = "_Help" };
         help.Items.Add(Item("Markdown _Reference", ShowHelp));
@@ -205,9 +242,9 @@ public class MainWindow : Window
             HorizontalContentAlignment = HorizontalAlignment.Left,
             Width = 200,
             FontSize = 12,
-            Foreground = MutedText,
-            Background = new SolidColorBrush(Color.FromRgb(0x1E, 0x1E, 0x1E)),
-            BorderBrush = ChromeBorder,
+            Foreground = _mutedText,
+            Background = _chromeInset,
+            BorderBrush = _chromeBorder,
             BorderThickness = new Avalonia.Thickness(1),
             CornerRadius = new Avalonia.CornerRadius(6),
             Command = new RelayCommand(OpenPalette),
@@ -223,9 +260,9 @@ public class MainWindow : Window
         var border = new Border
         {
             Child = grid,
-            Background = ChromeBackground,
+            Background = _chromeBg,
             BorderThickness = new Avalonia.Thickness(0, 0, 0, 1),
-            BorderBrush = ChromeBorder,
+            BorderBrush = _chromeBorder,
         };
         DockPanel.SetDock(border, Dock.Top);
         return border;
@@ -252,7 +289,7 @@ public class MainWindow : Window
     {
         foreach (var block in new[] { _statusState, _statusPosition, _statusCounts })
         {
-            block.Foreground = MutedText;
+            block.Foreground = _mutedText;
             block.FontSize = 12;
             block.VerticalAlignment = VerticalAlignment.Center;
         }
@@ -275,8 +312,8 @@ public class MainWindow : Window
         {
             Child = grid,
             BorderThickness = new Avalonia.Thickness(0, 1, 0, 0),
-            BorderBrush = ChromeBorder,
-            Background = ChromeBackground,
+            BorderBrush = _chromeBorder,
+            Background = _chromeBg,
         };
         DockPanel.SetDock(border, Dock.Bottom);
         return border;
@@ -285,6 +322,84 @@ public class MainWindow : Window
     // ----- command catalog & palette -----
 
     private void OpenPalette() => _palette.Open(BuildCommands());
+
+    private static string ThemeLabel(AppTheme theme) => theme switch
+    {
+        AppTheme.System => "Follow System",
+        AppTheme.Light => "Light",
+        AppTheme.Dark => "Dark",
+        AppTheme.HighContrast => "High Contrast",
+        _ => theme.ToString(),
+    };
+
+    private void SetTheme(AppTheme theme)
+    {
+        _settings.Settings.Theme = theme;
+        ApplyTheme(theme);
+        _settings.Save();
+    }
+
+    /// <summary>
+    /// Apply an appearance mode (PRD §7.2): set the Fluent variant for the chrome, the matching
+    /// <see cref="MarkdownTheme"/> for the editor, and re-tint the shared chrome brushes. System
+    /// follows the OS; high contrast pairs a dark shell with the high-contrast editor palette.
+    /// </summary>
+    private void ApplyTheme(AppTheme theme)
+    {
+        if (Application.Current is not { } app)
+        {
+            return;
+        }
+
+        app.RequestedThemeVariant = theme switch
+        {
+            AppTheme.Light => ThemeVariant.Light,
+            AppTheme.Dark or AppTheme.HighContrast => ThemeVariant.Dark,
+            _ => ThemeVariant.Default, // follow OS
+        };
+
+        var editorTheme = theme switch
+        {
+            AppTheme.Light => MarkdownTheme.Light,
+            AppTheme.HighContrast => MarkdownTheme.HighContrast,
+            AppTheme.Dark => MarkdownTheme.Dark,
+            _ => app.ActualThemeVariant == ThemeVariant.Light ? MarkdownTheme.Light : MarkdownTheme.Dark,
+        };
+        _editorView.EditorTheme = editorTheme;
+
+        var isLight = ReferenceEquals(editorTheme, MarkdownTheme.Light);
+        ApplyChromeColors(isLight, theme == AppTheme.HighContrast);
+
+        foreach (var (t, item) in _themeItems)
+        {
+            item.IsChecked = t == theme; // keep the View ▸ Theme radios in sync
+        }
+    }
+
+    private void ApplyChromeColors(bool isLight, bool isHighContrast)
+    {
+        if (isHighContrast)
+        {
+            _chromeBg.Color = Color.FromRgb(0x0A, 0x0A, 0x0A);
+            _chromeBorder.Color = Color.FromRgb(0x66, 0x66, 0x66);
+            _mutedText.Color = Color.FromRgb(0xDD, 0xDD, 0xDD);
+            _chromeInset.Color = Colors.Black;
+        }
+        else if (isLight)
+        {
+            _chromeBg.Color = Color.FromRgb(0xF3, 0xF3, 0xF3);
+            _chromeBorder.Color = Color.FromRgb(0xD7, 0xD7, 0xD7);
+            _mutedText.Color = Color.FromRgb(0x6A, 0x6E, 0x76);
+            _chromeInset.Color = Colors.White;
+        }
+        else
+        {
+            _chromeBg.Color = Color.FromRgb(0x25, 0x25, 0x26);
+            _chromeBorder.Color = Color.FromRgb(0x33, 0x33, 0x36);
+            _mutedText.Color = Color.FromRgb(0x9A, 0x9E, 0xA6);
+            _chromeInset.Color = Color.FromRgb(0x1E, 0x1E, 0x1E);
+        }
+    }
 
     private void ToggleToolbar()
     {

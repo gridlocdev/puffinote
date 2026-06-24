@@ -26,12 +26,12 @@ public sealed class FindBar : Border
     private IReadOnlyList<SearchMatch> _matches = System.Array.Empty<SearchMatch>();
     private int _current = -1;
 
-    public FindBar(MarkdownEditorView view)
+    public FindBar(MarkdownEditorView view, IBrush background, IBrush border)
     {
         _view = view;
         IsVisible = false;
-        Background = new SolidColorBrush(Color.FromRgb(0x25, 0x25, 0x26));
-        BorderBrush = new SolidColorBrush(Color.FromRgb(0x33, 0x33, 0x36));
+        Background = background; // shared chrome brush — adapts on theme change
+        BorderBrush = border;
         BorderThickness = new Avalonia.Thickness(0, 0, 0, 1);
         Padding = new Avalonia.Thickness(8, 6);
 

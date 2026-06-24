@@ -17,7 +17,42 @@ public readonly record struct RunStyle(
 /// </summary>
 public class MarkdownTheme
 {
-    public static readonly MarkdownTheme Default = new();
+    /// <summary>The default dark palette (the bare init values below).</summary>
+    public static MarkdownTheme Dark { get; } = new();
+
+    public static MarkdownTheme Default => Dark;
+
+    /// <summary>A light palette for light-mode / high-brightness environments (PRD §7.2).</summary>
+    public static MarkdownTheme Light { get; } = new()
+    {
+        Foreground = new SolidColorBrush(Color.FromRgb(0x1F, 0x23, 0x28)),
+        MarkerForeground = new SolidColorBrush(Color.FromRgb(0x8A, 0x8E, 0x96)),
+        LinkForeground = new SolidColorBrush(Color.FromRgb(0x09, 0x69, 0xDA)),
+        CodeForeground = new SolidColorBrush(Color.FromRgb(0xCF, 0x22, 0x2E)),
+        CodeBackground = new SolidColorBrush(Color.FromArgb(0x28, 0xAF, 0xB8, 0xC1)),
+        HighlightBackground = new SolidColorBrush(Color.FromRgb(0xFF, 0xF1, 0x9A)),
+        Caret = new SolidColorBrush(Color.FromRgb(0x09, 0x69, 0xDA)),
+        SelectionBackground = new SolidColorBrush(Color.FromArgb(0x40, 0x09, 0x69, 0xDA)),
+        SearchMatch = new SolidColorBrush(Color.FromArgb(0x66, 0xF5, 0xC2, 0x11)),
+        SearchMatchCurrent = new SolidColorBrush(Color.FromArgb(0xAA, 0xF0, 0xA8, 0x00)),
+        Background = new SolidColorBrush(Color.FromRgb(0xFD, 0xFD, 0xFD)),
+    };
+
+    /// <summary>A high-contrast palette: pure black/white with vivid accents (PRD §7.2, §9.6).</summary>
+    public static MarkdownTheme HighContrast { get; } = new()
+    {
+        Foreground = new SolidColorBrush(Colors.White),
+        MarkerForeground = new SolidColorBrush(Color.FromRgb(0xFF, 0xD4, 0x00)),
+        LinkForeground = new SolidColorBrush(Color.FromRgb(0x58, 0xC0, 0xFF)),
+        CodeForeground = new SolidColorBrush(Color.FromRgb(0xFF, 0x9D, 0x5C)),
+        CodeBackground = new SolidColorBrush(Color.FromArgb(0x55, 0xFF, 0xFF, 0xFF)),
+        HighlightBackground = new SolidColorBrush(Color.FromArgb(0x88, 0xFF, 0xD4, 0x00)),
+        Caret = new SolidColorBrush(Colors.White),
+        SelectionBackground = new SolidColorBrush(Color.FromArgb(0x88, 0x1E, 0x90, 0xFF)),
+        SearchMatch = new SolidColorBrush(Color.FromArgb(0x77, 0xFF, 0xD4, 0x00)),
+        SearchMatchCurrent = new SolidColorBrush(Color.FromArgb(0xCC, 0xFF, 0xD4, 0x00)),
+        Background = new SolidColorBrush(Colors.Black),
+    };
 
     public double BaseFontSize { get; init; } = 15;
 

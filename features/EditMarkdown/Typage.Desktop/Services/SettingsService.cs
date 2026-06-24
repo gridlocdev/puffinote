@@ -9,7 +9,11 @@ namespace Typage.Desktop.Services;
 /// </summary>
 public sealed class SettingsService
 {
-    private static readonly JsonSerializerOptions Options = new() { WriteIndented = true };
+    private static readonly JsonSerializerOptions Options = new()
+    {
+        WriteIndented = true,
+        Converters = { new System.Text.Json.Serialization.JsonStringEnumConverter() }, // readable enum names
+    };
     private readonly string _path;
 
     public SettingsService()
