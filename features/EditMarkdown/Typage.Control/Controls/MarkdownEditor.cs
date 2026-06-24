@@ -522,12 +522,15 @@ public class MarkdownEditor : Avalonia.Controls.Control, ILogicalScrollable
     private void DrawSearchMatches(DrawingContext context, int line, int lineStart, int contentLen, string lineText, int headingLevel)
     {
         var lineEnd = lineStart + contentLen;
-        for (var i = 0; i < _searchMatches.Count; i++)
+        // Matches are sorted, non-overlapping → both Start and End ascend. Binary-search the first
+        // match that could touch this line, then walk forward, so a line only touches its own matches
+        // (not all of them) — O(log M + matches-on-line) instead of O(M) per line.
+        for (var i = FirstMatchReaching(lineStart); i < _searchMatches.Count; i++)
         {
             var m = _searchMatches[i];
-            if (m.Start >= lineEnd || m.End <= lineStart)
+            if (m.Start >= lineEnd)
             {
-                continue; // match not on this line
+                break; // all later matches start past this line
             }
 
             var s = Math.Clamp(m.Start - lineStart, 0, contentLen);
@@ -542,6 +545,26 @@ public class MarkdownEditor : Avalonia.Controls.Control, ILogicalScrollable
             var brush = i == _currentMatch ? _theme.SearchMatchCurrent : _theme.SearchMatch;
             context.FillRectangle(brush, new Rect(x1, line * _theme.LineHeight + 2, x2 - x1, _theme.LineHeight - 4), 2);
         }
+    }
+
+    /// <summary>Index of the first match whose end is past <paramref name="lineStart"/> (lower bound).</summary>
+    internal int FirstMatchReaching(int lineStart)
+    {
+        int lo = 0, hi = _searchMatches.Count;
+        while (lo < hi)
+        {
+            var mid = (lo + hi) >> 1;
+            if (_searchMatches[mid].End <= lineStart)
+            {
+                lo = mid + 1;
+            }
+            else
+            {
+                hi = mid;
+            }
+        }
+
+        return lo;
     }
 
     private void DrawSelection(DrawingContext context, int line, int lineStart, int contentLen, Selection sel, string lineText)

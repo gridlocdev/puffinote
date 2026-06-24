@@ -119,6 +119,25 @@ public class EditorSmokeTests
     }
 
     [AvaloniaFact]
+    public void SearchMatchHighlight_BinarySearchFindsFirstReachingMatch()
+    {
+        var editor = new MarkdownEditor { Text = new string('x', 100) };
+        editor.SetSearchMatches(
+            new[]
+            {
+                new Engine.Document.SearchMatch(5, 2),  // ends at 7
+                new Engine.Document.SearchMatch(20, 2), // ends at 22
+                new Engine.Document.SearchMatch(50, 2), // ends at 52
+            },
+            current: 0);
+
+        Assert.Equal(0, editor.FirstMatchReaching(0));
+        Assert.Equal(1, editor.FirstMatchReaching(7));  // first match no longer reaches past 7
+        Assert.Equal(2, editor.FirstMatchReaching(22));
+        Assert.Equal(3, editor.FirstMatchReaching(52)); // past the last match
+    }
+
+    [AvaloniaFact]
     public void ThemeVariants_DifferByBackground()
     {
         var light = (Avalonia.Media.ISolidColorBrush)Control.Rendering.MarkdownTheme.Light.Background;
