@@ -727,6 +727,7 @@ public class MarkdownEditor : Avalonia.Controls.Control, ILogicalScrollable
         _modifiers = e.KeyModifiers;
         var ctrl = e.KeyModifiers.HasFlag(KeyModifiers.Control) || e.KeyModifiers.HasFlag(KeyModifiers.Meta);
         var shift = e.KeyModifiers.HasFlag(KeyModifiers.Shift);
+        var alt = e.KeyModifiers.HasFlag(KeyModifiers.Alt);
         var doc = _buffer.Document;
         var caret = _buffer.Selection.Caret;
         var handled = true;
@@ -739,6 +740,8 @@ public class MarkdownEditor : Avalonia.Controls.Control, ILogicalScrollable
             case Key.Tab: HandleTab(shift); break;
             case Key.Left: MoveCaret(VisualStep(caret, -1), shift); break;
             case Key.Right: MoveCaret(VisualStep(caret, 1), shift); break;
+            case Key.Up when alt && shift: MoveLines(-1); break;
+            case Key.Down when alt && shift: MoveLines(1); break;
             case Key.Up: MoveCaretByLine(-1, shift); break;
             case Key.Down: MoveCaretByLine(1, shift); break;
             case Key.Home: MoveCaret(doc.GetLineStart(doc.GetPosition(caret).Line), shift); break;
@@ -883,6 +886,65 @@ public class MarkdownEditor : Avalonia.Controls.Control, ILogicalScrollable
         var newEnd = Math.Max(newStart, sel.End + totalDelta);
         _buffer.Selection = new Selection(sel.Anchor <= sel.Caret ? newStart : newEnd, sel.Anchor <= sel.Caret ? newEnd : newStart);
     }
+
+    /// <summary>
+    /// Move the selected line(s) up (<paramref name="dir"/> = -1) or down (+1) by one row, swapping with
+    /// the adjacent line, as a single undoable edit (Alt+Shift+Up/Down). The selection travels with the
+    /// moved block, and a no-op at the document edge is silently ignored.
+    /// </summary>
+    private void MoveLines(int dir)
+    {
+        var doc = _buffer.Document;
+        var sel = _buffer.Selection;
+        var startLine = doc.GetPosition(sel.Start).Line;
+        var endLine = doc.GetPosition(sel.End).Line;
+
+        // A selection ending exactly at a line start doesn't really include that last line.
+        if (endLine > startLine && doc.GetPosition(sel.End).Column == 0)
+        {
+            endLine--;
+        }
+
+        var target = dir < 0 ? startLine - 1 : endLine + 1;
+        if (target < 0 || target >= doc.LineCount)
+        {
+            return; // already at the top / bottom
+        }
+
+        var regionStartLine = Math.Min(startLine, target);
+        var regionEndLine = Math.Max(endLine, target);
+        var lines = new List<string>();
+        for (var l = regionStartLine; l <= regionEndLine; l++)
+        {
+            lines.Add(doc.GetLineText(l));
+        }
+
+        // Rotate the adjacent line to the far side of the block.
+        if (dir < 0)
+        {
+            var moved = lines[0];        // the line above the block
+            lines.RemoveAt(0);
+            lines.Add(moved);            // ...now goes below it
+        }
+        else
+        {
+            var moved = lines[^1];       // the line below the block
+            lines.RemoveAt(lines.Count - 1);
+            lines.Insert(0, moved);      // ...now goes above it
+        }
+
+        var regionStart = doc.GetLineStart(regionStartLine);
+        var regionEnd = doc.GetLineEnd(regionEndLine);
+        var delta = (doc.GetLineEnd(target) - doc.GetLineStart(target)) + 1; // adjacent line length + its '\n'
+        _buffer.ReplaceRange(regionStart, regionEnd - regionStart, string.Join("\n", lines));
+
+        // The block shifted by one adjacent line in the move direction; carry the selection with it.
+        _buffer.Selection = new Selection(sel.Anchor + dir * delta, sel.Caret + dir * delta);
+        _goalX = double.NaN;
+    }
+
+    /// <summary>Move the selected line(s) up/down by one row; for tests.</summary>
+    internal void MoveLinesForTest(int dir) => MoveLines(dir);
 
     /// <summary>Resequence the ordered-list run starting at <paramref name="fromLine"/> as one edit (PRD §7.2).</summary>
     private void RenumberOrderedFrom(int fromLine)
