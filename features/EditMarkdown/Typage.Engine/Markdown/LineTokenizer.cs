@@ -29,8 +29,33 @@ internal static class LineTokenizer
         {
             BlockKind.FrontMatter => TokenizeInFrontMatter(line, lineStart, contentLen, output),
             BlockKind.FencedCode => TokenizeInFencedCode(line, lineStart, contentLen, entering, output),
-            _ => TokenizeNormal(line, lineStart, contentLen, lineIndex, allowFrontMatterOpen, output),
+            BlockKind.IndentedCode => TokenizeInIndentedCode(line, lineStart, contentLen, lineIndex, allowFrontMatterOpen, output),
+            _ => TokenizeNormal(line, lineStart, contentLen, lineIndex, allowFrontMatterOpen, entering.AfterBlank, output),
         };
+    }
+
+    /// <summary>
+    /// Inside an indented (4-space) code block: a line indented &gt;= 4 (or a blank line) stays in the
+    /// block; the first line dedented below 4 ends it and is re-classified as a normal line. A blank
+    /// line keeps the block open so a following indented line continues the same block (CommonMark §4.4).
+    /// </summary>
+    private static BlockState TokenizeInIndentedCode(
+        string line, int lineStart, int len, int lineIndex, bool allowFrontMatterOpen, List<Token> output)
+    {
+        if (len == 0)
+        {
+            return BlockState.IndentedCode; // a blank line may be interior; stay open
+        }
+
+        if (LeadingSpaces(line, len) >= 4)
+        {
+            output.Add(new Token(lineStart, len, TokenType.CodeText, TokenRole.Content));
+            return BlockState.IndentedCode;
+        }
+
+        // Dedented to a real line — the block has ended; classify this line normally (it is non-blank,
+        // so it follows a non-blank predecessor).
+        return TokenizeNormal(line, lineStart, len, lineIndex, allowFrontMatterOpen, afterBlank: false, output);
     }
 
     private static BlockState TokenizeInFrontMatter(string line, int lineStart, int len, List<Token> output)
@@ -65,7 +90,7 @@ internal static class LineTokenizer
         return entering; // still inside the fence (unterminated fences extend to EOF — PRD §7.4)
     }
 
-    private static BlockState TokenizeNormal(string line, int lineStart, int len, int lineIndex, bool allowFrontMatterOpen, List<Token> output)
+    private static BlockState TokenizeNormal(string line, int lineStart, int len, int lineIndex, bool allowFrontMatterOpen, bool afterBlank, List<Token> output)
     {
         var indent = LeadingSpaces(line, len);
 
@@ -75,6 +100,15 @@ internal static class LineTokenizer
         {
             output.Add(new Token(lineStart, len, TokenType.FrontMatterFence, TokenRole.Marker));
             return BlockState.FrontMatter;
+        }
+
+        // Indented code block: a non-blank line indented >= 4 spaces at a fresh block position (after a
+        // blank line or the top of the document) opens one. It cannot interrupt a paragraph, hence the
+        // afterBlank gate (CommonMark §4.4).
+        if (afterBlank && indent >= 4 && len > indent)
+        {
+            output.Add(new Token(lineStart, len, TokenType.CodeText, TokenRole.Content));
+            return BlockState.IndentedCode;
         }
 
         // Fenced code opens with >=3 backticks or tildes (indent <= 3).
@@ -128,9 +162,10 @@ internal static class LineTokenizer
             return BlockState.Normal;
         }
 
-        // Plain paragraph line -> inline only.
+        // Plain paragraph line -> inline only. A blank line marks the next line as a fresh block
+        // position (where an indented code block may open).
         InlineTokenizer.Tokenize(line, lineStart, 0, len, output, detectHardBreak: true);
-        return BlockState.Normal;
+        return BlockState.NormalAfter(len == 0);
     }
 
     // ----- recognizers -----

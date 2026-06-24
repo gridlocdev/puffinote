@@ -48,7 +48,7 @@ public sealed class MarkdownModel
         var n = document.LineCount;
         var entering = new BlockState[n];
         var tokens = new List<Token>[n];
-        TokenizeRange(document, 0, n, BlockState.Normal, entering, tokens);
+        TokenizeRange(document, 0, n, BlockState.Start, entering, tokens);
         return new MarkdownModel(entering, tokens);
     }
 
@@ -112,6 +112,7 @@ public sealed class MarkdownModel
                 && IsTableDelimiterRow(doc.GetLineText(i + 1)))
             {
                 i = TokenizeTable(doc, i, toLine, entering, tokens);
+                state = BlockState.Normal; // a table row is non-blank; the line after isn't a fresh block position
                 continue; // table is self-contained; state stays Normal
             }
 
