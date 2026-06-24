@@ -6,6 +6,7 @@ using Avalonia.Layout;
 using Avalonia.Media;
 using Avalonia.Platform.Storage;
 using Avalonia.Styling;
+using Avalonia.Threading;
 using Typage.Control.Rendering;
 using Typage.Control.Views;
 using Typage.Desktop.Commands;
@@ -560,7 +561,9 @@ public class MainWindow : Window
 
         if (files.Count > 0 && files[0].TryGetLocalPath() is { } path)
         {
-            OpenPath(path);
+            // A storage-picker await can resume off the UI thread; OpenPath touches the editor and
+            // settings, so marshal it back (the same hardening as the clipboard path in the surface).
+            await Dispatcher.UIThread.InvokeAsync(() => OpenPath(path));
         }
     }
 
@@ -586,15 +589,21 @@ public class MainWindow : Window
 
         if (file?.TryGetLocalPath() is { } path)
         {
-            if (WriteToPath(path))
+            // Marshal the write + chrome update back to the UI thread (the picker await may resume off it).
+            return await Dispatcher.UIThread.InvokeAsync(() =>
             {
-                _currentPath = path;
-                _settings.Settings.PushRecent(path);
-                _settings.Save();
-                RefreshRecentMenu();
-                UpdateChrome();
-                return true;
-            }
+                if (WriteToPath(path))
+                {
+                    _currentPath = path;
+                    _settings.Settings.PushRecent(path);
+                    _settings.Save();
+                    RefreshRecentMenu();
+                    UpdateChrome();
+                    return true;
+                }
+
+                return false;
+            });
         }
 
         return false;
@@ -642,17 +651,21 @@ public class MainWindow : Window
 
         if (file?.TryGetLocalPath() is { } path)
         {
-            var title = Path.GetFileNameWithoutExtension(path);
-            var html = HtmlRenderer.RenderDocument(Engine.Document.TextDocument.FromString(_editorView.Text), title);
-            try
+            // Read the editor text and report errors on the UI thread (the picker await may resume off it).
+            await Dispatcher.UIThread.InvokeAsync(() =>
             {
-                AtomicWrite(path, new UTF8Encoding(false).GetBytes(html)); // HTML export is always UTF-8
-            }
-            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
-            {
-                ShowError("Couldn't export HTML.",
-                    $"{ex.Message}\n\nCheck that the destination folder is writable.");
-            }
+                var title = Path.GetFileNameWithoutExtension(path);
+                var html = HtmlRenderer.RenderDocument(Engine.Document.TextDocument.FromString(_editorView.Text), title);
+                try
+                {
+                    AtomicWrite(path, new UTF8Encoding(false).GetBytes(html)); // HTML export is always UTF-8
+                }
+                catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+                {
+                    ShowError("Couldn't export HTML.",
+                        $"{ex.Message}\n\nCheck that the destination folder is writable.");
+                }
+            });
         }
     }
 
