@@ -32,6 +32,9 @@ public enum DecorationKind
     CheckboxChecked,
     QuoteBar,
     HorizontalRule,
+
+    /// <summary>A computed ordered-list ordinal (e.g. "3. ") drawn in place of the literal source digits.</summary>
+    OrderedNumber,
 }
 
 /// <summary>
@@ -72,7 +75,7 @@ public sealed class VisualLine
     /// </summary>
     public readonly record struct Segment(
         int From, int To, RunStyle Style, bool Concealed,
-        DecorationKind Decoration = DecorationKind.None, double DecorationWidth = 0);
+        DecorationKind Decoration = DecorationKind.None, double DecorationWidth = 0, string DecorationText = "");
 
     /// <summary>Lay out <paramref name="segments"/> (in column order) over <paramref name="lineText"/>, measuring with <paramref name="measure"/>.</summary>
     public static VisualLine Build(string lineText, IReadOnlyList<Segment> segments, Func<string, RunStyle, double> measure)
@@ -86,7 +89,7 @@ public sealed class VisualLine
                 // A decoration replaces a concealed marker: it owns that marker's source columns
                 // [From, To) (so the caret treats them atomically, like a concealed run) but advances a
                 // gutter of DecorationWidth, giving the content a hanging indent.
-                runs.Add(new VisualRun(VisualRunKind.Decoration, s.From, s.To - s.From, x, s.DecorationWidth, "", s.Style, s.Decoration));
+                runs.Add(new VisualRun(VisualRunKind.Decoration, s.From, s.To - s.From, x, s.DecorationWidth, s.DecorationText, s.Style, s.Decoration));
                 x += s.DecorationWidth;
                 continue;
             }

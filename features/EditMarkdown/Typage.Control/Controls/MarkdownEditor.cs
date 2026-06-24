@@ -1486,18 +1486,24 @@ public class MarkdownEditor : Avalonia.Controls.Control, ILogicalScrollable
             var style = StyleFor(t.Type, headingLevel);
             var concealed = MarkerConcealed(t);
 
-            // An ordered-list number stays visible (it's informative); only unordered bullets hide.
-            if (t.Type == TokenType.ListMarker && IsOrderedMarker(lineText, s, en))
-            {
-                concealed = false;
-            }
-
             if (concealed)
             {
                 // A concealed line-prefix marker may render as a synthetic decoration (bullet, checkbox,
                 // quote bar, rule) that keeps the content's hanging indent; otherwise it just vanishes.
                 var (deco, width) = DecorationFor(t, lineText, s, en, hasTask, style);
-                segments.Add(new VisualLine.Segment(s, en, style, true, deco, deco == DecorationKind.None ? 0 : width));
+                var decoText = string.Empty;
+
+                // An ordered-list marker hides its literal digits and shows a number computed from the
+                // list's structure: each nesting level restarts and resumes; a blank or non-list line
+                // starts a fresh list (items 4 & 5). Raw-source mode shows the literal source digits.
+                if (t.Type == TokenType.ListMarker && !hasTask && IsOrderedMarker(lineText, s, en))
+                {
+                    decoText = OrderedOrdinal(line) + OrderedDelimiter(lineText, s, en) + " ";
+                    deco = DecorationKind.OrderedNumber;
+                    width = MeasureWidth(decoText, style);
+                }
+
+                segments.Add(new VisualLine.Segment(s, en, style, true, deco, deco == DecorationKind.None ? 0 : width, decoText));
             }
             else
             {
@@ -1545,6 +1551,66 @@ public class MarkdownEditor : Avalonia.Controls.Control, ILogicalScrollable
             default:
                 return (DecorationKind.None, 0);
         }
+    }
+
+    /// <summary>
+    /// The ordinal to display for the ordered-list item on <paramref name="line"/>, computed from the
+    /// list's structure rather than the literal source digits: walking up, deeper (nested) lines are
+    /// skipped, a shallower line ends the level (a sub-list restarts at 1), and a blank or non-ordered
+    /// sibling starts a fresh list. So <c>1. 1. 1.</c> renders 1·2·3 and nested levels number themselves.
+    /// </summary>
+    private int OrderedOrdinal(int line)
+    {
+        var doc = _buffer.Document;
+        var self = LinePrefix.Parse(doc.GetLineText(line));
+        if (self.List != ListKind.Ordered)
+        {
+            return 1;
+        }
+
+        var count = 1;
+        for (var k = line - 1; k >= 0; k--)
+        {
+            var text = doc.GetLineText(k).TrimEnd('\r');
+            if (text.Trim().Length == 0)
+            {
+                break; // a blank line starts a fresh list
+            }
+
+            var p = LinePrefix.Parse(text);
+            if (p.Indent > self.Indent)
+            {
+                continue; // a deeper nested line belongs to a sub-list (or item continuation) — skip it
+            }
+
+            if (p.Indent < self.Indent)
+            {
+                break; // reached the enclosing (shallower) level — this sub-list starts here
+            }
+
+            if (p.Quote != self.Quote || p.List != ListKind.Ordered)
+            {
+                break; // a same-level sibling that isn't an ordered item ends the run
+            }
+
+            count++;
+        }
+
+        return count;
+    }
+
+    /// <summary>The ordered-list delimiter ('.'/')') inside marker columns <c>[s, en)</c>, defaulting to '.'.</summary>
+    private static string OrderedDelimiter(string lineText, int s, int en)
+    {
+        for (var k = s; k < en && k < lineText.Length; k++)
+        {
+            if (lineText[k] is '.' or ')')
+            {
+                return lineText[k].ToString();
+            }
+        }
+
+        return ".";
     }
 
     /// <summary>Whether the list marker spanning columns <c>[s, en)</c> is an ordered (numbered) one.</summary>
@@ -1640,6 +1706,15 @@ public class MarkdownEditor : Avalonia.Controls.Control, ILogicalScrollable
                     context.DrawLine(pen, b, c);
                 }
 
+                break;
+            }
+
+            case DecorationKind.OrderedNumber:
+            {
+                // The computed ordinal (e.g. "3. "), drawn in the bullet colour where the digits would be.
+                var ft = GetFormattedText(run.Text, run.Style, _theme.BulletForeground);
+                var ny = lineTop + (_theme.LineHeight - ft.Height) / 2;
+                context.DrawText(ft, new Point(run.X, ny));
                 break;
             }
 

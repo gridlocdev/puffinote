@@ -9,9 +9,8 @@ namespace Typage.UiTests;
 
 /// <summary>
 /// The rich live-preview decorations (PRD §7.4): concealed line-prefix markers render as synthetic UI
-/// (bullets, checkboxes, a blockquote bar, a horizontal rule) that keeps the content's hanging indent,
-/// while ordered-list numbers stay visible. Drives the real editor with the caret off the line so the
-/// markers conceal.
+/// (bullets, checkboxes, a blockquote bar, a horizontal rule, a computed ordered-list number) that keep
+/// the content's hanging indent. WYSIWYG conceals markers regardless of the caret.
 /// </summary>
 public class DecorationTests
 {
@@ -38,14 +37,64 @@ public class DecorationTests
         Assert.Contains(v.Runs, r => r.Kind == VisualRunKind.Text && r.Text == "item");
     }
 
+    private static string? OrderedText(MarkdownEditor editor, int line) =>
+        editor.BuildVisualLineForTest(line).Runs
+            .Where(r => r.Decoration == DecorationKind.OrderedNumber)
+            .Select(r => r.Text)
+            .FirstOrDefault();
+
     [AvaloniaFact]
-    public void OrderedListNumber_StaysVisible()
+    public void OrderedListNumber_RendersAsAComputedOrdinal()
     {
         var editor = CaretOffLine0("1. item\nx");
-        Assert.Null(DecorationOn(editor, 0)); // no bullet
+        Assert.Equal(DecorationKind.OrderedNumber, DecorationOn(editor, 0));
+        Assert.Equal("1. ", OrderedText(editor, 0));
         var v = editor.BuildVisualLineForTest(0);
-        Assert.Contains(v.Runs, r => r.Kind == VisualRunKind.Text && r.Text.Contains("1.")); // the number isn't hidden
-        Assert.DoesNotContain(v.Runs, r => r.Kind == VisualRunKind.Concealed);
+        Assert.True(v.ColumnToX(3) > 0); // "item" hangs past the number gutter (marker is "1. " = cols 0..3)
+    }
+
+    [AvaloniaFact]
+    public void OrderedNumbers_ComputeFromStructure_IgnoringLiteralDigits()
+    {
+        // All "1." in source, but they render 1·2·3 by position.
+        var editor = CaretOffLine0("1. a\n1. b\n1. c\nx");
+        Assert.Equal("1. ", OrderedText(editor, 0));
+        Assert.Equal("2. ", OrderedText(editor, 1));
+        Assert.Equal("3. ", OrderedText(editor, 2));
+    }
+
+    [AvaloniaFact]
+    public void NestedOrderedList_RestartsAndResumes()
+    {
+        //  1. a
+        //  2. b
+        //      1. x   (nested restarts)
+        //      2. y
+        //  3. c        (parent resumes)
+        var editor = CaretOffLine0("1. a\n2. b\n    1. x\n    2. y\n3. c\nz");
+        Assert.Equal("1. ", OrderedText(editor, 0));
+        Assert.Equal("2. ", OrderedText(editor, 1));
+        Assert.Equal("1. ", OrderedText(editor, 2)); // nested restarts at 1
+        Assert.Equal("2. ", OrderedText(editor, 3));
+        Assert.Equal("3. ", OrderedText(editor, 4)); // parent resumes at 3
+    }
+
+    [AvaloniaFact]
+    public void BlankLine_StartsAFreshOrderedList()
+    {
+        var editor = CaretOffLine0("1. a\n2. b\n\n1. c\nz");
+        Assert.Equal("2. ", OrderedText(editor, 1));
+        Assert.Equal("1. ", OrderedText(editor, 3)); // after the blank line, numbering resets
+    }
+
+    [AvaloniaFact]
+    public void OrderedNumber_ShowsLiteralDigits_InRawSourceMode()
+    {
+        var editor = CaretOffLine0("5. item\nx");
+        editor.ShowRawSource = true;
+        var v = editor.BuildVisualLineForTest(0);
+        Assert.DoesNotContain(v.Runs, r => r.Decoration == DecorationKind.OrderedNumber);
+        Assert.Contains(v.Runs, r => r.Kind == VisualRunKind.Text && r.Text.Contains("5.")); // raw digits shown
     }
 
     [AvaloniaFact]
