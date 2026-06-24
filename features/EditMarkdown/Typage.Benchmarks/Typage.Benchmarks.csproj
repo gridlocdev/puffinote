@@ -1,0 +1,25 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    BenchmarkDotNet harness for the engine hot paths behind caret/scroll latency
+    and the P2 incremental tokenizer (PRD §3). References only Typage.Engine (pure)
+    so it runs without a display. The surface's FormattedText width cache lives in
+    Typage.Control and needs the Avalonia headless host to measure; that is a
+    separate harness and is intentionally not built here.
+  -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <IsPackable>false</IsPackable>
+    <RootNamespace>Typage.Benchmarks</RootNamespace>
+    <Optimize>true</Optimize>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="BenchmarkDotNet" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Typage.Engine\Typage.Engine.csproj" />
+  </ItemGroup>
+
+</Project>

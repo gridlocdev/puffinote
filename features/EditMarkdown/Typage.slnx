@@ -7,5 +7,6 @@
     <Project Path="Typage.Engine.Tests/Typage.Engine.Tests.csproj" />
     <Project Path="Typage.Cli.Tests/Typage.Cli.Tests.csproj" />
     <Project Path="Typage.UiTests/Typage.UiTests.csproj" />
+    <Project Path="Typage.Benchmarks/Typage.Benchmarks.csproj" />
   </Folder>
 </Solution>
