@@ -1219,23 +1219,30 @@ public class MainWindow : Window
             HorizontalAlignment = HorizontalAlignment.Stretch,
         };
         var tabWidth = new NumericUpDown { Minimum = 1, Maximum = 8, Increment = 1, Value = s.TabWidth, FormatString = "0" };
+        var autosave = new NumericUpDown { Minimum = 0, Maximum = 600, Increment = 5, Value = s.AutosaveSeconds, FormatString = "0" };
         var showToolbar = new CheckBox { Content = "Show the formatting toolbar", IsChecked = s.ShowToolbar };
+        var rawSource = new CheckBox { Content = "Show raw Markdown source by default", IsChecked = s.ShowRawSource };
 
         var ok = new Button { Content = "OK", IsDefault = true };
         var cancel = new Button { Content = "Cancel", IsCancel = true };
 
         var grid = new Grid
         {
-            RowDefinitions = new RowDefinitions("Auto,Auto,Auto"),
+            RowDefinitions = new RowDefinitions("Auto,Auto,Auto,Auto,Auto"),
             ColumnDefinitions = new ColumnDefinitions("Auto,*"),
             Margin = new Avalonia.Thickness(0, 0, 0, 12),
         };
         AddSettingRow(grid, 0, "Theme", themeCombo);
         AddSettingRow(grid, 1, "Tab width", tabWidth);
-        Grid.SetRow(showToolbar, 2);
+        AddSettingRow(grid, 2, "Autosave (sec, 0 = off)", autosave);
+        Grid.SetRow(showToolbar, 3);
         Grid.SetColumnSpan(showToolbar, 2);
         showToolbar.Margin = new Avalonia.Thickness(0, 8, 0, 0);
         grid.Children.Add(showToolbar);
+        Grid.SetRow(rawSource, 4);
+        Grid.SetColumnSpan(rawSource, 2);
+        rawSource.Margin = new Avalonia.Thickness(0, 4, 0, 0);
+        grid.Children.Add(rawSource);
 
         var dialog = new Window
         {
@@ -1270,7 +1277,7 @@ public class MainWindow : Window
             s.TabWidth = (int)(tabWidth.Value ?? 4);
             _editorView.Editor.IndentWidth = s.TabWidth;
             s.ShowToolbar = showToolbar.IsChecked == true;
-            if (_toolbar is not null)
+            if (_toolbar is not null && !_focusMode)
             {
                 _toolbar.IsVisible = s.ShowToolbar;
             }
@@ -1278,6 +1285,16 @@ public class MainWindow : Window
             if (_toggleToolbarItem is not null)
             {
                 _toggleToolbarItem.IsChecked = s.ShowToolbar;
+            }
+
+            s.AutosaveSeconds = (int)(autosave.Value ?? 30);
+            SetupAutosave(); // pick up the new interval (or disable when 0)
+
+            s.ShowRawSource = rawSource.IsChecked == true;
+            _editorView.Editor.ShowRawSource = s.ShowRawSource;
+            if (_toggleRawSourceItem is not null)
+            {
+                _toggleRawSourceItem.IsChecked = s.ShowRawSource;
             }
 
             _settings.Save();
