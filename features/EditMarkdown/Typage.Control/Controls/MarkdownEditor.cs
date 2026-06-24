@@ -571,79 +571,63 @@ public class MarkdownEditor : Avalonia.Controls.Control, ILogicalScrollable
     {
         var lineTop = line * _theme.LineHeight;
         var lineStart = doc.GetLineStart(line);
-        var lineEnd = doc.GetLineEnd(line);
-        var lineText = doc.GetText(lineStart, lineEnd - lineStart).TrimEnd('\r');
-        var contentLen = lineText.Length;
-
-        var headingLevel = HeadingLevel(line);
-        var revealMarkers = _showRawSource || caretLine == line || sel.Intersects(lineStart, Math.Max(1, lineEnd - lineStart));
+        var visual = BuildVisualLine(line, sel, caretLine);
 
         // Search-match highlights (under the text), then the selection on top.
         if (_searchMatches.Count > 0)
         {
-            DrawSearchMatches(context, line, lineStart, contentLen, lineText, headingLevel);
+            DrawSearchMatches(context, line, lineStart, visual);
         }
 
         if (sel.Length > 0)
         {
-            DrawSelection(context, line, lineStart, contentLen, sel, lineText);
+            DrawSelection(context, line, lineStart, sel, visual);
         }
 
-        // Tile the line with styled segments (filling gaps between tokens with default style).
-        var x = 0d;
-        var caretX = double.NaN;
-        var caretCol = sel.Caret - lineStart;
-
-        foreach (var (from, to, style) in StyledSegments(line, contentLen, headingLevel))
+        // Draw every visual run: concealed marker runs vanish (zero width, not drawn); text and
+        // decorations advance the cursor exactly as the offset↔visual map measured them.
+        foreach (var run in visual.Runs)
         {
-            x += DrawSegment(context, lineText, from, to, lineTop, style, revealMarkers, ref caretX, caretCol, x);
+            switch (run.Kind)
+            {
+                case VisualRunKind.Text:
+                    DrawTextRun(context, run, lineTop);
+                    break;
+                case VisualRunKind.Decoration:
+                    DrawDecoration(context, run, lineTop);
+                    break;
+            }
         }
 
-        // Caret.
+        // Caret — placed through the map so it sits correctly amid hidden markers.
         if (caretLine == line && IsFocused)
         {
-            if (double.IsNaN(caretX))
-            {
-                caretX = caretCol <= 0 ? 0 : x;
-            }
-
+            var caretX = visual.ColumnToX(Math.Clamp(sel.Caret - lineStart, 0, visual.RawLength));
             var h = _theme.BaseFontSize * 1.3;
             var y = lineTop + (_theme.LineHeight - h) / 2;
             context.FillRectangle(_theme.Caret, new Rect(caretX, y, 1.5, h));
         }
 
-        return x; // total content width of this line (drives the horizontal extent)
+        return visual.Width; // total content width of this line (drives the horizontal extent)
     }
 
-    /// <summary>Draw one styled run; returns its advance width and records the caret X if it lands inside.</summary>
-    private double DrawSegment(
-        DrawingContext context, string lineText, int from, int to, double lineTop, RunStyle style,
-        bool revealMarkers, ref double caretX, int caretCol, double x)
+    /// <summary>Draw one visible run (content, or a revealed marker — markers carry their own brush in the style).</summary>
+    private void DrawTextRun(DrawingContext context, VisualRun run, double lineTop)
     {
-        var text = lineText.Substring(from, to - from);
-        var brush = style.IsMarker ? (revealMarkers ? _theme.MarkerForeground : _dimMarker) : style.Foreground;
-        var ft = GetFormattedText(text, style, brush);
+        var ft = GetFormattedText(run.Text, run.Style, run.Style.Foreground);
         var y = lineTop + (_theme.LineHeight - ft.Height) / 2;
 
-        if (style.Background is not null)
+        if (run.Style.Background is not null)
         {
-            context.FillRectangle(style.Background, new Rect(x, lineTop + 2, ft.Width, _theme.LineHeight - 4), 3);
+            context.FillRectangle(run.Style.Background, new Rect(run.X, lineTop + 2, ft.Width, _theme.LineHeight - 4), 3);
         }
 
-        context.DrawText(ft, new Point(x, y));
-
-        // Caret X if it falls within this run (measured with trailing whitespace included).
-        if (caretCol >= from && caretCol <= to && double.IsNaN(caretX))
-        {
-            caretX = x + MeasureWidth(lineText.Substring(from, caretCol - from), style);
-        }
-
-        return MeasureWidth(text, style); // advance includes trailing whitespace, unlike ft.Width
+        context.DrawText(ft, new Point(run.X, y));
     }
 
-    private void DrawSearchMatches(DrawingContext context, int line, int lineStart, int contentLen, string lineText, int headingLevel)
+    private void DrawSearchMatches(DrawingContext context, int line, int lineStart, VisualLine visual)
     {
-        var lineEnd = lineStart + contentLen;
+        var lineEnd = lineStart + visual.RawLength;
         // Matches are sorted, non-overlapping → both Start and End ascend. Binary-search the first
         // match that could touch this line, then walk forward, so a line only touches its own matches
         // (not all of them) — O(log M + matches-on-line) instead of O(M) per line.
@@ -655,15 +639,15 @@ public class MarkdownEditor : Avalonia.Controls.Control, ILogicalScrollable
                 break; // all later matches start past this line
             }
 
-            var s = Math.Clamp(m.Start - lineStart, 0, contentLen);
-            var e = Math.Clamp(m.End - lineStart, 0, contentLen);
+            var s = Math.Clamp(m.Start - lineStart, 0, visual.RawLength);
+            var e = Math.Clamp(m.End - lineStart, 0, visual.RawLength);
             if (e <= s)
             {
                 continue;
             }
 
-            var x1 = ColumnX(line, contentLen, headingLevel, lineText, s);
-            var x2 = ColumnX(line, contentLen, headingLevel, lineText, e);
+            var x1 = visual.ColumnToX(s);
+            var x2 = visual.ColumnToX(e);
             var brush = i == _currentMatch ? _theme.SearchMatchCurrent : _theme.SearchMatch;
             context.FillRectangle(brush, new Rect(x1, line * _theme.LineHeight + 2, x2 - x1, _theme.LineHeight - 4), 2);
         }
@@ -689,8 +673,9 @@ public class MarkdownEditor : Avalonia.Controls.Control, ILogicalScrollable
         return lo;
     }
 
-    private void DrawSelection(DrawingContext context, int line, int lineStart, int contentLen, Selection sel, string lineText)
+    private void DrawSelection(DrawingContext context, int line, int lineStart, Selection sel, VisualLine visual)
     {
+        var contentLen = visual.RawLength;
         var lineEnd = lineStart + contentLen;
         if (sel.Start > lineEnd || sel.End < lineStart)
         {
@@ -704,9 +689,8 @@ public class MarkdownEditor : Avalonia.Controls.Control, ILogicalScrollable
             return;
         }
 
-        var headingLevel = HeadingLevel(line);
-        var x1 = ColumnX(line, contentLen, headingLevel, lineText, selStartCol);
-        var x2 = ColumnX(line, contentLen, headingLevel, lineText, selEndCol);
+        var x1 = visual.ColumnToX(selStartCol);
+        var x2 = visual.ColumnToX(selEndCol);
         context.FillRectangle(_theme.SelectionBackground, new Rect(x1, line * _theme.LineHeight + 2, x2 - x1, _theme.LineHeight - 4));
     }
 
@@ -1184,9 +1168,7 @@ public class MarkdownEditor : Avalonia.Controls.Control, ILogicalScrollable
 
         var doc = _buffer.Document;
         var pos = doc.GetPosition(_buffer.Selection.Caret);
-        var lineStart = doc.GetLineStart(pos.Line);
-        var text = doc.GetText(lineStart, doc.GetLineEnd(pos.Line) - lineStart).TrimEnd('\r');
-        var x = ColumnX(pos.Line, text.Length, HeadingLevel(pos.Line), text, Math.Min(pos.Column, text.Length));
+        var x = CaretX(pos); // through the offset↔visual map, so hidden markers don't skew the scroll
         _extentWidth = Math.Max(_extentWidth, x + 12); // ensure we can scroll to a caret on a wide line
 
         // Caret position in scroll-content space (which includes the padding).
@@ -1255,10 +1237,8 @@ public class MarkdownEditor : Avalonia.Controls.Control, ILogicalScrollable
     /// <summary>The x-offset of the caret at <paramref name="pos"/>, measured with each run's real font.</summary>
     private double CaretX(LinePosition pos)
     {
-        var doc = _buffer.Document;
-        var lineStart = doc.GetLineStart(pos.Line);
-        var text = doc.GetText(lineStart, doc.GetLineEnd(pos.Line) - lineStart).TrimEnd('\r');
-        return ColumnX(pos.Line, text.Length, HeadingLevel(pos.Line), text, Math.Min(pos.Column, text.Length));
+        var visual = BuildVisualLine(pos.Line, _buffer.Selection, pos.Line);
+        return visual.ColumnToX(Math.Min(pos.Column, visual.RawLength));
     }
 
     /// <summary>Map a pointer position to the nearest caret offset (accounting for padding + scroll).</summary>
@@ -1306,14 +1286,29 @@ public class MarkdownEditor : Avalonia.Controls.Control, ILogicalScrollable
         new(baseStyle.Typeface.FontFamily, FontStyle.Normal, FontWeight.Bold);
 
     /// <summary>
-    /// The full styled tiling of a line: every token span resolved to a <see cref="RunStyle"/>,
-    /// with the gaps between tokens (e.g. leading indent) filled by the default style. The single
-    /// source of truth used by both rendering and width measurement, so the caret, the selection
-    /// rectangle, and mouse hit-testing all agree with the drawn glyphs even on styled lines.
+    /// Build the laid-out <see cref="VisualLine"/> for <paramref name="line"/> under the current
+    /// reveal state: tile the line into styled segments (gaps between tokens filled with the default
+    /// style), decide which marker segments conceal (PRD §7.4), and hand the result to
+    /// <see cref="VisualLine.Build"/> with the cached width measurer. This is the single source of
+    /// truth for drawing, caret placement, hit-testing, and selection — they all read the same
+    /// offset↔visual map, so hidden markers stay consistent everywhere.
     /// </summary>
-    private IEnumerable<(int From, int To, RunStyle Style)> StyledSegments(int line, int contentLen, int headingLevel)
+    private VisualLine BuildVisualLine(int line, Selection sel, int caretLine)
     {
-        var lineStart = _buffer.Document.GetLineStart(line);
+        var doc = _buffer.Document;
+        var lineStart = doc.GetLineStart(line);
+        var lineEnd = doc.GetLineEnd(line);
+        var lineText = doc.GetText(lineStart, lineEnd - lineStart).TrimEnd('\r');
+        var contentLen = lineText.Length;
+        var headingLevel = HeadingLevel(line);
+
+        // A line is "revealed" (line-prefix markers shown at full strength) when raw-source mode is on,
+        // the caret is on it, or a selection touches it. Inline nodes reveal individually (below).
+        var lineRevealed = _showRawSource || caretLine == line
+            || sel.Intersects(lineStart, Math.Max(1, lineEnd - lineStart));
+        var spans = NodeSpans(line);
+
+        var segments = new List<VisualLine.Segment>();
         var pos = 0;
         foreach (var t in _model.LineTokens(line))
         {
@@ -1326,44 +1321,99 @@ public class MarkdownEditor : Avalonia.Controls.Control, ILogicalScrollable
 
             if (s > pos)
             {
-                yield return (pos, s, DefaultStyle(headingLevel));
+                segments.Add(new VisualLine.Segment(pos, s, DefaultStyle(headingLevel), false));
             }
 
-            yield return (s, en, StyleFor(t.Type, headingLevel));
+            segments.Add(new VisualLine.Segment(s, en, StyleFor(t.Type, headingLevel), MarkerConcealed(t, lineRevealed, sel, spans)));
             pos = en;
         }
 
         if (pos < contentLen)
         {
-            yield return (pos, contentLen, DefaultStyle(headingLevel));
+            segments.Add(new VisualLine.Segment(pos, contentLen, DefaultStyle(headingLevel), false));
+        }
+
+        return VisualLine.Build(lineText, segments, MeasureWidth);
+    }
+
+    /// <summary>The laid-out visual line under the current caret/selection (for concealment + offset-map tests).</summary>
+    internal VisualLine BuildVisualLineForTest(int line) =>
+        BuildVisualLine(line, _buffer.Selection, _buffer.Document.GetPosition(_buffer.Selection.Caret).Line);
+
+    /// <summary>Document offset the visual line resolves <paramref name="x"/> to (hit-test); for tests.</summary>
+    internal int OffsetAtForTest(int line, double x) => OffsetAt(line, x);
+
+    /// <summary>The source span [start, end] of each inline node id (&gt;0) on <paramref name="line"/>.</summary>
+    private Dictionary<int, (int Start, int End)> NodeSpans(int line)
+    {
+        var spans = new Dictionary<int, (int Start, int End)>();
+        foreach (var t in _model.LineTokens(line))
+        {
+            if (t.Node <= 0)
+            {
+                continue;
+            }
+
+            spans[t.Node] = spans.TryGetValue(t.Node, out var span)
+                ? (Math.Min(span.Start, t.Start), Math.Max(span.End, t.End))
+                : (t.Start, t.End);
+        }
+
+        return spans;
+    }
+
+    /// <summary>
+    /// Whether <paramref name="t"/>'s marker punctuation should be hidden in the current reveal state
+    /// (PRD §7.4). Only <see cref="TokenRole.Marker"/> tokens ever conceal — content is always shown.
+    /// Inline markers conceal per inline node; line-prefix markers (heading/quote/list/task/HR) conceal
+    /// off the caret line; whole-line block fences stay revealed (collapsing their row is deferred).
+    /// </summary>
+    private bool MarkerConcealed(Token t, bool lineRevealed, Selection sel, Dictionary<int, (int Start, int End)> spans)
+    {
+        if (_showRawSource || t.Role != TokenRole.Marker)
+        {
+            return false;
+        }
+
+        switch (t.Type)
+        {
+            // Whole-line fences would blank their row if hidden; row-collapse is deferred (PRD §11), so
+            // keep them visible. Front matter additionally carries its "Properties" backdrop.
+            case TokenType.CodeFence or TokenType.FrontMatterFence or TokenType.TableDelimiter:
+                return false;
+
+            // Line-prefix markers (and the HR) reveal with their line.
+            case TokenType.HeadingMarker or TokenType.BlockquoteMarker or TokenType.ListMarker
+                or TokenType.TaskMarker or TokenType.HorizontalRule:
+                return !lineRevealed;
+
+            // Inline markers (emphasis/code/link/image/escape/url…) reveal per inline node.
+            default:
+                if (t.Node > 0 && spans.TryGetValue(t.Node, out var span))
+                {
+                    return !NodeRevealed(span, sel);
+                }
+
+                return !lineRevealed; // ungrouped inline markers (e.g. a hard break) follow the line
         }
     }
 
-    /// <summary>The x-offset of column <paramref name="col"/> on <paramref name="line"/>, measured with each run's real font.</summary>
-    private double ColumnX(int line, int contentLen, int headingLevel, string lineText, int col)
+    /// <summary>An inline node reveals when the caret is within its span (inclusive) or a selection overlaps it (PRD §7.4).</summary>
+    private static bool NodeRevealed((int Start, int End) span, Selection sel)
     {
-        if (col <= 0)
+        var caret = sel.Caret;
+        if (caret >= span.Start && caret <= span.End)
         {
-            return 0;
+            return true;
         }
 
-        var x = 0d;
-        foreach (var (from, to, style) in StyledSegments(line, contentLen, headingLevel))
-        {
-            if (col <= from)
-            {
-                break;
-            }
+        return sel.Length > 0 && sel.Start < span.End && sel.End > span.Start;
+    }
 
-            var end = Math.Min(col, to);
-            x += MeasureWidth(lineText.Substring(from, end - from), style);
-            if (col <= to)
-            {
-                break;
-            }
-        }
-
-        return x;
+    /// <summary>Draw a synthetic decoration glyph (bullet, checkbox). Geometry is added in the decorations phase.</summary>
+    private void DrawDecoration(DrawingContext context, VisualRun run, double lineTop)
+    {
+        // Stage 3 fills this in (bullets, checkboxes). No decoration runs are produced yet.
     }
 
     /// <summary>
@@ -1472,31 +1522,11 @@ public class MarkdownEditor : Avalonia.Controls.Control, ILogicalScrollable
     {
         var doc = _buffer.Document;
         var lineStart = doc.GetLineStart(line);
-        var lineEnd = doc.GetLineEnd(line);
-        var text = doc.GetText(lineStart, lineEnd - lineStart).TrimEnd('\r');
-        var headingLevel = HeadingLevel(line);
-        // Walk grapheme boundaries, picking the one whose styled prefix width is closest to x.
-        var best = 0;
-        var bestDist = double.MaxValue;
-        var col = 0;
-        while (true)
-        {
-            var w = ColumnX(line, text.Length, headingLevel, text, col);
-            var d = Math.Abs(w - x);
-            if (d < bestDist)
-            {
-                bestDist = d;
-                best = col;
-            }
-
-            if (col >= text.Length)
-            {
-                break;
-            }
-
-            col = Grapheme.NextBoundary(text, col);
-        }
-
-        return lineStart + best;
+        // Hit-test against the visual map (concealed markers are zero-width and never a caret stop), so
+        // a click resolves to the right document offset even on a line whose markers are hidden. The map
+        // is built with the current caret line's reveal state; landing here reveals the clicked line.
+        var caretLine = doc.GetPosition(_buffer.Selection.Caret).Line;
+        var visual = BuildVisualLine(line, _buffer.Selection, caretLine);
+        return lineStart + visual.XToColumn(x);
     }
 }
