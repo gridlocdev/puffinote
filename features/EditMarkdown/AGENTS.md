@@ -156,15 +156,25 @@ extend it, keep the layering and update the docs.
   fuzzy-filtered), **Find/Replace** (plain + regex via the engine's `DocumentSearch`, with in-editor
   match highlighting), recent-files menu, **light/dark/high-contrast themes** (View ▸ Theme,
   OS-following), a **Preferences dialog** (theme, tab width, toolbar), and modal error dialogs.
-- **Early / approximate:** the `MarkdownEditor` surface renders the token stream with the theme, handles
-  caret/selection/keyboard/mouse, and **dims** markers when the caret is away — but it keeps offsets
-  **1:1** with the visual model rather than collapsing concealed glyphs. The PRD's full §7.4 behavior
-  (true glyph-hiding with a bidirectional offset↔visual map, atomic caret traversal of concealed markers),
-  **IME**, the **automation peer (accessibility)**, smart paste, spell check,
-  external-change/conflict handling, and the OS print/PDF path are **the dedicated later phases
-  (PRD §11)** and are not built yet. Don't claim them done; build them on the layering that's here.
-  (Rendering can't be exercised by the headless CI here — no GPU — so the surface's draw path is
-  verified structurally and by the engine's incremental tests, not by pixel tests.)
+- **Also built (later additions):** §7.2 **editing assists** (list/blockquote continuation + exit,
+  ordered-list renumber, auto-indent, auto-pairing/wrap-selection, Tab/Shift+Tab indent/outdent — pure
+  helpers in `Engine/Editing/LinePrefix.cs` + `OrderedListRenumber.cs`), **interactive task checkboxes**
+  (click a `[ ]`/`[x]` to toggle), **mouse drag-select + double-click word select + a sticky goal
+  column**, a per-document **raw-source view** toggle (+ Settings default), **focus / distraction-free
+  mode** (F11), a **FormattedText draw cache** (alongside the width cache), a front-matter **"Properties"
+  panel** (backdrop + label; true *fold* still rides with §7.4), **external-change detection**
+  (FileSystemWatcher + three-way conflict prompt + self-save suppression, §7.1), **autosave/crash
+  recovery** sidecar snapshots (§9.4), and a **dependency-allowlist CI gate** (`Directory.Build.targets`,
+  §5/§9.3) + a `Typage.Benchmarks` BenchmarkDotNet harness.
+- **Early / approximate / not built:** the surface still keeps offsets **1:1** with the visual model
+  (markers **dim** rather than collapse), so the PRD's full §7.4 behavior (true glyph-hiding with a
+  bidirectional offset↔visual map, atomic caret traversal of concealed markers — and the front-matter
+  *fold* and a true "Properties" header that depend on it), **IME**, the **automation peer
+  (accessibility)**, **smart paste** (HTML→MD, image paste, paste-as-plain), **block objects** (inline
+  images / rendered tables / embeds), **spell check**, and the OS **print/PDF** path are the dedicated
+  later phases (PRD §11) and are **not built yet**. Don't claim them done; build them on the layering
+  that's here. (Rendering can't be exercised by the headless CI here — no GPU — so the surface's draw
+  path is verified structurally and by the engine's incremental tests, not by pixel tests.)
 
 ## Conventions
 
