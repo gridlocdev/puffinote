@@ -238,15 +238,15 @@ public class MarkdownEditor : Avalonia.Controls.Control, ILogicalScrollable
 
     // ----- formatting commands (toolbar / Format menu — PRD §7.5) -----
 
-    public void ToggleBold() => Wrap("**", "**");
+    public void ToggleBold() => ToggleEmphasis("**", "**", TokenType.Strong);
 
-    public void ToggleItalic() => Wrap("*", "*");
+    public void ToggleItalic() => ToggleEmphasis("*", "*", TokenType.Emphasis);
 
-    public void ToggleInlineCode() => Wrap("`", "`");
+    public void ToggleInlineCode() => ToggleEmphasis("`", "`", TokenType.InlineCode);
 
-    public void ToggleStrikethrough() => Wrap("~~", "~~");
+    public void ToggleStrikethrough() => ToggleEmphasis("~~", "~~", TokenType.Strikethrough);
 
-    public void ToggleHighlight() => Wrap("==", "==");
+    public void ToggleHighlight() => ToggleEmphasis("==", "==", TokenType.Highlight);
 
     /// <summary>Set the caret's line to an ATX heading of <paramref name="level"/> (replacing any existing one).</summary>
     public void ApplyHeading(int level)
@@ -262,21 +262,27 @@ public class MarkdownEditor : Avalonia.Controls.Control, ILogicalScrollable
     }
 
     /// <summary>
-    /// Wrap the selection in <paramref name="left"/>/<paramref name="right"/>. With no selection, wrap the
-    /// word the caret is inside (so ⌘B on a bare caret in a word bolds the whole word); if the caret isn't
-    /// touching a word, insert the empty pair to type into. Either way the wrapped content is left selected.
+    /// Toggle an inline emphasis format (bold/italic/strikethrough/highlight/inline-code) over the
+    /// selection — or, with no selection, the word the caret is inside (so ⌘B on a bare caret in a word
+    /// bolds the whole word). Applying the format a <b>second</b> time to text that is already wrapped in
+    /// exactly that format <b>removes</b> it (unwraps the run it expanded to). If the caret isn't touching a
+    /// word, an empty marker pair is inserted to type into. Either way the affected content is left selected.
     /// </summary>
-    public void Wrap(string left, string right)
+    /// <param name="left">Opening marker, e.g. <c>**</c>.</param>
+    /// <param name="right">Closing marker, e.g. <c>**</c>.</param>
+    /// <param name="contentType">The engine token type of this format's content (e.g. <see cref="TokenType.Strong"/>),
+    /// used to detect an existing run so a second press toggles it off.</param>
+    public void ToggleEmphasis(string left, string right, TokenType contentType)
     {
         var sel = _buffer.Selection;
-        int start, length;
+        int start, end;
         if (!sel.IsEmpty)
         {
-            (start, length) = (sel.Start, sel.Length);
+            (start, end) = (sel.Start, sel.End);
         }
         else if (WordAround(sel.Caret) is { } word)
         {
-            (start, length) = (word.Start, word.End - word.Start);
+            (start, end) = (word.Start, word.End);
         }
         else
         {
@@ -286,10 +292,69 @@ public class MarkdownEditor : Avalonia.Controls.Control, ILogicalScrollable
             return;
         }
 
-        var inner = _buffer.Document.GetText(start, length);
-        _buffer.ReplaceRange(start, length, left + inner + right);
-        _buffer.Selection = new Selection(start + left.Length, start + left.Length + inner.Length);
+        // Already wrapped in exactly this format? Strip the markers (one undo step) and re-select the content.
+        if (FindEmphasisRun(start, end, contentType) is { } run)
+        {
+            var inner = _buffer.Document.GetText(run.InnerStart, run.InnerEnd - run.InnerStart);
+            _buffer.ReplaceRange(run.OuterStart, run.OuterEnd - run.OuterStart, inner);
+            _buffer.Selection = new Selection(run.OuterStart, run.OuterStart + inner.Length);
+            Focus();
+            return;
+        }
+
+        var content = _buffer.Document.GetText(start, end - start);
+        _buffer.ReplaceRange(start, end - start, left + content + right);
+        _buffer.Selection = new Selection(start + left.Length, start + left.Length + content.Length);
         Focus();
+    }
+
+    /// <summary>
+    /// If <c>[start, end)</c> is exactly the content of an existing inline construct of
+    /// <paramref name="contentType"/> (e.g. the <c>word</c> inside <c>**word**</c>), return the construct's
+    /// outer span (markers included) and its inner content span so the caller can unwrap it; otherwise null.
+    /// Detection is token-based — the markers grouped with the content node (<see cref="Token.Node"/>) must
+    /// flank it — so a second ⌘B on a bolded word toggles bold off without disturbing surrounding emphasis.
+    /// </summary>
+    private (int OuterStart, int OuterEnd, int InnerStart, int InnerEnd)? FindEmphasisRun(int start, int end, TokenType contentType)
+    {
+        var doc = _buffer.Document;
+        if (start < 0 || end > doc.Length || start >= end)
+        {
+            return null;
+        }
+
+        var line = doc.GetPosition(start).Line;
+        if (doc.GetPosition(end).Line != line)
+        {
+            return null; // emphasis never crosses a line; a multi-line selection can't be a single run
+        }
+
+        var toks = _model.LineTokens(line);
+        foreach (var t in toks)
+        {
+            if (t.Type != contentType || t.Role != TokenRole.Content || t.Start != start || t.End != end)
+            {
+                continue;
+            }
+
+            var outerStart = t.Start;
+            var outerEnd = t.End;
+            foreach (var m in toks)
+            {
+                if (m.Node == t.Node && m.Role == TokenRole.Marker)
+                {
+                    outerStart = Math.Min(outerStart, m.Start);
+                    outerEnd = Math.Max(outerEnd, m.End);
+                }
+            }
+
+            if (outerStart < t.Start && outerEnd > t.End)
+            {
+                return (outerStart, outerEnd, t.Start, t.End);
+            }
+        }
+
+        return null;
     }
 
     /// <summary>
