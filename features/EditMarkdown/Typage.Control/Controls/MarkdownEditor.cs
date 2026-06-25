@@ -70,11 +70,16 @@ public class MarkdownEditor : Avalonia.Controls.Control, ILogicalScrollable
     private int[] _rowPrefix = new int[1];
     private bool _layoutDirty = true;
     private double _layoutWidth = double.NaN;
+    // Smallest line changed since the last layout. EnsureLayout reuses every block before it (their layout
+    // and all preceding context are unchanged). `int.MaxValue` = clean; 0 = a structural/width/theme change
+    // that forces a full rebuild.
+    private int _firstDirtyLine;
 
     // Laid-out, measured visual line per block, reused across renders / caret moves / hit-tests until the
     // layout is rebuilt (EnsureLayout clears it). Building one is expensive — tokens → segments → word-wrap
     // → text measurement — and it was previously redone on every frame and every caret step.
     private readonly Dictionary<int, VisualLine> _blockVisualCache = new();
+    private readonly List<int> _blockVisualEvict = new(); // scratch reused by EvictBlockVisualsFrom
 
     public MarkdownEditor()
     {
@@ -87,6 +92,7 @@ public class MarkdownEditor : Avalonia.Controls.Control, ILogicalScrollable
             _model = _model.Update(_buffer.Document, _buffer.LastChangedLine, out _);
             _goalX = double.NaN; // an edit moves the caret; the next Up/Down recomputes the goal column
             _layoutDirty = true; // line/row counts may have changed → rebuild the wrapped-layout cache
+            _firstDirtyLine = Math.Min(_firstDirtyLine, _buffer.LastChangedLine); // reuse blocks above this
             RaiseScrollInvalidated(EventArgs.Empty); // line count / extent may have changed
             InvalidateVisual();
             TextChanged?.Invoke(this, EventArgs.Empty);
@@ -164,6 +170,7 @@ public class MarkdownEditor : Avalonia.Controls.Control, ILogicalScrollable
             _formattedCache.Clear(); // cached glyph runs were built with the old theme's brushes/fonts
             _extentWidth = 0;    // fonts changed — let the horizontal extent regrow as lines redraw
             _layoutDirty = true; // line heights/wrapping depend on the font metrics
+            _firstDirtyLine = 0; // every block re-measures under new metrics
             RaiseScrollInvalidated(EventArgs.Empty);
             InvalidateMeasure();
             InvalidateVisual();
@@ -224,6 +231,7 @@ public class MarkdownEditor : Avalonia.Controls.Control, ILogicalScrollable
 
             _wordWrap = value;
             _layoutDirty = true;
+            _firstDirtyLine = 0; // wrapping changes for every block
             _extentWidth = 0;
             RaiseScrollInvalidated(EventArgs.Empty);
             InvalidateMeasure();
@@ -1245,11 +1253,13 @@ public class MarkdownEditor : Avalonia.Controls.Control, ILogicalScrollable
             return;
         }
 
-        // The block structure / wrap width is changing, so every cached visual line is now stale.
-        _blockVisualCache.Clear();
+        // A width change re-wraps every block; otherwise reuse everything before the first edited line, whose
+        // layout (and all the context feeding it) is unchanged — mirroring the incremental tokenizer. A clean
+        // sentinel here means we were dirtied without a tracked line, so rebuild fully to be safe.
+        var firstDirty = _layoutWidth == width && _firstDirtyLine != int.MaxValue ? _firstDirtyLine : 0;
 
         // Group lines into blocks: a line joins the previous block only if it and the line above are both
-        // plain paragraph text and the line above doesn't end in a hard break.
+        // plain paragraph text and the line above doesn't end in a hard break. (Cheap — no measurement.)
         var starts = new List<int>();
         var ofLine = new int[n];
         for (var l = 0; l < n; l++)
@@ -1263,29 +1273,91 @@ public class MarkdownEditor : Avalonia.Controls.Control, ILogicalScrollable
             ofLine[l] = starts.Count - 1;
         }
 
-        _blockStartLine = new int[starts.Count + 1];
-        for (var b = 0; b < starts.Count; b++)
+        var blockCount = starts.Count;
+        var oldStarts = _blockStartLine;
+        var oldRowCounts = _rowCounts;
+
+        var newStartLine = new int[blockCount + 1];
+        for (var b = 0; b < blockCount; b++)
         {
-            _blockStartLine[b] = starts[b];
+            newStartLine[b] = starts[b];
         }
 
-        _blockStartLine[starts.Count] = n;
+        newStartLine[blockCount] = n;
+
+        // Leading blocks identical to the previous layout (same boundaries, ending one line clear of the first
+        // edit so the flow-join the edit might change is excluded): their measured rows and cached visuals
+        // carry over untouched.
+        var reuse = 0;
+        while (reuse < blockCount && reuse < oldRowCounts.Length
+               && newStartLine[reuse] == oldStarts[reuse]
+               && newStartLine[reuse + 1] == oldStarts[reuse + 1]
+               && newStartLine[reuse + 1] <= firstDirty - 1)
+        {
+            reuse++;
+        }
+
+        // Cached visuals from the first rebuilt block on are stale (their indices may now name different
+        // blocks); the reused prefix stays. BlockVisual repopulates the rest as the row loop measures them.
+        EvictBlockVisualsFrom(reuse);
+
+        _blockStartLine = newStartLine;
         _blockOfLine = ofLine;
 
-        _rowCounts = new int[starts.Count];
-        _rowPrefix = new int[starts.Count + 1];
-        for (var b = 0; b < starts.Count; b++)
+        var rowCounts = new int[blockCount];
+        var rowPrefix = new int[blockCount + 1];
+        for (var b = 0; b < blockCount; b++)
         {
-            // A soft paragraph separator (a single collapsed blank line) takes no rows, so two paragraphs
-            // render one line apart instead of with an empty line between them.
-            var line = _blockStartLine[b];
-            var collapsed = _blockStartLine[b + 1] - line == 1 && IsCollapsedBlankLine(line);
-            _rowCounts[b] = collapsed ? 0 : BlockVisual(b).RowCount;
-            _rowPrefix[b + 1] = _rowPrefix[b] + _rowCounts[b];
+            if (b < reuse)
+            {
+                rowCounts[b] = oldRowCounts[b]; // unchanged block — keep its measured row count
+            }
+            else
+            {
+                // A soft paragraph separator (a single collapsed blank line) takes no rows, so two paragraphs
+                // render one line apart instead of with an empty line between them.
+                var line = newStartLine[b];
+                var collapsed = newStartLine[b + 1] - line == 1 && IsCollapsedBlankLine(line);
+                rowCounts[b] = collapsed ? 0 : BlockVisual(b).RowCount;
+            }
+
+            rowPrefix[b + 1] = rowPrefix[b] + rowCounts[b];
         }
 
+        _rowCounts = rowCounts;
+        _rowPrefix = rowPrefix;
         _layoutWidth = width;
         _layoutDirty = false;
+        _firstDirtyLine = int.MaxValue;
+    }
+
+    /// <summary>Drop cached block visuals at indices &gt;= <paramref name="from"/> (those blocks are being rebuilt).</summary>
+    private void EvictBlockVisualsFrom(int from)
+    {
+        if (from == 0)
+        {
+            _blockVisualCache.Clear();
+            return;
+        }
+
+        if (_blockVisualCache.Count == 0)
+        {
+            return;
+        }
+
+        _blockVisualEvict.Clear();
+        foreach (var key in _blockVisualCache.Keys)
+        {
+            if (key >= from)
+            {
+                _blockVisualEvict.Add(key);
+            }
+        }
+
+        foreach (var key in _blockVisualEvict)
+        {
+            _blockVisualCache.Remove(key);
+        }
     }
 
     /// <summary>
@@ -4154,6 +4226,13 @@ public class MarkdownEditor : Avalonia.Controls.Control, ILogicalScrollable
     {
         EnsureLayout();
         return TotalRows;
+    }
+
+    /// <summary>The global visual row at which <paramref name="line"/>'s block starts; for tests (layout equivalence).</summary>
+    internal int BlockTopRowForTest(int line)
+    {
+        EnsureLayout();
+        return _rowPrefix[BlockOf(line)];
     }
 
     /// <summary>
