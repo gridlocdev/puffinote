@@ -624,9 +624,18 @@ public class MarkdownEditor : Avalonia.Controls.Control, ILogicalScrollable
     private bool IsFlowLine(int line)
     {
         var doc = _buffer.Document;
-        if (doc.GetLineText(line).Trim().Length == 0)
+        var text = doc.GetLineText(line);
+        if (text.Trim().Length == 0)
         {
             return false; // a blank line separates paragraphs
+        }
+
+        // A line that starts with indentation is laid out on its own row: the user's leading tabs/spaces
+        // are deliberate, so it neither flows into the line above nor absorbs the line below (an indented
+        // line under plain prose otherwise merged into it with the newline becoming a space).
+        if (text[0] == ' ' || text[0] == '\t')
+        {
+            return false;
         }
 
         if (_model.EnteringState(line).Kind != BlockKind.Normal)
@@ -2349,9 +2358,35 @@ public class MarkdownEditor : Avalonia.Controls.Control, ILogicalScrollable
             return tokens[0].Type is TokenType.CodeFence or TokenType.CodeText;
         }
 
-        // A blank row is code only while inside a fenced or indented block (keeps the panel continuous).
-        return _model.EnteringState(line).Kind is BlockKind.FencedCode or BlockKind.IndentedCode;
+        // A blank row inside a fenced block is code until the fence closes. Inside an *indented* block a
+        // blank stays code only when it's interior — a later line resumes the indented code. A blank that
+        // merely trails the block (nothing more indented follows) is not part of it, so it isn't panelled
+        // — this is the empty line your caret sits on while typing below an indented block.
+        var entering = _model.EnteringState(line).Kind;
+        if (entering == BlockKind.FencedCode)
+        {
+            return true;
+        }
+
+        if (entering == BlockKind.IndentedCode)
+        {
+            for (var l = line + 1; l < _buffer.Document.LineCount; l++)
+            {
+                var toks = _model.LineTokens(l);
+                if (toks.Count == 0)
+                {
+                    continue; // another interior blank — keep scanning forward
+                }
+
+                return toks[0].Type == TokenType.CodeText; // indented code resumes → this blank is interior
+            }
+        }
+
+        return false;
     }
+
+    /// <summary>Whether <paramref name="line"/> is panelled as code (fenced/indented); for tests.</summary>
+    internal bool IsCodeLineForTest(int line) => IsCodeLine(line);
 
     // Task-checkbox geometry, shared between the gutter width and the drawn glyph so they stay in sync.
     private const double CheckboxLeftPad = 1;   // small inset before the box

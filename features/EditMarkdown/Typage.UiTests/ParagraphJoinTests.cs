@@ -76,6 +76,27 @@ public class ParagraphJoinTests
     }
 
     [AvaloniaFact]
+    public void IndentedLineBelowProse_DoesNotJoin()
+    {
+        var e = Editor("hello\n\tworld"); // the second line is tab-indented
+        Assert.NotEqual(e.BlockOfLineForTest(0), e.BlockOfLineForTest(1));
+    }
+
+    [AvaloniaFact]
+    public void SpaceIndentedLineBelowProse_DoesNotJoin()
+    {
+        var e = Editor("hello\n  world"); // leading spaces are deliberate indentation
+        Assert.NotEqual(e.BlockOfLineForTest(0), e.BlockOfLineForTest(1));
+    }
+
+    [AvaloniaFact]
+    public void ProseBelowAnIndentedLine_DoesNotAbsorbIt()
+    {
+        var e = Editor("\tindented\nplain"); // the indented line shouldn't pull "plain" up either
+        Assert.NotEqual(e.BlockOfLineForTest(0), e.BlockOfLineForTest(1));
+    }
+
+    [AvaloniaFact]
     public void HardBreakKeepsLinesSeparate()
     {
         // Two trailing spaces after "first" make a hard break, so the next line stays a separate block.

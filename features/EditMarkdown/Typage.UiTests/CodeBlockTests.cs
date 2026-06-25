@@ -30,6 +30,29 @@ public class CodeBlockTests
     }
 
     [AvaloniaFact]
+    public void TrailingBlankBelowIndentedCode_IsNotPanelled()
+    {
+        // The indented run is lines 0-1; line 2 is the empty line the caret sits on while typing. It must
+        // not be highlighted as code (the block has ended — nothing more indented follows).
+        var e = new Typage.Control.Controls.MarkdownEditor { Text = "    code one\n    code two\n\nprose" };
+        Assert.True(e.IsCodeLineForTest(0));
+        Assert.True(e.IsCodeLineForTest(1));
+        Assert.False(e.IsCodeLineForTest(2), "the trailing blank below the indented block isn't code");
+        Assert.False(e.IsCodeLineForTest(3));
+    }
+
+    [AvaloniaFact]
+    public void InteriorBlankBetweenIndentedCodeLines_StaysPanelled()
+    {
+        // A blank line *between* two indented code lines is interior — it keeps the panel continuous.
+        var e = new Typage.Control.Controls.MarkdownEditor { Text = "    code one\n\n    code two\nprose" };
+        Assert.True(e.IsCodeLineForTest(0));
+        Assert.True(e.IsCodeLineForTest(1), "the blank between two indented code lines stays code");
+        Assert.True(e.IsCodeLineForTest(2));
+        Assert.False(e.IsCodeLineForTest(3));
+    }
+
+    [AvaloniaFact]
     public void IndentedCodeBlock_Renders_WithoutThrowing()
     {
         var view = new MarkdownEditorView();
