@@ -3308,6 +3308,16 @@ public class MarkdownEditor : Avalonia.Controls.Control, ILogicalScrollable
         return true;
     }
 
+    /// <summary>Offset just past <paramref name="line"/>'s last content character, also dropping a trailing
+    /// <c>\r</c> (which <see cref="TextDocument.GetLineEnd"/> keeps as content) — so a CRLF merge removes the
+    /// whole <c>\r\n</c> rather than stranding a bare carriage return.</summary>
+    private int ContentEnd(int line)
+    {
+        var doc = _buffer.Document;
+        var end = doc.GetLineEnd(line);
+        return end > doc.GetLineStart(line) && doc[end - 1] == '\r' ? end - 1 : end;
+    }
+
     /// <summary>
     /// Backspace at the start of a paragraph that sits under a collapsed blank separator: remove the whole
     /// <c>\n\n</c> break (not just one newline, which would leave a single soft-break newline that flows the
@@ -3338,7 +3348,7 @@ public class MarkdownEditor : Avalonia.Controls.Control, ILogicalScrollable
             return false;
         }
 
-        var from = doc.GetLineEnd(line - 2); // end of the content line just above the blank
+        var from = ContentEnd(line - 2); // end of the content line just above the blank (excluding its \r)
         _buffer.ReplaceRange(from, caret - from, string.Empty);
         _buffer.Selection = Selection.At(from);
         return true;
@@ -3357,7 +3367,9 @@ public class MarkdownEditor : Avalonia.Controls.Control, ILogicalScrollable
         var doc = _buffer.Document;
         var caret = sel.Caret;
         var line = doc.GetPosition(caret).Line;
-        if (caret != doc.GetLineEnd(line) || !IsCollapsedBlankLine(line + 1))
+        // Compare against the visible content end (which excludes a CRLF's \r) — that's where End/⌘-Right put
+        // the caret, so forward-delete merges symmetrically with backspace on CRLF as well as LF.
+        if (caret != ContentEnd(line) || !IsCollapsedBlankLine(line + 1))
         {
             return false;
         }
@@ -4325,6 +4337,17 @@ public class MarkdownEditor : Avalonia.Controls.Control, ILogicalScrollable
         // zero-width and never a caret stop), so a click resolves to the right document offset even where
         // markers are hidden, the paragraph is joined from several source lines, or the text wraps.
         var visual = BlockVisual(block);
-        return BlockStartOffset(block) + visual.XToColumn(row, x);
+        var offset = BlockStartOffset(block) + visual.XToColumn(row, x);
+
+        // A CRLF soft-break inside a flow-joined paragraph renders as a column for the \r and one for the \n;
+        // never let a click resolve strictly between them — an edit there would split the \r\n into a stray
+        // bare \r. Snap to the content side (before the \r).
+        var doc = _buffer.Document;
+        if (offset > 0 && offset < doc.Length && doc[offset - 1] == '\r' && doc[offset] == '\n')
+        {
+            offset--;
+        }
+
+        return offset;
     }
 }
