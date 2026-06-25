@@ -77,9 +77,29 @@ public class FormatToggleOffTests
     }
 
     [AvaloniaFact]
-    public void Bold_OnAlreadyItalicWord_NestsRatherThanUnwrapping()
+    public void Italic_OnABoldWord_AddsItalicThenDropsBackToBold()
     {
-        // A different format than the one present doesn't toggle off — bold over an italic word adds bold.
+        // Bold and italic are independent layers over the same delimiter; italic on bold → bold-italic,
+        // and italic again removes only the italic layer, leaving bold.
+        var e = At("**word**", caret: 4); // caret inside the bold "word"
+        e.ToggleItalic();
+        Assert.Equal("***word***", e.Text);
+
+        e.ToggleItalic();
+        Assert.Equal("**word**", e.Text);
+    }
+
+    [AvaloniaFact]
+    public void Bold_OnBoldItalicWord_LeavesItalic()
+    {
+        var e = At("***word***", caret: 5); // caret inside bold-italic "word"
+        e.ToggleBold();
+        Assert.Equal("*word*", e.Text);
+    }
+
+    [AvaloniaFact]
+    public void Bold_OnAnItalicWord_ProducesBoldItalic()
+    {
         var e = At("*word*", caret: 3); // caret inside the italic "word"
         e.ToggleBold();
         Assert.Equal("***word***", e.Text);

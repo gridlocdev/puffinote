@@ -238,9 +238,9 @@ public class MarkdownEditor : Avalonia.Controls.Control, ILogicalScrollable
 
     // ----- formatting commands (toolbar / Format menu — PRD §7.5) -----
 
-    public void ToggleBold() => ToggleEmphasis("**", "**", TokenType.Strong);
+    public void ToggleBold() => ToggleStarEmphasis(bold: true);
 
-    public void ToggleItalic() => ToggleEmphasis("*", "*", TokenType.Emphasis);
+    public void ToggleItalic() => ToggleStarEmphasis(bold: false);
 
     public void ToggleInlineCode() => ToggleEmphasis("`", "`", TokenType.InlineCode);
 
@@ -351,6 +351,115 @@ public class MarkdownEditor : Avalonia.Controls.Control, ILogicalScrollable
             if (outerStart < t.Start && outerEnd > t.End)
             {
                 return (outerStart, outerEnd, t.Start, t.End);
+            }
+        }
+
+        return null;
+    }
+
+    /// <summary>
+    /// Toggle the bold (<c>**</c>) or italic (<c>*</c>) component of the target's emphasis, treating bold and
+    /// italic as <b>independent layers</b> over the same <c>*</c>/<c>_</c> delimiter (CommonMark nests them as
+    /// a single 1–3 long run). So italic on a bold word gives bold-italic (<c>***w***</c>); italic again drops
+    /// just the italic back to bold (<c>**w**</c>); bold on bold-italic leaves italic (<c>*w*</c>). With no
+    /// emphasis present it simply wraps; with no word/selection it inserts an empty delimiter pair.
+    /// </summary>
+    private void ToggleStarEmphasis(bool bold)
+    {
+        var sel = _buffer.Selection;
+        int start, end;
+        if (!sel.IsEmpty)
+        {
+            (start, end) = (sel.Start, sel.End);
+        }
+        else if (WordAround(sel.Caret) is { } word)
+        {
+            (start, end) = (word.Start, word.End);
+        }
+        else
+        {
+            var d = bold ? "**" : "*";
+            _buffer.ReplaceRange(sel.Caret, 0, d + d);
+            _buffer.Selection = Selection.At(sel.Caret + d.Length);
+            Focus();
+            return;
+        }
+
+        // Read the emphasis run already wrapping the target (its delimiter run is 1=italic, 2=bold, 3=both),
+        // flip the requested layer, and rewrite the whole construct with the new run length (0 = unwrap).
+        var existing = FindStarEmphasis(start, end);
+        var ch = existing?.Delim ?? '*';
+        var level = existing?.RunLength ?? 0;
+        var hasBold = level >= 2;
+        var hasItalic = level is 1 or 3;
+        if (bold)
+        {
+            hasBold = !hasBold;
+        }
+        else
+        {
+            hasItalic = !hasItalic;
+        }
+
+        var newLevel = (hasBold ? 2 : 0) + (hasItalic ? 1 : 0);
+        var content = _buffer.Document.GetText(start, end - start);
+        var delim = new string(ch, newLevel);
+        var outerStart = existing?.OuterStart ?? start;
+        var outerEnd = existing?.OuterEnd ?? end;
+
+        _buffer.ReplaceRange(outerStart, outerEnd - outerStart, delim + content + delim);
+        _buffer.Selection = new Selection(outerStart + delim.Length, outerStart + delim.Length + content.Length);
+        Focus();
+    }
+
+    /// <summary>
+    /// The <c>*</c>/<c>_</c> emphasis construct (bold, italic, or bold-italic) whose content is exactly
+    /// <c>[start, end)</c>: its outer span, its delimiter run length (1–3), and the delimiter char — or null.
+    /// </summary>
+    private (int OuterStart, int OuterEnd, int RunLength, char Delim)? FindStarEmphasis(int start, int end)
+    {
+        var doc = _buffer.Document;
+        if (start < 0 || end > doc.Length || start >= end)
+        {
+            return null;
+        }
+
+        var line = doc.GetPosition(start).Line;
+        if (doc.GetPosition(end).Line != line)
+        {
+            return null;
+        }
+
+        var toks = _model.LineTokens(line);
+        foreach (var t in toks)
+        {
+            if (t.Role != TokenRole.Content || t.Start != start || t.End != end ||
+                t.Type is not (TokenType.Strong or TokenType.Emphasis or TokenType.StrongEmphasis))
+            {
+                continue;
+            }
+
+            var outerStart = t.Start;
+            var outerEnd = t.End;
+            Token? open = null;
+            foreach (var m in toks)
+            {
+                if (m.Node != t.Node || m.Role != TokenRole.Marker)
+                {
+                    continue;
+                }
+
+                outerStart = Math.Min(outerStart, m.Start);
+                outerEnd = Math.Max(outerEnd, m.End);
+                if (open is null || m.Start < open.Value.Start)
+                {
+                    open = m;
+                }
+            }
+
+            if (open is { } o && outerStart < t.Start && outerEnd > t.End)
+            {
+                return (outerStart, outerEnd, o.Length, doc[o.Start]);
             }
         }
 
