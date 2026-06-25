@@ -1741,11 +1741,23 @@ public class MarkdownEditor : Avalonia.Controls.Control, ILogicalScrollable
             endLine--;
         }
 
-        // Extend the moved unit over the descendants (deeper-indented, non-blank lines) of the last line.
+        // Extend the moved unit over its descendants: deeper-indented lines that continue the *same list
+        // kind* (bulleted / numbered / checkbox) as the moved line, plus plain continuation text. A deeper
+        // line that starts a different kind of list marker is left out.
         var baseIndent = LineIndent(startLine);
-        while (endLine + 1 < doc.LineCount && !IsBlankLine(endLine + 1) && LineIndent(endLine + 1) > baseIndent)
+        var movedKind = ListItemKind(startLine);
+        while (endLine + 1 < doc.LineCount && !IsBlankLine(endLine + 1) && LineIndent(endLine + 1) > baseIndent
+               && CarriesAsDescendant(movedKind, endLine + 1))
         {
             endLine++;
+        }
+
+        // If a deeper line we *didn't* carry sits right after the moved unit (a nested list of a different
+        // kind), moving would strand that block under a new parent — so refuse the move. The sibling on the
+        // other side can still be moved to achieve the reorder, since a swap carries the whole subtree.
+        if (endLine + 1 < doc.LineCount && !IsBlankLine(endLine + 1) && LineIndent(endLine + 1) > baseIndent)
+        {
+            return;
         }
 
         int regionStartLine, regionEndLine, delta;
@@ -1830,6 +1842,34 @@ public class MarkdownEditor : Avalonia.Controls.Control, ILogicalScrollable
 
         _reorderActive = false;
         InvalidateVisual();
+    }
+
+    /// <summary>The kind of list marker a line carries, for the same-kind reorder rule.</summary>
+    private enum MarkerKind { None, Bulleted, Numbered, Checkbox }
+
+    /// <summary>Classify <paramref name="line"/>'s list marker: a task checkbox, a numbered item, a bullet, or none.</summary>
+    private MarkerKind ListItemKind(int line)
+    {
+        var p = LinePrefix.Parse(_buffer.Document.GetLineText(line));
+        if (p.HasTask)
+        {
+            return MarkerKind.Checkbox;
+        }
+
+        return p.List switch
+        {
+            ListKind.Ordered => MarkerKind.Numbered,
+            ListKind.Unordered => MarkerKind.Bulleted,
+            _ => MarkerKind.None,
+        };
+    }
+
+    /// <summary>Whether a deeper line is carried as a descendant of a <paramref name="movedKind"/> item: only
+    /// plain (non-list) continuation lines and same-kind list items are; a different list kind is not.</summary>
+    private bool CarriesAsDescendant(MarkerKind movedKind, int line)
+    {
+        var kind = ListItemKind(line);
+        return kind == MarkerKind.None || kind == movedKind;
     }
 
     /// <summary>
