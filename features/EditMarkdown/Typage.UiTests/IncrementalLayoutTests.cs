@@ -62,6 +62,18 @@ public class IncrementalLayoutTests
         AssertLayoutMatchesFullRebuild(editor, 2);
     }
 
+    [AvaloniaFact]
+    public void IncrementalLayout_AccumulatesDirtyLineAcrossEditsBeforeALayout()
+    {
+        // A compound operation makes several edits before the next layout. The reused prefix must start above
+        // the *earliest* of them, so editing a high line then a low one (no layout between) still rebuilds the
+        // low one. No ForTest/render call happens between the edits, so EnsureLayout sees both.
+        var editor = new MarkdownEditor { Text = "one\n\ntwo\n\nthree\n\nfour" };
+        editor.Buffer.ReplaceRange(editor.Buffer.Document.Length, 0, " edited"); // line 6 ("four")
+        editor.Buffer.ReplaceRange(0, 0, "ZERO\n\n");                            // now line 0 — the earlier line
+        AssertLayoutMatchesFullRebuild(editor, 0);
+    }
+
     private static void AssertLayoutMatchesFullRebuild(MarkdownEditor edited, int step)
     {
         var fresh = new MarkdownEditor { Text = edited.Text }; // a new editor full-rebuilds its layout
