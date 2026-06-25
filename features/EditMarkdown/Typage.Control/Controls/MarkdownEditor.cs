@@ -246,23 +246,65 @@ public class MarkdownEditor : Avalonia.Controls.Control, ILogicalScrollable
         _buffer.ReplaceRange(lineStart, text.Length, replacement);
     }
 
-    /// <summary>Wrap the selection in <paramref name="left"/>/<paramref name="right"/>, or insert the pair at the caret.</summary>
+    /// <summary>
+    /// Wrap the selection in <paramref name="left"/>/<paramref name="right"/>. With no selection, wrap the
+    /// word the caret is inside (so ⌘B on a bare caret in a word bolds the whole word); if the caret isn't
+    /// touching a word, insert the empty pair to type into. Either way the wrapped content is left selected.
+    /// </summary>
     public void Wrap(string left, string right)
     {
         var sel = _buffer.Selection;
-        if (sel.IsEmpty)
+        int start, length;
+        if (!sel.IsEmpty)
         {
-            _buffer.ReplaceRange(sel.Caret, 0, left + right);
-            _buffer.Selection = Selection.At(sel.Caret + left.Length);
+            (start, length) = (sel.Start, sel.Length);
+        }
+        else if (WordAround(sel.Caret) is { } word)
+        {
+            (start, length) = (word.Start, word.End - word.Start);
         }
         else
         {
-            var inner = _buffer.Document.GetText(sel.Start, sel.Length);
-            _buffer.ReplaceRange(sel.Start, sel.Length, left + inner + right);
-            _buffer.Selection = new Selection(sel.Start + left.Length, sel.Start + left.Length + inner.Length);
+            _buffer.ReplaceRange(sel.Caret, 0, left + right);
+            _buffer.Selection = Selection.At(sel.Caret + left.Length);
+            Focus();
+            return;
         }
 
+        var inner = _buffer.Document.GetText(start, length);
+        _buffer.ReplaceRange(start, length, left + inner + right);
+        _buffer.Selection = new Selection(start + left.Length, start + left.Length + inner.Length);
         Focus();
+    }
+
+    /// <summary>
+    /// The span of the word the caret at <paramref name="caret"/> is inside — the maximal run of
+    /// word characters (letters, digits, underscore) touching the caret on either side — or null when the
+    /// caret sits on whitespace/punctuation and isn't adjacent to a word. Never crosses a line break.
+    /// </summary>
+    private (int Start, int End)? WordAround(int caret)
+    {
+        var doc = _buffer.Document;
+        bool IsWordChar(int i) => i >= 0 && i < doc.Length && CharClass(doc[i]) == 0;
+
+        if (!IsWordChar(caret - 1) && !IsWordChar(caret))
+        {
+            return null;
+        }
+
+        var start = caret;
+        while (start > 0 && CharClass(doc[start - 1]) == 0)
+        {
+            start--;
+        }
+
+        var end = caret;
+        while (end < doc.Length && CharClass(doc[end]) == 0)
+        {
+            end++;
+        }
+
+        return (start, end);
     }
 
     /// <summary>Wrap the selection as a link <c>[text](url)</c>, leaving the caret in the URL slot.</summary>
