@@ -356,13 +356,23 @@ internal sealed class InlineTokenizer
             return 0; // no leading space inside; no empty span
         }
 
+        // Underscore (unlike '*') does not delimit intra-word, so snake_case / dunders stay literal: the
+        // opening run must not sit immediately after a word character (CommonMark's left-flanking rule for '_').
+        if (c == '_' && i > 0 && char.IsLetterOrDigit(_text[i - 1]))
+        {
+            return 0;
+        }
+
         var j = contentStart;
         while (j < to)
         {
-            if (_text[j] == c && !char.IsWhiteSpace(_text[j - 1]))
+            // A delimiter escaped by a backslash (an odd run of '\' before it) is a literal, not a closer.
+            if (_text[j] == c && !char.IsWhiteSpace(_text[j - 1]) && !IsEscaped(j))
             {
                 var closeRun = RunLength(j, to, c);
-                if (closeRun >= count)
+                // The '_' closer is likewise blocked when it sits immediately before a word character.
+                var intraWord = c == '_' && j + closeRun < to && char.IsLetterOrDigit(_text[j + closeRun]);
+                if (closeRun >= count && !intraWord)
                 {
                     var node = _nextNode++;
                     FlushText(i);
@@ -381,6 +391,18 @@ internal sealed class InlineTokenizer
         }
 
         return 0;
+    }
+
+    /// <summary>True when the character at <paramref name="pos"/> is backslash-escaped (preceded by an odd run of '\').</summary>
+    private bool IsEscaped(int pos)
+    {
+        var slashes = 0;
+        for (var k = pos - 1; k >= 0 && _text[k] == '\\'; k--)
+        {
+            slashes++;
+        }
+
+        return (slashes & 1) == 1;
     }
 
     // ----- token emission -----

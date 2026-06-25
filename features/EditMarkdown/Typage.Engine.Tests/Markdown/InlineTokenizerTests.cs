@@ -31,6 +31,39 @@ public class InlineTokenizerTests
     }
 
     [Fact]
+    public void IntrawordUnderscore_IsNotEmphasis()
+    {
+        // snake_case and similar identifiers must stay literal — a '_' between word characters does not emphasise.
+        Assert.False(HasType("foo_bar_baz", TokenType.Emphasis));
+        Assert.False(HasType("a snake_case name", TokenType.Emphasis));
+        Assert.Empty(TextsOfType("foo_bar_baz", TokenType.Emphasis));
+    }
+
+    [Fact]
+    public void Underscore_AtWordBoundaries_StillEmphasises()
+    {
+        // The intraword guard must not suppress legitimate underscore emphasis at word boundaries.
+        Assert.Equal(new[] { "it" }, TextsOfType("an _it_ word", TokenType.Emphasis));
+        Assert.Equal(new[] { "name" }, TextsOfType("__name__", TokenType.Strong)); // dunders at boundaries are bold
+    }
+
+    [Fact]
+    public void Asterisk_StaysIntrawordEmphasis()
+    {
+        // '*' (unlike '_') still emphasises intra-word — only underscore gets the guard.
+        Assert.Equal(new[] { "bc" }, TextsOfType("a*bc*d", TokenType.Emphasis));
+    }
+
+    [Fact]
+    public void EscapedDelimiter_DoesNotCloseEmphasis()
+    {
+        // The escaped '\*' is a literal, so the span closes at the final real '*' — content spans "a\*b".
+        Assert.Equal(new[] { "a\\*b" }, TextsOfType("*a\\*b*", TokenType.Emphasis));
+        // Same for strikethrough's escaped inner marker.
+        Assert.Equal(new[] { "x\\~~y" }, TextsOfType("~~x\\~~y~~", TokenType.Strikethrough));
+    }
+
+    [Fact]
     public void Highlight()
     {
         Assert.Equal(new[] { "hot" }, TextsOfType("==hot==", TokenType.Highlight));
