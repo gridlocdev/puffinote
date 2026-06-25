@@ -1632,9 +1632,12 @@ public class MarkdownEditor : Avalonia.Controls.Control, ILogicalScrollable
             var caret = sel.Caret;
             _buffer.ReplaceRange(lineStart, prefix.Length, string.Empty);
             _buffer.Selection = Selection.At(Math.Max(lineStart, caret - prefix.Length));
+            RenumberOrderedRun(caretLine); // exiting an item may renumber the remaining ordered list
             return;
         }
 
+        // IndentLines folds the ordered-list renumber into its own single edit (so indent + renumber is one
+        // undo step), keeping the source's per-level numbering in step with the preview.
         IndentLines(startLine, endLine, outdent: shift);
     }
 
@@ -1668,23 +1671,37 @@ public class MarkdownEditor : Avalonia.Controls.Control, ILogicalScrollable
         return new string(' ', Math.Max(1, IndentWidth));
     }
 
-    /// <summary>Add or remove one indent level on lines <paramref name="startLine"/>..<paramref name="endLine"/> as one edit.</summary>
+    /// <summary>
+    /// Add or remove one indent level on lines <paramref name="startLine"/>..<paramref name="endLine"/> as a
+    /// single edit, then renumber the ordered items in the rest of the run so changed nesting levels keep
+    /// 1-based, per-level numbering in the source (matching the preview). One <see cref="DocumentBuffer.ReplaceRange"/>.
+    /// </summary>
     private void IndentLines(int startLine, int endLine, bool outdent)
     {
         var doc = _buffer.Document;
         var sel = _buffer.Selection;
         var unit = IndentUnit(startLine, endLine);
         var maxSpaces = Math.Max(1, IndentWidth);
-        var regionStart = doc.GetLineStart(startLine);
-        var regionEnd = doc.GetLineEnd(endLine);
 
-        var newLines = new List<string>();
-        var startDelta = 0;
-        var totalDelta = 0;
-        for (var l = startLine; l <= endLine; l++)
+        // Extend the rewrite down over the rest of this non-blank run so renumbering can also fix following
+        // items whose level changed; only [startLine, endLine] is actually indented/outdented.
+        var runEnd = endLine;
+        while (runEnd + 1 < doc.LineCount && !IsBlankLine(runEnd + 1))
         {
-            var text = doc.GetLineText(l);
-            int delta;
+            runEnd++;
+        }
+
+        var newLines = new List<string>(runEnd - startLine + 1);
+        var headDelta = new int[runEnd - startLine + 1]; // chars inserted(+)/removed(-) at each line's head
+        for (var l = startLine; l <= runEnd; l++)
+        {
+            var text = LineContent(doc, l);
+            if (l > endLine)
+            {
+                newLines.Add(text); // past the selected lines: untouched here, only (maybe) renumbered below
+                continue;
+            }
+
             if (outdent)
             {
                 // Remove one indent level: a single leading tab, or up to IndentWidth leading spaces.
@@ -1702,31 +1719,46 @@ public class MarkdownEditor : Avalonia.Controls.Control, ILogicalScrollable
                 }
 
                 newLines.Add(text[remove..]);
-                delta = -remove;
+                headDelta[l - startLine] = -remove;
             }
             else if (text.Length == 0 && startLine != endLine)
             {
                 newLines.Add(text); // don't indent blank lines inside a multi-line block
-                delta = 0;
             }
             else
             {
                 newLines.Add(unit + text);
-                delta = unit.Length;
+                headDelta[l - startLine] = unit.Length;
             }
-
-            if (l == startLine)
-            {
-                startDelta = delta;
-            }
-
-            totalDelta += delta;
         }
 
-        _buffer.ReplaceRange(regionStart, regionEnd - regionStart, string.Join("\n", newLines));
-        var newStart = Math.Max(regionStart, sel.Start + startDelta);
-        var newEnd = Math.Max(newStart, sel.End + totalDelta);
-        _buffer.Selection = new Selection(sel.Anchor <= sel.Caret ? newStart : newEnd, sel.Anchor <= sel.Caret ? newEnd : newStart);
+        var info = RenumberOrdered(newLines, startLine, doc.GetLineText);
+
+        ReplaceLines(startLine, runEnd, newLines);
+
+        // Re-place the selection by line+column: a line's head insert/remove shifts its content, and a
+        // renumber past the marker shifts a caret sitting in the item's content.
+        var moved = _buffer.Document;
+        int Place(int line, int col)
+        {
+            var i = line - startLine;
+            if (i >= 0 && i < newLines.Count)
+            {
+                col = Math.Max(0, col + headDelta[i]);
+                if (col > info[i].MarkerStart)
+                {
+                    col += info[i].DigitDelta;
+                }
+            }
+
+            return moved.GetLineStart(line) + col;
+        }
+
+        var startL = doc.GetPosition(sel.Start).Line;
+        var endL = doc.GetPosition(sel.End).Line;
+        var ns = Place(startL, sel.Start - doc.GetLineStart(startL));
+        var ne = Place(endL, sel.End - doc.GetLineStart(endL));
+        _buffer.Selection = sel.Anchor <= sel.Caret ? new Selection(ns, ne) : new Selection(ne, ns);
     }
 
     /// <summary>
@@ -1768,7 +1800,40 @@ public class MarkdownEditor : Avalonia.Controls.Control, ILogicalScrollable
         // `lineDelta` is how many lines the moved unit shifts (down: the partner's line count; up: negative).
         int regionStartLine, regionEndLine, lineDelta;
         var newOrder = new List<string>();
-        if (dir < 0)
+        if (startKind == ItemKind.None)
+        {
+            // The moved line isn't a list item (plain text, a heading, a blockquote, …): swap it with the
+            // single immediately-adjacent line, exactly like moving any other line of text. The subtree /
+            // sibling logic below is only for list items — applying it here would make a plain line skip over
+            // an indented neighbour (e.g. a list item's continuation text) instead of swapping with it.
+            if (dir < 0)
+            {
+                if (startLine == 0)
+                {
+                    return; // already at the top
+                }
+
+                regionStartLine = startLine - 1;
+                regionEndLine = endLine;
+                newOrder.AddRange(LinesOf(doc, startLine, endLine));
+                newOrder.Add(LineContent(doc, startLine - 1));
+                lineDelta = -1;
+            }
+            else
+            {
+                if (endLine + 1 >= doc.LineCount)
+                {
+                    return; // already at the bottom
+                }
+
+                regionStartLine = startLine;
+                regionEndLine = endLine + 1;
+                newOrder.Add(LineContent(doc, endLine + 1));
+                newOrder.AddRange(LinesOf(doc, startLine, endLine));
+                lineDelta = 1;
+            }
+        }
+        else if (dir < 0)
         {
             if (startLine == 0)
             {
@@ -1815,36 +1880,30 @@ public class MarkdownEditor : Avalonia.Controls.Control, ILogicalScrollable
             lineDelta = swapEnd - s + 1;                            // moved unit shifts down past the sibling subtree
         }
 
-        // Renumber the reordered ordered-list items so the SOURCE persists the same sequence the preview
-        // computes (which is always 1-based per run). Done in-place on `newOrder` so the reorder + renumber
-        // is a single ReplaceRange (one undo step). `digitDelta[i]` records how each line's marker length
-        // changed, so the caret/anchor columns can follow when a number grows/shrinks (e.g. 9 → 10).
-        var regionEndAfter = regionStartLine + newOrder.Count - 1;
-        string FinalLine(int g) =>
-            g >= regionStartLine && g <= regionEndAfter ? newOrder[g - regionStartLine] : doc.GetLineText(g);
-
-        var digitDelta = new int[newOrder.Count];
-        var markerStart = new int[newOrder.Count];
-        for (var i = 0; i < newOrder.Count; i++)
+        // A move can shift the ordinals of *following* items too — e.g. a plain line moved into or out of a
+        // numbered list changes where a run starts. Extend the rewrite down over the rest of this non-blank
+        // run (only when it has ordered items) so those are renumbered in the same edit. Lines before the
+        // region never change (nothing above them moved), so the run is only extended downward.
+        var runEnd = regionEndLine;
+        while (runEnd + 1 < doc.LineCount && !IsBlankLine(runEnd + 1))
         {
-            var p = LinePrefix.Parse(newOrder[i]);
-            markerStart[i] = p.MarkerStart;
-            if (p.List != ListKind.Ordered)
-            {
-                continue;
-            }
-
-            var ordinal = OrderedOrdinalOf(p, FinalLine, regionStartLine + i);
-            if (ordinal == p.Number)
-            {
-                continue;
-            }
-
-            var text = newOrder[i];
-            var ordinalStr = ordinal.ToString(CultureInfo.InvariantCulture);
-            newOrder[i] = text[..p.MarkerStart] + ordinalStr + text[(p.MarkerStart + p.DigitCount)..];
-            digitDelta[i] = ordinalStr.Length - p.DigitCount;
+            runEnd++;
         }
+
+        if (runEnd > regionEndLine && RunHasOrderedItem(doc, regionStartLine, runEnd))
+        {
+            for (var l = regionEndLine + 1; l <= runEnd; l++)
+            {
+                newOrder.Add(LineContent(doc, l));
+            }
+
+            regionEndLine = runEnd;
+        }
+
+        // Renumber the reordered ordered-list items so the SOURCE persists the same sequence the preview
+        // computes (always 1-based per nesting level). Done in-place on `newOrder` so the reorder + renumber
+        // is a single ReplaceRange (one undo step); lines before the region give the ordinal context.
+        var info = RenumberOrdered(newOrder, regionStartLine, doc.GetLineText);
 
         // Caret/anchor line+column (line-relative) before the edit; the move shifts each by `lineDelta`.
         var caretLine = doc.GetPosition(sel.Caret).Line;
@@ -1852,9 +1911,7 @@ public class MarkdownEditor : Avalonia.Controls.Control, ILogicalScrollable
         var caretCol = sel.Caret - doc.GetLineStart(caretLine);
         var anchorCol = sel.Anchor - doc.GetLineStart(anchorLine);
 
-        var regionStart = doc.GetLineStart(regionStartLine);
-        var regionEnd = doc.GetLineEnd(regionEndLine);
-        _buffer.ReplaceRange(regionStart, regionEnd - regionStart, string.Join("\n", newOrder));
+        ReplaceLines(regionStartLine, regionEndLine, newOrder);
 
         // Re-place an endpoint by line+column, nudging the column by its line's renumber delta (when the
         // endpoint sits past the marker), so the selection rides along with the moved, renumbered item.
@@ -1862,9 +1919,9 @@ public class MarkdownEditor : Avalonia.Controls.Control, ILogicalScrollable
         int Place(int line, int col)
         {
             var i = line - regionStartLine;
-            if (i >= 0 && i < newOrder.Count && col > markerStart[i])
+            if (i >= 0 && i < info.Count && col > info[i].MarkerStart)
             {
-                col += digitDelta[i];
+                col += info[i].DigitDelta;
             }
 
             return moved.GetLineStart(line) + col;
@@ -1951,16 +2008,72 @@ public class MarkdownEditor : Avalonia.Controls.Control, ILogicalScrollable
     /// <summary>Whether <paramref name="line"/> is blank (only whitespace).</summary>
     private bool IsBlankLine(int line) => _buffer.Document.GetLineText(line).Trim().Length == 0;
 
-    /// <summary>The text of lines <c>[from, to]</c> (inclusive).</summary>
+    /// <summary>Whether any line in <c>[from, to]</c> carries an ordered-list marker.</summary>
+    private static bool RunHasOrderedItem(TextDocument doc, int from, int to)
+    {
+        for (var l = from; l <= to; l++)
+        {
+            if (LinePrefix.Parse(doc.GetLineText(l)).List == ListKind.Ordered)
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /// <summary>The text of lines <c>[from, to]</c> (inclusive), each without its trailing CR.</summary>
     private static List<string> LinesOf(TextDocument doc, int from, int to)
     {
         var list = new List<string>(Math.Max(0, to - from + 1));
         for (var l = from; l <= to; l++)
         {
-            list.Add(doc.GetLineText(l));
+            list.Add(LineContent(doc, l));
         }
 
         return list;
+    }
+
+    /// <summary>
+    /// A line's content <b>without</b> its trailing CR. A CRLF document stores the <c>\r</c> as line content
+    /// (so files round-trip byte-for-byte), but it is really part of the line ending — every line but the
+    /// last carries one — so reordering/rebuilding lines must strip it and let <see cref="ReplaceLines"/> put
+    /// the right ending back by position.
+    /// </summary>
+    private static string LineContent(TextDocument doc, int line)
+    {
+        var t = doc.GetLineText(line);
+        return t.Length > 0 && t[^1] == '\r' ? t[..^1] : t;
+    }
+
+    /// <summary>The document's line ending — <c>\r\n</c> if it uses CRLF anywhere, else <c>\n</c>.</summary>
+    private static string DetectNewline(TextDocument doc)
+    {
+        for (var i = 0; i < doc.Length; i++)
+        {
+            if (doc[i] == '\n')
+            {
+                return i > 0 && doc[i - 1] == '\r' ? "\r\n" : "\n";
+            }
+        }
+
+        return "\n";
+    }
+
+    /// <summary>
+    /// Replace document lines <c>[startLine, endLine]</c> with <paramref name="contents"/> (each a line with no
+    /// trailing newline), reproducing the document's line ending between and after them so CRLF/LF stays
+    /// byte-for-byte even when lines are permuted (the trailing CR belongs to whichever line is last).
+    /// </summary>
+    private void ReplaceLines(int startLine, int endLine, IReadOnlyList<string> contents)
+    {
+        var doc = _buffer.Document;
+        var nl = DetectNewline(doc);
+        var atDocEnd = endLine >= doc.LineCount - 1;
+        var regionStart = doc.GetLineStart(startLine);
+        var regionEnd = atDocEnd ? doc.Length : doc.GetLineStart(endLine + 1);
+        var text = string.Join(nl, contents) + (atDocEnd ? string.Empty : nl);
+        _buffer.ReplaceRange(regionStart, regionEnd - regionStart, text);
     }
 
     /// <summary>Move the selected line(s) / subtree up/down; for tests.</summary>
@@ -2976,6 +3089,105 @@ public class MarkdownEditor : Avalonia.Controls.Control, ILogicalScrollable
         }
 
         return (false, true); // a same-level ordered sibling
+    }
+
+    /// <summary>A list line's marker column and how its number's digit count changed when renumbered (for caret tracking).</summary>
+    private readonly record struct RenumberInfo(int MarkerStart, int DigitDelta);
+
+    /// <summary>
+    /// Rewrite every ordered-list item in <paramref name="lines"/> so its number is the preview ordinal
+    /// (1-based, restarting at each nesting level and after a blank line). <paramref name="lines"/> occupies
+    /// document lines starting at <paramref name="regionStart"/>; <paramref name="outside"/> supplies lines
+    /// before the region for ordinal context (a self-contained run can return <c>""</c>). Mutates
+    /// <paramref name="lines"/> in place and returns each line's marker start + digit-count change.
+    /// </summary>
+    private static IReadOnlyList<RenumberInfo> RenumberOrdered(List<string> lines, int regionStart, Func<int, string> outside)
+    {
+        string FinalLine(int g) =>
+            g >= regionStart && g < regionStart + lines.Count ? lines[g - regionStart] : outside(g);
+
+        var info = new RenumberInfo[lines.Count];
+        for (var i = 0; i < lines.Count; i++)
+        {
+            var p = LinePrefix.Parse(lines[i]);
+            var delta = 0;
+            if (p.List == ListKind.Ordered)
+            {
+                var ordinal = OrderedOrdinalOf(p, FinalLine, regionStart + i);
+                if (ordinal != p.Number)
+                {
+                    var ordinalStr = ordinal.ToString(CultureInfo.InvariantCulture);
+                    lines[i] = lines[i][..p.MarkerStart] + ordinalStr + lines[i][(p.MarkerStart + p.DigitCount)..];
+                    delta = ordinalStr.Length - p.DigitCount;
+                }
+            }
+
+            info[i] = new RenumberInfo(p.MarkerStart, delta);
+        }
+
+        return info;
+    }
+
+    /// <summary>
+    /// After an edit that changed ordered-list structure (e.g. indent/outdent, exiting an item), renumber the
+    /// ordered items in the maximal run of non-blank lines containing <paramref name="line"/> so the source
+    /// matches the preview. One <see cref="DocumentBuffer.ReplaceRange"/> (or none if already correct); the
+    /// caret/anchor stay on their line, nudged by their line's digit-count change.
+    /// </summary>
+    private void RenumberOrderedRun(int line)
+    {
+        var doc = _buffer.Document;
+        if (line < 0 || line >= doc.LineCount)
+        {
+            return;
+        }
+
+        var start = line;
+        while (start > 0 && !IsBlankLine(start - 1))
+        {
+            start--;
+        }
+
+        var end = line;
+        while (end + 1 < doc.LineCount && !IsBlankLine(end + 1))
+        {
+            end++;
+        }
+
+        var lines = new List<string>(end - start + 1);
+        for (var l = start; l <= end; l++)
+        {
+            lines.Add(LineContent(doc, l));
+        }
+
+        var before = string.Join("\n", lines);
+        var info = RenumberOrdered(lines, start, _ => string.Empty); // a non-blank run is self-contained
+        if (string.Join("\n", lines) == before)
+        {
+            return; // already sequential — nothing to rewrite
+        }
+
+        var sel = _buffer.Selection;
+        var caretLine = doc.GetPosition(sel.Caret).Line;
+        var anchorLine = doc.GetPosition(sel.Anchor).Line;
+        var caretCol = sel.Caret - doc.GetLineStart(caretLine);
+        var anchorCol = sel.Anchor - doc.GetLineStart(anchorLine);
+
+        ReplaceLines(start, end, lines);
+
+        var moved = _buffer.Document;
+        int Place(int l, int col)
+        {
+            var i = l - start;
+            if (i >= 0 && i < info.Count && col > info[i].MarkerStart)
+            {
+                col += info[i].DigitDelta;
+            }
+
+            return moved.GetLineStart(l) + col;
+        }
+
+        _buffer.Selection = new Selection(Place(anchorLine, anchorCol), Place(caretLine, caretCol));
     }
 
     /// <summary>The ordered-list delimiter ('.'/')') inside marker columns <c>[s, en)</c>, defaulting to '.'.</summary>
