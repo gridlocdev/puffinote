@@ -31,6 +31,10 @@ public class MenuShortcutTests
         Assert.True(HasBinding(window, Key.D, KeyModifiers.Control));                        // Duplicate Line
         Assert.True(HasBinding(window, Key.K, KeyModifiers.Control | KeyModifiers.Shift));   // Delete Line
         Assert.True(HasBinding(window, Key.D6, KeyModifiers.Control));                       // Heading 6
+        Assert.True(HasBinding(window, Key.E, KeyModifiers.Control | KeyModifiers.Shift));   // Code Block
+        Assert.True(HasBinding(window, Key.H, KeyModifiers.Control | KeyModifiers.Shift));   // Highlight
+        Assert.True(HasBinding(window, Key.D8, KeyModifiers.Control | KeyModifiers.Shift));  // Bulleted List
+        Assert.True(HasBinding(window, Key.D7, KeyModifiers.Control | KeyModifiers.Shift));  // Numbered List
     }
 
     [AvaloniaFact]

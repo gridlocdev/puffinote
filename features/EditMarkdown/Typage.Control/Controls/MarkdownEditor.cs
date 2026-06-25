@@ -1914,6 +1914,7 @@ public class MarkdownEditor : Avalonia.Controls.Control, ILogicalScrollable
             // Formatting (the shortcuts a Markdown editor is expected to have).
             case Key.B when ctrl: ToggleBold(); break;
             case Key.I when ctrl: ToggleItalic(); break;
+            case Key.E when ctrl && shift: InsertCodeBlock(); break; // ⌘⇧E fenced block (before ⌘E inline code)
             case Key.E when ctrl: ToggleInlineCode(); break;
             case Key.K when ctrl: InsertLink(); break;
             case Key.L when ctrl: ToggleTask(); break;
