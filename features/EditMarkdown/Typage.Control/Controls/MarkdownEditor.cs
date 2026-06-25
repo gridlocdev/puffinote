@@ -1059,7 +1059,14 @@ public class MarkdownEditor : Avalonia.Controls.Control, ILogicalScrollable
 
         if (!string.IsNullOrEmpty(text))
         {
-            RunOnUiThread(() => _buffer.Insert(text));
+            // Normalize the clipboard's line endings (often CRLF from other apps) to the document's own
+            // style, so a paste doesn't sprinkle foreign newlines through the file (golden rule #5).
+            RunOnUiThread(() =>
+            {
+                var nl = DetectNewline(_buffer.Document);
+                var normalized = text.Replace("\r\n", "\n").Replace('\r', '\n');
+                _buffer.Insert(nl == "\n" ? normalized : normalized.Replace("\n", nl));
+            });
         }
     }
 
@@ -1919,7 +1926,7 @@ public class MarkdownEditor : Avalonia.Controls.Control, ILogicalScrollable
             case Key.Back: if (!TryBackspacePair() && !TryBackspaceCollapsedBlank() && !TryVisualBackspace()) { _buffer.Backspace(); } break;
             case Key.Delete: if (!TryDeleteCollapsedBlank() && !TryVisualDelete()) { _buffer.Delete(); } break;
 
-            case Key.Enter when shift: _buffer.Insert("\n"); break; // plain newline, no list continuation
+            case Key.Enter when shift: _buffer.Insert(DetectNewline(_buffer.Document)); break; // plain newline (doc's ending), no list continuation
             case Key.Enter: HandleEnter(); break;
             case Key.Tab: HandleTab(shift); break;
 
@@ -2003,12 +2010,17 @@ public class MarkdownEditor : Avalonia.Controls.Control, ILogicalScrollable
         //   • If a newline already follows the break point, that paragraph break already exists, so we add
         //     just one "\n". The caret then skips the (now collapsed) first blank to land on the visible row.
         // The blank a "\n\n" leaves renders as regular spacing (IsCollapsedBlankLine).
+        // Insert the document's own line ending (CRLF stays CRLF) so editing never mixes \n into a \r\n
+        // file — golden rule #5, byte-for-byte line endings.
+        var nl = DetectNewline(doc);
         var breakLine = doc.GetPosition(sel.Start).Line;
         var beforeBreak = doc.GetText(doc.GetLineStart(breakLine), sel.Start - doc.GetLineStart(breakLine));
         var beforeContent = beforeBreak.Trim().Length > 0;
-        var afterNewline = sel.End < doc.Length && doc[sel.End] == '\n';
-        var paraBreak = beforeContent && !afterNewline ? "\n\n" : "\n";
-        var paraCaret = sel.Start + (beforeContent ? 2 : 1); // past the break, skipping a collapsed first blank
+        // A newline already following the break point — '\n', or the '\r' of a CRLF pair — means the
+        // paragraph break exists, so add just one line ending rather than opening a double gap.
+        var afterNewline = sel.End < doc.Length && doc[sel.End] is '\n' or '\r';
+        var paraBreak = beforeContent && !afterNewline ? nl + nl : nl;
+        var paraCaret = sel.Start + (beforeContent ? 2 : 1) * nl.Length; // past the break, skipping a collapsed first blank
 
         void PlaceParaCaret() => _buffer.Selection = Selection.At(Math.Clamp(paraCaret, 0, _buffer.Document.Length));
 
@@ -2032,8 +2044,8 @@ public class MarkdownEditor : Avalonia.Controls.Control, ILogicalScrollable
         if ((prefix.HasList || prefix.HasQuote) && caretCol < prefix.Length
             && lineText.AsSpan(prefix.Length).Trim().Length > 0)
         {
-            _buffer.ReplaceRange(lineStart, 0, "\n");
-            _buffer.Selection = Selection.At(sel.Caret + 1);
+            _buffer.ReplaceRange(lineStart, 0, nl);
+            _buffer.Selection = Selection.At(sel.Caret + nl.Length);
             return;
         }
 
@@ -2045,7 +2057,7 @@ public class MarkdownEditor : Avalonia.Controls.Control, ILogicalScrollable
                 _buffer.ReplaceRange(lineStart + result.ExitStart, result.ExitLength, string.Empty);
                 break;
             case EnterKind.Continue:
-                _buffer.ReplaceRange(sel.Caret, 0, result.Text);
+                _buffer.ReplaceRange(sel.Caret, 0, result.Text.Replace("\n", nl)); // match the doc's line ending
                 RenumberOrderedFrom(line + 1); // resequence following items if we split an ordered list
                 break;
             default:
@@ -2679,6 +2691,9 @@ public class MarkdownEditor : Avalonia.Controls.Control, ILogicalScrollable
 
     // Test hooks: drive the same editing-assist paths the key handlers use, without a focused window.
     internal void EnterForTest() => HandleEnter();
+
+    /// <summary>Shift+Enter: a plain newline in the document's own line ending, no list continuation.</summary>
+    internal void ShiftEnterForTest() => _buffer.Insert(DetectNewline(_buffer.Document));
 
     internal void TabForTest(bool shift) => HandleTab(shift);
 

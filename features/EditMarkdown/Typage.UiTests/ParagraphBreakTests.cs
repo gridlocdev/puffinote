@@ -160,4 +160,34 @@ public class ParagraphBreakTests
         // The interior blank is part of the code fence, so every row is kept (no paragraph collapse).
         Assert.Equal(5, e.TotalRowsForTest());
     }
+
+    [AvaloniaFact]
+    public void Enter_InACrlfDocument_InsertsCrlf_NotBareLf()
+    {
+        // A CRLF file must stay all-CRLF after editing (golden rule #5) — Enter must not splice in a bare \n.
+        var e = At("alpha\r\nbeta", 5); // end of "alpha", before the \r
+        e.EnterForTest();
+        Assert.Equal("alpha\r\n\r\nbeta", e.Text); // one CRLF blank, the soft break becomes a paragraph split
+        Assert.DoesNotContain('\n', e.Text.Replace("\r\n", "")); // no lone LF survives
+        Assert.Equal(9, e.Buffer.Selection.Caret); // start of "beta" (past both CRLF breaks)
+    }
+
+    [AvaloniaFact]
+    public void Enter_MidParagraphInCrlf_OpensACrlfParagraphBreak()
+    {
+        // The doc's CRLF is detected from its existing line; splitting mid-word writes a CRLF paragraph break.
+        var e = new MarkdownEditor { Text = "alpha beta\r\nx" };
+        e.Buffer.Selection = Selection.At(5); // after "alpha"
+        e.EnterForTest();
+        Assert.Equal("alpha\r\n\r\n beta\r\nx", e.Text);
+    }
+
+    [AvaloniaFact]
+    public void ShiftEnter_InACrlfDocument_InsertsCrlf()
+    {
+        var e = new MarkdownEditor { Text = "alpha\r\nbeta" };
+        e.Buffer.Selection = Selection.At(5);
+        e.ShiftEnterForTest();
+        Assert.Equal("alpha\r\n\r\nbeta", e.Text);
+    }
 }
