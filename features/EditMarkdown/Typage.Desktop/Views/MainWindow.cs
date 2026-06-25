@@ -98,6 +98,11 @@ public class MainWindow : Window
         Patterns = new[] { "*.md", "*.markdown", "*.mdown", "*.txt" },
     };
 
+    private static readonly FilePickerFileType ImageType = new("Images")
+    {
+        Patterns = ImageStaging.ImagePatterns,
+    };
+
     public MainWindow(SettingsService settings)
     {
         _settings = settings;
@@ -909,7 +914,7 @@ public class MainWindow : Window
             new("format.h6", "Heading 6", "Make this line a level-6 heading.", Shortcut.Cmd(Key.D6), () => ed.ApplyHeading(6)),
             new("format.paragraph", "Paragraph", "Remove the heading from this line.", Shortcut.Cmd(Key.D0), ed.SetParagraph),
 
-            new("insert.image", "Image…", "Insert an image reference.", null, ed.InsertImage),
+            new("insert.image", "Image…", "Pick an image file to insert.", null, () => _ = InsertImageAsync()),
             new("insert.codeBlock", "Code Block", "Insert a fenced code block.", null, ed.InsertCodeBlock),
             new("insert.hr", "Horizontal Rule", "Insert a horizontal rule.", null, ed.InsertHorizontalRule),
 
@@ -1041,6 +1046,96 @@ public class MainWindow : Window
         }
     }
 
+    // ----- image insertion + staging (PRD §8.3 images) -----
+
+    /// <summary>
+    /// Pick an image file and insert a reference to it. A <b>saved</b> document references the picked image
+    /// by a relative path (it has a folder to anchor against). An <b>unsaved</b> document has no such anchor,
+    /// so the image is copied into a scratch directory and referenced by that absolute staged path; the next
+    /// save offers to move it into the document's permanent home (see <see cref="ReconcileStagedImagesAsync"/>).
+    /// </summary>
+    private async Task InsertImageAsync()
+    {
+        var files = await StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
+        {
+            Title = "Insert Image",
+            AllowMultiple = false,
+            FileTypeFilter = new[] { ImageType, FilePickerFileTypes.All },
+        });
+
+        if (files.Count == 0 || files[0].TryGetLocalPath() is not { } source)
+        {
+            return;
+        }
+
+        await Dispatcher.UIThread.InvokeAsync(() =>
+        {
+            var ed = _editorView.Editor;
+            var alt = Path.GetFileNameWithoutExtension(source);
+            try
+            {
+                var url = _currentPath is { } docPath
+                    ? ImageStaging.RelativeUrl(docPath, source)              // saved → relative path in place
+                    : ImageStaging.Stage(source, System.Guid.NewGuid().ToString("N")); // unsaved → stage a copy
+                ed.InsertImageReference(url, alt);
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            {
+                ShowError("Couldn't insert the image.",
+                    $"{ex.Message}\n\nThe image could not be staged for the unsaved document.");
+            }
+        });
+    }
+
+    /// <summary>
+    /// When the document being saved to <paramref name="targetPath"/> still references staged (scratch)
+    /// images, offer to move them into an <c>images/</c> folder beside the document and rewrite the Markdown
+    /// to point there relatively. Declining leaves the staged paths intact (the document still opens). Runs
+    /// before the bytes are written so the saved file already carries the permanent paths.
+    /// </summary>
+    private async Task ReconcileStagedImagesAsync(string targetPath)
+    {
+        var staged = ImageStaging.StagedReferences(_editorView.Text);
+        if (staged.Count == 0)
+        {
+            return;
+        }
+
+        var noun = staged.Count == 1 ? "image" : "images";
+        if (!await ConfirmAsync(
+                $"Move {staged.Count} staged {noun} into an \"images\" folder next to the document, and update the links?",
+                confirmLabel: "Move", denyLabel: "Keep As-Is"))
+        {
+            return;
+        }
+
+        var imagesDir = Path.Combine(Path.GetDirectoryName(Path.GetFullPath(targetPath)) ?? ".", "images");
+        var edits = new List<(int Start, int Length, string NewUrl)>();
+        try
+        {
+            Directory.CreateDirectory(imagesDir);
+            foreach (var s in staged)
+            {
+                var dest = ImageStaging.UniqueDestination(imagesDir, ImageStaging.OriginalName(s.Url), File.Exists);
+                File.Move(s.Url, dest);
+                edits.Add((s.Start, s.Length, ImageStaging.RelativeUrl(targetPath, dest)));
+            }
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            ShowError("Couldn't move the staged images.",
+                $"{ex.Message}\n\nThe document will be saved with its current image links.");
+            // Fall through: apply whatever moves did succeed so the document and disk stay consistent.
+        }
+
+        if (edits.Count > 0)
+        {
+            var rewritten = ImageStaging.RewriteUrls(_editorView.Text, edits);
+            var buffer = _editorView.Editor.Buffer;
+            buffer.ReplaceRange(0, buffer.Document.Length, rewritten);
+        }
+    }
+
     private async Task<bool> SaveAsync()
     {
         if (_currentPath is null)
@@ -1048,6 +1143,7 @@ public class MainWindow : Window
             return await SaveAsAsync();
         }
 
+        await ReconcileStagedImagesAsync(_currentPath);
         return WriteToPath(_currentPath);
     }
 
@@ -1063,22 +1159,22 @@ public class MainWindow : Window
 
         if (file?.TryGetLocalPath() is { } path)
         {
-            // Marshal the write + chrome update back to the UI thread (the picker await may resume off it).
-            return await Dispatcher.UIThread.InvokeAsync(() =>
-            {
-                if (WriteToPath(path))
-                {
-                    _currentPath = path;
-                    _settings.Settings.PushRecent(path);
-                    _settings.Save();
-                    RefreshRecentMenu();
-                    UpdateChrome();
-                    WatchCurrentFile(); // follow the file we just saved as
-                    return true;
-                }
+            // Hop to the UI thread (the picker await may resume off it) before the modal + editor edits.
+            await Dispatcher.UIThread.InvokeAsync(() => { });
 
-                return false;
-            });
+            // Offer to move any staged images into their permanent home before the bytes hit disk.
+            await ReconcileStagedImagesAsync(path);
+
+            if (WriteToPath(path))
+            {
+                _currentPath = path;
+                _settings.Settings.PushRecent(path);
+                _settings.Save();
+                RefreshRecentMenu();
+                UpdateChrome();
+                WatchCurrentFile(); // follow the file we just saved as
+                return true;
+            }
         }
 
         return false;
