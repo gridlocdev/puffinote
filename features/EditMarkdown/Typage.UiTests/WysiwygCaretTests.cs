@@ -61,4 +61,38 @@ public class WysiwygCaretTests
         editor.BackspaceForTest();
         Assert.Equal("item", editor.Text); // the whole list marker is removed (un-lists the line)
     }
+
+    [AvaloniaFact]
+    public void Backspace_AtNestedBulletContentStart_RemovesTheMarker_KeepingIndent()
+    {
+        var editor = At("- a\n  - b", caret: 8); // caret right after the nested "- " marker, on "b"
+        editor.BackspaceForTest();
+        Assert.Equal("- a\n  b", editor.Text); // the bullet is deleted; the indentation stays
+        Assert.Equal(6, editor.Buffer.Selection.Caret); // caret at the (kept) indentation end
+    }
+
+    [AvaloniaFact]
+    public void Backspace_AtNestedCheckboxContentStart_RemovesTheCheckbox()
+    {
+        var editor = At("- a\n  - [ ] c", caret: 12); // caret after the nested "- [ ] "
+        editor.BackspaceForTest();
+        Assert.Equal("- a\n  c", editor.Text); // the whole checkbox marker is removed, indentation kept
+    }
+
+    [AvaloniaFact]
+    public void Backspace_AtNestedNumberContentStart_RemovesTheNumber()
+    {
+        var editor = At("- a\n  1. d", caret: 9); // caret after the nested "1. "
+        editor.BackspaceForTest();
+        Assert.Equal("- a\n  d", editor.Text);
+    }
+
+    [AvaloniaFact]
+    public void Backspace_OnIndentedPlainText_StillDeletesAnIndentSpace()
+    {
+        // No marker to strip here: a leading-whitespace plain line backspaces a single indent char.
+        var editor = At("- a\n    text", caret: 8); // caret inside the indentation, before "text"
+        editor.BackspaceForTest();
+        Assert.Equal("- a\n   text", editor.Text); // one space removed, not a no-op
+    }
 }

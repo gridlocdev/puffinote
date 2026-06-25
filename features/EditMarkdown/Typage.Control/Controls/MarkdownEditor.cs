@@ -2580,11 +2580,14 @@ public class MarkdownEditor : Avalonia.Controls.Control, ILogicalScrollable
             col--;
         }
 
-        if (col == 0)
+        // If the caret sits just past a hidden marker run (col < r.Col) and only indentation precedes that
+        // run, the caret is at a list/heading/quote content-start: strip the marker itself, keeping any
+        // leading indentation. So backspace at the right of a (possibly nested) bullet / number / checkbox
+        // removes the marker rather than nibbling an indent space. col == 0 is the un-indented case.
+        if (col < r.Col && doc.GetText(r.BlockStart, col).Trim().Length == 0)
         {
-            // Only hidden marker punctuation precedes the caret — strip the whole marker prefix.
-            _buffer.ReplaceRange(r.BlockStart, r.Col, string.Empty);
-            _buffer.Selection = Selection.At(r.BlockStart);
+            _buffer.ReplaceRange(r.BlockStart + col, r.Col - col, string.Empty);
+            _buffer.Selection = Selection.At(r.BlockStart + col);
             return true;
         }
 
