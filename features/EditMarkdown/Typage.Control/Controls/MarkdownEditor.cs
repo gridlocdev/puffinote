@@ -1765,7 +1765,8 @@ public class MarkdownEditor : Avalonia.Controls.Control, ILogicalScrollable
 
         // Anything deeper that we didn't carry simply stays put; the moved unit hops over the adjacent block
         // (sibling subtree or a run of left-behind deeper lines), reordering only within the contiguous region.
-        int regionStartLine, regionEndLine, delta;
+        // `lineDelta` is how many lines the moved unit shifts (down: the partner's line count; up: negative).
+        int regionStartLine, regionEndLine, lineDelta;
         var newOrder = new List<string>();
         if (dir < 0)
         {
@@ -1790,7 +1791,7 @@ public class MarkdownEditor : Avalonia.Controls.Control, ILogicalScrollable
             regionEndLine = endLine;
             newOrder.AddRange(LinesOf(doc, startLine, endLine));    // the moved subtree first...
             newOrder.AddRange(LinesOf(doc, p, startLine - 1));      // ...then the previous sibling subtree
-            delta = -BlockChars(doc, p, startLine - 1);
+            lineDelta = p - startLine;                              // moved unit shifts up to where the sibling began
         }
         else
         {
@@ -1811,25 +1812,70 @@ public class MarkdownEditor : Avalonia.Controls.Control, ILogicalScrollable
             regionEndLine = swapEnd;
             newOrder.AddRange(LinesOf(doc, s, swapEnd));            // the next sibling subtree first...
             newOrder.AddRange(LinesOf(doc, startLine, endLine));   // ...then the moved subtree
-            delta = BlockChars(doc, s, swapEnd);
+            lineDelta = swapEnd - s + 1;                            // moved unit shifts down past the sibling subtree
         }
 
-        // The moved subtree's character range, so we can locate it again after it shifts by `delta`.
-        var movedStartOffset = doc.GetLineStart(startLine);
-        var movedEndOffset = doc.GetLineEnd(endLine);
+        // Renumber the reordered ordered-list items so the SOURCE persists the same sequence the preview
+        // computes (which is always 1-based per run). Done in-place on `newOrder` so the reorder + renumber
+        // is a single ReplaceRange (one undo step). `digitDelta[i]` records how each line's marker length
+        // changed, so the caret/anchor columns can follow when a number grows/shrinks (e.g. 9 → 10).
+        var regionEndAfter = regionStartLine + newOrder.Count - 1;
+        string FinalLine(int g) =>
+            g >= regionStartLine && g <= regionEndAfter ? newOrder[g - regionStartLine] : doc.GetLineText(g);
+
+        var digitDelta = new int[newOrder.Count];
+        var markerStart = new int[newOrder.Count];
+        for (var i = 0; i < newOrder.Count; i++)
+        {
+            var p = LinePrefix.Parse(newOrder[i]);
+            markerStart[i] = p.MarkerStart;
+            if (p.List != ListKind.Ordered)
+            {
+                continue;
+            }
+
+            var ordinal = OrderedOrdinalOf(p, FinalLine, regionStartLine + i);
+            if (ordinal == p.Number)
+            {
+                continue;
+            }
+
+            var text = newOrder[i];
+            var ordinalStr = ordinal.ToString(CultureInfo.InvariantCulture);
+            newOrder[i] = text[..p.MarkerStart] + ordinalStr + text[(p.MarkerStart + p.DigitCount)..];
+            digitDelta[i] = ordinalStr.Length - p.DigitCount;
+        }
+
+        // Caret/anchor line+column (line-relative) before the edit; the move shifts each by `lineDelta`.
+        var caretLine = doc.GetPosition(sel.Caret).Line;
+        var anchorLine = doc.GetPosition(sel.Anchor).Line;
+        var caretCol = sel.Caret - doc.GetLineStart(caretLine);
+        var anchorCol = sel.Anchor - doc.GetLineStart(anchorLine);
 
         var regionStart = doc.GetLineStart(regionStartLine);
         var regionEnd = doc.GetLineEnd(regionEndLine);
         _buffer.ReplaceRange(regionStart, regionEnd - regionStart, string.Join("\n", newOrder));
 
-        // The moved subtree shifted by the swapped sibling's size; carry the selection with it.
-        _buffer.Selection = new Selection(sel.Anchor + delta, sel.Caret + delta);
+        // Re-place an endpoint by line+column, nudging the column by its line's renumber delta (when the
+        // endpoint sits past the marker), so the selection rides along with the moved, renumbered item.
+        var moved = _buffer.Document;
+        int Place(int line, int col)
+        {
+            var i = line - regionStartLine;
+            if (i >= 0 && i < newOrder.Count && col > markerStart[i])
+            {
+                col += digitDelta[i];
+            }
+
+            return moved.GetLineStart(line) + col;
+        }
+
+        _buffer.Selection = new Selection(Place(anchorLine + lineDelta, anchorCol), Place(caretLine + lineDelta, caretCol));
         _goalX = double.NaN;
 
-        // Bracket the moved block with the drop indicator (it shifted by the same `delta` as the selection).
-        var moved = _buffer.Document;
-        _reorderStartLine = moved.GetPosition(movedStartOffset + delta).Line;
-        _reorderEndLine = moved.GetPosition(movedEndOffset + delta).Line;
+        // Bracket the moved block with the drop indicator at its new line range.
+        _reorderStartLine = startLine + lineDelta;
+        _reorderEndLine = endLine + lineDelta;
         _reorderActive = true;
         InvalidateVisual();
     }
@@ -1915,18 +1961,6 @@ public class MarkdownEditor : Avalonia.Controls.Control, ILogicalScrollable
         }
 
         return list;
-    }
-
-    /// <summary>Total characters of lines <c>[from, to]</c> including each line's trailing newline.</summary>
-    private static int BlockChars(TextDocument doc, int from, int to)
-    {
-        var sum = 0;
-        for (var l = from; l <= to; l++)
-        {
-            sum += (doc.GetLineEnd(l) - doc.GetLineStart(l)) + 1;
-        }
-
-        return sum;
     }
 
     /// <summary>Move the selected line(s) / subtree up/down; for tests.</summary>
@@ -2884,6 +2918,17 @@ public class MarkdownEditor : Avalonia.Controls.Control, ILogicalScrollable
     {
         var doc = _buffer.Document;
         var self = LinePrefix.Parse(doc.GetLineText(line));
+        return OrderedOrdinalOf(self, k => doc.GetLineText(k), line);
+    }
+
+    /// <summary>
+    /// The 1-based ordinal an ordered item <paramref name="self"/> at <paramref name="line"/> shows, counting
+    /// preceding same-level ordered siblings via <paramref name="lineAt"/> until a blank line, a shallower
+    /// level, or a non-ordered same-level sibling. Decoupled from the live document so it can be computed over
+    /// a hypothetical (about-to-be-applied) reordering as well.
+    /// </summary>
+    private static int OrderedOrdinalOf(LinePrefix self, Func<int, string> lineAt, int line)
+    {
         if (self.List != ListKind.Ordered)
         {
             return 1;
@@ -2892,32 +2937,45 @@ public class MarkdownEditor : Avalonia.Controls.Control, ILogicalScrollable
         var count = 1;
         for (var k = line - 1; k >= 0; k--)
         {
-            var text = doc.GetLineText(k).TrimEnd('\r');
-            if (text.Trim().Length == 0)
+            var (stop, counts) = OrderedScanStep(lineAt(k), self);
+            if (counts)
             {
-                break; // a blank line starts a fresh list
+                count++;
             }
 
-            var p = LinePrefix.Parse(text);
-            if (p.Indent > self.Indent)
+            if (stop)
             {
-                continue; // a deeper nested line belongs to a sub-list (or item continuation) — skip it
+                break;
             }
-
-            if (p.Indent < self.Indent)
-            {
-                break; // reached the enclosing (shallower) level — this sub-list starts here
-            }
-
-            if (p.Quote != self.Quote || p.List != ListKind.Ordered)
-            {
-                break; // a same-level sibling that isn't an ordered item ends the run
-            }
-
-            count++;
         }
 
         return count;
+    }
+
+    /// <summary>
+    /// One backward-scan step for <see cref="OrderedOrdinalOf"/>: given a preceding <paramref name="text"/>
+    /// line and the item <paramref name="self"/>, whether to stop scanning and whether the line is a
+    /// same-level ordered sibling that the ordinal should count.
+    /// </summary>
+    private static (bool Stop, bool Counts) OrderedScanStep(string text, LinePrefix self)
+    {
+        if (text.TrimEnd('\r').Trim().Length == 0)
+        {
+            return (true, false); // a blank line starts a fresh list
+        }
+
+        var p = LinePrefix.Parse(text);
+        if (p.Indent > self.Indent)
+        {
+            return (false, false); // a deeper nested line / continuation — skip it
+        }
+
+        if (p.Indent < self.Indent || p.Quote != self.Quote || p.List != ListKind.Ordered)
+        {
+            return (true, false); // a shallower level, or a non-ordered same-level sibling, ends the run
+        }
+
+        return (false, true); // a same-level ordered sibling
     }
 
     /// <summary>The ordered-list delimiter ('.'/')') inside marker columns <c>[s, en)</c>, defaulting to '.'.</summary>
