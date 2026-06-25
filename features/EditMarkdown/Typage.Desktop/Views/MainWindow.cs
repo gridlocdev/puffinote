@@ -53,6 +53,7 @@ public class MainWindow : Window
     // Crash recovery (PRD §9.4): autosave the dirty buffer to a sidecar snapshot; clear it on a clean save.
     private readonly RecoveryService _recovery = new();
     private DispatcherTimer? _autosaveTimer;
+    private DispatcherTimer? _statsTimer; // debounces the whole-document word/char scan while typing
     private readonly List<(AppTheme Theme, CheckItem Item)> _themeItems = new();
 
     /// <summary>
@@ -125,12 +126,20 @@ public class MainWindow : Window
         // The command palette floats over everything as a collapsed overlay.
         Content = new Panel { Children = { root, _palette } };
 
-        _editorView.TextChanged += (_, _) => UpdateChrome();
+        _editorView.TextChanged += (_, _) =>
+        {
+            // The title + caret status are cheap; refresh them now. The word/char counts scan the whole
+            // document, so debounce them — recompute once typing pauses instead of on every keystroke.
+            UpdateTitle();
+            UpdateCaretStatus();
+            ScheduleDocumentStatus();
+        };
         _editorView.SelectionChanged += (_, _) => UpdateCaretStatus();
         Closing += OnClosing;
         Closed += (_, _) =>
         {
             _autosaveTimer?.Stop();
+            _statsTimer?.Stop();
             _recovery.Clear(); // a clean exit means there is nothing to recover next launch
             _watcher?.Dispose();
         };
@@ -1877,9 +1886,33 @@ public class MainWindow : Window
         Title = (_editorView.IsDirty ? "• " : string.Empty) + name + " — Typage";
     }
 
-    /// <summary>Document-level status — recomputed only on text change (not on every caret move).</summary>
+    /// <summary>
+    /// Coalesce the whole-document word/char scan to ~200ms after the last edit, so a burst of typing
+    /// recomputes the counts once (when the user pauses) rather than on every keystroke.
+    /// </summary>
+    private void ScheduleDocumentStatus()
+    {
+        _statsTimer ??= CreateStatsTimer();
+        _statsTimer.Stop();
+        _statsTimer.Start();
+    }
+
+    private DispatcherTimer CreateStatsTimer()
+    {
+        var timer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(200) };
+        timer.Tick += (_, _) =>
+        {
+            timer.Stop();
+            UpdateDocumentStatus();
+        };
+
+        return timer;
+    }
+
+    /// <summary>Document-level status — the word/char counts scan the document, so this is debounced on typing.</summary>
     private void UpdateDocumentStatus()
     {
+        _statsTimer?.Stop(); // a synchronous refresh supersedes any pending debounced one
         var stats = _editorView.Stats; // cached; whole-document scan only on text change
         _statusState.Text = _editorView.IsDirty ? "Modified" : "Saved";
         _statusCounts.Text =
