@@ -1320,6 +1320,14 @@ public class MarkdownEditor : Avalonia.Controls.Control, ILogicalScrollable
             context.FillRectangle(_theme.CodeBlockBackground, new Rect(-8, blockTop, ContentRight() + 16, visual.RowCount * lineH));
         }
 
+        // A horizontal rule has no real text to place a visible caret on, so when the caret is on it
+        // (WYSIWYG view, no range selection) highlight the whole rule row in the selection colour to show
+        // the rule line itself is the focused / selected line.
+        if (IsFocused && ShouldHighlightRuleLine(startLine))
+        {
+            context.FillRectangle(_theme.SelectionBackground, new Rect(-8, blockTop, ContentRight() + 16, visual.RowCount * lineH));
+        }
+
         // Search-match highlights (under the text), then the selection on top.
         if (_searchMatches.Count > 0)
         {
@@ -3002,6 +3010,24 @@ public class MarkdownEditor : Avalonia.Controls.Control, ILogicalScrollable
     }
 
     /// <summary>Draw a synthetic decoration that stands in for a concealed marker (PRD §7.4).</summary>
+    /// <summary>Whether <paramref name="line"/> is a horizontal rule (its sole token is the rule marker).</summary>
+    private bool IsHorizontalRuleLine(int line)
+    {
+        var toks = _model.LineTokens(line);
+        return toks.Count > 0 && toks[0].Type == TokenType.HorizontalRule;
+    }
+
+    /// <summary>
+    /// Whether the rule line at <paramref name="line"/> should be drawn with a full-row highlight: the caret
+    /// is on it, there is no range selection, and we're in WYSIWYG (non-source) view. (In raw-source view the
+    /// rule is plain <c>---</c> text and the usual caret/selection apply.)
+    /// </summary>
+    internal bool ShouldHighlightRuleLine(int line)
+        => !_showRawSource
+           && _buffer.Selection.Length == 0
+           && IsHorizontalRuleLine(line)
+           && _buffer.Document.GetPosition(_buffer.Selection.Caret).Line == line;
+
     private void DrawDecoration(DrawingContext context, VisualRun run, double lineTop)
     {
         var lineH = _theme.LineHeight;
