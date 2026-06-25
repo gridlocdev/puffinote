@@ -65,6 +65,9 @@ public partial class SpreadsheetEditorView : UserControl, IAppEnvironment
     /// <summary>Raised when the command bar is collapsed/expanded, so a host can persist the preference.</summary>
     public event EventHandler? CommandBarCollapsedChanged;
 
+    /// <summary>Raised when the radial-menu configuration changes (via its settings), so a host can persist it.</summary>
+    public event EventHandler? RadialConfigChanged;
+
     // Gated shortcut commands backing this control's KeyBindings. A command backs off (CanExecute=false)
     // while a modal overlay is open or a focused text input owns the key, so the overlay/editor handles
     // it instead (see RefreshCommandStates).
@@ -85,6 +88,9 @@ public partial class SpreadsheetEditorView : UserControl, IAppEnvironment
         Grid.Attach(_session);
         Grid.SelectionChanged += (_, _) => OnSelectionChanged();
         Grid.ContextRequested += OnGridContextRequested;
+        Grid.ContextMenuRequested += ShowGridContextMenuAt;
+        Grid.RadialCommandActivated += RunRadialCommand;
+        Grid.RadialCommandEnabled = id => AppCommands.ById(id) is { } command && command.IsEnabled(this);
 
         SheetTabs.PointerPressed += SheetTabsPointerPressed;
         SheetTabs.PointerMoved += SheetTabsPointerMoved;
@@ -92,6 +98,7 @@ public partial class SpreadsheetEditorView : UserControl, IAppEnvironment
         SheetTabs.PointerCaptureLost += (_, _) => EndTabDragVisual(); // tidy up if the drag is interrupted
         Grid.ClipboardInvalidated += (_, _) => ClearClipboard();
         Grid.EnterPasteRequested += (_, _) => EnterPaste();
+        Grid.MoveSelectionRequested += MoveSelection;
         WireSelectionUndo();
         _session.Changed += (_, _) => { Grid.Refresh(); UpdateChrome(); RefreshChartData(); };
         _session.StructureChanged += (_, _) => { BuildSheetTabs(); Grid.Refresh(); UpdateChrome(); RefreshSheetView(); };
@@ -145,6 +152,36 @@ public partial class SpreadsheetEditorView : UserControl, IAppEnvironment
             {
                 _commandBar.Collapsed = value;
             }
+        }
+    }
+
+    /// <summary>The press-and-hold radial menu's bindings; pushed in from settings and edited via its dialog.</summary>
+    public RadialMenuConfig RadialConfig
+    {
+        get => Grid.RadialConfig;
+        set => Grid.RadialConfig = value;
+    }
+
+    /// <summary>Run a command a radial wedge was released over (it is already known to be enabled).</summary>
+    private void RunRadialCommand(string commandId)
+    {
+        if (AppCommands.ById(commandId) is { } command && command.IsEnabled(this))
+        {
+            command.Execute(this);
+        }
+    }
+
+    /// <summary>
+    /// Open the radial-menu settings dialog, then adopt and persist any change. Reached from the command
+    /// catalog (and so the Command Palette / menu) — see <c>view.radialSettings</c>.
+    /// </summary>
+    public async void ShowRadialSettings()
+    {
+        var updated = await ShowModalAsync(new RadialSettingsDialog(RadialConfig));
+        if (updated is not null)
+        {
+            RadialConfig = updated;
+            RadialConfigChanged?.Invoke(this, EventArgs.Empty);
         }
     }
 
@@ -314,6 +351,41 @@ public partial class SpreadsheetEditorView : UserControl, IAppEnvironment
         {
             PasteTsv(text);
         }
+    }
+
+    /// <summary>
+    /// ⌥⇧+Arrow nudge: move the current selection's contents one cell in the given direction. It runs
+    /// the same cut/move machinery as cut-and-paste (<see cref="PasteBlockCommand"/> over a cut block),
+    /// so it is a single undoable step and rewrites any formula that pointed at the moved cells so the
+    /// references follow. A nudge that would push the block off the sheet is refused.
+    /// </summary>
+    private void MoveSelection(int rowDelta, int columnDelta)
+    {
+        var range = Selection.Range;
+        int destTop = range.Top + rowDelta;
+        int destLeft = range.Left + columnDelta;
+        int destBottom = range.Bottom + rowDelta;
+        int destRight = range.Right + columnDelta;
+
+        if (destTop < 0 || destLeft < 0
+            || destBottom >= SheetDimensions.MaxRows || destRight >= SheetDimensions.MaxColumns)
+        {
+            return; // nowhere to land — the block would fall off the sheet edge
+        }
+
+        var sheet = _session.ActiveSheet;
+        var block = ClipboardBlock.Capture(sheet, range, isCut: true);
+        var command = new PasteBlockCommand(sheet.Name, destTop, destLeft, block);
+        if (!Grid.TryEnforceValidation(command)) // honor any Stop-rule validation at the destination (#B)
+        {
+            return;
+        }
+
+        _session.Execute(command);
+        Selection.SetRange(destTop, destLeft, destBottom, destRight);
+        RevealActiveCell();
+        OnSelectionChanged();
+        Refresh();
     }
 
     /// <summary>
@@ -738,10 +810,23 @@ public partial class SpreadsheetEditorView : UserControl, IAppEnvironment
 
     private void OnGridContextRequested(object? sender, Avalonia.Input.ContextRequestedEventArgs e)
     {
-        var target = e.TryGetPosition(Grid, out var point)
-            ? Grid.SelectForContext(point)
-            : SpreadsheetGrid.ContextTarget.Cell;
+        // Pointer-driven context menus are owned by the grid's right-click gesture: a quick click shows
+        // this menu (via ContextMenuRequested), a press-and-hold shows the radial. Only the keyboard
+        // menu key reaches here without a position — show the cell menu at the active cell for it.
+        if (e.TryGetPosition(Grid, out _))
+        {
+            return;
+        }
 
+        ShowCellContextMenu(SpreadsheetGrid.ContextTarget.Cell);
+        e.Handled = true;
+    }
+
+    /// <summary>Quick right-click (no hold): settle the selection under the point and show its context menu.</summary>
+    private void ShowGridContextMenuAt(Avalonia.Point point) => ShowCellContextMenu(Grid.SelectForContext(point));
+
+    private void ShowCellContextMenu(SpreadsheetGrid.ContextTarget target)
+    {
         MenuFlyout? flyout = target switch
         {
             SpreadsheetGrid.ContextTarget.None => null,
@@ -795,7 +880,6 @@ public partial class SpreadsheetEditorView : UserControl, IAppEnvironment
         }
 
         flyout.ShowAt(Grid, showAtPointer: true);
-        e.Handled = true;
     }
 
     public void ZoomBy(double delta)

@@ -260,6 +260,7 @@ public sealed partial class SpreadsheetGrid
     protected override void OnPointerCaptureLost(PointerCaptureLostEventArgs e)
     {
         base.OnPointerCaptureLost(e);
+        CancelRadial(); // a radial gesture can't continue without the pointer — abandon it cleanly
         if (IsResizing)
         {
             _dragColumn = null;

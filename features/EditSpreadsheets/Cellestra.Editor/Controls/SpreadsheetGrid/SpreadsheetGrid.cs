@@ -83,6 +83,7 @@ public sealed partial class SpreadsheetGrid : Panel
         InitScrollBars();              // overlay scroll bars along the right/bottom edges (task 3)
         InitChrome();                  // popup layer for filter/validation dropdowns
         InitSignatureHelp();           // function argument hint while typing a formula
+        InitRadial();                  // press-and-hold radial command menu (added last → on top)
         ApplyTheme();                  // canvas/text colors follow the system light/dark theme
         ActualThemeVariantChanged += (_, _) => ApplyTheme();
         Selection.Changed += (_, _) => Redraw();
@@ -201,6 +202,13 @@ public sealed partial class SpreadsheetGrid : Panel
     public GridSelection Selection { get; } = new();
 
     public event EventHandler? SelectionChanged;
+
+    /// <summary>
+    /// Raised by ⌥⇧+Arrow: move the current selection's contents one cell in the given direction
+    /// (rowDelta, columnDelta). The host performs the move (and the reference fix-ups) since the
+    /// cut/move machinery lives there, mirroring <see cref="EnterPasteRequested"/>.
+    /// </summary>
+    public event Action<int, int>? MoveSelectionRequested;
 
     /// <summary>
     /// The active cell's address as text for the Name Box — the full merged range (e.g. <c>A1:B2</c>)
@@ -977,9 +985,11 @@ public sealed partial class SpreadsheetGrid : Panel
             return;
         }
 
-        // Right-click is for the context menu (raised separately as ContextRequested); don't let it
-        // start a selection. Commit any in-progress edit first so the menu acts on a settled cell,
-        // and focus the grid so typing works once the menu closes.
+        // Right-click drives the radial command menu and the context menu (see SpreadsheetGrid.Radial):
+        // a quick click raises the context menu, a press-and-hold raises the radial. Don't let it start
+        // a selection. Commit any in-progress edit first so it acts on a settled cell, and focus the grid
+        // so typing works once it closes. e.Handled stops the framework's own pointer context request —
+        // this gesture owns pointer-driven menus.
         if (e.GetCurrentPoint(this).Properties.IsRightButtonPressed)
         {
             if (_editing)
@@ -988,6 +998,8 @@ public sealed partial class SpreadsheetGrid : Panel
             }
 
             Focus();
+            BeginRightClickGesture(point, e.Pointer);
+            e.Handled = true;
             return;
         }
 
@@ -1193,6 +1205,19 @@ public sealed partial class SpreadsheetGrid : Panel
         base.OnPointerMoved(e);
         var point = e.GetPosition(this);
 
+        // While a right-button radial gesture is in flight the pointer drives the radial (its direction
+        // picks a wedge); suppress the usual hover/selection handling until the button is released.
+        if (_radialActive)
+        {
+            UpdateRadialHover(point);
+            return;
+        }
+
+        if (_radialPending)
+        {
+            return;
+        }
+
         if (_pointDragging)
         {
             UpdatePointDrag(point); // extend the point-mode reference into a range as the pointer drags
@@ -1241,6 +1266,18 @@ public sealed partial class SpreadsheetGrid : Panel
     protected override void OnPointerReleased(PointerReleasedEventArgs e)
     {
         base.OnPointerReleased(e);
+
+        // Finish a right-button radial gesture: run the highlighted command, or fall back to the
+        // context menu on a quick click. HandleRadialRelease snapshots and tears down the gesture
+        // before acting, so releasing the capture (which fires CaptureLost → CancelRadial) is a no-op.
+        if (_radialActive || _radialPending)
+        {
+            HandleRadialRelease();
+            e.Pointer.Capture(null);
+            e.Handled = true;
+            return;
+        }
+
         if (_pointDragging)
         {
             // The point-mode drag is done; the inserted range stays in the formula. Keep
@@ -1343,6 +1380,14 @@ public sealed partial class SpreadsheetGrid : Panel
             return;
         }
 
+        // Esc abandons an in-flight radial gesture before any other Esc behaviour.
+        if (e.Key == Key.Escape && (_radialActive || _radialPending))
+        {
+            CancelRadial();
+            e.Handled = true;
+            return;
+        }
+
         // Esc first dismisses an open filter/validation dropdown popup (a lightweight overlay, not a
         // modal) before any marquee/selection/paint Esc behaviour kicks in.
         if (e.Key == Key.Escape && _popupOpen)
@@ -1363,6 +1408,17 @@ public sealed partial class SpreadsheetGrid : Panel
         // ⌘+Arrow (Ctrl+Arrow off macOS) jumps to the edge of the data block, Excel-style; with Shift
         // it extends the selection to that edge instead of moving.
         bool jump = e.KeyModifiers.HasFlag(KeyModifiers.Meta) || e.KeyModifiers.HasFlag(KeyModifiers.Control);
+
+        // ⌥⇧+Arrow (Option=Alt on macOS) nudges the selection's contents one cell in that direction,
+        // rewriting any formula that pointed at the moved cells so the references follow — the same
+        // move semantics as a cut-and-paste. Requires Alt+Shift with no ⌘/Ctrl jump modifier.
+        if (e.KeyModifiers.HasFlag(KeyModifiers.Alt) && extend && !jump
+            && TryArrowDelta(e.Key, out int moveRow, out int moveColumn))
+        {
+            MoveSelectionRequested?.Invoke(moveRow, moveColumn);
+            e.Handled = true;
+            return;
+        }
 
         switch (e.Key)
         {
@@ -1440,6 +1496,21 @@ public sealed partial class SpreadsheetGrid : Panel
             BeginEdit(e.Text);
             e.Handled = true;
         }
+    }
+
+    /// <summary>The (rowDelta, columnDelta) for an arrow key, or false for any other key.</summary>
+    private static bool TryArrowDelta(Key key, out int rowDelta, out int columnDelta)
+    {
+        (rowDelta, columnDelta) = key switch
+        {
+            Key.Up => (-1, 0),
+            Key.Down => (1, 0),
+            Key.Left => (0, -1),
+            Key.Right => (0, 1),
+            _ => (0, 0),
+        };
+
+        return rowDelta != 0 || columnDelta != 0;
     }
 
     private static bool IsTypingKey(KeyEventArgs e) =>
@@ -1973,6 +2044,7 @@ public sealed partial class SpreadsheetGrid : Panel
     {
         _surface.Arrange(new Rect(finalSize));
         _popupLayer.Arrange(new Rect(finalSize));
+        _radialOverlay.Arrange(new Rect(finalSize));
         BuildVisible(finalSize);
         if (_editing && TryGetActiveCellRect(out var rect))
         {

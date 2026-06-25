@@ -110,6 +110,16 @@ public sealed class PasteBlockCommand : IEditCommand
             }
         }
 
+        // A move (cut) relocates the cells, so every formula in the workbook that pointed at the old
+        // location must follow them to the new one (Golden #8). A cut anchors once (PastePlanner), so
+        // the whole block translates by a single offset. Applying this to the destination cells too
+        // fixes up references between cells that moved together (e.g. a block where B2 = B1).
+        if (_block.IsCut && _plan.Anchors.Count > 0)
+        {
+            var (anchorRow, anchorColumn) = _plan.Anchors[0];
+            AdjustMovedReferences(workbook, anchorRow - _block.SourceRange.Top, anchorColumn - _block.SourceRange.Left);
+        }
+
         return EditResult.Cells(ChangedRefs());
     }
 
@@ -159,6 +169,35 @@ public sealed class PasteBlockCommand : IEditCommand
         }
 
         return EditResult.Cells(ChangedRefs());
+    }
+
+    /// <summary>
+    /// Rewrite every formula in the workbook so references that targeted the moved source cells now
+    /// point at their destination. Each changed cell is snapshotted first (idempotently, so a
+    /// destination cell already captured above keeps its pre-paste snapshot) and joins the result's
+    /// changed set, so undo restores it and recalc re-evaluates it.
+    /// </summary>
+    private void AdjustMovedReferences(Workbook workbook, int rowDelta, int columnDelta)
+    {
+        foreach (var sheet in workbook.Worksheets)
+        {
+            foreach (var (row, column, cell) in sheet.EnumerateCells().ToList())
+            {
+                if (!cell.IsFormula || !Parser.TryParse(cell.Formula!, out var expr, out _) || expr is null)
+                {
+                    continue;
+                }
+
+                var adjusted = ReferenceAdjuster.ForMove(
+                    expr, sheet.Name, _block.SourceSheet, _block.SourceRange, _destSheet, rowDelta, columnDelta);
+                string rewritten = FormulaWriter.Write(adjusted);
+                if (!string.Equals(rewritten, cell.Formula, StringComparison.Ordinal))
+                {
+                    Snapshot(sheet, row, column);
+                    cell.Formula = rewritten;
+                }
+            }
+        }
     }
 
     private List<CellRef> ChangedRefs() =>

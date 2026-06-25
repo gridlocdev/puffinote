@@ -128,6 +128,9 @@ public interface IAppEnvironment
     /// <summary>Display the keyboard shortcuts reference.</summary>
     void ShowKeyboardShortcuts();
 
+    /// <summary>Open the radial command menu's settings (segment count, labels, and per-segment bindings).</summary>
+    void ShowRadialSettings();
+
     /// <summary>Show the About screen (app name, pronunciation, description, version, license).</summary>
     void ShowAbout();
 

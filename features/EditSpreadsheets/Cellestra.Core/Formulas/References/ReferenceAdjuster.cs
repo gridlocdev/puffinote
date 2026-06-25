@@ -57,6 +57,43 @@ public static class ReferenceAdjuster
     }
 
     /// <summary>
+    /// Adjust references when cells are <b>moved</b> (a cut-paste, or an ⌥⇧-arrow nudge). Any
+    /// reference whose target cell lies in <paramref name="sourceRange"/> on
+    /// <paramref name="sourceSheet"/> follows the cells to their new home — shifted by the move's
+    /// <paramref name="rowDelta"/>/<paramref name="columnDelta"/> and re-homed on
+    /// <paramref name="destSheet"/> — so formulas keep pointing at the data that moved (Golden #8).
+    /// Unlike a copy, a move follows even <c>$</c>-absolute references (the cell itself relocated);
+    /// a range reference follows only when it lies <em>wholly</em> within the moved block, while a
+    /// partially-overlapped range and any reference outside the block stay put.
+    /// <paramref name="homeSheet"/> is the formula's own sheet, used to resolve unqualified refs.
+    /// </summary>
+    public static Expr ForMove(Expr expr, string homeSheet, string sourceSheet, CellRange sourceRange,
+        string destSheet, int rowDelta, int columnDelta)
+    {
+        // A reference lands unqualified when it ends up on the formula's own sheet; otherwise it
+        // carries the destination sheet so a cross-sheet move stays addressable.
+        string? destSheetRef = string.Equals(destSheet, homeSheet, StringComparison.OrdinalIgnoreCase) ? null : destSheet;
+
+        bool InSource(CellAddress a)
+        {
+            string effective = a.Sheet ?? homeSheet;
+            return string.Equals(effective, sourceSheet, StringComparison.OrdinalIgnoreCase)
+                && a.Column >= sourceRange.Left && a.Column <= sourceRange.Right
+                && a.Row >= sourceRange.Top && a.Row <= sourceRange.Bottom;
+        }
+
+        CellAddress Moved(CellAddress a) =>
+            new(a.Column + columnDelta, a.Row + rowDelta, a.ColumnAbsolute, a.RowAbsolute, destSheetRef);
+
+        CellAddress MapAddress(CellAddress a) => InSource(a) ? Moved(a) : a;
+
+        CellRange MapRange(CellRange r) =>
+            InSource(r.Start) && InSource(r.End) ? new CellRange(Moved(r.Start), Moved(r.End)) : r;
+
+        return Rewrite(expr, a => MapAddress(a), r => MapRange(r));
+    }
+
+    /// <summary>
     /// Adjust references when a worksheet is deleted: any reference whose effective sheet is the
     /// deleted one becomes <c>#REF!</c>. A reference with no explicit sheet belongs to
     /// <paramref name="homeSheet"/> (the formula's own sheet) and is only affected if that is the

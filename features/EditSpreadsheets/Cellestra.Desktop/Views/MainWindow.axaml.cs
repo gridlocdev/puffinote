@@ -43,9 +43,11 @@ public partial class MainWindow : Window, IEditorHost
         Editor.Host = this;
         Editor.Zoom = _settings.Zoom;
         Editor.CommandBarCollapsed = _settings.CommandBarCollapsed;
+        Editor.RadialConfig = _settings.RadialMenu;
         Editor.DocumentChanged += (_, _) => UpdateTitle();
         Editor.CommandStateChanged += (_, _) => RefreshCommandStates();
         Editor.CommandBarCollapsedChanged += (_, _) => PersistSettings();
+        Editor.RadialConfigChanged += (_, _) => PersistSettings();
 
         BuildNativeMenu();
         Closing += OnWindowClosing;
@@ -110,6 +112,7 @@ public partial class MainWindow : Window, IEditorHost
         _settings = _settings with
         {
             CommandBarCollapsed = Editor.CommandBarCollapsed,
+            RadialMenu = Editor.RadialConfig,
             Zoom = Editor.Zoom,
             WindowWidth = Width,
             WindowHeight = Height,
@@ -157,7 +160,7 @@ public partial class MainWindow : Window, IEditorHost
         menu.Items.Add(Submenu("Data", "data.sortAsc", "data.sortDesc", "data.customSort", "data.sortAndFilter", null,
             "data.toggleFilter", "data.clearFilter", null, "data.createTable", "data.removeDuplicates",
             "data.textToColumns", "data.validation", null, "formula.recalc"));
-        menu.Items.Add(Submenu("View", "view.commandPalette", "view.goToSheet", null, "view.zoomIn", "view.zoomOut", "view.actualSize", null, "view.freezePanes"));
+        menu.Items.Add(Submenu("View", "view.commandPalette", "view.goToSheet", null, "view.zoomIn", "view.zoomOut", "view.actualSize", null, "view.freezePanes", null, "view.radialSettings"));
         menu.Items.Add(Submenu("Help", "help.shortcuts", null, "help.about"));
         NativeMenu.SetMenu(this, menu);
     }

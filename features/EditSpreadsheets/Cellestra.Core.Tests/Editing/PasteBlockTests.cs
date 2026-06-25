@@ -46,6 +46,64 @@ public class PasteBlockTests
     }
 
     [Fact]
+    public void Cut_paste_makes_external_references_follow_the_moved_cell()
+    {
+        var (_, history, sheet) = New();
+        sheet.SetValue(0, 0, CellValue.Number(10));            // A1
+        sheet.SetFormula(0, 2, "A1*2", CellValue.Number(20));  // C1 = A1*2 (points at A1)
+
+        var block = ClipboardBlock.Capture(sheet, CellRange.Parse("A1"), isCut: true);
+        history.Execute(new PasteBlockCommand(sheet.Name, 4, 0, block)); // move A1 → A5
+
+        Assert.Equal("A5*2", sheet.Find(0, 2)!.Formula); // the reference followed the cell
+
+        history.Undo();
+        Assert.Equal("A1*2", sheet.Find(0, 2)!.Formula); // and is restored on undo
+    }
+
+    [Fact]
+    public void Cut_paste_follows_even_absolute_references()
+    {
+        var (_, history, sheet) = New();
+        sheet.SetValue(0, 0, CellValue.Number(10));               // A1
+        sheet.SetFormula(0, 2, "$A$1*2", CellValue.Number(20));   // C1 = $A$1*2
+
+        var block = ClipboardBlock.Capture(sheet, CellRange.Parse("A1"), isCut: true);
+        history.Execute(new PasteBlockCommand(sheet.Name, 4, 0, block)); // move A1 → A5
+
+        // A move relocates the cell itself, so an absolute reference follows it (unlike a copy).
+        Assert.Equal("$A$5*2", sheet.Find(0, 2)!.Formula);
+    }
+
+    [Fact]
+    public void Cut_paste_adjusts_references_between_cells_that_move_together()
+    {
+        var (_, history, sheet) = New();
+        sheet.SetValue(0, 1, CellValue.Number(3));               // B1
+        sheet.SetFormula(1, 1, "B1+1", CellValue.Number(4));     // B2 = B1+1 (both inside the block)
+
+        var block = ClipboardBlock.Capture(sheet, CellRange.Parse("B1:B2"), isCut: true);
+        history.Execute(new PasteBlockCommand(sheet.Name, 0, 3, block)); // move B1:B2 → D1:D2
+
+        // The intra-block reference moves with the block: B2's "B1" becomes D2's "D1".
+        Assert.Equal("D1+1", sheet.Find(1, 3)!.Formula);
+    }
+
+    [Fact]
+    public void Cut_paste_leaves_references_outside_the_moved_cell_untouched()
+    {
+        var (_, history, sheet) = New();
+        sheet.SetValue(0, 0, CellValue.Number(10));               // A1 (stays put)
+        sheet.SetFormula(0, 1, "A1*2", CellValue.Number(20));     // B1 = A1*2 (the cell we move)
+
+        var block = ClipboardBlock.Capture(sheet, CellRange.Parse("B1"), isCut: true);
+        history.Execute(new PasteBlockCommand(sheet.Name, 5, 5, block)); // move B1 → F6
+
+        // The moved cell's own reference to the un-moved A1 stays verbatim.
+        Assert.Equal("A1*2", sheet.Find(5, 5)!.Formula);
+    }
+
+    [Fact]
     public void Single_cell_fills_a_multi_cell_selection()
     {
         var (_, history, sheet) = New();

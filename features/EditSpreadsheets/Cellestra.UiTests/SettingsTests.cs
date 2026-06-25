@@ -1,5 +1,7 @@
+using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using Cellestra.Desktop.Commands;
 using Cellestra.Desktop.Services;
 using Xunit;
 
@@ -7,6 +9,51 @@ namespace Cellestra.UiTests;
 
 public class SettingsTests
 {
+    [Fact]
+    public void Radial_menu_config_round_trips_through_disk()
+    {
+        string path = Path.Combine(Path.GetTempPath(), $"cellestra-settings-{System.Guid.NewGuid():N}.json");
+        try
+        {
+            var service = new SettingsService(path);
+            var radial = new RadialMenuConfig
+            {
+                SegmentCount = 4,
+                ShowLabels = false,
+                CommandIds = new List<string?> { "edit.cut", null, "edit.paste", "edit.undo" },
+            };
+            service.Save(new AppSettings { RadialMenu = radial });
+
+            var loaded = service.Load().RadialMenu;
+            Assert.Equal(4, loaded.SegmentCount);
+            Assert.False(loaded.ShowLabels);
+            Assert.Equal("edit.cut", loaded.CommandIdAt(0));
+            Assert.Null(loaded.CommandIdAt(1));
+            Assert.Equal("edit.undo", loaded.CommandIdAt(3));
+        }
+        finally
+        {
+            File.Delete(path);
+        }
+    }
+
+    [Fact]
+    public void Settings_without_a_radial_block_fall_back_to_the_default()
+    {
+        string path = Path.Combine(Path.GetTempPath(), $"cellestra-settings-{System.Guid.NewGuid():N}.json");
+        try
+        {
+            // An older settings file (written before the radial feature) has no RadialMenu key.
+            File.WriteAllText(path, "{ \"Zoom\": 1.0 }");
+            var loaded = new SettingsService(path).Load();
+            Assert.Equal(RadialMenuConfig.DefaultSegmentCount, loaded.RadialMenu.SegmentCount);
+        }
+        finally
+        {
+            File.Delete(path);
+        }
+    }
+
     [Fact]
     public void Settings_round_trip_through_disk()
     {

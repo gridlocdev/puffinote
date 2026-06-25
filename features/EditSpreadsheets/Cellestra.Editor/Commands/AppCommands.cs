@@ -174,6 +174,7 @@ public static class AppCommands
         new("view.zoomOut", "Zoom Out", "Make everything smaller.", e => e.ZoomBy(-0.1), "zoom-out", new KeyGesture(Key.OemMinus, Cmd)),
         new("view.actualSize", "Actual Size", "Reset zoom to 100%.", e => e.ResetZoom(), "maximize", new KeyGesture(Key.D0, Cmd)),
         new("view.freezePanes", "Freeze Panes", "Keep header rows and columns in view.", e => e.ToggleFreezePanes(), "layout-grid"),
+        new("view.radialSettings", "Radial Menu Settings…", "Configure the hold-right-click radial command menu.", e => e.ShowRadialSettings(), "settings-2"),
 
         // Insert (merge)
         new("format.merge", "Merge Cells", "Combine the selected cells into one.", MergeCells, "table-cells-merge",
