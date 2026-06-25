@@ -135,7 +135,7 @@ public class MarkdownTheme
             TokenType.Strong => new RunStyle(Bold(), BaseFontSize, Foreground, null, false),
             TokenType.Emphasis => new RunStyle(Italic(), BaseFontSize, Foreground, null, false),
             TokenType.StrongEmphasis => new RunStyle(BoldItalic(), BaseFontSize, Foreground, null, false),
-            TokenType.Strikethrough => new RunStyle(Body(), BaseFontSize, Foreground, null, false, Strike()),
+            TokenType.Strikethrough => new RunStyle(Body(), BaseFontSize, Foreground, null, false, Strike(Foreground)),
             TokenType.Highlight => new RunStyle(Body(), BaseFontSize, Foreground, HighlightBackground, false),
             // Inline code gets a tight "pill" background; code-block text does not — the continuous
             // block panel behind the whole fence/indent provides its background instead (no per-line box).
@@ -170,6 +170,20 @@ public class MarkdownTheme
     private Typeface BoldItalic() => new(_body, FontStyle.Italic, FontWeight.Bold);
     private Typeface Mono() => new(_mono);
 
-    private static TextDecorationCollection Strike() =>
-        new() { new TextDecoration { Location = TextDecorationLocation.Strikethrough } };
+    /// <summary>
+    /// A strikethrough decoration with an <b>explicit</b> stroke pen in the text colour. The stroke is given
+    /// rather than left null because relying on a decoration to inherit the run's foreground is unreliable
+    /// across draw backends — an explicit pen guarantees the line actually renders through the text.
+    /// </summary>
+    private static TextDecorationCollection Strike(IBrush foreground) =>
+        new()
+        {
+            new TextDecoration
+            {
+                Location = TextDecorationLocation.Strikethrough,
+                Stroke = foreground,
+                StrokeThickness = 1,
+                StrokeThicknessUnit = TextDecorationUnit.Pixel,
+            },
+        };
 }

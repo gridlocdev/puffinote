@@ -1,5 +1,6 @@
 using System.Linq;
 using Avalonia.Input;
+using Avalonia.Media;
 using Avalonia.Headless.XUnit;
 using Typage.Control.Controls;
 using Typage.Control.Rendering;
@@ -31,6 +32,13 @@ public class StrikethroughTests
         var run = e.BuildVisualLineForTest(0).Runs
             .First(r => r.Kind == VisualRunKind.Text && r.Text.Contains("done"));
         Assert.NotNull(run.Style.Decorations); // the content carries the strikethrough decoration
+
+        // A strikethrough at the text's mid-line, with an explicit stroke pen so the line draws on every
+        // backend (a null stroke relies on a foreground fallback that isn't reliable everywhere).
+        var deco = run.Style.Decorations!.Single();
+        Assert.Equal(TextDecorationLocation.Strikethrough, deco.Location);
+        Assert.NotNull(deco.Stroke);
+        Assert.True(deco.StrokeThickness > 0);
     }
 
     [AvaloniaFact]
