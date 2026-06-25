@@ -78,6 +78,24 @@ public class NestedCheckboxTests
     }
 
     [AvaloniaFact]
+    public void IndividualNestedCheckbox_ReordersAmongSiblings_PreservingItsState()
+    {
+        var e = At("- [ ] a\n  - [ ] a1\n  - [x] a2\n  - [ ] a3", line: 2); // caret on the middle child (checked)
+        e.MoveLinesForTest(-1);
+        Assert.Equal("- [ ] a\n  - [x] a2\n  - [ ] a1\n  - [ ] a3", e.Text); // a2 moved up, still checked
+        e.MoveLinesForTest(1);
+        Assert.Equal("- [ ] a\n  - [ ] a1\n  - [x] a2\n  - [ ] a3", e.Text); // and back down again
+    }
+
+    [AvaloniaFact]
+    public void IndividualNestedChild_CarriesItsOwnSubtree_WhenItHasOne()
+    {
+        var e = At("- [ ] a\n  - [ ] a1\n    - [ ] a1x\n  - [ ] a2", line: 1); // caret on a1, which has a child
+        e.MoveLinesForTest(1);
+        Assert.Equal("- [ ] a\n  - [ ] a2\n  - [ ] a1\n    - [ ] a1x", e.Text); // a1 + a1x swap with a2 as a unit
+    }
+
+    [AvaloniaFact]
     public void FirstChild_CannotMoveAboveItsParent()
     {
         var e = At("- [ ] a\n  - [ ] a1", line: 1); // the only child

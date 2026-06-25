@@ -971,27 +971,55 @@ public class MarkdownEditor : Avalonia.Controls.Control, ILogicalScrollable
     protected override void OnKeyDown(KeyEventArgs e)
     {
         _modifiers = e.KeyModifiers;
-        var ctrl = e.KeyModifiers.HasFlag(KeyModifiers.Control) || e.KeyModifiers.HasFlag(KeyModifiers.Meta);
+        var control = e.KeyModifiers.HasFlag(KeyModifiers.Control);
+        var meta = e.KeyModifiers.HasFlag(KeyModifiers.Meta);
+        var ctrl = control || meta; // the platform "command" modifier for the formatting/clipboard shortcuts
         var shift = e.KeyModifiers.HasFlag(KeyModifiers.Shift);
         var alt = e.KeyModifiers.HasFlag(KeyModifiers.Alt);
+        var isMac = OperatingSystem.IsMacOS();
+        var wordMod = isMac ? alt : control; // word-wise nav/delete: ⌥ on macOS, Ctrl elsewhere
         var doc = _buffer.Document;
         var caret = _buffer.Selection.Caret;
         var handled = true;
 
         switch (e.Key)
         {
+            // --- deletion (⌘⌫ to line start on macOS, then word-wise) ---
+            case Key.Back when isMac && meta: DeleteToRowStart(caret); break;
+            case Key.Back when wordMod: DeleteWord(-1); break;
+            case Key.Delete when wordMod: DeleteWord(1); break;
             case Key.Back: if (!TryBackspacePair() && !TryVisualBackspace()) { _buffer.Backspace(); } break;
             case Key.Delete: if (!TryVisualDelete()) { _buffer.Delete(); } break;
+
+            case Key.Enter when shift: _buffer.Insert("\n"); break; // plain newline, no list continuation
             case Key.Enter: HandleEnter(); break;
             case Key.Tab: HandleTab(shift); break;
+
+            // --- horizontal navigation: word, then macOS ⌘-line, then by grapheme ---
+            case Key.Left when wordMod: MoveCaret(WordBoundary(caret, -1), shift); break;
+            case Key.Right when wordMod: MoveCaret(WordBoundary(caret, 1), shift); break;
+            case Key.Left when isMac && meta: MoveCaret(RowStartOffset(caret), shift); break;
+            case Key.Right when isMac && meta: MoveCaret(RowEndOffset(caret), shift); break;
             case Key.Left: MoveCaret(VisualStep(caret, -1), shift); break;
             case Key.Right: MoveCaret(VisualStep(caret, 1), shift); break;
+
+            // --- vertical navigation: move lines, doc ends (⌘↑/↓ on macOS), else by visual row ---
             case Key.Up when alt && shift: MoveLines(-1); break;
             case Key.Down when alt && shift: MoveLines(1); break;
+            case Key.Up when isMac && meta: MoveCaret(0, shift); break;
+            case Key.Down when isMac && meta: MoveCaret(doc.Length, shift); break;
             case Key.Up: MoveCaretByLine(-1, shift); break;
             case Key.Down: MoveCaretByLine(1, shift); break;
-            case Key.Home: MoveCaret(doc.GetLineStart(doc.GetPosition(caret).Line), shift); break;
-            case Key.End: MoveCaret(doc.GetLineEnd(doc.GetPosition(caret).Line), shift); break;
+            case Key.PageUp: MoveCaretByLine(-PageRows(), shift); break;
+            case Key.PageDown: MoveCaretByLine(PageRows(), shift); break;
+
+            // --- line / document extents ---
+            case Key.Home when control: MoveCaret(0, shift); break;        // Ctrl+Home → document start
+            case Key.End when control: MoveCaret(doc.Length, shift); break; // Ctrl+End → document end
+            case Key.Home: MoveCaret(SmartHome(caret), shift); break;       // content start ⇄ visual-row start
+            case Key.End: MoveCaret(RowEndOffset(caret), shift); break;     // end of the visual row
+
+            case Key.Escape when !_buffer.Selection.IsEmpty: MoveCaret(_buffer.Selection.Caret, extend: false); break;
 
             // Clipboard.
             case Key.C when ctrl: _ = CopyAsync(); break;
@@ -1461,10 +1489,19 @@ public class MarkdownEditor : Avalonia.Controls.Control, ILogicalScrollable
         var line = _buffer.Document.GetPosition(offset).Line;
         var shift = e.KeyModifiers.HasFlag(KeyModifiers.Shift);
 
-        // A double-click selects the word (or run) under the cursor.
+        // A double-click selects the word (or run) under the cursor; a triple-click selects the whole
+        // paragraph block (the standard editor escalation).
         if (e.ClickCount == 2)
         {
             SelectWordAt(line, offset);
+            e.Handled = true;
+            base.OnPointerPressed(e);
+            return;
+        }
+
+        if (e.ClickCount >= 3)
+        {
+            SelectBlockAt(line);
             e.Handled = true;
             base.OnPointerPressed(e);
             return;
@@ -1553,6 +1590,17 @@ public class MarkdownEditor : Avalonia.Controls.Control, ILogicalScrollable
 
     /// <summary>Select the word/run at <paramref name="offset"/> on <paramref name="line"/>; for tests.</summary>
     internal void SelectWordForTest(int line, int offset) => SelectWordAt(line, offset);
+
+    /// <summary>Select the whole paragraph block containing <paramref name="line"/> (triple-click).</summary>
+    private void SelectBlockAt(int line)
+    {
+        var block = BlockOf(line);
+        _buffer.Selection = new Selection(BlockStartOffset(block), BlockEndOffset(block));
+        _goalX = double.NaN;
+    }
+
+    /// <summary>Select the paragraph block at <paramref name="line"/> (triple-click); for tests.</summary>
+    internal void SelectBlockForTest(int line) => SelectBlockAt(line);
 
     /// <summary>Move the caret up/down by <paramref name="delta"/> lines (sticky goal column); for tests.</summary>
     internal void MoveCaretByLineForTest(int delta) => MoveCaretByLine(delta, extend: false);
@@ -1711,6 +1759,158 @@ public class MarkdownEditor : Avalonia.Controls.Control, ILogicalScrollable
 
     /// <summary>Move the caret atomically in <paramref name="dir"/>; for tests.</summary>
     internal void VisualStepForTest(int dir, bool extend = false) => MoveCaret(VisualStep(_buffer.Selection.Caret, dir), extend);
+
+    /// <summary>
+    /// The document offset one word away from <paramref name="offset"/> in <paramref name="dir"/> (+1
+    /// right, -1 left): skip a run of whitespace, then a run of like-classed characters (word vs
+    /// punctuation), the way Ctrl/⌥ + arrow works in every editor. Word boundaries fall on punctuation-run
+    /// edges, which coincide with hidden marker edges, so the result is always a valid caret stop.
+    /// </summary>
+    private int WordBoundary(int offset, int dir)
+    {
+        var doc = _buffer.Document;
+        var i = Math.Clamp(offset, 0, doc.Length);
+        if (dir > 0)
+        {
+            while (i < doc.Length && char.IsWhiteSpace(doc[i]))
+            {
+                i++;
+            }
+
+            if (i < doc.Length)
+            {
+                var cls = CharClass(doc[i]);
+                while (i < doc.Length && !char.IsWhiteSpace(doc[i]) && CharClass(doc[i]) == cls)
+                {
+                    i++;
+                }
+            }
+        }
+        else
+        {
+            while (i > 0 && char.IsWhiteSpace(doc[i - 1]))
+            {
+                i--;
+            }
+
+            if (i > 0)
+            {
+                var cls = CharClass(doc[i - 1]);
+                while (i > 0 && !char.IsWhiteSpace(doc[i - 1]) && CharClass(doc[i - 1]) == cls)
+                {
+                    i--;
+                }
+            }
+        }
+
+        return i;
+    }
+
+    /// <summary>Delete from the start of the caret's visual row to the caret (macOS ⌘⌫).</summary>
+    private void DeleteToRowStart(int caret)
+    {
+        if (!_buffer.Selection.IsEmpty)
+        {
+            _buffer.Insert(string.Empty);
+            return;
+        }
+
+        var start = RowStartOffset(caret);
+        if (start < caret)
+        {
+            _buffer.ReplaceRange(start, caret - start, string.Empty);
+        }
+    }
+
+    /// <summary>Delete from the caret to the next word boundary in <paramref name="dir"/> (Ctrl/⌥ + Backspace/Delete).</summary>
+    private void DeleteWord(int dir)
+    {
+        var sel = _buffer.Selection;
+        if (!sel.IsEmpty)
+        {
+            _buffer.Insert(string.Empty); // a selection deletes normally
+            return;
+        }
+
+        var target = WordBoundary(sel.Caret, dir);
+        if (target == sel.Caret)
+        {
+            return;
+        }
+
+        var from = Math.Min(sel.Caret, target);
+        _buffer.ReplaceRange(from, Math.Abs(target - sel.Caret), string.Empty);
+    }
+
+    /// <summary>The source-column range <c>[start, end)</c> occupied by visual <paramref name="row"/> of <paramref name="visual"/>.</summary>
+    private static (int Start, int End) RowColumns(VisualLine visual, int row)
+    {
+        var start = int.MaxValue;
+        var end = 0;
+        foreach (var run in visual.Runs)
+        {
+            if (run.Len > 0 && run.Row == row)
+            {
+                start = Math.Min(start, run.Col);
+                end = Math.Max(end, run.Col + run.Len);
+            }
+        }
+
+        return start == int.MaxValue ? (0, 0) : (start, end);
+    }
+
+    /// <summary>The offset at the start of the caret's wrapped visual row.</summary>
+    private int RowStartOffset(int caret)
+    {
+        var r = ResolveCaret(caret);
+        return r.BlockStart + RowColumns(r.Visual, r.Visual.RowOf(r.Col)).Start;
+    }
+
+    /// <summary>The offset at the end of the caret's wrapped visual row.</summary>
+    private int RowEndOffset(int caret)
+    {
+        var r = ResolveCaret(caret);
+        return r.BlockStart + RowColumns(r.Visual, r.Visual.RowOf(r.Col)).End;
+    }
+
+    /// <summary>
+    /// Smart Home: jump to the first visible, non-whitespace content on the caret's visual row; when the
+    /// caret is already there, jump to the true start of the row instead (the toggle every editor has).
+    /// </summary>
+    private int SmartHome(int caret)
+    {
+        var doc = _buffer.Document;
+        var r = ResolveCaret(caret);
+        var (start, end) = RowColumns(r.Visual, r.Visual.RowOf(r.Col));
+        var content = start;
+        while (content < end &&
+               (r.Visual.IsColumnHidden(content) || char.IsWhiteSpace(doc[r.BlockStart + content])))
+        {
+            content++;
+        }
+
+        var contentOffset = r.BlockStart + content;
+        return caret == contentOffset ? r.BlockStart + start : contentOffset;
+    }
+
+    /// <summary>The number of visual rows a Page Up/Down moves (a viewport-height of rows, less one for overlap).</summary>
+    private int PageRows()
+    {
+        var h = _viewport.Height > 0 ? _viewport.Height : Bounds.Height;
+        return Math.Max(1, (int)(h / _theme.LineHeight) - 1);
+    }
+
+    /// <summary>Move the caret to <paramref name="dir"/> word boundary; for tests.</summary>
+    internal void WordMoveForTest(int dir, bool extend = false) => MoveCaret(WordBoundary(_buffer.Selection.Caret, dir), extend);
+
+    /// <summary>Delete a word in <paramref name="dir"/>; for tests.</summary>
+    internal void DeleteWordForTest(int dir) => DeleteWord(dir);
+
+    /// <summary>Smart-Home the caret; for tests.</summary>
+    internal void HomeForTest(bool extend = false) => MoveCaret(SmartHome(_buffer.Selection.Caret), extend);
+
+    /// <summary>Move the caret to the end of its visual row; for tests.</summary>
+    internal void EndForTest(bool extend = false) => MoveCaret(RowEndOffset(_buffer.Selection.Caret), extend);
 
     /// <summary>
     /// Backspace in WYSIWYG mode: delete the previous <b>visible</b> grapheme, stepping over any concealed
