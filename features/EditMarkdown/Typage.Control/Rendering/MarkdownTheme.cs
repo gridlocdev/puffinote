@@ -141,7 +141,7 @@ public class MarkdownTheme
             // block panel behind the whole fence/indent provides its background instead (no per-line box).
             TokenType.InlineCode => new RunStyle(Mono(), BaseFontSize, CodeForeground, CodeBackground, false),
             TokenType.CodeText => new RunStyle(Mono(), BaseFontSize, CodeForeground, null, false),
-            TokenType.LinkText or TokenType.Autolink or TokenType.WikiLink => new RunStyle(Body(), BaseFontSize, LinkForeground, null, false),
+            TokenType.LinkText or TokenType.Autolink or TokenType.WikiLink => new RunStyle(Body(), BaseFontSize, LinkForeground, null, false, LinkUnderline),
             TokenType.LinkUrl or TokenType.ImageUrl or TokenType.Embed => Marker(),
             TokenType.BlockquoteMarker or TokenType.ListMarker or TokenType.TaskMarker
                 or TokenType.HorizontalRule or TokenType.CodeFence or TokenType.FrontMatterFence
@@ -175,6 +175,24 @@ public class MarkdownTheme
     /// rather than left null because relying on a decoration to inherit the run's foreground is unreliable
     /// across draw backends — an explicit pen guarantees the line actually renders through the text.
     /// </summary>
+    private TextDecorationCollection? _linkUnderline;
+
+    /// <summary>
+    /// The underline decoration for link text — a solid rule in <see cref="LinkForeground"/>, so links read
+    /// like HTML hyperlinks (coloured <i>and</i> underlined). Built once per theme instance (themes are
+    /// immutable) and shared, so the FormattedText cache keys on a stable decoration object.
+    /// </summary>
+    public TextDecorationCollection LinkUnderline => _linkUnderline ??= new()
+    {
+        new TextDecoration
+        {
+            Location = TextDecorationLocation.Underline,
+            Stroke = LinkForeground,
+            StrokeThickness = 1,
+            StrokeThicknessUnit = TextDecorationUnit.Pixel,
+        },
+    };
+
     private static TextDecorationCollection Strike(IBrush foreground) =>
         new()
         {

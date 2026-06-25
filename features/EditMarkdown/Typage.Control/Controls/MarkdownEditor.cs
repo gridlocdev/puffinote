@@ -2950,6 +2950,69 @@ public class MarkdownEditor : Avalonia.Controls.Control, ILogicalScrollable
     private static Typeface HeadingTypeface(RunStyle baseStyle) =>
         new(baseStyle.Typeface.FontFamily, FontStyle.Normal, FontWeight.Bold);
 
+    /// <summary>Restyle a run as an inline-link hyperlink: link colour + underline, keeping its typeface/size.</summary>
+    private RunStyle AsLink(RunStyle style) =>
+        style with { Foreground = _theme.LinkForeground, Decorations = _theme.LinkUnderline };
+
+    /// <summary>The absolute text spans of inline links <c>[text](url)</c> on <paramref name="line"/> — the
+    /// range between each link node's opening <c>[</c> and its <c>](</c>, i.e. the part a reader clicks.</summary>
+    private List<(int Start, int End)> LinkTextSpans(int line)
+    {
+        var spans = new List<(int, int)>();
+        var toks = _model.LineTokens(line);
+        foreach (var u in toks)
+        {
+            if (u.Type != TokenType.LinkUrl)
+            {
+                continue;
+            }
+
+            // Among the markers grouped with this link node, the opening "[" has the smallest start and the
+            // "](" is the one ending exactly where the URL begins; the text is what sits between them.
+            var openStart = int.MaxValue;
+            var openEnd = -1;
+            var midStart = -1;
+            foreach (var m in toks)
+            {
+                if (m.Node != u.Node || m.Role != TokenRole.Marker)
+                {
+                    continue;
+                }
+
+                if (m.Start < openStart)
+                {
+                    openStart = m.Start;
+                    openEnd = m.End;
+                }
+
+                if (m.End == u.Start)
+                {
+                    midStart = m.Start;
+                }
+            }
+
+            if (openEnd >= 0 && midStart > openEnd)
+            {
+                spans.Add((openEnd, midStart));
+            }
+        }
+
+        return spans;
+    }
+
+    private static bool InLinkText(List<(int Start, int End)> spans, int start, int end)
+    {
+        foreach (var (s, e) in spans)
+        {
+            if (start >= s && end <= e)
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
     /// <summary>
     /// Build the laid-out <see cref="VisualLine"/> for <paramref name="line"/> under the current
     /// reveal state: tile the line into styled segments (gaps between tokens filled with the default
@@ -2994,6 +3057,10 @@ public class MarkdownEditor : Avalonia.Controls.Control, ILogicalScrollable
             var headingLevel = HeadingLevel(line);
             lastHeading = headingLevel;
             var hasTask = _model.LineTokens(line).Any(t => t.Type == TokenType.TaskMarker);
+            // The text of an inline link [text](url) is tokenized as ordinary content (the engine recurses
+            // into it), so to render it like an HTML hyperlink we colour + underline any content that falls
+            // inside the link-text span — the gap between the opening "[" and the "](" of each link node.
+            var linkSpans = LinkTextSpans(line);
 
             foreach (var t in _model.LineTokens(line))
             {
@@ -3006,8 +3073,14 @@ public class MarkdownEditor : Avalonia.Controls.Control, ILogicalScrollable
 
                 if (s > pos)
                 {
-                    // The gap (including a joined newline) is plain text.
-                    segments.Add(new VisualLine.Segment(pos, s, DefaultStyle(headingLevel), false));
+                    // The gap (including a joined newline) is plain text — unless it falls inside a link's text.
+                    var gapStyle = DefaultStyle(headingLevel);
+                    if (InLinkText(linkSpans, pos + blockStart, s + blockStart))
+                    {
+                        gapStyle = AsLink(gapStyle);
+                    }
+
+                    segments.Add(new VisualLine.Segment(pos, s, gapStyle, false));
                 }
 
                 // The decoration helpers index into the *line* text, so keep line-relative offsets for them;
@@ -3037,6 +3110,13 @@ public class MarkdownEditor : Avalonia.Controls.Control, ILogicalScrollable
                 }
                 else
                 {
+                    // Content inside an inline link's text renders like an HTML hyperlink (coloured + underlined),
+                    // keeping any emphasis typeface it already carries.
+                    if (InLinkText(linkSpans, t.Start, t.End))
+                    {
+                        style = AsLink(style);
+                    }
+
                     segments.Add(new VisualLine.Segment(s, en, style, false));
                 }
 
