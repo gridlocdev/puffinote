@@ -193,7 +193,11 @@ extend it, keep the layering and update the docs.
   **variable block heights** (a per-block row-count cache + prefix sums, rebuilt on text/theme/width change —
   O(n) per edit, fine for note-sized docs); Up/Down move by **visual row**. Indented (4-space) code blocks
   are recognized (engine), code text has **no per-line background** (one block panel), and **Alt+Shift+Up/Down
-  reorders lines** (incl. checklist items).
+  reorders the item *and its sub-items*** (subtree swap with the adjacent sibling — nested lists/checkboxes).
+  **Tabs count as indentation** everywhere spaces do (column-aware tokenizer thresholds, literal-indent
+  continuation, tab-preserving Tab/Shift+Tab, tabs drawn as `IndentWidth` spaces). A **standard caret-nav
+  suite** is wired (platform-aware word move/delete, smart Home, visual-row Home/End, Page Up/Down, doc-extent
+  jumps, Shift+Enter plain break, Esc collapses a selection, triple-click selects the paragraph).
 - **Early / approximate / not built:** **whole-line block folding** (collapsing a fenced-code/front-matter
   fence row or rendering a real table grid — they still occupy their row), the front-matter **fold** and a
   true "Properties" header, **block objects** (inline images / rendered tables / embeds), **IME**, the
