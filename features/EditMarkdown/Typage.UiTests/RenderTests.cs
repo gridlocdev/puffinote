@@ -27,6 +27,22 @@ public class RenderTests
     }
 
     [AvaloniaFact]
+    public void BlockVisual_IsCached_AcrossCallsUntilTheLayoutChanges()
+    {
+        var editor = new Typage.Control.Controls.MarkdownEditor { Text = "# Title\n\nsome **bold** body text" };
+        editor.BuildVisualLineForTest(2); // first build measures the text
+        var afterFirst = editor.RawMeasureCount;
+        Assert.True(afterFirst > 0);
+
+        editor.BuildVisualLineForTest(2); // a second look with no edit must reuse the cached visual
+        Assert.Equal(afterFirst, editor.RawMeasureCount); // no fresh measuring
+
+        editor.Text = "# Title\n\nsome **bold** body text changed"; // an edit invalidates the cache
+        editor.BuildVisualLineForTest(2);
+        Assert.True(editor.RawMeasureCount > afterFirst); // rebuilt (measured again)
+    }
+
+    [AvaloniaFact]
     public void RendersRichConstructs_WithoutThrowing()
     {
         var view = new MarkdownEditorView();

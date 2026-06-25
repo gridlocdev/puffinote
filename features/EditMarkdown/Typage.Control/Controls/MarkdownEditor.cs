@@ -71,6 +71,11 @@ public class MarkdownEditor : Avalonia.Controls.Control, ILogicalScrollable
     private bool _layoutDirty = true;
     private double _layoutWidth = double.NaN;
 
+    // Laid-out, measured visual line per block, reused across renders / caret moves / hit-tests until the
+    // layout is rebuilt (EnsureLayout clears it). Building one is expensive — tokens → segments → word-wrap
+    // → text measurement — and it was previously redone on every frame and every caret step.
+    private readonly Dictionary<int, VisualLine> _blockVisualCache = new();
+
     public MarkdownEditor()
     {
         Focusable = true;
@@ -196,6 +201,7 @@ public class MarkdownEditor : Avalonia.Controls.Control, ILogicalScrollable
             }
 
             _showRawSource = value;
+            _blockVisualCache.Clear(); // marker concealment differs by mode, so cached visuals are stale
             InvalidateVisual();
         }
     }
@@ -1238,6 +1244,9 @@ public class MarkdownEditor : Avalonia.Controls.Control, ILogicalScrollable
         {
             return;
         }
+
+        // The block structure / wrap width is changing, so every cached visual line is now stale.
+        _blockVisualCache.Clear();
 
         // Group lines into blocks: a line joins the previous block only if it and the line above are both
         // plain paragraph text and the line above doesn't end in a hard break.
@@ -3567,6 +3576,21 @@ public class MarkdownEditor : Avalonia.Controls.Control, ILogicalScrollable
     /// concealed (full WYSIWYG), so the layout is caret-independent.
     /// </summary>
     private VisualLine BlockVisual(int block)
+    {
+        // Reuse the laid-out line while the layout is stable (cleared by EnsureLayout on any structural or
+        // width change). Callers always run EnsureLayout first, so the block boundaries behind a cached
+        // entry are current.
+        if (_blockVisualCache.TryGetValue(block, out var cached))
+        {
+            return cached;
+        }
+
+        var visual = BuildBlockVisual(block);
+        _blockVisualCache[block] = visual;
+        return visual;
+    }
+
+    private VisualLine BuildBlockVisual(int block)
     {
         var doc = _buffer.Document;
         var startLine = _blockStartLine[block];
