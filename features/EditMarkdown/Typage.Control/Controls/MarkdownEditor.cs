@@ -1260,7 +1260,11 @@ public class MarkdownEditor : Avalonia.Controls.Control, ILogicalScrollable
         _rowPrefix = new int[starts.Count + 1];
         for (var b = 0; b < starts.Count; b++)
         {
-            _rowCounts[b] = BlockVisual(b).RowCount;
+            // A soft paragraph separator (a single collapsed blank line) takes no rows, so two paragraphs
+            // render one line apart instead of with an empty line between them.
+            var line = _blockStartLine[b];
+            var collapsed = _blockStartLine[b + 1] - line == 1 && IsCollapsedBlankLine(line);
+            _rowCounts[b] = collapsed ? 0 : BlockVisual(b).RowCount;
             _rowPrefix[b + 1] = _rowPrefix[b] + _rowCounts[b];
         }
 
@@ -1380,6 +1384,15 @@ public class MarkdownEditor : Avalonia.Controls.Control, ILogicalScrollable
         EnsureLayout();
         var doc = _buffer.Document;
         var block = BlockOf(doc.GetPosition(offset).Line);
+
+        // A collapsed blank block has no rows to position a caret on; snap to the end of the previous
+        // (content) block so an offset that lands on a separator still resolves to a drawn position.
+        while (block > 0 && _rowCounts.Length > block && _rowCounts[block] == 0)
+        {
+            block--;
+            offset = BlockEndOffset(block);
+        }
+
         var blockStart = BlockStartOffset(block);
         var visual = BlockVisual(block);
         var col = Math.Clamp(offset - blockStart, 0, visual.RawLength);
@@ -1415,6 +1428,11 @@ public class MarkdownEditor : Avalonia.Controls.Control, ILogicalScrollable
             var maxWidth = _extentWidth;
             for (var block = first; block < last; block++)
             {
+                if (_rowCounts[block] == 0)
+                {
+                    continue; // a collapsed blank separator takes no rows and draws nothing
+                }
+
                 maxWidth = Math.Max(maxWidth, RenderBlock(context, doc, block, caret, caretLine));
             }
 
@@ -1895,8 +1913,8 @@ public class MarkdownEditor : Avalonia.Controls.Control, ILogicalScrollable
             case Key.Back when isMac && meta: DeleteToRowStart(caret); break;
             case Key.Back when wordMod: DeleteWord(-1); break;
             case Key.Delete when wordMod: DeleteWord(1); break;
-            case Key.Back: if (!TryBackspacePair() && !TryVisualBackspace()) { _buffer.Backspace(); } break;
-            case Key.Delete: if (!TryVisualDelete()) { _buffer.Delete(); } break;
+            case Key.Back: if (!TryBackspacePair() && !TryBackspaceCollapsedBlank() && !TryVisualBackspace()) { _buffer.Backspace(); } break;
+            case Key.Delete: if (!TryDeleteCollapsedBlank() && !TryVisualDelete()) { _buffer.Delete(); } break;
 
             case Key.Enter when shift: _buffer.Insert("\n"); break; // plain newline, no list continuation
             case Key.Enter: HandleEnter(); break;
@@ -1973,7 +1991,7 @@ public class MarkdownEditor : Avalonia.Controls.Control, ILogicalScrollable
         var sel = _buffer.Selection;
         if (!sel.IsEmpty)
         {
-            _buffer.Insert("\n"); // a selection is replaced by the newline; no continuation
+            _buffer.Insert("\n\n"); // a paragraph break (see default): replace the selection with one
             return;
         }
 
@@ -1993,7 +2011,13 @@ public class MarkdownEditor : Avalonia.Controls.Control, ILogicalScrollable
                 RenumberOrderedFrom(line + 1); // resequence following items if we split an ordered list
                 break;
             default:
-                _buffer.Insert("\n");
+                // A plain paragraph break writes TWO newlines, so the two halves are real Markdown
+                // paragraphs (a single newline is a soft break that the tokenizer flows back together,
+                // which made the caret "teleport"). The blank line between them is collapsed to regular
+                // spacing on screen (IsCollapsedBlankLine / EnsureLayout) and the caret glides over it.
+                // On an already-blank line one newline suffices (the blank above already separates the
+                // paragraphs), so pressing Enter repeatedly adds one empty line at a time, not two.
+                _buffer.Insert(IsBlankLine(line) ? "\n" : "\n\n");
                 break;
         }
     }
@@ -2402,6 +2426,26 @@ public class MarkdownEditor : Avalonia.Controls.Control, ILogicalScrollable
     /// <summary>Whether <paramref name="line"/> is blank (only whitespace).</summary>
     private bool IsBlankLine(int line) => _buffer.Document.GetLineText(line).Trim().Length == 0;
 
+    /// <summary>
+    /// Whether <paramref name="line"/> is a <b>soft paragraph separator</b>: a blank line directly below a
+    /// non-blank one, in ordinary (non-code, non-front-matter) flow. Pressing Enter writes such a blank
+    /// (a <c>\n\n</c> paragraph break); it is collapsed to zero visual rows so two paragraphs sit one line
+    /// apart (regular spacing) instead of leaving an empty line, and the caret glides over it as one step.
+    /// A second consecutive blank is <i>not</i> collapsed — that's a deliberately empty line — and a blank
+    /// inside a code block stays part of the code.
+    /// </summary>
+    private bool IsCollapsedBlankLine(int line)
+    {
+        var doc = _buffer.Document;
+        return line > 0 && line < doc.LineCount
+            && IsBlankLine(line) && !IsBlankLine(line - 1)
+            && _model.EnteringState(line).Kind == BlockKind.Normal;
+    }
+
+    /// <summary>Whether the caret <paramref name="offset"/> sits on a collapsed blank line (not a valid stop).</summary>
+    private bool IsCollapsedOffset(int offset) =>
+        IsCollapsedBlankLine(_buffer.Document.GetPosition(offset).Line);
+
     /// <summary>Whether any line in <c>[from, to]</c> carries an ordered-list marker.</summary>
     private static bool RunHasOrderedItem(TextDocument doc, int from, int to)
     {
@@ -2598,7 +2642,7 @@ public class MarkdownEditor : Avalonia.Controls.Control, ILogicalScrollable
 
     internal void BackspaceForTest()
     {
-        if (!TryBackspacePair() && !TryVisualBackspace())
+        if (!TryBackspacePair() && !TryBackspaceCollapsedBlank() && !TryVisualBackspace())
         {
             _buffer.Backspace();
         }
@@ -2606,7 +2650,7 @@ public class MarkdownEditor : Avalonia.Controls.Control, ILogicalScrollable
 
     internal void DeleteForTest()
     {
-        if (!TryVisualDelete())
+        if (!TryDeleteCollapsedBlank() && !TryVisualDelete())
         {
             _buffer.Delete();
         }
@@ -2923,7 +2967,9 @@ public class MarkdownEditor : Avalonia.Controls.Control, ILogicalScrollable
         var next = Math.Clamp(dir > 0 ? _buffer.NextCaret(caret) : _buffer.PreviousCaret(caret), 0, doc.Length);
         var r = ResolveCaret(next);
         var guard = 0;
-        while (r.Visual.IsInsideConcealed(r.Col) && guard++ <= doc.Length)
+        // Glide over a concealed marker run (atomic) or a collapsed blank separator (the \n\n between two
+        // paragraphs renders as one break, so it's one caret step) until a real stop is reached.
+        while ((r.Visual.IsInsideConcealed(r.Col) || IsCollapsedOffset(next)) && guard++ <= doc.Length)
         {
             var stepped = Math.Clamp(dir > 0 ? _buffer.NextCaret(next) : _buffer.PreviousCaret(next), 0, doc.Length);
             if (stepped == next)
@@ -3185,6 +3231,58 @@ public class MarkdownEditor : Avalonia.Controls.Control, ILogicalScrollable
         var end = Grapheme.NextBoundary(realText, col);
         _buffer.ReplaceRange(r.BlockStart + col, end - col, string.Empty);
         _buffer.Selection = Selection.At(r.BlockStart + col);
+        return true;
+    }
+
+    /// <summary>
+    /// Backspace at the start of a paragraph that sits under a collapsed blank separator: remove the whole
+    /// <c>\n\n</c> break (not just one newline, which would leave a single soft-break newline that flows the
+    /// paragraphs back together), merging this paragraph onto the end of the one above. Mirrors the Enter that
+    /// created the break.
+    /// </summary>
+    private bool TryBackspaceCollapsedBlank()
+    {
+        var sel = _buffer.Selection;
+        if (!sel.IsEmpty)
+        {
+            return false;
+        }
+
+        var doc = _buffer.Document;
+        var caret = sel.Caret;
+        var line = doc.GetPosition(caret).Line;
+        if (caret != doc.GetLineStart(line) || line < 1 || !IsCollapsedBlankLine(line - 1))
+        {
+            return false;
+        }
+
+        var from = doc.GetLineEnd(line - 2); // end of the content line just above the blank
+        _buffer.ReplaceRange(from, caret - from, string.Empty);
+        _buffer.Selection = Selection.At(from);
+        return true;
+    }
+
+    /// <summary>Forward Delete at the end of a paragraph followed by a collapsed blank separator: remove the
+    /// whole <c>\n\n</c> break, pulling the next paragraph up (the symmetric counterpart of backspace).</summary>
+    private bool TryDeleteCollapsedBlank()
+    {
+        var sel = _buffer.Selection;
+        if (!sel.IsEmpty)
+        {
+            return false;
+        }
+
+        var doc = _buffer.Document;
+        var caret = sel.Caret;
+        var line = doc.GetPosition(caret).Line;
+        if (caret != doc.GetLineEnd(line) || !IsCollapsedBlankLine(line + 1))
+        {
+            return false;
+        }
+
+        var to = doc.GetLineStart(line + 2); // start of the content line just below the blank
+        _buffer.ReplaceRange(caret, to - caret, string.Empty);
+        _buffer.Selection = Selection.At(caret);
         return true;
     }
 

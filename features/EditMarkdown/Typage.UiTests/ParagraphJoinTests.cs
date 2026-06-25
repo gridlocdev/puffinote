@@ -40,7 +40,9 @@ public class ParagraphJoinTests
     {
         var e = Editor("first\n\nsecond");
         Assert.NotEqual(e.BlockOfLineForTest(0), e.BlockOfLineForTest(2));
-        Assert.Equal(3, e.TotalRowsForTest()); // first | blank | second
+        // The blank line is a soft paragraph separator: collapsed to zero rows, so the two paragraphs sit
+        // one line apart (regular spacing) rather than leaving an empty line between them.
+        Assert.Equal(2, e.TotalRowsForTest()); // first | second
     }
 
     [AvaloniaFact]
