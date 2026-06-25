@@ -82,6 +82,29 @@ public class LinkExpandTests
     }
 
     [AvaloniaFact]
+    public void SuggestedLinkText_IsTheWordUnderTheCaret()
+    {
+        var e = At("see google here", caret: 7); // inside "google"
+        Assert.Equal("google", e.SuggestedLinkText());
+    }
+
+    [AvaloniaFact]
+    public void InsertLinkWithText_WrapsTheTargetWithDisplayAndUrl()
+    {
+        var e = At("see google here", caret: 7); // inside "google"
+        e.InsertLinkWithText("Google", "https://google.com");
+        Assert.Equal("see [Google](https://google.com) here", e.Text);
+    }
+
+    [AvaloniaFact]
+    public void InsertLinkWithText_EmptyDisplayFallsBackToTheUrl()
+    {
+        var e = At("a  b", caret: 2); // nothing under the caret
+        e.InsertLinkWithText("", "https://x.test");
+        Assert.Equal("a [https://x.test](https://x.test) b", e.Text);
+    }
+
+    [AvaloniaFact]
     public void ImageReference_UsesTheWordAsAltAndPointsAtTheUrl()
     {
         var e = At("logo", caret: 2);

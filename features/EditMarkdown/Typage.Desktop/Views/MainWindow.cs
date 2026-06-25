@@ -901,7 +901,7 @@ public class MainWindow : Window
             new("format.code", "Inline Code", "Format the selection as inline code.", Shortcut.Cmd(Key.E), ed.ToggleInlineCode),
             new("format.strike", "Strikethrough", "Strike through the selection.", Shortcut.Cmd(Key.X, KeyModifiers.Shift), ed.ToggleStrikethrough),
             new("format.highlight", "Highlight", "Highlight the selection (==text==).", Shortcut.Cmd(Key.H, KeyModifiers.Shift), ed.ToggleHighlight),
-            new("format.link", "Insert Link", "Wrap the selection as a link.", Shortcut.Cmd(Key.K), ed.InsertLink),
+            new("format.link", "Insert Link…", "Insert a link with display text and a location.", Shortcut.Cmd(Key.K), () => _ = ShowLinkDialogAsync()),
             new("format.task", "Checkbox", "Add a task checkbox to this line, or toggle it.", Shortcut.Cmd(Key.L), ed.ToggleTask),
             new("format.quote", "Blockquote", "Toggle a blockquote on the line(s).", null, ed.ToggleBlockquote),
             new("format.bulletList", "Bulleted List", "Toggle a bulleted list on the line(s).", Shortcut.Cmd(Key.D8, KeyModifiers.Shift), ed.ToggleBulletList),
@@ -1629,6 +1629,71 @@ public class MainWindow : Window
         };
         ok.Click += (_, _) => dialog.Close();
         _ = dialog.ShowDialog(this);
+    }
+
+    /// <summary>
+    /// The ⌘K link dialog: a "Display text" field (prefilled from the selection / word under the caret) and a
+    /// "Location" field, with Cancel / Add. On Add the link is inserted over the current target; spaces in the
+    /// location are encoded as <c>%20</c> so the URL survives as one Markdown destination.
+    /// </summary>
+    private async Task ShowLinkDialogAsync()
+    {
+        var ed = _editorView.Editor;
+        var displayBox = new TextBox { PlaceholderText = "Display text", Text = ed.SuggestedLinkText() };
+        var locationBox = new TextBox { PlaceholderText = "https://example.com or path/to/file" };
+
+        var add = new Button { Content = "Add", IsDefault = true };
+        var cancel = new Button { Content = "Cancel", IsCancel = true };
+        var tcs = new TaskCompletionSource<bool>();
+        add.Click += (_, _) => tcs.TrySetResult(true);
+        cancel.Click += (_, _) => tcs.TrySetResult(false);
+
+        var grid = new Grid
+        {
+            RowDefinitions = new RowDefinitions("Auto,Auto"),
+            ColumnDefinitions = new ColumnDefinitions("Auto,*"),
+        };
+        AddSettingRow(grid, 0, "Display text", displayBox);
+        AddSettingRow(grid, 1, "Location", locationBox);
+
+        var dialog = new Window
+        {
+            Title = "Insert Link",
+            Width = 380,
+            SizeToContent = SizeToContent.Height,
+            WindowStartupLocation = WindowStartupLocation.CenterOwner,
+            CanResize = false,
+            Content = new StackPanel
+            {
+                Margin = new Avalonia.Thickness(16),
+                Spacing = 16,
+                Children =
+                {
+                    grid,
+                    new StackPanel
+                    {
+                        Orientation = Orientation.Horizontal,
+                        HorizontalAlignment = HorizontalAlignment.Right,
+                        Spacing = 8,
+                        Children = { cancel, add },
+                    },
+                },
+            },
+        };
+        dialog.Closed += (_, _) => tcs.TrySetResult(false);
+        add.Click += (_, _) => dialog.Close();
+        cancel.Click += (_, _) => dialog.Close();
+        // Land in the field that still needs typing: location when a label is already filled, else display text.
+        dialog.Opened += (_, _) => (string.IsNullOrEmpty(displayBox.Text) ? displayBox : locationBox).Focus();
+
+        await dialog.ShowDialog(this);
+        if (!await tcs.Task)
+        {
+            return;
+        }
+
+        var url = (locationBox.Text ?? string.Empty).Trim().Replace(" ", "%20");
+        ed.InsertLinkWithText((displayBox.Text ?? string.Empty).Trim(), url);
     }
 
     private async Task<bool> ConfirmAsync(string message, string confirmLabel = "Discard", string denyLabel = "Cancel")

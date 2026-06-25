@@ -504,6 +504,29 @@ public class MarkdownEditor : Avalonia.Controls.Control, ILogicalScrollable
     /// </summary>
     public void InsertLink() => InsertReference(image: false);
 
+    /// <summary>
+    /// The text a link inserted right now would use as its visible label: the selection, or the word under a
+    /// bare caret (empty when neither). The shell reads this to prefill the "display text" field of its link
+    /// dialog (⌘K) so wrapping an existing word keeps it.
+    /// </summary>
+    public string SuggestedLinkText() => LinkTarget().Text;
+
+    /// <summary>
+    /// Insert a link <c>[text](url)</c> over the current target (selection or word under the caret), reducing
+    /// any inner link/image the target touches to its visible text so the new link wins (no nesting). When
+    /// <paramref name="text"/> is empty it falls back to the URL, then to the existing target text. The caller
+    /// is responsible for encoding the URL (e.g. spaces → <c>%20</c>); the caret lands just after the link.
+    /// </summary>
+    public void InsertLinkWithText(string text, string url)
+    {
+        var (start, end, existing) = LinkTarget();
+        var display = text.Length > 0 ? text : url.Length > 0 ? url : existing;
+        var replacement = $"[{display}]({url})";
+        _buffer.ReplaceRange(start, end - start, replacement);
+        _buffer.Selection = Selection.At(start + replacement.Length);
+        Focus();
+    }
+
     private void InsertReference(bool image)
     {
         var (start, end, text) = LinkTarget();
@@ -1916,7 +1939,7 @@ public class MarkdownEditor : Avalonia.Controls.Control, ILogicalScrollable
             case Key.I when ctrl: ToggleItalic(); break;
             case Key.E when ctrl && shift: InsertCodeBlock(); break; // ⌘⇧E fenced block (before ⌘E inline code)
             case Key.E when ctrl: ToggleInlineCode(); break;
-            case Key.K when ctrl: InsertLink(); break;
+            // ⌘K is owned by the shell: it bubbles to the window, which opens the link dialog (display + location).
             case Key.L when ctrl: ToggleTask(); break;
             case Key.D0 when ctrl: SetParagraph(); break;
             case >= Key.D1 and <= Key.D6 when ctrl: ApplyHeading(e.Key - Key.D1 + 1); break;
