@@ -753,7 +753,7 @@ public class MainWindow : Window
             new("format.bold", "Bold", "Make the selection bold.", Shortcut.Cmd(Key.B), ed.ToggleBold),
             new("format.italic", "Italic", "Make the selection italic.", Shortcut.Cmd(Key.I), ed.ToggleItalic),
             new("format.code", "Inline Code", "Format the selection as inline code.", Shortcut.Cmd(Key.E), ed.ToggleInlineCode),
-            new("format.strike", "Strikethrough", "Strike through the selection.", null, ed.ToggleStrikethrough),
+            new("format.strike", "Strikethrough", "Strike through the selection.", Shortcut.Cmd(Key.X, KeyModifiers.Shift), ed.ToggleStrikethrough),
             new("format.highlight", "Highlight", "Highlight the selection (==text==).", null, ed.ToggleHighlight),
             new("format.link", "Insert Link", "Wrap the selection as a link.", Shortcut.Cmd(Key.K), ed.InsertLink),
             new("format.task", "Checkbox", "Add a task checkbox to this line, or toggle it.", Shortcut.Cmd(Key.L), ed.ToggleTask),

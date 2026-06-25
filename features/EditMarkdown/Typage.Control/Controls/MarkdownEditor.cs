@@ -1527,8 +1527,9 @@ public class MarkdownEditor : Avalonia.Controls.Control, ILogicalScrollable
 
             case Key.Escape when !_buffer.Selection.IsEmpty: MoveCaret(_buffer.Selection.Caret, extend: false); break;
 
-            // Clipboard.
+            // Clipboard. (⌘⇧X is strikethrough below — it must be matched before plain ⌘X = Cut.)
             case Key.C when ctrl: _ = CopyAsync(); break;
+            case Key.X when ctrl && shift: ToggleStrikethrough(); break;
             case Key.X when ctrl: _ = CutAsync(); break;
             case Key.V when ctrl: _ = PasteAsync(); break;
 

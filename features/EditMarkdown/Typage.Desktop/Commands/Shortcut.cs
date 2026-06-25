@@ -36,6 +36,6 @@ public readonly record struct Shortcut(Key Key, KeyModifiers Extra = KeyModifier
     /// </summary>
     public bool YieldsToTextInput =>
         UsesCommand
-        && (Extra == KeyModifiers.None || Extra == KeyModifiers.Shift)
-        && Key is Key.A or Key.C or Key.V or Key.X or Key.Z or Key.Y;
+        && ((Extra == KeyModifiers.None && Key is Key.A or Key.C or Key.V or Key.X or Key.Z or Key.Y)
+            || (Extra == KeyModifiers.Shift && Key is Key.Z)); // ⌘⇧Z (Redo) is the only shifted editing chord
 }
