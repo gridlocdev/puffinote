@@ -200,6 +200,14 @@ public readonly record struct LinePrefix(
             return new EnterResult(EnterKind.Exit, string.Empty, exitStart, contentLen - exitStart);
         }
 
+        // Caret sits within the marker prefix — left of the item's content (e.g. on the left of a
+        // checkbox/bullet). Continuing here would splice another "- "/"1. "/"[ ] " into the line. Insert a
+        // plain newline instead, pushing the whole item down with the caret riding it, like a normal editor.
+        if (caretColumn < p.Length)
+        {
+            return new EnterResult(EnterKind.Plain, "\n", 0, 0);
+        }
+
         return new EnterResult(EnterKind.Continue, "\n" + p.ContinuationPrefix(), 0, 0);
     }
 }

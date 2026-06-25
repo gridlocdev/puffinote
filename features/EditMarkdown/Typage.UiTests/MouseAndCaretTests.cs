@@ -53,6 +53,37 @@ public class MouseAndCaretTests
     }
 
     [AvaloniaFact]
+    public void UpArrow_OnTheFirstRow_JumpsToTheDocumentStart()
+    {
+        // Caret mid-way along the top line; Up has nowhere higher to go, so it lands at the very start.
+        var editor = new MarkdownEditor { Text = "# abcdefghij\n# xy\n# more text" };
+        editor.Buffer.Selection = Selection.At(8); // column 8 on the first line
+        editor.MoveCaretByLineForTest(-1);
+        Assert.Equal(0, editor.Buffer.Selection.Caret);
+    }
+
+    [AvaloniaFact]
+    public void DownArrow_OnTheLastRow_JumpsToTheDocumentEnd()
+    {
+        var editor = new MarkdownEditor { Text = "# abcdefghij\n# xy\n# more text" };
+        var len = editor.Buffer.Document.Length;
+        editor.Buffer.Selection = Selection.At(len - 6); // partway along the last line
+        editor.MoveCaretByLineForTest(1);
+        Assert.Equal(len, editor.Buffer.Selection.Caret);
+    }
+
+    [AvaloniaFact]
+    public void UpArrow_OnAnInteriorRow_StillStepsOneRow_NotToTheStart()
+    {
+        // The edge jump must only fire at the true top: from line 1, Up goes to line 0, not offset 0.
+        var editor = new MarkdownEditor { Text = "# abcdefghij\n# xydef\n# more text" };
+        editor.Buffer.Selection = Selection.At(editor.Buffer.Document.GetLineStart(1) + 4);
+        editor.MoveCaretByLineForTest(-1);
+        Assert.Equal(0, editor.Buffer.Document.GetPosition(editor.Buffer.Selection.Caret).Line);
+        Assert.NotEqual(0, editor.Buffer.Selection.Caret); // landed on line 0 at the goal column, not the very start
+    }
+
+    [AvaloniaFact]
     public void GoalColumn_ResetsAfterAHorizontalMove()
     {
         var editor = new MarkdownEditor { Text = "# abcdefghij\n# xy\n# abcdefghij" };

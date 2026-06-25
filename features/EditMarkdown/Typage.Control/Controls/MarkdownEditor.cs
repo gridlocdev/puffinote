@@ -2022,7 +2022,22 @@ public class MarkdownEditor : Avalonia.Controls.Control, ILogicalScrollable
         var line = breakLine;
         var lineStart = doc.GetLineStart(line);
         var lineText = doc.GetLineText(line);
-        var result = LinePrefix.ComputeEnter(lineText, sel.Caret - lineStart);
+        var caretCol = sel.Caret - lineStart;
+
+        // Enter with the caret left of a non-empty list/quote item's content (anywhere in its marker
+        // prefix — e.g. on the left of a checkbox or bullet) must slide the whole item, indentation and
+        // marker intact, down by one line — not splice a duplicate "- "/"1. "/"[ ] " into it. Insert the
+        // newline at the line start so nothing of the prefix is split, and let the caret ride the item.
+        var prefix = LinePrefix.Parse(lineText);
+        if ((prefix.HasList || prefix.HasQuote) && caretCol < prefix.Length
+            && lineText.AsSpan(prefix.Length).Trim().Length > 0)
+        {
+            _buffer.ReplaceRange(lineStart, 0, "\n");
+            _buffer.Selection = Selection.At(sel.Caret + 1);
+            return;
+        }
+
+        var result = LinePrefix.ComputeEnter(lineText, caretCol);
 
         switch (result.Kind)
         {
@@ -3376,7 +3391,24 @@ public class MarkdownEditor : Avalonia.Controls.Control, ILogicalScrollable
         // Move by one wrapped visual row, not a whole document line, so Up/Down step through a long
         // wrapped paragraph (and across joined source lines) the way a normal document editor does.
         var globalRow = _rowPrefix[r.Block] + r.Visual.RowOf(r.Col);
-        var targetRow = Math.Clamp(globalRow + delta, 0, Math.Max(0, TotalRows - 1));
+        var requestedRow = globalRow + delta;
+
+        // Off the top/bottom edge: Up on the first visual row jumps to the very start of the document,
+        // Down on the last visual row jumps to the very end — like a normal editor, rather than sitting
+        // still on the same row at the goal column.
+        if (requestedRow < 0)
+        {
+            MoveCaret(0, extend);
+            return;
+        }
+
+        if (requestedRow > TotalRows - 1)
+        {
+            MoveCaret(_buffer.Document.Length, extend);
+            return;
+        }
+
+        var targetRow = requestedRow;
         var targetBlock = BlockAtRow(targetRow);
         var localRow = targetRow - _rowPrefix[targetBlock];
         MoveCaret(OffsetAt(targetBlock, localRow, _goalX), extend, keepGoalColumn: true);

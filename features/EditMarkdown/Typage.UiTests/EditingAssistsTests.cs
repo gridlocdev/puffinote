@@ -36,6 +36,46 @@ public class EditingAssistsTests
     }
 
     [AvaloniaFact]
+    public void Enter_LeftOfACheckbox_PushesTheItemDown_WithoutDuplicatingTheMarker()
+    {
+        // Caret at column 0 — left of the checkbox. Enter must add a blank line above and slide the whole
+        // "- [ ] task" item down, NOT splice another "- [ ] " into the line.
+        var editor = At("- [ ] task", 0);
+        editor.EnterForTest();
+        Assert.Equal("\n- [ ] task", editor.Text);
+        Assert.Equal(1, editor.Buffer.Selection.Caret); // caret rides the item (start of the pushed-down line)
+    }
+
+    [AvaloniaFact]
+    public void Enter_LeftOfABullet_PushesTheItemDown()
+    {
+        var editor = At("- task", 0);
+        editor.EnterForTest();
+        Assert.Equal("\n- task", editor.Text);
+        Assert.Equal(1, editor.Buffer.Selection.Caret);
+    }
+
+    [AvaloniaFact]
+    public void Enter_LeftOfANestedBulletsCheckbox_KeepsTheIndentIntact()
+    {
+        // Indented item, caret at the marker (past the indent, left of the checkbox). The whole line —
+        // indentation and marker — slides down as one; the indent is not split onto the blank line.
+        var editor = At("- a\n  - [ ] c", caret: 6); // offset 6 = start of "- [ ] c" marker (after "  ")
+        editor.EnterForTest();
+        Assert.Equal("- a\n\n  - [ ] c", editor.Text);
+        Assert.Equal(7, editor.Buffer.Selection.Caret); // still at the marker, on the pushed-down item
+    }
+
+    [AvaloniaFact]
+    public void Enter_AtACheckboxsContentStart_StillContinuesTheList()
+    {
+        // Right of the checkbox (caret at the content "task") keeps the normal split-into-a-new-item assist.
+        var editor = At("- [ ] task", 6);
+        editor.EnterForTest();
+        Assert.Equal("- [ ] \n- [ ] task", editor.Text);
+    }
+
+    [AvaloniaFact]
     public void Enter_RenumbersFollowingOrderedItems()
     {
         // Caret at end of "2. b" (offset 9); Enter inserts "3. " and the old "3. d" becomes "4. d".

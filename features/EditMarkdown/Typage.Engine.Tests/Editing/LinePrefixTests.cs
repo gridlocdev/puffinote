@@ -111,6 +111,19 @@ public class LinePrefixTests
         Assert.Equal("\n- ", r.Text);
     }
 
+    [Theory]
+    [InlineData("- task", 0)]        // left of a bullet
+    [InlineData("- [ ] task", 0)]    // left of a checkbox
+    [InlineData("1. task", 0)]       // left of an ordered marker
+    [InlineData("  - task", 2)]      // left of a nested bullet (caret at the marker, past the indent)
+    public void ComputeEnter_LeftOfAMarker_DoesNotDuplicateIt(string line, int caretColumn)
+    {
+        // Enter left of a non-empty item's content must not splice another marker in — it's a plain newline.
+        var r = LinePrefix.ComputeEnter(line, caretColumn);
+        Assert.Equal(EnterKind.Plain, r.Kind);
+        Assert.Equal("\n", r.Text);
+    }
+
     [Fact]
     public void Renumber_ResequencesFollowingItems()
     {
