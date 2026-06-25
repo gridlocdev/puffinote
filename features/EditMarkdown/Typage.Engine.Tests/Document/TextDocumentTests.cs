@@ -127,6 +127,27 @@ public class TextDocumentTests
     }
 
     [Fact]
+    public void Reads_AcrossManyPieces_ResolveAtBoundaries()
+    {
+        // Force several non-coalescing pieces, then read characters and ranges that straddle piece boundaries —
+        // exercises the binary-search piece index at first/last/interior offsets.
+        var doc = TextDocument.FromString("ABCDEFGH");
+        doc = doc.Insert(2, "12");  // A B 1 2 C D E F G H
+        doc = doc.Insert(6, "xy");  // A B 1 2 C D x y E F G H
+        const string expected = "AB12CDxyEFGH";
+
+        Assert.Equal(expected, doc.GetText());
+        for (var i = 0; i < expected.Length; i++)
+        {
+            Assert.Equal(expected[i], doc[i]); // every char, including each piece's first/last
+        }
+
+        Assert.Equal("12CDxy", doc.GetText(2, 6)); // a range spanning three pieces
+        Assert.Equal("H", doc.GetText(expected.Length - 1, 1)); // last char
+        Assert.Equal(expected, doc.GetText(0, expected.Length)); // whole range via the indexed path
+    }
+
+    [Fact]
     public void SequentialTyping_CoalescesIntoFewPieces()
     {
         // Typing one character at a time at the end appends contiguously to the add buffer, so the pieces

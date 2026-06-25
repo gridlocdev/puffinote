@@ -56,7 +56,8 @@ public sealed class TextDocument
     private readonly string _original; // the immutable original buffer (shared by reference, never copied)
     private readonly AddBuffer _add;   // the lineage's append buffer (inserts live here)
     private readonly Piece[] _pieces;
-    private int[]? _lineStarts; // lazily computed offsets of the first char of each line
+    private int[]? _lineStarts;   // lazily computed offsets of the first char of each line
+    private int[]? _pieceOffsets; // lazily computed cumulative start offset of each piece (for binary search)
 
     /// <summary>The empty document.</summary>
     public static readonly TextDocument Empty = new(string.Empty, EmptyAdd, Array.Empty<Piece>(), 0);
@@ -137,32 +138,18 @@ public sealed class TextDocument
         }
 
         var sb = new System.Text.StringBuilder(length);
-        var consumed = 0;
-        var remainingToSkip = start;
-        var remainingToTake = length;
-        foreach (var p in _pieces)
+        var i = PieceIndexAt(start);
+        var remaining = length;
+        var posInPiece = start - PieceOffsets[i]; // offset within the first piece to start at
+        for (; i < _pieces.Length && remaining > 0; i++)
         {
-            if (remainingToTake == 0)
-            {
-                break;
-            }
-
-            if (remainingToSkip >= p.Length)
-            {
-                remainingToSkip -= p.Length;
-                continue;
-            }
-
-            var from = p.Start + remainingToSkip;
-            var avail = p.Length - remainingToSkip;
-            remainingToSkip = 0;
-            var take = Math.Min(avail, remainingToTake);
-            AppendPiece(sb, p, from, take);
-            remainingToTake -= take;
-            consumed += take;
+            var p = _pieces[i];
+            var take = Math.Min(p.Length - posInPiece, remaining);
+            AppendPiece(sb, p, p.Start + posInPiece, take);
+            remaining -= take;
+            posInPiece = 0; // every later piece is consumed from its beginning
         }
 
-        _ = consumed;
         return sb.ToString();
     }
 
@@ -176,18 +163,10 @@ public sealed class TextDocument
                 throw new ArgumentOutOfRangeException(nameof(index));
             }
 
-            var pos = index;
-            foreach (var p in _pieces)
-            {
-                if (pos < p.Length)
-                {
-                    return p.FromAdd ? _add[p.Start + pos] : _original[p.Start + pos];
-                }
-
-                pos -= p.Length;
-            }
-
-            throw new ArgumentOutOfRangeException(nameof(index)); // unreachable
+            var i = PieceIndexAt(index);
+            var p = _pieces[i];
+            var pos = p.Start + (index - PieceOffsets[i]);
+            return p.FromAdd ? _add[pos] : _original[pos];
         }
     }
 
@@ -319,6 +298,52 @@ public sealed class TextDocument
         }
 
         return result.ToArray();
+    }
+
+    // ----- Piece index (binary search by absolute offset) -----
+
+    /// <summary>Cumulative start offset of each piece (entry <c>i</c> = total length of pieces before <c>i</c>;
+    /// the final entry is <see cref="Length"/>), so a piece can be found by offset in O(log pieces).</summary>
+    private int[] PieceOffsets
+    {
+        get
+        {
+            if (_pieceOffsets is not null)
+            {
+                return _pieceOffsets;
+            }
+
+            var offsets = new int[_pieces.Length + 1];
+            for (var i = 0; i < _pieces.Length; i++)
+            {
+                offsets[i + 1] = offsets[i] + _pieces[i].Length;
+            }
+
+            return _pieceOffsets = offsets;
+        }
+    }
+
+    /// <summary>Index of the piece containing absolute <paramref name="offset"/> — the greatest <c>i</c> with
+    /// <c>PieceOffsets[i] &lt;= offset</c>. Requires <c>0 &lt;= offset &lt; Length</c> (so at least one piece).</summary>
+    private int PieceIndexAt(int offset)
+    {
+        var offsets = PieceOffsets;
+        var lo = 0;
+        var hi = _pieces.Length - 1;
+        while (lo < hi)
+        {
+            var mid = (lo + hi + 1) >> 1;
+            if (offsets[mid] <= offset)
+            {
+                lo = mid;
+            }
+            else
+            {
+                hi = mid - 1;
+            }
+        }
+
+        return lo;
     }
 
     // ----- Line / offset services -----
