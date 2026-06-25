@@ -1741,20 +1741,21 @@ public class MarkdownEditor : Avalonia.Controls.Control, ILogicalScrollable
             endLine--;
         }
 
-        // Extend the moved unit over its descendants: deeper-indented lines that continue the *same list
-        // kind* (bulleted / numbered / checkbox) as the moved line, plus plain continuation text. A deeper
-        // line that starts a different kind of list marker is left out.
+        // Extend the moved unit over its descendants: deeper-indented lines that belong to the list item —
+        // nested list items of *any* kind (bulleted / numbered / checkbox) and plain continuation text. A
+        // deeper line that begins a distinct block construct (a heading, blockquote, horizontal rule, code
+        // fence, or table — "a symbol of a different kind than the list's") is something one wouldn't think
+        // of as part of the list, so it isn't carried.
         var baseIndent = LineIndent(startLine);
-        var movedKind = ListItemKind(startLine);
         while (endLine + 1 < doc.LineCount && !IsBlankLine(endLine + 1) && LineIndent(endLine + 1) > baseIndent
-               && CarriesAsDescendant(movedKind, endLine + 1))
+               && CarriesAsDescendant(endLine + 1))
         {
             endLine++;
         }
 
-        // If a deeper line we *didn't* carry sits right after the moved unit (a nested list of a different
-        // kind), moving would strand that block under a new parent — so refuse the move. The sibling on the
-        // other side can still be moved to achieve the reorder, since a swap carries the whole subtree.
+        // If a deeper line we *didn't* carry sits right after the moved unit (a nested block construct),
+        // moving would strand it under a new parent — so refuse the move. The sibling on the other side can
+        // still be moved to achieve the reorder, since a swap carries the whole subtree.
         if (endLine + 1 < doc.LineCount && !IsBlankLine(endLine + 1) && LineIndent(endLine + 1) > baseIndent)
         {
             return;
@@ -1844,32 +1845,35 @@ public class MarkdownEditor : Avalonia.Controls.Control, ILogicalScrollable
         InvalidateVisual();
     }
 
-    /// <summary>The kind of list marker a line carries, for the same-kind reorder rule.</summary>
-    private enum MarkerKind { None, Bulleted, Numbered, Checkbox }
-
-    /// <summary>Classify <paramref name="line"/>'s list marker: a task checkbox, a numbered item, a bullet, or none.</summary>
-    private MarkerKind ListItemKind(int line)
+    /// <summary>
+    /// Whether a deeper-indented line is carried as part of a moved list item's subtree. Nested list items
+    /// of any kind and plain continuation text are; a line that begins a distinct block construct nested
+    /// under the item — a heading, blockquote, horizontal rule, code fence, or table — is not (those aren't
+    /// what one expects to drag along when reordering the list).
+    /// </summary>
+    private bool CarriesAsDescendant(int line)
     {
-        var p = LinePrefix.Parse(_buffer.Document.GetLineText(line));
-        if (p.HasTask)
+        var toks = _model.LineTokens(line);
+        if (toks.Count == 0)
         {
-            return MarkerKind.Checkbox;
+            return true; // an effectively empty line (blanks are already excluded by the caller)
         }
 
-        return p.List switch
+        if (toks[0].Type is TokenType.BlockquoteMarker or TokenType.HeadingMarker or TokenType.HorizontalRule
+            or TokenType.CodeFence or TokenType.TableDelimiter or TokenType.FrontMatterFence)
         {
-            ListKind.Ordered => MarkerKind.Numbered,
-            ListKind.Unordered => MarkerKind.Bulleted,
-            _ => MarkerKind.None,
-        };
-    }
+            return false;
+        }
 
-    /// <summary>Whether a deeper line is carried as a descendant of a <paramref name="movedKind"/> item: only
-    /// plain (non-list) continuation lines and same-kind list items are; a different list kind is not.</summary>
-    private bool CarriesAsDescendant(MarkerKind movedKind, int line)
-    {
-        var kind = ListItemKind(line);
-        return kind == MarkerKind.None || kind == movedKind;
+        foreach (var t in toks)
+        {
+            if (t.Type == TokenType.Marker && t.Length == 1 && _buffer.Document[t.Start] == '|')
+            {
+                return false; // a pipe-table row
+            }
+        }
+
+        return true;
     }
 
     /// <summary>
