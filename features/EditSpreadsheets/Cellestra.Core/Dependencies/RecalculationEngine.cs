@@ -91,6 +91,35 @@ public sealed class RecalculationEngine
         return Evaluate(affected.ToList());
     }
 
+    /// <summary>
+    /// Every formula cell that reads any of <paramref name="cells"/> — via a stored dependency edge or
+    /// a summarized large precedent range that contains it. This is the reverse index a move/swap uses
+    /// to rewrite only the formulas that actually reference the cells it relocates, instead of scanning
+    /// the whole workbook. Mirrors <see cref="AddDependents"/>; requires the graph to be current (it is
+    /// after load and after every recorded edit).
+    /// </summary>
+    public IReadOnlyCollection<CellRef> FormulasReferencing(IEnumerable<CellRef> cells)
+    {
+        var result = new HashSet<CellRef>();
+        foreach (var cell in cells)
+        {
+            foreach (var dependent in _graph.GetDependents(cell))
+            {
+                result.Add(dependent);
+            }
+
+            foreach (var (formula, ranges) in _largeRangePrecedents)
+            {
+                if (ranges.Any(range => range.Contains(cell)))
+                {
+                    result.Add(formula);
+                }
+            }
+        }
+
+        return result;
+    }
+
     /// <summary>Recompute volatile cells and their dependents (e.g. on an F9 in any mode).</summary>
     public RecalculationResult RecalculateVolatile()
     {

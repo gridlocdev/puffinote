@@ -353,14 +353,25 @@ public partial class SpreadsheetEditorView : UserControl, IAppEnvironment
         }
     }
 
+    /// <summary>The largest selection ⌥⇧-arrow will nudge — guards against a whole row/column swallowing memory.</summary>
+    private const int MaxNudgeCells = 16384;
+
     /// <summary>
-    /// ⌥⇧+Arrow nudge: move the current selection's contents one cell in the given direction. It runs
-    /// the same cut/move machinery as cut-and-paste (<see cref="PasteBlockCommand"/> over a cut block),
-    /// so it is a single undoable step and rewrites any formula that pointed at the moved cells so the
-    /// references follow. A nudge that would push the block off the sheet is refused.
+    /// ⌥⇧+Arrow nudge: reposition the current selection's contents one cell in the given direction.
+    /// When the destination is clear of the source it <b>swaps</b> with the equal-shaped neighbour
+    /// (non-destructive, and references follow symmetrically so nothing is hijacked — the gesture is
+    /// its own inverse); when a multi-cell block moves along its own axis and overlaps itself, it
+    /// shifts instead, overwriting what it covers. Either way it's one undoable step. Off-sheet,
+    /// multi-area, over-large, and across-merge nudges are refused with a status-line reason (#1/#5).
     /// </summary>
     private void MoveSelection(int rowDelta, int columnDelta)
     {
+        if (Selection.IsDiscontiguous)
+        {
+            Narrate("Can’t move a multi-area selection");
+            return;
+        }
+
         var range = Selection.Range;
         int destTop = range.Top + rowDelta;
         int destLeft = range.Left + columnDelta;
@@ -370,22 +381,83 @@ public partial class SpreadsheetEditorView : UserControl, IAppEnvironment
         if (destTop < 0 || destLeft < 0
             || destBottom >= SheetDimensions.MaxRows || destRight >= SheetDimensions.MaxColumns)
         {
-            return; // nowhere to land — the block would fall off the sheet edge
-        }
-
-        var sheet = _session.ActiveSheet;
-        var block = ClipboardBlock.Capture(sheet, range, isCut: true);
-        var command = new PasteBlockCommand(sheet.Name, destTop, destLeft, block);
-        if (!Grid.TryEnforceValidation(command)) // honor any Stop-rule validation at the destination (#B)
-        {
+            Narrate("At the edge of the sheet — can’t move further");
             return;
         }
 
-        _session.Execute(command);
+        if (range.CellCount > MaxNudgeCells)
+        {
+            Narrate("Selection is too large to move");
+            return;
+        }
+
+        var sheet = _session.ActiveSheet;
+        var destRange = new CellRange(new CellAddress(destLeft, destTop), new CellAddress(destRight, destBottom));
+
+        if (IntersectsMerge(sheet, range) || IntersectsMerge(sheet, destRange))
+        {
+            Narrate("Can’t move across merged cells");
+            return;
+        }
+
+        if (!range.Intersects(destRange))
+        {
+            // Disjoint neighbour: exchange the two blocks (non-destructive; an empty destination makes
+            // it a plain move). References into either block follow it (ReferenceAdjuster.ForSwap),
+            // scoped to just the formulas the dependency graph says are affected (no workbook scan).
+            var affected = AffectedFormulas(sheet.Name, range, rowDelta, columnDelta);
+            _session.Execute(new SwapCellsCommand(sheet.Name, range, rowDelta, columnDelta, affected));
+        }
+        else
+        {
+            // A multi-cell block moving along its own axis overlaps itself — shift it, overwriting the
+            // cells it covers (the displaced data can't be exchanged into a self-overlapping footprint).
+            var block = ClipboardBlock.Capture(sheet, range, isCut: true);
+            var command = new PasteBlockCommand(sheet.Name, destTop, destLeft, block);
+            if (!Grid.TryEnforceValidation(command)) // honor any Stop-rule validation at the destination (#B)
+            {
+                return;
+            }
+
+            _session.Execute(command);
+        }
+
         Selection.SetRange(destTop, destLeft, destBottom, destRight);
         RevealActiveCell();
         OnSelectionChanged();
         Refresh();
+        Narrate($"Moved {range} to {destRange}");
+    }
+
+    /// <summary>
+    /// The formula cells that reference either swap block (the source range and its destination), from
+    /// the live dependency graph — so the swap rewrites only those instead of scanning the workbook.
+    /// </summary>
+    private IReadOnlyCollection<Cellestra.Core.Dependencies.CellRef> AffectedFormulas(
+        string sheetName, CellRange blockA, int rowDelta, int columnDelta)
+    {
+        var cells = new List<Cellestra.Core.Dependencies.CellRef>(blockA.CellCount * 2);
+        foreach (var (r, c) in blockA.Positions())
+        {
+            cells.Add(new Cellestra.Core.Dependencies.CellRef(sheetName, r, c));
+            cells.Add(new Cellestra.Core.Dependencies.CellRef(sheetName, r + rowDelta, c + columnDelta));
+        }
+
+        return _session.FormulasReferencing(cells);
+    }
+
+    /// <summary>Whether any merged region on <paramref name="sheet"/> overlaps <paramref name="range"/>.</summary>
+    private static bool IntersectsMerge(Cellestra.Core.Model.Worksheet sheet, CellRange range)
+    {
+        foreach (var merge in sheet.MergedRegions)
+        {
+            if (merge.Range.Intersects(range))
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     /// <summary>

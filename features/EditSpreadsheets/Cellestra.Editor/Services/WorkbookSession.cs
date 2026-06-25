@@ -272,6 +272,18 @@ public sealed class WorkbookSession
         Changed?.Invoke(this, EventArgs.Empty);
     }
 
+    /// <summary>
+    /// The formula cells that read any of <paramref name="cells"/>, from the live dependency graph —
+    /// used to scope a move/swap's reference fix-ups to just the affected formulas instead of scanning
+    /// the workbook. The graph is current after load and after every <see cref="Execute"/>.
+    /// </summary>
+    public IReadOnlyCollection<Cellestra.Core.Dependencies.CellRef> FormulasReferencing(
+        IEnumerable<Cellestra.Core.Dependencies.CellRef> cells) => _recalc.FormulasReferencing(cells);
+
+    /// <summary>Rebuild the dependency graph from the model. Needed only after mutating cells outside an
+    /// <see cref="Execute"/> (e.g. test setup); the normal edit path keeps the graph current itself.</summary>
+    public void RebuildDependencies() => _recalc.RebuildGraph();
+
     private void ApplyResult(EditResult result)
     {
         if (result.Structural)

@@ -94,6 +94,61 @@ public static class ReferenceAdjuster
     }
 
     /// <summary>
+    /// Adjust references when two equal-shaped, non-overlapping blocks are <b>swapped</b> (the
+    /// ⌥⇧-arrow nudge onto an occupied neighbour). Block A is <paramref name="blockA"/>; block B is it
+    /// translated by (<paramref name="rowDelta"/>, <paramref name="columnDelta"/>). A reference into A
+    /// follows its cell to B and a reference into B follows to A — applied in a <em>single</em> pass
+    /// (each address maps once, by which block it lands in), so the two directions can't bounce a
+    /// reference back and forth. Both blocks live on <paramref name="sheet"/>; everything else is left
+    /// alone. <paramref name="homeSheet"/> resolves unqualified references.
+    /// </summary>
+    public static Expr ForSwap(Expr expr, string homeSheet, string sheet, CellRange blockA, int rowDelta, int columnDelta)
+    {
+        int aTop = blockA.Top, aLeft = blockA.Left, aBottom = blockA.Bottom, aRight = blockA.Right;
+        int bTop = aTop + rowDelta, bLeft = aLeft + columnDelta, bBottom = aBottom + rowDelta, bRight = aRight + columnDelta;
+
+        bool OnSheet(string? s) => string.Equals(s ?? homeSheet, sheet, StringComparison.OrdinalIgnoreCase);
+        bool InA(int row, int col) => row >= aTop && row <= aBottom && col >= aLeft && col <= aRight;
+        bool InB(int row, int col) => row >= bTop && row <= bBottom && col >= bLeft && col <= bRight;
+
+        CellAddress Shift(CellAddress a, int dr, int dc) =>
+            new(a.Column + dc, a.Row + dr, a.ColumnAbsolute, a.RowAbsolute, a.Sheet);
+
+        CellAddress MapAddress(CellAddress a)
+        {
+            if (!OnSheet(a.Sheet))
+            {
+                return a;
+            }
+
+            if (InA(a.Row, a.Column))
+            {
+                return Shift(a, rowDelta, columnDelta);
+            }
+
+            return InB(a.Row, a.Column) ? Shift(a, -rowDelta, -columnDelta) : a;
+        }
+
+        // A range follows only when it lies wholly within one block (so the swap moves it intact).
+        CellRange MapRange(CellRange r)
+        {
+            if (OnSheet(r.Sheet) && InA(r.Top, r.Left) && InA(r.Bottom, r.Right))
+            {
+                return new CellRange(Shift(r.Start, rowDelta, columnDelta), Shift(r.End, rowDelta, columnDelta));
+            }
+
+            if (OnSheet(r.Sheet) && InB(r.Top, r.Left) && InB(r.Bottom, r.Right))
+            {
+                return new CellRange(Shift(r.Start, -rowDelta, -columnDelta), Shift(r.End, -rowDelta, -columnDelta));
+            }
+
+            return r;
+        }
+
+        return Rewrite(expr, a => MapAddress(a), r => MapRange(r));
+    }
+
+    /// <summary>
     /// Adjust references when a worksheet is deleted: any reference whose effective sheet is the
     /// deleted one becomes <c>#REF!</c>. A reference with no explicit sheet belongs to
     /// <paramref name="homeSheet"/> (the formula's own sheet) and is only affected if that is the

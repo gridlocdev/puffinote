@@ -19,6 +19,7 @@ public class RadialMenuTests
         var sheet = window.Editor.Session.ActiveSheet;
         sheet.SetValue(0, 0, CellValue.Number(10));            // A1
         sheet.SetFormula(0, 2, "A1*2", CellValue.Number(20));  // C1 = A1*2 (points at A1)
+        window.Editor.Session.RebuildDependencies();           // formulas set outside an edit — refresh the graph
         window.Editor.Selection.MoveTo(0, 0);                  // select A1
 
         window.Editor.Grid.MoveSelectionForTest(1, 0);         // ⌥⇧Down: nudge A1 → A2
@@ -31,6 +32,45 @@ public class RadialMenuTests
         window.Editor.Session.Undo();
         Assert.Equal(10d, sheet.Find(0, 0)!.Value.AsNumber);  // undo restores the original layout
         Assert.Equal("A1*2", sheet.Find(0, 2)!.Formula);
+    }
+
+    [AvaloniaFact]
+    public void Option_shift_arrow_swaps_with_an_occupied_neighbour()
+    {
+        var window = new MainWindow();
+        window.Show();
+        var sheet = window.Editor.Session.ActiveSheet;
+        sheet.SetValue(0, 0, CellValue.Number(10)); // A1
+        sheet.SetValue(0, 1, CellValue.Number(20)); // B1
+        window.Editor.Selection.MoveTo(0, 0);       // select A1
+
+        window.Editor.Grid.MoveSelectionForTest(0, 1); // ⌥⇧Right onto the occupied B1
+
+        // Non-destructive: the two cells exchange rather than B1 being overwritten.
+        Assert.Equal(20d, sheet.Find(0, 0)!.Value.AsNumber);
+        Assert.Equal(10d, sheet.Find(0, 1)!.Value.AsNumber);
+        Assert.Equal(1, window.Editor.Selection.ActiveColumn); // selection followed to B1
+    }
+
+    [AvaloniaFact]
+    public void Swap_through_the_session_follows_references_via_the_dependency_index()
+    {
+        var window = new MainWindow();
+        window.Show();
+        var sheet = window.Editor.Session.ActiveSheet;
+        sheet.SetValue(0, 0, CellValue.Number(10));         // A1
+        sheet.SetValue(0, 1, CellValue.Number(20));         // B1
+        sheet.SetFormula(0, 2, "A1", CellValue.Number(10)); // C1 = A1
+        sheet.SetFormula(0, 3, "B1", CellValue.Number(20)); // D1 = B1
+        window.Editor.Session.RebuildDependencies();        // make the graph current for the index path
+        window.Editor.Selection.MoveTo(0, 0);
+
+        window.Editor.Grid.MoveSelectionForTest(0, 1); // ⌥⇧Right: swap A1 ⇄ B1
+
+        // Both references follow their data to its new cell — exercised through the engine's reverse
+        // index (SpreadsheetEditorView.AffectedFormulas → WorkbookSession.FormulasReferencing), not a scan.
+        Assert.Equal("B1", sheet.Find(0, 2)!.Formula);
+        Assert.Equal("A1", sheet.Find(0, 3)!.Formula);
     }
 
     [AvaloniaFact]
