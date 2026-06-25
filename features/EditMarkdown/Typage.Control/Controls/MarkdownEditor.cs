@@ -3446,7 +3446,10 @@ public class MarkdownEditor : Avalonia.Controls.Control, ILogicalScrollable
                         style = AsLink(style);
                     }
 
-                    segments.Add(new VisualLine.Segment(s, en, style, false));
+                    // Emphasis/strike/highlight content can wrap a construct of another kind (e.g.
+                    // ***~~bold~~***): split the content so the inner ~~ markers conceal and the word
+                    // carries both the outer emphasis and the inner decoration. Plain content is one segment.
+                    AddContentSegments(segments, s, en, text, style, t.Type);
                 }
 
                 pos = en;
@@ -3459,6 +3462,153 @@ public class MarkdownEditor : Avalonia.Controls.Control, ILogicalScrollable
         }
 
         return VisualLine.Build(text, segments, MeasureWidth, WrapWidth());
+    }
+
+    /// <summary>
+    /// Add the segments for one inline content token covering block columns <c>[s, en)</c>. Emphasis, strong,
+    /// strike, and highlight content can hold a construct of <i>another</i> kind on the inside (the engine
+    /// emits such content as one flat token — e.g. <c>***~~bold~~***</c> is StrongEmphasis content
+    /// "~~bold~~"). We scan for those nested constructs and split: the inner <c>~~</c>/<c>**</c>/… markers
+    /// conceal (zero width, like every other hidden marker), and the inner word carries the base style
+    /// <i>combined</i> with the nested one (bold-italic <i>and</i> a strike line). Content with nothing nested
+    /// — the common case — stays a single segment, so plain emphasis/strike is unchanged.
+    /// </summary>
+    private void AddContentSegments(List<VisualLine.Segment> segments, int s, int en, string blockText, RunStyle baseStyle, TokenType type)
+    {
+        if (type is not (TokenType.Strong or TokenType.Emphasis or TokenType.StrongEmphasis
+            or TokenType.Strikethrough or TokenType.Highlight))
+        {
+            segments.Add(new VisualLine.Segment(s, en, baseStyle, false));
+            return;
+        }
+
+        var content = blockText.Substring(s, en - s);
+        var nested = FindNestedConstructs(content);
+        if (nested.Count == 0)
+        {
+            segments.Add(new VisualLine.Segment(s, en, baseStyle, false));
+            return;
+        }
+
+        var p = 0;
+        foreach (var n in nested)
+        {
+            if (n.OpenStart > p)
+            {
+                segments.Add(new VisualLine.Segment(s + p, s + n.OpenStart, baseStyle, false));
+            }
+
+            var innerStart = n.OpenStart + n.MarkerLen;
+            segments.Add(new VisualLine.Segment(s + n.OpenStart, s + innerStart, baseStyle, true));         // open marker
+            segments.Add(new VisualLine.Segment(s + innerStart, s + n.InnerEnd, CombineNested(baseStyle, n.Delim, n.MarkerLen), false));
+            segments.Add(new VisualLine.Segment(s + n.InnerEnd, s + n.InnerEnd + n.MarkerLen, baseStyle, true)); // close marker
+            p = n.InnerEnd + n.MarkerLen;
+        }
+
+        if (p < content.Length)
+        {
+            segments.Add(new VisualLine.Segment(s + p, en, baseStyle, false));
+        }
+    }
+
+    /// <summary>One nested inline construct found inside another's content: the delimiter, its run length, and
+    /// the inner span (all relative to the enclosing content string).</summary>
+    private readonly record struct NestedConstruct(int OpenStart, int InnerEnd, int MarkerLen, char Delim);
+
+    /// <summary>
+    /// The top-level paired delimiter constructs inside <paramref name="content"/> — <c>~~</c>, <c>==</c>, and
+    /// <c>*</c>/<c>_</c> emphasis (run 1–3) — using the same tolerance as the engine tokenizer (no leading/
+    /// trailing inner whitespace, a close run at least as long as the open). One level deep, which covers
+    /// emphasis wrapping a strike/highlight and vice versa; deeper nesting is left as literal text.
+    /// </summary>
+    private static List<NestedConstruct> FindNestedConstructs(string content)
+    {
+        var found = new List<NestedConstruct>();
+        var i = 0;
+        while (i < content.Length)
+        {
+            var c = content[i];
+            if (c is '~' or '=' or '*' or '_')
+            {
+                var run = DelimRun(content, i, c);
+                var count = c is '~' or '=' ? 2 : Math.Min(run, 3);
+                var innerStart = i + count;
+                if (run >= count && innerStart < content.Length
+                    && content[innerStart] != c && !char.IsWhiteSpace(content[innerStart]))
+                {
+                    var close = FindClose(content, innerStart, c, count);
+                    if (close > innerStart)
+                    {
+                        found.Add(new NestedConstruct(i, close, count, c));
+                        i = close + count;
+                        continue;
+                    }
+                }
+            }
+
+            i++;
+        }
+
+        return found;
+    }
+
+    /// <summary>Index of the closing delimiter run (≥ <paramref name="count"/> of <paramref name="c"/>, not
+    /// preceded by whitespace) at or after <paramref name="from"/>; -1 if none.</summary>
+    private static int FindClose(string content, int from, char c, int count)
+    {
+        var j = from;
+        while (j < content.Length)
+        {
+            if (content[j] == c && !char.IsWhiteSpace(content[j - 1]))
+            {
+                if (DelimRun(content, j, c) >= count)
+                {
+                    return j;
+                }
+
+                j += DelimRun(content, j, c);
+            }
+            else
+            {
+                j++;
+            }
+        }
+
+        return -1;
+    }
+
+    private static int DelimRun(string s, int i, char c)
+    {
+        var n = 0;
+        while (i + n < s.Length && s[i + n] == c)
+        {
+            n++;
+        }
+
+        return n;
+    }
+
+    /// <summary>Combine <paramref name="baseStyle"/> with a nested construct's treatment: <c>~~</c> adds the
+    /// strike line, <c>==</c> the highlight band, and <c>*</c>/<c>_</c> merge bold/italic into the typeface
+    /// (so an emphasised word inside a strike, or struck text inside emphasis, keeps both).</summary>
+    private RunStyle CombineNested(RunStyle baseStyle, char delim, int markerLen)
+    {
+        if (delim == '~')
+        {
+            return baseStyle with { Decorations = _theme.Resolve(TokenType.Strikethrough).Decorations };
+        }
+
+        if (delim == '=')
+        {
+            return baseStyle with { Background = _theme.Resolve(TokenType.Highlight).Background };
+        }
+
+        var addItalic = markerLen is 1 or 3;
+        var addBold = markerLen is 2 or 3;
+        var tf = baseStyle.Typeface;
+        var weight = addBold || tf.Weight == FontWeight.Bold ? FontWeight.Bold : tf.Weight;
+        var fontStyle = addItalic || tf.Style == FontStyle.Italic ? FontStyle.Italic : tf.Style;
+        return baseStyle with { Typeface = new Typeface(tf.FontFamily, fontStyle, weight) };
     }
 
     /// <summary>The synthetic decoration (and its gutter width) that replaces concealed marker <paramref name="t"/>, if any.</summary>

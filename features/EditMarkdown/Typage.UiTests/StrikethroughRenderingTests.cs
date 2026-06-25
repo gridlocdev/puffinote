@@ -50,4 +50,31 @@ public class StrikethroughRenderingTests
             .First(r => r.Kind == VisualRunKind.Text);
         Assert.Null(run.Style.Decorations);
     }
+
+    [AvaloniaFact]
+    public void EmphasisWrappingAStrike_DrawsTheStrikeAndStaysBoldItalic()
+    {
+        // ***~~bold~~*** — the * markers are on the outside; the inner ~~ used to render literally with no
+        // strike. Now the word is bold-italic AND struck, with both marker pairs concealed.
+        var runs = CaretAtEnd("***~~bold~~*** done").BuildVisualLineForTest(0).Runs;
+        var visible = string.Concat(runs.Where(r => r.Kind == VisualRunKind.Text).Select(r => r.Text));
+        Assert.DoesNotContain("~", visible);
+        Assert.DoesNotContain("*", visible);
+
+        var run = runs.First(r => r.Kind == VisualRunKind.Text && r.Text == "bold");
+        var deco = Assert.Single(run.Style.Decorations!);
+        Assert.Equal(TextDecorationLocation.Strikethrough, deco.Location);
+        Assert.Equal(FontWeight.Bold, run.Style.Typeface.Weight);
+        Assert.Equal(FontStyle.Italic, run.Style.Typeface.Style);
+    }
+
+    [AvaloniaFact]
+    public void StrikeWrappingEmphasis_DrawsTheStrikeAndGoesBold()
+    {
+        // ~~**bold**~~ — strike on the outside, emphasis on the inside: bold AND struck.
+        var run = CaretAtEnd("~~**bold**~~ done").BuildVisualLineForTest(0).Runs
+            .First(r => r.Kind == VisualRunKind.Text && r.Text == "bold");
+        Assert.Equal(TextDecorationLocation.Strikethrough, run.Style.Decorations!.Single().Location);
+        Assert.Equal(FontWeight.Bold, run.Style.Typeface.Weight);
+    }
 }
