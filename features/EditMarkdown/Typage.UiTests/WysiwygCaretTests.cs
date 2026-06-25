@@ -30,6 +30,27 @@ public class WysiwygCaretTests
     }
 
     [AvaloniaFact]
+    public void RightArrow_GlidesThroughStackedMarkers_InOneStep()
+    {
+        // "***~~bold~~***": cols 0-2 ***, 3-4 ~~, 5-8 bold, 9-10 ~~, 11-13 ***. The junction at column 3
+        // (between *** and ~~) is zero-width and visually identical to the start of "bold", so a single
+        // Right from the start lands directly on 'b' (col 5) instead of stopping at the dead junction.
+        var editor = At("***~~bold~~***", caret: 0);
+        editor.VisualStepForTest(1);
+        Assert.Equal(5, editor.Buffer.Selection.Caret);
+    }
+
+    [AvaloniaFact]
+    public void RightArrow_GlidesPastALinksTrailingMarkers_ToLineEnd()
+    {
+        // "[a](b)": after the visible 'a' (col 2), the "](", the concealed URL, and ")" are all hidden and
+        // zero-width — one Right glides past them to the line end rather than stopping at each junction.
+        var editor = At("[a](b)", caret: 2);
+        editor.VisualStepForTest(1);
+        Assert.Equal(6, editor.Buffer.Selection.Caret);
+    }
+
+    [AvaloniaFact]
     public void LeftArrow_SkipsHiddenClosingMarker()
     {
         var editor = At("**bold**", caret: 8); // end of line, just past the closing **

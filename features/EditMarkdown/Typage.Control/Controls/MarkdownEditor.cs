@@ -2982,9 +2982,14 @@ public class MarkdownEditor : Avalonia.Controls.Control, ILogicalScrollable
     private VisualLine LineVisual(int line) => BlockVisual(BlockOf(line));
 
     /// <summary>
-    /// One caret step in <paramref name="dir"/> (+1 right, -1 left) that treats a concealed marker run as
-    /// atomic: a raw grapheme step landing strictly inside hidden punctuation keeps going until it reaches
-    /// a real stop, so the caret glides over hidden markers like a normal document editor (PRD §7.4).
+    /// One caret step in <paramref name="dir"/> (+1 right, -1 left) that treats hidden markers as atomic: it
+    /// glides over a concealed marker run, and over the <i>junction between two adjacent</i> concealed runs
+    /// (a column with a hidden character on both sides — e.g. between the <c>***</c> and <c>~~</c> of
+    /// <c>***~~bold~~***</c>, or between a link's <c>](</c> and its concealed URL), which is zero-width and
+    /// visually identical to its neighbours, so stopping there would be a caret press that doesn't move. It
+    /// still stops next to any visible glyph (so the position just inside/outside a construct is reachable)
+    /// and over a collapsed blank separator (one \n\n = one step), reaching a real stop like a normal
+    /// document editor (PRD §7.4).
     /// </summary>
     private int VisualStep(int caret, int dir)
     {
@@ -2992,9 +2997,7 @@ public class MarkdownEditor : Avalonia.Controls.Control, ILogicalScrollable
         var next = Math.Clamp(dir > 0 ? _buffer.NextCaret(caret) : _buffer.PreviousCaret(caret), 0, doc.Length);
         var r = ResolveCaret(next);
         var guard = 0;
-        // Glide over a concealed marker run (atomic) or a collapsed blank separator (the \n\n between two
-        // paragraphs renders as one break, so it's one caret step) until a real stop is reached.
-        while ((r.Visual.IsInsideConcealed(r.Col) || IsCollapsedOffset(next)) && guard++ <= doc.Length)
+        while ((IsBetweenHidden(r.Visual, r.Col) || IsCollapsedOffset(next)) && guard++ <= doc.Length)
         {
             var stepped = Math.Clamp(dir > 0 ? _buffer.NextCaret(next) : _buffer.PreviousCaret(next), 0, doc.Length);
             if (stepped == next)
@@ -3008,6 +3011,12 @@ public class MarkdownEditor : Avalonia.Controls.Control, ILogicalScrollable
 
         return next;
     }
+
+    /// <summary>Whether <paramref name="col"/> sits strictly between two hidden characters (a zero-width
+    /// junction of concealed/decoration runs): not next to any visible glyph and not a line boundary, so it
+    /// is visually indistinguishable from its neighbours and not a useful caret stop.</summary>
+    private static bool IsBetweenHidden(VisualLine visual, int col) =>
+        col > 0 && col < visual.RawLength && visual.IsColumnHidden(col - 1) && visual.IsColumnHidden(col);
 
     /// <summary>Move the caret atomically in <paramref name="dir"/>; for tests.</summary>
     internal void VisualStepForTest(int dir, bool extend = false) => MoveCaret(VisualStep(_buffer.Selection.Caret, dir), extend);
