@@ -28,6 +28,9 @@ public class MenuShortcutTests
         Assert.True(HasBinding(window, Key.F, KeyModifiers.Control));                       // Find
         Assert.True(HasBinding(window, Key.P, KeyModifiers.Control | KeyModifiers.Shift));  // Command Palette
         Assert.True(HasBinding(window, Key.F11, KeyModifiers.None));                        // Focus mode
+        Assert.True(HasBinding(window, Key.D, KeyModifiers.Control));                        // Duplicate Line
+        Assert.True(HasBinding(window, Key.K, KeyModifiers.Control | KeyModifiers.Shift));   // Delete Line
+        Assert.True(HasBinding(window, Key.D6, KeyModifiers.Control));                       // Heading 6
     }
 
     [AvaloniaFact]

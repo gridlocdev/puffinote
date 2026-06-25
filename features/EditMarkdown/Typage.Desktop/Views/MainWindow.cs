@@ -242,7 +242,15 @@ public class MainWindow : Window
         edit.Items.Add(InWindowItem("edit.cut"));
         edit.Items.Add(InWindowItem("edit.copy"));
         edit.Items.Add(InWindowItem("edit.paste"));
+        edit.Items.Add(new Separator());
+        edit.Items.Add(InWindowItem("edit.duplicateLine"));
+        edit.Items.Add(InWindowItem("edit.deleteLine"));
+        edit.Items.Add(InWindowItem("edit.moveLineUp"));
+        edit.Items.Add(InWindowItem("edit.moveLineDown"));
+        edit.Items.Add(new Separator());
         edit.Items.Add(InWindowItem("edit.selectAll"));
+        edit.Items.Add(InWindowItem("edit.selectWord"));
+        edit.Items.Add(InWindowItem("edit.selectParagraph"));
         edit.Items.Add(new Separator());
         edit.Items.Add(InWindowItem("edit.find"));
         edit.Items.Add(InWindowItem("edit.replace"));
@@ -250,13 +258,24 @@ public class MainWindow : Window
         var format = new MenuItem { Header = "F_ormat" };
         format.Items.Add(InWindowItem("format.bold"));
         format.Items.Add(InWindowItem("format.italic"));
-        format.Items.Add(InWindowItem("format.code"));
         format.Items.Add(InWindowItem("format.strike"));
-        format.Items.Add(InWindowItem("format.link"));
+        format.Items.Add(InWindowItem("format.highlight"));
+        format.Items.Add(InWindowItem("format.code"));
         format.Items.Add(new Separator());
-        format.Items.Add(InWindowItem("format.h1"));
-        format.Items.Add(InWindowItem("format.h2"));
-        format.Items.Add(InWindowItem("format.h3"));
+        format.Items.Add(InWindowSubmenu("_Heading",
+            "format.h1", "format.h2", "format.h3", "format.h4", "format.h5", "format.h6", null, "format.paragraph"));
+        format.Items.Add(InWindowItem("format.quote"));
+        format.Items.Add(InWindowItem("format.bulletList"));
+        format.Items.Add(InWindowItem("format.numberedList"));
+        format.Items.Add(InWindowItem("format.task"));
+
+        var insert = new MenuItem { Header = "_Insert" };
+        insert.Items.Add(InWindowItem("format.link"));
+        insert.Items.Add(InWindowItem("insert.image"));
+        insert.Items.Add(new Separator());
+        insert.Items.Add(InWindowItem("insert.codeBlock"));
+        insert.Items.Add(InWindowItem("insert.hr"));
+        insert.Items.Add(InWindowItem("format.task"));
 
         var view = new MenuItem { Header = "_View" };
         view.Items.Add(InWindowItem("view.commandPalette"));
@@ -293,12 +312,14 @@ public class MainWindow : Window
         menu.Items.Add(file);
         menu.Items.Add(edit);
         menu.Items.Add(format);
+        menu.Items.Add(insert);
         menu.Items.Add(view);
         menu.Items.Add(help);
         return menu;
     }
 
-    /// <summary>An in-window menu item from the catalog: its title, action (gated by IsEnabled), and displayed gesture.</summary>
+    /// <summary>An in-window menu item from the catalog: its title, action (gated by IsEnabled), displayed
+    /// gesture, and a hover tooltip carrying the command's plain-language description (mirrors Cellestra).</summary>
     private MenuItem InWindowItem(string id)
     {
         var c = _commandsById[id];
@@ -308,7 +329,20 @@ public class MainWindow : Window
             item.InputGesture = g;
         }
 
+        ToolTip.SetTip(item, c.Description);
         return item;
+    }
+
+    /// <summary>A nested in-window submenu (a popout) holding the given catalog command items / separators.</summary>
+    private MenuItem InWindowSubmenu(string header, params string?[] ids)
+    {
+        var sub = new MenuItem { Header = header };
+        foreach (var id in ids)
+        {
+            sub.Items.Add(id is null ? new Separator() : InWindowItem(id));
+        }
+
+        return sub;
     }
 
     private static MenuItem MenuLeaf(string header, Action action)
@@ -350,7 +384,7 @@ public class MainWindow : Window
         menu.Items.Add(file);
 
         var edit = NativeSubmenu("Edit");
-        foreach (var id in new[] { "edit.undo", "edit.redo", null, "edit.cut", "edit.copy", "edit.paste", "edit.selectAll", null, "edit.find", "edit.replace" })
+        foreach (var id in new[] { "edit.undo", "edit.redo", null, "edit.cut", "edit.copy", "edit.paste", null, "edit.duplicateLine", "edit.deleteLine", "edit.moveLineUp", "edit.moveLineDown", null, "edit.selectAll", "edit.selectWord", "edit.selectParagraph", null, "edit.find", "edit.replace" })
         {
             edit.Menu!.Items.Add(id is null ? new NativeMenuItemSeparator() : NativeItem(id));
         }
@@ -358,12 +392,32 @@ public class MainWindow : Window
         menu.Items.Add(edit);
 
         var format = NativeSubmenu("Format");
-        foreach (var id in new[] { "format.bold", "format.italic", "format.code", "format.strike", "format.link", null, "format.h1", "format.h2", "format.h3" })
+        foreach (var id in new[] { "format.bold", "format.italic", "format.strike", "format.highlight", "format.code", null })
         {
             format.Menu!.Items.Add(id is null ? new NativeMenuItemSeparator() : NativeItem(id));
         }
 
+        var headings = NativeSubmenu("Heading");
+        foreach (var id in new[] { "format.h1", "format.h2", "format.h3", "format.h4", "format.h5", "format.h6", null, "format.paragraph" })
+        {
+            headings.Menu!.Items.Add(id is null ? new NativeMenuItemSeparator() : NativeItem(id));
+        }
+
+        format.Menu!.Items.Add(headings);
+        foreach (var id in new[] { "format.quote", "format.bulletList", "format.numberedList", "format.task" })
+        {
+            format.Menu!.Items.Add(NativeItem(id));
+        }
+
         menu.Items.Add(format);
+
+        var insert = NativeSubmenu("Insert");
+        foreach (var id in new[] { "format.link", "insert.image", null, "insert.codeBlock", "insert.hr", "format.task" })
+        {
+            insert.Menu!.Items.Add(id is null ? new NativeMenuItemSeparator() : NativeItem(id));
+        }
+
+        menu.Items.Add(insert);
 
         var view = NativeSubmenu("View");
         view.Menu!.Items.Add(NativeItem("view.commandPalette"));
@@ -689,17 +743,34 @@ public class MainWindow : Window
             new("edit.selectAll", "Select All", "Select the whole document.", Shortcut.Cmd(Key.A), ed.SelectAll),
             new("edit.find", "Find…", "Find text in the document.", Shortcut.Cmd(Key.F), () => _findBar?.Show(replace: false)),
             new("edit.replace", "Find & Replace…", "Find text and replace it (plain or regex).", Shortcut.Cmd(Key.F, KeyModifiers.Alt), () => _findBar?.Show(replace: true)),
+            new("edit.moveLineUp", "Move Line Up", "Move the current line or block up.", Shortcut.Bare(Key.Up, KeyModifiers.Alt | KeyModifiers.Shift), ed.MoveLineUp),
+            new("edit.moveLineDown", "Move Line Down", "Move the current line or block down.", Shortcut.Bare(Key.Down, KeyModifiers.Alt | KeyModifiers.Shift), ed.MoveLineDown),
+            new("edit.duplicateLine", "Duplicate Line", "Duplicate the current line or selection.", Shortcut.Cmd(Key.D), ed.DuplicateLine),
+            new("edit.deleteLine", "Delete Line", "Delete the current line or selection.", Shortcut.Cmd(Key.K, KeyModifiers.Shift), ed.DeleteLine),
+            new("edit.selectWord", "Select Word", "Select the word under the caret.", null, ed.SelectCurrentWord),
+            new("edit.selectParagraph", "Select Paragraph", "Select the paragraph under the caret.", null, ed.SelectCurrentParagraph),
 
             new("format.bold", "Bold", "Make the selection bold.", Shortcut.Cmd(Key.B), ed.ToggleBold),
             new("format.italic", "Italic", "Make the selection italic.", Shortcut.Cmd(Key.I), ed.ToggleItalic),
             new("format.code", "Inline Code", "Format the selection as inline code.", Shortcut.Cmd(Key.E), ed.ToggleInlineCode),
             new("format.strike", "Strikethrough", "Strike through the selection.", null, ed.ToggleStrikethrough),
+            new("format.highlight", "Highlight", "Highlight the selection (==text==).", null, ed.ToggleHighlight),
             new("format.link", "Insert Link", "Wrap the selection as a link.", Shortcut.Cmd(Key.K), ed.InsertLink),
             new("format.task", "Checkbox", "Add a task checkbox to this line, or toggle it.", Shortcut.Cmd(Key.L), ed.ToggleTask),
+            new("format.quote", "Blockquote", "Toggle a blockquote on the line(s).", null, ed.ToggleBlockquote),
+            new("format.bulletList", "Bulleted List", "Toggle a bulleted list on the line(s).", null, ed.ToggleBulletList),
+            new("format.numberedList", "Numbered List", "Toggle a numbered list on the line(s).", null, ed.ToggleNumberedList),
             new("format.h1", "Heading 1", "Make this line a level-1 heading.", Shortcut.Cmd(Key.D1), () => ed.ApplyHeading(1)),
             new("format.h2", "Heading 2", "Make this line a level-2 heading.", Shortcut.Cmd(Key.D2), () => ed.ApplyHeading(2)),
             new("format.h3", "Heading 3", "Make this line a level-3 heading.", Shortcut.Cmd(Key.D3), () => ed.ApplyHeading(3)),
+            new("format.h4", "Heading 4", "Make this line a level-4 heading.", Shortcut.Cmd(Key.D4), () => ed.ApplyHeading(4)),
+            new("format.h5", "Heading 5", "Make this line a level-5 heading.", Shortcut.Cmd(Key.D5), () => ed.ApplyHeading(5)),
+            new("format.h6", "Heading 6", "Make this line a level-6 heading.", Shortcut.Cmd(Key.D6), () => ed.ApplyHeading(6)),
             new("format.paragraph", "Paragraph", "Remove the heading from this line.", Shortcut.Cmd(Key.D0), ed.SetParagraph),
+
+            new("insert.image", "Image…", "Insert an image reference.", null, ed.InsertImage),
+            new("insert.codeBlock", "Code Block", "Insert a fenced code block.", null, ed.InsertCodeBlock),
+            new("insert.hr", "Horizontal Rule", "Insert a horizontal rule.", null, ed.InsertHorizontalRule),
 
             new("view.commandPalette", "Command Palette…", "Search and run any command.", Shortcut.Cmd(Key.P, KeyModifiers.Shift), OpenPalette),
             new("view.toggleToolbar", "Toggle Toolbar", "Show or hide the formatting toolbar.", null, ToggleToolbar),

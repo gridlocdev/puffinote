@@ -233,6 +233,8 @@ public class MarkdownEditor : Avalonia.Controls.Control, ILogicalScrollable
 
     public void ToggleStrikethrough() => Wrap("~~", "~~");
 
+    public void ToggleHighlight() => Wrap("==", "==");
+
     /// <summary>Set the caret's line to an ATX heading of <paramref name="level"/> (replacing any existing one).</summary>
     public void ApplyHeading(int level)
     {
@@ -358,6 +360,237 @@ public class MarkdownEditor : Avalonia.Controls.Control, ILogicalScrollable
             _buffer.Selection = Selection.At(caret >= insertAt ? caret + inserted.Length : caret);
         }
 
+        Focus();
+    }
+
+    /// <summary>Wrap the selection as an image <c>![alt](url)</c>, leaving the caret in the URL slot.</summary>
+    public void InsertImage()
+    {
+        var sel = _buffer.Selection;
+        var text = sel.IsEmpty ? string.Empty : _buffer.Document.GetText(sel.Start, sel.Length);
+        var replacement = $"![{text}]()";
+        _buffer.ReplaceRange(sel.Start, sel.Length, replacement);
+        _buffer.Selection = Selection.At(sel.Start + replacement.Length - 1); // inside ()
+        Focus();
+    }
+
+    /// <summary>Wrap the selection in a fenced code block (<c>```</c>…<c>```</c>), or insert empty fences.</summary>
+    public void InsertCodeBlock()
+    {
+        var sel = _buffer.Selection;
+        var inner = sel.IsEmpty ? string.Empty : _buffer.Document.GetText(sel.Start, sel.Length);
+        _buffer.ReplaceRange(sel.Start, sel.Length, "```\n" + inner + "\n```");
+        _buffer.Selection = sel.IsEmpty
+            ? Selection.At(sel.Start + 4) // the empty content line between the fences
+            : new Selection(sel.Start + 4, sel.Start + 4 + inner.Length);
+        Focus();
+    }
+
+    /// <summary>Insert a horizontal rule (<c>---</c>) on its own line.</summary>
+    public void InsertHorizontalRule()
+    {
+        var doc = _buffer.Document;
+        var line = doc.GetPosition(_buffer.Selection.Caret).Line;
+        if (IsBlankLine(line))
+        {
+            var start = doc.GetLineStart(line);
+            _buffer.ReplaceRange(start, doc.GetLineEnd(line) - start, "---");
+            _buffer.Selection = Selection.At(start + 3);
+        }
+        else
+        {
+            var end = doc.GetLineEnd(line);
+            _buffer.ReplaceRange(end, 0, "\n\n---\n");
+            _buffer.Selection = Selection.At(end + 5); // just after the inserted "---"
+        }
+
+        Focus();
+    }
+
+    /// <summary>Toggle a blockquote (<c>&gt; </c>) prefix on the caret line / selected lines.</summary>
+    public void ToggleBlockquote()
+    {
+        var (startLine, endLine) = SelectedLineRange();
+        var allOn = AllNonBlank(startLine, endLine, p => p.HasQuote);
+        EditLineRange(startLine, endLine, (line, text) =>
+        {
+            var p = LinePrefix.Parse(text);
+            if (allOn)
+            {
+                return p.HasQuote ? text[..p.Indent] + text[(p.Indent + p.Quote.Length)..] : text;
+            }
+
+            return IsBlankLine(line) ? text : text[..p.Indent] + "> " + text[p.Indent..];
+        });
+    }
+
+    /// <summary>Toggle an unordered-list (<c>- </c>) marker on the caret line / selected lines.</summary>
+    public void ToggleBulletList()
+    {
+        var (startLine, endLine) = SelectedLineRange();
+        var allOn = AllNonBlank(startLine, endLine, p => p.List == ListKind.Unordered && !p.HasTask);
+        EditLineRange(startLine, endLine, (line, text) =>
+        {
+            var p = LinePrefix.Parse(text);
+            if (allOn)
+            {
+                return p.HasList ? text[..p.MarkerStart] + text[p.Length..] : text;
+            }
+
+            if (IsBlankLine(line))
+            {
+                return text;
+            }
+
+            var body = StripListMarker(text, p);
+            var bp = LinePrefix.Parse(body);
+            return body[..bp.Indent] + "- " + body[bp.Indent..];
+        });
+    }
+
+    /// <summary>Toggle an ordered-list (<c>1. </c>) marker on the caret line / selected lines (renumbering the run).</summary>
+    public void ToggleNumberedList()
+    {
+        var (startLine, endLine) = SelectedLineRange();
+        var allOn = AllNonBlank(startLine, endLine, p => p.List == ListKind.Ordered);
+        var n = 0;
+        EditLineRange(startLine, endLine, (line, text) =>
+        {
+            var p = LinePrefix.Parse(text);
+            if (allOn)
+            {
+                return p.HasList ? text[..p.MarkerStart] + text[p.Length..] : text;
+            }
+
+            if (IsBlankLine(line))
+            {
+                return text;
+            }
+
+            n++;
+            var body = StripListMarker(text, p);
+            var bp = LinePrefix.Parse(body);
+            return body[..bp.Indent] + $"{n}. " + body[bp.Indent..];
+        });
+    }
+
+    /// <summary>Move the caret line / selected block up one position (Alt+Shift+Up).</summary>
+    public void MoveLineUp() => MoveLines(-1);
+
+    /// <summary>Move the caret line / selected block down one position (Alt+Shift+Down).</summary>
+    public void MoveLineDown() => MoveLines(1);
+
+    /// <summary>Duplicate the caret line / selected lines, placing the copy below and moving onto it.</summary>
+    public void DuplicateLine()
+    {
+        var doc = _buffer.Document;
+        var (startLine, endLine) = SelectedLineRange();
+        var start = doc.GetLineStart(startLine);
+        var end = doc.GetLineEnd(endLine);
+        var block = doc.GetText(start, end - start);
+        var sel = _buffer.Selection;
+        _buffer.ReplaceRange(end, 0, "\n" + block);
+        var delta = end - start + 1; // the block plus its joining newline
+        _buffer.Selection = new Selection(sel.Anchor + delta, sel.Caret + delta);
+        Focus();
+    }
+
+    /// <summary>Delete the caret line / selected lines entirely (including a line break).</summary>
+    public void DeleteLine()
+    {
+        var doc = _buffer.Document;
+        var (startLine, endLine) = SelectedLineRange();
+        var start = doc.GetLineStart(startLine);
+        int end;
+        if (endLine + 1 < doc.LineCount)
+        {
+            end = doc.GetLineStart(endLine + 1); // through the trailing newline
+        }
+        else
+        {
+            end = doc.GetLineEnd(endLine);                  // last line — no newline after it
+            if (startLine > 0)
+            {
+                start = doc.GetLineEnd(startLine - 1);      // so eat the newline before it instead
+            }
+        }
+
+        _buffer.ReplaceRange(start, end - start, string.Empty);
+        _buffer.Selection = Selection.At(Math.Min(start, _buffer.Document.Length));
+        Focus();
+    }
+
+    /// <summary>Select the word the caret is inside (Format ▸ Select Word).</summary>
+    public void SelectCurrentWord()
+    {
+        var caret = _buffer.Selection.Caret;
+        SelectWordAt(_buffer.Document.GetPosition(caret).Line, caret);
+    }
+
+    /// <summary>Select the paragraph block the caret is inside (Format ▸ Select Paragraph).</summary>
+    public void SelectCurrentParagraph() =>
+        SelectBlockAt(_buffer.Document.GetPosition(_buffer.Selection.Caret).Line);
+
+    // ----- line-range editing helpers (shared by the blockquote/list toggles) -----
+
+    /// <summary>The inclusive line range the current selection spans (a selection ending at a line start
+    /// doesn't include that last line).</summary>
+    private (int Start, int End) SelectedLineRange()
+    {
+        var doc = _buffer.Document;
+        var sel = _buffer.Selection;
+        var startLine = doc.GetPosition(sel.Start).Line;
+        var endLine = doc.GetPosition(sel.End).Line;
+        if (endLine > startLine && doc.GetPosition(sel.End).Column == 0)
+        {
+            endLine--;
+        }
+
+        return (startLine, endLine);
+    }
+
+    /// <summary>Whether every non-blank line in <c>[startLine, endLine]</c> satisfies <paramref name="predicate"/>.</summary>
+    private bool AllNonBlank(int startLine, int endLine, Func<LinePrefix, bool> predicate)
+    {
+        var doc = _buffer.Document;
+        for (var l = startLine; l <= endLine; l++)
+        {
+            if (IsBlankLine(l))
+            {
+                continue;
+            }
+
+            if (!predicate(LinePrefix.Parse(doc.GetLineText(l))))
+            {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    /// <summary>Strip an existing list marker (and its task box) from <paramref name="text"/>, keeping indent and content.</summary>
+    private static string StripListMarker(string text, LinePrefix p) =>
+        p.HasList ? text[..p.MarkerStart] + text[p.Length..] : text;
+
+    /// <summary>Rewrite lines <c>[startLine, endLine]</c> via <paramref name="transform"/> as one undoable edit,
+    /// leaving the rewritten region selected (so a toggle can be repeated). Line endings are preserved.</summary>
+    private void EditLineRange(int startLine, int endLine, Func<int, string, string> transform)
+    {
+        var doc = _buffer.Document;
+        var regionStart = doc.GetLineStart(startLine);
+        var regionEnd = doc.GetLineEnd(endLine);
+        var lines = new List<string>(endLine - startLine + 1);
+        for (var l = startLine; l <= endLine; l++)
+        {
+            lines.Add(transform(l, doc.GetLineText(l)));
+        }
+
+        var joined = string.Join("\n", lines);
+        _buffer.ReplaceRange(regionStart, regionEnd - regionStart, joined);
+        _buffer.Selection = startLine == endLine
+            ? Selection.At(regionStart + joined.Length)
+            : new Selection(regionStart, regionStart + joined.Length);
         Focus();
     }
 
