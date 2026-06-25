@@ -1306,9 +1306,6 @@ public class MarkdownEditor : Avalonia.Controls.Control, ILogicalScrollable
     internal IReadOnlyList<(int First, int Last)> CodeCopyButtonsForTest() =>
         _codeCopyButtons.ConvertAll(b => (b.First, b.Last));
 
-    /// <summary>The control-space hit rect of the nth recorded copy button; for tests.</summary>
-    internal Rect CodeCopyButtonRectForTest(int index) => _codeCopyButtons[index].Rect;
-
     private double RenderBlock(DrawingContext context, TextDocument doc, int block, Selection sel, int caretLine)
     {
         var lineH = _theme.LineHeight;
