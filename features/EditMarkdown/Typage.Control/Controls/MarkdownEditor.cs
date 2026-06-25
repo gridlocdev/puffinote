@@ -1522,8 +1522,8 @@ public class MarkdownEditor : Avalonia.Controls.Control, ILogicalScrollable
             case Key.Down when alt && shift: MoveLines(1); break;
             case Key.Up when isMac && meta: MoveCaret(0, shift); break;
             case Key.Down when isMac && meta: MoveCaret(doc.Length, shift); break;
-            case Key.Up: MoveCaretByLine(-1, shift); break;
-            case Key.Down: MoveCaretByLine(1, shift); break;
+            case Key.Up: ArrowByLine(-1, shift); break;
+            case Key.Down: ArrowByLine(1, shift); break;
             case Key.PageUp: MoveCaretByLine(-PageRows(), shift); break;
             case Key.PageDown: MoveCaretByLine(PageRows(), shift); break;
 
@@ -2635,6 +2635,27 @@ public class MarkdownEditor : Avalonia.Controls.Control, ILogicalScrollable
     /// the caret's x is remembered on the first vertical move and reused, so passing through shorter
     /// lines doesn't permanently snap the column inward (the behavior every editor has).
     /// </summary>
+    /// <summary>
+    /// A bare Up/Down arrow. With a range selection and no Shift, it collapses to the selection's edge —
+    /// Up to the top (start), Down to the bottom (end) — rather than stepping a visual row from the active
+    /// caret; so e.g. Up right after Select All returns to the top of the selection. With Shift (extend) or
+    /// no selection it moves by one visual row as usual.
+    /// </summary>
+    private void ArrowByLine(int delta, bool extend)
+    {
+        var sel = _buffer.Selection;
+        if (!extend && !sel.IsEmpty)
+        {
+            MoveCaret(delta < 0 ? sel.Start : sel.End, extend: false);
+            return;
+        }
+
+        MoveCaretByLine(delta, extend);
+    }
+
+    /// <summary>Up/Down arrow with selection-edge collapse; for tests.</summary>
+    internal void ArrowByLineForTest(int delta, bool extend = false) => ArrowByLine(delta, extend);
+
     private void MoveCaretByLine(int delta, bool extend)
     {
         EnsureLayout();
