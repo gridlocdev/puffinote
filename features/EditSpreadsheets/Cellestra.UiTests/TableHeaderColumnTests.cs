@@ -53,7 +53,7 @@ public class TableHeaderColumnTests
         Assert.False(env.ActiveTable!.HasHeaderColumn);
         env.ToggleTableHeaderColumn();
         Assert.True(env.ActiveTable!.HasHeaderColumn);
-        Assert.NotNull(window.CaptureRenderedFrame()); // the header-column band renders without throwing
+        window.AssertRenders(); // the header-column band renders without throwing
 
         env.ToggleTableHeaderColumn();
         Assert.False(env.ActiveTable!.HasHeaderColumn);

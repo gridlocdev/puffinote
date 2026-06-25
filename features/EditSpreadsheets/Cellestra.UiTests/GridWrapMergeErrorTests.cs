@@ -61,8 +61,7 @@ public class GridWrapMergeErrorTests
 
         grid.Measure(new Size(800, 600));
         grid.Arrange(new Rect(0, 0, 800, 600));
-        var frame = window.CaptureRenderedFrame(); // real Skia render path
-        Assert.NotNull(frame);
+        window.AssertRenders();
     }
 
     [AvaloniaFact]
@@ -79,8 +78,7 @@ public class GridWrapMergeErrorTests
 
         grid.Measure(new Size(800, 600));
         grid.Arrange(new Rect(0, 0, 800, 600));
-        var frame = window.CaptureRenderedFrame();
-        Assert.NotNull(frame);
+        window.AssertRenders();
     }
 
     [AvaloniaFact]

@@ -89,8 +89,7 @@ public class ChartSheetTests
         env.AddChartSheet();
 
         // Forcing a real Skia frame exercises ChartControl.Render end to end.
-        var frame = window.CaptureRenderedFrame();
-        Assert.NotNull(frame);
+        window.AssertRenders();
 
         var resolved = window.Editor.ActiveChartViewForTest!.ResolvedForTest;
         Assert.NotNull(resolved);

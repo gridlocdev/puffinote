@@ -24,10 +24,10 @@ public class MarqueeTests
 
         // Copy sets the marquee; rendering exercises DrawMarquee through real Skia.
         window.Editor.Copy();
-        Assert.NotNull(window.CaptureRenderedFrame());
+        window.AssertRenders();
 
         // Starting an edit must clear the marquee/clipboard without error.
         window.Editor.BeginEdit();
-        Assert.NotNull(window.CaptureRenderedFrame());
+        window.AssertRenders();
     }
 }

@@ -91,7 +91,6 @@ public class OverflowMarkerTests
         var (window, sheet, _) = Open();
         sheet.SetValue(0, 0, CellValue.Text("A very long string that cannot fit inside one default column"));
         sheet.SetValue(0, 1, CellValue.Text("x"));
-        var frame = window.CaptureRenderedFrame(); // real Skia render path through the marker code
-        Assert.NotNull(frame);
+        window.AssertRenders();
     }
 }

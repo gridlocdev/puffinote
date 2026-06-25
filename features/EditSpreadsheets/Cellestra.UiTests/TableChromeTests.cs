@@ -36,7 +36,6 @@ public class TableChromeTests
         env.Refresh();
 
         // Forces a render pass; throws if any chrome drawing is broken.
-        var frame = window.CaptureRenderedFrame();
-        Assert.NotNull(frame);
+        window.AssertRenders();
     }
 }
