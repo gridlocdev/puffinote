@@ -95,4 +95,40 @@ public class WysiwygCaretTests
         editor.BackspaceForTest();
         Assert.Equal("- a\n   text", editor.Text); // one space removed, not a no-op
     }
+
+    [AvaloniaFact]
+    public void Backspace_OnAWhitespaceOnlyLine_ClearsTheLine()
+    {
+        var editor = At("a\n    ", caret: 6); // caret at the end of a spaces-only line
+        editor.BackspaceForTest();
+        Assert.Equal("a\n", editor.Text);             // the whole line's whitespace is gone
+        Assert.Equal(2, editor.Buffer.Selection.Caret); // caret at the (now empty) line start
+    }
+
+    [AvaloniaFact]
+    public void Backspace_OnATabOnlyLine_ClearsTheLine()
+    {
+        var editor = At("a\n\t\t", caret: 4); // caret at the end of a tabs-only line
+        editor.BackspaceForTest();
+        Assert.Equal("a\n", editor.Text);
+        Assert.Equal(2, editor.Buffer.Selection.Caret);
+    }
+
+    [AvaloniaFact]
+    public void Backspace_MidWhitespaceLine_StillClearsTheWholeLine()
+    {
+        var editor = At("a\n    ", caret: 4); // caret in the middle of the spaces
+        editor.BackspaceForTest();
+        Assert.Equal("a\n", editor.Text);
+        Assert.Equal(2, editor.Buffer.Selection.Caret);
+    }
+
+    [AvaloniaFact]
+    public void Backspace_OnAWhitespaceLine_PreservesCrlf()
+    {
+        // CRLF must stay byte-for-byte: only the spaces go, the line's \r\n is kept.
+        var editor = At("x\r\n   \r\ny", caret: 6); // caret after the three spaces, before the \r
+        editor.BackspaceForTest();
+        Assert.Equal("x\r\n\r\ny", editor.Text);
+    }
 }

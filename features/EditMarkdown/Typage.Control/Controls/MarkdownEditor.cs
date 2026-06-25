@@ -2574,6 +2574,20 @@ public class MarkdownEditor : Avalonia.Controls.Control, ILogicalScrollable
             return false; // block start: let plain backspace join with the previous block
         }
 
+        // A line that holds nothing but indentation (tabs/spaces): one backspace clears the whole line and
+        // drops the caret to the line start, instead of nibbling one whitespace char at a time. Only the
+        // whitespace is removed — a trailing '\r' (CRLF) is preserved so line endings stay byte-for-byte.
+        var caretLine = doc.GetPosition(sel.Caret).Line;
+        var lineStart = doc.GetLineStart(caretLine);
+        var lineText = doc.GetText(lineStart, doc.GetLineEnd(caretLine) - lineStart);
+        var content = lineText.EndsWith('\r') ? lineText[..^1] : lineText;
+        if (content.Length > 0 && content.Trim().Length == 0)
+        {
+            _buffer.ReplaceRange(lineStart, content.Length, string.Empty);
+            _buffer.Selection = Selection.At(lineStart);
+            return true;
+        }
+
         var col = r.Col;
         while (col > 0 && r.Visual.IsColumnHidden(col - 1))
         {
