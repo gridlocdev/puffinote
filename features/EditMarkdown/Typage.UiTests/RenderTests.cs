@@ -41,4 +41,22 @@ public class RenderTests
 
         Assert.True(view.Editor.RawMeasureCount > 0);
     }
+
+    [AvaloniaFact]
+    public void CaretAtEndOfDocEndingInNewline_RendersWithoutLandingOnACollapsedBlock()
+    {
+        var view = new MarkdownEditorView();
+        var window = new Window { Width = 300, Height = 200, Content = view };
+        window.Show();
+
+        // The trailing "\n" makes the last line a collapsed blank separator. Ctrl/Cmd+End leaves the caret
+        // on it; the render must still execute (the caret is drawn in the resolved content block, not lost
+        // in the skipped zero-row block).
+        view.Text = "Hello\n";
+        view.Editor.Buffer.Selection = Typage.Engine.Document.Selection.At(view.Editor.Buffer.Document.Length);
+
+        window.CaptureRenderedFrame(); // must not throw
+
+        Assert.True(view.Editor.RawMeasureCount > 0);
+    }
 }

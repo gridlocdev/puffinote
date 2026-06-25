@@ -1408,7 +1408,10 @@ public class MarkdownEditor : Avalonia.Controls.Control, ILogicalScrollable
 
         EnsureLayout();
         var caret = _buffer.Selection;
-        var caretLine = doc.GetPosition(caret.Caret).Line;
+        // The block the caret is drawn in is the *resolved* one: if the offset lands on a collapsed blank
+        // separator (e.g. Ctrl+End on a doc ending in "\n"), it snaps to the previous content block — whose
+        // row is actually drawn — so the caret never disappears into a skipped zero-row block.
+        var caretBlock = ResolveCaret(caret.Caret).Block;
 
         // Draw only the paragraph blocks whose wrapped rows intersect the viewport (virtualization over
         // variable block heights). The viewport height is 0 until the control is arranged in a scroll viewer.
@@ -1433,7 +1436,7 @@ public class MarkdownEditor : Avalonia.Controls.Control, ILogicalScrollable
                     continue; // a collapsed blank separator takes no rows and draws nothing
                 }
 
-                maxWidth = Math.Max(maxWidth, RenderBlock(context, doc, block, caret, caretLine));
+                maxWidth = Math.Max(maxWidth, RenderBlock(context, doc, block, caret, caretBlock));
             }
 
             DrawReorderIndicator(context, lineH);
@@ -1688,7 +1691,7 @@ public class MarkdownEditor : Avalonia.Controls.Control, ILogicalScrollable
     internal IReadOnlyList<(int First, int Last)> CodeCopyButtonsForTest() =>
         _codeCopyButtons.ConvertAll(b => (b.First, b.Last));
 
-    private double RenderBlock(DrawingContext context, TextDocument doc, int block, Selection sel, int caretLine)
+    private double RenderBlock(DrawingContext context, TextDocument doc, int block, Selection sel, int caretBlock)
     {
         var lineH = _theme.LineHeight;
         var blockTop = RowTop(block);
@@ -1738,7 +1741,7 @@ public class MarkdownEditor : Avalonia.Controls.Control, ILogicalScrollable
         }
 
         // Caret — placed through the map (correct amid hidden markers) on its wrapped row.
-        if (BlockOf(caretLine) == block && IsFocused)
+        if (caretBlock == block && IsFocused)
         {
             var col = Math.Clamp(sel.Caret - blockStart, 0, visual.RawLength);
             var caretX = visual.ColumnToX(col);
@@ -1989,14 +1992,25 @@ public class MarkdownEditor : Avalonia.Controls.Control, ILogicalScrollable
     private void HandleEnter()
     {
         var sel = _buffer.Selection;
+        var doc = _buffer.Document;
+
+        // A plain paragraph break is "\n\n", so the two halves are separate Markdown paragraphs (a single
+        // newline is a soft break the tokenizer flows back together — the old "teleport"). But that only
+        // applies when there is real content *before* the break on its line: at a line start / on a blank
+        // line a single "\n" is enough, so adding a line above content — or pressing Enter again on an empty
+        // line — doesn't open a double gap (there is no collapsible blank above to absorb the second
+        // newline). The blank a "\n\n" leaves renders as regular spacing (IsCollapsedBlankLine).
+        var breakLine = doc.GetPosition(sel.Start).Line;
+        var beforeBreak = doc.GetText(doc.GetLineStart(breakLine), sel.Start - doc.GetLineStart(breakLine));
+        var paraBreak = beforeBreak.Trim().Length > 0 ? "\n\n" : "\n";
+
         if (!sel.IsEmpty)
         {
-            _buffer.Insert("\n\n"); // a paragraph break (see default): replace the selection with one
+            _buffer.Insert(paraBreak); // replace the selection with the break
             return;
         }
 
-        var doc = _buffer.Document;
-        var line = doc.GetPosition(sel.Caret).Line;
+        var line = breakLine;
         var lineStart = doc.GetLineStart(line);
         var lineText = doc.GetLineText(line);
         var result = LinePrefix.ComputeEnter(lineText, sel.Caret - lineStart);
@@ -2011,13 +2025,7 @@ public class MarkdownEditor : Avalonia.Controls.Control, ILogicalScrollable
                 RenumberOrderedFrom(line + 1); // resequence following items if we split an ordered list
                 break;
             default:
-                // A plain paragraph break writes TWO newlines, so the two halves are real Markdown
-                // paragraphs (a single newline is a soft break that the tokenizer flows back together,
-                // which made the caret "teleport"). The blank line between them is collapsed to regular
-                // spacing on screen (IsCollapsedBlankLine / EnsureLayout) and the caret glides over it.
-                // On an already-blank line one newline suffices (the blank above already separates the
-                // paragraphs), so pressing Enter repeatedly adds one empty line at a time, not two.
-                _buffer.Insert(IsBlankLine(line) ? "\n" : "\n\n");
+                _buffer.Insert(paraBreak); // "\n\n" mid-content, "\n" at a line start / on a blank line
                 break;
         }
     }
@@ -2221,34 +2229,51 @@ public class MarkdownEditor : Avalonia.Controls.Control, ILogicalScrollable
         if (startKind == ItemKind.None)
         {
             // The moved line isn't a list item (plain text, a heading, a blockquote, …): swap it with the
-            // single immediately-adjacent line, exactly like moving any other line of text. The subtree /
-            // sibling logic below is only for list items — applying it here would make a plain line skip over
-            // an indented neighbour (e.g. a list item's continuation text) instead of swapping with it.
+            // adjacent line, exactly like moving any other line of text. The subtree / sibling logic below is
+            // only for list items — applying it here would make a plain line skip over an indented neighbour
+            // (e.g. a list item's continuation text) instead of swapping with it. A collapsed blank separator
+            // is skipped so two paragraphs trade places as whole units, carrying the blank between them —
+            // swapping with the (invisible) blank itself would leave a single newline that flows the two
+            // paragraphs back together.
             if (dir < 0)
             {
-                if (startLine == 0)
+                var p = startLine - 1;
+                while (p >= 0 && IsBlankLine(p))
                 {
-                    return; // already at the top
+                    p--;
                 }
 
-                regionStartLine = startLine - 1;
+                if (p < 0)
+                {
+                    return; // nothing but blank lines above
+                }
+
+                regionStartLine = p;
                 regionEndLine = endLine;
-                newOrder.AddRange(LinesOf(doc, startLine, endLine));
-                newOrder.Add(LineContent(doc, startLine - 1));
-                lineDelta = -1;
+                newOrder.AddRange(LinesOf(doc, startLine, endLine));   // the moved line(s)...
+                newOrder.AddRange(LinesOf(doc, p + 1, startLine - 1)); // ...the blank separator(s), if any...
+                newOrder.Add(LineContent(doc, p));                     // ...then the partner line
+                lineDelta = p - startLine;
             }
             else
             {
-                if (endLine + 1 >= doc.LineCount)
+                var p = endLine + 1;
+                while (p < doc.LineCount && IsBlankLine(p))
                 {
-                    return; // already at the bottom
+                    p++;
+                }
+
+                if (p >= doc.LineCount)
+                {
+                    return; // nothing but blank lines below
                 }
 
                 regionStartLine = startLine;
-                regionEndLine = endLine + 1;
-                newOrder.Add(LineContent(doc, endLine + 1));
-                newOrder.AddRange(LinesOf(doc, startLine, endLine));
-                lineDelta = 1;
+                regionEndLine = p;
+                newOrder.Add(LineContent(doc, p));                     // the partner line...
+                newOrder.AddRange(LinesOf(doc, endLine + 1, p - 1));   // ...the blank separator(s), if any...
+                newOrder.AddRange(LinesOf(doc, startLine, endLine));   // ...then the moved line(s)
+                lineDelta = p - endLine;
             }
         }
         else if (dir < 0)
@@ -3252,6 +3277,14 @@ public class MarkdownEditor : Avalonia.Controls.Control, ILogicalScrollable
         var caret = sel.Caret;
         var line = doc.GetPosition(caret).Line;
         if (caret != doc.GetLineStart(line) || line < 1 || !IsCollapsedBlankLine(line - 1))
+        {
+            return false;
+        }
+
+        // Only merge when this line is real content. On a *visible* empty line (between paragraphs) a plain
+        // backspace removes one newline — which is exactly what collapses two blanks back to one — so don't
+        // grab the whole \n\n here, which would re-flow the paragraphs above and below into one.
+        if (IsBlankLine(line))
         {
             return false;
         }

@@ -78,6 +78,40 @@ public class ParagraphBreakTests
     }
 
     [AvaloniaFact]
+    public void Enter_AtDocumentStart_AddsOnlyOneLine()
+    {
+        // No content before the caret (and no line above to collapse), so a single newline — not \n\n —
+        // pushes the paragraph down by exactly one line.
+        var e = At("Helloworld", 0);
+        e.EnterForTest();
+        Assert.Equal("\nHelloworld", e.Text);
+        Assert.Equal(1, e.Buffer.Selection.Caret);
+    }
+
+    [AvaloniaFact]
+    public void Enter_AtAParagraphStart_AddsOneBlankLine()
+    {
+        // Caret at the start of "world": one newline adds exactly one visible blank line above it (the
+        // existing separator already covers paragraph-ness), rather than opening a two-line gap.
+        var e = At("Hello\n\nworld", 7);
+        e.EnterForTest();
+        Assert.Equal("Hello\n\n\nworld", e.Text);
+        Assert.Equal(3, e.TotalRowsForTest()); // Hello | one visible empty line | world
+    }
+
+    [AvaloniaFact]
+    public void Backspace_OnAVisibleEmptyLine_RemovesOneNewline_NotTheWholeBreak()
+    {
+        // "A | empty | B": backspace on the visible empty line removes one newline, collapsing the two
+        // blanks back to one (A and B sit adjacent) — it must NOT remove the whole \n\n and re-flow A and B
+        // into a single paragraph.
+        var e = At("A\n\n\nB", 3); // start of the visible empty middle line
+        e.BackspaceForTest();
+        Assert.Equal("A\n\nB", e.Text);
+        Assert.NotEqual(e.BlockOfLineForTest(0), e.BlockOfLineForTest(2)); // still two paragraphs
+    }
+
+    [AvaloniaFact]
     public void ASecondBlankLine_StaysVisible()
     {
         // The first blank after content collapses; a second consecutive blank is a deliberate empty line.

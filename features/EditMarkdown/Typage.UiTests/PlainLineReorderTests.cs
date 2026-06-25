@@ -68,6 +68,25 @@ public class PlainLineReorderTests
     }
 
     [AvaloniaFact]
+    public void MovingAParagraphDown_SkipsTheBlankSeparator_AndKeepsParagraphsApart()
+    {
+        // Two paragraphs separated by the usual \n\n: moving the first down past the (invisible) blank must
+        // swap whole paragraphs and keep the separator, not flow them back into one line.
+        var e = At("Hello\n\nworld", 0);
+        e.MoveLinesForTest(1);
+        Assert.Equal("world\n\nHello", e.Text);
+        Assert.Equal(2, e.Buffer.Document.GetPosition(e.Buffer.Selection.Caret).Line); // caret rides "Hello"
+    }
+
+    [AvaloniaFact]
+    public void MovingAParagraphUp_SkipsTheBlankSeparator()
+    {
+        var e = At("Hello\n\nworld", 2); // caret on "world" (line 2)
+        e.MoveLinesForTest(-1);
+        Assert.Equal("world\n\nHello", e.Text);
+    }
+
+    [AvaloniaFact]
     public void MovingAPlainLineIntoANumberedList_RenumbersTheSource()
     {
         // The plain line is moved down into the list, splitting it; the second part restarts at 1 in source.
