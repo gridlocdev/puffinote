@@ -112,6 +112,40 @@ public class ParagraphBreakTests
     }
 
     [AvaloniaFact]
+    public void Enter_AtEndOfAParagraphAlreadyFollowedByABreak_AddsOnlyOneBlank()
+    {
+        // "Hello | world" are already separate paragraphs (\n\n). Pressing Enter at the end of the first must
+        // add exactly one visible blank line between them, not two — a newline already follows the caret, so
+        // only one more is needed, and the caret lands on the visible blank (offset 7), not the collapsed one.
+        var e = At("Hello\n\nworld", 5);
+        e.EnterForTest();
+        Assert.Equal("Hello\n\n\nworld", e.Text);
+        Assert.Equal(7, e.Buffer.Selection.Caret);
+        Assert.Equal(3, e.TotalRowsForTest()); // Hello | one blank | world
+    }
+
+    [AvaloniaFact]
+    public void Enter_AtEndThenBackspace_RestoresTheText()
+    {
+        // The \n\n insert and the collapsed-blank merge are inverses for a mid-document paragraph end.
+        var e = At("Hello\n\nworld", 5);
+        e.EnterForTest();
+        e.BackspaceForTest();
+        Assert.Equal("Hello\n\nworld", e.Text);
+    }
+
+    [AvaloniaFact]
+    public void Enter_AtAFlowJoinedSeam_SplitsIntoAdjacentParagraphs()
+    {
+        // "ab\ncd" renders as one flowing paragraph; Enter at the soft-break seam splits it into two
+        // paragraphs sitting adjacent (one \n\n), with the caret at the start of the second.
+        var e = At("ab\ncd", 2);
+        e.EnterForTest();
+        Assert.Equal("ab\n\ncd", e.Text);
+        Assert.Equal(4, e.Buffer.Selection.Caret); // start of "cd"
+    }
+
+    [AvaloniaFact]
     public void ASecondBlankLine_StaysVisible()
     {
         // The first blank after content collapses; a second consecutive blank is a deliberate empty line.

@@ -1995,18 +1995,27 @@ public class MarkdownEditor : Avalonia.Controls.Control, ILogicalScrollable
         var doc = _buffer.Document;
 
         // A plain paragraph break is "\n\n", so the two halves are separate Markdown paragraphs (a single
-        // newline is a soft break the tokenizer flows back together — the old "teleport"). But that only
-        // applies when there is real content *before* the break on its line: at a line start / on a blank
-        // line a single "\n" is enough, so adding a line above content — or pressing Enter again on an empty
-        // line — doesn't open a double gap (there is no collapsible blank above to absorb the second
-        // newline). The blank a "\n\n" leaves renders as regular spacing (IsCollapsedBlankLine).
+        // newline is a soft break the tokenizer flows back together — the old "teleport"). Two refinements
+        // keep the *visible* result to exactly one new line break in every position:
+        //   • Only the part before the caret being real content warrants the paragraph "\n\n"; at a line
+        //     start / on a blank line a single "\n" is enough (there is no collapsible blank above to absorb
+        //     the second newline, so it would otherwise open a double gap).
+        //   • If a newline already follows the break point, that paragraph break already exists, so we add
+        //     just one "\n". The caret then skips the (now collapsed) first blank to land on the visible row.
+        // The blank a "\n\n" leaves renders as regular spacing (IsCollapsedBlankLine).
         var breakLine = doc.GetPosition(sel.Start).Line;
         var beforeBreak = doc.GetText(doc.GetLineStart(breakLine), sel.Start - doc.GetLineStart(breakLine));
-        var paraBreak = beforeBreak.Trim().Length > 0 ? "\n\n" : "\n";
+        var beforeContent = beforeBreak.Trim().Length > 0;
+        var afterNewline = sel.End < doc.Length && doc[sel.End] == '\n';
+        var paraBreak = beforeContent && !afterNewline ? "\n\n" : "\n";
+        var paraCaret = sel.Start + (beforeContent ? 2 : 1); // past the break, skipping a collapsed first blank
+
+        void PlaceParaCaret() => _buffer.Selection = Selection.At(Math.Clamp(paraCaret, 0, _buffer.Document.Length));
 
         if (!sel.IsEmpty)
         {
-            _buffer.Insert(paraBreak); // replace the selection with the break
+            _buffer.ReplaceRange(sel.Start, sel.Length, paraBreak); // replace the selection with the break
+            PlaceParaCaret();
             return;
         }
 
@@ -2025,7 +2034,8 @@ public class MarkdownEditor : Avalonia.Controls.Control, ILogicalScrollable
                 RenumberOrderedFrom(line + 1); // resequence following items if we split an ordered list
                 break;
             default:
-                _buffer.Insert(paraBreak); // "\n\n" mid-content, "\n" at a line start / on a blank line
+                _buffer.ReplaceRange(sel.Caret, 0, paraBreak);
+                PlaceParaCaret();
                 break;
         }
     }
