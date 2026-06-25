@@ -11,6 +11,12 @@
   // (Avalonia.Native RenderTimer -6661 without a display link), so this targets
   // the build, the `cellestra` CLI, and the headless test suites.
   "postCreateCommand": "dotnet restore features/EditSpreadsheets/Cellestra.slnx",
+  // This container has no display/GPU, so the headless UI tests' real-Skia render path hangs. Default
+  // them to Avalonia's null drawing here (TestAppBuilder reads this var) so `dotnet test` just runs.
+  // CI / a real desktop don't set it and keep real Skia, so render-capture tests get real frames there.
+  "containerEnv": {
+    "CELLESTRA_HEADLESS_NULL_DRAWING": "1"
+  },
   "customizations": {
     "vscode": {
       "extensions": [
