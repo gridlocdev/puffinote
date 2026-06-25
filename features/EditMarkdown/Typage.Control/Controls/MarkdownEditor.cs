@@ -387,15 +387,170 @@ public class MarkdownEditor : Avalonia.Controls.Control, ILogicalScrollable
         return (start, end);
     }
 
-    /// <summary>Wrap the selection as a link <c>[text](url)</c>, leaving the caret in the URL slot.</summary>
-    public void InsertLink()
+    /// <summary>
+    /// Insert a link <c>[text](url)</c>. With a selection it becomes the link text; with no selection the
+    /// word the caret is inside is consumed as the text. Any link/image already inside the target is reduced
+    /// to its visible text first (the outer link wins, the inner construct is removed). The caret lands in
+    /// the empty URL slot — or in the empty text slot, when there was nothing to consume, so it stays visible.
+    /// </summary>
+    public void InsertLink() => InsertReference(image: false);
+
+    private void InsertReference(bool image)
+    {
+        var (start, end, text) = LinkTarget();
+        var lead = image ? "![" : "[";
+        var replacement = $"{lead}{text}]()";
+        _buffer.ReplaceRange(start, end - start, replacement);
+
+        // Caret in the URL slot when there's link text to keep; otherwise in the (empty) text slot to type into.
+        var caret = text.Length > 0
+            ? start + replacement.Length - 1
+            : start + lead.Length;
+        _buffer.Selection = Selection.At(caret);
+        Focus();
+    }
+
+    /// <summary>
+    /// The span and visible text to turn into a link/image: the selection, or the word under a bare caret.
+    /// The span is grown to swallow any link/image construct it touches, and that construct's syntax is
+    /// stripped to its text — so wrapping text that already contains a link yields one outer link, not a
+    /// nested one (the outer format takes precedence; the inner is removed).
+    /// </summary>
+    private (int Start, int End, string Text) LinkTarget()
     {
         var sel = _buffer.Selection;
-        var text = sel.IsEmpty ? string.Empty : _buffer.Document.GetText(sel.Start, sel.Length);
-        var replacement = $"[{text}]()";
-        _buffer.ReplaceRange(sel.Start, sel.Length, replacement);
-        _buffer.Selection = Selection.At(sel.Start + replacement.Length - 1); // inside ()
-        Focus();
+        var doc = _buffer.Document;
+        int start, end;
+        if (!sel.IsEmpty)
+        {
+            (start, end) = (sel.Start, sel.End);
+        }
+        else if (WordAround(sel.Caret) is { } w)
+        {
+            (start, end) = (w.Start, w.End);
+        }
+        else
+        {
+            return (sel.Caret, sel.Caret, string.Empty);
+        }
+
+        if (doc.GetPosition(start).Line != doc.GetPosition(Math.Max(start, end - 1)).Line)
+        {
+            return (start, end, doc.GetText(start, end - start)); // multi-line selection: take it verbatim
+        }
+
+        var spans = LinkAndImageSpans(doc.GetPosition(start).Line);
+
+        // Grow the target to fully cover any construct it overlaps (repeat until stable: absorbing one
+        // construct can bring its neighbour into range).
+        bool grew;
+        do
+        {
+            grew = false;
+            foreach (var sp in spans)
+            {
+                if (sp.FullStart < end && sp.FullEnd > start && (sp.FullStart < start || sp.FullEnd > end))
+                {
+                    start = Math.Min(start, sp.FullStart);
+                    end = Math.Max(end, sp.FullEnd);
+                    grew = true;
+                }
+            }
+        }
+        while (grew);
+
+        return (start, end, StripSpans(start, end, spans));
+    }
+
+    /// <summary>The source of <c>[start, end)</c> with each fully-enclosed link/image construct replaced by
+    /// just its visible text (link text / image alt) — emphasis and other formatting are left intact.</summary>
+    private string StripSpans(int start, int end, List<InlineLinkSpan> spans)
+    {
+        var doc = _buffer.Document;
+        var result = string.Empty;
+        var p = start;
+        foreach (var s in spans.Where(s => s.FullStart >= start && s.FullEnd <= end).OrderBy(s => s.FullStart))
+        {
+            if (s.FullStart > p)
+            {
+                result += doc.GetText(p, s.FullStart - p);
+            }
+
+            if (s.TextEnd > s.TextStart)
+            {
+                result += doc.GetText(s.TextStart, s.TextEnd - s.TextStart);
+            }
+
+            p = s.FullEnd;
+        }
+
+        if (end > p)
+        {
+            result += doc.GetText(p, end - p);
+        }
+
+        return result;
+    }
+
+    /// <summary>One inline link/image on a line: its full source span (markers + url) and its visible-text span.</summary>
+    private readonly record struct InlineLinkSpan(int FullStart, int FullEnd, int TextStart, int TextEnd);
+
+    /// <summary>Every inline link <c>[text](url)</c> and image <c>![alt](url)</c> on <paramref name="line"/>.</summary>
+    private List<InlineLinkSpan> LinkAndImageSpans(int line)
+    {
+        var spans = new List<InlineLinkSpan>();
+        var toks = _model.LineTokens(line);
+        foreach (var u in toks)
+        {
+            if (u.Type != TokenType.LinkUrl && u.Type != TokenType.ImageUrl)
+            {
+                continue;
+            }
+
+            var fullStart = int.MaxValue;
+            var fullEnd = -1;
+            var openStart = int.MaxValue;
+            var openEnd = -1;
+            var midStart = -1;
+            var altStart = -1;
+            var altEnd = -1;
+            foreach (var m in toks)
+            {
+                if (m.Node != u.Node)
+                {
+                    continue;
+                }
+
+                fullStart = Math.Min(fullStart, m.Start);
+                fullEnd = Math.Max(fullEnd, m.End);
+                if (m.Role == TokenRole.Marker)
+                {
+                    if (m.Start < openStart)
+                    {
+                        (openStart, openEnd) = (m.Start, m.End);
+                    }
+
+                    if (m.End == u.Start)
+                    {
+                        midStart = m.Start;
+                    }
+                }
+
+                if (m.Type == TokenType.ImageAlt)
+                {
+                    (altStart, altEnd) = (m.Start, m.End);
+                }
+            }
+
+            // Image alt is its own content token; link text is everything between "[" and "](".
+            var (textStart, textEnd) = altStart >= 0 ? (altStart, altEnd) : (openEnd, midStart);
+            if (fullEnd > fullStart && textStart >= 0 && textEnd >= textStart)
+            {
+                spans.Add(new InlineLinkSpan(fullStart, fullEnd, textStart, textEnd));
+            }
+        }
+
+        return spans;
     }
 
     /// <summary>Strip any heading marker from the caret's line, turning it back into a paragraph.</summary>
@@ -441,14 +596,26 @@ public class MarkdownEditor : Avalonia.Controls.Control, ILogicalScrollable
         Focus();
     }
 
-    /// <summary>Wrap the selection as an image <c>![alt](url)</c>, leaving the caret in the URL slot.</summary>
-    public void InsertImage()
+    /// <summary>
+    /// Insert an image <c>![alt](url)</c> with an empty URL — the bare-bones path used when no file is
+    /// chosen. Like <see cref="InsertLink"/>, it consumes the selection/word as alt text and reduces any
+    /// inner link/image to its text. The shell normally routes image insertion through a file picker and
+    /// calls <see cref="InsertImageReference"/> with the chosen path instead.
+    /// </summary>
+    public void InsertImage() => InsertReference(image: true);
+
+    /// <summary>
+    /// Insert an image reference pointing at <paramref name="url"/> (a resolved relative/staged path). The
+    /// selection or word under the caret becomes the alt text; if there is none, <paramref name="altFallback"/>
+    /// (typically the image's file name) is used. The caret lands just after the inserted reference.
+    /// </summary>
+    public void InsertImageReference(string url, string? altFallback = null)
     {
-        var sel = _buffer.Selection;
-        var text = sel.IsEmpty ? string.Empty : _buffer.Document.GetText(sel.Start, sel.Length);
-        var replacement = $"![{text}]()";
-        _buffer.ReplaceRange(sel.Start, sel.Length, replacement);
-        _buffer.Selection = Selection.At(sel.Start + replacement.Length - 1); // inside ()
+        var (start, end, text) = LinkTarget();
+        var alt = text.Length > 0 ? text : altFallback ?? string.Empty;
+        var replacement = $"![{alt}]({url})";
+        _buffer.ReplaceRange(start, end - start, replacement);
+        _buffer.Selection = Selection.At(start + replacement.Length);
         Focus();
     }
 
