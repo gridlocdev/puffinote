@@ -1721,6 +1721,35 @@ public class MarkdownEditor : Avalonia.Controls.Control, ILogicalScrollable
         }
 
         context.DrawText(ft, new Point(run.X, y));
+        DrawRunDecorations(context, run, ft, y);
+    }
+
+    /// <summary>
+    /// Draw the run's underline/strikethrough as real lines in the drawing context. Avalonia's
+    /// <c>FormattedText</c> text decorations don't paint dependably across backends, so — like Cellestra's
+    /// editor overlay — the lines are stroked by hand: a strikethrough through the x-height, an underline just
+    /// below the baseline. Each line uses its decoration's stroke (link underline in the link colour, strike
+    /// in the text colour), defaulting to the run's foreground.
+    /// </summary>
+    private void DrawRunDecorations(DrawingContext context, VisualRun run, FormattedText ft, double textTop)
+    {
+        if (run.Style.Decorations is not { } decorations || run.Text.Length == 0)
+        {
+            return;
+        }
+
+        var baseline = textTop + ft.Baseline;
+        var x0 = run.X;
+        var x1 = run.X + ft.Width;
+        foreach (var d in decorations)
+        {
+            var stroke = d.Stroke ?? run.Style.Foreground;
+            var pen = new Pen(stroke, Math.Max(1, run.Style.FontSize / 14.0));
+            var lineY = d.Location == TextDecorationLocation.Strikethrough
+                ? baseline - run.Style.FontSize * 0.26   // through the glyphs
+                : baseline + Math.Max(1, run.Style.FontSize * 0.08); // just under the baseline
+            context.DrawLine(pen, new Point(x0, lineY), new Point(x1, lineY));
+        }
     }
 
     private void DrawSearchMatches(DrawingContext context, int blockStart, double blockTop, VisualLine visual)
@@ -3856,19 +3885,18 @@ public class MarkdownEditor : Avalonia.Controls.Control, ILogicalScrollable
     /// </summary>
     private FormattedText GetFormattedText(string text, RunStyle style, IBrush brush)
     {
-        var key = new FormattedKey(text, style.Typeface, style.FontSize, brush, style.Decorations);
+        var key = new FormattedKey(text, style.Typeface, style.FontSize, brush);
         if (_formattedCache.TryGetValue(key, out var cached))
         {
             return cached;
         }
 
         _formattedBuilds++; // counts FormattedText construction (cache misses); used by perf tests
+        // Underline/strikethrough are NOT applied to the FormattedText: Avalonia's text decorations don't
+        // render reliably across draw backends (the same reason Cellestra overlays them), so the strike/
+        // underline lines are drawn by hand in DrawTextRun instead.
         var ft = new FormattedText(ExpandTabs(text), CultureInfo.CurrentCulture, FlowDirection.LeftToRight,
             style.Typeface, style.FontSize, brush);
-        if (style.Decorations is not null)
-        {
-            ft.SetTextDecorations(style.Decorations);
-        }
 
         if (_formattedCache.Count >= 8192)
         {
@@ -3882,7 +3910,7 @@ public class MarkdownEditor : Avalonia.Controls.Control, ILogicalScrollable
     private readonly Dictionary<FormattedKey, FormattedText> _formattedCache = new();
     private int _formattedBuilds;
 
-    private readonly record struct FormattedKey(string Text, Typeface Typeface, double Size, IBrush Brush, TextDecorationCollection? Decorations);
+    private readonly record struct FormattedKey(string Text, Typeface Typeface, double Size, IBrush Brush);
 
     /// <summary>Number of <see cref="FormattedText"/> objects built (cache misses); for perf tests.</summary>
     internal int FormattedBuildCount => _formattedBuilds;
