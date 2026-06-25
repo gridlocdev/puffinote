@@ -1741,26 +1741,22 @@ public class MarkdownEditor : Avalonia.Controls.Control, ILogicalScrollable
             endLine--;
         }
 
-        // Extend the moved unit over its descendants: deeper-indented lines that belong to the list item —
-        // nested list items of *any* kind (bulleted / numbered / checkbox) and plain continuation text. A
-        // deeper line that begins a distinct block construct (a heading, blockquote, horizontal rule, code
-        // fence, or table — "a symbol of a different kind than the list's") is something one wouldn't think
-        // of as part of the list, so it isn't carried.
+        // Extend the moved unit over its descendants, but carry *only* deeper-indented nested list items of
+        // the **same kind** (bulleted / numbered / checkbox) as the line the move was initiated on. Plain
+        // continuation text and nested items of a different kind don't apply to this list item, so they are
+        // left behind rather than dragged along — the extension stops at the first deeper line that isn't a
+        // same-kind item. (This works at any nesting level: moving a parent carries its same-kind sub-items
+        // but not, say, the continuation text under one of those sub-items.)
         var baseIndent = LineIndent(startLine);
+        var startKind = ListItemKindOf(startLine);
         while (endLine + 1 < doc.LineCount && !IsBlankLine(endLine + 1) && LineIndent(endLine + 1) > baseIndent
-               && CarriesAsDescendant(endLine + 1))
+               && CarriesAsDescendant(endLine + 1, startKind))
         {
             endLine++;
         }
 
-        // If a deeper line we *didn't* carry sits right after the moved unit (a nested block construct),
-        // moving would strand it under a new parent — so refuse the move. The sibling on the other side can
-        // still be moved to achieve the reorder, since a swap carries the whole subtree.
-        if (endLine + 1 < doc.LineCount && !IsBlankLine(endLine + 1) && LineIndent(endLine + 1) > baseIndent)
-        {
-            return;
-        }
-
+        // Anything deeper that we didn't carry simply stays put; the moved unit hops over the adjacent block
+        // (sibling subtree or a run of left-behind deeper lines), reordering only within the contiguous region.
         int regionStartLine, regionEndLine, delta;
         var newOrder = new List<string>();
         if (dir < 0)
@@ -1845,36 +1841,38 @@ public class MarkdownEditor : Avalonia.Controls.Control, ILogicalScrollable
         InvalidateVisual();
     }
 
-    /// <summary>
-    /// Whether a deeper-indented line is carried as part of a moved list item's subtree. Nested list items
-    /// of any kind and plain continuation text are; a line that begins a distinct block construct nested
-    /// under the item — a heading, blockquote, horizontal rule, code fence, or table — is not (those aren't
-    /// what one expects to drag along when reordering the list).
-    /// </summary>
-    private bool CarriesAsDescendant(int line)
+    /// <summary>The kind of list item a line carries (or <see cref="ItemKind.None"/> for a non-list line).</summary>
+    private enum ItemKind
     {
-        var toks = _model.LineTokens(line);
-        if (toks.Count == 0)
-        {
-            return true; // an effectively empty line (blanks are already excluded by the caller)
-        }
-
-        if (toks[0].Type is TokenType.BlockquoteMarker or TokenType.HeadingMarker or TokenType.HorizontalRule
-            or TokenType.CodeFence or TokenType.TableDelimiter or TokenType.FrontMatterFence)
-        {
-            return false;
-        }
-
-        foreach (var t in toks)
-        {
-            if (t.Type == TokenType.Marker && t.Length == 1 && _buffer.Document[t.Start] == '|')
-            {
-                return false; // a pipe-table row
-            }
-        }
-
-        return true;
+        None,
+        Bullet,
+        Numbered,
+        Checkbox,
     }
+
+    /// <summary>
+    /// Classify <paramref name="line"/>'s list marker into one of the three list kinds — bulleted, numbered,
+    /// or checkbox (a task item is its own kind, distinct from a plain bullet) — or <see cref="ItemKind.None"/>
+    /// when the line isn't a list item at all (plain text, a heading, a blockquote, …).
+    /// </summary>
+    private ItemKind ListItemKindOf(int line)
+    {
+        var p = LinePrefix.Parse(_buffer.Document.GetLineText(line));
+        return p.List switch
+        {
+            ListKind.Ordered => ItemKind.Numbered,
+            ListKind.Unordered => p.HasTask ? ItemKind.Checkbox : ItemKind.Bullet,
+            _ => ItemKind.None,
+        };
+    }
+
+    /// <summary>
+    /// Whether a deeper-indented line is carried as part of a moved list item's subtree: only a nested list
+    /// item of the <b>same kind</b> as the line the move started on (<paramref name="startKind"/>) is carried.
+    /// Plain continuation text and different-kind nested items aren't — they're left behind, not dragged along.
+    /// </summary>
+    private bool CarriesAsDescendant(int line, ItemKind startKind)
+        => startKind != ItemKind.None && ListItemKindOf(line) == startKind;
 
     /// <summary>
     /// The <b>visual indentation</b> of <paramref name="line"/> in columns — its nesting depth. Tabs are
