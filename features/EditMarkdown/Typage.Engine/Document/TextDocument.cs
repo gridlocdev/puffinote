@@ -30,6 +30,13 @@ public sealed class TextDocument
         Length = length;
     }
 
+    private TextDocument(Piece[] pieces, int length, int[]? lineStarts)
+    {
+        _pieces = pieces;
+        Length = length;
+        _lineStarts = lineStarts;
+    }
+
     /// <summary>Total length in UTF-16 code units.</summary>
     public int Length { get; }
 
@@ -147,7 +154,7 @@ public sealed class TextDocument
 
         var inserted = new Piece(text, 0, text.Length);
         var rebuilt = SpliceAt(offset, 0, new[] { inserted });
-        return new TextDocument(rebuilt, Length + text.Length);
+        return new TextDocument(rebuilt, Length + text.Length, PatchedLineStarts(offset, 0, text));
     }
 
     /// <summary>Delete <paramref name="length"/> code units at <paramref name="offset"/>.</summary>
@@ -166,7 +173,7 @@ public sealed class TextDocument
         }
 
         var rebuilt = SpliceAt(offset, length, Array.Empty<Piece>());
-        return new TextDocument(rebuilt, Length - length);
+        return new TextDocument(rebuilt, Length - length, PatchedLineStarts(offset, length, string.Empty));
     }
 
     /// <summary>Delete <paramref name="length"/> at <paramref name="offset"/> then insert <paramref name="text"/>.</summary>
@@ -183,7 +190,7 @@ public sealed class TextDocument
         }
 
         var rebuilt = SpliceAt(offset, length, new[] { new Piece(text, 0, text.Length) });
-        return new TextDocument(rebuilt, Length - length + text.Length);
+        return new TextDocument(rebuilt, Length - length + text.Length, PatchedLineStarts(offset, length, text));
     }
 
     /// <summary>
@@ -227,6 +234,68 @@ public sealed class TextDocument
     // ----- Line / offset services -----
 
     private int[] LineStarts => _lineStarts ??= ComputeLineStarts();
+
+    /// <summary>
+    /// Derive the new document's line starts from this (pre-edit) document's, given a replace of
+    /// <c>[offset, offset+deleteLength)</c> with <paramref name="insertText"/> — without re-scanning the
+    /// whole document. Returns <c>null</c> if our own starts aren't cached yet (then the new document
+    /// computes them lazily, exactly as before). Line starts before the edit are kept verbatim, the
+    /// inserted text is scanned for its own newlines, and starts after the edit shift by the length delta.
+    /// </summary>
+    private int[]? PatchedLineStarts(int offset, int deleteLength, string insertText)
+    {
+        var old = _lineStarts;
+        if (old is null)
+        {
+            return null;
+        }
+
+        var delta = insertText.Length - deleteLength;
+
+        // Kept prefix: every old start at or before the edit point (its preceding '\n' is untouched).
+        var keep = 0;
+        while (keep < old.Length && old[keep] <= offset)
+        {
+            keep++;
+        }
+
+        // Tail: old starts strictly past the deleted region (whose preceding '\n' survives), shifted by delta.
+        // A start at exactly offset+deleteLength is dropped — its '\n' sat on the last deleted character.
+        var tailFrom = keep;
+        var deleteEnd = offset + deleteLength;
+        while (tailFrom < old.Length && old[tailFrom] <= deleteEnd)
+        {
+            tailFrom++;
+        }
+
+        var inserted = 0;
+        for (var i = 0; i < insertText.Length; i++)
+        {
+            if (insertText[i] == '\n')
+            {
+                inserted++;
+            }
+        }
+
+        var result = new int[keep + inserted + (old.Length - tailFrom)];
+        Array.Copy(old, 0, result, 0, keep);
+
+        var w = keep;
+        for (var i = 0; i < insertText.Length; i++)
+        {
+            if (insertText[i] == '\n')
+            {
+                result[w++] = offset + i + 1;
+            }
+        }
+
+        for (var j = tailFrom; j < old.Length; j++)
+        {
+            result[w++] = old[j] + delta;
+        }
+
+        return result;
+    }
 
     private int[] ComputeLineStarts()
     {

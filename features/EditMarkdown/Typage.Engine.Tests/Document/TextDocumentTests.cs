@@ -125,4 +125,93 @@ public class TextDocumentTests
         doc = doc.Delete(7, 6); // remove " World"
         Assert.Equal("Goodbye", doc.GetText());
     }
+
+    // The line-start index is patched incrementally on each edit (no whole-document rescan). These pin the
+    // tricky boundary cases; the fuzz test below proves equivalence to a from-scratch scan in general.
+
+    [Fact]
+    public void IncrementalLineStarts_InsertingANewline_AddsALine()
+    {
+        var doc = TextDocument.FromString("abcd");
+        _ = doc.LineCount; // force the pre-edit starts to be cached → the patched path runs
+        doc = doc.Insert(2, "X\nY");
+        Assert.Equal(2, doc.LineCount);
+        AssertLineStartsMatchFromScratch(doc);
+    }
+
+    [Fact]
+    public void IncrementalLineStarts_DeletingTheNewline_JoinsLines()
+    {
+        var doc = TextDocument.FromString("ab\ncd");
+        _ = doc.LineCount;
+        doc = doc.Delete(2, 1); // remove the '\n'
+        Assert.Equal(1, doc.LineCount);
+        Assert.Equal("abcd", doc.GetText());
+        AssertLineStartsMatchFromScratch(doc);
+    }
+
+    [Fact]
+    public void IncrementalLineStarts_ReplacingAcrossANewline()
+    {
+        var doc = TextDocument.FromString("one\ntwo\nthree");
+        _ = doc.LineCount;
+        doc = doc.Replace(2, 4, "X\nY\nZ"); // spans the first '\n'
+        AssertLineStartsMatchFromScratch(doc);
+    }
+
+    [Fact]
+    public void IncrementalLineStarts_DeletingExactlyUpToALineStart()
+    {
+        var doc = TextDocument.FromString("a\nb\nc");
+        _ = doc.LineCount;
+        doc = doc.Delete(2, 2); // remove "b\n" — deleteEnd lands on the next line start
+        Assert.Equal("a\nc", doc.GetText());
+        AssertLineStartsMatchFromScratch(doc);
+    }
+
+    [Fact]
+    public void IncrementalLineStarts_MatchFromScratch_AcrossRandomEdits()
+    {
+        var rng = new System.Random(0xC0FFEE);
+        var doc = TextDocument.FromString("line one\nline two\r\nthree\n\nlast");
+
+        for (var step = 0; step < 3000; step++)
+        {
+            _ = doc.LineCount; // ensure the pre-edit document has its starts cached (patched path, not lazy)
+            var len = doc.Length;
+            var offset = rng.Next(0, len + 1);
+
+            doc = rng.Next(3) switch
+            {
+                0 => doc.Insert(offset, RandomChunk(rng)),
+                1 => doc.Delete(offset, rng.Next(0, System.Math.Min(6, len - offset) + 1)),
+                _ => doc.Replace(offset, rng.Next(0, System.Math.Min(6, len - offset) + 1), RandomChunk(rng)),
+            };
+
+            AssertLineStartsMatchFromScratch(doc);
+        }
+    }
+
+    private static string RandomChunk(System.Random rng)
+    {
+        var n = rng.Next(0, 5);
+        var chars = new char[n];
+        for (var i = 0; i < n; i++)
+        {
+            chars[i] = rng.Next(6) switch { 0 => '\n', 1 => '\r', 2 => '\n', _ => (char)('a' + rng.Next(3)) };
+        }
+
+        return new string(chars);
+    }
+
+    /// <summary>Assert the document's (incrementally patched) line index matches a fresh from-scratch scan.</summary>
+    private static void AssertLineStartsMatchFromScratch(TextDocument doc)
+    {
+        var fresh = TextDocument.FromString(doc.GetText()); // lazy null → trusted ComputeLineStarts
+        Assert.Equal(fresh.LineCount, doc.LineCount);
+        for (var line = 0; line < fresh.LineCount; line++)
+        {
+            Assert.Equal(fresh.GetLineStart(line), doc.GetLineStart(line));
+        }
+    }
 }
