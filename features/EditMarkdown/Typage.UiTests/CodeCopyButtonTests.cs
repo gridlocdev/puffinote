@@ -44,6 +44,15 @@ public class CodeCopyButtonTests
     }
 
     [AvaloniaFact]
+    public void IndentedBlock_WithAWhitespaceOnlyInteriorBlank_CopiesAcrossTheBlank()
+    {
+        // A "blank" interior line with a couple of spaces must not split the block, so copying the run
+        // still spans both code lines with the empty interior line between them.
+        var e = new MarkdownEditor { Text = "para\n\n    a\n  \n    b\n" };
+        Assert.Equal("a\n\nb", e.CodeBlockTextForTest(2, 4));
+    }
+
+    [AvaloniaFact]
     public void Rendering_RecordsOneButton_SpanningTheWholeFencedRun()
     {
         var view = new MarkdownEditorView();

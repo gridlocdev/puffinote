@@ -39,6 +39,16 @@ public class IndentedCodeTests
     }
 
     [Fact]
+    public void WhitespaceOnlyLineInsideBlock_IsBlank_AndKeepsItOpen()
+    {
+        // A "blank" interior line carrying a few spaces (fewer than four) is still blank — it must not be
+        // treated as a dedent that ends the block (CommonMark §4.4). The block spans both code lines.
+        var md = "x\n\n    line one\n  \n    line three\nprose";
+        Assert.Equal(new[] { "    line one", "    line three" }, TextsOfType(md, TokenType.CodeText));
+        Assert.Equal(BlockKind.IndentedCode, Tokenize(md).Model.EnteringState(4).Kind);
+    }
+
+    [Fact]
     public void DedentEndsTheBlock()
     {
         var md = "x\n\n    code\n  not code (two spaces)";

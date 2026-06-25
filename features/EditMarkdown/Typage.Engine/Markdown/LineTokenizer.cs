@@ -36,26 +36,26 @@ internal static class LineTokenizer
 
     /// <summary>
     /// Inside an indented (4-space) code block: a line indented &gt;= 4 (or a blank line) stays in the
-    /// block; the first line dedented below 4 ends it and is re-classified as a normal line. A blank
-    /// line keeps the block open so a following indented line continues the same block (CommonMark §4.4).
+    /// block; the first <b>non-blank</b> line dedented below 4 ends it and is re-classified as a normal
+    /// line. A blank line — empty <i>or</i> whitespace-only, whatever its width — keeps the block open so a
+    /// following indented line continues the same block (CommonMark §4.4); it isn't a dedent.
     /// </summary>
     private static BlockState TokenizeInIndentedCode(
         string line, int lineStart, int len, int lineIndex, bool allowFrontMatterOpen, List<Token> output)
     {
-        if (len == 0)
+        var ws = LeadingWhitespace(line, len, out var columns);
+        if (ws == len)
         {
-            return BlockState.IndentedCode; // a blank line may be interior; stay open
+            return BlockState.IndentedCode; // a blank line (any indent) is interior; stay open, emit no token
         }
 
-        LeadingWhitespace(line, len, out var columns);
         if (columns >= 4)
         {
             output.Add(new Token(lineStart, len, TokenType.CodeText, TokenRole.Content));
             return BlockState.IndentedCode;
         }
 
-        // Dedented to a real line — the block has ended; classify this line normally (it is non-blank,
-        // so it follows a non-blank predecessor).
+        // Dedented to a real (non-blank) line — the block has ended; classify this line normally.
         return TokenizeNormal(line, lineStart, len, lineIndex, allowFrontMatterOpen, afterBlank: false, output);
     }
 
