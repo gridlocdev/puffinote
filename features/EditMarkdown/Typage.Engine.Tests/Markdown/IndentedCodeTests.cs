@@ -49,6 +49,15 @@ public class IndentedCodeTests
     }
 
     [Fact]
+    public void IndentedLineAfterAWhitespaceOnlyBlank_OpensTheBlock()
+    {
+        // The separating "blank" line carries a couple of spaces — it's still blank, so it sets a fresh
+        // block position and the indented line below it opens a code block (as a truly-empty line would).
+        var md = "para\n  \n    code\n";
+        Assert.Equal(new[] { "    code" }, TextsOfType(md, TokenType.CodeText));
+    }
+
+    [Fact]
     public void DedentEndsTheBlock()
     {
         var md = "x\n\n    code\n  not code (two spaces)";

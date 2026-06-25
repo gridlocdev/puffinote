@@ -165,10 +165,11 @@ internal static class LineTokenizer
             return BlockState.Normal;
         }
 
-        // Plain paragraph line -> inline only. A blank line marks the next line as a fresh block
-        // position (where an indented code block may open).
+        // Plain paragraph line -> inline only. A blank line — empty or whitespace-only (indent spans the
+        // whole line) — marks the next line as a fresh block position where an indented code block may open,
+        // so an indented line following a "blank" line of spaces still starts/continues a code block.
         InlineTokenizer.Tokenize(line, lineStart, 0, len, output, detectHardBreak: true);
-        return BlockState.NormalAfter(len == 0);
+        return BlockState.NormalAfter(indent == len);
     }
 
     // ----- recognizers -----
