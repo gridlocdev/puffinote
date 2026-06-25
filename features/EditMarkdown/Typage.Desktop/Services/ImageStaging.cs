@@ -50,6 +50,17 @@ public static class ImageStaging
         return dest;
     }
 
+    /// <summary>
+    /// Percent-encode the characters that would break a Markdown link destination — space (critical: the
+    /// scratch root lives under "…/Application Support/…" on macOS), parentheses, and <c>%</c> itself — so the
+    /// path survives as a single <c>![alt](url)</c> destination. Path separators are left intact.
+    /// </summary>
+    public static string EncodeUrl(string url) =>
+        url.Replace("%", "%25").Replace(" ", "%20").Replace("(", "%28").Replace(")", "%29");
+
+    /// <summary>Reverse <see cref="EncodeUrl"/> (and any other percent-escapes) back to a filesystem path/URL.</summary>
+    public static string DecodeUrl(string url) => System.Uri.UnescapeDataString(url);
+
     /// <summary>True when <paramref name="url"/> is an absolute path inside the staging root.</summary>
     public static bool IsStaged(string url)
     {
@@ -81,8 +92,9 @@ public static class ImageStaging
     {
         var model = MarkdownModel.Build(TextDocument.FromString(documentText));
         return model.AllTokens()
-            .Where(t => t.Type == TokenType.ImageUrl && t.Meta is { } url && IsStaged(url))
-            .Select(t => new StagedRef(t.Start, t.Length, t.Meta!))
+            .Where(t => t.Type == TokenType.ImageUrl && t.Meta is not null)
+            .Select(t => new StagedRef(t.Start, t.Length, DecodeUrl(t.Meta!))) // decode "%20" etc. to the real path
+            .Where(r => IsStaged(r.Url))
             .OrderBy(r => r.Start)
             .ToList();
     }
@@ -132,6 +144,50 @@ public static class ImageStaging
         return candidate;
     }
 
-    /// <summary>One staged image reference: the URL's source span and its (staged) value.</summary>
+    /// <summary>
+    /// Copy each staged image referenced in <paramref name="documentText"/> into an <c>images/</c> folder
+    /// beside the document being saved to <paramref name="targetPath"/> (created if missing), and return the
+    /// document text with those URLs repointed at their new relative, encoded locations. The files are
+    /// physically copied out of the scratch directory. A per-file IO failure is reported via the returned
+    /// error while the successful copies are still applied, so disk and document stay consistent.
+    /// </summary>
+    public static (string NewText, string? Error) Reconcile(string documentText, string targetPath, IReadOnlyList<StagedRef> staged)
+    {
+        if (staged.Count == 0)
+        {
+            return (documentText, null);
+        }
+
+        var imagesDir = Path.Combine(Path.GetDirectoryName(Path.GetFullPath(targetPath)) ?? ".", "images");
+        try
+        {
+            Directory.CreateDirectory(imagesDir);
+        }
+        catch (System.Exception ex) when (ex is IOException or System.UnauthorizedAccessException)
+        {
+            return (documentText, ex.Message);
+        }
+
+        var edits = new List<(int Start, int Length, string NewUrl)>();
+        string? error = null;
+        foreach (var s in staged)
+        {
+            try
+            {
+                var dest = UniqueDestination(imagesDir, OriginalName(s.Url), File.Exists);
+                File.Copy(s.Url, dest);
+                edits.Add((s.Start, s.Length, EncodeUrl(RelativeUrl(targetPath, dest))));
+            }
+            catch (System.Exception ex) when (ex is IOException or System.UnauthorizedAccessException)
+            {
+                error = ex.Message;
+            }
+        }
+
+        var text = edits.Count > 0 ? RewriteUrls(documentText, edits) : documentText;
+        return (text, error);
+    }
+
+    /// <summary>One staged image reference: the URL's source span and its decoded (real) filesystem path.</summary>
     public readonly record struct StagedRef(int Start, int Length, string Url);
 }

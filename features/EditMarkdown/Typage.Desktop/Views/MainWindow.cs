@@ -1074,10 +1074,10 @@ public class MainWindow : Window
             var alt = Path.GetFileNameWithoutExtension(source);
             try
             {
-                var url = _currentPath is { } docPath
+                var path = _currentPath is { } docPath
                     ? ImageStaging.RelativeUrl(docPath, source)              // saved → relative path in place
                     : ImageStaging.Stage(source, System.Guid.NewGuid().ToString("N")); // unsaved → stage a copy
-                ed.InsertImageReference(url, alt);
+                ed.InsertImageReference(ImageStaging.EncodeUrl(path), alt); // encode so spaces don't break the link
             }
             catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
             {
@@ -1089,9 +1089,10 @@ public class MainWindow : Window
 
     /// <summary>
     /// When the document being saved to <paramref name="targetPath"/> still references staged (scratch)
-    /// images, offer to move them into an <c>images/</c> folder beside the document and rewrite the Markdown
-    /// to point there relatively. Declining leaves the staged paths intact (the document still opens). Runs
-    /// before the bytes are written so the saved file already carries the permanent paths.
+    /// images, offer to copy them into an <c>images/</c> folder beside the document (created if missing) and
+    /// rewrite the Markdown to point there relatively. The files are physically copied out of the scratch
+    /// directory, not just re-pathed. Declining leaves the staged paths intact (the document still opens).
+    /// Runs before the bytes are written so the saved file already carries the permanent paths.
     /// </summary>
     private async Task ReconcileStagedImagesAsync(string targetPath)
     {
@@ -1103,36 +1104,23 @@ public class MainWindow : Window
 
         var noun = staged.Count == 1 ? "image" : "images";
         if (!await ConfirmAsync(
-                $"Move {staged.Count} staged {noun} into an \"images\" folder next to the document, and update the links?",
-                confirmLabel: "Move", denyLabel: "Keep As-Is"))
+                $"Copy {staged.Count} staged {noun} into an \"images\" folder next to the document, and update the links?",
+                confirmLabel: "Copy", denyLabel: "Keep As-Is"))
         {
             return;
         }
 
-        var imagesDir = Path.Combine(Path.GetDirectoryName(Path.GetFullPath(targetPath)) ?? ".", "images");
-        var edits = new List<(int Start, int Length, string NewUrl)>();
-        try
+        var (newText, error) = ImageStaging.Reconcile(_editorView.Text, targetPath, staged);
+        if (error is not null)
         {
-            Directory.CreateDirectory(imagesDir);
-            foreach (var s in staged)
-            {
-                var dest = ImageStaging.UniqueDestination(imagesDir, ImageStaging.OriginalName(s.Url), File.Exists);
-                File.Move(s.Url, dest);
-                edits.Add((s.Start, s.Length, ImageStaging.RelativeUrl(targetPath, dest)));
-            }
-        }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
-        {
-            ShowError("Couldn't move the staged images.",
-                $"{ex.Message}\n\nThe document will be saved with its current image links.");
-            // Fall through: apply whatever moves did succeed so the document and disk stay consistent.
+            ShowError("Couldn't copy some staged images.",
+                $"{error}\n\nThe document will be saved with its current image links.");
         }
 
-        if (edits.Count > 0)
+        if (newText != _editorView.Text)
         {
-            var rewritten = ImageStaging.RewriteUrls(_editorView.Text, edits);
             var buffer = _editorView.Editor.Buffer;
-            buffer.ReplaceRange(0, buffer.Document.Length, rewritten);
+            buffer.ReplaceRange(0, buffer.Document.Length, newText);
         }
     }
 
