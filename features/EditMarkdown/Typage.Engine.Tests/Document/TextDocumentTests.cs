@@ -126,6 +126,87 @@ public class TextDocumentTests
         Assert.Equal("Goodbye", doc.GetText());
     }
 
+    [Fact]
+    public void SequentialTyping_CoalescesIntoFewPieces()
+    {
+        // Typing one character at a time at the end appends contiguously to the add buffer, so the pieces
+        // coalesce instead of growing ~1 per keystroke.
+        var doc = TextDocument.FromString("start: ");
+        for (var i = 0; i < 50; i++)
+        {
+            doc = doc.Insert(doc.Length, "x");
+        }
+
+        Assert.Equal("start: " + new string('x', 50), doc.GetText());
+        Assert.True(doc.PieceCount <= 3, $"expected coalescing to keep pieces small, got {doc.PieceCount}");
+    }
+
+    [Fact]
+    public void DeletingFromTheMiddle_DoesNotGrowPiecesUnbounded()
+    {
+        // Backspacing the just-typed tail shrinks the trailing add piece in place rather than fragmenting.
+        var doc = TextDocument.FromString("abc");
+        for (var i = 0; i < 20; i++)
+        {
+            doc = doc.Insert(doc.Length, "y");
+        }
+
+        for (var i = 0; i < 20; i++)
+        {
+            doc = doc.Delete(doc.Length - 1, 1);
+        }
+
+        Assert.Equal("abc", doc.GetText());
+        Assert.True(doc.PieceCount <= 2, $"got {doc.PieceCount}");
+    }
+
+    [Fact]
+    public void ContentAndReads_MatchAReferenceString_AcrossRandomEdits()
+    {
+        // Fuzz the piece table against a plain string oracle: after every random edit the full text, every
+        // random substring (GetText(start,len)), and every random char (indexer) must agree. Guards the
+        // piece-coalescing / add-buffer machinery and any piece-lookup index.
+        var rng = new System.Random(0x5EED);
+        var doc = TextDocument.FromString("the quick brown fox\njumps over\nthe lazy dog");
+        var reference = doc.GetText();
+
+        for (var step = 0; step < 4000; step++)
+        {
+            var offset = rng.Next(0, reference.Length + 1);
+            switch (rng.Next(3))
+            {
+                case 0:
+                    var ins = RandomChunk(rng);
+                    doc = doc.Insert(offset, ins);
+                    reference = reference[..offset] + ins + reference[offset..];
+                    break;
+                case 1:
+                    var del = rng.Next(0, System.Math.Min(7, reference.Length - offset) + 1);
+                    doc = doc.Delete(offset, del);
+                    reference = reference[..offset] + reference[(offset + del)..];
+                    break;
+                default:
+                    var rl = rng.Next(0, System.Math.Min(7, reference.Length - offset) + 1);
+                    var rep = RandomChunk(rng);
+                    doc = doc.Replace(offset, rl, rep);
+                    reference = reference[..offset] + rep + reference[(offset + rl)..];
+                    break;
+            }
+
+            Assert.Equal(reference, doc.GetText());
+            Assert.Equal(reference.Length, doc.Length);
+
+            // a handful of random range/char reads each step
+            for (var r = 0; r < 4 && reference.Length > 0; r++)
+            {
+                var s = rng.Next(0, reference.Length);
+                var len = rng.Next(0, reference.Length - s + 1);
+                Assert.Equal(reference.Substring(s, len), doc.GetText(s, len));
+                Assert.Equal(reference[s], doc[s]);
+            }
+        }
+    }
+
     // The line-start index is patched incrementally on each edit (no whole-document rescan). These pin the
     // tricky boundary cases; the fuzz test below proves equivalence to a from-scratch scan in general.
 

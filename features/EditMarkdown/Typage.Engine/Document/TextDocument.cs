@@ -15,30 +15,70 @@ namespace Typage.Engine.Document;
 /// </remarks>
 public sealed class TextDocument
 {
-    /// <summary>A contiguous run of characters from one source string. Immutable.</summary>
-    private readonly record struct Piece(string Source, int Start, int Length);
+    /// <summary>
+    /// A contiguous run of characters, either from the immutable original buffer or (when
+    /// <see cref="FromAdd"/>) the shared append buffer. Immutable.
+    /// </summary>
+    private readonly record struct Piece(bool FromAdd, int Start, int Length);
 
+    /// <summary>
+    /// The append-only insert buffer, shared by reference across one document's edit lineage so consecutive
+    /// insertions land in one contiguous run and coalesce into a single piece (rather than ~2-3 new pieces per
+    /// keystroke). Append-only — content at <c>[0, Length)</c> never changes — so every existing piece's range
+    /// stays valid as the buffer grows, preserving snapshot immutability.
+    /// </summary>
+    private sealed class AddBuffer
+    {
+        private char[] _chars = new char[64];
+
+        public int Length { get; private set; }
+
+        public int Append(string text)
+        {
+            var start = Length;
+            if (Length + text.Length > _chars.Length)
+            {
+                Array.Resize(ref _chars, Math.Max(Length + text.Length, _chars.Length * 2));
+            }
+
+            text.CopyTo(0, _chars, Length, text.Length);
+            Length += text.Length;
+            return start;
+        }
+
+        public char this[int i] => _chars[i];
+
+        public void AppendTo(System.Text.StringBuilder sb, int start, int length) => sb.Append(_chars, start, length);
+    }
+
+    private static readonly AddBuffer EmptyAdd = new(); // never appended to (first edit allocates a fresh buffer)
+
+    private readonly string _original; // the immutable original buffer (shared by reference, never copied)
+    private readonly AddBuffer _add;   // the lineage's append buffer (inserts live here)
     private readonly Piece[] _pieces;
     private int[]? _lineStarts; // lazily computed offsets of the first char of each line
 
     /// <summary>The empty document.</summary>
-    public static readonly TextDocument Empty = new(Array.Empty<Piece>(), 0);
+    public static readonly TextDocument Empty = new(string.Empty, EmptyAdd, Array.Empty<Piece>(), 0);
 
-    private TextDocument(Piece[] pieces, int length)
+    private TextDocument(string original, AddBuffer add, Piece[] pieces, int length, int[]? lineStarts = null)
     {
-        _pieces = pieces;
-        Length = length;
-    }
-
-    private TextDocument(Piece[] pieces, int length, int[]? lineStarts)
-    {
+        _original = original;
+        _add = add;
         _pieces = pieces;
         Length = length;
         _lineStarts = lineStarts;
     }
 
+    /// <summary>The append buffer to insert into: the lineage's existing one, or a fresh one when none has been
+    /// started yet (so the never-appended static <see cref="EmptyAdd"/> is never grown).</summary>
+    private AddBuffer InsertBuffer() => _add.Length > 0 ? _add : new AddBuffer();
+
     /// <summary>Total length in UTF-16 code units.</summary>
     public int Length { get; }
+
+    /// <summary>Number of pieces in the table; for tests (coalescing keeps this small under sequential edits).</summary>
+    internal int PieceCount => _pieces.Length;
 
     /// <summary>Build a document from a string. The string becomes the (shared) original buffer.</summary>
     public static TextDocument FromString(string? text)
@@ -48,7 +88,7 @@ public sealed class TextDocument
             return Empty;
         }
 
-        return new TextDocument(new[] { new Piece(text, 0, text.Length) }, text.Length);
+        return new TextDocument(text, EmptyAdd, new[] { new Piece(false, 0, text.Length) }, text.Length);
     }
 
     /// <summary>The full document text, materialized.</summary>
@@ -62,10 +102,23 @@ public sealed class TextDocument
         var sb = new System.Text.StringBuilder(Length);
         foreach (var p in _pieces)
         {
-            sb.Append(p.Source, p.Start, p.Length);
+            AppendPiece(sb, p, p.Start, p.Length);
         }
 
         return sb.ToString();
+    }
+
+    /// <summary>Append the sub-run <c>[from, from+take)</c> of <paramref name="p"/> to <paramref name="sb"/>.</summary>
+    private void AppendPiece(System.Text.StringBuilder sb, Piece p, int from, int take)
+    {
+        if (p.FromAdd)
+        {
+            _add.AppendTo(sb, from, take);
+        }
+        else
+        {
+            sb.Append(_original, from, take);
+        }
     }
 
     /// <summary>The substring <c>[start, start+length)</c>.</summary>
@@ -104,7 +157,7 @@ public sealed class TextDocument
             var avail = p.Length - remainingToSkip;
             remainingToSkip = 0;
             var take = Math.Min(avail, remainingToTake);
-            sb.Append(p.Source, from, take);
+            AppendPiece(sb, p, from, take);
             remainingToTake -= take;
             consumed += take;
         }
@@ -128,7 +181,7 @@ public sealed class TextDocument
             {
                 if (pos < p.Length)
                 {
-                    return p.Source[p.Start + pos];
+                    return p.FromAdd ? _add[p.Start + pos] : _original[p.Start + pos];
                 }
 
                 pos -= p.Length;
@@ -152,9 +205,10 @@ public sealed class TextDocument
             return this;
         }
 
-        var inserted = new Piece(text, 0, text.Length);
+        var add = InsertBuffer();
+        var inserted = new Piece(true, add.Append(text), text.Length);
         var rebuilt = SpliceAt(offset, 0, new[] { inserted });
-        return new TextDocument(rebuilt, Length + text.Length, PatchedLineStarts(offset, 0, text));
+        return new TextDocument(_original, add, rebuilt, Length + text.Length, PatchedLineStarts(offset, 0, text));
     }
 
     /// <summary>Delete <paramref name="length"/> code units at <paramref name="offset"/>.</summary>
@@ -173,7 +227,7 @@ public sealed class TextDocument
         }
 
         var rebuilt = SpliceAt(offset, length, Array.Empty<Piece>());
-        return new TextDocument(rebuilt, Length - length, PatchedLineStarts(offset, length, string.Empty));
+        return new TextDocument(_original, _add, rebuilt, Length - length, PatchedLineStarts(offset, length, string.Empty));
     }
 
     /// <summary>Delete <paramref name="length"/> at <paramref name="offset"/> then insert <paramref name="text"/>.</summary>
@@ -189,8 +243,9 @@ public sealed class TextDocument
             return Delete(offset, length);
         }
 
-        var rebuilt = SpliceAt(offset, length, new[] { new Piece(text, 0, text.Length) });
-        return new TextDocument(rebuilt, Length - length + text.Length, PatchedLineStarts(offset, length, text));
+        var add = InsertBuffer();
+        var rebuilt = SpliceAt(offset, length, new[] { new Piece(true, add.Append(text), text.Length) });
+        return new TextDocument(_original, add, rebuilt, Length - length + text.Length, PatchedLineStarts(offset, length, text));
     }
 
     /// <summary>
@@ -213,21 +268,56 @@ public sealed class TextDocument
             if (pieceStart < offset)
             {
                 var keep = Math.Min(p.Length, offset - pieceStart);
-                head.Add(new Piece(p.Source, p.Start, keep));
+                head.Add(new Piece(p.FromAdd, p.Start, keep));
             }
 
             // Part of this piece after the deleted span -> tail.
             if (pieceEnd > deleteEnd)
             {
                 var skip = Math.Max(0, deleteEnd - pieceStart);
-                tail.Add(new Piece(p.Source, p.Start + skip, p.Length - skip));
+                tail.Add(new Piece(p.FromAdd, p.Start + skip, p.Length - skip));
             }
         }
 
         var result = new List<Piece>(head.Count + insertPieces.Length + tail.Count);
-        result.AddRange(head);
-        result.AddRange(insertPieces);
-        result.AddRange(tail);
+
+        void AddCoalescing(Piece p)
+        {
+            if (p.Length == 0)
+            {
+                return;
+            }
+
+            // Merge with the previous piece when they are the same buffer and physically adjacent — so
+            // consecutive insertions (which append contiguously to the add buffer) collapse to one piece.
+            if (result.Count > 0)
+            {
+                var last = result[^1];
+                if (last.FromAdd == p.FromAdd && last.Start + last.Length == p.Start)
+                {
+                    result[^1] = last with { Length = last.Length + p.Length };
+                    return;
+                }
+            }
+
+            result.Add(p);
+        }
+
+        foreach (var p in head)
+        {
+            AddCoalescing(p);
+        }
+
+        foreach (var p in insertPieces)
+        {
+            AddCoalescing(p);
+        }
+
+        foreach (var p in tail)
+        {
+            AddCoalescing(p);
+        }
+
         return result.ToArray();
     }
 
