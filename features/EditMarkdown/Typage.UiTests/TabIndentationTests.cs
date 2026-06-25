@@ -39,6 +39,26 @@ public class TabIndentationTests
     }
 
     [AvaloniaFact]
+    public void MixedIndentSiblings_ReorderTogether()
+    {
+        // a1 is nested with a tab, a2 with four spaces — both sit at the same visual depth, so they
+        // are siblings and swap. (Counting raw characters would treat a2 as a deeper child of a1.)
+        var e = At("- a\n\t- a1\n    - a2", line: 1); // caret on the tab-nested first child
+        e.MoveLinesForTest(1);
+        Assert.Equal("- a\n    - a2\n\t- a1", e.Text);
+    }
+
+    [AvaloniaFact]
+    public void MoveDown_DoesNotLandBetweenAParentAndItsTabNestedChild()
+    {
+        // s's child s1 is nested with tabs (fewer characters than s's four spaces). Moving x down must
+        // carry s1 along with s, never slot x between them.
+        var e = At("- top\n    - x\n    - s\n\t\t- s1", line: 1); // caret on x
+        e.MoveLinesForTest(1);
+        Assert.Equal("- top\n    - s\n\t\t- s1\n    - x", e.Text);
+    }
+
+    [AvaloniaFact]
     public void Outdent_RemovesALeadingTab()
     {
         var e = At("\t- [ ] x");

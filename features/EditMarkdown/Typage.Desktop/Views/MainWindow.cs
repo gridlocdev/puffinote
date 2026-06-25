@@ -695,6 +695,7 @@ public class MainWindow : Window
             new("format.code", "Inline Code", "Format the selection as inline code.", Shortcut.Cmd(Key.E), ed.ToggleInlineCode),
             new("format.strike", "Strikethrough", "Strike through the selection.", null, ed.ToggleStrikethrough),
             new("format.link", "Insert Link", "Wrap the selection as a link.", Shortcut.Cmd(Key.K), ed.InsertLink),
+            new("format.task", "Checkbox", "Add a task checkbox to this line, or toggle it.", Shortcut.Cmd(Key.L), ed.ToggleTask),
             new("format.h1", "Heading 1", "Make this line a level-1 heading.", Shortcut.Cmd(Key.D1), () => ed.ApplyHeading(1)),
             new("format.h2", "Heading 2", "Make this line a level-2 heading.", Shortcut.Cmd(Key.D2), () => ed.ApplyHeading(2)),
             new("format.h3", "Heading 3", "Make this line a level-3 heading.", Shortcut.Cmd(Key.D3), () => ed.ApplyHeading(3)),

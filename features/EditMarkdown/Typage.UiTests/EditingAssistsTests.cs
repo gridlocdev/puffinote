@@ -61,6 +61,46 @@ public class EditingAssistsTests
     }
 
     [AvaloniaFact]
+    public void ShiftTab_AtOutermostLevel_ExitsTheList()
+    {
+        var editor = At("- item", 6); // a top-level item — nothing left to outdent
+        editor.TabForTest(shift: true);
+        Assert.Equal("item", editor.Text); // the marker is stripped, the content stays
+    }
+
+    [AvaloniaFact]
+    public void ShiftTab_OnAnEmptyOutermostItem_OutdentsToAnEmptyLine()
+    {
+        var editor = At("- ", 2);
+        editor.TabForTest(shift: true);
+        Assert.Equal("", editor.Text); // exiting an empty item leaves an empty line
+    }
+
+    [AvaloniaFact]
+    public void ShiftTab_AtOutermostLevel_ExitsATaskItem()
+    {
+        var editor = At("- [ ] task", 10);
+        editor.TabForTest(shift: true);
+        Assert.Equal("task", editor.Text);
+    }
+
+    [AvaloniaFact]
+    public void ShiftTab_AtOutermostLevel_ExitsABlockquote()
+    {
+        var editor = At("> note", 6);
+        editor.TabForTest(shift: true);
+        Assert.Equal("note", editor.Text);
+    }
+
+    [AvaloniaFact]
+    public void ShiftTab_OnANestedItem_OutdentsOneLevel_WithoutExiting()
+    {
+        var editor = At("    - item", 10); // indent 4 → still room to outdent
+        editor.TabForTest(shift: true);
+        Assert.Equal("- item", editor.Text); // unchanged: it outdents rather than exiting
+    }
+
+    [AvaloniaFact]
     public void Tab_InPlainText_InsertsSpaces()
     {
         var editor = At("abc", 3);

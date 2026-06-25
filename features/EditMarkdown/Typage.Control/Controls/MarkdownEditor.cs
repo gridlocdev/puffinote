@@ -290,6 +290,35 @@ public class MarkdownEditor : Avalonia.Controls.Control, ILogicalScrollable
         }
     }
 
+    /// <summary>
+    /// Add a task checkbox to the caret's line, or toggle an existing one (⌘L / Ctrl+L). If the line
+    /// already carries a <c>[ ]</c>/<c>[x]</c>, flip its state (caret stays put); if it is a plain list
+    /// item, insert <c>[ ] </c> after its marker; otherwise turn the line into an unordered task item
+    /// (<c>- [ ] </c>, preserving any indentation) — one shortcut both creates and toggles checkboxes.
+    /// </summary>
+    public void ToggleTask()
+    {
+        var doc = _buffer.Document;
+        var line = doc.GetPosition(_buffer.Selection.Caret).Line;
+        var prefix = LinePrefix.Parse(doc.GetLineText(line));
+
+        if (prefix.HasTask)
+        {
+            ToggleTaskOnLine(line);
+        }
+        else
+        {
+            // Insert "[ ] " after an existing list marker, or a whole "- [ ] " item after the indentation.
+            var insertAt = doc.GetLineStart(line) + (prefix.HasList ? prefix.Length : prefix.Indent);
+            var inserted = prefix.HasList ? "[ ] " : "- [ ] ";
+            var caret = _buffer.Selection.Caret;
+            _buffer.ReplaceRange(insertAt, 0, inserted);
+            _buffer.Selection = Selection.At(caret >= insertAt ? caret + inserted.Length : caret);
+        }
+
+        Focus();
+    }
+
     /// <summary>Select the whole document.</summary>
     public void SelectAll() => _buffer.Selection = new Selection(0, _buffer.Document.Length);
 
@@ -1031,6 +1060,7 @@ public class MarkdownEditor : Avalonia.Controls.Control, ILogicalScrollable
             case Key.I when ctrl: ToggleItalic(); break;
             case Key.E when ctrl: ToggleInlineCode(); break;
             case Key.K when ctrl: InsertLink(); break;
+            case Key.L when ctrl: ToggleTask(); break;
             case Key.D0 when ctrl: SetParagraph(); break;
             case >= Key.D1 and <= Key.D6 when ctrl: ApplyHeading(e.Key - Key.D1 + 1); break;
 
@@ -1097,13 +1127,25 @@ public class MarkdownEditor : Avalonia.Controls.Control, ILogicalScrollable
         var endLine = doc.GetPosition(sel.End).Line;
         var caretLine = doc.GetPosition(sel.Caret).Line;
         var multiLine = endLine > startLine;
-        var onList = LinePrefix.Parse(doc.GetLineText(caretLine)).HasList;
+        var prefix = LinePrefix.Parse(doc.GetLineText(caretLine));
 
         // Plain text, single caret, not on a list item → a Tab inserts one indent unit (a tab where the
         // line already uses tabs, otherwise spaces).
-        if (!shift && !multiLine && sel.IsEmpty && !onList)
+        if (!shift && !multiLine && sel.IsEmpty && !prefix.HasList)
         {
             _buffer.Insert(IndentUnit(caretLine, caretLine));
+            return;
+        }
+
+        // Shift+Tab on a single nestable item (list/quote/task) that is already at the outermost level
+        // (no indentation left to remove) exits the construct: strip the whole marker prefix, leaving the
+        // content as a plain line — so an empty item outdents to an empty line (PRD §7.2 list exit).
+        if (shift && !multiLine && (prefix.HasList || prefix.HasQuote) && prefix.Indent == 0)
+        {
+            var lineStart = doc.GetLineStart(caretLine);
+            var caret = sel.Caret;
+            _buffer.ReplaceRange(lineStart, prefix.Length, string.Empty);
+            _buffer.Selection = Selection.At(Math.Max(lineStart, caret - prefix.Length));
             return;
         }
 
@@ -1286,17 +1328,24 @@ public class MarkdownEditor : Avalonia.Controls.Control, ILogicalScrollable
         _goalX = double.NaN;
     }
 
-    /// <summary>The number of leading whitespace characters (spaces and tabs) on <paramref name="line"/> — its nesting depth.</summary>
+    /// <summary>
+    /// The <b>visual indentation</b> of <paramref name="line"/> in columns — its nesting depth. Tabs are
+    /// measured on <see cref="IndentWidth"/>-column tab stops (matching the tokenizer's
+    /// <c>LeadingWhitespace</c> and how the surface draws a leading tab), so that a child indented with one
+    /// tab and a sibling indented with four spaces land at the same depth. Comparing raw character counts
+    /// instead would treat mixed tab/space indentation as different levels and split a parent from its child.
+    /// </summary>
     private int LineIndent(int line)
     {
         var t = _buffer.Document.GetLineText(line);
-        var n = 0;
-        while (n < t.Length && (t[n] == ' ' || t[n] == '\t'))
+        var stop = Math.Max(1, IndentWidth);
+        var columns = 0;
+        for (var i = 0; i < t.Length && (t[i] == ' ' || t[i] == '\t'); i++)
         {
-            n++;
+            columns += t[i] == '\t' ? stop - (columns % stop) : 1;
         }
 
-        return n;
+        return columns;
     }
 
     /// <summary>Whether <paramref name="line"/> is blank (only whitespace).</summary>
@@ -1644,20 +1693,39 @@ public class MarkdownEditor : Avalonia.Controls.Control, ILogicalScrollable
                 continue;
             }
 
-            var box = t.Start + 1; // the character between the brackets
-            if (box >= _buffer.Document.Length)
-            {
-                return false;
-            }
-
-            var replacement = _buffer.Document[box] == ' ' ? "x" : " ";
-            var caret = _buffer.Selection;
-            _buffer.ReplaceRange(box, 1, replacement);
-            _buffer.Selection = caret; // a checkbox click shouldn't move the caret
-            return true;
+            return ToggleBoxAt(t.Start + 1); // the character between the brackets
         }
 
         return false;
+    }
+
+    /// <summary>Flip the first task checkbox on <paramref name="line"/> (used by ⌘L), if it has one.</summary>
+    private bool ToggleTaskOnLine(int line)
+    {
+        foreach (var t in _model.LineTokens(line))
+        {
+            if (t.Type == TokenType.TaskMarker)
+            {
+                return ToggleBoxAt(t.Start + 1);
+            }
+        }
+
+        return false;
+    }
+
+    /// <summary>Flip the <c>[ ]</c>/<c>[x]</c> box character at <paramref name="box"/>, leaving the caret put.</summary>
+    private bool ToggleBoxAt(int box)
+    {
+        if (box < 0 || box >= _buffer.Document.Length)
+        {
+            return false;
+        }
+
+        var replacement = _buffer.Document[box] == ' ' ? "x" : " ";
+        var caret = _buffer.Selection;
+        _buffer.ReplaceRange(box, 1, replacement);
+        _buffer.Selection = caret; // toggling a checkbox shouldn't move the caret
+        return true;
     }
 
     /// <summary>Toggle the task checkbox covering <paramref name="offset"/> on <paramref name="line"/>; for tests.</summary>
