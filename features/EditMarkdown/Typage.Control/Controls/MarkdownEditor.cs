@@ -35,6 +35,13 @@ public class MarkdownEditor : Avalonia.Controls.Control, ILogicalScrollable
     private MarkdownTheme _theme = MarkdownTheme.Default;
     private IBrush _dimMarker = new SolidColorBrush(Color.FromArgb(0x46, 0x6E, 0x76, 0x81));
 
+    // Drop-indicator state for Alt+Shift line reorder: while a reorder "session" is active (consecutive
+    // moves), faint dotted lines bracket the moved block so it's clear what's being shuffled. Cleared by any
+    // other key, click, or edit.
+    private bool _reorderActive;
+    private int _reorderStartLine;
+    private int _reorderEndLine;
+
     // Virtualized logical-scroll state: only the lines inside the viewport are drawn, and the
     // horizontal extent grows as wide lines are encountered (no whole-document width scan).
     private Vector _offset;
@@ -1041,6 +1048,8 @@ public class MarkdownEditor : Avalonia.Controls.Control, ILogicalScrollable
                 maxWidth = Math.Max(maxWidth, RenderBlock(context, doc, block, caret, caretLine));
             }
 
+            DrawReorderIndicator(context, lineH);
+
             // Only relevant when wrapping is off: grow the horizontal extent as wide lines come into view.
             if (!_wordWrap && maxWidth > _extentWidth)
             {
@@ -1117,6 +1126,35 @@ public class MarkdownEditor : Avalonia.Controls.Control, ILogicalScrollable
         var label = GetFormattedText("Properties", _theme.Resolve(TokenType.FrontMatterFence), _dimMarker);
         var labelY = startTop + (lineH - label.Height) / 2;
         context.DrawText(label, new Point(panelRight - label.Width - 6, labelY));
+    }
+
+    /// <summary>
+    /// Faint dotted lines just above the first and just below the last line of the block being reordered
+    /// (Alt+Shift+Up/Down), so it's visually clear what's moving. Drawn in document space inside the
+    /// content transform; a no-op unless a reorder session is active.
+    /// </summary>
+    private void DrawReorderIndicator(DrawingContext context, double lineH)
+    {
+        if (!_reorderActive)
+        {
+            return;
+        }
+
+        var n = _buffer.Document.LineCount;
+        if (_reorderStartLine < 0 || _reorderEndLine >= n || _reorderStartLine > _reorderEndLine)
+        {
+            _reorderActive = false;
+            return;
+        }
+
+        var top = RowTop(BlockOf(_reorderStartLine));
+        var bottomBlock = BlockOf(_reorderEndLine);
+        var bottom = RowTop(bottomBlock) + _rowCounts[bottomBlock] * lineH;
+        var pen = new Pen(_dimMarker, 1) { DashStyle = new DashStyle(new double[] { 2, 2 }, 0) };
+        var left = -6.0;
+        var right = ContentRight();
+        context.DrawLine(pen, new Point(left, top), new Point(right, top));
+        context.DrawLine(pen, new Point(left, bottom), new Point(right, bottom));
     }
 
     private double RenderBlock(DrawingContext context, TextDocument doc, int block, Selection sel, int caretLine)
@@ -1294,6 +1332,12 @@ public class MarkdownEditor : Avalonia.Controls.Control, ILogicalScrollable
         var doc = _buffer.Document;
         var caret = _buffer.Selection.Caret;
         var handled = true;
+
+        // Any key other than a continued line move ends the reorder drop-indicator session.
+        if (!(alt && shift && e.Key is Key.Up or Key.Down))
+        {
+            ClearReorderIndicator();
+        }
 
         switch (e.Key)
         {
@@ -1603,6 +1647,10 @@ public class MarkdownEditor : Avalonia.Controls.Control, ILogicalScrollable
             delta = BlockChars(doc, s, swapEnd);
         }
 
+        // The moved subtree's character range, so we can locate it again after it shifts by `delta`.
+        var movedStartOffset = doc.GetLineStart(startLine);
+        var movedEndOffset = doc.GetLineEnd(endLine);
+
         var regionStart = doc.GetLineStart(regionStartLine);
         var regionEnd = doc.GetLineEnd(regionEndLine);
         _buffer.ReplaceRange(regionStart, regionEnd - regionStart, string.Join("\n", newOrder));
@@ -1610,6 +1658,28 @@ public class MarkdownEditor : Avalonia.Controls.Control, ILogicalScrollable
         // The moved subtree shifted by the swapped sibling's size; carry the selection with it.
         _buffer.Selection = new Selection(sel.Anchor + delta, sel.Caret + delta);
         _goalX = double.NaN;
+
+        // Bracket the moved block with the drop indicator (it shifted by the same `delta` as the selection).
+        var moved = _buffer.Document;
+        _reorderStartLine = moved.GetPosition(movedStartOffset + delta).Line;
+        _reorderEndLine = moved.GetPosition(movedEndOffset + delta).Line;
+        _reorderActive = true;
+        InvalidateVisual();
+    }
+
+    /// <summary>The reorder drop-indicator state (active + the bracketed line range); for tests.</summary>
+    internal (bool Active, int Start, int End) ReorderIndicatorForTest() => (_reorderActive, _reorderStartLine, _reorderEndLine);
+
+    /// <summary>Clear the reorder drop indicator (any action other than a continued line move ends the session).</summary>
+    private void ClearReorderIndicator()
+    {
+        if (!_reorderActive)
+        {
+            return;
+        }
+
+        _reorderActive = false;
+        InvalidateVisual();
     }
 
     /// <summary>
@@ -1807,6 +1877,8 @@ public class MarkdownEditor : Avalonia.Controls.Control, ILogicalScrollable
 
     protected override void OnPointerPressed(PointerPressedEventArgs e)
     {
+        ClearReorderIndicator(); // a click ends the reorder session
+
         // Let a right-click through so the context menu can open; only the left button moves the caret.
         if (!e.GetCurrentPoint(this).Properties.IsLeftButtonPressed)
         {
