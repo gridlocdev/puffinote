@@ -53,6 +53,19 @@ public class ImageStagingTests
     }
 
     [Fact]
+    public void EncodeUrl_AbsolutePath_BecomesAFileUrl_AndRoundTrips()
+    {
+        var abs = Staged("id__my (photo).png"); // absolute, with a space and parentheses
+        var encoded = ImageStaging.EncodeUrl(abs);
+
+        Assert.StartsWith("file://", encoded);
+        Assert.DoesNotContain(" ", encoded);  // space → %20
+        Assert.DoesNotContain("(", encoded);  // parens → %28/%29 so the destination doesn't truncate
+        Assert.DoesNotContain(")", encoded);
+        Assert.Equal(abs, ImageStaging.DecodeUrl(encoded)); // decodes back to the real path
+    }
+
+    [Fact]
     public void StagedReferences_FindsAnEncodedPathWithSpaces()
     {
         // Mirrors macOS, where the scratch root sits under ".../Application Support/...". The encoded URL

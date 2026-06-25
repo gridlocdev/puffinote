@@ -51,15 +51,30 @@ public static class ImageStaging
     }
 
     /// <summary>
-    /// Percent-encode the characters that would break a Markdown link destination — space (critical: the
-    /// scratch root lives under "…/Application Support/…" on macOS), parentheses, and <c>%</c> itself — so the
-    /// path survives as a single <c>![alt](url)</c> destination. Path separators are left intact.
+    /// Encode <paramref name="url"/> as a Markdown image/link destination. An <b>absolute</b> filesystem path
+    /// becomes a <c>file://</c> URL (so a local image resolves the same way a browser would and the path is
+    /// unambiguous), with spaces and parentheses percent-encoded so it survives as a single <c>![alt](url)</c>
+    /// destination — critical on macOS, where the scratch root lives under "…/Application Support/…". A
+    /// <b>relative</b> path is left relative (no scheme) but still has its link-breaking characters — space,
+    /// parentheses, and <c>%</c> — percent-encoded; path separators are kept intact.
     /// </summary>
-    public static string EncodeUrl(string url) =>
-        url.Replace("%", "%25").Replace(" ", "%20").Replace("(", "%28").Replace(")", "%29");
+    public static string EncodeUrl(string url)
+    {
+        if (Path.IsPathFullyQualified(url))
+        {
+            // Uri escapes spaces (→ %20) but leaves parentheses, which still break a Markdown destination.
+            return new System.Uri(url).AbsoluteUri.Replace("(", "%28").Replace(")", "%29");
+        }
 
-    /// <summary>Reverse <see cref="EncodeUrl"/> (and any other percent-escapes) back to a filesystem path/URL.</summary>
-    public static string DecodeUrl(string url) => System.Uri.UnescapeDataString(url);
+        return url.Replace("%", "%25").Replace(" ", "%20").Replace("(", "%28").Replace(")", "%29");
+    }
+
+    /// <summary>Reverse <see cref="EncodeUrl"/> back to a filesystem path: a <c>file://</c> URL becomes its
+    /// local path; anything else is percent-unescaped.</summary>
+    public static string DecodeUrl(string url) =>
+        url.StartsWith("file:", System.StringComparison.OrdinalIgnoreCase)
+            ? new System.Uri(url).LocalPath
+            : System.Uri.UnescapeDataString(url);
 
     /// <summary>True when <paramref name="url"/> is an absolute path inside the staging root.</summary>
     public static bool IsStaged(string url)
