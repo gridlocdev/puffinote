@@ -42,6 +42,12 @@ public class MarkdownEditor : Avalonia.Controls.Control, ILogicalScrollable
     private int _reorderStartLine;
     private int _reorderEndLine;
 
+    // Per-code-block "copy" buttons, rebuilt each render: each holds its hit rect (control space) and the
+    // line range of the code run it copies. _copiedFeedbackLine is the run currently showing "Copied!".
+    private readonly List<(Rect Rect, int First, int Last)> _codeCopyButtons = new();
+    private int _copiedFeedbackLine = -1;
+    private DispatcherTimer? _copyFeedbackTimer;
+
     // Virtualized logical-scroll state: only the lines inside the viewport are drawn, and the
     // horizontal extent grows as wide lines are encountered (no whole-document width scan).
     private Vector _offset;
@@ -1049,6 +1055,7 @@ public class MarkdownEditor : Avalonia.Controls.Control, ILogicalScrollable
             }
 
             DrawReorderIndicator(context, lineH);
+            DrawCodeCopyButtons(context, first, last, lineH);
 
             // Only relevant when wrapping is off: grow the horizontal extent as wide lines come into view.
             if (!_wordWrap && maxWidth > _extentWidth)
@@ -1156,6 +1163,148 @@ public class MarkdownEditor : Avalonia.Controls.Control, ILogicalScrollable
         context.DrawLine(pen, new Point(left, top), new Point(right, top));
         context.DrawLine(pen, new Point(left, bottom), new Point(right, bottom));
     }
+
+    /// <summary>
+    /// A "copy" button at the top-right of each code block (fenced or indented) visible in the viewport, plus
+    /// a transient "Copied!" label after a click. Drawn in document space; the hit rect is stored in control
+    /// space (the inverse of the render transform) so <see cref="OnPointerPressed"/> can test pointer clicks.
+    /// </summary>
+    private void DrawCodeCopyButtons(DrawingContext context, int firstBlock, int lastBlock, double lineH)
+    {
+        _codeCopyButtons.Clear();
+        var doc = _buffer.Document;
+        for (var b = firstBlock; b < lastBlock; b++)
+        {
+            var line = _blockStartLine[b];
+            if (!IsCodeLine(line) || (line > 0 && IsCodeLine(line - 1)))
+            {
+                continue; // only the first line of each contiguous code run carries the button
+            }
+
+            var endLine = line;
+            while (endLine + 1 < doc.LineCount && IsCodeLine(endLine + 1))
+            {
+                endLine++;
+            }
+
+            const double w = 24;
+            var h = lineH - 8;
+            var x = ContentRight() - w - 6;
+            var y = RowTop(b) + 4;
+            var rect = new Rect(x, y, w, h);
+            context.FillRectangle(_theme.CodeBlockBackground, rect, 4);
+            DrawCopyGlyph(context, rect);
+
+            if (_copiedFeedbackLine == line)
+            {
+                var label = GetFormattedText("Copied!", _theme.Resolve(TokenType.CodeText), _theme.LinkForeground);
+                context.DrawText(label, new Point(x - label.Width - 6, y + (h - label.Height) / 2));
+            }
+
+            // Store the hit rect in control space (undo the PaddingLeft/Top − scroll-offset render transform).
+            _codeCopyButtons.Add((new Rect(x + _theme.PaddingLeft - _offset.X, y + _theme.PaddingTop - _offset.Y, w, h), line, endLine));
+        }
+    }
+
+    /// <summary>Draw a two-overlapping-rectangles "copy" glyph centred in <paramref name="button"/>.</summary>
+    private void DrawCopyGlyph(DrawingContext context, Rect button)
+    {
+        var pen = new Pen(_theme.MarkerForeground, 1.2);
+        var cx = button.X + button.Width / 2;
+        var cy = button.Y + button.Height / 2;
+        const double gw = 8, gh = 9, off = 2;
+        var back = new Rect(cx - gw / 2 + off, cy - gh / 2 - off, gw, gh);
+        var front = new Rect(cx - gw / 2 - off, cy - gh / 2 + off, gw, gh);
+        context.DrawRectangle(_theme.CodeBlockBackground, pen, back, 1.5, 1.5);
+        context.DrawRectangle(_theme.CodeBlockBackground, pen, front, 1.5, 1.5);
+    }
+
+    /// <summary>The source text of the code run <c>[firstLine, lastLine]</c> to copy: a fenced block's inner
+    /// lines (without the <c>```</c> fences), or an indented block's lines dedented by one level.</summary>
+    private string CodeBlockText(int firstLine, int lastLine)
+    {
+        var doc = _buffer.Document;
+        var openToks = _model.LineTokens(firstLine);
+        var fenced = openToks.Count > 0 && openToks[0].Type == TokenType.CodeFence;
+        var from = firstLine;
+        var to = lastLine;
+        if (fenced)
+        {
+            from = firstLine + 1;
+            var closeToks = _model.LineTokens(lastLine);
+            if (lastLine > firstLine && closeToks.Count > 0 && closeToks[0].Type == TokenType.CodeFence)
+            {
+                to = lastLine - 1; // drop the closing fence (an unterminated fence keeps its last line)
+            }
+        }
+
+        var lines = new List<string>(Math.Max(0, to - from + 1));
+        for (var l = from; l <= to; l++)
+        {
+            var text = doc.GetLineText(l).TrimEnd('\r');
+            lines.Add(fenced ? text : Dedent(text));
+        }
+
+        return string.Join("\n", lines);
+    }
+
+    /// <summary>Strip one indent level (a leading tab, or up to four leading spaces) from <paramref name="text"/>.</summary>
+    private static string Dedent(string text)
+    {
+        if (text.Length > 0 && text[0] == '\t')
+        {
+            return text[1..];
+        }
+
+        var spaces = 0;
+        while (spaces < 4 && spaces < text.Length && text[spaces] == ' ')
+        {
+            spaces++;
+        }
+
+        return text[spaces..];
+    }
+
+    /// <summary>Copy the code run <c>[first, last]</c> to the clipboard and flash a "Copied!" confirmation.</summary>
+    private void CopyCodeBlock(int first, int last)
+    {
+        if (TopLevel.GetTopLevel(this)?.Clipboard is { } clipboard)
+        {
+            var text = CodeBlockText(first, last); // read on the UI thread, before the await
+            _ = SetClipboardSafe(clipboard, text);
+        }
+
+        _copiedFeedbackLine = first;
+        _copyFeedbackTimer?.Stop();
+        _copyFeedbackTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(1300) };
+        _copyFeedbackTimer.Tick += (_, _) =>
+        {
+            _copyFeedbackTimer!.Stop();
+            _copiedFeedbackLine = -1;
+            InvalidateVisual();
+        };
+        _copyFeedbackTimer.Start();
+        InvalidateVisual();
+    }
+
+    private static async Task SetClipboardSafe(IClipboard clipboard, string text)
+    {
+        try
+        {
+            await clipboard.SetTextAsync(text);
+        }
+        catch (Exception)
+        {
+            // A clipboard write failure shouldn't crash the editor.
+        }
+    }
+
+    /// <summary>The text a code-block copy button would place on the clipboard; for tests.</summary>
+    internal string CodeBlockTextForTest(int firstLine, int lastLine) => CodeBlockText(firstLine, lastLine);
+
+    /// <summary>The copy-button hit regions recorded by the last render (line ranges); for tests.</summary>
+    internal IReadOnlyList<(int First, int Last)> CodeCopyButtonsForTest() =>
+        _codeCopyButtons.ConvertAll(b => (b.First, b.Last));
 
     private double RenderBlock(DrawingContext context, TextDocument doc, int block, Selection sel, int caretLine)
     {
@@ -1878,6 +2027,22 @@ public class MarkdownEditor : Avalonia.Controls.Control, ILogicalScrollable
     protected override void OnPointerPressed(PointerPressedEventArgs e)
     {
         ClearReorderIndicator(); // a click ends the reorder session
+
+        // A click on a code block's copy button copies that block and shows the confirmation — handled
+        // before caret placement so it doesn't also move the caret.
+        if (e.GetCurrentPoint(this).Properties.IsLeftButtonPressed)
+        {
+            var p = e.GetPosition(this);
+            foreach (var btn in _codeCopyButtons)
+            {
+                if (btn.Rect.Contains(p))
+                {
+                    CopyCodeBlock(btn.First, btn.Last);
+                    e.Handled = true;
+                    return;
+                }
+            }
+        }
 
         // Let a right-click through so the context menu can open; only the left button moves the caret.
         if (!e.GetCurrentPoint(this).Properties.IsLeftButtonPressed)
