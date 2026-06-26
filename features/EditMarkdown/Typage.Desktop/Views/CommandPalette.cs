@@ -6,6 +6,7 @@ using Avalonia.Layout;
 using Avalonia.Media;
 using Avalonia.VisualTree;
 using BirdBrain.Components.Commands;
+using BirdBrain.Components.Theming;
 using Typage.Desktop.Commands;
 
 namespace Typage.Desktop.Views;
@@ -30,7 +31,7 @@ public sealed class CommandPalette : Panel
     public CommandPalette()
     {
         IsVisible = false;
-        Background = new SolidColorBrush(Color.FromArgb(0x66, 0, 0, 0)); // dim backdrop
+        Background = Tokens.Dark.Scrim; // dim backdrop (Typage's shell is dark)
 
         var card = new Border
         {
@@ -40,8 +41,8 @@ public sealed class CommandPalette : Panel
             Margin = new Thickness(0, 90, 0, 0),
             Padding = new Thickness(12),
             CornerRadius = new CornerRadius(10),
-            Background = new SolidColorBrush(Color.FromRgb(0x2A, 0x2A, 0x2C)),
-            BorderBrush = new SolidColorBrush(Color.FromRgb(0x3A, 0x3A, 0x3E)),
+            Background = Tokens.Dark.Surface,
+            BorderBrush = Tokens.Dark.SurfaceBorder,
             BorderThickness = new Thickness(1),
             Child = new StackPanel { Children = { _search, _list } },
         };
@@ -164,14 +165,14 @@ public sealed class CommandPalette : Panel
         {
             Text = row.Description,
             FontSize = 11,
-            Foreground = new SolidColorBrush(Color.FromRgb(0x8A, 0x8E, 0x96)),
+            Foreground = Tokens.Dark.MutedText,
             TextTrimming = TextTrimming.CharacterEllipsis,
         };
         var shortcut = new TextBlock
         {
             Text = row.Shortcut,
             FontSize = 12,
-            Foreground = new SolidColorBrush(Color.FromRgb(0x9A, 0x9E, 0xA6)),
+            Foreground = Tokens.Dark.MutedText,
             VerticalAlignment = VerticalAlignment.Center,
         };
 

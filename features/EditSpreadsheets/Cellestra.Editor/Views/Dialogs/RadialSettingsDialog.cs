@@ -8,6 +8,7 @@ using Avalonia.Layout;
 using Avalonia.Media;
 using Avalonia.VisualTree;
 using BirdBrain.Components.Commands;
+using BirdBrain.Components.Theming;
 using Cellestra.Desktop.Commands;
 using Cellestra.Desktop.Controls.Icons;
 using Cellestra.Desktop.Controls.RadialMenu;
@@ -33,9 +34,11 @@ public sealed class RadialSettingsDialog : ModalDialog<RadialMenuConfig>
     private static readonly Cursor HandCursor = new(StandardCursorType.Hand);
     private static readonly Cursor RowDragCursor = new(StandardCursorType.SizeNorthSouth);
     private static readonly Cursor RadialDragCursor = new(StandardCursorType.DragMove);
-    private static readonly IBrush SelectedRowBrush = new SolidColorBrush(Color.FromArgb(0x33, 0x2A, 0x7D, 0xE1));
-    private static readonly IBrush PickerMuted = new SolidColorBrush(Color.FromRgb(0x88, 0x88, 0x88));
-    private static readonly IBrush PickerCardBrush = new SolidColorBrush(Color.FromArgb(0xFF, 0x2A, 0x2C, 0x31));
+    // This dialog and its sub-overlays are dark chrome, so they read the dark token palette.
+    private static readonly IBrush SelectedRowBrush = Tokens.Dark.AccentSubtle;
+    private static readonly IBrush PickerMuted = Tokens.Dark.MutedText;
+    private static readonly IBrush PickerCardBrush = Tokens.Dark.Surface;
+    private static readonly IBrush ScrimBrush = Tokens.Dark.Scrim;
 
     private readonly NumericUpDown _countField;
     private readonly StackPanel _bindingRows = new() { Spacing = 6 };
@@ -516,7 +519,7 @@ public sealed class RadialSettingsDialog : ModalDialog<RadialMenuConfig>
         var card = new Border
         {
             MaxWidth = 320,
-            Background = new SolidColorBrush(Color.FromArgb(0xFF, 0x2A, 0x2C, 0x31)),
+            Background = PickerCardBrush,
             CornerRadius = new Avalonia.CornerRadius(8),
             Padding = new Avalonia.Thickness(16),
             HorizontalAlignment = HorizontalAlignment.Center,
@@ -537,7 +540,7 @@ public sealed class RadialSettingsDialog : ModalDialog<RadialMenuConfig>
         var scrim = new Border
         {
             IsVisible = false,
-            Background = new SolidColorBrush(Color.FromArgb(0x80, 0, 0, 0)), // a scrim that swallows clicks to the body
+            Background = ScrimBrush, // a scrim that swallows clicks to the body
             Child = card,
         };
         // Trap Tab inside this prompt so it cycles its own buttons, not the dialog body behind it.
@@ -663,7 +666,7 @@ public sealed class RadialSettingsDialog : ModalDialog<RadialMenuConfig>
         var scrim = new Border
         {
             IsVisible = false,
-            Background = new SolidColorBrush(Color.FromArgb(0x80, 0, 0, 0)),
+            Background = ScrimBrush,
             Child = card,
         };
         scrim.PointerPressed += (_, e) =>

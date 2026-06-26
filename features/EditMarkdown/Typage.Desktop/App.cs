@@ -1,7 +1,9 @@
 using Avalonia;
 using Avalonia.Controls.ApplicationLifetimes;
+using Avalonia.Media;
 using Avalonia.Styling;
 using Avalonia.Themes.Fluent;
+using BirdBrain.Components.Theming;
 using Typage.Desktop.Services;
 using Typage.Desktop.Views;
 
@@ -17,6 +19,7 @@ public class App : Application
     {
         Styles.Add(new FluentTheme());
         RequestedThemeVariant = ThemeVariant.Dark; // a dark shell to sit alongside the dark editor
+        Tokens.Current = new BirdBrainTheme(Color.FromRgb(0x57, 0x9D, 0xF6)); // Typage's blue accent
     }
 
     public override void OnFrameworkInitializationCompleted()

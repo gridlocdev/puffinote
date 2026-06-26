@@ -2,7 +2,9 @@ using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Markup.Xaml;
+using Avalonia.Media;
 using BirdBrain.Components.Commands;
+using BirdBrain.Components.Theming;
 using Cellestra.Desktop.Commands;
 using Cellestra.Desktop.Views;
 
@@ -13,6 +15,7 @@ public partial class App : Application
     public override void Initialize()
     {
         AvaloniaXamlLoader.Load(this);
+        Tokens.Current = new BirdBrainTheme(Color.FromRgb(0x2A, 0x7D, 0xE1)); // Cellestra's blue accent
         BuildApplicationMenu();
     }
 
