@@ -89,7 +89,7 @@ public sealed class RadialMenuOverlay : Control
         _center = center;
         _segments = segments;
         _activeSegment = -1;
-        UpdateTooltip();
+        UpdateTooltip(show: false);
         InvalidateVisual();
     }
 
@@ -102,26 +102,54 @@ public sealed class RadialMenuOverlay : Control
     /// <summary>Test seam: whether the floating command tooltip is currently open.</summary>
     internal bool TooltipOpenForTest => ToolTip.GetIsOpen(this);
 
-    /// <summary>Highlight the segment the cursor now points at (-1 for none); repaints if it changed.</summary>
-    public void SetActiveSegment(int segment)
+    /// <summary>
+    /// Highlight the segment the cursor now points at (-1 for none); repaints if it changed. The floating
+    /// tooltip is shown only when <paramref name="showTooltip"/> — i.e. the highlight came from a genuine
+    /// pointer hover over the radial, not from a programmatic highlight (a keyboard selection on the
+    /// settings list), so the tip never appears while the mouse is elsewhere.
+    /// </summary>
+    public void SetActiveSegment(int segment, bool showTooltip = true)
     {
-        if (segment == _activeSegment)
+        if (segment != _activeSegment)
         {
-            return;
+            _activeSegment = segment;
+            InvalidateVisual();
         }
 
-        _activeSegment = segment;
-        UpdateTooltip();
-        InvalidateVisual();
+        UpdateTooltip(showTooltip);
     }
 
     public void Hide()
     {
         _segments = Array.Empty<RadialSegment>();
         _activeSegment = -1;
-        UpdateTooltip();
+        UpdateTooltip(show: false);
         InvalidateVisual();
     }
+
+    protected override void OnAttachedToVisualTree(VisualTreeAttachmentEventArgs e)
+    {
+        base.OnAttachedToVisualTree(e);
+        // A manually-driven tooltip won't dismiss itself, so close it when the window loses focus
+        // (e.g. ⌘-Tab / Alt-Tab) — otherwise it floats over other apps.
+        if (TopLevel.GetTopLevel(this) is WindowBase window)
+        {
+            window.Deactivated += OnWindowDeactivated;
+        }
+    }
+
+    protected override void OnDetachedFromVisualTree(VisualTreeAttachmentEventArgs e)
+    {
+        if (TopLevel.GetTopLevel(this) is WindowBase window)
+        {
+            window.Deactivated -= OnWindowDeactivated;
+        }
+
+        ToolTip.SetIsOpen(this, false); // never leave a tip behind when the radial leaves the tree
+        base.OnDetachedFromVisualTree(e);
+    }
+
+    private void OnWindowDeactivated(object? sender, EventArgs e) => ToolTip.SetIsOpen(this, false);
 
     /// <summary>The command the highlighted wedge runs, or null when nothing/an unbound wedge is active.</summary>
     private AppCommand? ActiveCommand()
@@ -140,7 +168,7 @@ public sealed class RadialMenuOverlay : Control
     /// command bar shows (<see cref="CommandBarControl.BuildTip"/>) — rather than drawing a label inside
     /// the ring. Reopened on each change so it repositions on the new wedge; closed when nothing is active.
     /// </summary>
-    private void UpdateTooltip()
+    private void UpdateTooltip(bool show)
     {
         // Only drive the popup once shown; merely constructing the overlay (e.g. in a test) opens nothing.
         if (TopLevel.GetTopLevel(this) is null)
@@ -149,7 +177,7 @@ public sealed class RadialMenuOverlay : Control
         }
 
         ToolTip.SetIsOpen(this, false);
-        var command = ActiveCommand();
+        var command = show ? ActiveCommand() : null;
         if (command is null)
         {
             return;

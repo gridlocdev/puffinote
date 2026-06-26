@@ -293,9 +293,13 @@ public sealed class RadialSettingsDialog : ModalDialog<RadialMenuConfig>
         UpdatePreviewHighlight();
     }
 
-    /// <summary>The preview highlights the hovered wedge, or — when nothing is hovered — the selected one.</summary>
+    /// <summary>
+    /// The preview highlights the hovered wedge, or — when nothing is hovered — the selected one. The
+    /// floating tooltip only follows a real hover, so navigating the list from the keyboard highlights a
+    /// wedge without popping a tip that would linger over other windows.
+    /// </summary>
     private void UpdatePreviewHighlight() =>
-        _preview.SetActiveSegment(_hoverSegment >= 0 ? _hoverSegment : _selectedSegment);
+        _preview.SetActiveSegment(_hoverSegment >= 0 ? _hoverSegment : _selectedSegment, showTooltip: _hoverSegment >= 0);
 
     /// <summary>Paint the selected row's background so the ⌥⇧-arrow / drag target is visible.</summary>
     private void ApplySelectionHighlight()

@@ -313,4 +313,41 @@ public class RadialMenuTests
 
         window.AssertRenders(); // the popup + overlay render without throwing
     }
+
+    [AvaloniaFact]
+    public void Radial_tooltip_shows_only_for_a_real_hover_not_a_programmatic_highlight()
+    {
+        var overlay = new RadialMenuOverlay { FitToBounds = true };
+        var window = new Window { Width = 280, Height = 280, Content = overlay };
+        window.Show();
+        overlay.Open(new Avalonia.Point(140, 140), new[]
+        {
+            new RadialSegment("edit.copy", "copy", "Copy", true),
+            new RadialSegment("edit.paste", "clipboard", "Paste", true),
+        });
+
+        overlay.SetActiveSegment(0, showTooltip: false); // e.g. a keyboard selection on the settings list
+        Assert.Equal(0, overlay.ActiveSegment);          // the wedge still highlights...
+        Assert.False(overlay.TooltipOpenForTest);        // ...but no tip pops where the mouse isn't
+
+        overlay.SetActiveSegment(0, showTooltip: true);  // now an actual hover over that wedge
+        Assert.True(overlay.TooltipOpenForTest);
+
+        overlay.SetActiveSegment(0, showTooltip: false); // hover leaves while it stays selected — tip closes
+        Assert.False(overlay.TooltipOpenForTest);
+    }
+
+    [AvaloniaFact]
+    public void Radial_tooltip_dismisses_when_the_overlay_leaves_the_tree()
+    {
+        var overlay = new RadialMenuOverlay { FitToBounds = true };
+        var window = new Window { Width = 280, Height = 280, Content = overlay };
+        window.Show();
+        overlay.Open(new Avalonia.Point(140, 140), new[] { new RadialSegment("edit.copy", "copy", "Copy", true) });
+        overlay.SetActiveSegment(0);
+        Assert.True(overlay.TooltipOpenForTest);
+
+        window.Content = null; // detaching the overlay must take its tooltip down with it
+        Assert.False(overlay.TooltipOpenForTest);
+    }
 }
