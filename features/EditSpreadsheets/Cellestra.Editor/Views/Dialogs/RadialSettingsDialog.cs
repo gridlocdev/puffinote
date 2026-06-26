@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using Avalonia.Controls;
@@ -56,9 +57,14 @@ public sealed class RadialSettingsDialog : ModalDialog<RadialMenuConfig>
     private readonly List<TextBlock> _segmentLabels = new();
     private readonly List<Border> _rowBorders = new();
 
-    // The inline "reset to defaults?" confirmation, layered over the dialog body (one modal at a time is
-    // hosted by the editor, so the confirmation can't be a second ShowModalAsync — it lives in here).
+    // Inline confirmations layered over the dialog body (one modal at a time is hosted by the editor, so
+    // these can't be a second ShowModalAsync — they live in here): "reset to defaults?" and, when Escape
+    // is pressed with unsaved edits, "save or cancel?".
     private readonly Border _resetConfirm;
+    private readonly Border _saveConfirm;
+
+    // The config as it stood when the dialog opened, to tell whether Escape is discarding real changes.
+    private readonly RadialMenuConfig _originalConfig;
 
     // A full-length working buffer of per-segment bindings (kept the maximum length so shrinking then
     // growing the count remembers earlier picks); only the first N are shown and saved.
@@ -75,6 +81,7 @@ public sealed class RadialSettingsDialog : ModalDialog<RadialMenuConfig>
         Title = "Radial Menu Settings";
 
         var normalized = config.Normalized();
+        _originalConfig = normalized;
         _bindings = (config with { SegmentCount = RadialMenuConfig.MaxSegments }).Normalized().CommandIds.ToList();
 
         _choices = new[] { new CommandChoice(null, "— None —") }
@@ -186,7 +193,8 @@ public sealed class RadialSettingsDialog : ModalDialog<RadialMenuConfig>
         };
 
         _resetConfirm = BuildResetConfirm();
-        DialogContent = new Panel { Children = { body, _resetConfirm } };
+        _saveConfirm = BuildSaveConfirm();
+        DialogContent = new Panel { Children = { body, _resetConfirm, _saveConfirm } };
 
         RebuildBindingRows();
     }
@@ -470,17 +478,39 @@ public sealed class RadialSettingsDialog : ModalDialog<RadialMenuConfig>
         _preview.Open(new Avalonia.Point(PreviewSize / 2, PreviewSize / 2), segments);
     }
 
-    /// <summary>The semi-transparent "reset to defaults?" confirmation layered over the body.</summary>
-    private Border BuildResetConfirm()
+    /// <summary>The "reset to defaults?" confirmation layered over the body.</summary>
+    private Border BuildResetConfirm() => BuildConfirmOverlay(
+        "Reset radial menu?",
+        "This restores the default segment count and command bindings. Your current changes will be discarded.",
+        ("Cancel", false, HideResetConfirm),
+        ("Reset", true, () => { ApplyDefaults(); HideResetConfirm(); }));
+
+    /// <summary>
+    /// The "save or cancel?" confirmation shown when Escape is pressed with unsaved edits. Saving closes
+    /// with the edited config; cancelling discards (closes with null, like Escape would have); Esc on the
+    /// prompt backs out to keep editing.
+    /// </summary>
+    private Border BuildSaveConfirm() => BuildConfirmOverlay(
+        "Save changes?",
+        "You've changed the radial menu settings. Save them, or cancel to discard your changes.",
+        ("Cancel", false, () => Close(null)),
+        ("Save Settings", true, () => Close(BuildConfig())));
+
+    /// <summary>A semi-transparent confirmation card (heading, message, buttons) layered over the body.</summary>
+    private static Border BuildConfirmOverlay(string heading, string message, params (string Label, bool IsDefault, Action OnClick)[] buttons)
     {
-        var resetNow = new Button { Content = "Reset", IsDefault = true };
-        resetNow.Click += (_, _) =>
+        var buttonRow = new StackPanel
         {
-            ApplyDefaults();
-            HideResetConfirm();
+            Orientation = Orientation.Horizontal,
+            Spacing = 8,
+            HorizontalAlignment = HorizontalAlignment.Right,
         };
-        var keep = new Button { Content = "Cancel" };
-        keep.Click += (_, _) => HideResetConfirm();
+        foreach (var (label, isDefault, onClick) in buttons)
+        {
+            var button = new Button { Content = label, IsDefault = isDefault };
+            button.Click += (_, _) => onClick();
+            buttonRow.Children.Add(button);
+        }
 
         var card = new Border
         {
@@ -496,20 +526,9 @@ public sealed class RadialSettingsDialog : ModalDialog<RadialMenuConfig>
                 Spacing = 12,
                 Children =
                 {
-                    new TextBlock { Text = "Reset radial menu?", FontWeight = FontWeight.SemiBold, FontSize = 14 },
-                    new TextBlock
-                    {
-                        Text = "This restores the default segment count and command bindings. "
-                            + "Your current changes will be discarded.",
-                        TextWrapping = TextWrapping.Wrap,
-                    },
-                    new StackPanel
-                    {
-                        Orientation = Orientation.Horizontal,
-                        Spacing = 8,
-                        HorizontalAlignment = HorizontalAlignment.Right,
-                        Children = { keep, resetNow },
-                    },
+                    new TextBlock { Text = heading, FontWeight = FontWeight.SemiBold, FontSize = 14 },
+                    new TextBlock { Text = message, TextWrapping = TextWrapping.Wrap },
+                    buttonRow,
                 },
             },
         };
@@ -517,8 +536,7 @@ public sealed class RadialSettingsDialog : ModalDialog<RadialMenuConfig>
         return new Border
         {
             IsVisible = false,
-            // A scrim that swallows clicks to the body behind it; clicking it dismisses the prompt.
-            Background = new SolidColorBrush(Color.FromArgb(0x80, 0, 0, 0)),
+            Background = new SolidColorBrush(Color.FromArgb(0x80, 0, 0, 0)), // a scrim that swallows clicks to the body
             Child = card,
         };
     }
@@ -526,6 +544,32 @@ public sealed class RadialSettingsDialog : ModalDialog<RadialMenuConfig>
     private void ShowResetConfirm() => _resetConfirm.IsVisible = true;
 
     private void HideResetConfirm() => _resetConfirm.IsVisible = false;
+
+    private void ShowSaveConfirm() => _saveConfirm.IsVisible = true;
+
+    private void HideSaveConfirm() => _saveConfirm.IsVisible = false;
+
+    /// <summary>Whether the edited config differs from how it was when the dialog opened.</summary>
+    private bool IsDirty => !ConfigsEqual(BuildConfig(), _originalConfig);
+
+    /// <summary>Content equality for two normalized configs (record equality won't compare the id list).</summary>
+    private static bool ConfigsEqual(RadialMenuConfig a, RadialMenuConfig b)
+    {
+        if (a.SegmentCount != b.SegmentCount)
+        {
+            return false;
+        }
+
+        for (int i = 0; i < a.SegmentCount; i++)
+        {
+            if (a.CommandIdAt(i) != b.CommandIdAt(i))
+            {
+                return false;
+            }
+        }
+
+        return true;
+    }
 
     /// <summary>Restore every field — count and all bindings — to <see cref="RadialMenuConfig.Default"/>.</summary>
     private void ApplyDefaults()
@@ -542,13 +586,49 @@ public sealed class RadialSettingsDialog : ModalDialog<RadialMenuConfig>
         RebuildBindingRows(); // covers the case where the count was already at the default (no ValueChanged)
     }
 
-    protected override void OnKeyDown(KeyEventArgs e)
+    /// <summary>Handle Escape: dismiss an open prompt, or guard a dirty close. Returns true if it acted.</summary>
+    private bool HandleEscape()
     {
-        // While the reset prompt is up, Esc dismisses just the prompt, not the whole settings dialog.
-        if (_resetConfirm.IsVisible && e.Key == Key.Escape)
+        if (_resetConfirm.IsVisible)
         {
             HideResetConfirm();
-            e.Handled = true;
+            return true;
+        }
+
+        if (_saveConfirm.IsVisible)
+        {
+            HideSaveConfirm();
+            return true;
+        }
+
+        if (IsDirty)
+        {
+            ShowSaveConfirm();
+            return true;
+        }
+
+        return false;
+    }
+
+    protected override void OnKeyDown(KeyEventArgs e)
+    {
+        if (e.Key == Key.Escape)
+        {
+            // A prompt dismisses first; otherwise unsaved edits raise the save prompt instead of closing.
+            if (HandleEscape())
+            {
+                e.Handled = true;
+                return;
+            }
+
+            base.OnKeyDown(e); // nothing to guard — let the dialog cancel/close as usual
+            return;
+        }
+
+        // Reordering shortcuts are inert while a confirmation scrim is up over the body.
+        if (_resetConfirm.IsVisible || _saveConfirm.IsVisible)
+        {
+            base.OnKeyDown(e);
             return;
         }
 
@@ -615,4 +695,13 @@ public sealed class RadialSettingsDialog : ModalDialog<RadialMenuConfig>
 
     internal bool IsRowSelectedForTest(int segment) =>
         segment >= 0 && segment < _rowBorders.Count && ReferenceEquals(_rowBorders[segment].Background, SelectedRowBrush);
+
+    internal bool IsDirtyForTest => IsDirty;
+
+    /// <summary>Test seam: run the Escape handler; returns true if it intercepted (prompt shown/dismissed).</summary>
+    internal bool PressEscapeForTest() => HandleEscape();
+
+    internal bool SaveConfirmVisibleForTest => _saveConfirm.IsVisible;
+
+    internal void SetSegmentCountForTest(int count) => _countField.Value = count;
 }

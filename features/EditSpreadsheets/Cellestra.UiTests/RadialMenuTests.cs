@@ -222,6 +222,45 @@ public class RadialMenuTests
     }
 
     [AvaloniaFact]
+    public void Escape_with_unsaved_changes_prompts_to_save_or_cancel()
+    {
+        var dialog = new RadialSettingsDialog(new RadialMenuConfig
+        {
+            SegmentCount = 4,
+            CommandIds = new List<string?> { "edit.cut", "edit.copy", "edit.paste", "edit.undo" },
+        });
+
+        Assert.False(dialog.IsDirtyForTest); // nothing touched yet
+
+        dialog.DragReorderForTest(0, 1); // a real edit
+        Assert.True(dialog.IsDirtyForTest);
+
+        Assert.True(dialog.PressEscapeForTest());        // Escape is intercepted...
+        Assert.True(dialog.SaveConfirmVisibleForTest);   // ...and raises the save/cancel prompt
+
+        Assert.True(dialog.PressEscapeForTest());        // Escape again backs out of the prompt
+        Assert.False(dialog.SaveConfirmVisibleForTest);
+    }
+
+    [AvaloniaFact]
+    public void Escape_without_changes_does_not_prompt()
+    {
+        var dialog = new RadialSettingsDialog(new RadialMenuConfig
+        {
+            SegmentCount = 4,
+            CommandIds = new List<string?> { "edit.cut", "edit.copy", "edit.paste", "edit.undo" },
+        });
+
+        Assert.False(dialog.PressEscapeForTest());     // not intercepted — the dialog just cancels
+        Assert.False(dialog.SaveConfirmVisibleForTest);
+
+        dialog.SetSegmentCountForTest(5); // changing the count counts as a change too
+        Assert.True(dialog.IsDirtyForTest);
+        Assert.True(dialog.PressEscapeForTest());
+        Assert.True(dialog.SaveConfirmVisibleForTest);
+    }
+
+    [AvaloniaFact]
     public void Radial_overlay_renders_the_active_segments_tooltip()
     {
         var overlay = new RadialMenuOverlay { FitToBounds = true };
