@@ -137,8 +137,8 @@ public sealed class RadialMenuOverlay : Control
 
     /// <summary>
     /// Float a real tooltip over the highlighted wedge — the same name + shortcut + description card the
-    /// command bar shows (<see cref="CommandBar.BuildTip"/>) — rather than drawing a label inside the
-    /// ring. Reopened on each change so it repositions on the new wedge; closed when nothing is active.
+    /// command bar shows (<see cref="CommandBarControl.BuildTip"/>) — rather than drawing a label inside
+    /// the ring. Reopened on each change so it repositions on the new wedge; closed when nothing is active.
     /// </summary>
     private void UpdateTooltip()
     {
@@ -155,10 +155,47 @@ public sealed class RadialMenuOverlay : Control
             return;
         }
 
+        AnchorTooltipToWedge();
         ToolTip.SetTip(this, CommandBarControl.BuildTip(command));
-        ToolTip.SetPlacement(this, PlacementMode.Pointer);
         ToolTip.SetShowDelay(this, 0);
         ToolTip.SetIsOpen(this, true);
+    }
+
+    /// <summary>
+    /// Pin the tooltip to the active wedge's outer edge (not the cursor), sitting just beyond it on the
+    /// side the wedge points toward so it never covers the ring. The offsets cancel each placement mode's
+    /// own anchor so the effective anchor is the edge point regardless of which side we chose.
+    /// </summary>
+    private void AnchorTooltipToWedge()
+    {
+        var (center, scale) = ComputeLayout();
+        double angle = RadialMenuLayout.SegmentCenterAngle(_activeSegment, _segments.Count);
+        var (px, py) = RadialMenuLayout.Polar(center.X, center.Y, OuterRadius * scale, angle);
+
+        double w = Bounds.Width;
+        double h = Bounds.Height;
+        double dx = Math.Sin(angle);   // outward direction of the wedge (x right)
+        double dy = -Math.Cos(angle);  // outward direction (y down)
+
+        PlacementMode mode;
+        double hOffset;
+        double vOffset;
+        if (Math.Abs(dy) >= Math.Abs(dx))
+        {
+            mode = dy < 0 ? PlacementMode.Top : PlacementMode.Bottom;
+            hOffset = px - (w / 2);
+            vOffset = dy < 0 ? py : py - h;
+        }
+        else
+        {
+            mode = dx > 0 ? PlacementMode.Right : PlacementMode.Left;
+            hOffset = dx > 0 ? px - w : px;
+            vOffset = py - (h / 2);
+        }
+
+        ToolTip.SetPlacement(this, mode);
+        ToolTip.SetHorizontalOffset(this, hOffset);
+        ToolTip.SetVerticalOffset(this, vOffset);
     }
 
     public override void Render(DrawingContext context)

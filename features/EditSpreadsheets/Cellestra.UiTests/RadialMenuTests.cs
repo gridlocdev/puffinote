@@ -296,9 +296,13 @@ public class RadialMenuTests
             new RadialSegment(null, null, string.Empty, false),
         });
 
-        overlay.SetActiveSegment(0); // floats the command-bar tip card over the wedge
+        overlay.SetActiveSegment(0); // top wedge — tip anchored above its outer edge
         Assert.True(overlay.TooltipOpenForTest);
         Assert.Equal("edit.copy", overlay.ActiveTooltipCommandIdForTest);
+        Assert.Equal(Avalonia.Controls.PlacementMode.Top, Avalonia.Controls.ToolTip.GetPlacement(overlay));
+
+        overlay.SetActiveSegment(1); // wedge pointing lower-right — tip anchored to its right
+        Assert.Equal(Avalonia.Controls.PlacementMode.Right, Avalonia.Controls.ToolTip.GetPlacement(overlay));
 
         overlay.SetActiveSegment(2); // an unbound wedge has no command — the tip closes
         Assert.False(overlay.TooltipOpenForTest);
