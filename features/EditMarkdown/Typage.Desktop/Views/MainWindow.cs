@@ -9,6 +9,7 @@ using Avalonia.Platform.Storage;
 using Avalonia.Styling;
 using Avalonia.Threading;
 using BirdBrain.Components.Commands;
+using BirdBrain.Components.Overlays;
 using Typage.Control.Rendering;
 using Typage.Control.Views;
 using Typage.Desktop.Commands;
@@ -36,6 +37,9 @@ public class MainWindow : Window
     private readonly MenuItem _recentMenu = new() { Header = "Open _Recent" };
     private NativeMenuItem? _nativeRecentItem; // the macOS "Open Recent" submenu (when the native bar is used)
     private readonly CommandPalette _palette = new();
+    // Hosts internal modal dialogs (confirm prompts, etc.) over a dimmed backdrop, instead of native
+    // OS dialog windows — the shared host the editors share.
+    private readonly OverlayHost _overlayHost = new() { Background = new SolidColorBrush(Color.FromArgb(0x40, 0, 0, 0)) };
     private Dictionary<string, AppCommand> _commandsById = new();
     private FindBar? _findBar;
     private Border? _toolbar;
@@ -124,8 +128,10 @@ public class MainWindow : Window
         root.Children.Add(_statusBar);
         root.Children.Add(_editorView);
 
-        // The command palette floats over everything as a collapsed overlay.
-        Content = new Panel { Children = { root, _palette } };
+        // The command palette and the modal overlay host float over everything; the host sits on top so
+        // a dialog renders above the palette. When a modal closes, return focus to the editor.
+        Content = new Panel { Children = { root, _palette, _overlayHost } };
+        _overlayHost.Closed += (_, _) => _editorView.Focus();
 
         _editorView.TextChanged += (_, _) =>
         {
@@ -1706,46 +1712,14 @@ public class MainWindow : Window
         ed.InsertLinkWithText((displayBox.Text ?? string.Empty).Trim(), url);
     }
 
-    private async Task<bool> ConfirmAsync(string message, string confirmLabel = "Discard", string denyLabel = "Cancel")
-    {
-        var tcs = new TaskCompletionSource<bool>();
-        var yes = new Button { Content = confirmLabel, IsDefault = false };
-        var no = new Button { Content = denyLabel, IsCancel = true };
-        yes.Click += (_, _) => tcs.TrySetResult(true);
-        no.Click += (_, _) => tcs.TrySetResult(false);
-
-        var dialog = new Window
-        {
-            Title = "Typage",
-            Width = 360,
-            SizeToContent = SizeToContent.Height,
-            WindowStartupLocation = WindowStartupLocation.CenterOwner,
-            CanResize = false,
-            Content = new StackPanel
-            {
-                Margin = new Avalonia.Thickness(16),
-                Spacing = 16,
-                Children =
-                {
-                    new TextBlock { Text = message, TextWrapping = TextWrapping.Wrap },
-                    new StackPanel
-                    {
-                        Orientation = Orientation.Horizontal,
-                        HorizontalAlignment = HorizontalAlignment.Right,
-                        Spacing = 8,
-                        Children = { no, yes },
-                    },
-                },
-            },
-        };
-        dialog.Closed += (_, _) => tcs.TrySetResult(false);
-        // The button clicks record the choice (above) AND close the dialog — without this the window
-        // stays open and ShowDialog never returns, so clicking appears to do nothing until you close it.
-        yes.Click += (_, _) => dialog.Close();
-        no.Click += (_, _) => dialog.Close();
-        await dialog.ShowDialog(this);
-        return await tcs.Task;
-    }
+    /// <summary>
+    /// A yes/no prompt shown as an internal modal in the shared overlay host (no separate OS window).
+    /// Confirm is not the default button, and Esc / backdrop deny — so a stray Enter can't trigger a
+    /// destructive action. Returns true only when the user confirms.
+    /// </summary>
+    private async Task<bool> ConfirmAsync(string message, string confirmLabel = "Discard", string denyLabel = "Cancel") =>
+        await _overlayHost.ShowModalAsync(
+            new ConfirmDialog(heading: string.Empty, message: message, confirmLabel: confirmLabel, denyLabel: denyLabel, confirmIsDefault: false));
 
     /// <summary>The Preferences dialog (PRD §7.9): theme, tab width, and toolbar visibility.</summary>
     private void ShowSettings()
