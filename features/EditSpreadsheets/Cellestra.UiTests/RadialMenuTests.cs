@@ -283,6 +283,58 @@ public class RadialMenuTests
     }
 
     [AvaloniaFact]
+    public void Clicking_a_wedge_opens_a_command_picker_that_binds_that_slot()
+    {
+        var dialog = new RadialSettingsDialog(new RadialMenuConfig
+        {
+            SegmentCount = 4,
+            CommandIds = new List<string?> { "edit.cut", "edit.copy", "edit.paste", "edit.undo" },
+        });
+
+        dialog.OpenCommandPickerForTest(2);
+        Assert.True(dialog.CommandPickerVisibleForTest);
+        Assert.Equal(2, dialog.CommandPickerSegmentForTest);
+
+        // Empty query lists the unbind row first, then the commands.
+        var all = dialog.PickerResultIdsForTest(string.Empty);
+        Assert.Null(all[0]); // "— None —"
+        Assert.Contains("format.bold", all);
+
+        // Fuzzy search narrows to matching commands.
+        var bold = dialog.PickerResultIdsForTest("bold");
+        Assert.Contains("format.bold", bold);
+        Assert.DoesNotContain("edit.undo", bold);
+
+        // Committing assigns the command to that wedge and closes the picker.
+        dialog.CommitPickerForTest("format.bold");
+        Assert.False(dialog.CommandPickerVisibleForTest);
+        Assert.Equal("format.bold", dialog.BuildConfigForTest().CommandIdAt(2));
+        Assert.Equal("edit.copy", dialog.BuildConfigForTest().CommandIdAt(1)); // neighbours untouched
+
+        // Picking "— None —" unbinds the wedge.
+        dialog.OpenCommandPickerForTest(2);
+        dialog.CommitPickerForTest(null);
+        Assert.Null(dialog.BuildConfigForTest().CommandIdAt(2));
+    }
+
+    [AvaloniaFact]
+    public void Command_picker_dismisses_on_escape_without_binding()
+    {
+        var dialog = new RadialSettingsDialog(new RadialMenuConfig
+        {
+            SegmentCount = 4,
+            CommandIds = new List<string?> { "edit.cut", "edit.copy", "edit.paste", "edit.undo" },
+        });
+
+        dialog.OpenCommandPickerForTest(1);
+        Assert.True(dialog.CommandPickerVisibleForTest);
+
+        Assert.True(dialog.PressEscapeForTest()); // Esc closes the picker first, not the dialog
+        Assert.False(dialog.CommandPickerVisibleForTest);
+        Assert.Equal("edit.copy", dialog.BuildConfigForTest().CommandIdAt(1)); // binding unchanged
+    }
+
+    [AvaloniaFact]
     public void Radial_overlay_floats_a_command_tooltip_over_the_active_wedge()
     {
         var overlay = new RadialMenuOverlay { FitToBounds = true };

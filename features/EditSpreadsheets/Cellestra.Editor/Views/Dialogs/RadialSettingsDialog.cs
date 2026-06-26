@@ -2,10 +2,13 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using Avalonia.Controls;
+using Avalonia.Controls.Templates;
 using Avalonia.Input;
 using Avalonia.Layout;
 using Avalonia.Media;
+using Avalonia.VisualTree;
 using Cellestra.Desktop.Commands;
+using Cellestra.Desktop.Controls.Icons;
 using Cellestra.Desktop.Controls.RadialMenu;
 using Cellestra.Desktop.Views.Overlays;
 
@@ -17,8 +20,9 @@ namespace Cellestra.Desktop.Views.Dialogs;
 /// exactly as it appears in the grid (same <see cref="RadialMenuOverlay"/>, scaled to fit and centred).
 /// Segments can be reordered three ways — dragging a row's label, dragging a wedge in the preview onto
 /// another (swap), or ⌥⇧↑/↓ on the selected row. Hovering a wedge highlights it and bolds the matching
-/// row; clicking it focuses that row's picker. Selecting a row from the keyboard highlights its wedge in
-/// the preview. Returns the edited <see cref="RadialMenuConfig"/>, or null on cancel.
+/// row; clicking it opens a command-palette-style picker to (re)bind that wedge. Selecting a row from the
+/// keyboard highlights its wedge in the preview. Returns the edited <see cref="RadialMenuConfig"/>, or
+/// null on cancel.
 /// </summary>
 public sealed class RadialSettingsDialog : ModalDialog<RadialMenuConfig>
 {
@@ -45,6 +49,8 @@ public sealed class RadialSettingsDialog : ModalDialog<RadialMenuConfig>
     private static readonly Cursor RowDragCursor = new(StandardCursorType.SizeNorthSouth);
     private static readonly Cursor RadialDragCursor = new(StandardCursorType.DragMove);
     private static readonly IBrush SelectedRowBrush = new SolidColorBrush(Color.FromArgb(0x33, 0x2A, 0x7D, 0xE1));
+    private static readonly IBrush PickerMuted = new SolidColorBrush(Color.FromRgb(0x88, 0x88, 0x88));
+    private static readonly IBrush PickerCardBrush = new SolidColorBrush(Color.FromArgb(0xFF, 0x2A, 0x2C, 0x31));
 
     private readonly NumericUpDown _countField;
     private readonly StackPanel _bindingRows = new() { Spacing = 6 };
@@ -62,6 +68,13 @@ public sealed class RadialSettingsDialog : ModalDialog<RadialMenuConfig>
     // is pressed with unsaved edits, "save or cancel?".
     private readonly Border _resetConfirm;
     private readonly Border _saveConfirm;
+
+    // A command-palette-style picker for binding one wedge, layered over the body like the prompts above.
+    private readonly Border _commandPicker;
+    private TextBox _pickerSearch = null!;
+    private ListBox _pickerList = null!;
+    private TextBlock _pickerTitle = null!;
+    private int _pickerSegment = -1; // the wedge currently being (re)bound (-1 = picker closed)
 
     // The config as it stood when the dialog opened, to tell whether Escape is discarding real changes.
     private readonly RadialMenuConfig _originalConfig;
@@ -195,7 +208,8 @@ public sealed class RadialSettingsDialog : ModalDialog<RadialMenuConfig>
 
         _resetConfirm = BuildResetConfirm();
         _saveConfirm = BuildSaveConfirm();
-        DialogContent = new Panel { Children = { body, _resetConfirm, _saveConfirm } };
+        _commandPicker = BuildCommandPicker();
+        DialogContent = new Panel { Children = { body, _resetConfirm, _saveConfirm, _commandPicker } };
 
         RebuildBindingRows();
     }
@@ -465,15 +479,17 @@ public sealed class RadialSettingsDialog : ModalDialog<RadialMenuConfig>
             return;
         }
 
-        // A press that never swapped is a plain click: focus that wedge's picker.
-        if (!_radialDragMoved && _radialDragIndex < _pickers.Count)
-        {
-            _pickers[_radialDragIndex].Focus();
-        }
-
+        int segment = _radialDragIndex;
+        bool wasClick = !_radialDragMoved;
         _radialDragIndex = -1;
         _previewBox.Cursor = HandCursor;
         e.Pointer.Capture(null);
+
+        // A press that never swapped is a plain click: open the command picker to (re)bind that wedge.
+        if (wasClick && segment >= 0 && segment < SegmentCount)
+        {
+            ShowCommandPicker(segment);
+        }
     }
 
     /// <summary>Redraw the preview from the current count and bindings.</summary>
@@ -562,6 +578,226 @@ public sealed class RadialSettingsDialog : ModalDialog<RadialMenuConfig>
 
     private void HideSaveConfirm() => _saveConfirm.IsVisible = false;
 
+    // --- Command picker (bind one wedge) -------------------------------------------------------------
+
+    /// <summary>One choice in the wedge's command picker; <see cref="Id"/> null is the "unbind" option.</summary>
+    private sealed record PickerItem(string? Id, string Label, string? Icon, string Description);
+
+    /// <summary>
+    /// A command-palette-style picker — a search box over the same icon + name + description rows — for
+    /// choosing the command a wedge runs. A distinct accent header ("Bind command to Segment N", with a
+    /// crosshair and a "won't run now" note) makes clear you're <em>assigning</em> a command, not running
+    /// one. Layered over the body; commits on click/Enter, dismisses on Esc/backdrop/Cancel.
+    /// </summary>
+    private Border BuildCommandPicker()
+    {
+        _pickerTitle = new TextBlock { FontWeight = FontWeight.SemiBold, FontSize = 14 };
+        var header = new Border
+        {
+            Background = SelectedRowBrush,
+            CornerRadius = new Avalonia.CornerRadius(6),
+            Padding = new Avalonia.Thickness(10, 8),
+            Child = new StackPanel
+            {
+                Orientation = Orientation.Horizontal,
+                Spacing = 10,
+                Children =
+                {
+                    new LucideIcon { IconKey = "crosshair", Size = 18, VerticalAlignment = VerticalAlignment.Center },
+                    new StackPanel
+                    {
+                        VerticalAlignment = VerticalAlignment.Center,
+                        Children =
+                        {
+                            _pickerTitle,
+                            new TextBlock
+                            {
+                                Text = "Choose the command this wedge runs — it won't run now.",
+                                Foreground = PickerMuted,
+                                FontSize = 11.5,
+                                TextWrapping = TextWrapping.Wrap,
+                            },
+                        },
+                    },
+                },
+            },
+        };
+
+        _pickerSearch = new TextBox { PlaceholderText = "Search commands…" };
+        _pickerSearch.TextChanged += (_, _) => PopulatePicker(_pickerSearch.Text ?? string.Empty);
+        _pickerSearch.KeyDown += (_, e) =>
+        {
+            switch (e.Key)
+            {
+                case Key.Escape: HideCommandPicker(); e.Handled = true; break;
+                case Key.Return: CommitPicker(); e.Handled = true; break;
+                case Key.Down: MovePicker(+1); e.Handled = true; break;
+                case Key.Up: MovePicker(-1); e.Handled = true; break;
+            }
+        };
+
+        _pickerList = new ListBox
+        {
+            MaxHeight = 280,
+            ItemTemplate = new FuncDataTemplate<PickerItem>((item, _) => BuildPickerRow(item)),
+        };
+        // A click lands selection on press, so by release SelectedItem is the clicked row — commit it,
+        // but only when the click actually hit a row (not the empty space below a short list).
+        _pickerList.PointerReleased += (_, e) =>
+        {
+            if ((e.Source as Avalonia.Visual)?.FindAncestorOfType<ListBoxItem>(includeSelf: true) is not null)
+            {
+                CommitPicker();
+            }
+        };
+
+        var card = new Border
+        {
+            Width = 440,
+            Background = PickerCardBrush,
+            CornerRadius = new Avalonia.CornerRadius(8),
+            Padding = new Avalonia.Thickness(14),
+            HorizontalAlignment = HorizontalAlignment.Center,
+            VerticalAlignment = VerticalAlignment.Center,
+            BoxShadow = new BoxShadows(new BoxShadow { Blur = 16, OffsetY = 4, Color = Color.FromArgb(0x60, 0, 0, 0) }),
+            Child = new StackPanel
+            {
+                Spacing = 10,
+                Children =
+                {
+                    header,
+                    _pickerSearch,
+                    _pickerList,
+                    new TextBlock { Text = "↵ assign · Esc cancel", Foreground = PickerMuted, FontSize = 11, HorizontalAlignment = HorizontalAlignment.Right },
+                },
+            },
+        };
+
+        var scrim = new Border
+        {
+            IsVisible = false,
+            Background = new SolidColorBrush(Color.FromArgb(0x80, 0, 0, 0)),
+            Child = card,
+        };
+        scrim.PointerPressed += (_, e) =>
+        {
+            if (ReferenceEquals(e.Source, scrim))
+            {
+                HideCommandPicker(); // clicking the dim backdrop cancels
+            }
+        };
+
+        return scrim;
+    }
+
+    private void ShowCommandPicker(int segment)
+    {
+        if (!InRange(segment))
+        {
+            return;
+        }
+
+        _pickerSegment = segment;
+        _pickerTitle.Text = $"Bind command to Segment {segment + 1}";
+        _pickerSearch.Text = string.Empty;
+        PopulatePicker(string.Empty);
+        _commandPicker.IsVisible = true;
+        Avalonia.Threading.Dispatcher.UIThread.Post(() => _pickerSearch.Focus());
+    }
+
+    private void HideCommandPicker()
+    {
+        _commandPicker.IsVisible = false;
+        _pickerSegment = -1;
+    }
+
+    /// <summary>Rank the commands against <paramref name="query"/> (fuzzy), with an "unbind" row on top.</summary>
+    private void PopulatePicker(string query)
+    {
+        var items = new List<PickerItem>();
+        if (string.IsNullOrEmpty(query) || FuzzyMatcher.Score("None", query) >= 0)
+        {
+            items.Add(new PickerItem(null, "— None —", null, "Leave this wedge empty"));
+        }
+
+        items.AddRange(AppCommands.All
+            .Select(c => (Command: c, Score: FuzzyMatcher.Score(c.Label, query)))
+            .Where(x => x.Score >= 0)
+            .OrderByDescending(x => x.Score)
+            .Select(x => new PickerItem(x.Command.Id, x.Command.Label, x.Command.Icon, x.Command.Description)));
+
+        _pickerList.ItemsSource = items;
+        _pickerList.SelectedIndex = items.Count > 0 ? 0 : -1;
+    }
+
+    private void MovePicker(int direction)
+    {
+        int next = _pickerList.SelectedIndex + direction;
+        if (next >= 0 && next < _pickerList.ItemCount)
+        {
+            _pickerList.SelectedIndex = next;
+            _pickerList.ScrollIntoView(next);
+        }
+    }
+
+    /// <summary>Assign the highlighted command (or unbind) to the wedge being edited, then close.</summary>
+    private void CommitPicker()
+    {
+        if (_pickerSegment < 0 || _pickerList.SelectedItem is not PickerItem item)
+        {
+            return;
+        }
+
+        _bindings[_pickerSegment] = item.Id;
+        _selectedSegment = _pickerSegment;
+        HideCommandPicker();
+        RebuildBindingRows();
+    }
+
+    private Control BuildPickerRow(PickerItem? item)
+    {
+        // The ListBox can build the template with a null item while recycling containers — render nothing.
+        if (item is null)
+        {
+            return new Control();
+        }
+
+        var dock = new DockPanel { LastChildFill = true };
+
+        if (_pickerSegment >= 0 && item.Id is { } id && id == _bindings[_pickerSegment])
+        {
+            var current = new TextBlock
+            {
+                Text = "Current",
+                Foreground = PickerMuted,
+                FontSize = 11,
+                VerticalAlignment = VerticalAlignment.Center,
+                Margin = new Avalonia.Thickness(8, 0, 0, 0),
+            };
+            DockPanel.SetDock(current, Dock.Right);
+            dock.Children.Add(current);
+        }
+
+        if (!string.IsNullOrEmpty(item.Icon))
+        {
+            var icon = new LucideIcon { IconKey = item.Icon, Size = 16, VerticalAlignment = VerticalAlignment.Center, Margin = new Avalonia.Thickness(0, 0, 11, 0) };
+            DockPanel.SetDock(icon, Dock.Left);
+            dock.Children.Add(icon);
+        }
+
+        dock.Children.Add(new StackPanel
+        {
+            VerticalAlignment = VerticalAlignment.Center,
+            Children =
+            {
+                new TextBlock { Text = item.Label, FontWeight = FontWeight.Medium },
+                new TextBlock { Text = item.Description, Foreground = PickerMuted, FontSize = 11, TextTrimming = TextTrimming.CharacterEllipsis },
+            },
+        });
+
+        return dock;
+    }
+
     /// <summary>Whether the edited config differs from how it was when the dialog opened.</summary>
     private bool IsDirty => !ConfigsEqual(BuildConfig(), _originalConfig);
 
@@ -599,9 +835,18 @@ public sealed class RadialSettingsDialog : ModalDialog<RadialMenuConfig>
         RebuildBindingRows(); // covers the case where the count was already at the default (no ValueChanged)
     }
 
+    /// <summary>Whether any layered overlay (a prompt or the command picker) is up over the body.</summary>
+    private bool AnyOverlayOpen => _resetConfirm.IsVisible || _saveConfirm.IsVisible || _commandPicker.IsVisible;
+
     /// <summary>Handle Escape: dismiss an open prompt, or guard a dirty close. Returns true if it acted.</summary>
     private bool HandleEscape()
     {
+        if (_commandPicker.IsVisible)
+        {
+            HideCommandPicker();
+            return true;
+        }
+
         if (_resetConfirm.IsVisible)
         {
             HideResetConfirm();
@@ -638,8 +883,8 @@ public sealed class RadialSettingsDialog : ModalDialog<RadialMenuConfig>
             return;
         }
 
-        // Reordering shortcuts are inert while a confirmation scrim is up over the body.
-        if (_resetConfirm.IsVisible || _saveConfirm.IsVisible)
+        // Reordering shortcuts are inert while any scrim (a prompt or the picker) is up over the body.
+        if (AnyOverlayOpen)
         {
             base.OnKeyDown(e);
             return;
@@ -720,4 +965,25 @@ public sealed class RadialSettingsDialog : ModalDialog<RadialMenuConfig>
     internal bool SaveConfirmVisibleForTest => _saveConfirm.IsVisible;
 
     internal void SetSegmentCountForTest(int count) => _countField.Value = count;
+
+    internal void OpenCommandPickerForTest(int segment) => ShowCommandPicker(segment);
+
+    internal bool CommandPickerVisibleForTest => _commandPicker.IsVisible;
+
+    internal int CommandPickerSegmentForTest => _pickerSegment;
+
+    /// <summary>Test seam: command ids the picker lists for <paramref name="query"/>, in ranked order.</summary>
+    internal IReadOnlyList<string?> PickerResultIdsForTest(string query)
+    {
+        PopulatePicker(query);
+        return _pickerList.ItemsSource!.Cast<PickerItem>().Select(i => i.Id).ToList();
+    }
+
+    /// <summary>Test seam: pick the row with <paramref name="commandId"/> (null = unbind) and commit it.</summary>
+    internal void CommitPickerForTest(string? commandId)
+    {
+        var items = _pickerList.ItemsSource!.Cast<PickerItem>().ToList();
+        _pickerList.SelectedItem = items.First(i => i.Id == commandId);
+        CommitPicker();
+    }
 }
