@@ -2,6 +2,7 @@ using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Markup.Xaml;
+using BirdBrain.Components.Commands;
 using Cellestra.Desktop.Commands;
 using Cellestra.Desktop.Views;
 

@@ -8,6 +8,7 @@ using Avalonia.Media;
 using Avalonia.Platform.Storage;
 using Avalonia.Styling;
 using Avalonia.Threading;
+using BirdBrain.Components.Commands;
 using Typage.Control.Rendering;
 using Typage.Control.Views;
 using Typage.Desktop.Commands;

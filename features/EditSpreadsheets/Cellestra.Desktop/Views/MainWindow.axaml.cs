@@ -8,6 +8,7 @@ using Avalonia.Layout;
 using Avalonia.Markup.Xaml;
 using Avalonia.Media;
 using Avalonia.Platform.Storage;
+using BirdBrain.Components.Commands;
 using Cellestra.Desktop.Commands;
 using Cellestra.Desktop.Services;
 using Cellestra.Desktop.Views.Overlays;

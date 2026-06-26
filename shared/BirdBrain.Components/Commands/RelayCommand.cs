@@ -1,8 +1,9 @@
+using System;
 using System.Windows.Input;
 
-namespace Typage.Desktop;
+namespace BirdBrain.Components.Commands;
 
-/// <summary>A minimal <see cref="ICommand"/> for wiring menu items and key bindings to handlers.</summary>
+/// <summary>A minimal <see cref="ICommand"/> over a delegate, for binding menu items and key bindings.</summary>
 public sealed class RelayCommand : ICommand
 {
     private readonly Action _execute;
