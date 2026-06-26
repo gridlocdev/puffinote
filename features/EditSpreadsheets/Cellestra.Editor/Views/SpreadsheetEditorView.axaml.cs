@@ -123,6 +123,11 @@ public partial class SpreadsheetEditorView : UserControl, IAppEnvironment
         _commandBar.CollapsedChanged += (_, _) => CommandBarCollapsedChanged?.Invoke(this, EventArgs.Empty);
         CommandBarHost.Content = _commandBar;
 
+        // The shared overlay host owns show/dismiss + the Tab-trap; the app supplies the blur and the
+        // grid-shortcut suspend/restore around it (an open overlay must stop the grid reacting to keys).
+        OverlayHost.Opened += (_, _) => { RefreshCommandStates(); SetBackgroundBlur(true); };
+        OverlayHost.Closed += (_, _) => { RefreshCommandStates(); SetBackgroundBlur(false); Grid.Focus(); };
+
         // Esc closes any open overlay (command palette / sheet switcher / internal modal) no matter
         // where focus sits inside it. Handled on the tunnelling route so it fires before any inner
         // control (a TextBox, ListBox, default/cancel button) can swallow the key first.
@@ -191,21 +196,10 @@ public partial class SpreadsheetEditorView : UserControl, IAppEnvironment
     /// awaiter resolves to the cancel result) or close a palette-style overlay.</summary>
     private void OnPreviewKeyDownForOverlay(object? sender, KeyEventArgs e)
     {
-        if (e.Key != Key.Escape || !OverlayHost.IsVisible)
+        if (e.Key == Key.Escape && OverlayHost.TryCancel())
         {
-            return;
+            e.Handled = true;
         }
-
-        if (_activeModal is { } modal)
-        {
-            modal.CancelFromHost();
-        }
-        else
-        {
-            CloseOverlay();
-        }
-
-        e.Handled = true;
     }
 
     // ---- IAppEnvironment --------------------------------------------------
@@ -2152,9 +2146,6 @@ public partial class SpreadsheetEditorView : UserControl, IAppEnvironment
 
     private void ShowPalette(string placeholder, IReadOnlyList<PaletteItem> items)
     {
-        OverlayHost.Children.Clear();
-        _activeModal = null; // a palette isn't a result-returning modal; clear any stale handle
-
         var palette = new PaletteListView(key => string.IsNullOrEmpty(key)
             ? null
             : new LucideIcon { IconKey = key, Size = 16, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 11, 0) })
@@ -2164,8 +2155,8 @@ public partial class SpreadsheetEditorView : UserControl, IAppEnvironment
         palette.SetItems(items
             .Select(i => new PaletteEntry(i.Label, i.Run, i.Description, i.Shortcut, i.Icon, i.Category))
             .ToList());
-        palette.Cancelled += (_, _) => CloseOverlay();
-        palette.Chosen += entry => { CloseOverlay(); entry.Run(); };
+        palette.Cancelled += (_, _) => OverlayHost.Close();
+        palette.Chosen += entry => { OverlayHost.Close(); entry.Run(); };
 
         var box = new Border
         {
@@ -2180,120 +2171,30 @@ public partial class SpreadsheetEditorView : UserControl, IAppEnvironment
             Child = palette, // the shared list view traps Tab inside itself
         };
 
-        OverlayHost.Children.Add(box);
-        OverlayHost.IsVisible = true;
-        RefreshCommandStates(); // the grid behind the palette must stop reacting to shortcuts/keys
-        SetBackgroundBlur(true); // blur the grid behind the palette too (consistent with internal modals)
-        OverlayHost.PointerPressed += OverlayBackgroundPressed;
+        // The shared host shows the card over the backdrop and (via Opened/Closed) blurs the grid and
+        // suspends its shortcuts; a backdrop click or Esc closes it.
+        OverlayHost.ShowContent(box);
         // Defer focus until the overlay's template is realized, otherwise focusing the just-shown input
-        // can silently fail and the user has to click into it first (mirrors ShowModalAsync's deferral).
+        // can silently fail and the user has to click into it first.
         Avalonia.Threading.Dispatcher.UIThread.Post(() => palette.SearchBox.Focus());
-    }
-
-    private void OverlayBackgroundPressed(object? sender, PointerPressedEventArgs e)
-    {
-        if (!ReferenceEquals(e.Source, OverlayHost))
-        {
-            return;
-        }
-
-        // Clicking the dimmed backdrop dismisses: cancel an internal modal (so its awaiter resolves
-        // to the cancel result), or just close a palette-style overlay.
-        if (_activeModal is { } modal)
-        {
-            modal.CancelFromHost();
-        }
-        else
-        {
-            CloseOverlay();
-        }
-    }
-
-    private void CloseOverlay()
-    {
-        OverlayHost.PointerPressed -= OverlayBackgroundPressed;
-        OverlayHost.Children.Clear();
-        OverlayHost.IsVisible = false;
-        _activeModal = null;
-        RefreshCommandStates(); // shortcuts/keys act on the grid again now the overlay is gone
-        SetBackgroundBlur(false);
-        Grid.Focus();
     }
 
     // ---- Internal modal host ---------------------------------------------
 
-    /// <summary>The currently shown internal modal dialog, if any (so its backdrop click cancels it).</summary>
-    private IModalDialog? _activeModal;
-
     /// <summary>
-    /// Blur the grid/chrome behind a modal (PRD task: "add blur to the background above any modal").
-    /// Applied to <see cref="ContentRoot"/> only, so the overlay's own content stays sharp.
+    /// Blur the grid/chrome behind an overlay (PRD task: "add blur to the background above any modal").
+    /// Applied to <see cref="ContentRoot"/> only, so the overlay's own content stays sharp. Wired to the
+    /// shared <see cref="OverlayHost"/>'s Opened/Closed in the constructor.
     /// </summary>
     private void SetBackgroundBlur(bool on) =>
         ContentRoot.Effect = on ? new BlurEffect { Radius = 8 } : null;
 
     /// <summary>
-    /// Host an internal modal dialog over the (blurred) grid, like the command palette, and await its
-    /// result (PRD task: internal modals instead of separate OS windows). Esc / backdrop cancel. Public
-    /// so a host can present its own dialogs (e.g. the unsaved-changes prompt) in the editor's overlay.
+    /// Host an internal modal dialog over the (blurred) grid in the shared overlay host and await its
+    /// result (internal modals instead of separate OS windows). Esc / backdrop cancel. Public so a host
+    /// can present its own dialogs (e.g. the unsaved-changes prompt) in the editor's overlay.
     /// </summary>
-    public Task<TResult?> ShowModalAsync<TResult>(ModalDialog<TResult> dialog)
-    {
-        OverlayHost.Children.Clear();
-        _activeModal = dialog;
-
-        var chrome = BuildModalChrome(dialog, dialog.Title);
-        OverlayHost.Children.Add(chrome);
-        OverlayHost.IsVisible = true;
-        RefreshCommandStates(); // the grid behind the modal must stop reacting to shortcuts/keys
-        SetBackgroundBlur(true);
-        OverlayHost.PointerPressed += OverlayBackgroundPressed;
-
-        dialog.Closed += (_, _) =>
-        {
-            if (ReferenceEquals(_activeModal, dialog))
-            {
-                CloseOverlay();
-            }
-        };
-
-        // Focus the dialog so Esc reaches it even before an inner field claims focus.
-        Avalonia.Threading.Dispatcher.UIThread.Post(() => dialog.Focus());
-        return dialog.Result;
-    }
-
-    /// <summary>Wrap a modal dialog's body in the same floating "card" chrome the palette uses (title + shadow).</summary>
-    private Border BuildModalChrome(Control body, string title)
-    {
-        var stack = new StackPanel { Spacing = 10 };
-        if (!string.IsNullOrEmpty(title))
-        {
-            stack.Children.Add(new TextBlock
-            {
-                Text = title,
-                FontWeight = FontWeight.SemiBold,
-                FontSize = 14,
-            });
-        }
-
-        stack.Children.Add(body);
-
-        var chrome = new Border
-        {
-            MaxWidth = 560,
-            MaxHeight = 640,
-            Background = ThemedSurface,
-            CornerRadius = new CornerRadius(8),
-            Padding = new Thickness(16),
-            VerticalAlignment = VerticalAlignment.Center,
-            HorizontalAlignment = HorizontalAlignment.Center,
-            BoxShadow = new BoxShadows(new BoxShadow { Blur = 16, OffsetY = 4, Color = Color.FromArgb(0x40, 0, 0, 0) }),
-            Child = stack,
-        };
-        // Trap Tab within the modal card so focus cycles through its own fields and never escapes to the
-        // grid / toolbar behind it (a dialog's sub-modals set their own Cycle scope inside this one).
-        KeyboardNavigation.SetTabNavigation(chrome, KeyboardNavigationMode.Cycle);
-        return chrome;
-    }
+    public Task<TResult?> ShowModalAsync<TResult>(ModalDialog<TResult> dialog) =>
+        OverlayHost.ShowModalAsync(dialog);
 
 }
