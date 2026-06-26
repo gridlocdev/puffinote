@@ -35,9 +35,4 @@
     <InternalsVisibleTo Include="Cellestra.UiTests" />
   </ItemGroup>
 
-  <ItemGroup>
-    <!-- The vendored Lucide SVG glyphs (avares://Cellestra.Editor/Assets/icons/...). -->
-    <AvaloniaResource Include="Assets\**" />
-  </ItemGroup>
-
 </Project>

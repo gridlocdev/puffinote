@@ -7,7 +7,7 @@ using Avalonia.Layout;
 using Avalonia.Media;
 using Cellestra.Core.Values;
 using Cellestra.Desktop.Commands;
-using Cellestra.Desktop.Controls.Icons;
+using BirdBrain.Components.Controls.Icons;
 using AvColor = Avalonia.Media.Color;
 using ArgbColor = Cellestra.Core.Styling.ArgbColor;
 using CellStyle = Cellestra.Core.Styling.CellStyle;

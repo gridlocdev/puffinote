@@ -10,7 +10,7 @@ using Avalonia.VisualTree;
 using BirdBrain.Components.Commands;
 using BirdBrain.Components.Theming;
 using Cellestra.Desktop.Commands;
-using Cellestra.Desktop.Controls.Icons;
+using BirdBrain.Components.Controls.Icons;
 using Cellestra.Desktop.Controls.RadialMenu;
 using Cellestra.Desktop.Views.Overlays;
 

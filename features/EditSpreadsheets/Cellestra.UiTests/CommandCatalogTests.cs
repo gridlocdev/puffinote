@@ -55,7 +55,7 @@ public class CommandCatalogTests
                 continue;
             }
 
-            Assert.True(Cellestra.Desktop.Controls.Icons.LucideIcons.Get(command.Icon) is not null,
+            Assert.True(BirdBrain.Components.Controls.Icons.LucideIcons.Get(command.Icon) is not null,
                 $"{command.Id} references missing icon '{command.Icon}'");
         }
     }

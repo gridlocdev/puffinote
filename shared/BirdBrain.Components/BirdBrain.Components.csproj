@@ -20,4 +20,9 @@
     <PackageReference Include="Avalonia" />
   </ItemGroup>
 
+  <ItemGroup>
+    <!-- The vendored Lucide SVG glyphs (avares://BirdBrain.Components/Assets/icons/...). -->
+    <AvaloniaResource Include="Assets\**" />
+  </ItemGroup>
+
 </Project>

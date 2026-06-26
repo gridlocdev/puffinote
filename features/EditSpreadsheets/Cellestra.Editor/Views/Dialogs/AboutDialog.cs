@@ -3,7 +3,7 @@ using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Layout;
 using Avalonia.Media;
-using Cellestra.Desktop.Controls.Icons;
+using BirdBrain.Components.Controls.Icons;
 using Cellestra.Desktop.Views.Overlays;
 
 namespace Cellestra.Desktop.Views.Dialogs;

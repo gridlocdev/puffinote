@@ -8,7 +8,7 @@ using Avalonia.Controls.Shapes;
 using Avalonia.Layout;
 using Avalonia.Media;
 using Cellestra.Desktop.Commands;
-using Cellestra.Desktop.Controls.Icons;
+using BirdBrain.Components.Controls.Icons;
 
 namespace Cellestra.Desktop.Controls.CommandBar;
 

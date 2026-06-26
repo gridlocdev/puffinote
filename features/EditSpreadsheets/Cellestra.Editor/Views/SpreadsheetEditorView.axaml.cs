@@ -31,7 +31,7 @@ using Cellestra.Desktop.Controls.ChartView;
 using Cellestra.Desktop.Views.Dialogs;
 using NumberFormatter = Cellestra.Core.Styling.NumberFormatter;
 using Cellestra.Desktop.Commands;
-using Cellestra.Desktop.Controls.Icons;
+using BirdBrain.Components.Controls.Icons;
 using Cellestra.Desktop.Controls.SpreadsheetGrid;
 using Cellestra.Desktop.Services;
 using Cellestra.Desktop.Views.Overlays;

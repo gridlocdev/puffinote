@@ -5,7 +5,7 @@ using Avalonia.Controls;
 using Avalonia.Media;
 using Avalonia.Media.Immutable;
 using Cellestra.Desktop.Commands;
-using Cellestra.Desktop.Controls.Icons;
+using BirdBrain.Components.Controls.Icons;
 using CommandBarControl = Cellestra.Desktop.Controls.CommandBar.CommandBar;
 
 namespace Cellestra.Desktop.Controls.RadialMenu;

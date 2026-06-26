@@ -1,6 +1,6 @@
 using Avalonia;
 using Avalonia.Headless.XUnit;
-using Cellestra.Desktop.Controls.Icons;
+using BirdBrain.Components.Controls.Icons;
 using Xunit;
 
 namespace Cellestra.UiTests;

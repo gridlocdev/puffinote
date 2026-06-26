@@ -7,7 +7,7 @@ using Avalonia;
 using Avalonia.Media;
 using Avalonia.Platform;
 
-namespace Cellestra.Desktop.Controls.Icons;
+namespace BirdBrain.Components.Controls.Icons;
 
 /// <summary>
 /// Loads the vendored Lucide SVG glyphs (MIT, under <c>Assets/icons</c>) and parses each into a
@@ -39,10 +39,10 @@ public static class LucideIcons
 
     private static Geometry? Load(string key)
     {
-        // The icons ship in this control library (assembly name "Cellestra.Editor"), which is the
-        // authority an avares URI resolves against — so the standalone app and any host that embeds
-        // the editor both find them, regardless of the host assembly's name.
-        var uri = new Uri($"avares://Cellestra.Editor/Assets/icons/{key}.svg");
+        // The icons ship in this shared library (assembly name "BirdBrain.Components"), which is the
+        // authority an avares URI resolves against — so every app in the family finds them,
+        // regardless of the host assembly's name.
+        var uri = new Uri($"avares://BirdBrain.Components/Assets/icons/{key}.svg");
         if (!AssetLoader.Exists(uri))
         {
             return null;
