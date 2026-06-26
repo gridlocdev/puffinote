@@ -43,7 +43,7 @@ public sealed class RadialSettingsDialog : ModalDialog<RadialMenuConfig>
 
     private static readonly Cursor HandCursor = new(StandardCursorType.Hand);
     private static readonly Cursor RowDragCursor = new(StandardCursorType.SizeNorthSouth);
-    private static readonly Cursor RadialDragCursor = new(StandardCursorType.SizeAll);
+    private static readonly Cursor RadialDragCursor = new(StandardCursorType.DragMove);
     private static readonly IBrush SelectedRowBrush = new SolidColorBrush(Color.FromArgb(0x33, 0x2A, 0x7D, 0xE1));
 
     private readonly NumericUpDown _countField;
@@ -483,7 +483,8 @@ public sealed class RadialSettingsDialog : ModalDialog<RadialMenuConfig>
         "Reset radial menu?",
         "This restores the default segment count and command bindings. Your current changes will be discarded.",
         ("Cancel", false, HideResetConfirm),
-        ("Reset", true, () => { ApplyDefaults(); HideResetConfirm(); }));
+        ("Reset", true, () => { ApplyDefaults(); HideResetConfirm(); }
+    ));
 
     /// <summary>
     /// The "save or cancel?" confirmation shown when Escape is pressed with unsaved edits. Saving closes
