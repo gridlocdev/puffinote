@@ -1,6 +1,6 @@
 # Proposal 0001 — `BirdBrain.Components`, a shared app-shell / design-system library
 
-- **Status:** Accepted — Phase 0 + Phase 1 approved (later phases remain proposed; see §9, §10)
+- **Status:** Phase 0 + Phase 1 **landed** (`FuzzyMatcher`, `RelayCommand` now shared); Phases 2–5 remain proposed (see §7, §10)
 - **Author:** (you) · drafted with Claude
 - **Affects:** `features/EditSpreadsheets` (Cellestra), `features/EditMarkdown` (Typage), and the
   planned **BirdBrain** composite app
@@ -53,10 +53,10 @@ Not speculative — a survey found these same-concept files in **both** apps tod
 
 | Concept | Cellestra | Typage | Similarity | Tier |
 |---|---|---|---|---|
-| `FuzzyMatcher` | `Cellestra.Editor/Views/Overlays` | `Typage.Desktop/Commands` | **Identical** (Typage's comment says *"ported from Cellestra"*) | A |
-| `ShortcutFormatter` | `Cellestra.Editor/Commands` | `Typage.Desktop/Commands` | Near-identical *(verify)* | A |
-| `Shortcut` | ✓ | ✓ | Same concept (touches `Avalonia.Input`) | A/B |
-| `RelayCommand` | `Cellestra.Editor/Commands` | `Typage.Desktop` | Minor differences | A/B |
+| `FuzzyMatcher` | `Cellestra.Editor/Views/Overlays` | `Typage.Desktop/Commands` | **Identical** (Typage's comment says *"ported from Cellestra"*) | A → ✅ **moved (Phase 1)** |
+| `RelayCommand` | `Cellestra.Editor/Commands` | `Typage.Desktop` | **Identical** | A → ✅ **moved (Phase 1)** |
+| `ShortcutFormatter` | `Cellestra.Editor/Commands` | `Typage.Desktop/Commands` | **Different input** — Cellestra formats a `KeyGesture`, Typage formats its own `Shortcut` | C (with `Shortcut`) |
+| `Shortcut` | ✗ (Cellestra uses `KeyGesture` directly) | `Typage.Desktop/Commands` | **Typage-only — not a duplicate**; tied to the `AppCommand` unification | C |
 | Command Palette | `ShowPalette` / overlay | `CommandPalette` panel | Same pattern, parallel code | B |
 | Modal / overlay primitives + Tab focus-trap | `ModalDialog`, `OverlayHost` | palette overlay | Same pattern | B |
 | Tooltip cards (`BuildTip`) | ✓ | ✓ *(verify)* | Same pattern | B |
@@ -215,17 +215,21 @@ the capability areas: `Commands/`, `Theming/`, `Overlays/`, `Controls/`, `Shell/
 
 Each phase ends with **all** apps building clean and tests green; land a phase only when it does.
 
-- **Phase 0 — Scaffold.** Create `shared/BirdBrain.Components`, wire it into both solutions, reference
-  it (empty) from both Desktop projects. Prove the build plumbing.
-- **Phase 1 — Tier A leaves.** Move `FuzzyMatcher`, `ShortcutFormatter`, `Shortcut` (and `RelayCommand`
-  if identical enough). Delete both copies; point both apps at the shared ones. *Lowest-risk slice;
-  de-risks everything.*
+- **Phase 0 — Scaffold. ✅ Done.** Created `shared/BirdBrain.Components`, wired into both solutions,
+  referenced (empty) from both Desktop projects. Build plumbing proven.
+- **Phase 1 — Tier A leaves. ✅ Done.** Moved `FuzzyMatcher` and `RelayCommand` (both byte-for-byte
+  identical) into `BirdBrain.Components.Commands`; deleted both copies of each; repointed all consumers;
+  both solutions build clean with green tests. **As-built note:** `ShortcutFormatter` and `Shortcut`
+  were *not* moved — they are not actually trivial duplicates (Cellestra has no `Shortcut` type and its
+  `ShortcutFormatter` formats a `KeyGesture`, while Typage's formats its own `Shortcut`). They are
+  reclassified Tier C and folded into **Phase 4**.
 - **Phase 2 — Design tokens + theme contract.** Introduce the token resources / `IAppTheme`; replace
   hardcoded color literals in both apps. Each app supplies its palette.
 - **Phase 3 — UI primitives.** Modal/overlay host + Tab focus-trap, confirm dialog, tooltip card,
   command palette, icon system. Re-skinned via Phase-2 tokens.
-- **Phase 4 — `AppCommand` unification (Tier C).** Env-agnostic command; Cellestra captures its env at
-  construction; migrate catalog wiring.
+- **Phase 4 — `AppCommand` + shortcut unification (Tier C).** Env-agnostic command (Cellestra captures
+  its env at construction); a shared `Shortcut` representation; migrate `ShortcutFormatter` and the
+  catalog wiring onto it.
 - **Phase 5 — Shell services.** Settings/workspace base, CLI scaffolding (resolve the §4.4 split here if
   the CLI needs the primitives). (`EditHistory` is **not** in this list — it's engine-layer and
   domain-coupled; see §4.2.)
@@ -260,11 +264,12 @@ Stop after any phase that delivers value; later phases are independent.
 
 ---
 
-## 10. Approved first step
+## 10. First step — landed
 
-**Phase 0 + Phase 1:** stand up `shared/BirdBrain.Components` (one UI project) and move the three
-identical leaves (`FuzzyMatcher`, `ShortcutFormatter`, `Shortcut`) across both apps, green-to-green.
-Phases 2+ remain proposed and will be scheduled after this lands.
+**Phase 0 + Phase 1 are done:** `shared/BirdBrain.Components` (one UI project) is stood up and wired
+into both solutions, and the two genuinely-identical leaves — `FuzzyMatcher` and `RelayCommand` — now
+live there once, consumed by both apps, green-to-green. `ShortcutFormatter`/`Shortcut` turned out not to
+be trivial duplicates and were deferred to Phase 4 (see §7). Phases 2–5 remain proposed.
 
 ---
 
