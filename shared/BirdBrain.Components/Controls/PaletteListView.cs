@@ -85,8 +85,8 @@ public sealed class PaletteListView : StackPanel
     /// <summary>The search placeholder text.</summary>
     public string Placeholder
     {
-        get => _search.Watermark ?? string.Empty;
-        set => _search.Watermark = value;
+        get => _search.PlaceholderText ?? string.Empty;
+        set => _search.PlaceholderText = value;
     }
 
     /// <summary>Raised when a row is chosen (Enter or click). The host typically closes, then runs it.</summary>

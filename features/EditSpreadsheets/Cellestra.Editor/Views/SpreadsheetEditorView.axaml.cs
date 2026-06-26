@@ -17,6 +17,7 @@ using Avalonia.Media;
 using Avalonia.Platform.Storage;
 using Avalonia.VisualTree;
 using BirdBrain.Components.Commands;
+using BirdBrain.Components.Controls;
 using Cellestra.Charts;
 // The view moved to the Cellestra.Editor namespace; the moved command bar keeps its original
 // Cellestra.Desktop.Controls.CommandBar namespace. Alias it to disambiguate from Avalonia's own
@@ -2146,104 +2147,25 @@ public partial class SpreadsheetEditorView : UserControl, IAppEnvironment
 
     // ---- Palette overlay --------------------------------------------------
 
-    /// <summary>
-    /// One palette row. A normal item carries an action; a <see cref="IsHeader"/> row is a non-selectable
-    /// category divider (PRD §6.7 screenshot showed results grouped by category, not a flat list).
-    /// </summary>
-    private sealed record PaletteItem(string Label, string? Icon, string Description, string Shortcut, Action Run, string Category = "", bool IsHeader = false)
-    {
-        public static PaletteItem Header(string category) =>
-            new(category, null, string.Empty, string.Empty, static () => { }, category, IsHeader: true);
-    }
-
-    private static readonly IBrush PaletteMuted = new SolidColorBrush(Color.FromRgb(0x88, 0x88, 0x88));
+    /// <summary>One palette entry: an icon + command name + description + shortcut that runs an action.</summary>
+    private sealed record PaletteItem(string Label, string? Icon, string Description, string Shortcut, Action Run, string Category = "");
 
     private void ShowPalette(string placeholder, IReadOnlyList<PaletteItem> items)
     {
         OverlayHost.Children.Clear();
         _activeModal = null; // a palette isn't a result-returning modal; clear any stale handle
 
-        var input = new TextBox { PlaceholderText = placeholder, Margin = new Thickness(0, 0, 0, 6) };
-        var list = new ListBox
+        var palette = new PaletteListView(key => string.IsNullOrEmpty(key)
+            ? null
+            : new LucideIcon { IconKey = key, Size = 16, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 11, 0) })
         {
-            MaxHeight = 340,
-            ItemTemplate = new FuncDataTemplate<PaletteItem>((item, _) => BuildPaletteRow(item)),
+            Placeholder = placeholder,
         };
-
-        void Populate(string query)
-        {
-            // Score and rank, then divide the results under their category section headers (File, Edit,
-            // Format, Data, View…) instead of one flat list. Within a category, keep the fuzzy order.
-            var matches = items
-                .Where(i => !i.IsHeader)
-                .Select(i => (Item: i, Score: FuzzyMatcher.Score(i.Label, query)))
-                .Where(x => x.Score >= 0)
-                .OrderByDescending(x => x.Score)
-                .ToList();
-
-            var grouped = new List<PaletteItem>();
-            foreach (var group in matches.GroupBy(x => x.Item.Category))
-            {
-                if (!string.IsNullOrEmpty(group.Key))
-                {
-                    grouped.Add(PaletteItem.Header(group.Key));
-                }
-
-                grouped.AddRange(group.Select(x => x.Item));
-            }
-
-            list.ItemsSource = grouped;
-            list.SelectedIndex = FirstSelectableIndex(grouped, 0, +1);
-        }
-
-        Populate(string.Empty);
-
-        void Run()
-        {
-            if (list.SelectedItem is PaletteItem { IsHeader: false } chosen)
-            {
-                CloseOverlay();
-                chosen.Run();
-            }
-        }
-
-        // Step over category-header rows so arrow keys land only on runnable commands.
-        void Move(int direction)
-        {
-            if (list.ItemsSource is not IReadOnlyList<PaletteItem> rows || rows.Count == 0)
-            {
-                return;
-            }
-
-            int next = FirstSelectableIndex(rows, list.SelectedIndex + direction, direction);
-            if (next >= 0)
-            {
-                list.SelectedIndex = next;
-            }
-        }
-
-        input.TextChanged += (_, _) => Populate(input.Text ?? string.Empty);
-        input.KeyDown += (_, e) =>
-        {
-            switch (e.Key)
-            {
-                case Key.Escape: CloseOverlay(); break;
-                case Key.Return: Run(); break;
-                case Key.Down: Move(+1); break;
-                case Key.Up: Move(-1); break;
-            }
-        };
-        // A single click on a result row runs it (it's a launcher modeled on VS Code's palette, PRD
-        // §6.7 — "do a thing" fast). The ListBox selects the row on pointer-press, so by release
-        // SelectedItem is the clicked row; we only run when the click actually landed on an item row
-        // (not the empty space below a short list, and not a category header).
-        list.PointerReleased += (_, e) =>
-        {
-            if ((e.Source as Visual)?.FindAncestorOfType<ListBoxItem>(includeSelf: true) is not null)
-            {
-                Run();
-            }
-        };
+        palette.SetItems(items
+            .Select(i => new PaletteEntry(i.Label, i.Run, i.Description, i.Shortcut, i.Icon, i.Category))
+            .ToList());
+        palette.Cancelled += (_, _) => CloseOverlay();
+        palette.Chosen += entry => { CloseOverlay(); entry.Run(); };
 
         var box = new Border
         {
@@ -2255,11 +2177,8 @@ public partial class SpreadsheetEditorView : UserControl, IAppEnvironment
             VerticalAlignment = VerticalAlignment.Top,
             HorizontalAlignment = HorizontalAlignment.Center,
             BoxShadow = new BoxShadows(new BoxShadow { Blur = 16, OffsetY = 4, Color = Color.FromArgb(0x40, 0, 0, 0) }),
-            Child = new StackPanel { Children = { input, list } },
+            Child = palette, // the shared list view traps Tab inside itself
         };
-        // Trap Tab inside the palette so it cycles between the search box and the list, never reaching
-        // the grid / toolbar behind it.
-        KeyboardNavigation.SetTabNavigation(box, KeyboardNavigationMode.Cycle);
 
         OverlayHost.Children.Add(box);
         OverlayHost.IsVisible = true;
@@ -2268,80 +2187,7 @@ public partial class SpreadsheetEditorView : UserControl, IAppEnvironment
         OverlayHost.PointerPressed += OverlayBackgroundPressed;
         // Defer focus until the overlay's template is realized, otherwise focusing the just-shown input
         // can silently fail and the user has to click into it first (mirrors ShowModalAsync's deferral).
-        Avalonia.Threading.Dispatcher.UIThread.Post(() => input.Focus());
-    }
-
-    /// <summary>The first selectable (non-header) row index at or after <paramref name="start"/> stepping by <paramref name="step"/>, or -1.</summary>
-    private static int FirstSelectableIndex(IReadOnlyList<PaletteItem> rows, int start, int step)
-    {
-        for (int i = Math.Max(0, start); i >= 0 && i < rows.Count; i += step)
-        {
-            if (!rows[i].IsHeader)
-            {
-                return i;
-            }
-        }
-
-        return -1;
-    }
-
-    /// <summary>One palette row: a category divider, or an icon + command name + description + shortcut (PRD §6.7).</summary>
-    private static Control BuildPaletteRow(PaletteItem? item)
-    {
-        // The ListBox recycles containers while scrolling and may build the template with a null
-        // item; render nothing rather than dereferencing it.
-        if (item is null)
-        {
-            return new Control();
-        }
-
-        if (item.IsHeader)
-        {
-            // A non-interactive category section header (e.g. "Format"), dividing the results.
-            return new TextBlock
-            {
-                Text = item.Label.ToUpperInvariant(),
-                FontSize = 10,
-                FontWeight = FontWeight.SemiBold,
-                Foreground = PaletteMuted,
-                Margin = new Thickness(2, 8, 0, 2),
-            };
-        }
-
-        var dock = new DockPanel { LastChildFill = true };
-
-        if (!string.IsNullOrEmpty(item.Shortcut))
-        {
-            var shortcut = new TextBlock
-            {
-                Text = item.Shortcut,
-                Foreground = PaletteMuted,
-                FontSize = 11,
-                VerticalAlignment = VerticalAlignment.Center,
-                Margin = new Thickness(8, 0, 0, 0),
-            };
-            DockPanel.SetDock(shortcut, Dock.Right);
-            dock.Children.Add(shortcut);
-        }
-
-        if (!string.IsNullOrEmpty(item.Icon))
-        {
-            var icon = new LucideIcon { IconKey = item.Icon, Size = 16, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 11, 0) };
-            DockPanel.SetDock(icon, Dock.Left);
-            dock.Children.Add(icon);
-        }
-
-        dock.Children.Add(new StackPanel
-        {
-            VerticalAlignment = VerticalAlignment.Center,
-            Children =
-            {
-                new TextBlock { Text = item.Label, FontWeight = FontWeight.Medium },
-                new TextBlock { Text = item.Description, Foreground = PaletteMuted, FontSize = 11, TextTrimming = TextTrimming.CharacterEllipsis },
-            },
-        });
-
-        return dock;
+        Avalonia.Threading.Dispatcher.UIThread.Post(() => palette.SearchBox.Focus());
     }
 
     private void OverlayBackgroundPressed(object? sender, PointerPressedEventArgs e)
