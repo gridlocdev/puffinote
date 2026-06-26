@@ -1,6 +1,6 @@
 # Proposal 0001 — `BirdBrain.Components`, a shared app-shell / design-system library
 
-- **Status:** Phase 0 + Phase 1 **landed** (`FuzzyMatcher`, `RelayCommand` now shared); Phases 2–5 remain proposed (see §7, §10)
+- **Status:** Phases 0–1 **landed** (`FuzzyMatcher`, `RelayCommand` shared); Phase 2 **foundation landed** (token contract + first chrome migrated); Phases 3–5 proposed (see §7)
 - **Author:** (you) · drafted with Claude
 - **Affects:** `features/EditSpreadsheets` (Cellestra), `features/EditMarkdown` (Typage), and the
   planned **BirdBrain** composite app
@@ -223,8 +223,15 @@ Each phase ends with **all** apps building clean and tests green; land a phase o
   were *not* moved — they are not actually trivial duplicates (Cellestra has no `Shortcut` type and its
   `ShortcutFormatter` formats a `KeyGesture`, while Typage's formats its own `Shortcut`). They are
   reclassified Tier C and folded into **Phase 4**.
-- **Phase 2 — Design tokens + theme contract.** Introduce the token resources / `IAppTheme`; replace
-  hardcoded color literals in both apps. Each app supplies its palette.
+- **Phase 2 — Design tokens + theme contract. ✅ Foundation done.** Added a variant-aware token
+  contract in `BirdBrain.Components.Theming` — `ThemePalette` (Accent / AccentSubtle / Surface /
+  SurfaceBorder / MutedText / Scrim), `IAppTheme`, a default `BirdBrainTheme` seeded by accent, and the
+  `Tokens` accessor (named `Tokens`, not `AppTheme`, to avoid colliding with apps' own theme-preference
+  enums) — mirroring the editor's `GridPalette.For(ThemeVariant)`. Each app registers its theme at
+  startup (Cellestra `0x2A7DE1`, Typage `0x579DF6`). First chrome migrated onto tokens: Cellestra's
+  `RadialSettingsDialog` and Typage's `CommandPalette`. **Remaining:** the rest of the shell literals
+  migrate incrementally — most land in Phase 3 as the chrome itself moves to shared. Domain-surface
+  colors (grid cells, Markdown syntax via `MarkdownTheme`) stay app-specific (§4.2), not tokenized.
 - **Phase 3 — UI primitives.** Modal/overlay host + Tab focus-trap, confirm dialog, tooltip card,
   command palette, icon system. Re-skinned via Phase-2 tokens.
 - **Phase 4 — `AppCommand` + shortcut unification (Tier C).** Env-agnostic command (Cellestra captures
