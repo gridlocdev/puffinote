@@ -44,6 +44,9 @@ public sealed class CommandPalette : Panel
             BorderThickness = new Thickness(1),
             Child = new StackPanel { Children = { _search, _list } },
         };
+        // Trap Tab inside the palette card so it cycles between the search box and the list, never
+        // reaching the editor / toolbar behind the overlay.
+        KeyboardNavigation.SetTabNavigation(card, KeyboardNavigationMode.Cycle);
 
         _list.ItemTemplate = new FuncDataTemplate<PaletteRow>((row, _) => BuildRow(row), supportsRecycling: true);
 
