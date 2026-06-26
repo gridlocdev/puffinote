@@ -25,11 +25,10 @@ public class RadialMenuLayoutTests
         Assert.Equal(-1, RadialMenuLayout.SegmentAt(0, -50, segmentCount: 0, deadZoneRadius: 40));
 
     [Fact]
-    public void Default_config_has_six_labelled_seeded_segments()
+    public void Default_config_has_six_seeded_segments()
     {
         var config = RadialMenuConfig.Default;
         Assert.Equal(RadialMenuConfig.DefaultSegmentCount, config.SegmentCount);
-        Assert.True(config.ShowLabels);
         Assert.Equal(config.SegmentCount, config.CommandIds.Count);
         Assert.Equal("edit.cut", config.CommandIdAt(0));
     }

@@ -19,14 +19,12 @@ public class SettingsTests
             var radial = new RadialMenuConfig
             {
                 SegmentCount = 4,
-                ShowLabels = false,
                 CommandIds = new List<string?> { "edit.cut", null, "edit.paste", "edit.undo" },
             };
             service.Save(new AppSettings { RadialMenu = radial });
 
             var loaded = service.Load().RadialMenu;
             Assert.Equal(4, loaded.SegmentCount);
-            Assert.False(loaded.ShowLabels);
             Assert.Equal("edit.cut", loaded.CommandIdAt(0));
             Assert.Null(loaded.CommandIdAt(1));
             Assert.Equal("edit.undo", loaded.CommandIdAt(3));

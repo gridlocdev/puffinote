@@ -5,10 +5,10 @@ namespace Cellestra.Desktop.Commands;
 
 /// <summary>
 /// User configuration for the press-and-hold radial command menu (the right-click-hold pie): how
-/// many segments it has, whether each segment shows a text label beside its icon, and which
-/// <see cref="AppCommand"/> (by id) each segment runs. It reads the one command catalog (Golden Rule
-/// #4), so a segment is just a command id — never a second copy of a command. Persisted as part of
-/// the app settings JSON and pushed into the editor like the other view state (zoom, command-bar).
+/// many segments it has and which <see cref="AppCommand"/> (by id) each segment runs. It reads the one
+/// command catalog (Golden Rule #4), so a segment is just a command id — never a second copy of a
+/// command. Each wedge shows its icon, with the command's title surfacing as a tooltip on hover.
+/// Persisted as part of the app settings JSON and pushed into the editor like the other view state.
 /// </summary>
 public sealed record RadialMenuConfig
 {
@@ -21,9 +21,6 @@ public sealed record RadialMenuConfig
 
     /// <summary>How many wedges the radial is divided into.</summary>
     public int SegmentCount { get; init; } = DefaultSegmentCount;
-
-    /// <summary>Whether each wedge draws its command's label under the icon (off = icons only).</summary>
-    public bool ShowLabels { get; init; } = true;
 
     /// <summary>
     /// The command id bound to each segment, clockwise from the top. A null/blank entry is an
@@ -42,7 +39,7 @@ public sealed record RadialMenuConfig
         "format.bold", "edit.autoSum", "data.toggleFilter", "format.cells", "insert.rowsAbove", "edit.clearAll",
     };
 
-    /// <summary>A ready-to-use default radial (six segments, labels on, seeded from the common actions).</summary>
+    /// <summary>A ready-to-use default radial (six segments, seeded from the common actions).</summary>
     public static RadialMenuConfig Default => new RadialMenuConfig().Normalized();
 
     /// <summary>The command id bound to <paramref name="index"/>, or null when unbound / out of range.</summary>

@@ -89,7 +89,7 @@ public sealed partial class SpreadsheetGrid
         _radialActive = true;
         _radialSegments = BuildRadialSegments();
         _radialActiveSegment = -1;
-        _radialOverlay.Open(_radialCenter, _radialSegments, _radialConfig.ShowLabels);
+        _radialOverlay.Open(_radialCenter, _radialSegments);
     }
 
     private void UpdateRadialHover(Point point)

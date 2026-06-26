@@ -1,7 +1,9 @@
 using System.Collections.Generic;
+using Avalonia.Controls;
 using Avalonia.Headless.XUnit;
 using Cellestra.Core.Values;
 using Cellestra.Desktop.Commands;
+using Cellestra.Desktop.Controls.RadialMenu;
 using Cellestra.Desktop.Views;
 using Cellestra.Desktop.Views.Dialogs;
 using Xunit;
@@ -95,7 +97,6 @@ public class RadialMenuTests
         window.Editor.RadialConfig = new RadialMenuConfig
         {
             SegmentCount = 3,
-            ShowLabels = true,
             CommandIds = new List<string?> { "edit.copy", null, "edit.paste" },
         };
 
@@ -132,14 +133,12 @@ public class RadialMenuTests
         var dialog = new RadialSettingsDialog(new RadialMenuConfig
         {
             SegmentCount = 4,
-            ShowLabels = false,
             CommandIds = new List<string?> { "edit.cut", "edit.copy", "edit.paste", "edit.undo" },
         });
 
         var result = dialog.BuildConfigForTest();
 
         Assert.Equal(4, result.SegmentCount);
-        Assert.False(result.ShowLabels);
         Assert.Equal("edit.cut", result.CommandIdAt(0));
         Assert.Equal("edit.undo", result.CommandIdAt(3));
     }
@@ -150,7 +149,6 @@ public class RadialMenuTests
         var dialog = new RadialSettingsDialog(new RadialMenuConfig
         {
             SegmentCount = 4,
-            ShowLabels = true,
             CommandIds = new List<string?> { "edit.cut", "edit.copy", "edit.paste", "edit.undo" },
         });
 
@@ -168,7 +166,6 @@ public class RadialMenuTests
         var dialog = new RadialSettingsDialog(new RadialMenuConfig
         {
             SegmentCount = 4,
-            ShowLabels = false,
             CommandIds = new List<string?> { "edit.cut", "edit.copy", "edit.paste", "edit.undo" },
         });
 
@@ -181,7 +178,64 @@ public class RadialMenuTests
         var result = dialog.BuildConfigForTest();
         var defaults = RadialMenuConfig.Default;
         Assert.Equal(defaults.SegmentCount, result.SegmentCount);
-        Assert.Equal(defaults.ShowLabels, result.ShowLabels);
         Assert.Equal(defaults.CommandIdAt(0), result.CommandIdAt(0));
+    }
+
+    [AvaloniaFact]
+    public void Settings_dialog_swap_reorders_two_segments()
+    {
+        var dialog = new RadialSettingsDialog(new RadialMenuConfig
+        {
+            SegmentCount = 4,
+            CommandIds = new List<string?> { "edit.cut", "edit.copy", "edit.paste", "edit.undo" },
+        });
+
+        dialog.DragReorderForTest(0, 2); // drag segment 1 onto segment 3 — they swap
+
+        var result = dialog.BuildConfigForTest();
+        Assert.Equal("edit.paste", result.CommandIdAt(0));
+        Assert.Equal("edit.cut", result.CommandIdAt(2));
+        Assert.Equal("edit.copy", result.CommandIdAt(1)); // untouched
+        Assert.Equal(2, dialog.SelectedSegmentForTest);   // selection follows the dragged item
+    }
+
+    [AvaloniaFact]
+    public void Settings_dialog_alt_shift_arrow_moves_the_selected_segment()
+    {
+        var dialog = new RadialSettingsDialog(new RadialMenuConfig
+        {
+            SegmentCount = 4,
+            CommandIds = new List<string?> { "edit.cut", "edit.copy", "edit.paste", "edit.undo" },
+        });
+
+        dialog.SelectSegmentForTest(1);
+        dialog.MoveSelectedForTest(+1); // ⌥⇧↓ : segment 2 (copy) trades places with segment 3 (paste)
+
+        var result = dialog.BuildConfigForTest();
+        Assert.Equal("edit.paste", result.CommandIdAt(1));
+        Assert.Equal("edit.copy", result.CommandIdAt(2));
+        Assert.Equal(2, dialog.SelectedSegmentForTest);
+        Assert.True(dialog.IsRowSelectedForTest(2));
+
+        dialog.MoveSelectedForTest(+10); // off the bottom edge — refused, no change
+        Assert.Equal("edit.copy", dialog.BuildConfigForTest().CommandIdAt(2));
+    }
+
+    [AvaloniaFact]
+    public void Radial_overlay_renders_the_active_segments_tooltip()
+    {
+        var overlay = new RadialMenuOverlay { FitToBounds = true };
+        var window = new Window { Width = 280, Height = 280, Content = overlay };
+        window.Show();
+
+        overlay.Open(new Avalonia.Point(140, 140), new[]
+        {
+            new RadialSegment("edit.copy", "copy", "Copy", true),
+            new RadialSegment("edit.paste", "clipboard", "Paste", true),
+            new RadialSegment(null, null, string.Empty, false),
+        });
+        overlay.SetActiveSegment(0); // its title draws as the centre tooltip — must not throw in the render pass
+
+        window.AssertRenders();
     }
 }
