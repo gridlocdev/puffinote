@@ -11,7 +11,7 @@ using Avalonia.Platform.Storage;
 using BirdBrain.Components.Commands;
 using Cellestra.Desktop.Commands;
 using Cellestra.Desktop.Services;
-using Cellestra.Desktop.Views.Overlays;
+using BirdBrain.Components.Overlays;
 using Cellestra.Editor;
 
 namespace Cellestra.Desktop.Views;

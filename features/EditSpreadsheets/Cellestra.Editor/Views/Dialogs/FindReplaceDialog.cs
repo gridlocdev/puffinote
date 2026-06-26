@@ -6,7 +6,7 @@ using Avalonia.Layout;
 using Cellestra.Core.Editing;
 using Cellestra.Core.Model;
 using Cellestra.Desktop.Commands;
-using Cellestra.Desktop.Views.Overlays;
+using BirdBrain.Components.Overlays;
 using NumberFormatter = Cellestra.Core.Styling.NumberFormatter;
 
 namespace Cellestra.Desktop.Views.Dialogs;

@@ -12,7 +12,7 @@ using BirdBrain.Components.Theming;
 using Cellestra.Desktop.Commands;
 using BirdBrain.Components.Controls.Icons;
 using Cellestra.Desktop.Controls.RadialMenu;
-using Cellestra.Desktop.Views.Overlays;
+using BirdBrain.Components.Overlays;
 
 namespace Cellestra.Desktop.Views.Dialogs;
 

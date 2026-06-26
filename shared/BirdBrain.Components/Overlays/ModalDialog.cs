@@ -6,7 +6,7 @@ using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Layout;
 
-namespace Cellestra.Desktop.Views.Overlays;
+namespace BirdBrain.Components.Overlays;
 
 /// <summary>Non-generic handle the host keeps to the active modal so a backdrop click can cancel it.</summary>
 public interface IModalDialog
@@ -16,16 +16,15 @@ public interface IModalDialog
 }
 
 /// <summary>
-/// Base for an <em>internal</em> modal dialog rendered inside the window's overlay host (PRD task:
-/// "any modal popup that spawns a separate window should be an internal modal, similar to the one
-/// spawned in the command palette"). It replaces the old <see cref="Window"/>-per-dialog model: a
-/// dialog builds its content panel, sets <see cref="DialogContent"/>, and finishes by calling
-/// <see cref="Close"/> with its result. The host (<see cref="MainWindow"/>) shows it over a blurred
-/// grid and awaits <see cref="ShowAsync"/>.
+/// Base for an <em>internal</em> modal dialog rendered inside an app's overlay host rather than a
+/// separate OS <see cref="Window"/> — the same model as the command palette. A dialog builds its
+/// content panel, assigns <see cref="DialogContent"/>, and finishes by calling <see cref="Close"/>
+/// with its result; a host shows it (typically over a blurred/dimmed backdrop) and awaits
+/// <see cref="Result"/>.
 ///
 /// Mirrors the small slice of the <see cref="Window"/> API the dialogs used (<c>Title</c>,
-/// <c>Close(result)</c>) so the migrated dialog bodies barely change. Esc cancels (returns the
-/// type's default), Enter is handled by each dialog's default button as before.
+/// <c>Close(result)</c>) so a dialog body reads the same whether shown as a window or an overlay.
+/// Esc cancels (returns the type's default), Enter is handled by each dialog's default button.
 /// </summary>
 public abstract class ModalDialog<TResult> : ContentControl, IModalDialog
 {

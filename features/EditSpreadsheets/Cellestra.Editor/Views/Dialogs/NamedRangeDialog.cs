@@ -3,7 +3,7 @@ using System.Linq;
 using Avalonia.Controls;
 using Avalonia.Layout;
 using Cellestra.Core.Model;
-using Cellestra.Desktop.Views.Overlays;
+using BirdBrain.Components.Overlays;
 
 namespace Cellestra.Desktop.Views.Dialogs;
 
