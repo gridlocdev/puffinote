@@ -283,7 +283,7 @@ public class RadialMenuTests
     }
 
     [AvaloniaFact]
-    public void Radial_overlay_renders_the_active_segments_tooltip()
+    public void Radial_overlay_floats_a_command_tooltip_over_the_active_wedge()
     {
         var overlay = new RadialMenuOverlay { FitToBounds = true };
         var window = new Window { Width = 280, Height = 280, Content = overlay };
@@ -295,8 +295,18 @@ public class RadialMenuTests
             new RadialSegment("edit.paste", "clipboard", "Paste", true),
             new RadialSegment(null, null, string.Empty, false),
         });
-        overlay.SetActiveSegment(0); // its title draws as the centre tooltip — must not throw in the render pass
 
-        window.AssertRenders();
+        overlay.SetActiveSegment(0); // floats the command-bar tip card over the wedge
+        Assert.True(overlay.TooltipOpenForTest);
+        Assert.Equal("edit.copy", overlay.ActiveTooltipCommandIdForTest);
+
+        overlay.SetActiveSegment(2); // an unbound wedge has no command — the tip closes
+        Assert.False(overlay.TooltipOpenForTest);
+        Assert.Null(overlay.ActiveTooltipCommandIdForTest);
+
+        overlay.SetActiveSegment(-1); // back in the dead zone — still closed
+        Assert.False(overlay.TooltipOpenForTest);
+
+        window.AssertRenders(); // the popup + overlay render without throwing
     }
 }

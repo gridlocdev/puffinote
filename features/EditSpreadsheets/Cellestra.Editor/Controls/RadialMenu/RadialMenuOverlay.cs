@@ -1,11 +1,12 @@
 using System;
 using System.Collections.Generic;
-using System.Globalization;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Media;
 using Avalonia.Media.Immutable;
+using Cellestra.Desktop.Commands;
 using Cellestra.Desktop.Controls.Icons;
+using CommandBarControl = Cellestra.Desktop.Controls.CommandBar.CommandBar;
 
 namespace Cellestra.Desktop.Controls.RadialMenu;
 
@@ -26,7 +27,6 @@ public sealed class RadialMenuOverlay : Control
     private const double IconSize = 22;
 
     private static readonly IBrush GlassFill = new ImmutableSolidColorBrush(Color.FromArgb(0xE6, 0x24, 0x26, 0x2B));
-    private static readonly IBrush TooltipFill = new ImmutableSolidColorBrush(Color.FromArgb(0xFF, 0x10, 0x12, 0x16));
     private static readonly IBrush ActiveFill = new ImmutableSolidColorBrush(Color.FromArgb(0xFF, 0x2A, 0x7D, 0xE1));
     private static readonly IBrush ActiveDisabledFill = new ImmutableSolidColorBrush(Color.FromArgb(0xFF, 0x4A, 0x4F, 0x57));
     private static readonly IBrush InnerFill = new ImmutableSolidColorBrush(Color.FromArgb(0xF2, 0x18, 0x1A, 0x1E));
@@ -89,11 +89,18 @@ public sealed class RadialMenuOverlay : Control
         _center = center;
         _segments = segments;
         _activeSegment = -1;
+        UpdateTooltip();
         InvalidateVisual();
     }
 
     /// <summary>The currently highlighted segment (-1 for none).</summary>
     public int ActiveSegment => _activeSegment;
+
+    /// <summary>Test seam: the id of the command whose tip the active wedge floats (null when none).</summary>
+    internal string? ActiveTooltipCommandIdForTest => ActiveCommand()?.Id;
+
+    /// <summary>Test seam: whether the floating command tooltip is currently open.</summary>
+    internal bool TooltipOpenForTest => ToolTip.GetIsOpen(this);
 
     /// <summary>Highlight the segment the cursor now points at (-1 for none); repaints if it changed.</summary>
     public void SetActiveSegment(int segment)
@@ -104,6 +111,7 @@ public sealed class RadialMenuOverlay : Control
         }
 
         _activeSegment = segment;
+        UpdateTooltip();
         InvalidateVisual();
     }
 
@@ -111,7 +119,46 @@ public sealed class RadialMenuOverlay : Control
     {
         _segments = Array.Empty<RadialSegment>();
         _activeSegment = -1;
+        UpdateTooltip();
         InvalidateVisual();
+    }
+
+    /// <summary>The command the highlighted wedge runs, or null when nothing/an unbound wedge is active.</summary>
+    private AppCommand? ActiveCommand()
+    {
+        if (_activeSegment < 0 || _activeSegment >= _segments.Count)
+        {
+            return null;
+        }
+
+        string? id = _segments[_activeSegment].CommandId;
+        return id is null ? null : AppCommands.ById(id);
+    }
+
+    /// <summary>
+    /// Float a real tooltip over the highlighted wedge — the same name + shortcut + description card the
+    /// command bar shows (<see cref="CommandBar.BuildTip"/>) — rather than drawing a label inside the
+    /// ring. Reopened on each change so it repositions on the new wedge; closed when nothing is active.
+    /// </summary>
+    private void UpdateTooltip()
+    {
+        // Only drive the popup once shown; merely constructing the overlay (e.g. in a test) opens nothing.
+        if (TopLevel.GetTopLevel(this) is null)
+        {
+            return;
+        }
+
+        ToolTip.SetIsOpen(this, false);
+        var command = ActiveCommand();
+        if (command is null)
+        {
+            return;
+        }
+
+        ToolTip.SetTip(this, CommandBarControl.BuildTip(command));
+        ToolTip.SetPlacement(this, PlacementMode.Pointer);
+        ToolTip.SetShowDelay(this, 0);
+        ToolTip.SetIsOpen(this, true);
     }
 
     public override void Render(DrawingContext context)
@@ -149,9 +196,8 @@ public sealed class RadialMenuOverlay : Control
             DrawSegmentContent(context, i, count);
         }
 
-        // The active wedge's command title surfaces as a tooltip readout in the centre hole — drawn last
-        // so it sits on top. (The grid no longer paints a label under every wedge; this is hover-only.)
-        DrawActiveTooltip(context);
+        // The active wedge's command title floats as a real tooltip popup (see UpdateTooltip), not drawn
+        // into the ring — so it matches the command bar's hover card and can spill outside the radial.
     }
 
     private Geometry BuildWedge(double fromAngle, double toAngle)
@@ -192,38 +238,6 @@ public sealed class RadialMenuOverlay : Control
 
         var (iconX, iconY) = RadialMenuLayout.Polar(_drawCenter.X, _drawCenter.Y, contentRadius, angle);
         DrawIcon(context, segment.IconKey, iconX, iconY, brush, iconSize);
-    }
-
-    /// <summary>Draw the hovered wedge's command title as a tooltip pill in the centre (nothing if none).</summary>
-    private void DrawActiveTooltip(DrawingContext context)
-    {
-        if (_activeSegment < 0 || _activeSegment >= _segments.Count)
-        {
-            return;
-        }
-
-        string label = _segments[_activeSegment].Label;
-        if (string.IsNullOrEmpty(label))
-        {
-            return;
-        }
-
-        var text = new FormattedText(label, CultureInfo.CurrentCulture, FlowDirection.LeftToRight,
-            Typeface.Default, Math.Max(10, 12 * _drawScale), GlyphBrush)
-        {
-            TextAlignment = TextAlignment.Center,
-            MaxTextWidth = OuterRadius * 1.5 * _drawScale,
-            Trimming = TextTrimming.CharacterEllipsis,
-            MaxLineCount = 1,
-        };
-
-        double padX = 10 * _drawScale;
-        double padY = 5 * _drawScale;
-        double w = text.Width + (2 * padX);
-        double h = text.Height + (2 * padY);
-        var rect = new Rect(_drawCenter.X - (w / 2), _drawCenter.Y - (h / 2), w, h);
-        context.DrawRectangle(TooltipFill, RimPen, new RoundedRect(rect, 6 * _drawScale));
-        context.DrawText(text, new Point(_drawCenter.X - (text.Width / 2), _drawCenter.Y - (text.Height / 2)));
     }
 
     private static void DrawIcon(DrawingContext context, string? iconKey, double centerX, double centerY, IBrush brush, double iconSize)
