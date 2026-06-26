@@ -25,6 +25,10 @@ public sealed class RadialMenuOverlay : Control
     private const double InnerRadius = 40;
     private const double IconSize = 22;
 
+    // The farthest a label can reach from the centre (radius of the label band plus half its widest
+    // line): used to scale the whole radial down so labels stay inside the bounds in fit-to-bounds mode.
+    private const double LabeledExtent = 140;
+
     private static readonly IBrush GlassFill = new ImmutableSolidColorBrush(Color.FromArgb(0xE6, 0x24, 0x26, 0x2B));
     private static readonly IBrush ActiveFill = new ImmutableSolidColorBrush(Color.FromArgb(0xFF, 0x2A, 0x7D, 0xE1));
     private static readonly IBrush ActiveDisabledFill = new ImmutableSolidColorBrush(Color.FromArgb(0xFF, 0x4A, 0x4F, 0x57));
@@ -38,6 +42,8 @@ public sealed class RadialMenuOverlay : Control
     private IReadOnlyList<RadialSegment> _segments = Array.Empty<RadialSegment>();
     private bool _showLabels = true;
     private int _activeSegment = -1;
+    private Point _drawCenter;
+    private double _drawScale = 1;
 
     public RadialMenuOverlay()
     {
@@ -45,8 +51,41 @@ public sealed class RadialMenuOverlay : Control
         IsHitTestVisible = false;
     }
 
+    /// <summary>
+    /// When true the radial is centred on the control's own bounds and scaled to fit them (labels and
+    /// all). Used by the settings preview, where the overlay sits in a fixed box; the grid leaves this
+    /// false so the radial appears full-size centred on the cursor.
+    /// </summary>
+    public bool FitToBounds { get; set; }
+
     /// <summary>The radial's dead-zone radius — a cursor closer than this to the centre selects nothing.</summary>
     public static double DeadZoneRadius => InnerRadius;
+
+    /// <summary>
+    /// The segment a point in the control's own coordinate space falls in (-1 for the dead zone / none),
+    /// honouring the current centre and fit-to-bounds scale. Lets a hit-test-invisible preview map
+    /// pointer events (forwarded from its parent) back to a segment.
+    /// </summary>
+    public int SegmentAtLocalPoint(Point p)
+    {
+        var (center, scale) = ComputeLayout();
+        return RadialMenuLayout.SegmentAt(p.X - center.X, p.Y - center.Y, _segments.Count, InnerRadius * scale);
+    }
+
+    /// <summary>The centre and uniform scale to draw at — fitted to bounds, or the opened centre at 1:1.</summary>
+    private (Point Center, double Scale) ComputeLayout()
+    {
+        if (!FitToBounds)
+        {
+            return (_center, 1);
+        }
+
+        var center = new Point(Bounds.Width / 2, Bounds.Height / 2);
+        double natural = _showLabels ? LabeledExtent : OuterRadius + 4;
+        double available = (Math.Min(Bounds.Width, Bounds.Height) / 2) - 2;
+        double scale = available > 0 && natural > 0 ? available / natural : 1;
+        return (center, scale);
+    }
 
     /// <summary>Open the radial centred at <paramref name="center"/> with the given segments.</summary>
     public void Open(Point center, IReadOnlyList<RadialSegment> segments, bool showLabels)
@@ -85,6 +124,8 @@ public sealed class RadialMenuOverlay : Control
             return;
         }
 
+        (_drawCenter, _drawScale) = ComputeLayout();
+
         double step = 2 * Math.PI / count;
         for (int i = 0; i < count; i++)
         {
@@ -102,7 +143,8 @@ public sealed class RadialMenuOverlay : Control
         }
 
         // The hollow centre is a clear "release here to cancel" target.
-        context.DrawEllipse(InnerFill, RimPen, _center, InnerRadius, InnerRadius);
+        double innerR = InnerRadius * _drawScale;
+        context.DrawEllipse(InnerFill, RimPen, _drawCenter, innerR, innerR);
 
         for (int i = 0; i < count; i++)
         {
@@ -112,19 +154,21 @@ public sealed class RadialMenuOverlay : Control
 
     private Geometry BuildWedge(double fromAngle, double toAngle)
     {
-        var (ix1, iy1) = RadialMenuLayout.Polar(_center.X, _center.Y, InnerRadius, fromAngle);
-        var (ox1, oy1) = RadialMenuLayout.Polar(_center.X, _center.Y, OuterRadius, fromAngle);
-        var (ox2, oy2) = RadialMenuLayout.Polar(_center.X, _center.Y, OuterRadius, toAngle);
-        var (ix2, iy2) = RadialMenuLayout.Polar(_center.X, _center.Y, InnerRadius, toAngle);
+        double innerR = InnerRadius * _drawScale;
+        double outerR = OuterRadius * _drawScale;
+        var (ix1, iy1) = RadialMenuLayout.Polar(_drawCenter.X, _drawCenter.Y, innerR, fromAngle);
+        var (ox1, oy1) = RadialMenuLayout.Polar(_drawCenter.X, _drawCenter.Y, outerR, fromAngle);
+        var (ox2, oy2) = RadialMenuLayout.Polar(_drawCenter.X, _drawCenter.Y, outerR, toAngle);
+        var (ix2, iy2) = RadialMenuLayout.Polar(_drawCenter.X, _drawCenter.Y, innerR, toAngle);
 
         var geometry = new StreamGeometry();
         using (var ctx = geometry.Open())
         {
             ctx.BeginFigure(new Point(ix1, iy1), isFilled: true);
             ctx.LineTo(new Point(ox1, oy1));
-            ctx.ArcTo(new Point(ox2, oy2), new Size(OuterRadius, OuterRadius), 0, isLargeArc: false, SweepDirection.Clockwise);
+            ctx.ArcTo(new Point(ox2, oy2), new Size(outerR, outerR), 0, isLargeArc: false, SweepDirection.Clockwise);
             ctx.LineTo(new Point(ix2, iy2));
-            ctx.ArcTo(new Point(ix1, iy1), new Size(InnerRadius, InnerRadius), 0, isLargeArc: false, SweepDirection.CounterClockwise);
+            ctx.ArcTo(new Point(ix1, iy1), new Size(innerR, innerR), 0, isLargeArc: false, SweepDirection.CounterClockwise);
             ctx.EndFigure(isClosed: true);
         }
 
@@ -141,21 +185,22 @@ public sealed class RadialMenuOverlay : Control
         }
 
         double angle = RadialMenuLayout.SegmentCenterAngle(index, count);
-        double contentRadius = (InnerRadius + OuterRadius) / 2;
+        double contentRadius = (InnerRadius + OuterRadius) / 2 * _drawScale;
+        double iconSize = IconSize * _drawScale;
 
         // With labels on, lift the icon a touch so the label sits beneath it within the wedge.
-        double iconRadius = _showLabels ? contentRadius - 8 : contentRadius;
-        var (iconX, iconY) = RadialMenuLayout.Polar(_center.X, _center.Y, iconRadius, angle);
-        DrawIcon(context, segment.IconKey, iconX, iconY, brush);
+        double iconRadius = _showLabels ? contentRadius - (8 * _drawScale) : contentRadius;
+        var (iconX, iconY) = RadialMenuLayout.Polar(_drawCenter.X, _drawCenter.Y, iconRadius, angle);
+        DrawIcon(context, segment.IconKey, iconX, iconY, brush, iconSize);
 
         if (_showLabels && !string.IsNullOrEmpty(segment.Label))
         {
-            var (labelX, labelY) = RadialMenuLayout.Polar(_center.X, _center.Y, contentRadius + 16, angle);
-            DrawLabel(context, segment.Label, labelX, labelY, brush);
+            var (labelX, labelY) = RadialMenuLayout.Polar(_drawCenter.X, _drawCenter.Y, contentRadius + (16 * _drawScale), angle);
+            DrawLabel(context, segment.Label, labelX, labelY, brush, _drawScale);
         }
     }
 
-    private static void DrawIcon(DrawingContext context, string? iconKey, double centerX, double centerY, IBrush brush)
+    private static void DrawIcon(DrawingContext context, string? iconKey, double centerX, double centerY, IBrush brush, double iconSize)
     {
         var geometry = LucideIcons.Get(iconKey);
         if (geometry is null)
@@ -163,23 +208,23 @@ public sealed class RadialMenuOverlay : Control
             return;
         }
 
-        double scale = IconSize / LucideIcons.ViewBox;
+        double scale = iconSize / LucideIcons.ViewBox;
         var pen = new Pen(brush, 2) { LineCap = PenLineCap.Round, LineJoin = PenLineJoin.Round };
         var transform = Matrix.CreateScale(scale, scale)
-            * Matrix.CreateTranslation(centerX - (IconSize / 2), centerY - (IconSize / 2));
+            * Matrix.CreateTranslation(centerX - (iconSize / 2), centerY - (iconSize / 2));
         using (context.PushTransform(transform))
         {
             context.DrawGeometry(null, pen, geometry);
         }
     }
 
-    private static void DrawLabel(DrawingContext context, string label, double centerX, double centerY, IBrush brush)
+    private static void DrawLabel(DrawingContext context, string label, double centerX, double centerY, IBrush brush, double scale)
     {
         var text = new FormattedText(label, CultureInfo.CurrentCulture, FlowDirection.LeftToRight,
-            Typeface.Default, 10.5, brush)
+            Typeface.Default, Math.Max(8.5, 10.5 * scale), brush)
         {
             TextAlignment = TextAlignment.Center,
-            MaxTextWidth = (OuterRadius - InnerRadius) + 24,
+            MaxTextWidth = ((OuterRadius - InnerRadius) + 24) * scale,
             Trimming = TextTrimming.CharacterEllipsis,
             MaxLineCount = 1,
         };

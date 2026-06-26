@@ -1,6 +1,7 @@
 using System.Collections.Generic;
 using System.Linq;
 using Avalonia.Controls;
+using Avalonia.Input;
 using Avalonia.Layout;
 using Avalonia.Media;
 using Cellestra.Desktop.Commands;
@@ -11,9 +12,10 @@ namespace Cellestra.Desktop.Views.Dialogs;
 
 /// <summary>
 /// Settings for the press-and-hold radial command menu (task 3): on the left, the number of segments,
-/// a show-labels toggle, and a command picker per segment; on the right, a live preview of the radial
-/// drawn exactly as it appears in the grid (same <see cref="RadialMenuOverlay"/>). Returns the edited
-/// <see cref="RadialMenuConfig"/>, or null on cancel.
+/// a show-labels toggle, a command picker per segment, and a Reset button; on the right, a live preview
+/// of the radial drawn exactly as it appears in the grid (same <see cref="RadialMenuOverlay"/>, scaled
+/// to fit). Hovering a segment in the preview highlights it and bolds the matching segment row; clicking
+/// it focuses that row's picker. Returns the edited <see cref="RadialMenuConfig"/>, or null on cancel.
 /// </summary>
 public sealed class RadialSettingsDialog : ModalDialog<RadialMenuConfig>
 {
@@ -33,13 +35,22 @@ public sealed class RadialSettingsDialog : ModalDialog<RadialMenuConfig>
         public override string ToString() => Label; // ComboBox shows this
     }
 
-    private const double PreviewSize = 280;
+    private const double PreviewSize = 250;
+    private const double LeftWidth = 250;
 
     private readonly NumericUpDown _countField;
     private readonly CheckBox _labelsToggle;
     private readonly StackPanel _bindingRows = new() { Spacing = 6 };
-    private readonly RadialMenuOverlay _preview = new() { Width = PreviewSize, Height = PreviewSize };
+    private readonly RadialMenuOverlay _preview = new() { Width = PreviewSize, Height = PreviewSize, FitToBounds = true };
     private readonly IReadOnlyList<CommandChoice> _choices;
+
+    // Per-segment picker + name label, in segment order, so the preview can bold/focus the matching row.
+    private readonly List<ComboBox> _pickers = new();
+    private readonly List<TextBlock> _segmentLabels = new();
+
+    // The inline "reset to defaults?" confirmation, layered over the dialog body (one modal at a time is
+    // hosted by the editor, so the confirmation can't be a second ShowModalAsync — it lives in here).
+    private readonly Border _resetConfirm;
 
     // A full-length working buffer of per-segment bindings (kept the maximum length so shrinking then
     // growing the count remembers earlier picks); only the first N are shown and saved.
@@ -73,9 +84,16 @@ public sealed class RadialSettingsDialog : ModalDialog<RadialMenuConfig>
         _labelsToggle = new CheckBox { Content = "Show text labels", IsChecked = normalized.ShowLabels };
         _labelsToggle.IsCheckedChanged += (_, _) => RefreshPreview();
 
+        var resetButton = new Button
+        {
+            Content = "Reset",
+            HorizontalAlignment = HorizontalAlignment.Center,
+        };
+        resetButton.Click += (_, _) => ShowResetConfirm();
+
         var left = new StackPanel
         {
-            Width = 300,
+            Width = LeftWidth,
             Spacing = 14,
             Children =
             {
@@ -84,11 +102,33 @@ public sealed class RadialSettingsDialog : ModalDialog<RadialMenuConfig>
                 new TextBlock { Text = "Segment commands", FontWeight = FontWeight.SemiBold },
                 new ScrollViewer
                 {
-                    MaxHeight = 280,
+                    MaxHeight = 260,
                     VerticalScrollBarVisibility = Avalonia.Controls.Primitives.ScrollBarVisibility.Auto,
                     Content = _bindingRows,
                 },
+                resetButton,
             },
+        };
+
+        var previewBox = new Border
+        {
+            Width = PreviewSize,
+            Height = PreviewSize,
+            CornerRadius = new Avalonia.CornerRadius(8),
+            Background = new SolidColorBrush(Color.FromArgb(0x20, 0x80, 0x80, 0x80)),
+            Child = _preview,
+        };
+        // The overlay is hit-test invisible (it has to be, in the grid), so the box forwards pointer
+        // events: hover highlights the segment and bolds its row; a press focuses that row's picker.
+        previewBox.PointerMoved += (_, e) => SetHover(_preview.SegmentAtLocalPoint(e.GetPosition(_preview)));
+        previewBox.PointerExited += (_, _) => SetHover(-1);
+        previewBox.PointerPressed += (_, e) =>
+        {
+            int segment = _preview.SegmentAtLocalPoint(e.GetPosition(_preview));
+            if (segment >= 0 && segment < _pickers.Count)
+            {
+                _pickers[segment].Focus();
+            }
         };
 
         var right = new StackPanel
@@ -98,14 +138,7 @@ public sealed class RadialSettingsDialog : ModalDialog<RadialMenuConfig>
             Children =
             {
                 new TextBlock { Text = "Preview", FontWeight = FontWeight.SemiBold },
-                new Border
-                {
-                    Width = PreviewSize,
-                    Height = PreviewSize,
-                    CornerRadius = new Avalonia.CornerRadius(8),
-                    Background = new SolidColorBrush(Color.FromArgb(0x20, 0x80, 0x80, 0x80)),
-                    Child = _preview,
-                },
+                previewBox,
             },
         };
 
@@ -114,7 +147,7 @@ public sealed class RadialSettingsDialog : ModalDialog<RadialMenuConfig>
         var cancel = new Button { Content = "Cancel", IsCancel = true };
         cancel.Click += (_, _) => Close(null);
 
-        DialogContent = new StackPanel
+        var body = new StackPanel
         {
             Spacing = 14,
             Children =
@@ -122,7 +155,7 @@ public sealed class RadialSettingsDialog : ModalDialog<RadialMenuConfig>
                 new StackPanel
                 {
                     Orientation = Orientation.Horizontal,
-                    Spacing = 24,
+                    Spacing = 18,
                     Children = { left, right },
                 },
                 new StackPanel
@@ -134,6 +167,9 @@ public sealed class RadialSettingsDialog : ModalDialog<RadialMenuConfig>
                 },
             },
         };
+
+        _resetConfirm = BuildResetConfirm();
+        DialogContent = new Panel { Children = { body, _resetConfirm } };
 
         RebuildBindingRows();
     }
@@ -156,6 +192,9 @@ public sealed class RadialSettingsDialog : ModalDialog<RadialMenuConfig>
     private void RebuildBindingRows()
     {
         _bindingRows.Children.Clear();
+        _pickers.Clear();
+        _segmentLabels.Clear();
+
         for (int i = 0; i < SegmentCount; i++)
         {
             int index = i;
@@ -164,7 +203,6 @@ public sealed class RadialSettingsDialog : ModalDialog<RadialMenuConfig>
                 ItemsSource = _choices,
                 SelectedItem = _choices.FirstOrDefault(c => c.Id == _bindings[index]) ?? _choices[0],
                 HorizontalAlignment = HorizontalAlignment.Stretch,
-                MinWidth = 180,
             };
             picker.SelectionChanged += (_, _) =>
             {
@@ -172,10 +210,39 @@ public sealed class RadialSettingsDialog : ModalDialog<RadialMenuConfig>
                 RefreshPreview();
             };
 
-            _bindingRows.Children.Add(Labeled($"Segment {i + 1}", picker));
+            var name = new TextBlock
+            {
+                Text = $"Segment {i + 1}",
+                VerticalAlignment = VerticalAlignment.Center,
+                Width = 80,
+            };
+
+            var row = new Grid
+            {
+                ColumnDefinitions = new ColumnDefinitions("Auto,*"),
+            };
+            Grid.SetColumn(name, 0);
+            Grid.SetColumn(picker, 1);
+            row.Children.Add(name);
+            row.Children.Add(picker);
+
+            _pickers.Add(picker);
+            _segmentLabels.Add(name);
+            _bindingRows.Children.Add(row);
         }
 
+        SetHover(-1);
         RefreshPreview();
+    }
+
+    /// <summary>Highlight <paramref name="segment"/> in the preview and bold its row's label (-1 clears).</summary>
+    private void SetHover(int segment)
+    {
+        _preview.SetActiveSegment(segment);
+        for (int i = 0; i < _segmentLabels.Count; i++)
+        {
+            _segmentLabels[i].FontWeight = i == segment ? FontWeight.Bold : FontWeight.Normal;
+        }
     }
 
     /// <summary>Redraw the preview from the current count, labels toggle, and bindings.</summary>
@@ -192,6 +259,91 @@ public sealed class RadialSettingsDialog : ModalDialog<RadialMenuConfig>
         _preview.Open(new Avalonia.Point(PreviewSize / 2, PreviewSize / 2), segments, _labelsToggle.IsChecked == true);
     }
 
+    /// <summary>The semi-transparent "reset to defaults?" confirmation layered over the body.</summary>
+    private Border BuildResetConfirm()
+    {
+        var resetNow = new Button { Content = "Reset", IsDefault = true };
+        resetNow.Click += (_, _) =>
+        {
+            ApplyDefaults();
+            HideResetConfirm();
+        };
+        var keep = new Button { Content = "Cancel" };
+        keep.Click += (_, _) => HideResetConfirm();
+
+        var card = new Border
+        {
+            MaxWidth = 320,
+            Background = new SolidColorBrush(Color.FromArgb(0xFF, 0x2A, 0x2C, 0x31)),
+            CornerRadius = new Avalonia.CornerRadius(8),
+            Padding = new Avalonia.Thickness(16),
+            HorizontalAlignment = HorizontalAlignment.Center,
+            VerticalAlignment = VerticalAlignment.Center,
+            BoxShadow = new BoxShadows(new BoxShadow { Blur = 16, OffsetY = 4, Color = Color.FromArgb(0x60, 0, 0, 0) }),
+            Child = new StackPanel
+            {
+                Spacing = 12,
+                Children =
+                {
+                    new TextBlock { Text = "Reset radial menu?", FontWeight = FontWeight.SemiBold, FontSize = 14 },
+                    new TextBlock
+                    {
+                        Text = "This restores the default segment count, labels, and command bindings. "
+                            + "Your current changes will be discarded.",
+                        TextWrapping = TextWrapping.Wrap,
+                    },
+                    new StackPanel
+                    {
+                        Orientation = Orientation.Horizontal,
+                        Spacing = 8,
+                        HorizontalAlignment = HorizontalAlignment.Right,
+                        Children = { keep, resetNow },
+                    },
+                },
+            },
+        };
+
+        return new Border
+        {
+            IsVisible = false,
+            // A scrim that swallows clicks to the body behind it; clicking it dismisses the prompt.
+            Background = new SolidColorBrush(Color.FromArgb(0x80, 0, 0, 0)),
+            Child = card,
+        };
+    }
+
+    private void ShowResetConfirm() => _resetConfirm.IsVisible = true;
+
+    private void HideResetConfirm() => _resetConfirm.IsVisible = false;
+
+    /// <summary>Restore every field — count, labels, and all bindings — to <see cref="RadialMenuConfig.Default"/>.</summary>
+    private void ApplyDefaults()
+    {
+        var defaults = RadialMenuConfig.Default;
+        var fullBindings = (defaults with { SegmentCount = RadialMenuConfig.MaxSegments }).Normalized().CommandIds;
+        for (int i = 0; i < _bindings.Count; i++)
+        {
+            _bindings[i] = i < fullBindings.Count ? fullBindings[i] : null;
+        }
+
+        _countField.Value = defaults.SegmentCount;
+        _labelsToggle.IsChecked = defaults.ShowLabels;
+        RebuildBindingRows(); // covers the case where the count was already at the default (no ValueChanged)
+    }
+
+    protected override void OnKeyDown(KeyEventArgs e)
+    {
+        // While the reset prompt is up, Esc dismisses just the prompt, not the whole settings dialog.
+        if (_resetConfirm.IsVisible && e.Key == Key.Escape)
+        {
+            HideResetConfirm();
+            e.Handled = true;
+            return;
+        }
+
+        base.OnKeyDown(e);
+    }
+
     private RadialMenuConfig BuildConfig() => new RadialMenuConfig
     {
         SegmentCount = SegmentCount,
@@ -201,4 +353,20 @@ public sealed class RadialSettingsDialog : ModalDialog<RadialMenuConfig>
 
     /// <summary>Test seam: the config the dialog would return for its current fields.</summary>
     internal RadialMenuConfig BuildConfigForTest() => BuildConfig();
+
+    /// <summary>Test seam: drive the preview's hover→row-bold + reset-confirm wiring without a pointer.</summary>
+    internal void HoverSegmentForTest(int segment) => SetHover(segment);
+
+    internal bool IsRowBoldForTest(int segment) =>
+        segment >= 0 && segment < _segmentLabels.Count && _segmentLabels[segment].FontWeight == FontWeight.Bold;
+
+    internal void OpenResetConfirmForTest() => ShowResetConfirm();
+
+    internal bool ResetConfirmVisibleForTest => _resetConfirm.IsVisible;
+
+    internal void ConfirmResetForTest()
+    {
+        ApplyDefaults();
+        HideResetConfirm();
+    }
 }

@@ -143,4 +143,45 @@ public class RadialMenuTests
         Assert.Equal("edit.cut", result.CommandIdAt(0));
         Assert.Equal("edit.undo", result.CommandIdAt(3));
     }
+
+    [AvaloniaFact]
+    public void Settings_dialog_bolds_the_hovered_segment_row()
+    {
+        var dialog = new RadialSettingsDialog(new RadialMenuConfig
+        {
+            SegmentCount = 4,
+            ShowLabels = true,
+            CommandIds = new List<string?> { "edit.cut", "edit.copy", "edit.paste", "edit.undo" },
+        });
+
+        dialog.HoverSegmentForTest(2);
+        Assert.True(dialog.IsRowBoldForTest(2));
+        Assert.False(dialog.IsRowBoldForTest(0));
+
+        dialog.HoverSegmentForTest(-1); // pointer left the preview
+        Assert.False(dialog.IsRowBoldForTest(2));
+    }
+
+    [AvaloniaFact]
+    public void Settings_dialog_reset_restores_defaults_only_after_confirming()
+    {
+        var dialog = new RadialSettingsDialog(new RadialMenuConfig
+        {
+            SegmentCount = 4,
+            ShowLabels = false,
+            CommandIds = new List<string?> { "edit.cut", "edit.copy", "edit.paste", "edit.undo" },
+        });
+
+        dialog.OpenResetConfirmForTest();
+        Assert.True(dialog.ResetConfirmVisibleForTest);
+
+        dialog.ConfirmResetForTest();
+        Assert.False(dialog.ResetConfirmVisibleForTest);
+
+        var result = dialog.BuildConfigForTest();
+        var defaults = RadialMenuConfig.Default;
+        Assert.Equal(defaults.SegmentCount, result.SegmentCount);
+        Assert.Equal(defaults.ShowLabels, result.ShowLabels);
+        Assert.Equal(defaults.CommandIdAt(0), result.CommandIdAt(0));
+    }
 }
