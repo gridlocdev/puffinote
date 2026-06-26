@@ -2256,6 +2256,9 @@ public partial class SpreadsheetEditorView : UserControl, IAppEnvironment
             BoxShadow = new BoxShadows(new BoxShadow { Blur = 16, OffsetY = 4, Color = Color.FromArgb(0x40, 0, 0, 0) }),
             Child = new StackPanel { Children = { input, list } },
         };
+        // Trap Tab inside the palette so it cycles between the search box and the list, never reaching
+        // the grid / toolbar behind it.
+        KeyboardNavigation.SetTabNavigation(box, KeyboardNavigationMode.Cycle);
 
         OverlayHost.Children.Add(box);
         OverlayHost.IsVisible = true;
@@ -2428,7 +2431,7 @@ public partial class SpreadsheetEditorView : UserControl, IAppEnvironment
 
         stack.Children.Add(body);
 
-        return new Border
+        var chrome = new Border
         {
             MaxWidth = 560,
             MaxHeight = 640,
@@ -2440,6 +2443,10 @@ public partial class SpreadsheetEditorView : UserControl, IAppEnvironment
             BoxShadow = new BoxShadows(new BoxShadow { Blur = 16, OffsetY = 4, Color = Color.FromArgb(0x40, 0, 0, 0) }),
             Child = stack,
         };
+        // Trap Tab within the modal card so focus cycles through its own fields and never escapes to the
+        // grid / toolbar behind it (a dialog's sub-modals set their own Cycle scope inside this one).
+        KeyboardNavigation.SetTabNavigation(chrome, KeyboardNavigationMode.Cycle);
+        return chrome;
     }
 
 }

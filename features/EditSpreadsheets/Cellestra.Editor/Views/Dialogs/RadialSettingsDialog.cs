@@ -533,21 +533,36 @@ public sealed class RadialSettingsDialog : ModalDialog<RadialMenuConfig>
             },
         };
 
-        return new Border
+        var scrim = new Border
         {
             IsVisible = false,
             Background = new SolidColorBrush(Color.FromArgb(0x80, 0, 0, 0)), // a scrim that swallows clicks to the body
             Child = card,
         };
+        // Trap Tab inside this prompt so it cycles its own buttons, not the dialog body behind it.
+        KeyboardNavigation.SetTabNavigation(scrim, KeyboardNavigationMode.Cycle);
+        return scrim;
     }
 
-    private void ShowResetConfirm() => _resetConfirm.IsVisible = true;
+    private void ShowResetConfirm() => ShowOverlay(_resetConfirm);
 
     private void HideResetConfirm() => _resetConfirm.IsVisible = false;
 
-    private void ShowSaveConfirm() => _saveConfirm.IsVisible = true;
+    private void ShowSaveConfirm() => ShowOverlay(_saveConfirm);
 
     private void HideSaveConfirm() => _saveConfirm.IsVisible = false;
+
+    /// <summary>Show a layered overlay and move keyboard focus into it (so its Tab trap takes effect).</summary>
+    private static void ShowOverlay(Border overlay)
+    {
+        overlay.IsVisible = true;
+        Avalonia.Threading.Dispatcher.UIThread.Post(() =>
+        {
+            var target = overlay.GetVisualDescendants().OfType<Button>().FirstOrDefault(b => b.IsDefault)
+                ?? overlay.GetVisualDescendants().OfType<InputElement>().FirstOrDefault(c => c.Focusable);
+            target?.Focus();
+        });
+    }
 
     // --- Command picker (bind one wedge) -------------------------------------------------------------
 
@@ -657,6 +672,8 @@ public sealed class RadialSettingsDialog : ModalDialog<RadialMenuConfig>
                 HideCommandPicker(); // clicking the dim backdrop cancels
             }
         };
+        // Trap Tab inside the picker so it cycles its search box / list, not the dialog body behind it.
+        KeyboardNavigation.SetTabNavigation(scrim, KeyboardNavigationMode.Cycle);
 
         return scrim;
     }
@@ -944,6 +961,9 @@ public sealed class RadialSettingsDialog : ModalDialog<RadialMenuConfig>
     internal void OpenCommandPickerForTest(int segment) => ShowCommandPicker(segment);
 
     internal bool CommandPickerVisibleForTest => _commandPicker.IsVisible;
+
+    /// <summary>Test seam: the picker's scrim element, to assert Tab focus stays inside it.</summary>
+    internal Control CommandPickerOverlayForTest => _commandPicker;
 
     internal int CommandPickerSegmentForTest => _pickerSegment;
 
