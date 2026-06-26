@@ -1,11 +1,11 @@
+using System.Collections.Generic;
+using System.Linq;
 using Avalonia;
 using Avalonia.Controls;
-using Avalonia.Controls.Templates;
 using Avalonia.Input;
 using Avalonia.Layout;
-using Avalonia.Media;
 using Avalonia.VisualTree;
-using BirdBrain.Components.Commands;
+using BirdBrain.Components.Controls;
 using BirdBrain.Components.Theming;
 using Typage.Desktop.Commands;
 
@@ -13,20 +13,12 @@ namespace Typage.Desktop.Views;
 
 /// <summary>
 /// The Command Palette (⌘K) — a VS Code / Cellestra-style overlay that runs any command in the one
-/// catalog by name, with fuzzy filtering and full keyboard control. A full-window overlay panel,
-/// collapsed until opened; clicking the backdrop or pressing Esc dismisses it.
+/// catalog by name. A full-window dim overlay hosting the shared <see cref="PaletteListView"/>;
+/// collapsed until opened, clicking the backdrop or pressing Esc dismisses it.
 /// </summary>
 public sealed class CommandPalette : Panel
 {
-    private readonly TextBox _search = new()
-    {
-        PlaceholderText = "Type a command…",
-        FontSize = 15,
-        Margin = new Thickness(0, 0, 0, 8),
-    };
-
-    private readonly ListBox _list = new() { MaxHeight = 360, BorderThickness = new Thickness(0) };
-    private IReadOnlyList<AppCommand> _commands = System.Array.Empty<AppCommand>();
+    private readonly PaletteListView _palette = new() { Placeholder = "Type a command…" };
 
     public CommandPalette()
     {
@@ -44,13 +36,8 @@ public sealed class CommandPalette : Panel
             Background = Tokens.Dark.Surface,
             BorderBrush = Tokens.Dark.SurfaceBorder,
             BorderThickness = new Thickness(1),
-            Child = new StackPanel { Children = { _search, _list } },
+            Child = _palette, // the shared list view traps Tab inside itself
         };
-        // Trap Tab inside the palette card so it cycles between the search box and the list, never
-        // reaching the editor / toolbar behind the overlay.
-        KeyboardNavigation.SetTabNavigation(card, KeyboardNavigationMode.Cycle);
-
-        _list.ItemTemplate = new FuncDataTemplate<PaletteRow>((row, _) => BuildRow(row), supportsRecycling: true);
 
         Children.Add(card);
 
@@ -63,127 +50,20 @@ public sealed class CommandPalette : Panel
             }
         }, handledEventsToo: true);
 
-        _search.KeyDown += OnSearchKeyDown;
-        _search.TextChanged += (_, _) => Refilter();
-        _list.DoubleTapped += (_, _) => Run(_list.SelectedItem as PaletteRow);
+        _palette.Cancelled += (_, _) => Close();
+        _palette.Chosen += entry => { Close(); entry.Run(); };
     }
 
-    /// <summary>Open the palette over the given commands and focus the search box.</summary>
+    /// <summary>Open the palette over the given (enabled) commands and focus the search box.</summary>
     public void Open(IReadOnlyList<AppCommand> commands)
     {
-        _commands = commands;
-        _search.Text = string.Empty;
-        Refilter();
+        _palette.SetItems(commands
+            .Where(c => c.IsEnabled)
+            .Select(c => new PaletteEntry(c.Title, c.Execute, c.Description, c.ShortcutText))
+            .ToList());
         IsVisible = true;
-        _search.Focus();
+        _palette.SearchBox.Focus();
     }
 
     public void Close() => IsVisible = false;
-
-    private void OnSearchKeyDown(object? sender, KeyEventArgs e)
-    {
-        switch (e.Key)
-        {
-            case Key.Escape:
-                Close();
-                e.Handled = true;
-                break;
-            case Key.Enter:
-                Run(_list.SelectedItem as PaletteRow);
-                e.Handled = true;
-                break;
-            case Key.Down:
-                Move(1);
-                e.Handled = true;
-                break;
-            case Key.Up:
-                Move(-1);
-                e.Handled = true;
-                break;
-        }
-    }
-
-    private void Move(int delta)
-    {
-        var count = _list.ItemCount;
-        if (count == 0)
-        {
-            return;
-        }
-
-        var index = _list.SelectedIndex + delta;
-        _list.SelectedIndex = System.Math.Clamp(index, 0, count - 1);
-        _list.ScrollIntoView(_list.SelectedIndex);
-    }
-
-    private void Refilter()
-    {
-        var query = _search.Text ?? string.Empty;
-        var rows = new List<(PaletteRow Row, int Score)>();
-        foreach (var c in _commands)
-        {
-            if (!c.IsEnabled)
-            {
-                continue;
-            }
-
-            var score = FuzzyMatcher.Score(c.Title, query);
-            if (score < 0)
-            {
-                continue;
-            }
-
-            rows.Add((new PaletteRow(c.Title, c.ShortcutText, c.Description, c), score));
-        }
-
-        rows.Sort((a, b) => b.Score != a.Score
-            ? b.Score.CompareTo(a.Score)
-            : string.CompareOrdinal(a.Row.Title, b.Row.Title));
-
-        _list.ItemsSource = rows.ConvertAll(r => r.Row);
-        if (_list.ItemCount > 0)
-        {
-            _list.SelectedIndex = 0;
-        }
-    }
-
-    private void Run(PaletteRow? row)
-    {
-        if (row is null)
-        {
-            return;
-        }
-
-        Close();
-        row.Command.Execute();
-    }
-
-    private static Avalonia.Controls.Control BuildRow(PaletteRow row)
-    {
-        var title = new TextBlock { Text = row.Title, FontSize = 14 };
-        var description = new TextBlock
-        {
-            Text = row.Description,
-            FontSize = 11,
-            Foreground = Tokens.Dark.MutedText,
-            TextTrimming = TextTrimming.CharacterEllipsis,
-        };
-        var shortcut = new TextBlock
-        {
-            Text = row.Shortcut,
-            FontSize = 12,
-            Foreground = Tokens.Dark.MutedText,
-            VerticalAlignment = VerticalAlignment.Center,
-        };
-
-        var grid = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto") };
-        var text = new StackPanel { Children = { title, description } };
-        Grid.SetColumn(text, 0);
-        Grid.SetColumn(shortcut, 1);
-        grid.Children.Add(text);
-        grid.Children.Add(shortcut);
-        return grid;
-    }
-
-    private sealed record PaletteRow(string Title, string Shortcut, string Description, AppCommand Command);
 }
