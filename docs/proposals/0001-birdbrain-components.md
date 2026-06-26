@@ -1,6 +1,6 @@
 # Proposal 0001 — `BirdBrain.Components`, a shared app-shell / design-system library
 
-- **Status:** Phases 0–1 **landed** (`FuzzyMatcher`, `RelayCommand` shared); Phase 2 **foundation landed** (token contract + first chrome migrated); Phases 3–5 proposed (see §7)
+- **Status:** Phases 0–1 **landed** (`FuzzyMatcher`, `RelayCommand` shared); Phase 2 **foundation landed** (token contract + first chrome migrated); Phase 3 **largely landed** (palette, icon system, tooltip card, overlay/modal host + shared `ConfirmDialog`; both apps converged); Phases 4–5 proposed (see §7)
 - **Author:** (you) · drafted with Claude
 - **Affects:** `features/EditSpreadsheets` (Cellestra), `features/EditMarkdown` (Typage), and the
   planned **BirdBrain** composite app
@@ -232,8 +232,20 @@ Each phase ends with **all** apps building clean and tests green; land a phase o
   `RadialSettingsDialog` and Typage's `CommandPalette`. **Remaining:** the rest of the shell literals
   migrate incrementally — most land in Phase 3 as the chrome itself moves to shared. Domain-surface
   colors (grid cells, Markdown syntax via `MarkdownTheme`) stay app-specific (§4.2), not tokenized.
-- **Phase 3 — UI primitives.** Modal/overlay host + Tab focus-trap, confirm dialog, tooltip card,
-  command palette, icon system. Re-skinned via Phase-2 tokens.
+- **Phase 3 — UI primitives. ✅ Largely landed.** Shared, token-skinned: the **command palette**
+  (`PaletteListView`, adopted by both apps); the **icon system** (`LucideIcon`/`LucideIcons` + the 76
+  vendored SVGs, now `avares://BirdBrain.Components/...`); the **tooltip card** (`TooltipCard`, reading
+  `MutedText` instead of the copy-pasted `0x888888`); and the **overlay/modal stack** — `IModalDialog`
+  + `ModalDialog<TResult>` base, a shared **`OverlayHost`** (themed card chrome + Tab focus-trap +
+  backdrop/Esc dismissal, with Opened/Closed hooks for app-specific blur/shortcut-suspend/focus), and a
+  shared **`ConfirmDialog`**. Cellestra runs its palette **and** every internal modal through the shared
+  host; Typage routes its confirm prompts through the same host + `ConfirmDialog` (its first internal
+  modals, replacing native `Window` dialogs). **As-built note:** Phase 3 turned out *not* to be a pile of
+  duplicates — a survey found icon/tooltip were **Cellestra-only** and the modal host **structurally
+  diverged** (Cellestra internal overlay vs Typage native windows). The Cellestra-only primitives were
+  lifted anyway, anticipating the BirdBrain app. **Remaining (optional):** Typage's other native dialogs
+  (link, the tri-state save-changes prompt, the external-reload conflict, the message/OK box) still use
+  `Window.ShowDialog`; each is a distinct follow-on (some need new shared types) and is not a *confirm*.
 - **Phase 4 — `AppCommand` + shortcut unification (Tier C).** Env-agnostic command (Cellestra captures
   its env at construction); a shared `Shortcut` representation; migrate `ShortcutFormatter` and the
   catalog wiring onto it.
