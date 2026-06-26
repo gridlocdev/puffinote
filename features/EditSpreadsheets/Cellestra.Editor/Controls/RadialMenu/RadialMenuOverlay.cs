@@ -92,6 +92,9 @@ public sealed class RadialMenuOverlay : Control
         InvalidateVisual();
     }
 
+    /// <summary>The currently highlighted segment (-1 for none).</summary>
+    public int ActiveSegment => _activeSegment;
+
     /// <summary>Highlight the segment the cursor now points at (-1 for none); repaints if it changed.</summary>
     public void SetActiveSegment(int segment)
     {

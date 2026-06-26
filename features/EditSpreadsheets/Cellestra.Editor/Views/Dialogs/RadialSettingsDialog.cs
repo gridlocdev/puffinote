@@ -17,8 +17,8 @@ namespace Cellestra.Desktop.Views.Dialogs;
 /// exactly as it appears in the grid (same <see cref="RadialMenuOverlay"/>, scaled to fit and centred).
 /// Segments can be reordered three ways — dragging a row's label, dragging a wedge in the preview onto
 /// another (swap), or ⌥⇧↑/↓ on the selected row. Hovering a wedge highlights it and bolds the matching
-/// row; clicking it focuses that row's picker. Returns the edited <see cref="RadialMenuConfig"/>, or
-/// null on cancel.
+/// row; clicking it focuses that row's picker. Selecting a row from the keyboard highlights its wedge in
+/// the preview. Returns the edited <see cref="RadialMenuConfig"/>, or null on cancel.
 /// </summary>
 public sealed class RadialSettingsDialog : ModalDialog<RadialMenuConfig>
 {
@@ -71,6 +71,7 @@ public sealed class RadialSettingsDialog : ModalDialog<RadialMenuConfig>
     private readonly List<string?> _bindings;
 
     private int _selectedSegment = -1; // the row targeted by ⌥⇧↑/↓ and arrow navigation (-1 = none)
+    private int _hoverSegment = -1;    // the wedge the pointer is over (transient; takes the preview highlight)
     private bool _labelHasFocus;       // a row's drag-handle label currently holds keyboard focus
     private int _rowDragIndex = -1;    // segment being dragged by its left-hand label (-1 = not dragging)
     private int _radialDragIndex = -1; // segment being dragged inside the preview (-1 = not dragging)
@@ -276,19 +277,25 @@ public sealed class RadialSettingsDialog : ModalDialog<RadialMenuConfig>
         }
 
         ApplySelectionHighlight();
-        SetHover(-1);
-        RefreshPreview();
+        RefreshPreview();    // resets the preview's highlight...
+        SetHover(-1);        // ...so re-assert it (selection wins when nothing is hovered)
     }
 
-    /// <summary>Highlight <paramref name="segment"/> in the preview and bold its row's label (-1 clears).</summary>
+    /// <summary>Set the hovered wedge (-1 = none): bolds its row and gives it the preview highlight.</summary>
     private void SetHover(int segment)
     {
-        _preview.SetActiveSegment(segment);
+        _hoverSegment = segment;
         for (int i = 0; i < _segmentLabels.Count; i++)
         {
             _segmentLabels[i].FontWeight = i == segment ? FontWeight.Bold : FontWeight.Normal;
         }
+
+        UpdatePreviewHighlight();
     }
+
+    /// <summary>The preview highlights the hovered wedge, or — when nothing is hovered — the selected one.</summary>
+    private void UpdatePreviewHighlight() =>
+        _preview.SetActiveSegment(_hoverSegment >= 0 ? _hoverSegment : _selectedSegment);
 
     /// <summary>Paint the selected row's background so the ⌥⇧-arrow / drag target is visible.</summary>
     private void ApplySelectionHighlight()
@@ -304,6 +311,7 @@ public sealed class RadialSettingsDialog : ModalDialog<RadialMenuConfig>
     {
         _selectedSegment = InRange(index) ? index : -1;
         ApplySelectionHighlight();
+        UpdatePreviewHighlight(); // mirror the selection onto the preview wedge
         if (focus && _selectedSegment >= 0)
         {
             _segmentLabels[_selectedSegment].Focus();
@@ -696,6 +704,9 @@ public sealed class RadialSettingsDialog : ModalDialog<RadialMenuConfig>
 
     internal bool IsRowSelectedForTest(int segment) =>
         segment >= 0 && segment < _rowBorders.Count && ReferenceEquals(_rowBorders[segment].Background, SelectedRowBrush);
+
+    /// <summary>Test seam: which wedge the preview currently highlights.</summary>
+    internal int PreviewActiveSegmentForTest => _preview.ActiveSegment;
 
     internal bool IsDirtyForTest => IsDirty;
 

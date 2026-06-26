@@ -216,9 +216,31 @@ public class RadialMenuTests
         Assert.Equal("edit.copy", result.CommandIdAt(2));
         Assert.Equal(2, dialog.SelectedSegmentForTest);
         Assert.True(dialog.IsRowSelectedForTest(2));
+        Assert.Equal(2, dialog.PreviewActiveSegmentForTest); // the moved wedge lights up in the preview
 
         dialog.MoveSelectedForTest(+10); // off the bottom edge — refused, no change
         Assert.Equal("edit.copy", dialog.BuildConfigForTest().CommandIdAt(2));
+    }
+
+    [AvaloniaFact]
+    public void Settings_dialog_keyboard_selection_highlights_the_preview_wedge()
+    {
+        var dialog = new RadialSettingsDialog(new RadialMenuConfig
+        {
+            SegmentCount = 4,
+            CommandIds = new List<string?> { "edit.cut", "edit.copy", "edit.paste", "edit.undo" },
+        });
+
+        Assert.Equal(-1, dialog.PreviewActiveSegmentForTest); // nothing selected, nothing hovered
+
+        dialog.SelectSegmentForTest(3);
+        Assert.Equal(3, dialog.PreviewActiveSegmentForTest);
+
+        // A transient hover wins while it lasts, then the selection highlight returns.
+        dialog.HoverSegmentForTest(1);
+        Assert.Equal(1, dialog.PreviewActiveSegmentForTest);
+        dialog.HoverSegmentForTest(-1);
+        Assert.Equal(3, dialog.PreviewActiveSegmentForTest);
     }
 
     [AvaloniaFact]
