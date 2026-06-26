@@ -227,7 +227,7 @@ public class MainWindow : Window
             KeyBindings.Add(new KeyBinding
             {
                 Gesture = shortcut.ToGesture(),
-                Command = new RelayCommand(command.Execute, () => command.IsEnabled),
+                Command = CommandFor(command),
             });
         }
 
@@ -236,10 +236,21 @@ public class MainWindow : Window
             KeyBindings.Add(new KeyBinding
             {
                 Gesture = new KeyGesture(Key.H, KeyModifiers.Control), // Windows/Linux convention for Replace
-                Command = new RelayCommand(() => _findBar?.Show(replace: true)),
+                Command = new RelayCommand(() => _findBar?.Show(replace: true), () => !AnyOverlayOpen),
             });
         }
     }
+
+    /// <summary>True while a palette or an internal modal is open over the content.</summary>
+    private bool AnyOverlayOpen => _overlayHost.IsOpen || _palette.IsVisible;
+
+    /// <summary>
+    /// The ICommand backing a command's shortcut / menu item. Gated on <see cref="AnyOverlayOpen"/> so a
+    /// keyboard shortcut (or a macOS native-menu accelerator, which the overlay scrim can't intercept)
+    /// can't fire a command while a palette or modal dialog is up.
+    /// </summary>
+    private RelayCommand CommandFor(AppCommand command) =>
+        new(command.Execute, () => command.IsEnabled && !AnyOverlayOpen);
 
     // ----- in-window menu (Windows/Linux) -----
 
@@ -345,7 +356,7 @@ public class MainWindow : Window
     private MenuItem InWindowItem(string id)
     {
         var c = _commandsById[id];
-        var item = new MenuItem { Header = c.Title, Command = new RelayCommand(c.Execute, () => c.IsEnabled) };
+        var item = new MenuItem { Header = c.Title, Command = CommandFor(c) };
         if (c.Gesture is { } g)
         {
             item.InputGesture = g;
@@ -480,7 +491,7 @@ public class MainWindow : Window
     private NativeMenuItem NativeItem(string id)
     {
         var c = _commandsById[id];
-        var item = new NativeMenuItem(c.Title) { Command = new RelayCommand(c.Execute, () => c.IsEnabled) };
+        var item = new NativeMenuItem(c.Title) { Command = CommandFor(c) };
         if (c.Shortcut is { } s && !s.YieldsToTextInput)
         {
             item.Gesture = s.ToGesture(mac: true);
@@ -1467,51 +1478,17 @@ public class MainWindow : Window
     /// </summary>
     private async Task<ConflictChoice> PromptConflictAsync()
     {
-        var tcs = new TaskCompletionSource<ConflictChoice>();
-        var reload = new Button { Content = "Reload" };
-        var keep = new Button { Content = "Keep Mine", IsDefault = true };
-        var saveAs = new Button { Content = "Save As…" };
-        reload.Click += (_, _) => tcs.TrySetResult(ConflictChoice.Reload);
-        keep.Click += (_, _) => tcs.TrySetResult(ConflictChoice.KeepMine);
-        saveAs.Click += (_, _) => tcs.TrySetResult(ConflictChoice.SaveAs);
-
         var name = _currentPath is null ? "This file" : Path.GetFileName(_currentPath);
-        var dialog = new Window
-        {
-            Title = "Typage",
-            Width = 440,
-            SizeToContent = SizeToContent.Height,
-            WindowStartupLocation = WindowStartupLocation.CenterOwner,
-            CanResize = false,
-            Content = new StackPanel
-            {
-                Margin = new Avalonia.Thickness(16),
-                Spacing = 16,
-                Children =
-                {
-                    new TextBlock
-                    {
-                        Text = $"{name} changed on disk, but you have unsaved changes here. " +
-                               "Reload to use the version on disk, keep your changes (they’ll overwrite the file when you save), " +
-                               "or save a separate copy.",
-                        TextWrapping = TextWrapping.Wrap,
-                    },
-                    new StackPanel
-                    {
-                        Orientation = Orientation.Horizontal,
-                        HorizontalAlignment = HorizontalAlignment.Right,
-                        Spacing = 8,
-                        Children = { reload, saveAs, keep },
-                    },
-                },
-            },
-        };
-        dialog.Closed += (_, _) => tcs.TrySetResult(ConflictChoice.KeepMine); // closing keeps the user's work
-        reload.Click += (_, _) => dialog.Close();
-        keep.Click += (_, _) => dialog.Close();
-        saveAs.Click += (_, _) => dialog.Close();
-        await dialog.ShowDialog(this);
-        return await tcs.Task;
+        // Esc / backdrop keep the user's work (the safe default), same as closing the old window did.
+        return await _overlayHost.ShowModalAsync(new ChoiceDialog<ConflictChoice>(
+            heading: string.Empty,
+            message: $"{name} changed on disk, but you have unsaved changes here. " +
+                     "Reload to use the version on disk, keep your changes (they’ll overwrite the file when you save), " +
+                     "or save a separate copy.",
+            dismiss: ConflictChoice.KeepMine,
+            new Choice<ConflictChoice>("Reload", ConflictChoice.Reload),
+            new Choice<ConflictChoice>("Save As…", ConflictChoice.SaveAs),
+            new Choice<ConflictChoice>("Keep Mine", ConflictChoice.KeepMine, IsDefault: true)));
     }
 
     // ----- unsaved-changes guard (heuristics 3, 5) -----
@@ -1561,49 +1538,15 @@ public class MainWindow : Window
 
     private async Task<UnsavedChoice> PromptUnsavedAsync()
     {
-        var tcs = new TaskCompletionSource<UnsavedChoice>();
-        var save = new Button { Content = "Save", IsDefault = true };
-        var discard = new Button { Content = "Don't Save" };
-        var cancel = new Button { Content = "Cancel", IsCancel = true };
-        save.Click += (_, _) => tcs.TrySetResult(UnsavedChoice.Save);
-        discard.Click += (_, _) => tcs.TrySetResult(UnsavedChoice.Discard);
-        cancel.Click += (_, _) => tcs.TrySetResult(UnsavedChoice.Cancel);
-
         var name = _currentPath is null ? "this document" : Path.GetFileName(_currentPath);
-        var dialog = new Window
-        {
-            Title = "Typage",
-            Width = 400,
-            SizeToContent = SizeToContent.Height,
-            WindowStartupLocation = WindowStartupLocation.CenterOwner,
-            CanResize = false,
-            Content = new StackPanel
-            {
-                Margin = new Avalonia.Thickness(16),
-                Spacing = 16,
-                Children =
-                {
-                    new TextBlock
-                    {
-                        Text = $"Save changes to {name} before closing?",
-                        TextWrapping = TextWrapping.Wrap,
-                    },
-                    new StackPanel
-                    {
-                        Orientation = Orientation.Horizontal,
-                        HorizontalAlignment = HorizontalAlignment.Right,
-                        Spacing = 8,
-                        Children = { discard, cancel, save },
-                    },
-                },
-            },
-        };
-        dialog.Closed += (_, _) => tcs.TrySetResult(UnsavedChoice.Cancel);
-        save.Click += (_, _) => dialog.Close();
-        discard.Click += (_, _) => dialog.Close();
-        cancel.Click += (_, _) => dialog.Close();
-        await dialog.ShowDialog(this);
-        return await tcs.Task;
+        // Esc / backdrop cancel the close, never silently discarding or saving.
+        return await _overlayHost.ShowModalAsync(new ChoiceDialog<UnsavedChoice>(
+            heading: string.Empty,
+            message: $"Save changes to {name} before closing?",
+            dismiss: UnsavedChoice.Cancel,
+            new Choice<UnsavedChoice>("Don't Save", UnsavedChoice.Discard),
+            new Choice<UnsavedChoice>("Cancel", UnsavedChoice.Cancel, IsCancel: true),
+            new Choice<UnsavedChoice>("Save", UnsavedChoice.Save, IsDefault: true)));
     }
 
     /// <summary>
@@ -1618,33 +1561,8 @@ public class MainWindow : Window
             return;
         }
 
-        var ok = new Button { Content = "OK", IsDefault = true, IsCancel = true };
-        var dialog = new Window
-        {
-            Title = "Typage",
-            Width = 420,
-            SizeToContent = SizeToContent.Height,
-            CanResize = false,
-            WindowStartupLocation = WindowStartupLocation.CenterOwner,
-            Content = new StackPanel
-            {
-                Margin = new Avalonia.Thickness(16),
-                Spacing = 12,
-                Children =
-                {
-                    new TextBlock { Text = message, FontWeight = FontWeight.Bold, TextWrapping = TextWrapping.Wrap },
-                    new TextBlock { Text = detail, TextWrapping = TextWrapping.Wrap },
-                    new StackPanel
-                    {
-                        Orientation = Orientation.Horizontal,
-                        HorizontalAlignment = HorizontalAlignment.Right,
-                        Children = { ok },
-                    },
-                },
-            },
-        };
-        ok.Click += (_, _) => dialog.Close();
-        _ = dialog.ShowDialog(this);
+        // The bold message becomes the modal heading; the OS reason / suggested action is the body.
+        _ = _overlayHost.ShowModalAsync(new MessageDialog(heading: message, message: detail));
     }
 
     /// <summary>
@@ -1655,61 +1573,13 @@ public class MainWindow : Window
     private async Task ShowLinkDialogAsync()
     {
         var ed = _editorView.Editor;
-        var displayBox = new TextBox { PlaceholderText = "Display text", Text = ed.SuggestedLinkText() };
-        var locationBox = new TextBox { PlaceholderText = "https://example.com or path/to/file" };
-
-        var add = new Button { Content = "Add", IsDefault = true };
-        var cancel = new Button { Content = "Cancel", IsCancel = true };
-        var tcs = new TaskCompletionSource<bool>();
-        add.Click += (_, _) => tcs.TrySetResult(true);
-        cancel.Click += (_, _) => tcs.TrySetResult(false);
-
-        var grid = new Grid
-        {
-            RowDefinitions = new RowDefinitions("Auto,Auto"),
-            ColumnDefinitions = new ColumnDefinitions("Auto,*"),
-        };
-        AddSettingRow(grid, 0, "Display text", displayBox);
-        AddSettingRow(grid, 1, "Location", locationBox);
-
-        var dialog = new Window
-        {
-            Title = "Insert Link",
-            Width = 380,
-            SizeToContent = SizeToContent.Height,
-            WindowStartupLocation = WindowStartupLocation.CenterOwner,
-            CanResize = false,
-            Content = new StackPanel
-            {
-                Margin = new Avalonia.Thickness(16),
-                Spacing = 16,
-                Children =
-                {
-                    grid,
-                    new StackPanel
-                    {
-                        Orientation = Orientation.Horizontal,
-                        HorizontalAlignment = HorizontalAlignment.Right,
-                        Spacing = 8,
-                        Children = { cancel, add },
-                    },
-                },
-            },
-        };
-        dialog.Closed += (_, _) => tcs.TrySetResult(false);
-        add.Click += (_, _) => dialog.Close();
-        cancel.Click += (_, _) => dialog.Close();
-        // Land in the field that still needs typing: location when a label is already filled, else display text.
-        dialog.Opened += (_, _) => (string.IsNullOrEmpty(displayBox.Text) ? displayBox : locationBox).Focus();
-
-        await dialog.ShowDialog(this);
-        if (!await tcs.Task)
+        var entered = await _overlayHost.ShowModalAsync(new LinkDialog(ed.SuggestedLinkText()));
+        if (entered is not { } values)
         {
             return;
         }
 
-        var url = (locationBox.Text ?? string.Empty).Trim().Replace(" ", "%20");
-        ed.InsertLinkWithText((displayBox.Text ?? string.Empty).Trim(), url);
+        ed.InsertLinkWithText(values.Text, values.Url);
     }
 
     /// <summary>
@@ -1722,7 +1592,7 @@ public class MainWindow : Window
             new ConfirmDialog(heading: string.Empty, message: message, confirmLabel: confirmLabel, denyLabel: denyLabel, confirmIsDefault: false));
 
     /// <summary>The Preferences dialog (PRD §7.9): theme, tab width, and toolbar visibility.</summary>
-    private void ShowSettings()
+    private async void ShowSettings()
     {
         var s = _settings.Settings;
 
@@ -1737,14 +1607,11 @@ public class MainWindow : Window
         var showToolbar = new CheckBox { Content = "Show the formatting toolbar", IsChecked = s.ShowToolbar };
         var rawSource = new CheckBox { Content = "Show raw Markdown source by default", IsChecked = s.ShowRawSource };
 
-        var ok = new Button { Content = "OK", IsDefault = true };
-        var cancel = new Button { Content = "Cancel", IsCancel = true };
-
         var grid = new Grid
         {
             RowDefinitions = new RowDefinitions("Auto,Auto,Auto,Auto,Auto"),
             ColumnDefinitions = new ColumnDefinitions("Auto,*"),
-            Margin = new Avalonia.Thickness(0, 0, 0, 12),
+            Width = 340,
         };
         AddSettingRow(grid, 0, "Theme", themeCombo);
         AddSettingRow(grid, 1, "Tab width", tabWidth);
@@ -1758,64 +1625,38 @@ public class MainWindow : Window
         rawSource.Margin = new Avalonia.Thickness(0, 4, 0, 0);
         grid.Children.Add(rawSource);
 
-        var dialog = new Window
+        if (!await _overlayHost.ShowModalAsync(new FormDialog("Preferences", grid)))
         {
-            Title = "Preferences",
-            Width = 380,
-            SizeToContent = SizeToContent.Height,
-            CanResize = false,
-            WindowStartupLocation = WindowStartupLocation.CenterOwner,
-            Content = new StackPanel
-            {
-                Margin = new Avalonia.Thickness(18),
-                Spacing = 8,
-                Children =
-                {
-                    grid,
-                    new StackPanel
-                    {
-                        Orientation = Orientation.Horizontal,
-                        HorizontalAlignment = HorizontalAlignment.Right,
-                        Spacing = 8,
-                        Children = { cancel, ok },
-                    },
-                },
-            },
-        };
+            return; // Cancel / Esc — leave settings untouched
+        }
 
-        ok.Click += (_, _) =>
+        var theme = (AppTheme)System.Math.Clamp(themeCombo.SelectedIndex, 0, 3);
+        s.Theme = theme;
+        ApplyTheme(theme);
+        s.TabWidth = (int)(tabWidth.Value ?? 4);
+        _editorView.Editor.IndentWidth = s.TabWidth;
+        s.ShowToolbar = showToolbar.IsChecked == true;
+        if (_toolbar is not null && !_focusMode)
         {
-            var theme = (AppTheme)System.Math.Clamp(themeCombo.SelectedIndex, 0, 3);
-            s.Theme = theme;
-            ApplyTheme(theme);
-            s.TabWidth = (int)(tabWidth.Value ?? 4);
-            _editorView.Editor.IndentWidth = s.TabWidth;
-            s.ShowToolbar = showToolbar.IsChecked == true;
-            if (_toolbar is not null && !_focusMode)
-            {
-                _toolbar.IsVisible = s.ShowToolbar;
-            }
+            _toolbar.IsVisible = s.ShowToolbar;
+        }
 
-            if (_toggleToolbarItem is not null)
-            {
-                _toggleToolbarItem.IsChecked = s.ShowToolbar;
-            }
+        if (_toggleToolbarItem is not null)
+        {
+            _toggleToolbarItem.IsChecked = s.ShowToolbar;
+        }
 
-            s.AutosaveSeconds = (int)(autosave.Value ?? 30);
-            SetupAutosave(); // pick up the new interval (or disable when 0)
+        s.AutosaveSeconds = (int)(autosave.Value ?? 30);
+        SetupAutosave(); // pick up the new interval (or disable when 0)
 
-            s.ShowRawSource = rawSource.IsChecked == true;
-            _editorView.Editor.ShowRawSource = s.ShowRawSource;
-            if (_toggleRawSourceItem is not null)
-            {
-                _toggleRawSourceItem.IsChecked = s.ShowRawSource;
-            }
+        s.ShowRawSource = rawSource.IsChecked == true;
+        _editorView.Editor.ShowRawSource = s.ShowRawSource;
+        if (_toggleRawSourceItem is not null)
+        {
+            _toggleRawSourceItem.IsChecked = s.ShowRawSource;
+        }
 
-            _settings.Save();
-            dialog.Close();
-        };
-        cancel.Click += (_, _) => dialog.Close();
-        _ = dialog.ShowDialog(this);
+        _settings.Save();
     }
 
     private static void AddSettingRow(Grid grid, int row, string label, Avalonia.Controls.Control control)
