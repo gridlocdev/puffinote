@@ -1,0 +1,23 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    BirdBrain.Components — the shared app-shell / design-system library for the BirdBrain family
+    (Cellestra, Typage, and the future BirdBrain composite app). See
+    docs/proposals/0001-birdbrain-components.md.
+
+    It will hold the command-system primitives, design tokens, and UI chrome (palette, modals,
+    tooltips) so the apps share one look and one set of patterns. Dependency rule: this library
+    references Avalonia and its own code only — never an app, engine, or editing surface. Apps
+    reference it. (Target framework, nullable, and package versions come from the repo-root
+    Directory.Build.props / Directory.Packages.props.)
+  -->
+  <PropertyGroup>
+    <RootNamespace>BirdBrain.Components</RootNamespace>
+    <AssemblyName>BirdBrain.Components</AssemblyName>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Avalonia" />
+  </ItemGroup>
+
+</Project>

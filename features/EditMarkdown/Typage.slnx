@@ -9,4 +9,7 @@
     <Project Path="Typage.UiTests/Typage.UiTests.csproj" />
     <Project Path="Typage.Benchmarks/Typage.Benchmarks.csproj" />
   </Folder>
+  <Folder Name="/shared/">
+    <Project Path="../../shared/BirdBrain.Components/BirdBrain.Components.csproj" />
+  </Folder>
 </Solution>
