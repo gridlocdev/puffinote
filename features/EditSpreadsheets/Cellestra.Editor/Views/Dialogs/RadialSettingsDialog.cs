@@ -16,7 +16,7 @@ namespace Cellestra.Desktop.Views.Dialogs;
 
 /// <summary>
 /// Settings for the press-and-hold radial command menu (task 3): on the left, the number of segments,
-/// a command picker per segment, and a Reset button; on the right, a live preview of the radial drawn
+/// a "Segment N — Command" row with a Select button per segment, and a Reset button; on the right, a live preview of the radial drawn
 /// exactly as it appears in the grid (same <see cref="RadialMenuOverlay"/>, scaled to fit and centred).
 /// Segments can be reordered three ways — dragging a row's label, dragging a wedge in the preview onto
 /// another (swap), or ⌥⇧↑/↓ on the selected row. Hovering a wedge highlights it and bolds the matching
@@ -26,22 +26,6 @@ namespace Cellestra.Desktop.Views.Dialogs;
 /// </summary>
 public sealed class RadialSettingsDialog : ModalDialog<RadialMenuConfig>
 {
-    /// <summary>A choice in a segment's command picker; <see cref="Id"/> null is the "unbound" option.</summary>
-    private sealed class CommandChoice
-    {
-        public CommandChoice(string? id, string label)
-        {
-            Id = id;
-            Label = label;
-        }
-
-        public string? Id { get; }
-
-        public string Label { get; }
-
-        public override string ToString() => Label; // ComboBox shows this
-    }
-
     private const double PreviewSize = 250;
     private const double LeftWidth = 250;
 
@@ -56,10 +40,8 @@ public sealed class RadialSettingsDialog : ModalDialog<RadialMenuConfig>
     private readonly StackPanel _bindingRows = new() { Spacing = 6 };
     private readonly RadialMenuOverlay _preview = new() { Width = PreviewSize, Height = PreviewSize, FitToBounds = true };
     private readonly Border _previewBox;
-    private readonly IReadOnlyList<CommandChoice> _choices;
 
-    // Per-segment widgets, in segment order, so the preview can bold/focus/highlight the matching row.
-    private readonly List<ComboBox> _pickers = new();
+    // Per-segment widgets, in segment order, so the preview can bold/highlight the matching row.
     private readonly List<TextBlock> _segmentLabels = new();
     private readonly List<Border> _rowBorders = new();
 
@@ -97,12 +79,6 @@ public sealed class RadialSettingsDialog : ModalDialog<RadialMenuConfig>
         var normalized = config.Normalized();
         _originalConfig = normalized;
         _bindings = (config with { SegmentCount = RadialMenuConfig.MaxSegments }).Normalized().CommandIds.ToList();
-
-        _choices = new[] { new CommandChoice(null, "— None —") }
-            .Concat(AppCommands.All
-                .OrderBy(c => c.Label, System.StringComparer.CurrentCulture)
-                .Select(c => new CommandChoice(c.Id, c.Label)))
-            .ToList();
 
         _countField = new NumericUpDown
         {
@@ -230,11 +206,10 @@ public sealed class RadialSettingsDialog : ModalDialog<RadialMenuConfig>
 
     private bool InRange(int index) => index >= 0 && index < SegmentCount;
 
-    /// <summary>Rebuild the per-segment command pickers to match the current segment count.</summary>
+    /// <summary>Rebuild the per-segment rows ("Segment N — Command" + a Select button) for the count.</summary>
     private void RebuildBindingRows()
     {
         _bindingRows.Children.Clear();
-        _pickers.Clear();
         _segmentLabels.Clear();
         _rowBorders.Clear();
 
@@ -246,24 +221,14 @@ public sealed class RadialSettingsDialog : ModalDialog<RadialMenuConfig>
         for (int i = 0; i < SegmentCount; i++)
         {
             int index = i;
-            var picker = new ComboBox
-            {
-                ItemsSource = _choices,
-                SelectedItem = _choices.FirstOrDefault(c => c.Id == _bindings[index]) ?? _choices[0],
-                HorizontalAlignment = HorizontalAlignment.Stretch,
-            };
-            picker.SelectionChanged += (_, _) =>
-            {
-                _bindings[index] = (picker.SelectedItem as CommandChoice)?.Id;
-                RefreshPreview();
-            };
 
-            // The label doubles as the drag handle and the keyboard focus target for reordering.
+            // The label names the segment and its current command, and doubles as the drag handle and the
+            // keyboard focus target for reordering.
             var name = new TextBlock
             {
-                Text = $"Segment {i + 1}",
+                Text = $"Segment {i + 1} — {BindingLabel(_bindings[index])}",
                 VerticalAlignment = VerticalAlignment.Center,
-                Width = 80,
+                TextTrimming = TextTrimming.CharacterEllipsis,
                 Focusable = true,
                 Cursor = HandCursor,
             };
@@ -271,11 +236,14 @@ public sealed class RadialSettingsDialog : ModalDialog<RadialMenuConfig>
             name.LostFocus += (_, _) => _labelHasFocus = false;
             name.PointerPressed += (_, e) => OnLabelPressed(index, e);
 
-            var grid = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,*") };
+            var select = new Button { Content = "Select…", Margin = new Avalonia.Thickness(8, 0, 0, 0) };
+            select.Click += (_, _) => ShowCommandPicker(index);
+
+            var grid = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto") };
             Grid.SetColumn(name, 0);
-            Grid.SetColumn(picker, 1);
+            Grid.SetColumn(select, 1);
             grid.Children.Add(name);
-            grid.Children.Add(picker);
+            grid.Children.Add(select);
 
             var row = new Border
             {
@@ -284,7 +252,6 @@ public sealed class RadialSettingsDialog : ModalDialog<RadialMenuConfig>
                 Child = grid,
             };
 
-            _pickers.Add(picker);
             _segmentLabels.Add(name);
             _rowBorders.Add(row);
             _bindingRows.Children.Add(row);
@@ -294,6 +261,10 @@ public sealed class RadialSettingsDialog : ModalDialog<RadialMenuConfig>
         RefreshPreview();    // resets the preview's highlight...
         SetHover(-1);        // ...so re-assert it (selection wins when nothing is hovered)
     }
+
+    /// <summary>The display name of a binding for the row label: the command's label, or "Unbound".</summary>
+    private static string BindingLabel(string? commandId) =>
+        commandId is null ? "Unbound" : AppCommands.ById(commandId)?.Label ?? commandId;
 
     /// <summary>Set the hovered wedge (-1 = none): bolds its row and gives it the preview highlight.</summary>
     private void SetHover(int segment)
@@ -953,6 +924,10 @@ public sealed class RadialSettingsDialog : ModalDialog<RadialMenuConfig>
 
     internal bool IsRowSelectedForTest(int segment) =>
         segment >= 0 && segment < _rowBorders.Count && ReferenceEquals(_rowBorders[segment].Background, SelectedRowBrush);
+
+    /// <summary>Test seam: the "Segment N — Command" text of a row's label.</summary>
+    internal string? RowLabelForTest(int segment) =>
+        segment >= 0 && segment < _segmentLabels.Count ? _segmentLabels[segment].Text : null;
 
     /// <summary>Test seam: which wedge the preview currently highlights.</summary>
     internal int PreviewActiveSegmentForTest => _preview.ActiveSegment;

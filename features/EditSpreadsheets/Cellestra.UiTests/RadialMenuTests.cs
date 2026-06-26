@@ -318,6 +318,26 @@ public class RadialMenuTests
     }
 
     [AvaloniaFact]
+    public void Segment_row_label_shows_the_bound_command_name()
+    {
+        var dialog = new RadialSettingsDialog(new RadialMenuConfig
+        {
+            SegmentCount = 3,
+            CommandIds = new List<string?> { "edit.cut", null, "edit.paste" },
+        });
+
+        var cut = AppCommands.ById("edit.cut")!.Label;
+        Assert.Equal($"Segment 1 — {cut}", dialog.RowLabelForTest(0));
+        Assert.Equal("Segment 2 — Unbound", dialog.RowLabelForTest(1)); // empty slot
+
+        // Rebinding through the picker updates the label.
+        dialog.OpenCommandPickerForTest(1);
+        dialog.CommitPickerForTest("format.bold");
+        var bold = AppCommands.ById("format.bold")!.Label;
+        Assert.Equal($"Segment 2 — {bold}", dialog.RowLabelForTest(1));
+    }
+
+    [AvaloniaFact]
     public void Command_picker_dismisses_on_escape_without_binding()
     {
         var dialog = new RadialSettingsDialog(new RadialMenuConfig
