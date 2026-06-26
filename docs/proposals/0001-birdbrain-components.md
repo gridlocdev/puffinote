@@ -237,15 +237,17 @@ Each phase ends with **all** apps building clean and tests green; land a phase o
   vendored SVGs, now `avares://BirdBrain.Components/...`); the **tooltip card** (`TooltipCard`, reading
   `MutedText` instead of the copy-pasted `0x888888`); and the **overlay/modal stack** — `IModalDialog`
   + `ModalDialog<TResult>` base, a shared **`OverlayHost`** (themed card chrome + Tab focus-trap +
-  backdrop/Esc dismissal, with Opened/Closed hooks for app-specific blur/shortcut-suspend/focus), and a
-  shared **`ConfirmDialog`**. Cellestra runs its palette **and** every internal modal through the shared
-  host; Typage routes its confirm prompts through the same host + `ConfirmDialog` (its first internal
-  modals, replacing native `Window` dialogs). **As-built note:** Phase 3 turned out *not* to be a pile of
+  backdrop/Esc dismissal, with Opened/Closed hooks for app-specific blur/shortcut-suspend/focus), and the
+  shared dialog set **`ConfirmDialog`** / **`ChoiceDialog<T>`** (multi-way) / **`MessageDialog`** /
+  **`FormDialog`** (body + OK/Cancel). Cellestra runs its palette **and** every internal modal through the
+  shared host. Typage was fully migrated off native `Window.ShowDialog`: confirm prompts, the tri-state
+  unsaved/conflict choices, the error box, the link prompt (a Typage-local `LinkDialog`), and the
+  Preferences form are all internal modals now (the Markdown-reference window stays a *modeless* secondary
+  window — not a modal dialog). Typage's command bindings (keyboard / in-window menu / macOS native menu)
+  are gated on "an overlay is open" so a shortcut can't fire under a palette or modal. **As-built note:** Phase 3 turned out *not* to be a pile of
   duplicates — a survey found icon/tooltip were **Cellestra-only** and the modal host **structurally
   diverged** (Cellestra internal overlay vs Typage native windows). The Cellestra-only primitives were
-  lifted anyway, anticipating the BirdBrain app. **Remaining (optional):** Typage's other native dialogs
-  (link, the tri-state save-changes prompt, the external-reload conflict, the message/OK box) still use
-  `Window.ShowDialog`; each is a distinct follow-on (some need new shared types) and is not a *confirm*.
+  lifted anyway, anticipating the BirdBrain app.
 - **Phase 4 — `AppCommand` + shortcut unification (Tier C).** Env-agnostic command (Cellestra captures
   its env at construction); a shared `Shortcut` representation; migrate `ShortcutFormatter` and the
   catalog wiring onto it.
