@@ -5,6 +5,7 @@ using Avalonia.Input;
 using Avalonia.Layout;
 using Avalonia.Media;
 using Avalonia.VisualTree;
+using BirdBrain.Components.Commands;
 using Typage.Desktop.Commands;
 
 namespace Typage.Desktop.Views;

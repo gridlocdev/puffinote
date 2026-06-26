@@ -1,4 +1,4 @@
-using Typage.Desktop.Commands;
+using BirdBrain.Components.Commands;
 using Xunit;
 
 namespace Typage.UiTests;

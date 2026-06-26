@@ -16,6 +16,7 @@ using Avalonia.Markup.Xaml;
 using Avalonia.Media;
 using Avalonia.Platform.Storage;
 using Avalonia.VisualTree;
+using BirdBrain.Components.Commands;
 using Cellestra.Charts;
 // The view moved to the Cellestra.Editor namespace; the moved command bar keeps its original
 // Cellestra.Desktop.Controls.CommandBar namespace. Alias it to disambiguate from Avalonia's own

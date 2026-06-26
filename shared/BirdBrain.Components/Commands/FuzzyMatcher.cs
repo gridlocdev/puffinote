@@ -1,9 +1,9 @@
-namespace Typage.Desktop.Commands;
+namespace BirdBrain.Components.Commands;
 
 /// <summary>
-/// Subsequence fuzzy matching for the Command Palette (modeled on VS Code, ported from Cellestra):
-/// a query matches when its characters appear in order in the candidate. Returns a score (higher is
-/// better) so results rank sensibly; -1 means no match.
+/// Subsequence fuzzy matching for the Command Palette and similar pickers (modeled on VS Code): a
+/// query matches when its characters appear in order in the candidate. Returns a score (higher is
+/// better) so results can be ranked; -1 means no match. Shared across the BirdBrain family.
 /// </summary>
 public static class FuzzyMatcher
 {
@@ -14,13 +14,13 @@ public static class FuzzyMatcher
             return 0;
         }
 
-        var score = 0;
-        var candidateIndex = 0;
-        var consecutive = 0;
+        int score = 0;
+        int candidateIndex = 0;
+        int consecutive = 0;
 
-        foreach (var q in query)
+        foreach (char q in query)
         {
-            var matched = false;
+            bool matched = false;
             for (; candidateIndex < candidate.Length; candidateIndex++)
             {
                 if (char.ToLowerInvariant(candidate[candidateIndex]) == char.ToLowerInvariant(q))

@@ -7,6 +7,7 @@ using Avalonia.Input;
 using Avalonia.Layout;
 using Avalonia.Media;
 using Avalonia.VisualTree;
+using BirdBrain.Components.Commands;
 using Cellestra.Desktop.Commands;
 using Cellestra.Desktop.Controls.Icons;
 using Cellestra.Desktop.Controls.RadialMenu;
