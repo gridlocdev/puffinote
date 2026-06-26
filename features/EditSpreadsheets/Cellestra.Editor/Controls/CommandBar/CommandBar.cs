@@ -8,6 +8,7 @@ using Avalonia.Controls.Shapes;
 using Avalonia.Layout;
 using Avalonia.Media;
 using Cellestra.Desktop.Commands;
+using BirdBrain.Components.Controls;
 using BirdBrain.Components.Controls.Icons;
 
 namespace Cellestra.Desktop.Controls.CommandBar;
@@ -579,23 +580,10 @@ public sealed class CommandBar : UserControl
             : $"{command.Label} {(command.IsToggleActive(env) ? "on" : "off")} · {address}";
     }
 
-    /// <summary>Tooltip body: name + shortcut on top, the plain-language description beneath.</summary>
-    internal static Control BuildTip(AppCommand command)
-    {
-        var header = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8 };
-        header.Children.Add(new TextBlock { Text = command.Label, FontWeight = FontWeight.SemiBold });
-        if (!string.IsNullOrEmpty(command.ShortcutText))
-        {
-            header.Children.Add(new TextBlock { Text = command.ShortcutText, Foreground = MutedBrush });
-        }
-
-        var panel = new StackPanel { Spacing = 2, MaxWidth = 240 };
-        panel.Children.Add(header);
-        if (!string.IsNullOrEmpty(command.Description))
-        {
-            panel.Children.Add(new TextBlock { Text = command.Description, Foreground = MutedBrush, FontSize = 11.5, TextWrapping = TextWrapping.Wrap });
-        }
-
-        return panel;
-    }
+    /// <summary>
+    /// Tooltip body: name + shortcut on top, the plain-language description beneath. Adapts this app's
+    /// <see cref="AppCommand"/> onto the shared <see cref="TooltipCard"/> (which themes muted text).
+    /// </summary>
+    internal static Control BuildTip(AppCommand command) =>
+        new TooltipCard(command.Label, command.ShortcutText, command.Description);
 }
