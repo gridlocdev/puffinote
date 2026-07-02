@@ -23,6 +23,9 @@ public sealed class AppSettings
 
     public int TabWidth { get; set; } = 4;
 
+    /// <summary>The left/right text inset (padding) of the editor, in pixels, applied to both sides (PRD §7.5).</summary>
+    public int EditorPadding { get; set; } = 20;
+
     public bool ShowToolbar { get; set; } = true;
 
     /// <summary>The default for the per-document raw-source view (markers always shown; PRD §7.4).</summary>

@@ -167,6 +167,7 @@ public class MainWindow : Window
         _editorView.Editor.IndentWidth = _settings.Settings.TabWidth;
         _editorView.Editor.ShowRawSource = _settings.Settings.ShowRawSource; // restore the raw-source default
         _editorView.Editor.CompletedTaskSorting = _settings.Settings.CompletedTaskSort; // restore task-sort default
+        _editorView.Editor.HorizontalPadding = _settings.Settings.EditorPadding; // restore editor padding
 
         SetupAutosave();
         Opened += async (_, _) => await CheckForRecoveryAsync(); // offer recovery once the window is up
@@ -1605,6 +1606,7 @@ public class MainWindow : Window
             HorizontalAlignment = HorizontalAlignment.Stretch,
         };
         var tabWidth = new NumericUpDown { Minimum = 1, Maximum = 8, Increment = 1, Value = s.TabWidth, FormatString = "0" };
+        var padding = new NumericUpDown { Minimum = 0, Maximum = 200, Increment = 4, Value = s.EditorPadding, FormatString = "0" };
         var autosave = new NumericUpDown { Minimum = 0, Maximum = 600, Increment = 5, Value = s.AutosaveSeconds, FormatString = "0" };
         var completedTasks = new ComboBox
         {
@@ -1617,19 +1619,20 @@ public class MainWindow : Window
 
         var grid = new Grid
         {
-            RowDefinitions = new RowDefinitions("Auto,Auto,Auto,Auto,Auto,Auto"),
+            RowDefinitions = new RowDefinitions("Auto,Auto,Auto,Auto,Auto,Auto,Auto"),
             ColumnDefinitions = new ColumnDefinitions("Auto,*"),
             Width = 340,
         };
         AddSettingRow(grid, 0, "Theme", themeCombo);
         AddSettingRow(grid, 1, "Tab width", tabWidth);
-        AddSettingRow(grid, 2, "Autosave (sec, 0 = off)", autosave);
-        AddSettingRow(grid, 3, "Completed tasks", completedTasks);
-        Grid.SetRow(showToolbar, 4);
+        AddSettingRow(grid, 2, "Padding (px)", padding);
+        AddSettingRow(grid, 3, "Autosave (sec, 0 = off)", autosave);
+        AddSettingRow(grid, 4, "Completed tasks", completedTasks);
+        Grid.SetRow(showToolbar, 5);
         Grid.SetColumnSpan(showToolbar, 2);
         showToolbar.Margin = new Avalonia.Thickness(0, 8, 0, 0);
         grid.Children.Add(showToolbar);
-        Grid.SetRow(rawSource, 5);
+        Grid.SetRow(rawSource, 6);
         Grid.SetColumnSpan(rawSource, 2);
         rawSource.Margin = new Avalonia.Thickness(0, 4, 0, 0);
         grid.Children.Add(rawSource);
@@ -1644,6 +1647,8 @@ public class MainWindow : Window
         ApplyTheme(theme);
         s.TabWidth = (int)(tabWidth.Value ?? 4);
         _editorView.Editor.IndentWidth = s.TabWidth;
+        s.EditorPadding = (int)(padding.Value ?? 20);
+        _editorView.Editor.HorizontalPadding = s.EditorPadding;
         s.ShowToolbar = showToolbar.IsChecked == true;
         if (_toolbar is not null && !_focusMode)
         {
