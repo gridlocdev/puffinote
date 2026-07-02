@@ -620,6 +620,15 @@ public class MainWindow : Window
             FontStyle = italic ? FontStyle.Italic : FontStyle.Normal,
             Command = new RelayCommand(action),
         };
+
+        // A sans-serif capital "I" is just a vertical stroke, so italicised it reads as a bare diagonal
+        // line. A serif face gives the glyph its top/bottom bars, so the italic "I" is recognisable.
+        if (italic)
+        {
+            button.FontFamily = new FontFamily("Georgia, Times New Roman, serif");
+            button.FontSize = 15;
+        }
+
         ToolTip.SetTip(button, tooltip);
         return button;
     }
