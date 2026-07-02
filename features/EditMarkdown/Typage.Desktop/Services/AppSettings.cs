@@ -1,4 +1,5 @@
 using Typage.Control.Controls;
+using RecentFilesHelper = Puffinote.Components.Shell.RecentFiles;
 
 namespace Typage.Desktop.Services;
 
@@ -49,13 +50,6 @@ public sealed class AppSettings
 
     public const int MaxRecentFiles = 10;
 
-    public void PushRecent(string path)
-    {
-        RecentFiles.RemoveAll(p => string.Equals(p, path, StringComparison.OrdinalIgnoreCase));
-        RecentFiles.Insert(0, path);
-        if (RecentFiles.Count > MaxRecentFiles)
-        {
-            RecentFiles.RemoveRange(MaxRecentFiles, RecentFiles.Count - MaxRecentFiles);
-        }
-    }
+    public void PushRecent(string path) =>
+        RecentFiles = RecentFilesHelper.Push(RecentFiles, path, MaxRecentFiles);
 }

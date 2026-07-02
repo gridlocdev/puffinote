@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using Cellestra.Desktop.Commands;
+using RecentFilesHelper = Puffinote.Components.Shell.RecentFiles;
 
 namespace Cellestra.Desktop.Services;
 
@@ -27,15 +28,6 @@ public sealed record AppSettings
     public const int MaxRecentFiles = 10;
 
     /// <summary>Return a copy with <paramref name="path"/> promoted to the most-recent slot (deduped, capped).</summary>
-    public AppSettings WithRecentFile(string path)
-    {
-        var recent = new List<string> { path };
-        recent.AddRange(RecentFiles.Where(p => !string.Equals(p, path, System.StringComparison.OrdinalIgnoreCase)));
-        if (recent.Count > MaxRecentFiles)
-        {
-            recent.RemoveRange(MaxRecentFiles, recent.Count - MaxRecentFiles);
-        }
-
-        return this with { RecentFiles = recent };
-    }
+    public AppSettings WithRecentFile(string path) =>
+        this with { RecentFiles = RecentFilesHelper.Push(RecentFiles, path, MaxRecentFiles) };
 }

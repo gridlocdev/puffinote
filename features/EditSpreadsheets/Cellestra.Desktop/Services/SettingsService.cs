@@ -1,13 +1,15 @@
 using System;
 using System.IO;
 using System.Text.Json;
+using Puffinote.Components.Shell;
 
 namespace Cellestra.Desktop.Services;
 
 /// <summary>
 /// Loads and saves <see cref="AppSettings"/> to
-/// <c>~/Library/Application Support/Cellestra/settings.json</c> (ARCHITECTURE §8). Failures are
-/// swallowed so a missing or unreadable file never blocks the app from starting.
+/// <c>~/Library/Application Support/Cellestra/settings.json</c> (ARCHITECTURE §8). The tolerant
+/// load / best-effort save plumbing is the shared <see cref="SettingsStore"/> (proposal 0001 §4.1E);
+/// this owns only Cellestra's file path and settings type.
 /// </summary>
 public sealed class SettingsService
 {
@@ -24,33 +26,7 @@ public sealed class SettingsService
         return Path.Combine(home, "Library", "Application Support", "Cellestra", "settings.json");
     }
 
-    public AppSettings Load()
-    {
-        try
-        {
-            if (File.Exists(_path))
-            {
-                return JsonSerializer.Deserialize<AppSettings>(File.ReadAllText(_path)) ?? new AppSettings();
-            }
-        }
-        catch (Exception ex) when (ex is IOException or JsonException or UnauthorizedAccessException)
-        {
-            // Corrupt or unreadable settings fall back to defaults.
-        }
+    public AppSettings Load() => SettingsStore.Load(_path, static () => new AppSettings(), JsonOptions);
 
-        return new AppSettings();
-    }
-
-    public void Save(AppSettings settings)
-    {
-        try
-        {
-            Directory.CreateDirectory(Path.GetDirectoryName(_path)!);
-            File.WriteAllText(_path, JsonSerializer.Serialize(settings, JsonOptions));
-        }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
-        {
-            // Best-effort: if we cannot write settings, continue without persisting.
-        }
-    }
+    public void Save(AppSettings settings) => SettingsStore.Save(_path, settings, JsonOptions);
 }

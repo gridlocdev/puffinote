@@ -1,11 +1,12 @@
 using System.Text.Json;
+using Puffinote.Components.Shell;
 
 namespace Typage.Desktop.Services;
 
 /// <summary>
 /// Loads and saves <see cref="AppSettings"/> as JSON in the OS-standard app-config location
-/// (PRD §7.9). Failures to read/write settings are non-fatal — the app falls back to defaults
-/// rather than refusing to start.
+/// (PRD §7.9). The tolerant load / best-effort save plumbing is the shared <see cref="SettingsStore"/>
+/// (proposal 0001 §4.1E); this owns only Typage's file path, serializer options, and settings type.
 /// </summary>
 public sealed class SettingsService
 {
@@ -18,42 +19,11 @@ public sealed class SettingsService
 
     public SettingsService()
     {
-        var dir = Path.Combine(
-            Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "Typage");
-        _path = Path.Combine(dir, "settings.json");
-        Settings = Load();
+        _path = SettingsStore.AppConfigPath("Typage", "settings.json");
+        Settings = SettingsStore.Load(_path, static () => new AppSettings(), Options);
     }
 
     public AppSettings Settings { get; private set; }
 
-    private AppSettings Load()
-    {
-        try
-        {
-            if (File.Exists(_path))
-            {
-                return JsonSerializer.Deserialize<AppSettings>(File.ReadAllText(_path), Options) ?? new AppSettings();
-            }
-        }
-        catch (Exception ex) when (ex is IOException or JsonException or UnauthorizedAccessException)
-        {
-            // Corrupt or unreadable settings — start fresh rather than crash.
-        }
-
-        return new AppSettings();
-    }
-
-    public void Save()
-    {
-        try
-        {
-            var dir = Path.GetDirectoryName(_path)!;
-            Directory.CreateDirectory(dir);
-            File.WriteAllText(_path, JsonSerializer.Serialize(Settings, Options));
-        }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
-        {
-            // Best-effort persistence; ignore failures.
-        }
-    }
+    public void Save() => SettingsStore.Save(_path, Settings, Options);
 }

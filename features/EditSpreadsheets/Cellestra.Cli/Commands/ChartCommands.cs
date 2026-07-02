@@ -1,4 +1,5 @@
 using System.CommandLine;
+using Puffinote.Components.Core.Cli;
 using Cellestra.Charts;
 using Cellestra.Cli.Infrastructure;
 using Cellestra.Core.Model;

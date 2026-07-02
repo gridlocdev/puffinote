@@ -1,6 +1,7 @@
 using System.CommandLine;
 using Typage.Cli.Commands;
 using Typage.Cli.Infrastructure;
+using Puffinote.Components.Core.Cli;
 
 namespace Typage.Cli;
 
@@ -23,28 +24,7 @@ public static class CliApplication
         };
     }
 
-    public static int Run(string[] args)
-    {
-        var configuration = new InvocationConfiguration { EnableDefaultExceptionHandler = false };
-        try
-        {
-            return BuildRoot().Parse(args).Invoke(configuration);
-        }
-        catch (Exception ex) when (IsExpectedError(ex))
-        {
-            Console.Error.WriteLine($"typage: {ex.Message}");
-            return 1;
-        }
-    }
-
-    /// <summary>
-    /// Errors a user can cause — bad input, a missing file — are reported cleanly with exit 1.
-    /// Anything else is a bug and is left to surface loudly.
-    /// </summary>
-    private static bool IsExpectedError(Exception ex) => ex is
-        CliException or
-        ArgumentException or
-        IOException or
-        UnauthorizedAccessException or
-        FormatException;
+    public static int Run(string[] args) =>
+        // The shared harness handles the common expected-error set (CliException, bad input, missing file).
+        CliHost.Run(BuildRoot(), args, "typage");
 }

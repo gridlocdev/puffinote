@@ -10,5 +10,8 @@
     <Project Path="Cellestra.Core.Tests/Cellestra.Core.Tests.csproj" />
     <Project Path="Cellestra.UiTests/Cellestra.UiTests.csproj" />
   </Folder>
-  <Folder Name="/shared/" />
+  <Folder Name="/shared/">
+    <Project Path="../../shared/Puffinote.Components/Puffinote.Components.csproj" />
+    <Project Path="../../shared/Puffinote.Components.Core/Puffinote.Components.Core.csproj" />
+  </Folder>
 </Solution>

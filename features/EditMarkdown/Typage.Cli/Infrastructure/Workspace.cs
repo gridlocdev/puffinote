@@ -1,4 +1,5 @@
 using System.Text;
+using Puffinote.Components.Core.Cli;
 using Typage.Engine.Document;
 
 namespace Typage.Cli.Infrastructure;

@@ -1,6 +1,6 @@
 # Proposal 0001 — `Puffinote.Components`, a shared app-shell / design-system library
 
-- **Status:** Phases 0–1 **landed** (`FuzzyMatcher`, `RelayCommand` shared); Phase 2 **foundation landed** (token contract + first chrome migrated); Phase 3 **largely landed** (palette, icon system, tooltip card, overlay/modal host + shared `ConfirmDialog`; both apps converged); Phases 4–5 proposed (see §7)
+- **Status:** Phases 0–1 **landed** (`FuzzyMatcher`, `RelayCommand` shared); Phase 2 **foundation landed** (token contract + first chrome migrated); Phase 3 **largely landed** (palette, icon system, tooltip card, overlay/modal host + shared `ConfirmDialog`; both apps converged); Phase 4 **landed** (env-agnostic `AppCommand` + shared `Shortcut`/`ShortcutFormatter`; Cellestra captures its env at construction); Phase 5 **landed** (shared settings mechanism `SettingsStore`/`RecentFiles`; CLI scaffolding `CliException`/`CliHost` — the §4.4 non-UI `Puffinote.Components.Core` split is now realized). See §7. **Renamed from `BirdBrain.Components` → `Puffinote.Components`.**
 - **Author:** (you) · drafted with Claude
 - **Affects:** `features/EditSpreadsheets` (Cellestra), `features/EditMarkdown` (Typage), and the
   planned **Puffinote** composite app
@@ -248,12 +248,26 @@ Each phase ends with **all** apps building clean and tests green; land a phase o
   duplicates — a survey found icon/tooltip were **Cellestra-only** and the modal host **structurally
   diverged** (Cellestra internal overlay vs Typage native windows). The Cellestra-only primitives were
   lifted anyway, anticipating the Puffinote app.
-- **Phase 4 — `AppCommand` + shortcut unification (Tier C).** Env-agnostic command (Cellestra captures
-  its env at construction); a shared `Shortcut` representation; migrate `ShortcutFormatter` and the
-  catalog wiring onto it.
-- **Phase 5 — Shell services.** Settings/workspace base, CLI scaffolding (resolve the §4.4 split here if
-  the CLI needs the primitives). (`EditHistory` is **not** in this list — it's engine-layer and
-  domain-coupled; see §4.2.)
+- **Phase 4 — `AppCommand` + shortcut unification (Tier C). ✅ Landed.** A single env-agnostic
+  `AppCommand` (`Action Execute`, `Func<bool>? CanExecute/IsActive`, optional `Icon`, one `Title`) plus a
+  platform-agnostic `Shortcut` and shared `ShortcutFormatter`, all in `Puffinote.Components.Commands`.
+  Typage dropped its three copies and consumes the shared types unchanged. Cellestra's catalog became a
+  **per-environment instance** (`AppCommands(IAppEnvironment)`, reachable via `IAppEnvironment.Commands`)
+  whose commands close over the editor captured at construction; every consumer (command bar, radial
+  menu/overlay, dialogs, native/in-window menus, key bindings) reads it. **As-built notes:** Cellestra is
+  macOS-only, so its surfaces render shortcuts through a mac-forced `AppCommandDisplay.MacShortcut`
+  (the shared `ShortcutText` follows the current OS, right for the cross-platform siblings). Metadata-only
+  catalog tests build the catalog against a no-op `FakeAppEnvironment` (fast, no window); behaviour tests
+  use the real editor.
+- **Phase 5 — Shell services. ✅ Landed.** The shared settings **mechanism** — `SettingsStore` (tolerant
+  JSON load + best-effort save) and `RecentFiles` (dedupe/cap) in `Puffinote.Components.Shell` — with each
+  app keeping its own settings *type* and file path (they diverge, and Typage's is UI-coupled, so a shared
+  base *type* was rejected in favour of a shared mechanism). CLI scaffolding — `CliException` + the
+  `CliHost` run harness — is shared too, and because the CLIs are Avalonia-free this **realized the §4.4
+  split**: a new non-UI `Puffinote.Components.Core` now holds it (referenced by both `*.Cli` projects).
+  `Workspace` stayed per-app (engine-coupled: it loads a `Workbook` vs a `TextDocument`), and recent-files
+  live in each app's settings, so there was no separate workspace concept to extract. (`EditHistory` is
+  **not** in this list — it's engine-layer and domain-coupled; see §4.2.)
 
 Stop after any phase that delivers value; later phases are independent.
 

@@ -3,7 +3,8 @@
   <!--
     The command-line surface: a third consumer of Cellestra.Core (alongside the
     Desktop app), for CI/build pipelines. GOLDEN RULE: no Avalonia, no network.
-    Only Cellestra.Core + System.CommandLine.
+    Cellestra.Core + System.CommandLine + the family's non-UI shell floor
+    (Puffinote.Components.Core: shared CliException + CliHost run harness).
   -->
   <PropertyGroup>
     <OutputType>Exe</OutputType>
@@ -17,6 +18,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\Cellestra.Core\Cellestra.Core.csproj" />
+    <ProjectReference Include="..\..\..\shared\Puffinote.Components.Core\Puffinote.Components.Core.csproj" />
   </ItemGroup>
 
 </Project>

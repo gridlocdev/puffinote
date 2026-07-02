@@ -1,0 +1,21 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    Puffinote.Components.Core — the *non-UI* floor of the Puffinote family (proposal 0001 §4.4).
+    Split out from Puffinote.Components (the Avalonia UI library) so the CLIs — which are
+    "no Avalonia, no network" — can share primitives without pulling in a UI dependency. It
+    references System.CommandLine and its own code only; never Avalonia, an app, or an engine.
+    Currently holds the shared CLI scaffolding (CliException + the CliHost run harness).
+    (Target framework, nullable, and package versions come from the repo-root
+    Directory.Build.props / Directory.Packages.props.)
+  -->
+  <PropertyGroup>
+    <RootNamespace>Puffinote.Components.Core</RootNamespace>
+    <AssemblyName>Puffinote.Components.Core</AssemblyName>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="System.CommandLine" />
+  </ItemGroup>
+
+</Project>
