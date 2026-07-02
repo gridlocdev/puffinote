@@ -44,4 +44,25 @@ public class EditorPaddingTests
         e.HorizontalPadding = null; // back to the theme's PaddingLeft — no exception, still lays out
         Assert.Equal(1, e.TotalRowsForTest());
     }
+
+    [AvaloniaFact]
+    public void VerticalPadding_DoesNotAffectWrapping()
+    {
+        var paragraph = string.Join(' ', System.Linq.Enumerable.Repeat("word", 40));
+        var e = Arranged(paragraph, 300);
+        var rows = e.TotalRowsForTest();
+        e.VerticalPadding = 120; // top/bottom inset — rows (wrapping) are unchanged
+        Assert.Equal(rows, e.TotalRowsForTest());
+    }
+
+    [AvaloniaFact]
+    public void VerticalPadding_GrowsTheScrollExtentHeight()
+    {
+        var e = Arranged("one line", 300);
+        var before = ((Avalonia.Controls.Primitives.IScrollable)e).Extent.Height;
+        e.VerticalPadding = 100;
+        var after = ((Avalonia.Controls.Primitives.IScrollable)e).Extent.Height;
+        // The extent adds the inset at both the top and the bottom, so it grows by 2 x the increase.
+        Assert.True(after > before, $"expected a taller extent, got {after} vs {before}");
+    }
 }

@@ -297,6 +297,33 @@ public class MarkdownEditor : Avalonia.Controls.Control, ILogicalScrollable
     private double PaddingLeft => _horizontalPadding ?? _theme.PaddingLeft;
 
     /// <summary>
+    /// The top/bottom text inset from the editor edge, in device pixels, applied symmetrically to both ends
+    /// (Settings ▸ padding). When null the theme's own <see cref="MarkdownTheme.PaddingTop"/> is used. Unlike
+    /// the horizontal inset this doesn't affect wrapping, only the scroll extent and where content is drawn.
+    /// </summary>
+    public double? VerticalPadding
+    {
+        get => _verticalPadding;
+        set
+        {
+            if (_verticalPadding == value)
+            {
+                return;
+            }
+
+            _verticalPadding = value;
+            RaiseScrollInvalidated(EventArgs.Empty); // the scroll extent grows/shrinks by the new inset
+            InvalidateMeasure();
+            InvalidateVisual();
+        }
+    }
+
+    private double? _verticalPadding;
+
+    /// <summary>The effective top/bottom inset: the <see cref="VerticalPadding"/> override or the theme's default.</summary>
+    private double PaddingTop => _verticalPadding ?? _theme.PaddingTop;
+
+    /// <summary>
     /// When enabled, toggling a task checkbox keeps its sibling checkbox list sorted by completion state.
     /// A checked item only moves when every nested task in its subtree is also complete.
     /// </summary>
@@ -1247,7 +1274,7 @@ public class MarkdownEditor : Avalonia.Controls.Control, ILogicalScrollable
         get
         {
             EnsureLayout();
-            var height = Math.Max(_theme.LineHeight, TotalRows * _theme.LineHeight) + _theme.PaddingTop * 2;
+            var height = Math.Max(_theme.LineHeight, TotalRows * _theme.LineHeight) + PaddingTop * 2;
             // When wrapping, the content never exceeds the viewport width, so there is no horizontal scroll.
             var width = _wordWrap ? _viewport.Width : Math.Max(PaddingLeft * 2 + _extentWidth, _viewport.Width);
             return new Size(width, height);
@@ -1593,14 +1620,14 @@ public class MarkdownEditor : Avalonia.Controls.Control, ILogicalScrollable
         // variable block heights). The viewport height is 0 until the control is arranged in a scroll viewer.
         var lineH = _theme.LineHeight;
         var viewportH = _viewport.Height > 0 ? _viewport.Height : Bounds.Height;
-        var contentTop = _offset.Y - _theme.PaddingTop;
+        var contentTop = _offset.Y - PaddingTop;
         var firstRow = Math.Max(0, (int)(contentTop / lineH));
         var lastRow = (int)((contentTop + viewportH) / lineH) + 1;
         var first = BlockAtRow(firstRow);
         var last = Math.Min(_rowCounts.Length, BlockAtRow(lastRow) + 1);
 
         // Content is drawn in document space, inset by the padding and shifted by the scroll offset.
-        using (context.PushTransform(Matrix.CreateTranslation(PaddingLeft - _offset.X, _theme.PaddingTop - _offset.Y)))
+        using (context.PushTransform(Matrix.CreateTranslation(PaddingLeft - _offset.X, PaddingTop - _offset.Y)))
         {
             if (!RawTextMode)
             {
@@ -1769,7 +1796,7 @@ public class MarkdownEditor : Avalonia.Controls.Control, ILogicalScrollable
             }
 
             // Store the hit rect in control space (undo the PaddingLeft/Top − scroll-offset render transform).
-            _codeCopyButtons.Add((new Rect(x + PaddingLeft - _offset.X, y + _theme.PaddingTop - _offset.Y, w, h), line, endLine));
+            _codeCopyButtons.Add((new Rect(x + PaddingLeft - _offset.X, y + PaddingTop - _offset.Y, w, h), line, endLine));
         }
     }
 
@@ -3376,7 +3403,7 @@ public class MarkdownEditor : Avalonia.Controls.Control, ILogicalScrollable
 
         // Caret position in scroll-content space (which includes the padding), on its wrapped row.
         var px = x + PaddingLeft;
-        var py = RowTop(r.Block) + r.Visual.RowOf(r.Col) * _theme.LineHeight + _theme.PaddingTop;
+        var py = RowTop(r.Block) + r.Visual.RowOf(r.Col) * _theme.LineHeight + PaddingTop;
         const double margin = 8;
 
         var newY = _offset.Y;
@@ -3891,7 +3918,7 @@ public class MarkdownEditor : Avalonia.Controls.Control, ILogicalScrollable
     private int OffsetAtPoint(Point point)
     {
         EnsureLayout();
-        var contentY = point.Y - _theme.PaddingTop + _offset.Y;
+        var contentY = point.Y - PaddingTop + _offset.Y;
         var contentX = point.X - PaddingLeft + _offset.X;
         var globalRow = Math.Max(0, (int)(contentY / _theme.LineHeight));
         var block = BlockAtRow(globalRow);

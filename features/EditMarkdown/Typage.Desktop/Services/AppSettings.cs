@@ -26,6 +26,9 @@ public sealed class AppSettings
     /// <summary>The left/right text inset (padding) of the editor, in pixels, applied to both sides (PRD §7.5).</summary>
     public int EditorPadding { get; set; } = 20;
 
+    /// <summary>The top/bottom text inset (padding) of the editor, in pixels, applied to both ends (PRD §7.5).</summary>
+    public int EditorPaddingVertical { get; set; } = 14;
+
     public bool ShowToolbar { get; set; } = true;
 
     /// <summary>
