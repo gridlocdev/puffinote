@@ -1,3 +1,5 @@
+using Typage.Control.Controls;
+
 namespace Typage.Desktop.Services;
 
 /// <summary>The appearance mode (PRD §7.2). <see cref="System"/> follows the OS light/dark setting.</summary>
@@ -28,6 +30,13 @@ public sealed class AppSettings
 
     /// <summary>Seconds between crash-recovery autosaves; 0 disables it (PRD §9.4).</summary>
     public int AutosaveSeconds { get; set; } = 30;
+
+    /// <summary>
+    /// How a checkbox list re-orders itself when a task is toggled: leave items in place
+    /// (<see cref="MarkdownEditor.CompletedTaskSortMode.None"/>, the default) or float completed
+    /// items to the top/bottom of their sibling group (PRD §7.2 editing assists).
+    /// </summary>
+    public MarkdownEditor.CompletedTaskSortMode CompletedTaskSort { get; set; } = MarkdownEditor.CompletedTaskSortMode.None;
 
     public const int MaxRecentFiles = 10;
 

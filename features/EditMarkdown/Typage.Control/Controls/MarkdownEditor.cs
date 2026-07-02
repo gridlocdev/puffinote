@@ -30,6 +30,15 @@ namespace Typage.Control.Controls;
 /// </remarks>
 public class MarkdownEditor : Avalonia.Controls.Control, ILogicalScrollable
 {
+    public enum CompletedTaskSortMode
+    {
+        None,
+        Top,
+        Bottom,
+    }
+
+    private readonly record struct TaskSubtree(int StartLine, int EndLine, bool IsComplete);
+
     private readonly DocumentBuffer _buffer = new();
     private MarkdownModel _model;
     private MarkdownTheme _theme = MarkdownTheme.Default;
@@ -214,6 +223,12 @@ public class MarkdownEditor : Avalonia.Controls.Control, ILogicalScrollable
     }
 
     private bool _showRawSource;
+
+    /// <summary>
+    /// When enabled, toggling a task checkbox keeps its sibling checkbox list sorted by completion state.
+    /// A checked item only moves when every nested task in its subtree is also complete.
+    /// </summary>
+    public CompletedTaskSortMode CompletedTaskSorting { get; set; }
 
     /// <summary>
     /// When true (the default) long lines soft-wrap to the viewport width and the editor never scrolls
@@ -3056,7 +3071,7 @@ public class MarkdownEditor : Avalonia.Controls.Control, ILogicalScrollable
                 continue;
             }
 
-            return ToggleBoxAt(t.Start + 1); // the character between the brackets
+            return ToggleBoxAt(line, t.Start + 1); // the character between the brackets
         }
 
         return false;
@@ -3069,7 +3084,7 @@ public class MarkdownEditor : Avalonia.Controls.Control, ILogicalScrollable
         {
             if (t.Type == TokenType.TaskMarker)
             {
-                return ToggleBoxAt(t.Start + 1);
+                return ToggleBoxAt(line, t.Start + 1);
             }
         }
 
@@ -3077,7 +3092,7 @@ public class MarkdownEditor : Avalonia.Controls.Control, ILogicalScrollable
     }
 
     /// <summary>Flip the <c>[ ]</c>/<c>[x]</c> box character at <paramref name="box"/>, leaving the caret put.</summary>
-    private bool ToggleBoxAt(int box)
+    private bool ToggleBoxAt(int line, int box)
     {
         if (box < 0 || box >= _buffer.Document.Length)
         {
@@ -3087,8 +3102,167 @@ public class MarkdownEditor : Avalonia.Controls.Control, ILogicalScrollable
         var replacement = _buffer.Document[box] == ' ' ? "x" : " ";
         var caret = _buffer.Selection;
         _buffer.ReplaceRange(box, 1, replacement);
-        _buffer.Selection = caret; // toggling a checkbox shouldn't move the caret
+        if (!TrySortCompletedTaskGroup(line, caret))
+        {
+            _buffer.Selection = caret; // toggling a checkbox shouldn't move the caret
+        }
+
         return true;
+    }
+
+    private bool TrySortCompletedTaskGroup(int line, Selection selection)
+    {
+        if (CompletedTaskSorting == CompletedTaskSortMode.None)
+        {
+            return false;
+        }
+
+        var doc = _buffer.Document;
+        if (line < 0 || line >= doc.LineCount)
+        {
+            return false;
+        }
+
+        var indent = LineIndent(line);
+        var prefix = LinePrefix.Parse(doc.GetLineText(line));
+        if (!prefix.HasTask)
+        {
+            return false;
+        }
+
+        var groupStart = line;
+        while (true)
+        {
+            var previous = PreviousTaskSiblingStart(groupStart, indent);
+            if (previous < 0)
+            {
+                break;
+            }
+
+            groupStart = previous;
+        }
+
+        var items = ReadTaskSiblingGroup(groupStart, indent);
+        if (items.Count < 2)
+        {
+            return false;
+        }
+
+        var sorted = CompletedTaskSorting == CompletedTaskSortMode.Top
+            ? items.OrderByDescending(static item => item.IsComplete).ToList()
+            : items.OrderBy(static item => item.IsComplete).ToList();
+        if (sorted.SequenceEqual(items))
+        {
+            return false;
+        }
+
+        var regionStart = items[0].StartLine;
+        var regionEnd = items[^1].EndLine;
+        var lineMap = new int[regionEnd - regionStart + 1];
+        var contents = new List<string>();
+        var nextLine = regionStart;
+        foreach (var item in sorted)
+        {
+            for (var sourceLine = item.StartLine; sourceLine <= item.EndLine; sourceLine++)
+            {
+                lineMap[sourceLine - regionStart] = nextLine++;
+                contents.Add(LineContent(doc, sourceLine));
+            }
+        }
+
+        var anchor = selection.Anchor;
+        var caret = selection.Caret;
+        ReplaceLines(regionStart, regionEnd, contents);
+
+        var moved = _buffer.Document;
+        _buffer.Selection = new Selection(
+            RemapOffset(anchor, regionStart, regionEnd, lineMap, moved, doc),
+            RemapOffset(caret, regionStart, regionEnd, lineMap, moved, doc));
+        _goalX = double.NaN;
+        return true;
+    }
+
+    private int PreviousTaskSiblingStart(int startLine, int indent)
+    {
+        var previous = startLine - 1;
+        while (previous >= 0 && !IsBlankLine(previous) && LineIndent(previous) > indent)
+        {
+            previous--;
+        }
+
+        if (previous < 0 || IsBlankLine(previous) || LineIndent(previous) != indent)
+        {
+            return -1;
+        }
+
+        return LinePrefix.Parse(_buffer.Document.GetLineText(previous)).HasTask ? previous : -1;
+    }
+
+    private List<TaskSubtree> ReadTaskSiblingGroup(int startLine, int indent)
+    {
+        var doc = _buffer.Document;
+        var items = new List<TaskSubtree>();
+        var line = startLine;
+        while (line < doc.LineCount)
+        {
+            if (IsBlankLine(line) || LineIndent(line) != indent)
+            {
+                break;
+            }
+
+            var prefix = LinePrefix.Parse(doc.GetLineText(line));
+            if (!prefix.HasTask)
+            {
+                break;
+            }
+
+            var endLine = line;
+            while (endLine + 1 < doc.LineCount && !IsBlankLine(endLine + 1) && LineIndent(endLine + 1) > indent)
+            {
+                endLine++;
+            }
+
+            items.Add(new TaskSubtree(line, endLine, IsCompletedTaskSubtree(line, endLine)));
+            line = endLine + 1;
+        }
+
+        return items;
+    }
+
+    private bool IsCompletedTaskSubtree(int startLine, int endLine)
+    {
+        var doc = _buffer.Document;
+        var self = LinePrefix.Parse(doc.GetLineText(startLine));
+        if (!self.HasTask || !self.TaskChecked)
+        {
+            return false;
+        }
+
+        for (var line = startLine + 1; line <= endLine; line++)
+        {
+            var prefix = LinePrefix.Parse(doc.GetLineText(line));
+            if (prefix.HasTask && !prefix.TaskChecked)
+            {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    private static int RemapOffset(int offset, int regionStart, int regionEnd, int[] lineMap, TextDocument moved, TextDocument original)
+    {
+        var position = original.GetPosition(offset);
+        if (position.Line < regionStart || position.Line > regionEnd)
+        {
+            return offset;
+        }
+
+        var newLine = lineMap[position.Line - regionStart];
+        var originalColumn = offset - original.GetLineStart(position.Line);
+        var newLineStart = moved.GetLineStart(newLine);
+        var newLineLength = moved.GetLineText(newLine).Length;
+        return newLineStart + Math.Min(originalColumn, newLineLength);
     }
 
     /// <summary>Toggle the task checkbox covering <paramref name="offset"/> on <paramref name="line"/>; for tests.</summary>

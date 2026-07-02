@@ -32,7 +32,7 @@ public sealed class SettingsService
         {
             if (File.Exists(_path))
             {
-                return JsonSerializer.Deserialize<AppSettings>(File.ReadAllText(_path)) ?? new AppSettings();
+                return JsonSerializer.Deserialize<AppSettings>(File.ReadAllText(_path), Options) ?? new AppSettings();
             }
         }
         catch (Exception ex) when (ex is IOException or JsonException or UnauthorizedAccessException)

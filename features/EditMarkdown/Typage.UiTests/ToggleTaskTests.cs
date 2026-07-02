@@ -83,4 +83,50 @@ public class ToggleTaskTests
         e.Undo();
         Assert.Equal("buy milk", e.Text);
     }
+
+    [AvaloniaFact]
+    public void CompletedTasks_CanMoveToBottom()
+    {
+        var e = At("- [ ] a\n- [ ] b\n- [ ] c", line: 0, col: 6);
+        e.CompletedTaskSorting = MarkdownEditor.CompletedTaskSortMode.Bottom;
+
+        e.ToggleTask();
+
+        Assert.Equal("- [ ] b\n- [ ] c\n- [x] a", e.Text);
+        Assert.Equal(2, e.Buffer.Document.GetPosition(e.Buffer.Selection.Caret).Line);
+    }
+
+    [AvaloniaFact]
+    public void CompletedTasks_CanMoveToTop()
+    {
+        var e = At("- [ ] a\n- [ ] b\n- [x] c", line: 1, col: 6);
+        e.CompletedTaskSorting = MarkdownEditor.CompletedTaskSortMode.Top;
+
+        e.ToggleTask();
+
+        Assert.Equal("- [x] b\n- [x] c\n- [ ] a", e.Text);
+        Assert.Equal(0, e.Buffer.Document.GetPosition(e.Buffer.Selection.Caret).Line);
+    }
+
+    [AvaloniaFact]
+    public void NestedIncompleteTasks_BlockParentFromMoving()
+    {
+        var e = At("- [ ] a\n  - [ ] child\n- [ ] b", line: 0, col: 6);
+        e.CompletedTaskSorting = MarkdownEditor.CompletedTaskSortMode.Bottom;
+
+        e.ToggleTask();
+
+        Assert.Equal("- [x] a\n  - [ ] child\n- [ ] b", e.Text);
+    }
+
+    [AvaloniaFact]
+    public void CompletedNestedSubtree_MovesAsAUnit()
+    {
+        var e = At("- [ ] a\n  - [x] child\n- [ ] b", line: 0, col: 6);
+        e.CompletedTaskSorting = MarkdownEditor.CompletedTaskSortMode.Bottom;
+
+        e.ToggleTask();
+
+        Assert.Equal("- [ ] b\n- [x] a\n  - [x] child", e.Text);
+    }
 }

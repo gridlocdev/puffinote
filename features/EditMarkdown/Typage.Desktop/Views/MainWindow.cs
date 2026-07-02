@@ -10,6 +10,7 @@ using Avalonia.Styling;
 using Avalonia.Threading;
 using BirdBrain.Components.Commands;
 using BirdBrain.Components.Overlays;
+using Typage.Control.Controls;
 using Typage.Control.Rendering;
 using Typage.Control.Views;
 using Typage.Desktop.Commands;
@@ -165,6 +166,7 @@ public class MainWindow : Window
         ApplyTheme(_settings.Settings.Theme);
         _editorView.Editor.IndentWidth = _settings.Settings.TabWidth;
         _editorView.Editor.ShowRawSource = _settings.Settings.ShowRawSource; // restore the raw-source default
+        _editorView.Editor.CompletedTaskSorting = _settings.Settings.CompletedTaskSort; // restore task-sort default
 
         SetupAutosave();
         Opened += async (_, _) => await CheckForRecoveryAsync(); // offer recovery once the window is up
@@ -1604,23 +1606,30 @@ public class MainWindow : Window
         };
         var tabWidth = new NumericUpDown { Minimum = 1, Maximum = 8, Increment = 1, Value = s.TabWidth, FormatString = "0" };
         var autosave = new NumericUpDown { Minimum = 0, Maximum = 600, Increment = 5, Value = s.AutosaveSeconds, FormatString = "0" };
+        var completedTasks = new ComboBox
+        {
+            ItemsSource = new[] { "Leave in place", "Move to top", "Move to bottom" },
+            SelectedIndex = (int)s.CompletedTaskSort,
+            HorizontalAlignment = HorizontalAlignment.Stretch,
+        };
         var showToolbar = new CheckBox { Content = "Show the formatting toolbar", IsChecked = s.ShowToolbar };
         var rawSource = new CheckBox { Content = "Show raw Markdown source by default", IsChecked = s.ShowRawSource };
 
         var grid = new Grid
         {
-            RowDefinitions = new RowDefinitions("Auto,Auto,Auto,Auto,Auto"),
+            RowDefinitions = new RowDefinitions("Auto,Auto,Auto,Auto,Auto,Auto"),
             ColumnDefinitions = new ColumnDefinitions("Auto,*"),
             Width = 340,
         };
         AddSettingRow(grid, 0, "Theme", themeCombo);
         AddSettingRow(grid, 1, "Tab width", tabWidth);
         AddSettingRow(grid, 2, "Autosave (sec, 0 = off)", autosave);
-        Grid.SetRow(showToolbar, 3);
+        AddSettingRow(grid, 3, "Completed tasks", completedTasks);
+        Grid.SetRow(showToolbar, 4);
         Grid.SetColumnSpan(showToolbar, 2);
         showToolbar.Margin = new Avalonia.Thickness(0, 8, 0, 0);
         grid.Children.Add(showToolbar);
-        Grid.SetRow(rawSource, 4);
+        Grid.SetRow(rawSource, 5);
         Grid.SetColumnSpan(rawSource, 2);
         rawSource.Margin = new Avalonia.Thickness(0, 4, 0, 0);
         grid.Children.Add(rawSource);
@@ -1648,6 +1657,9 @@ public class MainWindow : Window
 
         s.AutosaveSeconds = (int)(autosave.Value ?? 30);
         SetupAutosave(); // pick up the new interval (or disable when 0)
+
+        s.CompletedTaskSort = (MarkdownEditor.CompletedTaskSortMode)System.Math.Clamp(completedTasks.SelectedIndex, 0, 2);
+        _editorView.Editor.CompletedTaskSorting = s.CompletedTaskSort;
 
         s.ShowRawSource = rawSource.IsChecked == true;
         _editorView.Editor.ShowRawSource = s.ShowRawSource;
