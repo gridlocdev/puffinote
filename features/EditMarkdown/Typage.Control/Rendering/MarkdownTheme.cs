@@ -162,6 +162,12 @@ public class MarkdownTheme
         _ => BaseFontSize,
     };
 
+    /// <summary>
+    /// The plain treatment for the raw-text view: monospace body text in the foreground colour, with no
+    /// background, decorations, or marker flag — every token, marker and content alike, renders identically.
+    /// </summary>
+    public RunStyle RawTextStyle() => new(Mono(), BaseFontSize, Foreground, null, false);
+
     private RunStyle Marker() => new(Body(), BaseFontSize, MarkerForeground, null, true);
 
     private Typeface Body() => new(_body);

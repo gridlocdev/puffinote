@@ -206,23 +206,64 @@ public class MarkdownEditor : Avalonia.Controls.Control, ILogicalScrollable
     /// strength instead of dimming away from the caret (PRD §7.4 raw-source view). A per-document
     /// session toggle whose default comes from Settings.
     /// </summary>
-    public bool ShowRawSource
+    /// <summary>
+    /// How the editing surface presents the document (PRD §7.4). <see cref="ViewMode.Rich"/> is the WYSIWYG
+    /// live preview (markers concealed, full formatting); <see cref="ViewMode.Formatted"/> keeps the
+    /// formatting but reveals the raw Markdown markers; <see cref="ViewMode.RawText"/> shows the plain
+    /// monospace source with no concealment, styling, or decorations — read exactly as it will be saved.
+    /// </summary>
+    public enum ViewMode
     {
-        get => _showRawSource;
+        /// <summary>WYSIWYG live preview: markers concealed, full formatting.</summary>
+        Rich,
+
+        /// <summary>Formatted, but with the raw Markdown markers revealed (the classic "raw source" view).</summary>
+        Formatted,
+
+        /// <summary>Plain monospace source text: no concealment, no styling, no decorations.</summary>
+        RawText,
+    }
+
+    /// <summary>The active presentation mode (PRD §7.4). Defaults to the WYSIWYG <see cref="ViewMode.Rich"/>.</summary>
+    public ViewMode View
+    {
+        get => _viewMode;
         set
         {
-            if (_showRawSource == value)
+            if (_viewMode == value)
             {
                 return;
             }
 
-            _showRawSource = value;
-            _blockVisualCache.Clear(); // marker concealment differs by mode, so cached visuals are stale
+            _viewMode = value;
+            _layoutDirty = true;   // RawText ungroups paragraphs and un-collapses blanks, so re-group fully
+            _firstDirtyLine = 0;
+            _extentWidth = 0;
+            _blockVisualCache.Clear(); // concealment/styling differ by mode, so cached visuals are stale
+            RaiseScrollInvalidated(EventArgs.Empty);
+            InvalidateMeasure();
             InvalidateVisual();
         }
     }
 
-    private bool _showRawSource;
+    private ViewMode _viewMode;
+
+    /// <summary>
+    /// Legacy toggle kept for existing callers: reveals or conceals the syntax markers. Reading it is true
+    /// in both <see cref="ViewMode.Formatted"/> and <see cref="ViewMode.RawText"/>; setting it swaps between
+    /// <see cref="ViewMode.Rich"/> and <see cref="ViewMode.Formatted"/>.
+    /// </summary>
+    public bool ShowRawSource
+    {
+        get => _viewMode != ViewMode.Rich;
+        set => View = value ? ViewMode.Formatted : ViewMode.Rich;
+    }
+
+    /// <summary>Markers are revealed (not concealed) in both the Formatted and RawText views.</summary>
+    private bool MarkersRevealed => _viewMode != ViewMode.Rich;
+
+    /// <summary>The plain monospace source view: no concealment, styling, decorations, or paragraph flow.</summary>
+    private bool RawTextMode => _viewMode == ViewMode.RawText;
 
     /// <summary>
     /// The left/right text inset from the editor edge, in device pixels, applied symmetrically to both
@@ -1310,7 +1351,8 @@ public class MarkdownEditor : Avalonia.Controls.Control, ILogicalScrollable
         var ofLine = new int[n];
         for (var l = 0; l < n; l++)
         {
-            var joins = l > 0 && IsFlowLine(l) && IsFlowLine(l - 1) && !EndsWithHardBreak(l - 1);
+            // Raw-text view shows the literal source: every line stands on its own row (no paragraph flow).
+            var joins = !RawTextMode && l > 0 && IsFlowLine(l) && IsFlowLine(l - 1) && !EndsWithHardBreak(l - 1);
             if (!joins)
             {
                 starts.Add(l);
@@ -1560,7 +1602,10 @@ public class MarkdownEditor : Avalonia.Controls.Control, ILogicalScrollable
         // Content is drawn in document space, inset by the padding and shifted by the scroll offset.
         using (context.PushTransform(Matrix.CreateTranslation(PaddingLeft - _offset.X, _theme.PaddingTop - _offset.Y)))
         {
-            DrawPropertiesPanel(context, first, last); // front-matter "Properties" backdrop, under the text
+            if (!RawTextMode)
+            {
+                DrawPropertiesPanel(context, first, last); // front-matter "Properties" backdrop, under the text
+            }
 
             var maxWidth = _extentWidth;
             for (var block = first; block < last; block++)
@@ -1574,7 +1619,10 @@ public class MarkdownEditor : Avalonia.Controls.Control, ILogicalScrollable
             }
 
             DrawReorderIndicator(context, lineH);
-            DrawCodeCopyButtons(context, first, last, lineH);
+            if (!RawTextMode)
+            {
+                DrawCodeCopyButtons(context, first, last, lineH); // no code-block chrome in the plain-source view
+            }
 
             // Only relevant when wrapping is off: grow the horizontal extent as wide lines come into view.
             if (!_wordWrap && maxWidth > _extentWidth)
@@ -1834,7 +1882,8 @@ public class MarkdownEditor : Avalonia.Controls.Control, ILogicalScrollable
         var visual = BlockVisual(block);
 
         // A code block (always a singleton block) gets a subtle background panel spanning all its rows.
-        if (IsCodeLine(startLine))
+        // Raw-text view is unstyled, so it draws no panel.
+        if (!RawTextMode && IsCodeLine(startLine))
         {
             context.FillRectangle(_theme.CodeBlockBackground, new Rect(-8, blockTop, ContentRight() + 16, visual.RowCount * lineH));
         }
@@ -2639,6 +2688,12 @@ public class MarkdownEditor : Avalonia.Controls.Control, ILogicalScrollable
     /// </summary>
     private bool IsCollapsedBlankLine(int line)
     {
+        // Raw-text view shows every blank line as a real, editable row (no soft collapsing).
+        if (RawTextMode)
+        {
+            return false;
+        }
+
         var doc = _buffer.Document;
         return line > 0 && line < doc.LineCount
             && IsEmptyLine(line) && !IsBlankLine(line - 1)
@@ -3980,6 +4035,16 @@ public class MarkdownEditor : Avalonia.Controls.Control, ILogicalScrollable
         var blockStart = doc.GetLineStart(startLine);
         var blockEnd = doc.GetLineEnd(endLine);
 
+        // Raw-text view: draw the literal source in one plain monospace style, with no marker concealment,
+        // per-token colouring, or synthetic decorations. Each block is a single line here (paragraph flow is
+        // off in this mode), so the source maps 1:1 to the drawn columns.
+        if (RawTextMode)
+        {
+            var lineText = doc.GetText(blockStart, blockEnd - blockStart).TrimEnd('\n', '\r');
+            var plain = new List<VisualLine.Segment> { new(0, lineText.Length, _theme.RawTextStyle(), false) };
+            return VisualLine.Build(lineText, plain, MeasureWidth, WrapWidth());
+        }
+
         // Interior newlines render as spaces so the paragraph flows; the last line's trailing CR is dropped
         // (matching the old single-line path). Replacement is char-for-char so columns stay 1:1 with offsets.
         var raw = doc.GetText(blockStart, blockEnd - blockStart).Replace('\n', ' ');
@@ -4565,7 +4630,7 @@ public class MarkdownEditor : Avalonia.Controls.Control, ILogicalScrollable
     /// </summary>
     private bool MarkerConcealed(Token t)
     {
-        if (_showRawSource || t.Role != TokenRole.Marker)
+        if (MarkersRevealed || t.Role != TokenRole.Marker)
         {
             return false;
         }
@@ -4589,7 +4654,7 @@ public class MarkdownEditor : Avalonia.Controls.Control, ILogicalScrollable
     /// rule is plain <c>---</c> text and the usual caret/selection apply.)
     /// </summary>
     internal bool ShouldHighlightRuleLine(int line)
-        => !_showRawSource
+        => !MarkersRevealed
            && _buffer.Selection.Length == 0
            && IsHorizontalRuleLine(line)
            && _buffer.Document.GetPosition(_buffer.Selection.Caret).Line == line;

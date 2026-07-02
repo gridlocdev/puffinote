@@ -10,30 +10,44 @@ namespace Typage.UiTests;
 public class ViewModeTests
 {
     [AvaloniaFact]
-    public void Editor_ShowRawSource_IsOffByDefault()
+    public void Editor_View_DefaultsToRich()
     {
-        Assert.False(new MarkdownEditor().ShowRawSource);
+        var e = new MarkdownEditor();
+        Assert.Equal(MarkdownEditor.ViewMode.Rich, e.View);
+        Assert.False(e.ShowRawSource);
     }
 
     [AvaloniaFact]
-    public void Window_AppliesRawSourceDefaultFromSettings()
+    public void ShowRawSource_ShimMapsToFormattedAndRich()
     {
-        var settings = new SettingsService();
-        settings.Settings.ShowRawSource = true;
-        var window = new MainWindow(settings);
-        Assert.True(window.EditorView.Editor.ShowRawSource);
+        var e = new MarkdownEditor { ShowRawSource = true };
+        Assert.Equal(MarkdownEditor.ViewMode.Formatted, e.View);
+        e.ShowRawSource = false;
+        Assert.Equal(MarkdownEditor.ViewMode.Rich, e.View);
+        // RawText also reads as "raw source" (markers revealed) but is not reachable via the bool setter.
+        e.View = MarkdownEditor.ViewMode.RawText;
+        Assert.True(e.ShowRawSource);
     }
 
     [AvaloniaFact]
-    public void RawSourceToggle_FlipsEditorAndSetting()
+    public void Window_AppliesViewModeDefaultFromSettings()
+    {
+        var settings = new SettingsService();
+        settings.Settings.View = MarkdownEditor.ViewMode.RawText;
+        var window = new MainWindow(settings);
+        Assert.Equal(MarkdownEditor.ViewMode.RawText, window.EditorView.Editor.View);
+    }
+
+    [AvaloniaFact]
+    public void SetViewMode_UpdatesEditorAndSetting()
     {
         var settings = new SettingsService();
         var window = new MainWindow(settings);
-        Assert.False(window.EditorView.Editor.ShowRawSource);
+        Assert.Equal(MarkdownEditor.ViewMode.Rich, window.EditorView.Editor.View);
 
-        window.ToggleRawSourceForTest();
-        Assert.True(window.EditorView.Editor.ShowRawSource);
-        Assert.True(settings.Settings.ShowRawSource);
+        window.SetViewModeForTest(MarkdownEditor.ViewMode.RawText);
+        Assert.Equal(MarkdownEditor.ViewMode.RawText, window.EditorView.Editor.View);
+        Assert.Equal(MarkdownEditor.ViewMode.RawText, settings.Settings.View);
     }
 
     [AvaloniaFact]

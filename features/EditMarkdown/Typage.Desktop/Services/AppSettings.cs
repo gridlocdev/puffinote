@@ -28,8 +28,11 @@ public sealed class AppSettings
 
     public bool ShowToolbar { get; set; } = true;
 
-    /// <summary>The default for the per-document raw-source view (markers always shown; PRD §7.4).</summary>
-    public bool ShowRawSource { get; set; }
+    /// <summary>
+    /// The default presentation mode for the editing surface: the WYSIWYG rich view, the formatted view
+    /// with markers revealed, or the plain raw-text source (PRD §7.4).
+    /// </summary>
+    public MarkdownEditor.ViewMode View { get; set; } = MarkdownEditor.ViewMode.Rich;
 
     /// <summary>Seconds between crash-recovery autosaves; 0 disables it (PRD §9.4).</summary>
     public int AutosaveSeconds { get; set; } = 30;

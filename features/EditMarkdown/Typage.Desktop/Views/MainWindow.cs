@@ -46,8 +46,8 @@ public class MainWindow : Window
     private Border? _toolbar;
     private Border? _statusBar;
     private CheckItem? _toggleToolbarItem;
-    private CheckItem? _toggleRawSourceItem;
     private CheckItem? _toggleFocusItem;
+    private readonly List<(MarkdownEditor.ViewMode Mode, CheckItem Item)> _viewModeItems = new();
     private bool _focusMode;
 
     // External-change detection (PRD §7.1): watch the open file, and remember the exact text last
@@ -165,7 +165,7 @@ public class MainWindow : Window
 
         ApplyTheme(_settings.Settings.Theme);
         _editorView.Editor.IndentWidth = _settings.Settings.TabWidth;
-        _editorView.Editor.ShowRawSource = _settings.Settings.ShowRawSource; // restore the raw-source default
+        _editorView.Editor.View = _settings.Settings.View; // restore the view-mode default
         _editorView.Editor.CompletedTaskSorting = _settings.Settings.CompletedTaskSort; // restore task-sort default
         _editorView.Editor.HorizontalPadding = _settings.Settings.EditorPadding; // restore editor padding
 
@@ -186,7 +186,7 @@ public class MainWindow : Window
 
     internal void ToggleFocusModeForTest() => ToggleFocusMode();
 
-    internal void ToggleRawSourceForTest() => ToggleRawSource();
+    internal void SetViewModeForTest(MarkdownEditor.ViewMode mode) => SetViewMode(mode);
 
     // ----- chrome -----
 
@@ -317,8 +317,23 @@ public class MainWindow : Window
         view.Items.Add(InWindowItem("view.commandPalette"));
         view.Items.Add(new Separator());
         _toggleToolbarItem = new CheckItem(AddInWindowCheck(view, "Show _Toolbar", _settings.Settings.ShowToolbar, ToggleToolbar));
-        _toggleRawSourceItem = new CheckItem(AddInWindowCheck(view, "Show Raw _Source", _settings.Settings.ShowRawSource, ToggleRawSource));
         _toggleFocusItem = new CheckItem(AddInWindowCheck(view, "_Focus Mode", _focusMode, ToggleFocusMode, _commandsById["view.toggleFocus"].Gesture));
+        view.Items.Add(new Separator());
+        foreach (var m in System.Enum.GetValues<MarkdownEditor.ViewMode>())
+        {
+            var choice = m;
+            var item = new MenuItem
+            {
+                Header = ViewModeLabel(m),
+                ToggleType = MenuItemToggleType.Radio,
+                GroupName = "viewmode",
+                IsChecked = _settings.Settings.View == m,
+            };
+            item.Click += (_, _) => SetViewMode(choice);
+            _viewModeItems.Add((m, new CheckItem(item)));
+            view.Items.Add(item);
+        }
+
         view.Items.Add(new Separator());
 
         var themeMenu = new MenuItem { Header = "T_heme" };
@@ -459,8 +474,21 @@ public class MainWindow : Window
         view.Menu!.Items.Add(NativeItem("view.commandPalette"));
         view.Menu.Items.Add(new NativeMenuItemSeparator());
         _toggleToolbarItem = new CheckItem(AddNativeCheck(view.Menu, "Show Toolbar", _settings.Settings.ShowToolbar, ToggleToolbar));
-        _toggleRawSourceItem = new CheckItem(AddNativeCheck(view.Menu, "Show Raw Source", _settings.Settings.ShowRawSource, ToggleRawSource));
         _toggleFocusItem = new CheckItem(AddNativeCheck(view.Menu, "Focus Mode", _focusMode, ToggleFocusMode, _commandsById["view.toggleFocus"].Gesture));
+        view.Menu.Items.Add(new NativeMenuItemSeparator());
+        foreach (var m in System.Enum.GetValues<MarkdownEditor.ViewMode>())
+        {
+            var choice = m;
+            var item = new NativeMenuItem(ViewModeLabel(m))
+            {
+                ToggleType = MenuItemToggleType.Radio,
+                IsChecked = _settings.Settings.View == m,
+                Command = new RelayCommand(() => SetViewMode(choice)),
+            };
+            _viewModeItems.Add((m, new CheckItem(item)));
+            view.Menu.Items.Add(item);
+        }
+
         view.Menu.Items.Add(new NativeMenuItemSeparator());
 
         var themeMenu = NativeSubmenu("Theme");
@@ -858,18 +886,24 @@ public class MainWindow : Window
         _settings.Save();
     }
 
-    /// <summary>Toggle the raw-source view; the new state also becomes the persisted default (PRD §7.4).</summary>
-    private void ToggleRawSource()
+    /// <summary>The menu/command label for a view mode (also used for the Preferences default; PRD §7.4).</summary>
+    private static string ViewModeLabel(MarkdownEditor.ViewMode mode) => mode switch
     {
-        var raw = !_editorView.Editor.ShowRawSource;
-        _editorView.Editor.ShowRawSource = raw;
-        if (_toggleRawSourceItem is not null)
-        {
-            _toggleRawSourceItem.IsChecked = raw;
-        }
+        MarkdownEditor.ViewMode.Rich => "View Rich View",
+        MarkdownEditor.ViewMode.Formatted => "View Formatted View",
+        _ => "View Raw Text",
+    };
 
-        _settings.Settings.ShowRawSource = raw;
+    /// <summary>Switch the editing surface to <paramref name="mode"/>; the new mode becomes the persisted default (PRD §7.4).</summary>
+    private void SetViewMode(MarkdownEditor.ViewMode mode)
+    {
+        _editorView.Editor.View = mode;
+        _settings.Settings.View = mode;
         _settings.Save();
+        foreach (var (m, item) in _viewModeItems)
+        {
+            item.IsChecked = m == mode;
+        }
     }
 
     /// <summary>Toggle distraction-free mode: hide the toolbar and status bar (session-only).</summary>
@@ -950,7 +984,9 @@ public class MainWindow : Window
 
             new("view.commandPalette", "Command Palette…", "Search and run any command.", Shortcut.Cmd(Key.P, KeyModifiers.Shift), OpenPalette),
             new("view.toggleToolbar", "Toggle Toolbar", "Show or hide the formatting toolbar.", null, ToggleToolbar),
-            new("view.toggleRawSource", "Toggle Raw Source", "Show the raw Markdown source (markers always visible).", null, ToggleRawSource),
+            new("view.viewRich", "View Rich View", "Live preview: formatted, with Markdown markers hidden.", null, () => SetViewMode(MarkdownEditor.ViewMode.Rich)),
+            new("view.viewFormatted", "View Formatted View", "Formatted, with the raw Markdown markers revealed.", null, () => SetViewMode(MarkdownEditor.ViewMode.Formatted)),
+            new("view.viewRaw", "View Raw Text", "Plain-text source: no rich formatting or decorations.", null, () => SetViewMode(MarkdownEditor.ViewMode.RawText)),
             new("view.toggleFocus", "Toggle Focus Mode", "Distraction-free: hide the toolbar and status bar.", Shortcut.Bare(Key.F11), ToggleFocusMode),
             new("app.preferences", "Preferences…", "Theme, tab width, and toolbar settings.", Shortcut.Cmd(Key.OemComma), ShowSettings),
             new("help.reference", "Markdown Reference", "Open the offline syntax & shortcut reference.", null, ShowHelp),
@@ -1614,8 +1650,18 @@ public class MainWindow : Window
             SelectedIndex = (int)s.CompletedTaskSort,
             HorizontalAlignment = HorizontalAlignment.Stretch,
         };
+        var viewMode = new ComboBox
+        {
+            ItemsSource = new[]
+            {
+                ViewModeLabel(MarkdownEditor.ViewMode.Rich),
+                ViewModeLabel(MarkdownEditor.ViewMode.Formatted),
+                ViewModeLabel(MarkdownEditor.ViewMode.RawText),
+            },
+            SelectedIndex = (int)s.View,
+            HorizontalAlignment = HorizontalAlignment.Stretch,
+        };
         var showToolbar = new CheckBox { Content = "Show the formatting toolbar", IsChecked = s.ShowToolbar };
-        var rawSource = new CheckBox { Content = "Show raw Markdown source by default", IsChecked = s.ShowRawSource };
 
         var grid = new Grid
         {
@@ -1628,14 +1674,11 @@ public class MainWindow : Window
         AddSettingRow(grid, 2, "Padding (px)", padding);
         AddSettingRow(grid, 3, "Autosave (sec, 0 = off)", autosave);
         AddSettingRow(grid, 4, "Completed tasks", completedTasks);
-        Grid.SetRow(showToolbar, 5);
+        AddSettingRow(grid, 5, "Default view", viewMode);
+        Grid.SetRow(showToolbar, 6);
         Grid.SetColumnSpan(showToolbar, 2);
         showToolbar.Margin = new Avalonia.Thickness(0, 8, 0, 0);
         grid.Children.Add(showToolbar);
-        Grid.SetRow(rawSource, 6);
-        Grid.SetColumnSpan(rawSource, 2);
-        rawSource.Margin = new Avalonia.Thickness(0, 4, 0, 0);
-        grid.Children.Add(rawSource);
 
         if (!await _overlayHost.ShowModalAsync(new FormDialog("Preferences", grid)))
         {
@@ -1666,12 +1709,7 @@ public class MainWindow : Window
         s.CompletedTaskSort = (MarkdownEditor.CompletedTaskSortMode)System.Math.Clamp(completedTasks.SelectedIndex, 0, 2);
         _editorView.Editor.CompletedTaskSorting = s.CompletedTaskSort;
 
-        s.ShowRawSource = rawSource.IsChecked == true;
-        _editorView.Editor.ShowRawSource = s.ShowRawSource;
-        if (_toggleRawSourceItem is not null)
-        {
-            _toggleRawSourceItem.IsChecked = s.ShowRawSource;
-        }
+        SetViewMode((MarkdownEditor.ViewMode)System.Math.Clamp(viewMode.SelectedIndex, 0, 2)); // applies + syncs menu + saves
 
         _settings.Save();
     }
