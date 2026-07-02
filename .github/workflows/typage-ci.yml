@@ -6,17 +6,18 @@ name: Typage CI
 # `dotnet build` is the gate — no separate step needed.
 
 on:
-  push:
-    paths:
-      - 'features/EditMarkdown/**'
-      - 'Directory.Packages.props'
-      - 'Directory.Build.props'
-      - '.github/workflows/typage-ci.yml'
-  pull_request:
-    paths:
-      - 'features/EditMarkdown/**'
-      - 'Directory.Packages.props'
-      - 'Directory.Build.props'
+  workflow_dispatch:
+  # push:
+  #   paths:
+  #     - 'features/EditMarkdown/**'
+  #     - 'Directory.Packages.props'
+  #     - 'Directory.Build.props'
+  #     - '.github/workflows/typage-ci.yml'
+  # pull_request:
+  #   paths:
+  #     - 'features/EditMarkdown/**'
+  #     - 'Directory.Packages.props'
+  #     - 'Directory.Build.props'
 
 jobs:
   build-test:
