@@ -100,6 +100,37 @@ public class ParagraphBreakTests
     }
 
     [AvaloniaFact]
+    public void TypingIntoARealEmptyLineAboveAParagraph_PreservesTheParagraphBreakBelow()
+    {
+        // Regression: a visible empty line before a paragraph is only one source newline. Once the user
+        // types into it, that line becomes real paragraph content, so the newline below must expand into a
+        // full paragraph break rather than collapsing the two paragraphs into one soft-wrapped block.
+        var e = At("\nthi\n\nthere", 0);
+        e.TypeForTest('t');
+        Assert.Equal("t\n\nthi\n\nthere", e.Text);
+        Assert.Equal(1, e.Buffer.Selection.Caret); // caret stays after the typed character on the new line
+    }
+
+    [AvaloniaFact]
+    public void BackspacingTheOnlyTypedCharacterOnThatLine_RestoresTheOriginalBreaks()
+    {
+        var e = At("\nthi\n\nthere", 0);
+        e.TypeForTest('t');
+        e.BackspaceForTest();
+        Assert.Equal("\nthi\n\nthere", e.Text);
+    }
+
+    [AvaloniaFact]
+    public void DeletingTheOnlyTypedCharacterOnThatLine_RestoresTheOriginalBreaks()
+    {
+        var e = At("\nthi\n\nthere", 0);
+        e.TypeForTest('t');
+        e.Buffer.Selection = Selection.At(0);
+        e.DeleteForTest();
+        Assert.Equal("\nthi\n\nthere", e.Text);
+    }
+
+    [AvaloniaFact]
     public void Backspace_OnAVisibleEmptyLine_RemovesOneNewline_NotTheWholeBreak()
     {
         // "A | empty | B": backspace on the visible empty line removes one newline, collapsing the two
@@ -159,6 +190,29 @@ public class ParagraphBreakTests
         var e = new MarkdownEditor { Text = "```\ncode\n\nmore\n```" };
         // The interior blank is part of the code fence, so every row is kept (no paragraph collapse).
         Assert.Equal(5, e.TotalRowsForTest());
+    }
+
+    [AvaloniaFact]
+    public void Enter_AtEndOfAnIndentedLine_MovesTheCaretToTheNewVisibleLine()
+    {
+        // Regression: Enter auto-indents by carrying the leading whitespace down, so the new line is
+        // whitespace-only. That line must NOT be treated as a collapsed paragraph separator (which gave it
+        // zero rows and snapped the caret back to the end of the line above — "Enter doesn't move to the
+        // next line"). A 2-space indent isn't a code block, so this is the case that used to break.
+        var e = At("  code", 6);
+        e.EnterForTest();
+        Assert.Equal("  code\n  ", e.Text);            // indent carried down
+        Assert.Equal(9, e.Buffer.Selection.Caret);      // caret after the carried indent on the new line
+        Assert.Equal(2, e.TotalRowsForTest());          // the new line is a real, visible row
+        Assert.Equal(1, e.CaretDrawnRowForTest());      // and the caret is drawn on it, not snapped back up
+    }
+
+    [AvaloniaFact]
+    public void AWhitespaceOnlyLine_IsNotCollapsedAsASeparator()
+    {
+        // A line the user has indentation on is a real row; only a truly empty separator collapses.
+        var e = new MarkdownEditor { Text = "code\n  \nmore" };
+        Assert.Equal(3, e.TotalRowsForTest());
     }
 
     [AvaloniaFact]

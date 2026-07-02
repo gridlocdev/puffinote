@@ -116,6 +116,15 @@ public sealed class DocumentBuffer
     /// <summary>Replace <c>[start, start+length)</c> with <paramref name="text"/> as one undoable edit.</summary>
     public void ReplaceRange(int start, int length, string text)
     {
+        ReplaceRange(start, length, text, caretAfter: null);
+    }
+
+    /// <summary>
+    /// Replace <c>[start, start+length)</c> with <paramref name="text"/> as one undoable edit, placing the
+    /// post-edit caret at <paramref name="caretAfter"/> when supplied instead of just after the inserted text.
+    /// </summary>
+    public void ReplaceRange(int start, int length, string text, int? caretAfter)
+    {
         var edit = TextEdit.Replace(_document, start, length, text ?? string.Empty);
         if (edit.OldLength == 0 && edit.NewLength == 0)
         {
@@ -124,7 +133,7 @@ public sealed class DocumentBuffer
 
         var before = _selection;
         _document = edit.Apply(_document);
-        _selection = Selection.At(edit.CaretAfter);
+        _selection = Selection.At(caretAfter ?? edit.CaretAfter);
         _history.Record(edit, before, _selection);
         RaiseTextChanged(_document.GetPosition(edit.Start).Line);
     }

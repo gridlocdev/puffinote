@@ -1970,7 +1970,7 @@ public class MarkdownEditor : Avalonia.Controls.Control, ILogicalScrollable
         {
             if (e.Text.Length != 1 || !TryAutoPair(e.Text[0]))
             {
-                _buffer.Insert(e.Text);
+                InsertTypedText(e.Text);
             }
         }
 
@@ -2570,18 +2570,32 @@ public class MarkdownEditor : Avalonia.Controls.Control, ILogicalScrollable
     private bool IsBlankLine(int line) => _buffer.Document.GetLineText(line).Trim().Length == 0;
 
     /// <summary>
-    /// Whether <paramref name="line"/> is a <b>soft paragraph separator</b>: a blank line directly below a
+    /// Whether <paramref name="line"/> is <b>truly empty</b> — no characters at all (an optional trailing
+    /// <c>\r</c> of a CRLF break aside). This is stricter than <see cref="IsBlankLine"/>, which also accepts
+    /// whitespace-only lines: a line the user has put indentation on (e.g. auto-indent carried down by Enter)
+    /// is a real editable row, not the empty separator a <c>\n\n</c> paragraph break inserts.
+    /// </summary>
+    private bool IsEmptyLine(int line)
+    {
+        var text = _buffer.Document.GetLineText(line);
+        return text.Length == 0 || (text.Length == 1 && text[0] == '\r');
+    }
+
+    /// <summary>
+    /// Whether <paramref name="line"/> is a <b>soft paragraph separator</b>: an empty line directly below a
     /// non-blank one, in ordinary (non-code, non-front-matter) flow. Pressing Enter writes such a blank
     /// (a <c>\n\n</c> paragraph break); it is collapsed to zero visual rows so two paragraphs sit one line
     /// apart (regular spacing) instead of leaving an empty line, and the caret glides over it as one step.
     /// A second consecutive blank is <i>not</i> collapsed — that's a deliberately empty line — and a blank
-    /// inside a code block stays part of the code.
+    /// inside a code block stays part of the code. The line must be <see cref="IsEmptyLine">truly empty</see>:
+    /// a whitespace-only line (an auto-indented new line) is a real row and keeps its caret, so collapsing it
+    /// would strand the caret at the end of the line above (the "Enter doesn't move to the next line" bug).
     /// </summary>
     private bool IsCollapsedBlankLine(int line)
     {
         var doc = _buffer.Document;
         return line > 0 && line < doc.LineCount
-            && IsBlankLine(line) && !IsBlankLine(line - 1)
+            && IsEmptyLine(line) && !IsBlankLine(line - 1)
             && _model.EnteringState(line).Kind == BlockKind.Normal;
     }
 
@@ -2782,8 +2796,54 @@ public class MarkdownEditor : Avalonia.Controls.Control, ILogicalScrollable
     {
         if (c < ' ' || !TryAutoPair(c))
         {
-            _buffer.Insert(c.ToString());
+            InsertTypedText(c.ToString());
         }
+    }
+
+    private void InsertTypedText(string text)
+    {
+        if (TryExpandTypedEmptyLineIntoParagraph(text, out var inserted, out var caretAfter))
+        {
+            var sel = _buffer.Selection;
+            _buffer.ReplaceRange(sel.Start, sel.Length, inserted, caretAfter);
+            return;
+        }
+
+        _buffer.Insert(text);
+    }
+
+    /// <summary>
+    /// Typing the first visible content into a real empty line directly above a paragraph must keep that
+    /// following paragraph separated. Without this, the one newline that made the line visible is reused as
+    /// the typed line's trailing newline, collapsing two paragraphs into one source soft break.
+    /// </summary>
+    private bool TryExpandTypedEmptyLineIntoParagraph(string text, out string inserted, out int caretAfter)
+    {
+        inserted = text;
+        caretAfter = 0;
+
+        if (string.IsNullOrEmpty(text) || text.IndexOf('\n') >= 0 || text.IndexOf('\r') >= 0)
+        {
+            return false;
+        }
+
+        var sel = _buffer.Selection;
+        if (!sel.IsEmpty)
+        {
+            return false;
+        }
+
+        var doc = _buffer.Document;
+        var line = doc.GetPosition(sel.Caret).Line;
+        if (!IsEmptyLine(line) || line + 1 >= doc.LineCount || IsBlankLine(line + 1)
+            || _model.EnteringState(line).Kind != BlockKind.Normal)
+        {
+            return false;
+        }
+
+        inserted = text + DetectNewline(doc);
+        caretAfter = sel.Start + text.Length;
+        return true;
     }
 
     internal void BackspaceForTest()
@@ -3330,6 +3390,11 @@ public class MarkdownEditor : Avalonia.Controls.Control, ILogicalScrollable
             return true;
         }
 
+        if (TryRestoreBlankLineByRemovingSyntheticParagraphChar(caretLine, sel.Caret, forward: false))
+        {
+            return true;
+        }
+
         var col = r.Col;
         while (col > 0 && r.Visual.IsColumnHidden(col - 1))
         {
@@ -3370,6 +3435,12 @@ public class MarkdownEditor : Avalonia.Controls.Control, ILogicalScrollable
         }
 
         var doc = _buffer.Document;
+        var caretLine = doc.GetPosition(sel.Caret).Line;
+        if (TryRestoreBlankLineByRemovingSyntheticParagraphChar(caretLine, sel.Caret, forward: true))
+        {
+            return true;
+        }
+
         var r = ResolveCaret(sel.Caret);
         var col = r.Col;
         while (col < r.Visual.RawLength && r.Visual.IsColumnHidden(col))
@@ -3386,6 +3457,40 @@ public class MarkdownEditor : Avalonia.Controls.Control, ILogicalScrollable
         var end = Grapheme.NextBoundary(realText, col);
         _buffer.ReplaceRange(r.BlockStart + col, end - col, string.Empty);
         _buffer.Selection = Selection.At(r.BlockStart + col);
+        return true;
+    }
+
+    /// <summary>
+    /// Typing into a visible blank line above a paragraph materializes that line as <c>text + newline</c> so
+    /// the following paragraph keeps its own break. If the user then deletes the line's <i>only</i> grapheme,
+    /// remove that supporting newline as well and restore the original visible blank line instead of leaving
+    /// an extra empty paragraph behind.
+    /// </summary>
+    private bool TryRestoreBlankLineByRemovingSyntheticParagraphChar(int line, int caret, bool forward)
+    {
+        var doc = _buffer.Document;
+        if (line + 2 >= doc.LineCount || !IsCollapsedBlankLine(line + 1) || IsBlankLine(line) || IsBlankLine(line + 2))
+        {
+            return false;
+        }
+
+        var lineStart = doc.GetLineStart(line);
+        var lineEnd = ContentEnd(line);
+        var text = doc.GetText(lineStart, lineEnd - lineStart);
+        if (text.Length == 0 || Grapheme.NextBoundary(text, 0) != text.Length)
+        {
+            return false; // only a single-grapheme line is eligible for the round-trip restore
+        }
+
+        if ((!forward && caret != lineEnd) || (forward && caret != lineStart))
+        {
+            return false;
+        }
+
+        var removeStart = forward ? lineStart : lineStart;
+        var removeEnd = doc.GetLineStart(line + 1); // delete the char plus its supporting newline
+        _buffer.ReplaceRange(removeStart, removeEnd - removeStart, string.Empty);
+        _buffer.Selection = Selection.At(lineStart);
         return true;
     }
 
@@ -4233,6 +4338,18 @@ public class MarkdownEditor : Avalonia.Controls.Control, ILogicalScrollable
     {
         EnsureLayout();
         return _rowPrefix[BlockOf(line)];
+    }
+
+    /// <summary>The global visual row the caret is actually drawn on, mirroring RenderBlock's placement; for tests.</summary>
+    internal int CaretDrawnRowForTest()
+    {
+        EnsureLayout();
+        var sel = _buffer.Selection;
+        var caretBlock = ResolveCaret(sel.Caret).Block;
+        var blockStart = BlockStartOffset(caretBlock);
+        var visual = BlockVisual(caretBlock);
+        var col = Math.Clamp(sel.Caret - blockStart, 0, visual.RawLength);
+        return _rowPrefix[caretBlock] + visual.RowOf(col);
     }
 
     /// <summary>

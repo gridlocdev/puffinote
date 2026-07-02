@@ -74,6 +74,20 @@ public class IncrementalLayoutTests
         AssertLayoutMatchesFullRebuild(editor, 0);
     }
 
+    [AvaloniaFact]
+    public void IncrementalLayout_TypingThenDeletingOnABlankLine_RestoresTheOriginalLayout()
+    {
+        var seed = "\n\n\n\n\n";
+        var editor = new MarkdownEditor { Text = seed };
+        editor.Buffer.Selection = Typage.Engine.Document.Selection.At(2);
+
+        editor.TypeForTest('t');
+        editor.BackspaceForTest();
+
+        Assert.Equal(seed, editor.Text);
+        AssertLayoutMatchesFullRebuild(editor, 0);
+    }
+
     private static void AssertLayoutMatchesFullRebuild(MarkdownEditor edited, int step)
     {
         var fresh = new MarkdownEditor { Text = edited.Text }; // a new editor full-rebuilds its layout
