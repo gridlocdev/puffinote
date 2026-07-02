@@ -69,6 +69,11 @@ public class DataCommandTests
         env.Commands.ById("data.createTable")!.Execute();
         Assert.Single(sheet.Tables);
         Assert.Equal("Table1", sheet.Tables[0].Name);
+
+        // The overlap surfaced the "already in a table" message as a modal; dismiss it so the modal (and
+        // its background blur) doesn't keep the headless test process alive after the test returns.
+        Assert.True(env.IsModalOpen);
+        window.Editor.OverlayHost.Close();
     }
 
     [AvaloniaFact]
