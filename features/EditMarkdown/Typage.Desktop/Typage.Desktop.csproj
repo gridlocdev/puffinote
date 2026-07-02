@@ -22,8 +22,8 @@
          menu, file dialogs, and settings. -->
     <ProjectReference Include="..\Typage.Control\Typage.Control.csproj" />
     <ProjectReference Include="..\Typage.Engine\Typage.Engine.csproj" />
-    <!-- Shared app-shell / design-system library (BirdBrain family). -->
-    <ProjectReference Include="..\..\..\shared\BirdBrain.Components\BirdBrain.Components.csproj" />
+    <!-- Shared app-shell / design-system library (Puffinote family). -->
+    <ProjectReference Include="..\..\..\shared\Puffinote.Components\Puffinote.Components.csproj" />
   </ItemGroup>
 
   <ItemGroup>

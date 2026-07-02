@@ -1,23 +1,23 @@
 using Avalonia.Media;
 using Avalonia.Media.Immutable;
 
-namespace BirdBrain.Components.Theming;
+namespace Puffinote.Components.Theming;
 
 /// <summary>
-/// The default BirdBrain-family theme: shared neutral chrome (surfaces, borders, muted text, scrim)
+/// The default Puffinote-family theme: shared neutral chrome (surfaces, borders, muted text, scrim)
 /// seeded with one <em>accent</em> the app passes in. Apps register an instance at startup, e.g.
-/// <c>AppTheme.Current = new BirdBrainTheme(Color.FromRgb(0x2A, 0x7D, 0xE1));</c>. Per-variant accents
+/// <c>AppTheme.Current = new PuffinoteTheme(Color.FromRgb(0x2A, 0x7D, 0xE1));</c>. Per-variant accents
 /// can come later; for now the accent is shared across light and dark. Register via
-/// <c>Tokens.Current = new BirdBrainTheme(accent)</c>.
+/// <c>Tokens.Current = new PuffinoteTheme(accent)</c>.
 /// </summary>
-public sealed class BirdBrainTheme : IAppTheme
+public sealed class PuffinoteTheme : IAppTheme
 {
     /// <summary>A ready-to-use theme with the family's default blue accent.</summary>
-    public static IAppTheme Default { get; } = new BirdBrainTheme(Color.FromRgb(0x2A, 0x7D, 0xE1));
+    public static IAppTheme Default { get; } = new PuffinoteTheme(Color.FromRgb(0x2A, 0x7D, 0xE1));
 
     private static readonly IBrush ScrimBrush = new ImmutableSolidColorBrush(Color.FromArgb(0x80, 0, 0, 0));
 
-    public BirdBrainTheme(Color accent)
+    public PuffinoteTheme(Color accent)
     {
         IBrush accentBrush = new ImmutableSolidColorBrush(accent);
         IBrush accentSubtle = new ImmutableSolidColorBrush(Color.FromArgb(0x33, accent.R, accent.G, accent.B));

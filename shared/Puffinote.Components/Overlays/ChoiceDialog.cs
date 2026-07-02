@@ -2,7 +2,7 @@ using Avalonia.Controls;
 using Avalonia.Layout;
 using Avalonia.Media;
 
-namespace BirdBrain.Components.Overlays;
+namespace Puffinote.Components.Overlays;
 
 /// <summary>One labelled button in a <see cref="ChoiceDialog{TChoice}"/>, returning <paramref name="Value"/>.</summary>
 /// <param name="Label">The button text.</param>

@@ -10,6 +10,6 @@
     <Project Path="Typage.Benchmarks/Typage.Benchmarks.csproj" />
   </Folder>
   <Folder Name="/shared/">
-    <Project Path="../../shared/BirdBrain.Components/BirdBrain.Components.csproj" />
+    <Project Path="../../shared/Puffinote.Components/Puffinote.Components.csproj" />
   </Folder>
 </Solution>

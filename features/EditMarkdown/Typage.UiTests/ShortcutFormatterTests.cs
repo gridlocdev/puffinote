@@ -1,5 +1,5 @@
 using Avalonia.Input;
-using Typage.Desktop.Commands;
+using Puffinote.Components.Commands;
 using Xunit;
 
 namespace Typage.UiTests;

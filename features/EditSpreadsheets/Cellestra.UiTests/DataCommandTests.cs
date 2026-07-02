@@ -24,7 +24,7 @@ public class DataCommandTests
         sheet.SetValue(3, 0, CellValue.Text("Bev")); sheet.SetValue(3, 1, CellValue.Number(2));
         env.Selection.MoveTo(1, 0); // inside the region, active column = Name
 
-        AppCommands.ById("data.sortAsc")!.Execute(env);
+        env.Commands.ById("data.sortAsc")!.Execute();
 
         Assert.Equal("Name", sheet.GetValue(0, 0).AsText); // header stays
         Assert.Equal("Ada", sheet.GetValue(1, 0).AsText);
@@ -44,7 +44,7 @@ public class DataCommandTests
         sheet.SetValue(1, 0, CellValue.Number(1));
         env.Selection.MoveTo(0, 0);
 
-        AppCommands.ById("data.createTable")!.Execute(env);
+        env.Commands.ById("data.createTable")!.Execute();
 
         Assert.NotNull(sheet.FindTable(0, 0));
         Assert.Equal("Table1", sheet.FindTable(0, 0)!.Name);
@@ -61,12 +61,12 @@ public class DataCommandTests
         sheet.SetValue(0, 0, CellValue.Text("H"));
         sheet.SetValue(1, 0, CellValue.Number(1));
         env.Selection.MoveTo(0, 0);
-        AppCommands.ById("data.createTable")!.Execute(env);
+        env.Commands.ById("data.createTable")!.Execute();
         Assert.Single(sheet.Tables);
 
         // Second invocation over the same cells must surface a message, not throw, and add nothing.
         env.Selection.MoveTo(1, 0);
-        AppCommands.ById("data.createTable")!.Execute(env);
+        env.Commands.ById("data.createTable")!.Execute();
         Assert.Single(sheet.Tables);
         Assert.Equal("Table1", sheet.Tables[0].Name);
     }
@@ -114,7 +114,7 @@ public class DataCommandTests
         sheet.ActiveSort = new Cellestra.Core.Data.SortSpec(
             new[] { new Cellestra.Core.Data.SortLevel(0, true) });
 
-        AppCommands.ById("data.clearFilter")!.Execute(env);
+        env.Commands.ById("data.clearFilter")!.Execute();
 
         // Clearing must drop the persisted spec/sort so they don't resurrect on reopen.
         Assert.Null(sheet.ActiveFilterSpec);

@@ -1,9 +1,9 @@
 using Avalonia.Media;
 
-namespace BirdBrain.Components.Theming;
+namespace Puffinote.Components.Theming;
 
 /// <summary>
-/// The semantic design tokens the BirdBrain family's shell chrome (palette, modals, tooltips,
+/// The semantic design tokens the Puffinote family's shell chrome (palette, modals, tooltips,
 /// selection) reads, for one theme variant. Apps supply concrete values via an <see cref="IAppTheme"/>;
 /// the shared primitives never hardcode colors. Domain-surface styling (grid cells, Markdown syntax)
 /// is app-specific and intentionally not modelled here.

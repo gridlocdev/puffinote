@@ -1,6 +1,6 @@
 using Avalonia.Controls;
 using Avalonia.Layout;
-using BirdBrain.Components.Overlays;
+using Puffinote.Components.Overlays;
 
 namespace Cellestra.Desktop.Views.Dialogs;
 

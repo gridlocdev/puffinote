@@ -7,12 +7,12 @@ using Avalonia.Input;
 using Avalonia.Layout;
 using Avalonia.Media;
 using Avalonia.VisualTree;
-using BirdBrain.Components.Commands;
-using BirdBrain.Components.Theming;
+using Puffinote.Components.Commands;
+using Puffinote.Components.Theming;
 using Cellestra.Desktop.Commands;
-using BirdBrain.Components.Controls.Icons;
+using Puffinote.Components.Controls.Icons;
 using Cellestra.Desktop.Controls.RadialMenu;
-using BirdBrain.Components.Overlays;
+using Puffinote.Components.Overlays;
 
 namespace Cellestra.Desktop.Views.Dialogs;
 
@@ -45,6 +45,11 @@ public sealed class RadialSettingsDialog : ModalDialog<RadialMenuConfig>
     private readonly RadialMenuOverlay _preview = new() { Width = PreviewSize, Height = PreviewSize, FitToBounds = true };
     private readonly Border _previewBox;
 
+    // The one command catalog, used to render each wedge's bound command (label/icon) and populate the
+    // binding picker. Optional so the dialog can be constructed standalone (e.g. layout tests); when null
+    // the rows read "Unbound" and the picker is empty.
+    private readonly AppCommands? _commands;
+
     // Per-segment widgets, in segment order, so the preview can bold/highlight the matching row.
     private readonly List<TextBlock> _segmentLabels = new();
     private readonly List<Border> _rowBorders = new();
@@ -76,9 +81,12 @@ public sealed class RadialSettingsDialog : ModalDialog<RadialMenuConfig>
     private int _radialDragIndex = -1; // segment being dragged inside the preview (-1 = not dragging)
     private bool _radialDragMoved;     // the preview drag swapped at least once (so release isn't a click)
 
-    public RadialSettingsDialog(RadialMenuConfig config)
+    public RadialSettingsDialog(RadialMenuConfig config, AppCommands? commands = null)
     {
         Title = "Radial Menu Settings";
+
+        _commands = commands;
+        _preview.Commands = commands;
 
         var normalized = config.Normalized();
         _originalConfig = normalized;
@@ -267,8 +275,8 @@ public sealed class RadialSettingsDialog : ModalDialog<RadialMenuConfig>
     }
 
     /// <summary>The display name of a binding for the row label: the command's label, or "Unbound".</summary>
-    private static string BindingLabel(string? commandId) =>
-        commandId is null ? "Unbound" : AppCommands.ById(commandId)?.Label ?? commandId;
+    private string BindingLabel(string? commandId) =>
+        commandId is null ? "Unbound" : _commands?.ById(commandId)?.Title ?? commandId;
 
     /// <summary>Set the hovered wedge (-1 = none): bolds its row and gives it the preview highlight.</summary>
     private void SetHover(int segment)
@@ -474,8 +482,8 @@ public sealed class RadialSettingsDialog : ModalDialog<RadialMenuConfig>
         var segments = new List<RadialSegment>(count);
         for (int i = 0; i < count; i++)
         {
-            var command = _bindings[i] is { } id ? AppCommands.ById(id) : null;
-            segments.Add(new RadialSegment(command?.Id, command?.Icon, command?.Label ?? string.Empty, command is not null));
+            var command = _bindings[i] is { } id ? _commands?.ById(id) : null;
+            segments.Add(new RadialSegment(command?.Id, command?.Icon, command?.Title ?? string.Empty, command is not null));
         }
 
         _preview.Open(new Avalonia.Point(PreviewSize / 2, PreviewSize / 2), segments);
@@ -712,11 +720,11 @@ public sealed class RadialSettingsDialog : ModalDialog<RadialMenuConfig>
             items.Add(new PickerItem(null, "— None —", null, "Leave this wedge empty"));
         }
 
-        items.AddRange(AppCommands.All
-            .Select(c => (Command: c, Score: FuzzyMatcher.Score(c.Label, query)))
+        items.AddRange((_commands?.All ?? Array.Empty<AppCommand>())
+            .Select(c => (Command: c, Score: FuzzyMatcher.Score(c.Title, query)))
             .Where(x => x.Score >= 0)
             .OrderByDescending(x => x.Score)
-            .Select(x => new PickerItem(x.Command.Id, x.Command.Label, x.Command.Icon, x.Command.Description)));
+            .Select(x => new PickerItem(x.Command.Id, x.Command.Title, x.Command.Icon, x.Command.Description)));
 
         _pickerList.ItemsSource = items;
         _pickerList.SelectedIndex = items.Count > 0 ? 0 : -1;

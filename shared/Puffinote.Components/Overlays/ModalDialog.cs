@@ -6,7 +6,7 @@ using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Layout;
 
-namespace BirdBrain.Components.Overlays;
+namespace Puffinote.Components.Overlays;
 
 /// <summary>Non-generic handle the host keeps to the active modal so a backdrop click can cancel it.</summary>
 public interface IModalDialog

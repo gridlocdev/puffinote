@@ -2,7 +2,7 @@ using Avalonia.Controls;
 using Avalonia.Layout;
 using Avalonia.Media;
 
-namespace BirdBrain.Components.Overlays;
+namespace Puffinote.Components.Overlays;
 
 /// <summary>
 /// A simple internal modal that states something and offers a single dismiss button (Nielsen heuristic

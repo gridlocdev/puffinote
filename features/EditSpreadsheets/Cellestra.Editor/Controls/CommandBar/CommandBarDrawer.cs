@@ -7,7 +7,8 @@ using Avalonia.Layout;
 using Avalonia.Media;
 using Cellestra.Core.Values;
 using Cellestra.Desktop.Commands;
-using BirdBrain.Components.Controls.Icons;
+using Puffinote.Components.Commands;
+using Puffinote.Components.Controls.Icons;
 using AvColor = Avalonia.Media.Color;
 using ArgbColor = Cellestra.Core.Styling.ArgbColor;
 using CellStyle = Cellestra.Core.Styling.CellStyle;
@@ -50,7 +51,7 @@ public static class CommandBarDrawer
         var refreshers = new List<Action>();
         foreach (string id in group.Overflow)
         {
-            if (AppCommands.ById(id) is { } command)
+            if (env.Commands.ById(id) is { } command)
             {
                 var (row, refresh) = BuildRow(command, env, close);
                 panel.Children.Add(row);
@@ -98,7 +99,7 @@ public static class CommandBarDrawer
             VerticalAlignment = VerticalAlignment.Center,
             Children =
             {
-                new TextBlock { Text = command.Label, FontSize = 13, FontWeight = FontWeight.Medium },
+                new TextBlock { Text = command.Title, FontSize = 13, FontWeight = FontWeight.Medium },
                 new TextBlock { Text = command.Description, FontSize = 11, Foreground = MutedBrush, TextWrapping = TextWrapping.Wrap },
             },
         };
@@ -106,11 +107,12 @@ public static class CommandBarDrawer
         var layout = new DockPanel { LastChildFill = true };
         DockPanel.SetDock(icon, Dock.Left);
         layout.Children.Add(icon);
-        if (!string.IsNullOrEmpty(command.ShortcutText))
+        var shortcutText = command.MacShortcut();
+        if (!string.IsNullOrEmpty(shortcutText))
         {
             var shortcut = new TextBlock
             {
-                Text = command.ShortcutText,
+                Text = shortcutText,
                 FontSize = 10.5,
                 Foreground = MutedBrush,
                 VerticalAlignment = VerticalAlignment.Center,
@@ -140,9 +142,9 @@ public static class CommandBarDrawer
         row.PointerExited += (_, _) => { hover = false; Paint(); };
         row.Click += (_, _) =>
         {
-            if (command.IsEnabled(env))
+            if (command.IsEnabled)
             {
-                command.Execute(env);
+                command.Execute();
                 env.Narrate(CommandBar.Describe(command, env));
             }
 
@@ -151,8 +153,8 @@ public static class CommandBarDrawer
 
         void Refresh()
         {
-            row.IsEnabled = command.IsEnabled(env);
-            on = command.IsToggleActive(env);
+            row.IsEnabled = command.IsEnabled;
+            on = command.IsToggleActive;
             Paint();
             if (on)
             {

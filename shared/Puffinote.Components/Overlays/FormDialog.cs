@@ -1,7 +1,7 @@
 using Avalonia.Controls;
 using Avalonia.Layout;
 
-namespace BirdBrain.Components.Overlays;
+namespace Puffinote.Components.Overlays;
 
 /// <summary>
 /// A general OK/Cancel modal around an arbitrary <paramref name="body"/> (a settings form, a reference

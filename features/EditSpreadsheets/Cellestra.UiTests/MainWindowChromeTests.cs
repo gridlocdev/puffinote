@@ -123,9 +123,9 @@ public class MainWindowChromeTests
     {
         var window = new MainWindow();
         window.Show();
-        var command = AppCommands.ById("sheet.resetData");
+        var command = window.Editor.Commands.ById("sheet.resetData");
         Assert.NotNull(command);
-        Assert.True(command!.IsEnabled(window.Editor));
+        Assert.True(command!.IsEnabled);
     }
 
     // ---- #7: a new sheet resets the active cell and clears the formula bar ----

@@ -3,6 +3,7 @@ using Avalonia.Input;
 using Cellestra.Desktop.Commands;
 using Cellestra.Desktop.Views;
 using Cellestra.Desktop.Views.Dialogs;
+using Puffinote.Components.Commands;
 using Xunit;
 
 namespace Cellestra.UiTests;
@@ -12,10 +13,12 @@ public class KeyboardShortcutsTests
     [Fact]
     public void Help_command_is_bound_to_question_mark()
     {
-        var command = AppCommands.ById("help.shortcuts");
+        // Metadata only — build the catalog against a no-op environment (no MainWindow needed).
+        var command = FakeAppEnvironment.Catalog.ById("help.shortcuts");
         Assert.NotNull(command);
-        Assert.Equal(new KeyGesture(Key.OemQuestion, KeyModifiers.Shift), command!.Shortcut);
-        Assert.Equal("?", command.ShortcutText);
+        Assert.Equal(new KeyGesture(Key.OemQuestion, KeyModifiers.Shift), command!.Gesture);
+        // Cellestra is macOS-only; assert the macOS rendering explicitly (the test host is Linux).
+        Assert.Equal("?", ShortcutFormatter.Format(command.Shortcut!.Value, mac: true));
     }
 
     [AvaloniaFact]
@@ -27,19 +30,20 @@ public class KeyboardShortcutsTests
 
         // Grid has focus by default: the "?" shortcut is live.
         Assert.False(env.IsTextInputFocused);
-        Assert.True(AppCommands.ById("help.shortcuts")!.IsEnabled(env));
+        Assert.True(env.Commands.ById("help.shortcuts")!.IsEnabled);
 
         // While editing a cell the character must type normally, so the shortcut backs off.
         env.BeginEdit();
         Assert.True(env.IsTextInputFocused);
-        Assert.False(AppCommands.ById("help.shortcuts")!.IsEnabled(env));
+        Assert.False(env.Commands.ById("help.shortcuts")!.IsEnabled);
     }
 
     [AvaloniaFact]
     public void Shortcuts_dialog_constructs()
     {
-        // Built from the one catalog; constructing it exercises the section/row layout.
-        var dialog = new KeyboardShortcutsDialog();
+        // Built from the one catalog; constructing it exercises the section/row layout. The catalog's
+        // metadata is env-independent, so a no-op environment suffices (no MainWindow needed).
+        var dialog = new KeyboardShortcutsDialog(FakeAppEnvironment.Catalog);
         Assert.Equal("Keyboard Shortcuts", dialog.Title);
     }
 }

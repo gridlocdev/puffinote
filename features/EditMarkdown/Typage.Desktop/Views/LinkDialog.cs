@@ -2,7 +2,7 @@ using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Layout;
-using BirdBrain.Components.Overlays;
+using Puffinote.Components.Overlays;
 
 namespace Typage.Desktop.Views;
 

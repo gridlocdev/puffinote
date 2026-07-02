@@ -12,6 +12,13 @@ namespace Cellestra.Desktop.Commands;
 /// </summary>
 public interface IAppEnvironment
 {
+    /// <summary>
+    /// The one command catalog, built once against this environment (proposal 0001 §5). Every surface —
+    /// menu bar, command bar, Command Palette, key bindings — reads its env-bound <see cref="AppCommand"/>s
+    /// from here, so they can never drift apart.
+    /// </summary>
+    AppCommands Commands { get; }
+
     WorkbookSession Session { get; }
 
     GridSelection Selection { get; }

@@ -10,7 +10,5 @@
     <Project Path="Cellestra.Core.Tests/Cellestra.Core.Tests.csproj" />
     <Project Path="Cellestra.UiTests/Cellestra.UiTests.csproj" />
   </Folder>
-  <Folder Name="/shared/">
-    <Project Path="../../shared/BirdBrain.Components/BirdBrain.Components.csproj" />
-  </Folder>
+  <Folder Name="/shared/" />
 </Solution>

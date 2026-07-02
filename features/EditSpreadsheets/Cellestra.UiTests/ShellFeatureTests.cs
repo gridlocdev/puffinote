@@ -31,7 +31,7 @@ public class ShellFeatureTests
         sheet.SetValue(2, 0, CellValue.Number(2));
         env.Selection.SetRange(0, 0, 2, 0); // select A1:A3 as the table region
 
-        AppCommands.ById("data.createTable")!.Execute(env);
+        env.Commands.ById("data.createTable")!.Execute();
 
         Assert.True(window.Editor.Grid.IsInlineEditing);              // editing started automatically (#2)
         Assert.Equal(0, env.Selection.ActiveRow);              // on the first header cell

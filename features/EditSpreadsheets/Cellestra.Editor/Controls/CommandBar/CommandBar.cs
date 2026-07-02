@@ -8,8 +8,9 @@ using Avalonia.Controls.Shapes;
 using Avalonia.Layout;
 using Avalonia.Media;
 using Cellestra.Desktop.Commands;
-using BirdBrain.Components.Controls;
-using BirdBrain.Components.Controls.Icons;
+using Puffinote.Components.Commands;
+using Puffinote.Components.Controls;
+using Puffinote.Components.Controls.Icons;
 
 namespace Cellestra.Desktop.Controls.CommandBar;
 
@@ -342,7 +343,7 @@ public sealed class CommandBar : UserControl
         var row = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center };
         foreach (string id in group.Primary)
         {
-            if (AppCommands.ById(id) is { } command)
+            if (_env.Commands.ById(id) is { } command)
             {
                 var button = new CommandBarButton(command, _env);
                 _buttons.Add(button);
@@ -374,7 +375,7 @@ public sealed class CommandBar : UserControl
         var grid = new WrapPanel { Orientation = Orientation.Horizontal, MaxWidth = 248 };
         foreach (string id in group.Primary.Concat(group.Overflow))
         {
-            if (AppCommands.ById(id) is { } command)
+            if (_env.Commands.ById(id) is { } command)
             {
                 var button = new CommandBarButton(command, _env, () => _overflowFlyout.Hide());
                 _buttons.Add(button);
@@ -425,7 +426,7 @@ public sealed class CommandBar : UserControl
 
     private Control BuildSearchPill()
     {
-        string shortcut = AppCommands.ById("view.commandPalette")?.ShortcutText ?? string.Empty;
+        string shortcut = _env.Commands.ById("view.commandPalette")?.MacShortcut() ?? string.Empty;
         var content = new StackPanel
         {
             Orientation = Orientation.Horizontal,
@@ -526,9 +527,9 @@ public sealed class CommandBar : UserControl
             PointerExited += (_, _) => { _hover = false; ApplyBackground(); };
             Click += (_, _) =>
             {
-                if (_command.IsEnabled(env))
+                if (_command.IsEnabled)
                 {
-                    _command.Execute(env);
+                    _command.Execute();
                     env.Narrate(Describe(_command, env));
                 }
 
@@ -540,8 +541,8 @@ public sealed class CommandBar : UserControl
 
         public void UpdateState(IAppEnvironment env)
         {
-            IsEnabled = _command.IsEnabled(env);
-            _on = _command.IsToggleActive(env);
+            IsEnabled = _command.IsEnabled;
+            _on = _command.IsToggleActive;
             _dot.IsVisible = _on;
             ApplyBackground();
             if (_on)
@@ -576,8 +577,8 @@ public sealed class CommandBar : UserControl
     {
         string address = env.Selection.ActiveAddress.ToString();
         return command.IsActive is null
-            ? $"{command.Label} · {address}"
-            : $"{command.Label} {(command.IsToggleActive(env) ? "on" : "off")} · {address}";
+            ? $"{command.Title} · {address}"
+            : $"{command.Title} {(command.IsToggleActive ? "on" : "off")} · {address}";
     }
 
     /// <summary>
@@ -585,5 +586,5 @@ public sealed class CommandBar : UserControl
     /// <see cref="AppCommand"/> onto the shared <see cref="TooltipCard"/> (which themes muted text).
     /// </summary>
     internal static Control BuildTip(AppCommand command) =>
-        new TooltipCard(command.Label, command.ShortcutText, command.Description);
+        new TooltipCard(command.Title, command.MacShortcut(), command.Description);
 }

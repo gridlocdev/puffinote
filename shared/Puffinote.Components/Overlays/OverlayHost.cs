@@ -6,9 +6,9 @@ using Avalonia.Input;
 using Avalonia.Layout;
 using Avalonia.Media;
 using Avalonia.Threading;
-using BirdBrain.Components.Theming;
+using Puffinote.Components.Theming;
 
-namespace BirdBrain.Components.Overlays;
+namespace Puffinote.Components.Overlays;
 
 /// <summary>
 /// The shared host for in-app overlays — command palettes and internal <see cref="ModalDialog{TResult}"/>

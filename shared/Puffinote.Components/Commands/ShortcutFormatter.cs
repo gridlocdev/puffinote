@@ -1,13 +1,13 @@
 using System.Text;
 using Avalonia.Input;
 
-namespace Typage.Desktop.Commands;
+namespace Puffinote.Components.Commands;
 
 /// <summary>
 /// Renders a <see cref="Shortcut"/> for display: macOS modifier symbols (⌃⌥⇧⌘, no separators) on macOS,
-/// and "Ctrl+Shift+…" text elsewhere. Used by the Command Palette and toolbar hint so a shortcut reads
-/// natively on each platform. (The menus render their own gestures: the macOS native menu draws the OS
-/// glyphs from its key-equivalent; the in-window menu shows Avalonia's "Ctrl+…" text.)
+/// and "Ctrl+Shift+…" text elsewhere. Shared by every app in the Puffinote family so a shortcut reads
+/// natively on each platform. (Menus render their own gestures: the macOS native menu draws the OS glyphs
+/// from its key-equivalent; an in-window menu shows Avalonia's "Ctrl+…" text.)
 /// </summary>
 public static class ShortcutFormatter
 {
@@ -18,6 +18,13 @@ public static class ShortcutFormatter
     public static string Format(Shortcut shortcut, bool mac)
     {
         var mods = shortcut.ModifiersFor(mac);
+
+        // "?" is inherently the shifted "/" key; show it bare rather than "⇧?" / "Shift+/".
+        if (shortcut.Key == Key.OemQuestion && mods == KeyModifiers.Shift)
+        {
+            return "?";
+        }
+
         var sb = new StringBuilder();
         if (mac)
         {
@@ -40,8 +47,6 @@ public static class ShortcutFormatter
             {
                 sb.Append('⌘');
             }
-
-            sb.Append(KeyText(shortcut.Key));
         }
         else
         {
@@ -64,10 +69,9 @@ public static class ShortcutFormatter
             {
                 sb.Append("Win+");
             }
-
-            sb.Append(KeyText(shortcut.Key));
         }
 
+        sb.Append(KeyText(shortcut.Key));
         return sb.ToString();
     }
 
@@ -78,10 +82,15 @@ public static class ShortcutFormatter
         >= Key.A and <= Key.Z => key.ToString(),
         Key.OemComma => ",",
         Key.OemQuestion => "/",
+        Key.OemPlus => "=",
+        Key.OemMinus => "−",
         Key.Left => "←",
         Key.Right => "→",
         Key.Up => "↑",
         Key.Down => "↓",
-        _ => key.ToString(), // F11, Enter, etc. read fine as-is
+        Key.Return => "↩",
+        Key.Delete or Key.Back => "⌫",
+        Key.Escape => "⎋",
+        _ => key.ToString(), // F9, F11, Enter, etc. read fine as-is
     };
 }

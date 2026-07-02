@@ -34,13 +34,13 @@ public class TableHeaderColumnTests
     {
         var window = TableWindow();
         var env = (IAppEnvironment)window.Editor;
-        var command = AppCommands.ById("data.headerColumn")!;
+        var command = env.Commands.ById("data.headerColumn")!;
 
         env.Selection.MoveTo(0, 0); // inside the table
-        Assert.True(command.IsEnabled(env));
+        Assert.True(command.IsEnabled);
 
         env.Selection.MoveTo(20, 20); // far outside any table
-        Assert.False(command.IsEnabled(env));
+        Assert.False(command.IsEnabled);
     }
 
     [AvaloniaFact]

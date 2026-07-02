@@ -1,9 +1,9 @@
-# Proposal 0001 — `BirdBrain.Components`, a shared app-shell / design-system library
+# Proposal 0001 — `Puffinote.Components`, a shared app-shell / design-system library
 
 - **Status:** Phases 0–1 **landed** (`FuzzyMatcher`, `RelayCommand` shared); Phase 2 **foundation landed** (token contract + first chrome migrated); Phase 3 **largely landed** (palette, icon system, tooltip card, overlay/modal host + shared `ConfirmDialog`; both apps converged); Phases 4–5 proposed (see §7)
 - **Author:** (you) · drafted with Claude
 - **Affects:** `features/EditSpreadsheets` (Cellestra), `features/EditMarkdown` (Typage), and the
-  planned **BirdBrain** composite app
+  planned **Puffinote** composite app
 
 ---
 
@@ -11,39 +11,39 @@
 
 Cellestra and Typage already share a substantial amount of **app-shell and design-system** code — some
 of it copied verbatim. We propose extracting that layer into a single shared library,
-**`BirdBrain.Components`**, living at `shared/BirdBrain.Components/`. The two existing apps and the
-future BirdBrain app will share one command system, one set of UI primitives, and one design language.
+**`Puffinote.Components`**, living at `shared/Puffinote.Components/`. The two existing apps and the
+future Puffinote app will share one command system, one set of UI primitives, and one design language.
 The **domain engines and editing surfaces stay separate**; only the shell and design system are shared.
 
 Migration is **phased and leaf-first**, keeping every app green at each step.
 
 ---
 
-## 2. Context: the BirdBrain family
+## 2. Context: the Puffinote family
 
-**BirdBrain** is a planned "second brain" notes app that **composes both Typage and Cellestra** —
+**Puffinote** is a planned "second brain" notes app that **composes both Typage and Cellestra** —
 embedding the live-preview Markdown editor and the spreadsheet into one workspace. The shared library
-is named `BirdBrain.Components` because it is the **foundation of that family**, consumed by three
+is named `Puffinote.Components` because it is the **foundation of that family**, consumed by three
 sibling apps:
 
 ```
                  ┌──────────────────────────────┐
-                 │      BirdBrain.Components      │   ← this proposal
+                 │      Puffinote.Components      │   ← this proposal
                  │  (design system + app shell)   │
                  └──────────────────────────────┘
                     ▲           ▲            ▲
         ┌───────────┘           │            └────────────┐
-   Cellestra (standalone)   Typage (standalone)      BirdBrain (composite)
+   Cellestra (standalone)   Typage (standalone)      Puffinote (composite)
    sheets                   notes                    notes + sheets, embeds both
 ```
 
 Two consequences for this proposal:
 
-- **Namespace root** is `BirdBrain.Components` (e.g. `BirdBrain.Components.Commands`,
-  `BirdBrain.Components.Theming`, `BirdBrain.Components.Controls`).
-- The library must stay **app-agnostic**: it may not depend on Cellestra, Typage, *or* BirdBrain. It is
-  the shared floor all three stand on. The act of *composing* the two editors into BirdBrain is the
-  BirdBrain app's job, not this library's (see §4.3, Deferred).
+- **Namespace root** is `Puffinote.Components` (e.g. `Puffinote.Components.Commands`,
+  `Puffinote.Components.Theming`, `Puffinote.Components.Controls`).
+- The library must stay **app-agnostic**: it may not depend on Cellestra, Typage, *or* Puffinote. It is
+  the shared floor all three stand on. The act of *composing* the two editors into Puffinote is the
+  Puffinote app's job, not this library's (see §4.3, Deferred).
 
 ---
 
@@ -70,17 +70,17 @@ Not speculative — a survey found these same-concept files in **both** apps tod
 | `Token` / `TokenType` | formula tokens | markdown tokens | **Coincidental name collision** | ✗ Do not share |
 
 Token copy-paste is visible: the muted-gray `Color.FromRgb(0x88,0x88,0x88)` literal appears 5× across
-the repo, accent blue `0x2A,0x7D,0xE1` 4×, etc. With BirdBrain on the horizon, we're past the
+the repo, accent blue `0x2A,0x7D,0xE1` 4×, etc. With Puffinote on the horizon, we're past the
 rule-of-three trigger.
 
 ---
 
 ## 4. Scope
 
-The guiding principle: **`BirdBrain.Components` owns *how an app in this family looks and behaves as a
+The guiding principle: **`Puffinote.Components` owns *how an app in this family looks and behaves as a
 shell* — not *what any app does*.** Patterns and chrome are shared; domain logic and content are not.
 
-### 4.1 In scope — what `BirdBrain.Components` will own
+### 4.1 In scope — what `Puffinote.Components` will own
 
 Organized by capability area. Each is something all three apps need and currently duplicate or would
 duplicate.
@@ -126,19 +126,19 @@ duplicate.
   `(TextEdit, Selection)` records with edit-coalescing. Same name, fundamentally different design — a
   `Token`-style collision, not shared behavior.
 - **App-specific command *contents*** and menus — the catalog *type* is shared; the entries are not.
-- **Cross-editor composition / embedding** — wiring a sheet into a note, the BirdBrain multi-pane
-  workspace. That's the BirdBrain app's responsibility (and partly Deferred, §4.3).
+- **Cross-editor composition / embedding** — wiring a sheet into a note, the Puffinote multi-pane
+  workspace. That's the Puffinote app's responsibility (and partly Deferred, §4.3).
 - **External distribution** — no public NuGet packaging, no semver contract. This is an *internal*
   in-repo library for now.
 
 ### 4.3 Deferred — likely later, deliberately not now
 
-These become relevant once BirdBrain exists. Building them speculatively would over-commit the design,
+These become relevant once Puffinote exists. Building them speculatively would over-commit the design,
 so they are explicitly **not** part of this work:
 
 - **Embedding/host protocol** — a seam (`IEmbedHost`/`IEmbedResolver`-style) letting one editor render
   inside another's document. Typage already has an `IEmbedResolver` seam; a cross-app version would be
-  designed against BirdBrain's real needs, not guessed at now.
+  designed against Puffinote's real needs, not guessed at now.
 - **Shared cross-app document / workspace model** — a unified notion of a "document" spanning notes and
   sheets.
 - **Composite app shell** — tabs/panes/command routing for hosting multiple editors at once.
@@ -148,12 +148,12 @@ so they are explicitly **not** part of this work:
 
 These keep the library a *floor*, not a tangle:
 
-1. **No upward references.** `BirdBrain.Components` references Avalonia and its own code only — never an
+1. **No upward references.** `Puffinote.Components` references Avalonia and its own code only — never an
    app, engine, or surface. Apps reference it.
 2. **The Avalonia / CLI boundary.** CLIs in this repo are "no Avalonia, no network." Anything a CLI
    needs to share (e.g. the `AppCommand` contract, `FuzzyMatcher`, `Shortcut`) must not force an
-   Avalonia-UI dependency. ⇒ **Likely split point:** a non-UI `BirdBrain.Components.Core` holding the
-   command contract + matcher + settings model, with the Avalonia controls in `BirdBrain.Components`.
+   Avalonia-UI dependency. ⇒ **Likely split point:** a non-UI `Puffinote.Components.Core` holding the
+   command contract + matcher + settings model, with the Avalonia controls in `Puffinote.Components`.
    We *start as one UI assembly* (Phase-1 contents are all UI-adjacent) and split at this seam **only
    when** the CLI actually needs to share a primitive — documented now so we don't paint ourselves in.
 3. **Tokens over literals.** No primitive hardcodes a color/size; it reads the theme contract.
@@ -162,7 +162,7 @@ These keep the library a *floor*, not a tangle:
 
 ### 4.5 Definition of done (for the overall effort, across phases)
 
-- All three Tier-A duplicates exist once, in `BirdBrain.Components`, referenced by both apps; the old
+- All three Tier-A duplicates exist once, in `Puffinote.Components`, referenced by both apps; the old
   copies are deleted.
 - No primitive contains a hardcoded theme literal; Cellestra and Typage each render with their own
   tokens via the theme contract.
@@ -170,7 +170,7 @@ These keep the library a *floor*, not a tangle:
 - A unified `AppCommand`; Cellestra and Typage both build their catalogs against it.
 - Both apps build clean (0 warnings) with green tests at the end of **every** phase.
 - A new app could stand up a recognizable shell (palette + themed modals) by referencing
-  `BirdBrain.Components` and supplying tokens + a command catalog — nothing else.
+  `Puffinote.Components` and supplying tokens + a command catalog — nothing else.
 
 ---
 
@@ -199,14 +199,14 @@ conventions for free.
 
 ```
 shared/
-  BirdBrain.Components/            ← new (Avalonia UI: controls, theming, palette, modals, shell)
-  BirdBrain.Components.Core/       ← later, only if the Avalonia/CLI seam (§4.4) forces it
+  Puffinote.Components/            ← new (Avalonia UI: controls, theming, palette, modals, shell)
+  Puffinote.Components.Core/       ← later, only if the Avalonia/CLI seam (§4.4) forces it
 features/
-  EditSpreadsheets/ …             ← references BirdBrain.Components
-  EditMarkdown/ …                 ← references BirdBrain.Components
+  EditSpreadsheets/ …             ← references Puffinote.Components
+  EditMarkdown/ …                 ← references Puffinote.Components
 ```
 
-Each app solution adds a `ProjectReference` to `shared/BirdBrain.Components`. Internal folders mirror
+Each app solution adds a `ProjectReference` to `shared/Puffinote.Components`. Internal folders mirror
 the capability areas: `Commands/`, `Theming/`, `Overlays/`, `Controls/`, `Shell/`.
 
 ---
@@ -215,17 +215,17 @@ the capability areas: `Commands/`, `Theming/`, `Overlays/`, `Controls/`, `Shell/
 
 Each phase ends with **all** apps building clean and tests green; land a phase only when it does.
 
-- **Phase 0 — Scaffold. ✅ Done.** Created `shared/BirdBrain.Components`, wired into both solutions,
+- **Phase 0 — Scaffold. ✅ Done.** Created `shared/Puffinote.Components`, wired into both solutions,
   referenced (empty) from both Desktop projects. Build plumbing proven.
 - **Phase 1 — Tier A leaves. ✅ Done.** Moved `FuzzyMatcher` and `RelayCommand` (both byte-for-byte
-  identical) into `BirdBrain.Components.Commands`; deleted both copies of each; repointed all consumers;
+  identical) into `Puffinote.Components.Commands`; deleted both copies of each; repointed all consumers;
   both solutions build clean with green tests. **As-built note:** `ShortcutFormatter` and `Shortcut`
   were *not* moved — they are not actually trivial duplicates (Cellestra has no `Shortcut` type and its
   `ShortcutFormatter` formats a `KeyGesture`, while Typage's formats its own `Shortcut`). They are
   reclassified Tier C and folded into **Phase 4**.
 - **Phase 2 — Design tokens + theme contract. ✅ Foundation done.** Added a variant-aware token
-  contract in `BirdBrain.Components.Theming` — `ThemePalette` (Accent / AccentSubtle / Surface /
-  SurfaceBorder / MutedText / Scrim), `IAppTheme`, a default `BirdBrainTheme` seeded by accent, and the
+  contract in `Puffinote.Components.Theming` — `ThemePalette` (Accent / AccentSubtle / Surface /
+  SurfaceBorder / MutedText / Scrim), `IAppTheme`, a default `PuffinoteTheme` seeded by accent, and the
   `Tokens` accessor (named `Tokens`, not `AppTheme`, to avoid colliding with apps' own theme-preference
   enums) — mirroring the editor's `GridPalette.For(ThemeVariant)`. Each app registers its theme at
   startup (Cellestra `0x2A7DE1`, Typage `0x579DF6`). First chrome migrated onto tokens: Cellestra's
@@ -234,7 +234,7 @@ Each phase ends with **all** apps building clean and tests green; land a phase o
   colors (grid cells, Markdown syntax via `MarkdownTheme`) stay app-specific (§4.2), not tokenized.
 - **Phase 3 — UI primitives. ✅ Largely landed.** Shared, token-skinned: the **command palette**
   (`PaletteListView`, adopted by both apps); the **icon system** (`LucideIcon`/`LucideIcons` + the 76
-  vendored SVGs, now `avares://BirdBrain.Components/...`); the **tooltip card** (`TooltipCard`, reading
+  vendored SVGs, now `avares://Puffinote.Components/...`); the **tooltip card** (`TooltipCard`, reading
   `MutedText` instead of the copy-pasted `0x888888`); and the **overlay/modal stack** — `IModalDialog`
   + `ModalDialog<TResult>` base, a shared **`OverlayHost`** (themed card chrome + Tab focus-trap +
   backdrop/Esc dismissal, with Opened/Closed hooks for app-specific blur/shortcut-suspend/focus), and the
@@ -247,7 +247,7 @@ Each phase ends with **all** apps building clean and tests green; land a phase o
   are gated on "an overlay is open" so a shortcut can't fire under a palette or modal. **As-built note:** Phase 3 turned out *not* to be a pile of
   duplicates — a survey found icon/tooltip were **Cellestra-only** and the modal host **structurally
   diverged** (Cellestra internal overlay vs Typage native windows). The Cellestra-only primitives were
-  lifted anyway, anticipating the BirdBrain app.
+  lifted anyway, anticipating the Puffinote app.
 - **Phase 4 — `AppCommand` + shortcut unification (Tier C).** Env-agnostic command (Cellestra captures
   its env at construction); a shared `Shortcut` representation; migrate `ShortcutFormatter` and the
   catalog wiring onto it.
@@ -275,9 +275,9 @@ Stop after any phase that delivers value; later phases are independent.
 
 ## 9. Decisions
 
-1. ~~**Name**~~ — **Decided: `BirdBrain.Components`.**
-2. ~~**Location**~~ — **Decided: `shared/BirdBrain.Components/` at repo root.**
-3. ~~**One project vs. split**~~ — **Decided: one UI project.** A non-UI `BirdBrain.Components.Core` is
+1. ~~**Name**~~ — **Decided: `Puffinote.Components`.**
+2. ~~**Location**~~ — **Decided: `shared/Puffinote.Components/` at repo root.**
+3. ~~**One project vs. split**~~ — **Decided: one UI project.** A non-UI `Puffinote.Components.Core` is
    added *only if* the CLI/no-Avalonia seam (§4.4) later forces it — not now.
 4. ~~**Scope of the first landing**~~ — **Decided: Phase 0 + Phase 1** as a reversible proof; re-evaluate
    Phases 2+ once the workflow is proven.
@@ -287,7 +287,7 @@ Stop after any phase that delivers value; later phases are independent.
 
 ## 10. First step — landed
 
-**Phase 0 + Phase 1 are done:** `shared/BirdBrain.Components` (one UI project) is stood up and wired
+**Phase 0 + Phase 1 are done:** `shared/Puffinote.Components` (one UI project) is stood up and wired
 into both solutions, and the two genuinely-identical leaves — `FuzzyMatcher` and `RelayCommand` — now
 live there once, consumed by both apps, green-to-green. `ShortcutFormatter`/`Shortcut` turned out not to
 be trivial duplicates and were deferred to Phase 4 (see §7). Phases 2–5 remain proposed.

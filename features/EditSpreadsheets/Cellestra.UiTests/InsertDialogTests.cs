@@ -3,7 +3,9 @@ using Avalonia.Headless.XUnit;
 using Cellestra.Core.Formulas.Functions;
 using Cellestra.Core.Model;
 using Cellestra.Desktop.Commands;
+using Cellestra.Desktop.Views;
 using Cellestra.Desktop.Views.Dialogs;
+using Puffinote.Components.Commands;
 using Xunit;
 
 namespace Cellestra.UiTests;
@@ -107,13 +109,17 @@ public class InsertDialogTests
     [Fact]
     public void Insert_commands_are_registered_with_their_shortcuts()
     {
-        Assert.NotNull(AppCommands.ById("insert.function"));
-        Assert.NotNull(AppCommands.ById("insert.namedRange"));
-        Assert.NotNull(AppCommands.ById("insert.hyperlink"));
+        // Pure metadata (ids + default shortcuts) — no window needed.
+        var commands = FakeAppEnvironment.Catalog;
 
-        Assert.Equal("⌃⌥F", AppCommands.ById("insert.function")!.ShortcutText);
-        Assert.Equal("⌥⌘K", AppCommands.ById("insert.hyperlink")!.ShortcutText);
+        Assert.NotNull(commands.ById("insert.function"));
+        Assert.NotNull(commands.ById("insert.namedRange"));
+        Assert.NotNull(commands.ById("insert.hyperlink"));
+
+        // Cellestra is macOS-only; assert the macOS rendering explicitly (the test host is Linux).
+        Assert.Equal("⌃⌥F", ShortcutFormatter.Format(commands.ById("insert.function")!.Shortcut!.Value, mac: true));
+        Assert.Equal("⌥⌘K", ShortcutFormatter.Format(commands.ById("insert.hyperlink")!.Shortcut!.Value, mac: true));
         // Named Range has no default shortcut.
-        Assert.Equal(string.Empty, AppCommands.ById("insert.namedRange")!.ShortcutText);
+        Assert.Equal(string.Empty, commands.ById("insert.namedRange")!.ShortcutText);
     }
 }

@@ -1,4 +1,4 @@
-using BirdBrain.Components.Commands;
+using Puffinote.Components.Commands;
 using Xunit;
 
 namespace Typage.UiTests;

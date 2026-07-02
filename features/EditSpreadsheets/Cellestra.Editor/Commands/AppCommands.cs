@@ -3,189 +3,191 @@ using System.Collections.Generic;
 using Avalonia.Input;
 using Cellestra.Core.Editing;
 using Cellestra.Core.Styling;
+using Puffinote.Components.Commands;
 
 namespace Cellestra.Desktop.Commands;
 
 /// <summary>
-/// The one command catalog (Golden Rule #4, ARCHITECTURE §7). Defined once here; the menu bar,
-/// command bar, Command Palette, and keybindings all read it. Shortcuts are the defaults and are
-/// remappable in Settings.
+/// The one command catalog (Golden Rule #4, ARCHITECTURE §7). Built once per <see cref="IAppEnvironment"/>
+/// (the editor view): the menu bar, command bar, Command Palette, and key bindings all read it. Each entry
+/// is the shared, environment-agnostic <see cref="AppCommand"/> whose action and enabled/active checks
+/// <b>close over the environment</b> captured here (proposal 0001 §5), so the palette and menus stay
+/// app-agnostic. Shortcuts are the defaults and are remappable in Settings.
 /// </summary>
-public static class AppCommands
+public sealed class AppCommands
 {
-    private static readonly List<AppCommand> _all = Build();
-    private static readonly Dictionary<string, AppCommand> _byId =
-        _all.ToDictionary(c => c.Id, StringComparer.Ordinal);
+    private readonly List<AppCommand> _all;
+    private readonly Dictionary<string, AppCommand> _byId;
 
-    public static IReadOnlyList<AppCommand> All => _all;
+    public AppCommands(IAppEnvironment environment)
+    {
+        _all = Build(environment);
+        _byId = _all.ToDictionary(c => c.Id, StringComparer.Ordinal);
+    }
 
-    public static AppCommand? ById(string id) => _byId.GetValueOrDefault(id);
+    public IReadOnlyList<AppCommand> All => _all;
 
-    private const KeyModifiers Cmd = KeyModifiers.Meta;
-    private const KeyModifiers CmdShift = KeyModifiers.Meta | KeyModifiers.Shift;
-    private const KeyModifiers CmdAlt = KeyModifiers.Meta | KeyModifiers.Alt;
-    private const KeyModifiers CtrlAlt = KeyModifiers.Control | KeyModifiers.Alt;
+    public AppCommand? ById(string id) => _byId.GetValueOrDefault(id);
 
-    private static List<AppCommand> Build() => new()
+    private static List<AppCommand> Build(IAppEnvironment e) => new()
     {
         // File
-        new("file.new", "New", "Start a new, empty workbook.", e => _ = e.NewWorkbookAsync(), "file-plus", new KeyGesture(Key.N, Cmd)),
-        new("file.open", "Open…", "Open a spreadsheet from disk.", e => _ = e.OpenWorkbookAsync(), "folder-open", new KeyGesture(Key.O, Cmd)),
-        new("file.save", "Save", "Save changes to the current file.", e => _ = e.SaveWorkbookAsync(), "save", new KeyGesture(Key.S, Cmd)),
-        new("file.saveAs", "Save As…", "Save a copy under a new name.", e => _ = e.SaveWorkbookAsAsync(), "save", new KeyGesture(Key.S, CmdShift)),
-        new("file.importCsv", "Import CSV…", "Load data from a CSV file.", e => _ = e.ImportCsvAsync(), "file-down"),
-        new("file.exportCsv", "Export CSV…", "Write the active sheet to a CSV file.", e => _ = e.ExportCsvAsync(), "file-up"),
+        new("file.new", "New", "Start a new, empty workbook.", Shortcut.Cmd(Key.N), () => _ = e.NewWorkbookAsync(), icon: "file-plus"),
+        new("file.open", "Open…", "Open a spreadsheet from disk.", Shortcut.Cmd(Key.O), () => _ = e.OpenWorkbookAsync(), icon: "folder-open"),
+        new("file.save", "Save", "Save changes to the current file.", Shortcut.Cmd(Key.S), () => _ = e.SaveWorkbookAsync(), icon: "save"),
+        new("file.saveAs", "Save As…", "Save a copy under a new name.", Shortcut.Cmd(Key.S, KeyModifiers.Shift), () => _ = e.SaveWorkbookAsAsync(), icon: "save"),
+        new("file.importCsv", "Import CSV…", "Load data from a CSV file.", null, () => _ = e.ImportCsvAsync(), icon: "file-down"),
+        new("file.exportCsv", "Export CSV…", "Write the active sheet to a CSV file.", null, () => _ = e.ExportCsvAsync(), icon: "file-up"),
 
         // Edit
-        new("edit.undo", "Undo", "Step backward through your changes.", e => { e.Session.Undo(); e.Refresh(); }, "undo",
-            new KeyGesture(Key.Z, Cmd), e => e.Session.CanUndo),
-        new("edit.redo", "Redo", "Re-apply a change you undid.", e => { e.Session.Redo(); e.Refresh(); }, "redo",
-            new KeyGesture(Key.Z, CmdShift), e => e.Session.CanRedo),
-        new("edit.cut", "Cut", "Move the selection to the clipboard.", e => e.Cut(), "scissors", new KeyGesture(Key.X, Cmd)),
-        new("edit.copy", "Copy", "Copy the selection to the clipboard.", e => e.Copy(), "copy", new KeyGesture(Key.C, Cmd)),
-        new("edit.paste", "Paste", "Paste from the clipboard.", e => e.Paste(), "clipboard", new KeyGesture(Key.V, Cmd)),
-        new("edit.pasteSpecial", "Paste Special…", "Paste only values, formats, or formulas.", e => e.PasteSpecial(), "clipboard-paste",
-            new KeyGesture(Key.V, CmdAlt)),
-        new("edit.autoSum", "AutoSum", "Sum the numbers above or to the left of the active cell.", AutoSum, "sigma",
-            new KeyGesture(Key.OemPlus, CmdAlt)),
-        new("fill.down", "Fill Down", "Copy the top row of the selection down through the rest.", FillDown, "arrow-down-to-line",
-            new KeyGesture(Key.D, Cmd)),
-        new("fill.right", "Fill Right", "Copy the left column of the selection rightward.", FillRight, "arrow-right-to-line",
-            new KeyGesture(Key.R, Cmd)),
+        new("edit.undo", "Undo", "Step backward through your changes.", Shortcut.Cmd(Key.Z), () => { e.Session.Undo(); e.Refresh(); },
+            canExecute: () => e.Session.CanUndo, icon: "undo"),
+        new("edit.redo", "Redo", "Re-apply a change you undid.", Shortcut.Cmd(Key.Z, KeyModifiers.Shift), () => { e.Session.Redo(); e.Refresh(); },
+            canExecute: () => e.Session.CanRedo, icon: "redo"),
+        new("edit.cut", "Cut", "Move the selection to the clipboard.", Shortcut.Cmd(Key.X), () => e.Cut(), icon: "scissors"),
+        new("edit.copy", "Copy", "Copy the selection to the clipboard.", Shortcut.Cmd(Key.C), () => e.Copy(), icon: "copy"),
+        new("edit.paste", "Paste", "Paste from the clipboard.", Shortcut.Cmd(Key.V), () => e.Paste(), icon: "clipboard"),
+        new("edit.pasteSpecial", "Paste Special…", "Paste only values, formats, or formulas.", Shortcut.Cmd(Key.V, KeyModifiers.Alt), () => e.PasteSpecial(),
+            icon: "clipboard-paste"),
+        new("edit.autoSum", "AutoSum", "Sum the numbers above or to the left of the active cell.", Shortcut.Cmd(Key.OemPlus, KeyModifiers.Alt), () => AutoSum(e),
+            icon: "sigma"),
+        new("fill.down", "Fill Down", "Copy the top row of the selection down through the rest.", Shortcut.Cmd(Key.D), () => FillDown(e),
+            icon: "arrow-down-to-line"),
+        new("fill.right", "Fill Right", "Copy the left column of the selection rightward.", Shortcut.Cmd(Key.R), () => FillRight(e),
+            icon: "arrow-right-to-line"),
         new("edit.formatPainter", "Format Painter", "Copy formatting from the active cell, then paste it onto the next selection.",
-            FormatPainter, "paintbrush", new KeyGesture(Key.C, CmdShift), isActive: e => e.Session.IsFormatPainterArmed),
-        new("edit.delete", "Clear Contents", "Clear the values, keep the formatting.", ClearContents, "eraser", new KeyGesture(Key.Delete)),
-        new("edit.clearFormats", "Clear Formatting", "Reset styling, keep the values.", ClearFormatting, "remove-formatting"),
-        new("edit.clearAll", "Clear All", "Clear both values and formatting.", ClearAll, "eraser"),
-        new("sheet.resetData", "Reset Sheet Data", "Clear every cell and its formatting on the active sheet.", e => e.ResetSheetData(), "eraser"),
-        new("edit.selectAll", "Select All", "Select the data region, then the whole sheet.", SelectAll, "square-dashed", new KeyGesture(Key.A, Cmd)),
-        new("edit.find", "Find…", "Find text in the sheet.", e => e.ShowFindReplace(replace: false), "search", new KeyGesture(Key.F, Cmd)),
-        new("edit.findReplace", "Find & Replace…", "Find text and replace it.", e => e.ShowFindReplace(replace: true), "replace",
-            new KeyGesture(Key.F, CmdAlt)),
+            Shortcut.Cmd(Key.C, KeyModifiers.Shift), () => FormatPainter(e), isActive: () => e.Session.IsFormatPainterArmed, icon: "paintbrush"),
+        new("edit.delete", "Clear Contents", "Clear the values, keep the formatting.", Shortcut.Bare(Key.Delete), () => ClearContents(e), icon: "eraser"),
+        new("edit.clearFormats", "Clear Formatting", "Reset styling, keep the values.", null, () => ClearFormatting(e), icon: "remove-formatting"),
+        new("edit.clearAll", "Clear All", "Clear both values and formatting.", null, () => ClearAll(e), icon: "eraser"),
+        new("sheet.resetData", "Reset Sheet Data", "Clear every cell and its formatting on the active sheet.", null, () => e.ResetSheetData(), icon: "eraser"),
+        new("edit.selectAll", "Select All", "Select the data region, then the whole sheet.", Shortcut.Cmd(Key.A), () => SelectAll(e), icon: "square-dashed"),
+        new("edit.find", "Find…", "Find text in the sheet.", Shortcut.Cmd(Key.F), () => e.ShowFindReplace(replace: false), icon: "search"),
+        new("edit.findReplace", "Find & Replace…", "Find text and replace it.", Shortcut.Cmd(Key.F, KeyModifiers.Alt), () => e.ShowFindReplace(replace: true),
+            icon: "replace"),
 
         // Format
-        new("format.bold", "Bold", "Make the text heavier.", e => ToggleFont(e, f => f.Bold, (f, v) => f.WithBold(v)), "bold",
-            new KeyGesture(Key.B, Cmd), isActive: e => ActiveStyle(e).Font.Bold),
-        new("format.italic", "Italic", "Slant the text.", e => ToggleFont(e, f => f.Italic, (f, v) => f.WithItalic(v)), "italic",
-            new KeyGesture(Key.I, Cmd), isActive: e => ActiveStyle(e).Font.Italic),
-        new("format.underline", "Underline", "Underline the text.", e => ToggleFont(e, f => f.Underline, (f, v) => f.WithUnderline(v)), "underline",
-            new KeyGesture(Key.U, Cmd), isActive: e => ActiveStyle(e).Font.Underline),
-        new("format.strikethrough", "Strikethrough", "Draw a line through the text.", e => ToggleFont(e, f => f.Strikethrough, (f, v) => f.WithStrikethrough(v)), "strikethrough",
-            new KeyGesture(Key.X, CmdShift), isActive: e => ActiveStyle(e).Font.Strikethrough),
-        new("format.alignLeft", "Align Left", "Align contents to the left.", e => SetAlignment(e, HorizontalAlignment.Left), "align-left",
-            isActive: e => ActiveStyle(e).Alignment.Horizontal == HorizontalAlignment.Left),
-        new("format.alignCenter", "Align Center", "Centre contents in the cell.", e => SetAlignment(e, HorizontalAlignment.Center), "align-center",
-            isActive: e => ActiveStyle(e).Alignment.Horizontal == HorizontalAlignment.Center),
-        new("format.alignRight", "Align Right", "Align contents to the right.", e => SetAlignment(e, HorizontalAlignment.Right), "align-right",
-            isActive: e => ActiveStyle(e).Alignment.Horizontal == HorizontalAlignment.Right),
-        new("format.wrap", "Wrap Text", "Wrap long text onto multiple lines.", ToggleWrap, "wrap-text",
-            isActive: e => ActiveStyle(e).Alignment.WrapText),
-        new("format.currency", "Currency", "Format the number as currency.", e => ToggleNumberFormat(e, CurrencyFormat, NumberFormatKind.Currency),
-            "dollar-sign", canExecute: IsNumericContext, isActive: e => ActiveStyle(e).NumberFormat.Kind == NumberFormatKind.Currency),
-        new("format.percent", "Percent", "Format the number as a percentage.", e => ToggleNumberFormat(e, NumberFormat.Percent, NumberFormatKind.Percent),
-            "percent", canExecute: IsNumericContext, isActive: e => ActiveStyle(e).NumberFormat.Kind == NumberFormatKind.Percent),
-        new("format.date", "Date", "Format the number as a date.", e => ToggleNumberFormat(e, DateFormat, NumberFormatKind.Date),
-            "calendar", canExecute: IsNumericContext, isActive: e => ActiveStyle(e).NumberFormat.Kind == NumberFormatKind.Date),
-        new("format.increaseDecimal", "Increase Decimal", "Show one more decimal place.",
-            e => StepDecimals(e, +1), "move-decimal-left", canExecute: CanStepDecimals),
-        new("format.decreaseDecimal", "Decrease Decimal", "Show one fewer decimal place.",
-            e => StepDecimals(e, -1), "move-decimal-right", canExecute: CanStepDecimals),
-        new("format.cells", "Format Cells…", "Open the full cell-formatting dialog.", e => e.ShowFormatCellsDialog(), "settings-2", new KeyGesture(Key.D1, Cmd)),
+        new("format.bold", "Bold", "Make the text heavier.", Shortcut.Cmd(Key.B), () => ToggleFont(e, f => f.Bold, (f, v) => f.WithBold(v)),
+            isActive: () => ActiveStyle(e).Font.Bold, icon: "bold"),
+        new("format.italic", "Italic", "Slant the text.", Shortcut.Cmd(Key.I), () => ToggleFont(e, f => f.Italic, (f, v) => f.WithItalic(v)),
+            isActive: () => ActiveStyle(e).Font.Italic, icon: "italic"),
+        new("format.underline", "Underline", "Underline the text.", Shortcut.Cmd(Key.U), () => ToggleFont(e, f => f.Underline, (f, v) => f.WithUnderline(v)),
+            isActive: () => ActiveStyle(e).Font.Underline, icon: "underline"),
+        new("format.strikethrough", "Strikethrough", "Draw a line through the text.", Shortcut.Cmd(Key.X, KeyModifiers.Shift),
+            () => ToggleFont(e, f => f.Strikethrough, (f, v) => f.WithStrikethrough(v)), isActive: () => ActiveStyle(e).Font.Strikethrough, icon: "strikethrough"),
+        new("format.alignLeft", "Align Left", "Align contents to the left.", null, () => SetAlignment(e, HorizontalAlignment.Left),
+            isActive: () => ActiveStyle(e).Alignment.Horizontal == HorizontalAlignment.Left, icon: "align-left"),
+        new("format.alignCenter", "Align Center", "Centre contents in the cell.", null, () => SetAlignment(e, HorizontalAlignment.Center),
+            isActive: () => ActiveStyle(e).Alignment.Horizontal == HorizontalAlignment.Center, icon: "align-center"),
+        new("format.alignRight", "Align Right", "Align contents to the right.", null, () => SetAlignment(e, HorizontalAlignment.Right),
+            isActive: () => ActiveStyle(e).Alignment.Horizontal == HorizontalAlignment.Right, icon: "align-right"),
+        new("format.wrap", "Wrap Text", "Wrap long text onto multiple lines.", null, () => ToggleWrap(e),
+            isActive: () => ActiveStyle(e).Alignment.WrapText, icon: "wrap-text"),
+        new("format.currency", "Currency", "Format the number as currency.", null, () => ToggleNumberFormat(e, CurrencyFormat, NumberFormatKind.Currency),
+            canExecute: () => IsNumericContext(e), isActive: () => ActiveStyle(e).NumberFormat.Kind == NumberFormatKind.Currency, icon: "dollar-sign"),
+        new("format.percent", "Percent", "Format the number as a percentage.", null, () => ToggleNumberFormat(e, NumberFormat.Percent, NumberFormatKind.Percent),
+            canExecute: () => IsNumericContext(e), isActive: () => ActiveStyle(e).NumberFormat.Kind == NumberFormatKind.Percent, icon: "percent"),
+        new("format.date", "Date", "Format the number as a date.", null, () => ToggleNumberFormat(e, DateFormat, NumberFormatKind.Date),
+            canExecute: () => IsNumericContext(e), isActive: () => ActiveStyle(e).NumberFormat.Kind == NumberFormatKind.Date, icon: "calendar"),
+        new("format.increaseDecimal", "Increase Decimal", "Show one more decimal place.", null,
+            () => StepDecimals(e, +1), canExecute: () => CanStepDecimals(e), icon: "move-decimal-left"),
+        new("format.decreaseDecimal", "Decrease Decimal", "Show one fewer decimal place.", null,
+            () => StepDecimals(e, -1), canExecute: () => CanStepDecimals(e), icon: "move-decimal-right"),
+        new("format.cells", "Format Cells…", "Open the full cell-formatting dialog.", Shortcut.Cmd(Key.D1), () => e.ShowFormatCellsDialog(), icon: "settings-2"),
 
         // "Format Selection As: <data-type>" — one entry per data type, surfaced in the Command Palette
         // (PRD §6.7). Each sets a specific number format outright (vs. the command-bar toggles above).
         new("format.asAutomatic", "Format Selection As: Automatic", "Use the general (automatic) number format.",
-            e => FormatSelectionAs(e, NumberFormat.General), "eraser"),
+            null, () => FormatSelectionAs(e, NumberFormat.General), icon: "eraser"),
         new("format.asNumber", "Format Selection As: Number", "Show as a number with thousands separators and two decimals.",
-            e => FormatSelectionAs(e, NumberFormatPreset), "a-large-small", canExecute: IsNumericContext),
+            null, () => FormatSelectionAs(e, NumberFormatPreset), canExecute: () => IsNumericContext(e), icon: "a-large-small"),
         new("format.asCurrency", "Format Selection As: Currency", "Show as currency.",
-            e => FormatSelectionAs(e, CurrencyFormat), "dollar-sign", canExecute: IsNumericContext),
+            null, () => FormatSelectionAs(e, CurrencyFormat), canExecute: () => IsNumericContext(e), icon: "dollar-sign"),
         new("format.asPercent", "Format Selection As: Percent", "Show as a percentage with two decimals.",
-            e => FormatSelectionAs(e, PercentFormatPreset), "percent", canExecute: IsNumericContext),
+            null, () => FormatSelectionAs(e, PercentFormatPreset), canExecute: () => IsNumericContext(e), icon: "percent"),
         new("format.asScientific", "Format Selection As: Scientific", "Show in scientific (exponent) notation.",
-            e => FormatSelectionAs(e, ScientificFormatPreset), "sigma", canExecute: IsNumericContext),
+            null, () => FormatSelectionAs(e, ScientificFormatPreset), canExecute: () => IsNumericContext(e), icon: "sigma"),
         new("format.asDate", "Format Selection As: Date", "Show as a date (YYYY-MM-DD).",
-            e => FormatSelectionAs(e, DateFormat), "calendar", canExecute: IsNumericContext),
+            null, () => FormatSelectionAs(e, DateFormat), canExecute: () => IsNumericContext(e), icon: "calendar"),
         new("format.asTime", "Format Selection As: Time", "Show as a time (HH:MM:SS).",
-            e => FormatSelectionAs(e, TimeFormatPreset), "calendar", canExecute: IsNumericContext),
+            null, () => FormatSelectionAs(e, TimeFormatPreset), canExecute: () => IsNumericContext(e), icon: "calendar"),
         new("format.asText", "Format Selection As: Text", "Treat the cell contents as plain text.",
-            e => FormatSelectionAs(e, NumberFormat.Text), "type"),
+            null, () => FormatSelectionAs(e, NumberFormat.Text), icon: "type"),
 
         // Borders — quick presets applied via the standard ApplyStyle path. The dropdown lives on the
         // command bar (see CommandBarModel "Border" group); Format Cells… covers per-edge control.
         new("format.borderAll", "All Borders", "Draw thin borders on every side of each selected cell.",
-            e => ApplyBorderToEach(e, "All Borders", _ => Border.All(BorderLineStyle.Thin)), "grid-2x2"),
+            null, () => ApplyBorderToEach(e, "All Borders", _ => Border.All(BorderLineStyle.Thin)), icon: "grid-2x2"),
         new("format.borderOutline", "Outer Border", "Draw a thin border around the outside of the selection.",
-            e => ApplyOutline(e), "square"),
+            null, () => ApplyOutline(e), icon: "square"),
         new("format.borderBottom", "Bottom Border", "Draw a thin border along the bottom of each selected cell.",
-            e => ApplyBorderToEach(e, "Bottom Border", b => b with { Bottom = ThinEdge }), "square"),
+            null, () => ApplyBorderToEach(e, "Bottom Border", b => b with { Bottom = ThinEdge }), icon: "square"),
         new("format.borderTop", "Top Border", "Draw a thin border along the top of each selected cell.",
-            e => ApplyBorderToEach(e, "Top Border", b => b with { Top = ThinEdge }), "square"),
+            null, () => ApplyBorderToEach(e, "Top Border", b => b with { Top = ThinEdge }), icon: "square"),
         new("format.borderLeft", "Left Border", "Draw a thin border along the left of each selected cell.",
-            e => ApplyBorderToEach(e, "Left Border", b => b with { Left = ThinEdge }), "square"),
+            null, () => ApplyBorderToEach(e, "Left Border", b => b with { Left = ThinEdge }), icon: "square"),
         new("format.borderRight", "Right Border", "Draw a thin border along the right of each selected cell.",
-            e => ApplyBorderToEach(e, "Right Border", b => b with { Right = ThinEdge }), "square"),
+            null, () => ApplyBorderToEach(e, "Right Border", b => b with { Right = ThinEdge }), icon: "square"),
         new("format.borderNone", "No Border", "Remove every border from the selected cells.",
-            e => ApplyBorderToEach(e, "No Border", _ => Border.None), "square-x"),
+            null, () => ApplyBorderToEach(e, "No Border", _ => Border.None), icon: "square-x"),
 
         // Insert
-        new("insert.rowsAbove", "Rows Above", "Insert rows above the selection.", e => InsertRows(e, above: true), "rows-plus"),
-        new("insert.columnsLeft", "Columns Left", "Insert columns left of the selection.", e => InsertColumns(e, before: true), "columns-plus"),
-        new("edit.deleteRows", "Delete Rows", "Delete the selected rows.", DeleteRows, "trash-2"),
-        new("edit.deleteColumns", "Delete Columns", "Delete the selected columns.", DeleteColumns, "trash-2"),
-        new("insert.sheet", "Sheet", "Add a new worksheet.", e => e.AddSheet(), "plus"),
-        new("insert.chartSheet", "Chart Sheet", "Add a sheet that shows a chart of your data.", e => e.AddChartSheet(), "chart-column"),
+        new("insert.rowsAbove", "Rows Above", "Insert rows above the selection.", null, () => InsertRows(e, above: true), icon: "rows-plus"),
+        new("insert.columnsLeft", "Columns Left", "Insert columns left of the selection.", null, () => InsertColumns(e, before: true), icon: "columns-plus"),
+        new("edit.deleteRows", "Delete Rows", "Delete the selected rows.", null, () => DeleteRows(e), icon: "trash-2"),
+        new("edit.deleteColumns", "Delete Columns", "Delete the selected columns.", null, () => DeleteColumns(e), icon: "trash-2"),
+        new("insert.sheet", "Sheet", "Add a new worksheet.", null, () => e.AddSheet(), icon: "plus"),
+        new("insert.chartSheet", "Chart Sheet", "Add a sheet that shows a chart of your data.", null, () => e.AddChartSheet(), icon: "chart-column"),
         new("insert.function", "Function…", "Browse the function library and insert one into the active cell.",
-            e => e.ShowFunctionPicker(), "sigma", new KeyGesture(Key.F, CtrlAlt)),
+            Shortcut.Bare(Key.F, KeyModifiers.Control | KeyModifiers.Alt), () => e.ShowFunctionPicker(), icon: "sigma"),
         new("insert.namedRange", "Named Range…", "Name the current selection, or manage existing named ranges.",
-            e => e.ShowNamedRangeManager(), "tag"),
+            null, () => e.ShowNamedRangeManager(), icon: "tag"),
         new("insert.hyperlink", "Hyperlink…", "Add, edit, or remove a hyperlink on the active cell.",
-            e => e.ShowHyperlinkDialog(), "link", new KeyGesture(Key.K, CmdAlt)),
-        new("sheet.rename", "Rename Sheet…", "Rename the active worksheet.", e => e.RenameActiveSheet(), "pencil"),
-        new("sheet.duplicate", "Duplicate Sheet", "Insert a copy of the active worksheet.", e => e.DuplicateActiveSheet(), "copy"),
-        new("sheet.delete", "Delete Sheet", "Delete the active worksheet.", e => e.DeleteActiveSheet(), "trash-2",
-            canExecute: e => e.Session.Workbook.Worksheets.Count > 1),
+            Shortcut.Cmd(Key.K, KeyModifiers.Alt), () => e.ShowHyperlinkDialog(), icon: "link"),
+        new("sheet.rename", "Rename Sheet…", "Rename the active worksheet.", null, () => e.RenameActiveSheet(), icon: "pencil"),
+        new("sheet.duplicate", "Duplicate Sheet", "Insert a copy of the active worksheet.", null, () => e.DuplicateActiveSheet(), icon: "copy"),
+        new("sheet.delete", "Delete Sheet", "Delete the active worksheet.", null, () => e.DeleteActiveSheet(),
+            canExecute: () => e.Session.Workbook.Worksheets.Count > 1, icon: "trash-2"),
 
         // Data
-        new("data.sortAsc", "Sort Ascending", "Sort the column A→Z.", e => Sort(e, ascending: true), "sort-asc"),
-        new("data.sortDesc", "Sort Descending", "Sort the column Z→A.", e => Sort(e, ascending: false), "sort-desc"),
-        new("data.customSort", "Sort…", "Sort by one or more columns.", e => e.ShowSortDialog(), "sort"),
+        new("data.sortAsc", "Sort Ascending", "Sort the column A→Z.", null, () => Sort(e, ascending: true), icon: "sort-asc"),
+        new("data.sortDesc", "Sort Descending", "Sort the column Z→A.", null, () => Sort(e, ascending: false), icon: "sort-desc"),
+        new("data.customSort", "Sort…", "Sort by one or more columns.", null, () => e.ShowSortDialog(), icon: "sort"),
         new("data.sortAndFilter", "Sort & Filter…", "Build an ordered list of sort and filter steps over a data region.",
-            e => e.ShowSortFilterDialog(), "filter", new KeyGesture(Key.F, CmdShift)),
-        new("data.toggleFilter", "Filter", "Filter rows by a rule.", e => e.ToggleFilter(), "filter",
-            isActive: e => e.Session.ActiveSheet.ActiveFilter is not null),
-        new("data.clearFilter", "Clear Filter", "Remove the active filter.", ClearFilter, "filter-x"),
-        new("data.createTable", "Table", "Turn the range into a table.", CreateTable, "table", new KeyGesture(Key.T, Cmd)),
+            Shortcut.Cmd(Key.F, KeyModifiers.Shift), () => e.ShowSortFilterDialog(), icon: "filter"),
+        new("data.toggleFilter", "Filter", "Filter rows by a rule.", null, () => e.ToggleFilter(),
+            isActive: () => e.Session.ActiveSheet.ActiveFilter is not null, icon: "filter"),
+        new("data.clearFilter", "Clear Filter", "Remove the active filter.", null, () => ClearFilter(e), icon: "filter-x"),
+        new("data.createTable", "Table", "Turn the range into a table.", Shortcut.Cmd(Key.T), () => CreateTable(e), icon: "table"),
         new("data.headerColumn", "Header Column", "Style the table's first column like its header row.",
-            e => e.ToggleTableHeaderColumn(), "columns", canExecute: e => e.ActiveTable is not null,
-            isActive: e => e.ActiveTable?.HasHeaderColumn ?? false),
-        new("data.removeDuplicates", "Remove Duplicates…", "Drop repeated rows from the range.", e => e.ShowRemoveDuplicatesDialog(), "list-x"),
-        new("data.textToColumns", "Text to Columns…", "Split a column on a delimiter.", e => e.ShowTextToColumnsDialog(), "columns"),
-        new("data.validation", "Data Validation…", "Restrict what can be entered.", e => e.ShowDataValidationDialog(), "square-check"),
+            null, () => e.ToggleTableHeaderColumn(), canExecute: () => e.ActiveTable is not null,
+            isActive: () => e.ActiveTable?.HasHeaderColumn ?? false, icon: "columns"),
+        new("data.removeDuplicates", "Remove Duplicates…", "Drop repeated rows from the range.", null, () => e.ShowRemoveDuplicatesDialog(), icon: "list-x"),
+        new("data.textToColumns", "Text to Columns…", "Split a column on a delimiter.", null, () => e.ShowTextToColumnsDialog(), icon: "columns"),
+        new("data.validation", "Data Validation…", "Restrict what can be entered.", null, () => e.ShowDataValidationDialog(), icon: "square-check"),
 
         // Formulas
-        new("formula.recalc", "Recalculate", "Recompute every formula now.", e => e.Session.RecalculateAll(), "refresh-cw", new KeyGesture(Key.F9)),
+        new("formula.recalc", "Recalculate", "Recompute every formula now.", Shortcut.Bare(Key.F9), () => e.Session.RecalculateAll(), icon: "refresh-cw"),
 
         // View
-        new("view.commandPalette", "Command Palette…", "Search and run any command.", e => e.ShowCommandPalette(), "command",
-            new KeyGesture(Key.K, Cmd)),
-        new("view.goToSheet", "Go to Sheet…", "Jump to another worksheet.", e => e.ShowSheetSwitcher(), "list", new KeyGesture(Key.P, CmdShift)),
-        new("view.zoomIn", "Zoom In", "Make everything larger.", e => e.ZoomBy(0.1), "zoom-in", new KeyGesture(Key.OemPlus, Cmd)),
-        new("view.zoomOut", "Zoom Out", "Make everything smaller.", e => e.ZoomBy(-0.1), "zoom-out", new KeyGesture(Key.OemMinus, Cmd)),
-        new("view.actualSize", "Actual Size", "Reset zoom to 100%.", e => e.ResetZoom(), "maximize", new KeyGesture(Key.D0, Cmd)),
-        new("view.freezePanes", "Freeze Panes", "Keep header rows and columns in view.", e => e.ToggleFreezePanes(), "layout-grid"),
-        new("view.radialSettings", "Radial Menu Settings…", "Configure the hold-right-click radial command menu.", e => e.ShowRadialSettings(), "settings-2"),
+        new("view.commandPalette", "Command Palette…", "Search and run any command.", Shortcut.Cmd(Key.K), () => e.ShowCommandPalette(), icon: "command"),
+        new("view.goToSheet", "Go to Sheet…", "Jump to another worksheet.", Shortcut.Cmd(Key.P, KeyModifiers.Shift), () => e.ShowSheetSwitcher(), icon: "list"),
+        new("view.zoomIn", "Zoom In", "Make everything larger.", Shortcut.Cmd(Key.OemPlus), () => e.ZoomBy(0.1), icon: "zoom-in"),
+        new("view.zoomOut", "Zoom Out", "Make everything smaller.", Shortcut.Cmd(Key.OemMinus), () => e.ZoomBy(-0.1), icon: "zoom-out"),
+        new("view.actualSize", "Actual Size", "Reset zoom to 100%.", Shortcut.Cmd(Key.D0), () => e.ResetZoom(), icon: "maximize"),
+        new("view.freezePanes", "Freeze Panes", "Keep header rows and columns in view.", null, () => e.ToggleFreezePanes(), icon: "layout-grid"),
+        new("view.radialSettings", "Radial Menu Settings…", "Configure the hold-right-click radial command menu.", null, () => e.ShowRadialSettings(), icon: "settings-2"),
 
         // Insert (merge)
-        new("format.merge", "Merge Cells", "Combine the selected cells into one.", MergeCells, "table-cells-merge",
-            isActive: e => e.Session.ActiveSheet.FindMerge(e.Selection.ActiveRow, e.Selection.ActiveColumn) is not null),
+        new("format.merge", "Merge Cells", "Combine the selected cells into one.", null, () => MergeCells(e),
+            isActive: () => e.Session.ActiveSheet.FindMerge(e.Selection.ActiveRow, e.Selection.ActiveColumn) is not null, icon: "table-cells-merge"),
 
         // Help
         // "?" (⇧/) opens the shortcuts reference; gated off while a text field has focus so the
         // character types normally when editing a cell, the formula bar, or a dialog.
-        new("help.shortcuts", "Keyboard Shortcuts", "List every keyboard shortcut.", e => e.ShowKeyboardShortcuts(), "keyboard",
-            new KeyGesture(Key.OemQuestion, KeyModifiers.Shift), e => !e.IsTextInputFocused),
-        new("help.about", "About Cellestra", "About Cellestra — version, pronunciation, and license.", e => e.ShowAbout(), "info"),
+        new("help.shortcuts", "Keyboard Shortcuts", "List every keyboard shortcut.", Shortcut.Bare(Key.OemQuestion, KeyModifiers.Shift),
+            () => e.ShowKeyboardShortcuts(), canExecute: () => !e.IsTextInputFocused, icon: "keyboard"),
+        new("help.about", "About Cellestra", "About Cellestra — version, pronunciation, and license.", null, () => e.ShowAbout(), icon: "info"),
     };
 
     // Number-format codes the bar's one-tap toggles apply. They classify (NumberFormatParser) as

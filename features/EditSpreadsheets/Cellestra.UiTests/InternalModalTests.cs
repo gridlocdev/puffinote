@@ -1,7 +1,7 @@
 using Avalonia.Headless;
 using Avalonia.Headless.XUnit;
 using Avalonia.Input;
-using BirdBrain.Components.Overlays;
+using Puffinote.Components.Overlays;
 using Cellestra.Desktop.Commands;
 using Cellestra.Desktop.Views;
 using Cellestra.Desktop.Views.Dialogs;
@@ -56,8 +56,9 @@ public class InternalModalTests
     [Fact]
     public void About_command_is_in_the_help_section_of_the_catalog()
     {
-        var about = AppCommands.ById("help.about");
+        // Pure metadata — no window needed.
+        var about = FakeAppEnvironment.Catalog.ById("help.about");
         Assert.NotNull(about);
-        Assert.Equal("About Cellestra", about!.Label);
+        Assert.Equal("About Cellestra", about!.Title);
     }
 }

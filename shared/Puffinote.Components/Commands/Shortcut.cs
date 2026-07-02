@@ -1,12 +1,13 @@
 using Avalonia.Input;
 
-namespace Typage.Desktop.Commands;
+namespace Puffinote.Components.Commands;
 
 /// <summary>
-/// A platform-agnostic keyboard shortcut: a key plus optional Shift/Alt, and whether it carries the
-/// platform's <b>command</b> modifier (⌘ on macOS, Ctrl elsewhere). Defining shortcuts this way — once,
-/// abstractly — lets the menus, key bindings, and Command Palette all render and bind them natively per
-/// platform (PRD §7.5: a platform-native menu bar), instead of hard-coding "Ctrl+…" or "⌘…".
+/// A platform-agnostic keyboard shortcut: a key plus optional Shift/Alt/Control, and whether it carries
+/// the platform's <b>command</b> modifier (⌘ on macOS, Ctrl elsewhere). Defining shortcuts this way —
+/// once, abstractly — lets an app's menus, key bindings, and Command Palette all render and bind them
+/// natively per platform, instead of hard-coding "Ctrl+…" or "⌘…". Shared by every app in the Puffinote
+/// family (Typage renders per-platform; Cellestra is macOS-only, so its shortcuts always read as ⌘/⌥/⌃).
 /// </summary>
 public readonly record struct Shortcut(Key Key, KeyModifiers Extra = KeyModifiers.None, bool UsesCommand = true)
 {
@@ -16,7 +17,7 @@ public readonly record struct Shortcut(Key Key, KeyModifiers Extra = KeyModifier
     /// <summary>A command-modifier shortcut: ⌘<paramref name="key"/> on macOS, Ctrl+<paramref name="key"/> elsewhere.</summary>
     public static Shortcut Cmd(Key key, KeyModifiers extra = KeyModifiers.None) => new(key, extra, UsesCommand: true);
 
-    /// <summary>A bare-key shortcut with no command modifier (e.g. F11).</summary>
+    /// <summary>A shortcut with no command modifier — just the literal <paramref name="extra"/> modifiers (e.g. F11, or ⌃⌥F).</summary>
     public static Shortcut Bare(Key key, KeyModifiers extra = KeyModifiers.None) => new(key, extra, UsesCommand: false);
 
     /// <summary>The concrete modifiers for the given platform (the command modifier resolves to Meta or Control).</summary>

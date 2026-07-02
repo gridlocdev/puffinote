@@ -25,7 +25,7 @@ public class TableChromeTests
         sheet.SetValue(1, 0, CellValue.Text("Ada")); sheet.SetValue(1, 1, CellValue.Number(1));
         sheet.SetValue(2, 0, CellValue.Text("Bev")); sheet.SetValue(2, 1, CellValue.Number(2));
         env.Selection.MoveTo(0, 0);
-        AppCommands.ById("data.createTable")!.Execute(env);
+        env.Commands.ById("data.createTable")!.Execute();
 
         // A list-validated cell (validation dropdown on the active cell).
         sheet.AddValidation(new DataValidation(ValidationKind.List, CellRange.Parse("D1")) { ListValues = new[] { "x", "y" } });

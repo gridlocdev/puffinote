@@ -5,7 +5,9 @@ using Avalonia.Controls;
 using Avalonia.Media;
 using Avalonia.Media.Immutable;
 using Cellestra.Desktop.Commands;
-using BirdBrain.Components.Controls.Icons;
+using Puffinote.Components.Commands;
+using Puffinote.Components.Controls;
+using Puffinote.Components.Controls.Icons;
 using CommandBarControl = Cellestra.Desktop.Controls.CommandBar.CommandBar;
 
 namespace Cellestra.Desktop.Controls.RadialMenu;
@@ -96,8 +98,18 @@ public sealed class RadialMenuOverlay : Control
     /// <summary>The currently highlighted segment (-1 for none).</summary>
     public int ActiveSegment => _activeSegment;
 
+    /// <summary>
+    /// The host's command catalog, used to enrich the hover tooltip (shortcut + description). Optional: with
+    /// no catalog the tip still shows the segment's own label, so the overlay renders standalone (e.g. tests).
+    /// </summary>
+    public AppCommands? Commands { get; set; }
+
+    /// <summary>The command id bound to the active wedge, or null in the dead zone / on an unbound wedge.</summary>
+    private string? ActiveSegmentCommandId =>
+        _activeSegment >= 0 && _activeSegment < _segments.Count ? _segments[_activeSegment].CommandId : null;
+
     /// <summary>Test seam: the id of the command whose tip the active wedge floats (null when none).</summary>
-    internal string? ActiveTooltipCommandIdForTest => ActiveCommand()?.Id;
+    internal string? ActiveTooltipCommandIdForTest => TooltipOpenForTest ? ActiveSegmentCommandId : null;
 
     /// <summary>Test seam: whether the floating command tooltip is currently open.</summary>
     internal bool TooltipOpenForTest => ToolTip.GetIsOpen(this);
@@ -151,17 +163,9 @@ public sealed class RadialMenuOverlay : Control
 
     private void OnWindowDeactivated(object? sender, EventArgs e) => ToolTip.SetIsOpen(this, false);
 
-    /// <summary>The command the highlighted wedge runs, or null when nothing/an unbound wedge is active.</summary>
-    private AppCommand? ActiveCommand()
-    {
-        if (_activeSegment < 0 || _activeSegment >= _segments.Count)
-        {
-            return null;
-        }
-
-        string? id = _segments[_activeSegment].CommandId;
-        return id is null ? null : AppCommands.ById(id);
-    }
+    /// <summary>The full command the highlighted wedge runs (from the catalog), or null when unresolved.</summary>
+    private AppCommand? ActiveCommand() =>
+        ActiveSegmentCommandId is { } id ? Commands?.ById(id) : null;
 
     /// <summary>
     /// Float a real tooltip over the highlighted wedge — the same name + shortcut + description card the
@@ -177,14 +181,20 @@ public sealed class RadialMenuOverlay : Control
         }
 
         ToolTip.SetIsOpen(this, false);
-        var command = show ? ActiveCommand() : null;
-        if (command is null)
+        if (!show || ActiveSegmentCommandId is null)
         {
-            return;
+            return; // dead zone or an unbound wedge — nothing to describe
         }
 
+        // Prefer the catalog's rich card (name + shortcut + description); with no catalog wired, fall back
+        // to the segment's own label so the overlay still floats a tip standalone.
+        var command = ActiveCommand();
+        object tip = command is not null
+            ? CommandBarControl.BuildTip(command)
+            : new TooltipCard(_segments[_activeSegment].Label, string.Empty, string.Empty);
+
         AnchorTooltipToWedge();
-        ToolTip.SetTip(this, CommandBarControl.BuildTip(command));
+        ToolTip.SetTip(this, tip);
         ToolTip.SetShowDelay(this, 0);
         ToolTip.SetIsOpen(this, true);
     }

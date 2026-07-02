@@ -8,10 +8,10 @@ using Avalonia.Input;
 using Avalonia.Layout;
 using Avalonia.Media;
 using Avalonia.VisualTree;
-using BirdBrain.Components.Commands;
-using BirdBrain.Components.Theming;
+using Puffinote.Components.Commands;
+using Puffinote.Components.Theming;
 
-namespace BirdBrain.Components.Controls;
+namespace Puffinote.Components.Controls;
 
 /// <summary>One runnable entry in a <see cref="PaletteListView"/>.</summary>
 /// <param name="Title">The command name shown (and matched against the query).</param>

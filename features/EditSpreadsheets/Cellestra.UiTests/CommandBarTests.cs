@@ -67,11 +67,11 @@ public class CommandBarTests
         var window = new MainWindow();
         window.Show();
 
-        Assert.Equal("Sort Ascending · A1", CommandBar.Describe(AppCommands.ById("data.sortAsc")!, window.Editor));
-        Assert.Equal("Bold off · A1", CommandBar.Describe(AppCommands.ById("format.bold")!, window.Editor));
+        Assert.Equal("Sort Ascending · A1", CommandBar.Describe(window.Editor.Commands.ById("data.sortAsc")!, window.Editor));
+        Assert.Equal("Bold off · A1", CommandBar.Describe(window.Editor.Commands.ById("format.bold")!, window.Editor));
 
         window.Editor.ApplyCellStyle(s => s.WithFont(s.Font with { Bold = true }), "Bold");
-        Assert.Equal("Bold on · A1", CommandBar.Describe(AppCommands.ById("format.bold")!, window.Editor));
+        Assert.Equal("Bold on · A1", CommandBar.Describe(window.Editor.Commands.ById("format.bold")!, window.Editor));
     }
 
     [AvaloniaFact]
@@ -85,7 +85,7 @@ public class CommandBarTests
             session.Workbook, session.ActiveSheet.Name, 0, 0, "1234567.89", session.Workbook.Settings.EffectiveLocale));
 
         double before = session.ActiveSheet.GetColumnWidth(0);
-        AppCommands.ById("format.currency")!.Execute(window.Editor); // "$1,234,567.89" overflows the default width
+        window.Editor.Commands.ById("format.currency")!.Execute(); // "$1,234,567.89" overflows the default width
 
         Assert.True(session.ActiveSheet.GetColumnWidth(0) > before, "column should grow to fit the formatted value");
     }
@@ -93,11 +93,13 @@ public class CommandBarTests
     [Fact]
     public void Bar_layout_ids_all_resolve_in_the_catalog()
     {
+        // Pure metadata: the bar layout references ids that must exist in the catalog (no window needed).
+        var commands = FakeAppEnvironment.Catalog;
         foreach (var group in CommandBarModel.For(CommandContext.Cell))
         {
             foreach (string id in group.Primary.Concat(group.Overflow))
             {
-                Assert.True(AppCommands.ById(id) is not null, $"unknown command id in bar layout: {id}");
+                Assert.True(commands.ById(id) is not null, $"unknown command id in bar layout: {id}");
             }
         }
     }

@@ -1,9 +1,9 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <!--
-    BirdBrain.Components — the shared app-shell / design-system library for the BirdBrain family
-    (Cellestra, Typage, and the future BirdBrain composite app). See
-    docs/proposals/0001-birdbrain-components.md.
+    Puffinote.Components — the shared app-shell / design-system library for the Puffinote family
+    (Cellestra, Typage, and the future Puffinote composite app). See
+    docs/proposals/0001-puffinote-components.md.
 
     It will hold the command-system primitives, design tokens, and UI chrome (palette, modals,
     tooltips) so the apps share one look and one set of patterns. Dependency rule: this library
@@ -12,8 +12,8 @@
     Directory.Build.props / Directory.Packages.props.)
   -->
   <PropertyGroup>
-    <RootNamespace>BirdBrain.Components</RootNamespace>
-    <AssemblyName>BirdBrain.Components</AssemblyName>
+    <RootNamespace>Puffinote.Components</RootNamespace>
+    <AssemblyName>Puffinote.Components</AssemblyName>
   </PropertyGroup>
 
   <ItemGroup>
@@ -21,7 +21,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <!-- The vendored Lucide SVG glyphs (avares://BirdBrain.Components/Assets/icons/...). -->
+    <!-- The vendored Lucide SVG glyphs (avares://Puffinote.Components/Assets/icons/...). -->
     <AvaloniaResource Include="Assets\**" />
   </ItemGroup>
 

@@ -3,7 +3,7 @@ using Avalonia.Controls;
 using Avalonia.Controls.Documents;
 using Avalonia.Media;
 
-namespace BirdBrain.Components.Controls.Icons;
+namespace Puffinote.Components.Controls.Icons;
 
 /// <summary>
 /// Renders a vendored Lucide glyph (see <see cref="LucideIcons"/>) as a stroked path that scales

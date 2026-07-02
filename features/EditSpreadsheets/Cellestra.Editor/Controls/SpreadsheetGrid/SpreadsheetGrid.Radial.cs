@@ -44,6 +44,22 @@ public sealed partial class SpreadsheetGrid
     /// <summary>Asked whether a command id is enabled right now, so a disabled wedge dims (default: enabled).</summary>
     public Func<string, bool>? RadialCommandEnabled { get; set; }
 
+    private AppCommands? _commands;
+
+    /// <summary>
+    /// The host's command catalog, used to resolve a bound wedge's icon/label and to feed the overlay's
+    /// hover tooltip. Set by the editor (which owns the one env-bound catalog); the overlay is kept in sync.
+    /// </summary>
+    public AppCommands? Commands
+    {
+        get => _commands;
+        set
+        {
+            _commands = value;
+            _radialOverlay.Commands = value;
+        }
+    }
+
     /// <summary>Raised on a quick right-click (no hold) so the host shows the ordinary context menu at the point.</summary>
     public event Action<Point>? ContextMenuRequested;
 
@@ -158,9 +174,9 @@ public sealed partial class SpreadsheetGrid
         for (int i = 0; i < config.SegmentCount; i++)
         {
             string? id = config.CommandIdAt(i);
-            var command = id is null ? null : AppCommands.ById(id);
+            var command = id is null ? null : _commands?.ById(id);
             bool enabled = command is not null && (RadialCommandEnabled?.Invoke(command.Id) ?? true);
-            segments.Add(new RadialSegment(command?.Id, command?.Icon, command?.Label ?? string.Empty, enabled));
+            segments.Add(new RadialSegment(command?.Id, command?.Icon, command?.Title ?? string.Empty, enabled));
         }
 
         return segments;

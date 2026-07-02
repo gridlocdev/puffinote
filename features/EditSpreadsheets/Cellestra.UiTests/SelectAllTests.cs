@@ -12,7 +12,7 @@ namespace Cellestra.UiTests;
 public class SelectAllTests
 {
     private static void RunSelectAll(IAppEnvironment env) =>
-        AppCommands.All.First(c => c.Id == "edit.selectAll").Execute(env);
+        env.Commands.All.First(c => c.Id == "edit.selectAll").Execute();
 
     private static Avalonia.Controls.NativeMenuItem SelectAllMenuItem(MainWindow window)
     {

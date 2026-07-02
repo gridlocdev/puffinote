@@ -3,8 +3,8 @@ using Avalonia.Controls;
 using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Markup.Xaml;
 using Avalonia.Media;
-using BirdBrain.Components.Commands;
-using BirdBrain.Components.Theming;
+using Puffinote.Components.Commands;
+using Puffinote.Components.Theming;
 using Cellestra.Desktop.Commands;
 using Cellestra.Desktop.Views;
 
@@ -15,7 +15,7 @@ public partial class App : Application
     public override void Initialize()
     {
         AvaloniaXamlLoader.Load(this);
-        Tokens.Current = new BirdBrainTheme(Color.FromRgb(0x2A, 0x7D, 0xE1)); // Cellestra's blue accent
+        Tokens.Current = new PuffinoteTheme(Color.FromRgb(0x2A, 0x7D, 0xE1)); // Cellestra's blue accent
         BuildApplicationMenu();
     }
 
@@ -28,19 +28,17 @@ public partial class App : Application
     // it doesn't exist yet here but always does by the time the item can be chosen.
     private void BuildApplicationMenu()
     {
-        if (AppCommands.ById("help.about") is not { } about)
-        {
-            return;
-        }
-
+        // The command catalog is now built per-editor (proposal 0001 §5), and no editor exists yet at
+        // Initialize time — so the About item resolves the live editor's catalog lazily at click time and
+        // runs the "help.about" command against it. The header is fixed (the standard app-menu About item).
         var menu = new NativeMenu();
-        menu.Items.Add(new NativeMenuItem(about.Label)
+        menu.Items.Add(new NativeMenuItem("About Cellestra")
         {
             Command = new RelayCommand(() =>
             {
                 if (ApplicationLifetime is IClassicDesktopStyleApplicationLifetime { MainWindow: MainWindow { Editor: { } editor } })
                 {
-                    about.Execute(editor);
+                    editor.Commands.ById("help.about")?.Execute();
                 }
             }),
         });

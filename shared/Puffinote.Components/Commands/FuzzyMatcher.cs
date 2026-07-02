@@ -1,9 +1,9 @@
-namespace BirdBrain.Components.Commands;
+namespace Puffinote.Components.Commands;
 
 /// <summary>
 /// Subsequence fuzzy matching for the Command Palette and similar pickers (modeled on VS Code): a
 /// query matches when its characters appear in order in the candidate. Returns a score (higher is
-/// better) so results can be ranked; -1 means no match. Shared across the BirdBrain family.
+/// better) so results can be ranked; -1 means no match. Shared across the Puffinote family.
 /// </summary>
 public static class FuzzyMatcher
 {

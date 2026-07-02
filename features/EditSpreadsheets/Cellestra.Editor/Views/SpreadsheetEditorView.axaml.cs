@@ -16,8 +16,8 @@ using Avalonia.Markup.Xaml;
 using Avalonia.Media;
 using Avalonia.Platform.Storage;
 using Avalonia.VisualTree;
-using BirdBrain.Components.Commands;
-using BirdBrain.Components.Controls;
+using Puffinote.Components.Commands;
+using Puffinote.Components.Controls;
 using Cellestra.Charts;
 // The view moved to the Cellestra.Editor namespace; the moved command bar keeps its original
 // Cellestra.Desktop.Controls.CommandBar namespace. Alias it to disambiguate from Avalonia's own
@@ -31,10 +31,10 @@ using Cellestra.Desktop.Controls.ChartView;
 using Cellestra.Desktop.Views.Dialogs;
 using NumberFormatter = Cellestra.Core.Styling.NumberFormatter;
 using Cellestra.Desktop.Commands;
-using BirdBrain.Components.Controls.Icons;
+using Puffinote.Components.Controls.Icons;
 using Cellestra.Desktop.Controls.SpreadsheetGrid;
 using Cellestra.Desktop.Services;
-using BirdBrain.Components.Overlays;
+using Puffinote.Components.Overlays;
 
 namespace Cellestra.Editor;
 
@@ -83,16 +83,27 @@ public partial class SpreadsheetEditorView : UserControl, IAppEnvironment
     private CommandBar? _commandBar;
     private System.DateTime? _lastSavedAt;
 
+    // The one command catalog, built once against this view (which is the IAppEnvironment). Each command
+    // closes over this environment (proposal 0001 §5), so the menu bar, command bar, Command Palette, and
+    // key bindings all read the same env-bound entries.
+    private readonly AppCommands _commands;
+
+    /// <inheritdoc />
+    public AppCommands Commands => _commands;
+
     public SpreadsheetEditorView()
     {
         InitializeComponent();
+
+        _commands = new AppCommands(this);
 
         Grid.Attach(_session);
         Grid.SelectionChanged += (_, _) => OnSelectionChanged();
         Grid.ContextRequested += OnGridContextRequested;
         Grid.ContextMenuRequested += ShowGridContextMenuAt;
         Grid.RadialCommandActivated += RunRadialCommand;
-        Grid.RadialCommandEnabled = id => AppCommands.ById(id) is { } command && command.IsEnabled(this);
+        Grid.Commands = _commands;
+        Grid.RadialCommandEnabled = id => _commands.ById(id) is { } command && command.IsEnabled;
 
         SheetTabs.PointerPressed += SheetTabsPointerPressed;
         SheetTabs.PointerMoved += SheetTabsPointerMoved;
@@ -172,9 +183,9 @@ public partial class SpreadsheetEditorView : UserControl, IAppEnvironment
     /// <summary>Run a command a radial wedge was released over (it is already known to be enabled).</summary>
     private void RunRadialCommand(string commandId)
     {
-        if (AppCommands.ById(commandId) is { } command && command.IsEnabled(this))
+        if (_commands.ById(commandId) is { } command && command.IsEnabled)
         {
-            command.Execute(this);
+            command.Execute();
         }
     }
 
@@ -184,7 +195,7 @@ public partial class SpreadsheetEditorView : UserControl, IAppEnvironment
     /// </summary>
     public async void ShowRadialSettings()
     {
-        var updated = await ShowModalAsync(new RadialSettingsDialog(RadialConfig));
+        var updated = await ShowModalAsync(new RadialSettingsDialog(RadialConfig, _commands));
         if (updated is not null)
         {
             RadialConfig = updated;
@@ -522,9 +533,9 @@ public partial class SpreadsheetEditorView : UserControl, IAppEnvironment
 
     public void ShowCommandPalette()
     {
-        var items = AppCommands.All
-            .Where(c => c.IsEnabled(this))
-            .Select(c => new PaletteItem(c.Label, c.Icon, c.Description, c.ShortcutText, () => c.Execute(this), CommandCategory(c.Id)))
+        var items = _commands.All
+            .Where(c => c.IsEnabled)
+            .Select(c => new PaletteItem(c.Title, c.Icon, c.Description, c.MacShortcut(), () => c.Execute(), CommandCategory(c.Id)))
             .ToList();
         ShowPalette("Type a command — bold, currency, sort…", items);
     }
@@ -861,14 +872,14 @@ public partial class SpreadsheetEditorView : UserControl, IAppEnvironment
                 continue;
             }
 
-            if (AppCommands.ById(id) is { } command)
+            if (_commands.ById(id) is { } command)
             {
                 flyout.Items.Add(new MenuItem
                 {
-                    Header = command.Label,
-                    InputGesture = command.Shortcut,
+                    Header = command.Title,
+                    InputGesture = command.Gesture,
                     Icon = command.Icon is null ? null : new LucideIcon { IconKey = command.Icon, Size = 15 },
-                    Command = new RelayCommand(() => command.Execute(this), () => command.IsEnabled(this)),
+                    Command = new RelayCommand(() => command.Execute(), () => command.IsEnabled),
                 });
             }
         }
@@ -921,29 +932,29 @@ public partial class SpreadsheetEditorView : UserControl, IAppEnvironment
         // Inside a table, offer the table-specific actions (task 5: designate a header column). The
         // command's IsActive shows a check when the first column is already a header column.
         if (target == SpreadsheetGrid.ContextTarget.Cell && ActiveTable is not null
-            && AppCommands.ById("data.headerColumn") is { } headerColumn)
+            && _commands.ById("data.headerColumn") is { } headerColumn)
         {
             flyout.Items.Add(new Separator());
 
             // Right-clicking any cell in a table offers the Sort & Filter dialog for that table (#1).
-            if (AppCommands.ById("data.sortAndFilter") is { } sortAndFilter)
+            if (_commands.ById("data.sortAndFilter") is { } sortAndFilter)
             {
                 flyout.Items.Add(new MenuItem
                 {
-                    Header = sortAndFilter.Label,
-                    InputGesture = sortAndFilter.Shortcut,
+                    Header = sortAndFilter.Title,
+                    InputGesture = sortAndFilter.Gesture,
                     Icon = sortAndFilter.Icon is null ? null : new LucideIcon { IconKey = sortAndFilter.Icon, Size = 15 },
-                    Command = new RelayCommand(() => sortAndFilter.Execute(this), () => sortAndFilter.IsEnabled(this)),
+                    Command = new RelayCommand(() => sortAndFilter.Execute(), () => sortAndFilter.IsEnabled),
                 });
             }
 
             flyout.Items.Add(new MenuItem
             {
-                Header = headerColumn.Label,
+                Header = headerColumn.Title,
                 Icon = headerColumn.Icon is null ? null : new LucideIcon { IconKey = headerColumn.Icon, Size = 15 },
-                Command = new RelayCommand(() => headerColumn.Execute(this), () => headerColumn.IsEnabled(this)),
+                Command = new RelayCommand(() => headerColumn.Execute(), () => headerColumn.IsEnabled),
                 ToggleType = MenuItemToggleType.CheckBox,
-                IsChecked = headerColumn.IsToggleActive(this),
+                IsChecked = headerColumn.IsToggleActive,
             });
         }
 
@@ -1119,7 +1130,7 @@ public partial class SpreadsheetEditorView : UserControl, IAppEnvironment
         Refresh();
     }
 
-    public void ShowKeyboardShortcuts() => _ = ShowModalAsync(new KeyboardShortcutsDialog());
+    public void ShowKeyboardShortcuts() => _ = ShowModalAsync(new KeyboardShortcutsDialog(_commands));
 
     public void ShowAbout() => _ = ShowModalAsync(new AboutDialog());
 
@@ -2024,21 +2035,21 @@ public partial class SpreadsheetEditorView : UserControl, IAppEnvironment
 
     private void RegisterKeyBindings()
     {
-        foreach (var command in AppCommands.All)
+        foreach (var command in _commands.All)
         {
-            if (command.Shortcut is null)
+            if (command.Gesture is null)
             {
                 continue;
             }
 
             var captured = command;
             var binding = new RelayCommand(
-                () => captured.Execute(this),
-                () => !IsModalOpen && !BlockedByTextInput(captured.Shortcut) && captured.IsEnabled(this));
+                () => captured.Execute(),
+                () => !IsModalOpen && !BlockedByTextInput(captured.Gesture) && captured.IsEnabled);
             _gatedCommands.Add(binding);
             KeyBindings.Add(new KeyBinding
             {
-                Gesture = command.Shortcut,
+                Gesture = command.Gesture,
                 // While a modal overlay (Command Palette / sheet switcher) is open, the grid behind it
                 // must not react to command shortcuts — only the overlay's own keys apply. So every
                 // global binding backs off, letting the focused overlay field handle the key (e.g. ⌘A

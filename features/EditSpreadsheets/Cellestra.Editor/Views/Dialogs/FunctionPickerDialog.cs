@@ -3,9 +3,9 @@ using System.Linq;
 using Avalonia.Controls;
 using Avalonia.Layout;
 using Avalonia.Media;
-using BirdBrain.Components.Commands;
+using Puffinote.Components.Commands;
 using Cellestra.Core.Formulas.Functions;
-using BirdBrain.Components.Overlays;
+using Puffinote.Components.Overlays;
 
 namespace Cellestra.Desktop.Views.Dialogs;
 

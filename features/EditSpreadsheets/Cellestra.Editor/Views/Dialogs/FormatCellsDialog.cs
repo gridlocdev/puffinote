@@ -4,7 +4,7 @@ using System.Linq;
 using Avalonia.Controls;
 using Avalonia.Layout;
 using Cellestra.Core.Styling;
-using BirdBrain.Components.Overlays;
+using Puffinote.Components.Overlays;
 using AvColor = Avalonia.Media.Color;
 using SAlign = Cellestra.Core.Styling.HorizontalAlignment;
 using SVAlign = Cellestra.Core.Styling.VerticalAlignment;

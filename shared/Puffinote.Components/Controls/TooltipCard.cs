@@ -3,9 +3,9 @@ using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Layout;
 using Avalonia.Media;
-using BirdBrain.Components.Theming;
+using Puffinote.Components.Theming;
 
-namespace BirdBrain.Components.Controls;
+namespace Puffinote.Components.Controls;
 
 /// <summary>
 /// A small tooltip body the shell floats over a control: a title with an optional shortcut beside it,

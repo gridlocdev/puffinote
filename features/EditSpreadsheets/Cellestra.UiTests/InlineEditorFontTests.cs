@@ -57,8 +57,8 @@ public class InlineEditorFontTests
 
         // Clicking Bold / Align Right mid-edit must immediately restyle the text being typed
         // (the toolbar buttons don't take focus, so the edit stays live).
-        AppCommands.ById("format.bold")!.Execute(window.Editor);
-        AppCommands.ById("format.alignRight")!.Execute(window.Editor);
+        window.Editor.Commands.ById("format.bold")!.Execute();
+        window.Editor.Commands.ById("format.alignRight")!.Execute();
 
         Assert.True(grid.EditorIsBold);
         Assert.Equal(Avalonia.Media.TextAlignment.Right, grid.EditorTextAlignment);

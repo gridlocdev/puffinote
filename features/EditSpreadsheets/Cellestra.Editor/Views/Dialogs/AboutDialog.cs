@@ -3,8 +3,8 @@ using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Layout;
 using Avalonia.Media;
-using BirdBrain.Components.Controls.Icons;
-using BirdBrain.Components.Overlays;
+using Puffinote.Components.Controls.Icons;
+using Puffinote.Components.Overlays;
 
 namespace Cellestra.Desktop.Views.Dialogs;
 

@@ -1,7 +1,7 @@
 using System;
 using System.Windows.Input;
 
-namespace BirdBrain.Components.Commands;
+namespace Puffinote.Components.Commands;
 
 /// <summary>A minimal <see cref="ICommand"/> over a delegate, for binding menu items and key bindings.</summary>
 public sealed class RelayCommand : ICommand

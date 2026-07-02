@@ -6,7 +6,7 @@ using Avalonia.Controls;
 using Avalonia.Layout;
 using Avalonia.Media;
 using Cellestra.Desktop.Commands;
-using BirdBrain.Components.Overlays;
+using Puffinote.Components.Overlays;
 
 namespace Cellestra.Desktop.Views.Dialogs;
 
@@ -42,7 +42,7 @@ public sealed class KeyboardShortcutsDialog : ModalDialog<bool>
         ("F4", "Cycle reference type (while editing a formula)"),
     };
 
-    public KeyboardShortcutsDialog()
+    public KeyboardShortcutsDialog(AppCommands commands)
     {
         Title = "Keyboard Shortcuts";
 
@@ -50,9 +50,9 @@ public sealed class KeyboardShortcutsDialog : ModalDialog<bool>
 
         foreach (var (prefix, title) in Categories)
         {
-            var rows = AppCommands.All
+            var rows = commands.All
                 .Where(c => c.Shortcut is not null && c.Id.StartsWith(prefix + ".", StringComparison.Ordinal))
-                .Select(c => (c.ShortcutText, c.Label))
+                .Select(c => (c.MacShortcut(), c.Title))
                 .ToList();
             if (rows.Count > 0)
             {

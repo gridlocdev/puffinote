@@ -20,7 +20,7 @@ public class GridChromeTests
 
         sheet.SetValue(0, 0, CellValue.Text("merged"));
         env.Selection.SetRange(0, 0, 1, 1);
-        AppCommands.ById("format.merge")!.Execute(env);
+        env.Commands.ById("format.merge")!.Execute();
 
         Assert.NotNull(sheet.FindMerge(0, 0));
         Assert.Equal(CellRange.Parse("A1:B2"), sheet.FindMerge(0, 0)!.Range);
@@ -35,11 +35,11 @@ public class GridChromeTests
         var sheet = env.Session.ActiveSheet;
 
         env.Selection.MoveTo(2, 3);
-        AppCommands.ById("view.freezePanes")!.Execute(env);
+        env.Commands.ById("view.freezePanes")!.Execute();
         Assert.Equal(2, sheet.FrozenRows);
         Assert.Equal(3, sheet.FrozenColumns);
 
-        AppCommands.ById("view.freezePanes")!.Execute(env);
+        env.Commands.ById("view.freezePanes")!.Execute();
         Assert.Equal(0, sheet.FrozenRows);
         Assert.Equal(0, sheet.FrozenColumns);
     }

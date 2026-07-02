@@ -8,10 +8,10 @@ using Avalonia.Layout;
 using Avalonia.Markup.Xaml;
 using Avalonia.Media;
 using Avalonia.Platform.Storage;
-using BirdBrain.Components.Commands;
+using Puffinote.Components.Commands;
 using Cellestra.Desktop.Commands;
 using Cellestra.Desktop.Services;
-using BirdBrain.Components.Overlays;
+using Puffinote.Components.Overlays;
 using Cellestra.Editor;
 
 namespace Cellestra.Desktop.Views;
@@ -217,13 +217,13 @@ public partial class MainWindow : Window, IEditorHost
                 continue;
             }
 
-            if (AppCommands.ById(id) is { } command)
+            if (Editor.Commands.ById(id) is { } command)
             {
                 var menuCommand = new RelayCommand(
-                    () => command.Execute(Editor),
-                    () => Editor.CanRunShortcut(command.Shortcut) && command.IsEnabled(Editor));
+                    () => command.Execute(),
+                    () => Editor.CanRunShortcut(command.Gesture) && command.IsEnabled);
                 _menuGatedCommands.Add(menuCommand);
-                submenu.Items.Add(new NativeMenuItem(command.Label)
+                submenu.Items.Add(new NativeMenuItem(command.Title)
                 {
                     // A native menu item's Gesture becomes a macOS key equivalent the system claims
                     // globally, ahead of the focused control — and a *disabled* item still swallows its
@@ -234,7 +234,7 @@ public partial class MainWindow : Window, IEditorHost
                     // grid's OnKeyDown (selection mode), the editors (edit mode), and the gated KeyBinding as
                     // the cross-platform fallback. Other shortcuts (⌘S, ⌘B…) keep their equivalent for the
                     // menu hint and still back off from a focused text input.
-                    Gesture = SpreadsheetEditorView.YieldsToTextInput(command.Shortcut) ? null : command.Shortcut,
+                    Gesture = SpreadsheetEditorView.YieldsToTextInput(command.Gesture) ? null : command.Gesture,
                     Command = menuCommand,
                 });
             }

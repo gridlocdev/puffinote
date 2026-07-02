@@ -24,7 +24,7 @@ public class ClearCommandTests
         env.Session.Execute(EditCommands.ApplyStyle(env.Session.Workbook, sheet.Name, CellRange.Parse("A1"),
             s => s.WithFont(s.Font.WithBold(true))));
 
-        AppCommands.ById("edit.clearFormats")!.Execute(env);
+        env.Commands.ById("edit.clearFormats")!.Execute();
 
         Assert.Equal(StylePool.DefaultId, sheet.Find(0, 0)!.StyleId);
         Assert.Equal("keep", sheet.GetValue(0, 0).AsText);
@@ -41,7 +41,7 @@ public class ClearCommandTests
         sheet.SetValue(0, 0, CellValue.Text("gone"));
         env.Selection.MoveTo(0, 0);
 
-        AppCommands.ById("edit.clearAll")!.Execute(env);
+        env.Commands.ById("edit.clearAll")!.Execute();
 
         Assert.Null(sheet.Find(0, 0));
     }
@@ -61,7 +61,7 @@ public class ClearCommandTests
         sheet.ActiveFilter = CellRange.Parse("A1:B3");
 
         env.Selection.SetRange(0, 0, 2, 1); // select the whole table
-        AppCommands.ById("edit.clearAll")!.Execute(env);
+        env.Commands.ById("edit.clearAll")!.Execute();
 
         Assert.Null(sheet.FindTable(0, 0));  // table (+ filter dropdowns + header fill) gone
         Assert.Null(sheet.ActiveFilter);     // filter gone

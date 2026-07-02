@@ -1,7 +1,7 @@
 <UserControl xmlns="https://github.com/avaloniaui"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:grid="clr-namespace:Cellestra.Desktop.Controls.SpreadsheetGrid"
-        xmlns:overlays="clr-namespace:BirdBrain.Components.Overlays;assembly=BirdBrain.Components"
+        xmlns:overlays="clr-namespace:Puffinote.Components.Overlays;assembly=Puffinote.Components"
         x:Class="Cellestra.Editor.SpreadsheetEditorView">
 
     <!-- Outer panel layers the main content under the overlay host so an internal modal can blur

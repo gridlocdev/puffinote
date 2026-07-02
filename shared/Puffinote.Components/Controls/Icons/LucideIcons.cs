@@ -7,7 +7,7 @@ using Avalonia;
 using Avalonia.Media;
 using Avalonia.Platform;
 
-namespace BirdBrain.Components.Controls.Icons;
+namespace Puffinote.Components.Controls.Icons;
 
 /// <summary>
 /// Loads the vendored Lucide SVG glyphs (MIT, under <c>Assets/icons</c>) and parses each into a
@@ -39,10 +39,10 @@ public static class LucideIcons
 
     private static Geometry? Load(string key)
     {
-        // The icons ship in this shared library (assembly name "BirdBrain.Components"), which is the
+        // The icons ship in this shared library (assembly name "Puffinote.Components"), which is the
         // authority an avares URI resolves against — so every app in the family finds them,
         // regardless of the host assembly's name.
-        var uri = new Uri($"avares://BirdBrain.Components/Assets/icons/{key}.svg");
+        var uri = new Uri($"avares://Puffinote.Components/Assets/icons/{key}.svg");
         if (!AssetLoader.Exists(uri))
         {
             return null;

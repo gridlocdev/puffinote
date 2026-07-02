@@ -1,6 +1,6 @@
 using Avalonia;
 using Avalonia.Headless.XUnit;
-using BirdBrain.Components.Controls.Icons;
+using Puffinote.Components.Controls.Icons;
 using Xunit;
 
 namespace Cellestra.UiTests;

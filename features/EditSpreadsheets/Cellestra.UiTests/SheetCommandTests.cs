@@ -80,11 +80,11 @@ public class SheetCommandTests
     {
         var window = new MainWindow();
         window.Show();
-        var delete = AppCommands.ById("sheet.delete")!;
+        var delete = window.Editor.Commands.ById("sheet.delete")!;
 
-        Assert.False(delete.IsEnabled(window.Editor)); // one sheet
+        Assert.False(delete.IsEnabled); // one sheet
         window.Editor.AddSheet();
-        Assert.True(delete.IsEnabled(window.Editor));
+        Assert.True(delete.IsEnabled);
     }
 
     [Fact]
@@ -113,7 +113,7 @@ public class SheetCommandTests
         env.Session.Execute(EditCommands.SetValue(sheet.Name, 1, 0, CellValue.Text("b")));
         env.Selection.MoveTo(0, 0);
 
-        AppCommands.ById("edit.deleteRows")!.Execute(window.Editor);
+        window.Editor.Commands.ById("edit.deleteRows")!.Execute();
 
         Assert.Equal("b", sheet.GetValue(0, 0).AsText); // row 0 deleted, "b" shifted up
     }
@@ -128,7 +128,7 @@ public class SheetCommandTests
         env.Session.Execute(EditCommands.SetValue(sheet.Name, 0, 0, CellValue.Text("keep")));
 
         env.Selection.SetRange(0, 0, SheetDimensions.MaxRows - 1, SheetDimensions.MaxColumns - 1); // Select All
-        AppCommands.ById("edit.deleteColumns")!.Execute(window.Editor);
+        window.Editor.Commands.ById("edit.deleteColumns")!.Execute();
 
         Assert.Equal("keep", sheet.GetValue(0, 0).AsText); // refused — deleting every column would wipe the sheet
     }

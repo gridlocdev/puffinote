@@ -119,12 +119,12 @@ public class RadialMenuTests
         sheet.SetValue(0, 0, CellValue.Number(1)); // a non-empty cell so Bold has something to toggle
         window.Editor.Selection.MoveTo(0, 0);
 
-        var bold = AppCommands.ById("format.bold")!;
-        Assert.False(bold.IsToggleActive(window.Editor));
+        var bold = window.Editor.Commands.ById("format.bold")!;
+        Assert.False(bold.IsToggleActive);
 
         window.Editor.Grid.ActivateRadialForTest("format.bold");
 
-        Assert.True(bold.IsToggleActive(window.Editor)); // the radial ran the command against the selection
+        Assert.True(bold.IsToggleActive); // the radial ran the command against the selection
     }
 
     [AvaloniaFact]
@@ -285,11 +285,13 @@ public class RadialMenuTests
     [AvaloniaFact]
     public void Clicking_a_wedge_opens_a_command_picker_that_binds_that_slot()
     {
+        var window = new MainWindow();
+        window.Show();
         var dialog = new RadialSettingsDialog(new RadialMenuConfig
         {
             SegmentCount = 4,
             CommandIds = new List<string?> { "edit.cut", "edit.copy", "edit.paste", "edit.undo" },
-        });
+        }, window.Editor.Commands);
 
         dialog.OpenCommandPickerForTest(2);
         Assert.True(dialog.CommandPickerVisibleForTest);
@@ -320,20 +322,23 @@ public class RadialMenuTests
     [AvaloniaFact]
     public void Segment_row_label_shows_the_bound_command_name()
     {
+        var window = new MainWindow();
+        window.Show();
+        var commands = window.Editor.Commands;
         var dialog = new RadialSettingsDialog(new RadialMenuConfig
         {
             SegmentCount = 3,
             CommandIds = new List<string?> { "edit.cut", null, "edit.paste" },
-        });
+        }, commands);
 
-        var cut = AppCommands.ById("edit.cut")!.Label;
+        var cut = commands.ById("edit.cut")!.Title;
         Assert.Equal($"Segment 1 — {cut}", dialog.RowLabelForTest(0));
         Assert.Equal("Segment 2 — Unbound", dialog.RowLabelForTest(1)); // empty slot
 
         // Rebinding through the picker updates the label.
         dialog.OpenCommandPickerForTest(1);
         dialog.CommitPickerForTest("format.bold");
-        var bold = AppCommands.ById("format.bold")!.Label;
+        var bold = commands.ById("format.bold")!.Title;
         Assert.Equal($"Segment 2 — {bold}", dialog.RowLabelForTest(1));
     }
 
