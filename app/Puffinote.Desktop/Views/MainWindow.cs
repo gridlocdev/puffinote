@@ -10,11 +10,12 @@ using Avalonia.Threading;
 using Puffinote.Components.Commands;
 using Puffinote.Components.Controls;
 using Puffinote.Components.Overlays;
+using Puffinote.Components.Shell;
 using Puffinote.Components.Theming;
 using Puffinote.Desktop.Commands;
-using Puffinote.Desktop.Controls;
 using Puffinote.Desktop.Panes;
 using Puffinote.Desktop.Shell;
+using Puffinote.Desktop.Sidebar;
 
 namespace Puffinote.Desktop.Views;
 
@@ -31,18 +32,16 @@ public class MainWindow : Window
         OperatingSystem.IsMacOS() ? KeyModifiers.Meta : KeyModifiers.Control;
 
     private readonly NotebookService _notebook;
-    private readonly FileTreeView _fileTree = new();
-    private readonly TextBlock _sidebarHeader = new()
-    {
-        Text = "NO NOTEBOOK OPEN",
-        FontSize = 11,
-        FontWeight = FontWeight.SemiBold,
-        Margin = new Avalonia.Thickness(12, 8),
-    };
+    private readonly SidebarView _sidebarView = new();
     private ColumnDefinition _sidebarColumn = new(260, GridUnitType.Pixel) { MinWidth = 160 };
     private Border _sidebar = null!;
     private GridSplitter _splitter = null!;
     private GridLength _lastSidebarWidth = new(260, GridUnitType.Pixel);
+
+    // The notebook-scoped recent-files list (PRD §7.2.3), maintained through the shared RecentFiles rule and
+    // shown in the sidebar's Recent panel plus seeded into quick-open. In-memory for now; persistence to
+    // .puffinote/ lands with Phase 5 config.
+    private List<string> _recent = new();
 
     private readonly TabHost _tabHost = new();
     private readonly OverlayHost _overlayHost = new()
@@ -62,7 +61,7 @@ public class MainWindow : Window
     // gesture, so it isn't routed. Everything else is focus-dispatched (ordinary bubbling key bindings).
     private static readonly HashSet<string> ReservedIds = new()
     {
-        "shell.commandPalette", "shell.openNotebook", "shell.toggleSidebar",
+        "shell.commandPalette", "shell.quickOpen", "shell.openNotebook", "shell.toggleSidebar",
         "shell.closeTab", "shell.nextTab", "shell.prevTab",
     };
     private List<(KeyGesture Gesture, RelayCommand Command)> _reservedBindings = new();
@@ -73,14 +72,13 @@ public class MainWindow : Window
     {
         _notebook = notebook;
         _notebook.NotebookOpened += (_, _) => OnNotebookOpened();
-        _fileTree.FileActivated += node => _ = OpenFileAsync(node.Path);
+        _sidebarView.FileActivated += path => _ = OpenFileAsync(path);
 
         Width = 1000;
         Height = 700;
         Title = "Puffinote";
 
         var palette = Tokens.Dark;
-        _sidebarHeader.Foreground = palette.MutedText;
 
         _tabHost.ConfirmClose = PromptCloseAsync;
         _tabHost.Changed += (_, _) => UpdatePaneChrome();
@@ -99,19 +97,21 @@ public class MainWindow : Window
     /// <summary>Open <paramref name="path"/> as the notebook (used by the CLI-arg path and the menu).</summary>
     public void OpenNotebook(string path) => _notebook.OpenNotebook(path);
 
+    /// <summary>The notebook's recent-files list, most-recent first (test seam).</summary>
+    internal IReadOnlyList<string> RecentForTest => _recent;
+
+    /// <summary>Whether a modal/overlay is currently shown (test seam).</summary>
+    internal bool IsOverlayOpenForTest => _overlayHost.IsOpen;
+
+    /// <summary>The id of the sidebar's active panel (test seam).</summary>
+    internal string ActiveSidebarPanelForTest => _sidebarView.ActivePanelId;
+
     private Control BuildBody(ThemePalette palette)
     {
         _sidebar = new Border
         {
             Background = palette.Surface,
-            Child = new DockPanel
-            {
-                Children =
-                {
-                    Dock(_sidebarHeader, Avalonia.Controls.Dock.Top),
-                    _fileTree,
-                },
-            },
+            Child = _sidebarView,
         };
 
         _splitter = new GridSplitter { Width = 4, Background = palette.SurfaceBorder };
@@ -134,12 +134,6 @@ public class MainWindow : Window
         return grid;
     }
 
-    private static T Dock<T>(T control, Dock dock) where T : Control
-    {
-        DockPanel.SetDock(control, dock);
-        return control;
-    }
-
     // ---- Command catalog → menu (macOS native / in-window), key bindings, and palette --------------
 
     /// <summary>Puffinote's shell catalog — defined once; the menu, key bindings, and palette all read it.</summary>
@@ -149,6 +143,8 @@ public class MainWindow : Window
         {
             new("shell.commandPalette", "Command Palette", "Search and run any command", Shortcut.Cmd(Key.K),
                 ShowCommandPalette, icon: "command"),
+            new("shell.quickOpen", "Quick Open…", "Jump to any file in the notebook", Shortcut.Cmd(Key.O),
+                ShowQuickOpen, () => _notebook.Root is not null, icon: "search"),
             new("shell.openNotebook", "Open Notebook…", "Open a folder as the notebook", Shortcut.Cmd(Key.O, KeyModifiers.Shift),
                 () => _ = OpenNotebookInteractiveAsync(), icon: "folder-open"),
             new("shell.save", "Save", "Save the active document", Shortcut.Cmd(Key.S),
@@ -162,7 +158,7 @@ public class MainWindow : Window
             new("shell.toggleSidebar", "Toggle Sidebar", "Show or hide the sidebar", Shortcut.Cmd(Key.OemBackslash),
                 ToggleSidebar),
             new("shell.focusTree", "Focus File Tree", "Move keyboard focus to the file tree", null,
-                () => _fileTree.FocusTree()),
+                () => _sidebarView.FocusTree()),
             new("shell.about", "About Puffinote", "About this app", null, ShowAbout),
         };
         _shellById = _shellCommands.ToDictionary(c => c.Id);
@@ -198,7 +194,7 @@ public class MainWindow : Window
             {
                 Items =
                 {
-                    new NativeMenuItem { Header = "File", Menu = BuildNativeMenu("shell.openNotebook", "shell.save", "shell.closeTab") },
+                    new NativeMenuItem { Header = "File", Menu = BuildNativeMenu("shell.openNotebook", "shell.quickOpen", "shell.save", "shell.closeTab") },
                     new NativeMenuItem { Header = "View", Menu = BuildNativeMenu("shell.commandPalette", "shell.toggleSidebar", "shell.nextTab", "shell.prevTab") },
                     new NativeMenuItem { Header = "Help", Menu = BuildNativeMenu("shell.about") },
                 },
@@ -210,7 +206,7 @@ public class MainWindow : Window
         {
             Items =
             {
-                new MenuItem { Header = "_File", ItemsSource = BuildMenuItems("shell.openNotebook", "shell.save", "shell.closeTab") },
+                new MenuItem { Header = "_File", ItemsSource = BuildMenuItems("shell.openNotebook", "shell.quickOpen", "shell.save", "shell.closeTab") },
                 new MenuItem { Header = "_View", ItemsSource = BuildMenuItems("shell.commandPalette", "shell.toggleSidebar", "shell.nextTab", "shell.prevTab") },
                 new MenuItem { Header = "_Help", ItemsSource = BuildMenuItems("shell.about") },
             },
@@ -250,7 +246,37 @@ public class MainWindow : Window
         palette.SetItems(entries);
         palette.Chosen += entry => { _overlayHost.Close(); entry.Run(); };
         palette.Cancelled += (_, _) => _overlayHost.Close();
+        ShowPaletteOverlay(palette);
+    }
 
+    /// <summary>
+    /// Quick-open (⌘O, PRD §7.2.5): a fuzzy file switcher, separate from the command palette. It lists every
+    /// notebook file — most-recent first for an empty query — and opens the chosen file into a tab. Reuses the
+    /// shared <see cref="PaletteListView"/> (which fuzzy-ranks by name as you type).
+    /// </summary>
+    private void ShowQuickOpen()
+    {
+        if (_overlayHost.IsOpen || _notebook.Root is null)
+        {
+            return;
+        }
+
+        var ordered = QuickOpen.OrderByRecency(_notebook.EnumerateFiles(), _recent);
+        var entries = ordered.Select(path => new PaletteEntry(
+            Title: System.IO.Path.GetFileName(path),
+            Run: () => _ = OpenFileAsync(path),
+            Description: RelativeToNotebook(path))).ToList();
+
+        var palette = new PaletteListView { Placeholder = "Go to file…" };
+        palette.SetItems(entries);
+        palette.Chosen += entry => { _overlayHost.Close(); entry.Run(); };
+        palette.Cancelled += (_, _) => _overlayHost.Close();
+        ShowPaletteOverlay(palette);
+    }
+
+    /// <summary>Present <paramref name="palette"/> in the shared overlay card and focus its search box.</summary>
+    private void ShowPaletteOverlay(PaletteListView palette)
+    {
         var card = new Border
         {
             Width = 560,
@@ -264,6 +290,17 @@ public class MainWindow : Window
         };
         _overlayHost.ShowContent(card);
         Dispatcher.UIThread.Post(() => palette.SearchBox.Focus());
+    }
+
+    /// <summary>A notebook file's path relative to the notebook root (for the quick-open / recent secondary line).</summary>
+    private string RelativeToNotebook(string path)
+    {
+        if (_notebook.RootPath is { } root && path.StartsWith(root, StringComparison.OrdinalIgnoreCase))
+        {
+            return path[root.Length..].TrimStart(System.IO.Path.DirectorySeparatorChar, '/');
+        }
+
+        return path;
     }
 
     /// <summary>
@@ -377,15 +414,31 @@ public class MainWindow : Window
 
     private void OnNotebookOpened()
     {
-        _fileTree.SetRoot(_notebook.Root);
-        _sidebarHeader.Text = _notebook.Root is { } r ? r.Name.ToUpperInvariant() : "NO NOTEBOOK OPEN";
+        _sidebarView.SetRoot(_notebook.Root);
+        _recent = new List<string>(); // recency is per-notebook (PRD §7.2.3) — start fresh on a switch
+        _sidebarView.SetRecent(_notebook.RootPath, _recent);
         UpdatePaneChrome();
     }
 
     // ---- Editor tabs ------------------------------------------------------------------------------
 
-    /// <summary>Open <paramref name="path"/> in a tab, focusing an existing tab for the same file.</summary>
-    internal Task OpenFileAsync(string path) => _tabHost.OpenAsync(path);
+    /// <summary>
+    /// Open <paramref name="path"/> in a tab, focusing an existing tab for the same file, and record it in
+    /// the notebook's recent list. Unsupported types (no editor pane) never enter the recent list.
+    /// </summary>
+    internal async Task OpenFileAsync(string path)
+    {
+        await _tabHost.OpenAsync(path);
+
+        // Record it only when it actually opened: OpenAsync no-ops on an unsupported type or a failed load,
+        // leaving some other tab active — so match the now-active pane's path against the requested file.
+        var full = System.IO.Path.GetFullPath(path);
+        if (_tabHost.ActivePane?.Path is { } opened && string.Equals(opened, full, StringComparison.OrdinalIgnoreCase))
+        {
+            _recent = RecentFiles.Push(_recent, opened);
+            _sidebarView.SetRecent(_notebook.RootPath, _recent);
+        }
+    }
 
     private async Task SaveCurrentAsync()
     {

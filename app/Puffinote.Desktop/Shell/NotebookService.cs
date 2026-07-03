@@ -33,4 +33,36 @@ public sealed class NotebookService
         NotebookOpened?.Invoke(this, EventArgs.Empty);
         return true;
     }
+
+    /// <summary>
+    /// Every file in the open notebook, absolute-pathed, in tree order (folders' contents before siblings,
+    /// directories before files at each level — the <see cref="NotebookNode"/> sort). Dotfiles and the
+    /// <c>.puffinote/</c> state directory are skipped (they never enter the tree). Empty when no notebook is
+    /// open. Feeds quick-open (PRD §7.2.5) and, later, the background search index (§7.2.3).
+    /// </summary>
+    public IReadOnlyList<string> EnumerateFiles()
+    {
+        var files = new List<string>();
+        if (Root is { } root)
+        {
+            Collect(root, files);
+        }
+
+        return files;
+    }
+
+    private static void Collect(NotebookNode directory, List<string> files)
+    {
+        foreach (var child in directory.EnumerateChildren())
+        {
+            if (child.IsDirectory)
+            {
+                Collect(child, files);
+            }
+            else
+            {
+                files.Add(child.Path);
+            }
+        }
+    }
 }

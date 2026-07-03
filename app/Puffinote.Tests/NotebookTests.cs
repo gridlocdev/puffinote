@@ -80,4 +80,28 @@ public sealed class NotebookTests : IDisposable
         Assert.Null(service.Root);
         Assert.Equal(0, raised);
     }
+
+    [Fact]
+    public void EnumerateFiles_walks_the_whole_tree_folders_first_skipping_hidden()
+    {
+        Touch("notes.md");
+        Touch("budget.ods");
+        Touch("sub/child.md");
+        Touch(".hidden");
+        Touch($"{NotebookNode.StateDirectoryName}/session.json");
+
+        var service = new NotebookService();
+        service.OpenNotebook(_notebook.FullName);
+
+        var relative = service.EnumerateFiles()
+            .Select(p => Path.GetRelativePath(_notebook.FullName, p).Replace('\\', '/'))
+            .ToArray();
+
+        // Directories are visited before sibling files (NotebookNode sort), and dotfiles / .puffinote are skipped.
+        Assert.Equal(new[] { "sub/child.md", "budget.ods", "notes.md" }, relative);
+    }
+
+    [Fact]
+    public void EnumerateFiles_is_empty_when_no_notebook_is_open() =>
+        Assert.Empty(new NotebookService().EnumerateFiles());
 }
