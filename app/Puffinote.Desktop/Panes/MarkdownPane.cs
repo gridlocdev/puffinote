@@ -1,4 +1,6 @@
 using Avalonia.Controls;
+using Avalonia.Input;
+using Puffinote.Components.Commands;
 using Typage.Control;
 using Typage.Control.Views;
 
@@ -29,6 +31,17 @@ internal sealed class MarkdownPane : IEditorPane
     public string? Path => _session.CurrentPath;
 
     public bool IsDirty => _view.IsDirty;
+
+    // A minimal editor catalog for the merged palette. Typage's full command catalog lives in its Desktop
+    // shell today; extracting it into Typage.Control (like the file-host seam) is a follow-up — until then
+    // the pane exposes the operations the embeddable control already offers.
+    public IReadOnlyList<AppCommand> Commands =>
+    [
+        new AppCommand("md.undo", "Undo", "Undo the last edit", Shortcut.Cmd(Key.Z),
+            () => _view.Undo(), () => _view.CanUndo, icon: "undo"),
+        new AppCommand("md.redo", "Redo", "Redo the last undone edit", Shortcut.Cmd(Key.Z, KeyModifiers.Shift),
+            () => _view.Redo(), () => _view.CanRedo, icon: "redo"),
+    ];
 
     public event EventHandler? DirtyChanged;
 

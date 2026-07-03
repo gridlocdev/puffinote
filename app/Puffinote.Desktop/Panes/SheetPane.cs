@@ -1,6 +1,8 @@
+using System.Linq;
 using Avalonia.Controls;
 using Cellestra.Desktop.Services;
 using Cellestra.Editor;
+using Puffinote.Components.Commands;
 
 namespace Puffinote.Desktop.Panes;
 
@@ -29,6 +31,9 @@ internal sealed class SheetPane : IEditorPane, IEditorHost
     public string? Path => _path;
 
     public bool IsDirty => _view.IsModified;
+
+    /// <summary>Cellestra's full command catalog (the view self-hosts it), for the merged palette.</summary>
+    public IReadOnlyList<AppCommand> Commands => _view.Commands.All.ToList();
 
     public event EventHandler? DirtyChanged;
 

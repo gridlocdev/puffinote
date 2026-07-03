@@ -1,12 +1,16 @@
+using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Layout;
 using Avalonia.Media;
 using Avalonia.Platform.Storage;
 using Avalonia.Styling;
+using Avalonia.Threading;
 using Puffinote.Components.Commands;
+using Puffinote.Components.Controls;
 using Puffinote.Components.Overlays;
 using Puffinote.Components.Theming;
+using Puffinote.Desktop.Commands;
 using Puffinote.Desktop.Controls;
 using Puffinote.Desktop.Panes;
 using Puffinote.Desktop.Shell;
@@ -44,7 +48,12 @@ public class MainWindow : Window
     {
         Background = new SolidColorBrush(Color.FromArgb(0x66, 0, 0, 0)),
     };
-    private RelayCommand? _saveCommand;
+
+    // Puffinote's one shell command catalog (PRD §7.4): menu, key bindings, and the palette all derive
+    // from it. _relays holds one shared RelayCommand per entry so their enabled state stays in step.
+    private List<AppCommand> _shellCommands = new();
+    private Dictionary<string, AppCommand> _shellById = new();
+    private Dictionary<string, RelayCommand> _relays = new();
     private bool _closingConfirmed;
 
     public MainWindow(NotebookService notebook)
@@ -118,62 +127,59 @@ public class MainWindow : Window
         return control;
     }
 
-    // ---- Menu (macOS native bar / in-window bar) + key bindings ------------------------------------
+    // ---- Command catalog → menu (macOS native / in-window), key bindings, and palette --------------
+
+    /// <summary>Puffinote's shell catalog — defined once; the menu, key bindings, and palette all read it.</summary>
+    private void BuildShellCommands()
+    {
+        _shellCommands = new List<AppCommand>
+        {
+            new("shell.commandPalette", "Command Palette", "Search and run any command", Shortcut.Cmd(Key.K),
+                ShowCommandPalette, icon: "command"),
+            new("shell.openNotebook", "Open Notebook…", "Open a folder as the notebook", Shortcut.Cmd(Key.O, KeyModifiers.Shift),
+                () => _ = OpenNotebookInteractiveAsync(), icon: "folder-open"),
+            new("shell.save", "Save", "Save the active document", Shortcut.Cmd(Key.S),
+                () => _ = SaveCurrentAsync(), () => _tabHost.ActivePane is not null, icon: "save"),
+            new("shell.closeTab", "Close Tab", "Close the active tab", Shortcut.Cmd(Key.W),
+                () => _ = _tabHost.CloseActiveAsync(), () => _tabHost.ActivePane is not null),
+            new("shell.nextTab", "Next Tab", "Switch to the next tab", Shortcut.Cmd(Key.OemCloseBrackets, KeyModifiers.Shift),
+                () => _tabHost.ActivateRelative(1)),
+            new("shell.prevTab", "Previous Tab", "Switch to the previous tab", Shortcut.Cmd(Key.OemOpenBrackets, KeyModifiers.Shift),
+                () => _tabHost.ActivateRelative(-1)),
+            new("shell.toggleSidebar", "Toggle Sidebar", "Show or hide the sidebar", Shortcut.Cmd(Key.OemBackslash),
+                ToggleSidebar),
+            new("shell.focusTree", "Focus File Tree", "Move keyboard focus to the file tree", null,
+                () => _fileTree.FocusTree()),
+            new("shell.about", "About Puffinote", "About this app", null, ShowAbout),
+        };
+        _shellById = _shellCommands.ToDictionary(c => c.Id);
+    }
 
     private void InstallMenu(DockPanel root)
     {
-        var openNotebook = new RelayCommand(() => _ = OpenNotebookInteractiveAsync());
-        var save = new RelayCommand(() => _ = SaveCurrentAsync(), () => _tabHost.ActivePane is not null);
-        _saveCommand = save;
-        var closeTab = new RelayCommand(() => _ = _tabHost.CloseActiveAsync(), () => _tabHost.ActivePane is not null);
-        var nextTab = new RelayCommand(() => _tabHost.ActivateRelative(1));
-        var prevTab = new RelayCommand(() => _tabHost.ActivateRelative(-1));
-        var toggleSidebar = new RelayCommand(ToggleSidebar);
-        var about = new RelayCommand(ShowAbout);
+        BuildShellCommands();
 
-        var openGesture = new KeyGesture(Key.O, PrimaryModifier | KeyModifiers.Shift);
-        var saveGesture = new KeyGesture(Key.S, PrimaryModifier);
-        var closeGesture = new KeyGesture(Key.W, PrimaryModifier);
-        var nextGesture = new KeyGesture(Key.OemCloseBrackets, PrimaryModifier | KeyModifiers.Shift);
-        var prevGesture = new KeyGesture(Key.OemOpenBrackets, PrimaryModifier | KeyModifiers.Shift);
-        var sidebarGesture = new KeyGesture(Key.OemBackslash, PrimaryModifier);
+        // One shared RelayCommand per catalog entry (menu + native menu + key bindings bind to it), so
+        // their enabled state stays in step — UpdatePaneChrome refreshes them together.
+        _relays = _shellCommands.ToDictionary(c => c.Id, c => new RelayCommand(() => c.Execute(), () => c.IsEnabled));
 
-        // Shortcuts work whether the menu is native (macOS) or in-window (elsewhere).
-        KeyBindings.Add(new KeyBinding { Gesture = openGesture, Command = openNotebook });
-        KeyBindings.Add(new KeyBinding { Gesture = saveGesture, Command = save });
-        KeyBindings.Add(new KeyBinding { Gesture = closeGesture, Command = closeTab });
-        KeyBindings.Add(new KeyBinding { Gesture = nextGesture, Command = nextTab });
-        KeyBindings.Add(new KeyBinding { Gesture = prevGesture, Command = prevTab });
-        KeyBindings.Add(new KeyBinding { Gesture = sidebarGesture, Command = toggleSidebar });
+        foreach (var command in _shellCommands)
+        {
+            if (command.Gesture is { } gesture)
+            {
+                KeyBindings.Add(new KeyBinding { Gesture = gesture, Command = _relays[command.Id] });
+            }
+        }
 
         if (OperatingSystem.IsMacOS())
         {
-            var fileMenu = new NativeMenu
-            {
-                Items =
-                {
-                    new NativeMenuItem { Header = "Open Notebook…", Command = openNotebook, Gesture = openGesture },
-                    new NativeMenuItem { Header = "Save", Command = save, Gesture = saveGesture },
-                    new NativeMenuItem { Header = "Close Tab", Command = closeTab, Gesture = closeGesture },
-                },
-            };
-            var viewMenu = new NativeMenu
-            {
-                Items =
-                {
-                    new NativeMenuItem { Header = "Toggle Sidebar", Command = toggleSidebar, Gesture = sidebarGesture },
-                    new NativeMenuItem { Header = "Next Tab", Command = nextTab, Gesture = nextGesture },
-                    new NativeMenuItem { Header = "Previous Tab", Command = prevTab, Gesture = prevGesture },
-                },
-            };
-            var helpMenu = new NativeMenu { Items = { new NativeMenuItem { Header = "About Puffinote", Command = about } } };
             NativeMenu.SetMenu(this, new NativeMenu
             {
                 Items =
                 {
-                    new NativeMenuItem { Header = "File", Menu = fileMenu },
-                    new NativeMenuItem { Header = "View", Menu = viewMenu },
-                    new NativeMenuItem { Header = "Help", Menu = helpMenu },
+                    new NativeMenuItem { Header = "File", Menu = BuildNativeMenu("shell.openNotebook", "shell.save", "shell.closeTab") },
+                    new NativeMenuItem { Header = "View", Menu = BuildNativeMenu("shell.commandPalette", "shell.toggleSidebar", "shell.nextTab", "shell.prevTab") },
+                    new NativeMenuItem { Header = "Help", Menu = BuildNativeMenu("shell.about") },
                 },
             });
             return;
@@ -183,35 +189,55 @@ public class MainWindow : Window
         {
             Items =
             {
-                new MenuItem
-                {
-                    Header = "_File",
-                    Items =
-                    {
-                        new MenuItem { Header = "Open Notebook…", Command = openNotebook, InputGesture = openGesture },
-                        new MenuItem { Header = "Save", Command = save, InputGesture = saveGesture },
-                        new MenuItem { Header = "Close Tab", Command = closeTab, InputGesture = closeGesture },
-                    },
-                },
-                new MenuItem
-                {
-                    Header = "_View",
-                    Items =
-                    {
-                        new MenuItem { Header = "Toggle Sidebar", Command = toggleSidebar, InputGesture = sidebarGesture },
-                        new MenuItem { Header = "Next Tab", Command = nextTab, InputGesture = nextGesture },
-                        new MenuItem { Header = "Previous Tab", Command = prevTab, InputGesture = prevGesture },
-                    },
-                },
-                new MenuItem
-                {
-                    Header = "_Help",
-                    Items = { new MenuItem { Header = "About Puffinote", Command = about } },
-                },
+                new MenuItem { Header = "_File", ItemsSource = BuildMenuItems("shell.openNotebook", "shell.save", "shell.closeTab") },
+                new MenuItem { Header = "_View", ItemsSource = BuildMenuItems("shell.commandPalette", "shell.toggleSidebar", "shell.nextTab", "shell.prevTab") },
+                new MenuItem { Header = "_Help", ItemsSource = BuildMenuItems("shell.about") },
             },
         };
         DockPanel.SetDock(menu, Avalonia.Controls.Dock.Top);
         root.Children.Add(menu);
+    }
+
+    private List<MenuItem> BuildMenuItems(params string[] ids) =>
+        ids.Select(id => _shellById[id]).Select(c =>
+            new MenuItem { Header = c.Title, Command = _relays[c.Id], InputGesture = c.Gesture }).ToList();
+
+    private NativeMenu BuildNativeMenu(params string[] ids)
+    {
+        var menu = new NativeMenu();
+        foreach (var id in ids)
+        {
+            var c = _shellById[id];
+            menu.Items.Add(new NativeMenuItem { Header = c.Title, Command = _relays[c.Id], Gesture = c.Gesture });
+        }
+
+        return menu;
+    }
+
+    /// <summary>Open the merged Command Palette (⌘K): Puffinote's shell commands + the active editor's catalog.</summary>
+    private void ShowCommandPalette()
+    {
+        var editor = _tabHost.ActivePane?.Commands ?? (IReadOnlyList<AppCommand>)Array.Empty<AppCommand>();
+        var entries = CommandMerge.ToEntries(_shellCommands, editor);
+
+        var palette = new PaletteListView { Placeholder = "Type a command…" };
+        palette.SetItems(entries);
+        palette.Chosen += entry => { _overlayHost.Close(); entry.Run(); };
+        palette.Cancelled += (_, _) => _overlayHost.Close();
+
+        var card = new Border
+        {
+            Width = 560,
+            Background = Tokens.Dark.Surface,
+            CornerRadius = new CornerRadius(8),
+            Padding = new Thickness(12),
+            Margin = new Thickness(0, 80, 0, 0),
+            HorizontalAlignment = HorizontalAlignment.Center,
+            VerticalAlignment = VerticalAlignment.Top,
+            Child = palette,
+        };
+        _overlayHost.ShowContent(card);
+        Dispatcher.UIThread.Post(() => palette.SearchBox.Focus());
     }
 
     private async Task OpenNotebookInteractiveAsync()
@@ -319,7 +345,10 @@ public class MainWindow : Window
 
     private void UpdatePaneChrome()
     {
-        _saveCommand?.RaiseCanExecuteChanged();
+        foreach (var relay in _relays.Values)
+        {
+            relay.RaiseCanExecuteChanged(); // refresh menu/keys enabled state (e.g. Save/Close need a tab)
+        }
 
         var notebookName = _notebook.Root?.Name;
         string title;

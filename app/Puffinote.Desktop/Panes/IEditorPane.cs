@@ -1,4 +1,5 @@
 using Avalonia.Controls;
+using Puffinote.Components.Commands;
 
 namespace Puffinote.Desktop.Panes;
 
@@ -35,4 +36,10 @@ internal interface IEditorPane : IDisposable
 
     /// <summary>Save the document to its current path (byte-faithful, atomic — the editor's own save).</summary>
     Task SaveAsync();
+
+    /// <summary>
+    /// This editor's command catalog, for the merged Command Palette (PRD §7.4). Cellestra exposes its
+    /// full catalog; Typage exposes a minimal set until its catalog is extracted into the control.
+    /// </summary>
+    IReadOnlyList<AppCommand> Commands { get; }
 }

@@ -45,6 +45,9 @@ internal sealed class FileTreeView : UserControl
         }
     }
 
+    /// <summary>Move keyboard focus into the tree (the shell's "focus file tree" command).</summary>
+    public void FocusTree() => _tree.Focus();
+
     /// <summary>Rebuild the tree for a newly opened notebook (or clear it when <paramref name="root"/> is null).</summary>
     public void SetRoot(NotebookNode? root)
     {
