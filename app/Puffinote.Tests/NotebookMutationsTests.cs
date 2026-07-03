@@ -69,6 +69,19 @@ public sealed class NotebookMutationsTests : IDisposable
     }
 
     [Fact]
+    public void Rename_can_change_only_the_letter_case()
+    {
+        var original = NotebookMutations.CreateFile(_dir.FullName, "Note.md");
+
+        // A case-only change must be allowed — on a case-insensitive filesystem the target "exists" as the
+        // same file, and it must not be rejected as a collision (C1).
+        var renamed = NotebookMutations.Rename(original, "NOTE.md");
+
+        Assert.Equal(Path("NOTE.md"), renamed);
+        Assert.True(File.Exists(renamed));
+    }
+
+    [Fact]
     public void Rename_to_the_same_name_is_a_no_op()
     {
         var original = NotebookMutations.CreateFile(_dir.FullName, "same.md");

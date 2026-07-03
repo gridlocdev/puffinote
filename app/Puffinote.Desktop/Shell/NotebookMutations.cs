@@ -46,7 +46,11 @@ internal static class NotebookMutations
             return path; // unchanged
         }
 
-        if (File.Exists(target) || Directory.Exists(target))
+        // A case-only change (e.g. "Readme.md" → "README.md") is the same entry on a case-insensitive
+        // filesystem (macOS/Windows), so File.Exists(target) is true — don't treat that as a collision, or
+        // the rename could never happen. The Move below still performs the recapitalization (C1).
+        var caseOnlyRename = string.Equals(target, path, StringComparison.OrdinalIgnoreCase);
+        if (!caseOnlyRename && (File.Exists(target) || Directory.Exists(target)))
         {
             throw new IOException($"“{newName}” already exists.");
         }

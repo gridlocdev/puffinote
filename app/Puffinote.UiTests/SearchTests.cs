@@ -25,7 +25,7 @@ public sealed class SearchTests
     }
 
     [AvaloniaFact]
-    public void Typing_shows_results_and_Enter_opens_the_selected_hit()
+    public async Task Typing_shows_results_and_Enter_opens_the_selected_hit()
     {
         var panel = new SearchPanel();
         var hit = new SearchHit("/v/a.md", "a.md", 1, "…a match…");
@@ -38,6 +38,7 @@ public sealed class SearchTests
         panel.Focus(); // focus the search box
 
         window.KeyTextInput("foo"); // type the query
+        await panel.RunSearchNowForTest(); // flush the debounce + off-thread scan deterministically
         Assert.Single(panel.ResultsForTest);
 
         window.KeyPressQwerty(PhysicalKey.Enter, RawInputModifiers.None); // Enter opens the top hit

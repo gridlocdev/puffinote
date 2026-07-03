@@ -38,12 +38,13 @@ internal sealed class NotebookSearchService
         IndexUpdated?.Invoke();
 
         var root = _notebook.RootPath;
-        var paths = _notebook.EnumerateFiles();
         var previous = _index;
         var loadCache = !_loadedCache;
         _loadedCache = true;
 
-        var index = await Task.Run(() => Reconcile(root, paths, previous, loadCache));
+        // Enumerate the notebook (a recursive, stat-per-entry tree walk) and reconcile both off the UI thread —
+        // the walk used to run on the UI thread and block it on large/slow notebooks (P3).
+        var index = await Task.Run(() => Reconcile(root, _notebook.EnumerateFiles(), previous, loadCache));
 
         if (generation != _generation)
         {

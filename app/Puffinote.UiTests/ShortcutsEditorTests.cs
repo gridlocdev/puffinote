@@ -84,6 +84,31 @@ public sealed class ShortcutsEditorTests
     }
 
     [AvaloniaFact]
+    public void A_chord_that_a_plain_keypress_would_type_is_ignored_during_capture()
+    {
+        var rebounds = 0;
+        var view = new ShortcutsEditorView();
+        view.Rebound += (_, _) => rebounds++;
+        view.SetBindings(Sample());
+        var window = new Window { Content = view };
+        window.Show();
+
+        ClickButton(view, "Rebind");
+
+        window.KeyPressQwerty(PhysicalKey.J, RawInputModifiers.None); // bare J would type "j"
+        Assert.True(view.IsCapturing); // still waiting
+        Assert.Equal(0, rebounds);
+
+        window.KeyPressQwerty(PhysicalKey.J, RawInputModifiers.Shift); // Shift+J would type "J"
+        Assert.True(view.IsCapturing);
+        Assert.Equal(0, rebounds);
+
+        window.KeyPressQwerty(PhysicalKey.J, RawInputModifiers.Control); // a real chord → accepted
+        Assert.False(view.IsCapturing);
+        Assert.Equal(1, rebounds);
+    }
+
+    [AvaloniaFact]
     public void Escape_cancels_capture_without_rebinding()
     {
         var rebounds = 0;

@@ -428,7 +428,14 @@ public class MainWindow : Window
     /// </summary>
     private void ScanForShortcutConflicts()
     {
-        if (_conflictWarned || _tabHost.ActivePane is not { } pane || ReferenceEquals(pane, _lastScannedPane))
+        // Don't scan or warn while an overlay owns the screen — retry on the next pane change, so the
+        // once-guard is never burned without the warning actually appearing (C4).
+        if (_conflictWarned || _overlayHost.IsOpen)
+        {
+            return;
+        }
+
+        if (_tabHost.ActivePane is not { } pane || ReferenceEquals(pane, _lastScannedPane))
         {
             return;
         }
@@ -441,7 +448,7 @@ public class MainWindow : Window
             return;
         }
 
-        _conflictWarned = true;
+        _conflictWarned = true; // latch only now that we're actually presenting the warning
         _ = WarnAboutShortcutConflictsAsync(conflicts);
     }
 
@@ -451,11 +458,6 @@ public class MainWindow : Window
     /// </summary>
     private async Task WarnAboutShortcutConflictsAsync(IReadOnlyList<ShortcutConflict> conflicts)
     {
-        if (_overlayHost.IsOpen)
-        {
-            return;
-        }
-
         var lines = conflicts
             .Select(c => $"•  {c.Editor.ShortcutText}  {c.Editor.Title}  →  “{c.Reserved.Title}” (Puffinote)")
             .ToList();

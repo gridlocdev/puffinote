@@ -178,6 +178,12 @@ public sealed class ShortcutsEditorView : UserControl
             return; // wait for a non-modifier key so a lone Shift/Ctrl doesn't bind
         }
 
+        if (!IsBindable(e.Key, e.KeyModifiers))
+        {
+            e.Handled = true;
+            return; // ignore a chord a plain keypress would type (see IsBindable) — keep waiting; Esc cancels
+        }
+
         _capturingId = null;
         e.Handled = true;
         Rebound?.Invoke(id, ShortcutFrom(e.Key, e.KeyModifiers));
@@ -186,6 +192,12 @@ public sealed class ShortcutsEditorView : UserControl
     private static bool IsModifier(Key key) => key is
         Key.LeftCtrl or Key.RightCtrl or Key.LeftShift or Key.RightShift or
         Key.LeftAlt or Key.RightAlt or Key.LWin or Key.RWin;
+
+    // Reject a chord that a plain keypress would type as text — nothing, or Shift only (Shift+letter still
+    // types the letter). Such a binding would fire while the user types in the editor. Require a non-Shift
+    // modifier (⌘/Ctrl/Alt/Meta) or a function key (C2).
+    private static bool IsBindable(Key key, KeyModifiers modifiers) =>
+        (modifiers & ~KeyModifiers.Shift) != KeyModifiers.None || (key is >= Key.F1 and <= Key.F24);
 
     // Fold a captured chord back into a platform-agnostic Shortcut: the platform command modifier (⌘ on
     // macOS, Ctrl elsewhere) becomes UsesCommand; any other held modifiers are the Extra set.

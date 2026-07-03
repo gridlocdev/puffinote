@@ -4,6 +4,7 @@ using Avalonia.Controls.Templates;
 using Avalonia.Input;
 using Avalonia.Layout;
 using Avalonia.Media;
+using Avalonia.Threading;
 using Puffinote.Components.Theming;
 using Puffinote.Desktop.Search;
 
@@ -20,15 +21,22 @@ internal sealed class SearchPanel : ISidebarPanel
     private readonly TextBlock _status;
     private readonly KeyboardListView _results;
     private readonly Control _root;
+    private readonly DispatcherTimer _debounce;
     private string _indexStatus = string.Empty;
     private IReadOnlyList<SearchHit> _lastHits = Array.Empty<SearchHit>();
+    private int _searchGeneration;
 
     public SearchPanel()
     {
         var palette = Tokens.Dark;
 
+        // Coalesce keystrokes: the scan is O(total notebook text), so re-running it on every character (and on
+        // the UI thread) janks a large notebook. Debounce, then run the scan off-thread (P1).
+        _debounce = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(150) };
+        _debounce.Tick += (_, _) => { _debounce.Stop(); _ = SearchAsync(); };
+
         _search = new TextBox { PlaceholderText = "Search the notebook…", Margin = new Thickness(8, 0, 8, 6) };
-        _search.TextChanged += (_, _) => RunSearch();
+        _search.TextChanged += (_, _) => ScheduleSearch();
         _search.KeyDown += OnSearchKeyDown;
 
         _status = new TextBlock
@@ -71,21 +79,59 @@ internal sealed class SearchPanel : ISidebarPanel
     public void SetIndexStatus(string text)
     {
         _indexStatus = text;
-        RunSearch(); // re-query (the index may have changed) and repaint the status
+        if (CurrentQuery.Length == 0)
+        {
+            _status.Text = _indexStatus; // no active query → just repaint the index status
+        }
+        else
+        {
+            ScheduleSearch(); // the index changed — re-run the current query (debounced)
+        }
     }
 
-    private void RunSearch()
+    /// <summary>Run the search now, bypassing the debounce (test seam).</summary>
+    internal Task RunSearchNowForTest()
     {
-        var query = (_search.Text ?? string.Empty).Trim();
-        var hits = query.Length == 0
-            ? Array.Empty<SearchHit>()
-            : SearchFunc?.Invoke(query) ?? Array.Empty<SearchHit>();
+        _debounce.Stop();
+        return SearchAsync();
+    }
+
+    private string CurrentQuery => (_search.Text ?? string.Empty).Trim();
+
+    private void ScheduleSearch()
+    {
+        _debounce.Stop();
+        _debounce.Start();
+    }
+
+    private async Task SearchAsync()
+    {
+        var query = CurrentQuery;
+        var generation = ++_searchGeneration;
+
+        if (query.Length == 0)
+        {
+            _lastHits = Array.Empty<SearchHit>();
+            _results.SetItems(_lastHits);
+            _status.Text = _indexStatus;
+            return;
+        }
+
+        if (SearchFunc is not { } search)
+        {
+            return;
+        }
+
+        // Run the O(total notebook text) scan off the UI thread; discard the result if a newer query supersedes.
+        var hits = await Task.Run(() => search(query));
+        if (generation != _searchGeneration)
+        {
+            return;
+        }
+
         _lastHits = hits;
         _results.SetItems(hits);
-
-        _status.Text = query.Length == 0
-            ? _indexStatus
-            : hits.Count == 0 ? "No matches" : $"{hits.Count} result{(hits.Count == 1 ? "" : "s")}";
+        _status.Text = hits.Count == 0 ? "No matches" : $"{hits.Count} result{(hits.Count == 1 ? "" : "s")}";
     }
 
     private void OnSearchKeyDown(object? sender, KeyEventArgs e)
