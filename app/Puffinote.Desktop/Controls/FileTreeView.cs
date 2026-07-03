@@ -71,8 +71,11 @@ internal sealed class FileTreeView : UserControl
     /// <summary>Raised to delete a node (Delete / context menu). Never the notebook root.</summary>
     public event Action<NotebookNode>? DeleteRequested;
 
-    /// <summary>Raised to create a new file; the argument is the selected node (the shell picks the folder).</summary>
-    public event Action<NotebookNode?>? NewFileRequested;
+    /// <summary>Raised to create a new Markdown note; the argument is the selected node (the shell picks the folder).</summary>
+    public event Action<NotebookNode?>? NewNoteRequested;
+
+    /// <summary>Raised to create a new spreadsheet; the argument is the selected node (the shell picks the folder).</summary>
+    public event Action<NotebookNode?>? NewSpreadsheetRequested;
 
     /// <summary>Raised to create a new folder; the argument is the selected node (the shell picks the folder).</summary>
     public event Action<NotebookNode?>? NewFolderRequested;
@@ -300,7 +303,8 @@ internal sealed class FileTreeView : UserControl
         {
             ItemsSource = new List<Control>
             {
-                Item("New File…", () => NewFileRequested?.Invoke(SelectedNode)),
+                Item("New Note…", () => NewNoteRequested?.Invoke(SelectedNode)),
+                Item("New Spreadsheet…", () => NewSpreadsheetRequested?.Invoke(SelectedNode)),
                 Item("New Folder…", () => NewFolderRequested?.Invoke(SelectedNode)),
                 new Separator(),
                 Item("Rename…", RequestRename),

@@ -10,7 +10,14 @@ namespace Puffinote.Desktop.Shell;
 internal static class NotebookMutations
 {
     /// <summary>Create an empty file named <paramref name="name"/> in <paramref name="directory"/>; returns its path.</summary>
-    public static string CreateFile(string directory, string name)
+    public static string CreateFile(string directory, string name) => CreateFile(directory, name, Array.Empty<byte>());
+
+    /// <summary>
+    /// Create a file named <paramref name="name"/> in <paramref name="directory"/> with the given initial
+    /// <paramref name="content"/>; returns its path. Notes are created empty; a spreadsheet is created with a
+    /// blank-workbook image, since an empty (0-byte) <c>.ods</c> isn't a valid workbook and won't open.
+    /// </summary>
+    public static string CreateFile(string directory, string name, byte[] content)
     {
         var path = Combine(directory, name);
         if (File.Exists(path) || Directory.Exists(path))
@@ -18,7 +25,7 @@ internal static class NotebookMutations
             throw new IOException($"“{name}” already exists.");
         }
 
-        File.WriteAllText(path, string.Empty);
+        File.WriteAllBytes(path, content);
         return path;
     }
 

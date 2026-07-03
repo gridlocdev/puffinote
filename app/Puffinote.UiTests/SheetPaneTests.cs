@@ -1,7 +1,9 @@
+using Avalonia.Controls;
 using Avalonia.Headless.XUnit;
 using Cellestra.Desktop.Services;
 using Cellestra.Editor;
 using Puffinote.Desktop.Panes;
+using Puffinote.Desktop.Shell;
 using Xunit;
 
 namespace Puffinote.UiTests;
@@ -54,5 +56,55 @@ public sealed class SheetPaneTests
         Assert.True(EditorPaneFactory.CanOpen("/x/budget.ODS"));
         Assert.IsType<SheetPane>(EditorPaneFactory.Create("/x/budget.ods"));
         Assert.IsType<MarkdownPane>(EditorPaneFactory.Create("/x/note.md"));
+    }
+
+    [AvaloniaFact]
+    public async Task A_newly_created_blank_spreadsheet_opens_as_a_real_editor()
+    {
+        var dir = Directory.CreateTempSubdirectory("puffinote-new-ods");
+        try
+        {
+            // Exactly what "New Spreadsheet" writes: a blank-workbook image, not an empty file.
+            var path = NotebookMutations.CreateFile(
+                dir.FullName, "book.ods", WorkbookSession.NewBlank().SerializeToBytes());
+            var host = new TabHost();
+
+            await host.OpenAsync(path);
+
+            Assert.Equal(1, host.Count);
+            Assert.IsType<SheetPane>(host.ActivePane);
+            Assert.Equal("book.ods", host.ActivePane!.Title);
+        }
+        finally
+        {
+            dir.Delete(recursive: true);
+        }
+    }
+
+    [AvaloniaFact]
+    public async Task Opening_an_empty_ods_shows_an_error_tab_instead_of_a_blank_editor()
+    {
+        var dir = Directory.CreateTempSubdirectory("puffinote-empty-ods");
+        try
+        {
+            // An empty (0-byte) .ods — exactly what the old "New File" produced — isn't a valid workbook, so
+            // LoadAndRecalc throws. Rather than a blank editor, no tab, or an unobserved crash, the editor
+            // area shows the reason in an ErrorPane.
+            var empty = Path.Combine(dir.FullName, "broken.ods");
+            File.WriteAllBytes(empty, Array.Empty<byte>());
+            var host = new TabHost();
+
+            await host.OpenAsync(empty);
+
+            Assert.Equal(1, host.Count);
+            var pane = Assert.IsType<ErrorPane>(host.ActivePane);
+            Assert.Equal("broken.ods", pane.Title);
+            Assert.Contains("broken.ods", Assert.IsType<TextBlock>(pane.View).Text);
+            Assert.Null(pane.Path); // an error tab is never recorded as recent
+        }
+        finally
+        {
+            dir.Delete(recursive: true);
+        }
     }
 }

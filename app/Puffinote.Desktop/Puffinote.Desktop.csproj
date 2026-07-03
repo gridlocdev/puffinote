@@ -17,6 +17,7 @@
     <PackageReference Include="Avalonia" />
     <PackageReference Include="Avalonia.Desktop" />
     <PackageReference Include="Avalonia.Themes.Fluent" />
+    <PackageReference Include="Avalonia.Controls.ColorPicker" /><!-- control theme for the embedded Cellestra editor's Format Cells picker -->
     <PackageReference Include="Avalonia.Fonts.Inter" />
   </ItemGroup>
 

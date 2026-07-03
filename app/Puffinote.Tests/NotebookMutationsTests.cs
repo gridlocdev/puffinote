@@ -22,6 +22,16 @@ public sealed class NotebookMutationsTests : IDisposable
     }
 
     [Fact]
+    public void CreateFile_writes_the_given_initial_content()
+    {
+        // "New Spreadsheet" seeds a blank-workbook image here, so an .ods is a valid workbook (not 0 bytes).
+        var content = new byte[] { 1, 2, 3, 4 };
+        var path = NotebookMutations.CreateFile(_dir.FullName, "book.ods", content);
+
+        Assert.Equal(content, File.ReadAllBytes(path));
+    }
+
+    [Fact]
     public void CreateFolder_makes_a_directory()
     {
         var path = NotebookMutations.CreateFolder(_dir.FullName, "sub");

@@ -1,5 +1,7 @@
 using Avalonia;
+using Avalonia.Controls;
 using Avalonia.Controls.ApplicationLifetimes;
+using Avalonia.Markup.Xaml.Styling;
 using Avalonia.Media;
 using Avalonia.Styling;
 using Avalonia.Themes.Fluent;
@@ -22,8 +24,33 @@ public class App : Application
     public override void Initialize()
     {
         Styles.Add(new FluentTheme());
+
+        // The embedded Cellestra editor uses a ColorPicker (Format Cells) — supply its control theme, exactly
+        // as the standalone Cellestra app does in its App.axaml, or that dialog fails for lack of a template.
+        Styles.Add(new StyleInclude(new Uri("avares://Puffinote/"))
+        {
+            Source = new Uri("avares://Avalonia.Controls.ColorPicker/Themes/Fluent/Fluent.xaml"),
+        });
+
         RequestedThemeVariant = ThemeVariant.Dark; // a dark shell to sit alongside the dark editors
         Tokens.Current = new PuffinoteTheme(Accent);
+
+        // The embedded Cellestra editor's chrome (formula bar, sheet-tab strip, status bar, chart border)
+        // binds to these host-provided brushes via DynamicResource. Standalone Cellestra defines them in its
+        // App.axaml; Puffinote is code-based, so mirror them here (values identical) — without them a sheet
+        // opens with unstyled, transparent chrome and reads as "the editor didn't open".
+        Resources.ThemeDictionaries[ThemeVariant.Dark] = new ResourceDictionary
+        {
+            ["ChromeBackground"] = new SolidColorBrush(Color.Parse("#252526")),
+            ["ChromeAltBackground"] = new SolidColorBrush(Color.Parse("#2D2D2E")),
+            ["ChromeBorder"] = new SolidColorBrush(Color.Parse("#3A3A3A")),
+        };
+        Resources.ThemeDictionaries[ThemeVariant.Light] = new ResourceDictionary
+        {
+            ["ChromeBackground"] = new SolidColorBrush(Color.Parse("#FAFAFA")),
+            ["ChromeAltBackground"] = new SolidColorBrush(Color.Parse("#F4F4F4")),
+            ["ChromeBorder"] = new SolidColorBrush(Color.Parse("#E0E0E0")),
+        };
     }
 
     public override void OnFrameworkInitializationCompleted()

@@ -7,6 +7,7 @@ using Avalonia.Media;
 using Avalonia.Platform.Storage;
 using Avalonia.Styling;
 using Avalonia.Threading;
+using Cellestra.Desktop.Services;
 using Puffinote.Components.Commands;
 using Puffinote.Components.Controls;
 using Puffinote.Components.Overlays;
@@ -82,6 +83,15 @@ public class MainWindow : Window
         "shell.commandPalette", "shell.quickOpen", "shell.openNotebook", "shell.toggleSidebar",
         "shell.closeTab", "shell.nextTab", "shell.prevTab",
     };
+
+    // Reserved keys whose capability the shell already provides, so shadowing an editor's binding on them
+    // loses nothing and isn't a real conflict: the merged palette (⌘K) is a superset of the editor's own
+    // palette, and quick-open (⌘O) is the shell's file-open. These are excluded from the conflict warning so
+    // it only fires when an editor binding is genuinely lost.
+    private static readonly HashSet<string> ShellSupersedesEditor = new()
+    {
+        "shell.commandPalette", "shell.quickOpen",
+    };
     private List<(KeyGesture Gesture, RelayCommand Command)> _reservedBindings = new();
     private bool _conflictWarned;
     private IEditorPane? _lastScannedPane;
@@ -99,7 +109,8 @@ public class MainWindow : Window
         _sidebarView.FileActivated += path => _ = OpenFileAsync(path);
         _sidebarView.SelectionChanged += _ => RefreshSelectionCommands();
         _sidebarView.PanelActivated += id => { if (id == "outline") RefreshOutline(); };
-        _sidebarView.NewFileRequested += node => _ = PromptNewFileAsync(node);
+        _sidebarView.NewNoteRequested += node => _ = PromptNewNoteAsync(node);
+        _sidebarView.NewSpreadsheetRequested += node => _ = PromptNewSpreadsheetAsync(node);
         _sidebarView.NewFolderRequested += node => _ = PromptNewFolderAsync(node);
         _sidebarView.RenameRequested += node => _ = PromptRenameAsync(node);
         _sidebarView.DeleteRequested += node => _ = PromptDeleteAsync(node);
@@ -209,8 +220,10 @@ public class MainWindow : Window
                 ShowQuickOpen, () => _notebook.Root is not null, icon: "search"),
             new("shell.openNotebook", "Open Notebook…", "Open a folder as the notebook", Bound("shell.openNotebook", Shortcut.Cmd(Key.O, KeyModifiers.Shift)),
                 () => _ = OpenNotebookInteractiveAsync(), icon: "folder-open"),
-            new("shell.newFile", "New File…", "Create a new file in the selected folder", Bound("shell.newFile", null),
-                () => _ = PromptNewFileAsync(_sidebarView.SelectedTreeNode), () => _notebook.Root is not null, icon: "file-plus"),
+            new("shell.newNote", "New Note…", "Create a new Markdown note in the selected folder", Bound("shell.newNote", null),
+                () => _ = PromptNewNoteAsync(_sidebarView.SelectedTreeNode), () => _notebook.Root is not null, icon: "file-plus"),
+            new("shell.newSpreadsheet", "New Spreadsheet…", "Create a new spreadsheet in the selected folder", Bound("shell.newSpreadsheet", null),
+                () => _ = PromptNewSpreadsheetAsync(_sidebarView.SelectedTreeNode), () => _notebook.Root is not null, icon: "table"),
             new("shell.newFolder", "New Folder…", "Create a new folder in the selected folder", Bound("shell.newFolder", null),
                 () => _ = PromptNewFolderAsync(_sidebarView.SelectedTreeNode), () => _notebook.Root is not null),
             new("shell.renameEntry", "Rename…", "Rename the selected file or folder", Bound("shell.renameEntry", null),
@@ -285,7 +298,7 @@ public class MainWindow : Window
             {
                 Items =
                 {
-                    new NativeMenuItem { Header = "File", Menu = BuildNativeMenu("shell.openNotebook", "shell.quickOpen", "shell.newFile", "shell.newFolder", "shell.save", "shell.closeTab") },
+                    new NativeMenuItem { Header = "File", Menu = BuildNativeMenu("shell.openNotebook", "shell.quickOpen", "shell.newNote", "shell.newSpreadsheet", "shell.newFolder", "shell.save", "shell.closeTab") },
                     new NativeMenuItem { Header = "View", Menu = BuildNativeMenu("shell.commandPalette", "shell.toggleSidebar", "shell.nextTab", "shell.prevTab") },
                     new NativeMenuItem { Header = "Help", Menu = BuildNativeMenu("shell.shortcuts", "shell.about") },
                 },
@@ -302,7 +315,7 @@ public class MainWindow : Window
         {
             Items =
             {
-                new MenuItem { Header = "_File", ItemsSource = BuildMenuItems("shell.openNotebook", "shell.quickOpen", "shell.newFile", "shell.newFolder", "shell.save", "shell.closeTab") },
+                new MenuItem { Header = "_File", ItemsSource = BuildMenuItems("shell.openNotebook", "shell.quickOpen", "shell.newNote", "shell.newSpreadsheet", "shell.newFolder", "shell.save", "shell.closeTab") },
                 new MenuItem { Header = "_View", ItemsSource = BuildMenuItems("shell.commandPalette", "shell.toggleSidebar", "shell.nextTab", "shell.prevTab") },
                 new MenuItem { Header = "_Help", ItemsSource = BuildMenuItems("shell.shortcuts", "shell.about") },
             },
@@ -433,7 +446,8 @@ public class MainWindow : Window
         }
 
         _lastScannedPane = pane;
-        var reserved = _shellCommands.Where(c => ReservedIds.Contains(c.Id));
+        // Warn only about reserved keys the shell doesn't already supersede (skip ⌘K palette / ⌘O quick-open).
+        var reserved = _shellCommands.Where(c => ReservedIds.Contains(c.Id) && !ShellSupersedesEditor.Contains(c.Id));
         var conflicts = ShortcutConflictScanner.Find(reserved, pane.Commands);
         if (conflicts.Count == 0)
         {
@@ -742,23 +756,64 @@ public class MainWindow : Window
         return _notebook.RootPath;
     }
 
-    private async Task PromptNewFileAsync(NotebookNode? context)
+    private Task PromptNewNoteAsync(NotebookNode? context) =>
+        // A note is a plain Markdown file — an empty .md opens fine.
+        PromptNewDocumentAsync(context, ".md", "New Note", "note", static () => Array.Empty<byte>());
+
+    private Task PromptNewSpreadsheetAsync(NotebookNode? context) =>
+        // A spreadsheet must be seeded with a blank-workbook image: an empty (0-byte) .ods isn't a valid
+        // workbook and would fail to open (that's the empty-file trap this split avoids).
+        PromptNewDocumentAsync(context, ".ods", "New Spreadsheet", "spreadsheet",
+            static () => WorkbookSession.NewBlank().SerializeToBytes());
+
+    /// <summary>
+    /// Prompt for a base name (the <paramref name="extension"/> is shown as a suffix after the box, not typed),
+    /// create the document with its <paramref name="content"/>, reveal it, and open it in a tab.
+    /// </summary>
+    private async Task PromptNewDocumentAsync(
+        NotebookNode? context, string extension, string heading, string kind, Func<byte[]> content)
     {
         if (_overlayHost.IsOpen || TargetDirectory(context) is not { } dir)
         {
             return;
         }
 
-        if (await PromptNameAsync("New File", initial: string.Empty, okLabel: "Create") is not { } name)
+        var box = new TextBox { Width = 240, PlaceholderText = "name" };
+        var body = new StackPanel
+        {
+            Orientation = Orientation.Horizontal,
+            Spacing = 6,
+            Children =
+            {
+                box,
+                new TextBlock
+                {
+                    Text = extension,
+                    VerticalAlignment = VerticalAlignment.Center,
+                    Foreground = Tokens.Dark.MutedText, // the extension is fixed by the command, not editable
+                },
+            },
+        };
+
+        var pending = _overlayHost.ShowModalAsync(new FormDialog(heading, body, "Create"));
+        Dispatcher.UIThread.Post(() => { box.Focus(); box.SelectAll(); });
+        if (await pending != true || string.IsNullOrWhiteSpace(box.Text))
         {
             return;
         }
 
-        await MutateAsync("Couldn't create the file", async () =>
+        // Tolerate a user who types the extension anyway, so we never produce "budget.ods.ods".
+        var baseName = box.Text.Trim();
+        if (baseName.EndsWith(extension, StringComparison.OrdinalIgnoreCase))
         {
-            var path = NotebookMutations.CreateFile(dir, name);
+            baseName = baseName[..^extension.Length];
+        }
+
+        await MutateAsync($"Couldn't create the {kind}", async () =>
+        {
+            var path = NotebookMutations.CreateFile(dir, baseName + extension, content());
             _sidebarView.RevealInTree(path);
-            await OpenFileAsync(path); // opens if it's a supported type; otherwise just reveals it
+            await OpenFileAsync(path);
         });
     }
 

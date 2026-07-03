@@ -48,7 +48,8 @@ internal sealed class SidebarView : UserControl
         _files.SelectionChanged += node => SelectionChanged?.Invoke(node);
         _files.RenameRequested += node => RenameRequested?.Invoke(node);
         _files.DeleteRequested += node => DeleteRequested?.Invoke(node);
-        _files.NewFileRequested += node => NewFileRequested?.Invoke(node);
+        _files.NewNoteRequested += node => NewNoteRequested?.Invoke(node);
+        _files.NewSpreadsheetRequested += node => NewSpreadsheetRequested?.Invoke(node);
         _files.NewFolderRequested += node => NewFolderRequested?.Invoke(node);
 
         var palette = Tokens.Dark;
@@ -80,7 +81,8 @@ internal sealed class SidebarView : UserControl
     /// <summary>Tree mutation requests (F2 / Delete / context menu), fulfilled by the shell.</summary>
     public event Action<NotebookNode>? RenameRequested;
     public event Action<NotebookNode>? DeleteRequested;
-    public event Action<NotebookNode?>? NewFileRequested;
+    public event Action<NotebookNode?>? NewNoteRequested;
+    public event Action<NotebookNode?>? NewSpreadsheetRequested;
     public event Action<NotebookNode?>? NewFolderRequested;
 
     /// <summary>The file tree's selected node, or null.</summary>

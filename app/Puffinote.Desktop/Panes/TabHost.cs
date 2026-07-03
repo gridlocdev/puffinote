@@ -140,9 +140,20 @@ internal sealed class TabHost : UserControl
         {
             await pane.LoadAsync(path);
         }
-        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+        catch (Exception e)
         {
             pane.Dispose();
+
+            // A file that's simply gone — a stale recent entry, or one deleted externally — leaves the open
+            // documents untouched; it shouldn't replace your work with an error. A file that EXISTS but can't
+            // be parsed (an empty/corrupt .ods that isn't a real workbook) shows the reason in the editor area
+            // instead of a blank/broken editor. Catching broadly also stops a non-IO parse error propagating
+            // out of this fire-and-forget open and going unobserved.
+            if (File.Exists(full))
+            {
+                AddTab(new ErrorPane(path, $"Couldn’t open {System.IO.Path.GetFileName(path)}.\n\n{e.Message}"), full);
+            }
+
             return;
         }
 

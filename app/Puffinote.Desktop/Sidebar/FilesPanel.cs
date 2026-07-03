@@ -18,7 +18,8 @@ internal sealed class FilesPanel : ISidebarPanel
         _tree.SelectionChanged += node => SelectionChanged?.Invoke(node);
         _tree.RenameRequested += node => RenameRequested?.Invoke(node);
         _tree.DeleteRequested += node => DeleteRequested?.Invoke(node);
-        _tree.NewFileRequested += node => NewFileRequested?.Invoke(node);
+        _tree.NewNoteRequested += node => NewNoteRequested?.Invoke(node);
+        _tree.NewSpreadsheetRequested += node => NewSpreadsheetRequested?.Invoke(node);
         _tree.NewFolderRequested += node => NewFolderRequested?.Invoke(node);
     }
 
@@ -37,7 +38,8 @@ internal sealed class FilesPanel : ISidebarPanel
     /// <summary>Tree mutation requests (F2 / Delete / context menu), fulfilled by the shell.</summary>
     public event Action<NotebookNode>? RenameRequested;
     public event Action<NotebookNode>? DeleteRequested;
-    public event Action<NotebookNode?>? NewFileRequested;
+    public event Action<NotebookNode?>? NewNoteRequested;
+    public event Action<NotebookNode?>? NewSpreadsheetRequested;
     public event Action<NotebookNode?>? NewFolderRequested;
 
     /// <summary>The tree's selected node, or null.</summary>
