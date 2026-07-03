@@ -5,6 +5,7 @@ using Avalonia.Media;
 using Avalonia.Platform.Storage;
 using Avalonia.Styling;
 using Puffinote.Components.Commands;
+using Puffinote.Components.Overlays;
 using Puffinote.Components.Theming;
 using Puffinote.Desktop.Controls;
 using Puffinote.Desktop.Panes;
@@ -13,10 +14,11 @@ using Puffinote.Desktop.Shell;
 namespace Puffinote.Desktop.Views;
 
 /// <summary>
-/// Puffinote's single window (PRD §5 — one notebook, one window). Phase 0 assembles the shell: a menu
-/// (macOS native bar, or an in-window bar elsewhere), a collapsible sidebar hosting the read-only file
-/// tree, and a placeholder editor area. No editors are embedded yet — Phase 1 mounts the first one.
-/// All chrome reads its colours from the shared <see cref="Tokens"/> so it matches the family.
+/// Puffinote's single window (PRD §5 — one notebook, one window): a menu (macOS native bar, or an in-window
+/// bar elsewhere), a collapsible keyboard-navigable sidebar with the file tree, and a <see cref="TabHost"/>
+/// editor area that hosts N open documents (notes and sheets), with a shared <see cref="OverlayHost"/> for
+/// the dirty-close prompt and messages. All chrome reads the shared <see cref="Tokens"/> so it matches the
+/// family.
 /// </summary>
 public class MainWindow : Window
 {
@@ -32,22 +34,18 @@ public class MainWindow : Window
         FontWeight = FontWeight.SemiBold,
         Margin = new Avalonia.Thickness(12, 8),
     };
-    private readonly TextBlock _placeholder = new()
-    {
-        Text = "Open a notebook to browse its files.\nEditors arrive in Phase 1.",
-        TextAlignment = TextAlignment.Center,
-        HorizontalAlignment = HorizontalAlignment.Center,
-        VerticalAlignment = VerticalAlignment.Center,
-    };
-
     private ColumnDefinition _sidebarColumn = new(260, GridUnitType.Pixel) { MinWidth = 160 };
     private Border _sidebar = null!;
-    private Border _mainArea = null!;
     private GridSplitter _splitter = null!;
     private GridLength _lastSidebarWidth = new(260, GridUnitType.Pixel);
 
-    private IEditorPane? _currentPane;
+    private readonly TabHost _tabHost = new();
+    private readonly OverlayHost _overlayHost = new()
+    {
+        Background = new SolidColorBrush(Color.FromArgb(0x66, 0, 0, 0)),
+    };
     private RelayCommand? _saveCommand;
+    private bool _closingConfirmed;
 
     public MainWindow(NotebookService notebook)
     {
@@ -61,12 +59,19 @@ public class MainWindow : Window
 
         var palette = Tokens.Dark;
         _sidebarHeader.Foreground = palette.MutedText;
-        _placeholder.Foreground = palette.MutedText;
+
+        _tabHost.ConfirmClose = PromptCloseAsync;
+        _tabHost.Changed += (_, _) => UpdatePaneChrome();
 
         var root = new DockPanel();
         InstallMenu(root);
         root.Children.Add(BuildBody(palette));
-        Content = root;
+
+        // Stack the shared overlay host above the content so dialogs (dirty-close prompt, messages) render
+        // over the whole window with a dimmed backdrop.
+        Content = new Panel { Children = { root, _overlayHost } };
+
+        Closing += OnWindowClosing;
     }
 
     /// <summary>Open <paramref name="path"/> as the notebook (used by the CLI-arg path and the menu).</summary>
@@ -89,8 +94,6 @@ public class MainWindow : Window
 
         _splitter = new GridSplitter { Width = 4, Background = palette.SurfaceBorder };
 
-        _mainArea = new Border { Child = _placeholder };
-
         var grid = new Grid
         {
             ColumnDefinitions = new ColumnDefinitions
@@ -102,10 +105,10 @@ public class MainWindow : Window
         };
         Grid.SetColumn(_sidebar, 0);
         Grid.SetColumn(_splitter, 1);
-        Grid.SetColumn(_mainArea, 2);
+        Grid.SetColumn(_tabHost, 2);
         grid.Children.Add(_sidebar);
         grid.Children.Add(_splitter);
-        grid.Children.Add(_mainArea);
+        grid.Children.Add(_tabHost);
         return grid;
     }
 
@@ -120,18 +123,27 @@ public class MainWindow : Window
     private void InstallMenu(DockPanel root)
     {
         var openNotebook = new RelayCommand(() => _ = OpenNotebookInteractiveAsync());
-        var save = new RelayCommand(() => _ = SaveCurrentAsync(), () => _currentPane is not null);
+        var save = new RelayCommand(() => _ = SaveCurrentAsync(), () => _tabHost.ActivePane is not null);
         _saveCommand = save;
+        var closeTab = new RelayCommand(() => _ = _tabHost.CloseActiveAsync(), () => _tabHost.ActivePane is not null);
+        var nextTab = new RelayCommand(() => _tabHost.ActivateRelative(1));
+        var prevTab = new RelayCommand(() => _tabHost.ActivateRelative(-1));
         var toggleSidebar = new RelayCommand(ToggleSidebar);
         var about = new RelayCommand(ShowAbout);
 
         var openGesture = new KeyGesture(Key.O, PrimaryModifier | KeyModifiers.Shift);
         var saveGesture = new KeyGesture(Key.S, PrimaryModifier);
+        var closeGesture = new KeyGesture(Key.W, PrimaryModifier);
+        var nextGesture = new KeyGesture(Key.OemCloseBrackets, PrimaryModifier | KeyModifiers.Shift);
+        var prevGesture = new KeyGesture(Key.OemOpenBrackets, PrimaryModifier | KeyModifiers.Shift);
         var sidebarGesture = new KeyGesture(Key.OemBackslash, PrimaryModifier);
 
         // Shortcuts work whether the menu is native (macOS) or in-window (elsewhere).
         KeyBindings.Add(new KeyBinding { Gesture = openGesture, Command = openNotebook });
         KeyBindings.Add(new KeyBinding { Gesture = saveGesture, Command = save });
+        KeyBindings.Add(new KeyBinding { Gesture = closeGesture, Command = closeTab });
+        KeyBindings.Add(new KeyBinding { Gesture = nextGesture, Command = nextTab });
+        KeyBindings.Add(new KeyBinding { Gesture = prevGesture, Command = prevTab });
         KeyBindings.Add(new KeyBinding { Gesture = sidebarGesture, Command = toggleSidebar });
 
         if (OperatingSystem.IsMacOS())
@@ -142,6 +154,7 @@ public class MainWindow : Window
                 {
                     new NativeMenuItem { Header = "Open Notebook…", Command = openNotebook, Gesture = openGesture },
                     new NativeMenuItem { Header = "Save", Command = save, Gesture = saveGesture },
+                    new NativeMenuItem { Header = "Close Tab", Command = closeTab, Gesture = closeGesture },
                 },
             };
             var viewMenu = new NativeMenu
@@ -149,6 +162,8 @@ public class MainWindow : Window
                 Items =
                 {
                     new NativeMenuItem { Header = "Toggle Sidebar", Command = toggleSidebar, Gesture = sidebarGesture },
+                    new NativeMenuItem { Header = "Next Tab", Command = nextTab, Gesture = nextGesture },
+                    new NativeMenuItem { Header = "Previous Tab", Command = prevTab, Gesture = prevGesture },
                 },
             };
             var helpMenu = new NativeMenu { Items = { new NativeMenuItem { Header = "About Puffinote", Command = about } } };
@@ -175,12 +190,18 @@ public class MainWindow : Window
                     {
                         new MenuItem { Header = "Open Notebook…", Command = openNotebook, InputGesture = openGesture },
                         new MenuItem { Header = "Save", Command = save, InputGesture = saveGesture },
+                        new MenuItem { Header = "Close Tab", Command = closeTab, InputGesture = closeGesture },
                     },
                 },
                 new MenuItem
                 {
                     Header = "_View",
-                    Items = { new MenuItem { Header = "Toggle Sidebar", Command = toggleSidebar, InputGesture = sidebarGesture } },
+                    Items =
+                    {
+                        new MenuItem { Header = "Toggle Sidebar", Command = toggleSidebar, InputGesture = sidebarGesture },
+                        new MenuItem { Header = "Next Tab", Command = nextTab, InputGesture = nextGesture },
+                        new MenuItem { Header = "Previous Tab", Command = prevTab, InputGesture = prevGesture },
+                    },
                 },
                 new MenuItem
                 {
@@ -234,7 +255,9 @@ public class MainWindow : Window
     }
 
     private void ShowAbout() =>
-        _placeholder.Text = "Puffinote — a second-brain notes app.\nComposes Typage (Markdown) and Cellestra (spreadsheets).";
+        _ = _overlayHost.ShowModalAsync(new MessageDialog(
+            "Puffinote",
+            "A second-brain notes app — composes Typage (Markdown) and Cellestra (spreadsheets)."));
 
     private void OnNotebookOpened()
     {
@@ -243,60 +266,54 @@ public class MainWindow : Window
         UpdatePaneChrome();
     }
 
-    // ---- Editor pane (Phase 1: a single pane; Phase 2 turns this into a tab host) ------------------
+    // ---- Editor tabs ------------------------------------------------------------------------------
 
-    /// <summary>
-    /// Open <paramref name="path"/> into the editor area. Phase 1 hosts a single pane, so this replaces
-    /// whatever is open. (Prompt-on-dirty-replace and multiple tabs land with Phase 2's document
-    /// lifecycle.) Unsupported file types are ignored for now (Phase 3 adds preview / open-externally).
-    /// </summary>
-    internal async Task OpenFileAsync(string path)
-    {
-        var pane = EditorPaneFactory.Create(path);
-        if (pane is null)
-        {
-            return;
-        }
-
-        // Load into the new (unmounted) pane FIRST, so a failed open never disturbs the document that's
-        // already open — swap only once the load succeeds.
-        try
-        {
-            await pane.LoadAsync(path);
-        }
-        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
-        {
-            pane.Dispose();
-            if (_currentPane is null)
-            {
-                _mainArea.Child = _placeholder;
-                _placeholder.Text = $"Couldn't open “{System.IO.Path.GetFileName(path)}”.\n{e.Message}";
-            }
-
-            return;
-        }
-
-        _currentPane?.Dispose();
-        _currentPane = pane;
-        pane.DirtyChanged += (_, _) => UpdatePaneChrome();
-        _mainArea.Child = pane.View;
-        UpdatePaneChrome();
-    }
+    /// <summary>Open <paramref name="path"/> in a tab, focusing an existing tab for the same file.</summary>
+    internal Task OpenFileAsync(string path) => _tabHost.OpenAsync(path);
 
     private async Task SaveCurrentAsync()
     {
-        if (_currentPane is null)
+        if (_tabHost.ActivePane is not { } pane)
         {
             return;
         }
 
         try
         {
-            await _currentPane.SaveAsync();
+            await pane.SaveAsync();
         }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException)
         {
-            _placeholder.Text = $"Couldn't save.\n{e.Message}";
+            await _overlayHost.ShowModalAsync(new MessageDialog("Couldn't save", e.Message));
+        }
+    }
+
+    /// <summary>The Save / Don't-Save / Cancel prompt the tab host shows before closing a dirty document.</summary>
+    private async Task<CloseDecision> PromptCloseAsync(IEditorPane pane)
+    {
+        var choice = await _overlayHost.ShowModalAsync(new ChoiceDialog<CloseDecision>(
+            "Unsaved changes",
+            $"“{pane.Title}” has unsaved changes. Save before closing?",
+            CloseDecision.Cancel,
+            new Choice<CloseDecision>("Save", CloseDecision.Save, IsDefault: true),
+            new Choice<CloseDecision>("Don't Save", CloseDecision.Discard),
+            new Choice<CloseDecision>("Cancel", CloseDecision.Cancel, IsCancel: true)));
+        return choice; // ChoiceDialog resolves Esc/backdrop to its dismiss value (Cancel)
+    }
+
+    /// <summary>Closing the window prompts for each dirty tab; hold the close until they're resolved.</summary>
+    private async void OnWindowClosing(object? sender, WindowClosingEventArgs e)
+    {
+        if (_closingConfirmed || !_tabHost.HasDirtyTabs)
+        {
+            return;
+        }
+
+        e.Cancel = true;
+        if (await _tabHost.CloseAllAsync())
+        {
+            _closingConfirmed = true;
+            Close();
         }
     }
 
@@ -306,7 +323,7 @@ public class MainWindow : Window
 
         var notebookName = _notebook.Root?.Name;
         string title;
-        if (_currentPane is { } pane)
+        if (_tabHost.ActivePane is { } pane)
         {
             var dirty = pane.IsDirty ? " •" : string.Empty;
             title = notebookName is null
@@ -318,7 +335,7 @@ public class MainWindow : Window
             title = notebookName is null ? "Puffinote" : $"Puffinote — {notebookName}";
         }
 
-        // Guard the assignment: DirtyChanged fires on every keystroke, but Window.Title is an OS call —
+        // Guard the assignment: Changed fires on every keystroke, but Window.Title is an OS call —
         // only touch it when the text actually changes (e.g. the dirty dot appears/clears).
         if (Title != title)
         {

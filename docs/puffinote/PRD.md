@@ -461,8 +461,13 @@ any phase that delivers value.
   `EditorPaneFactory`; `MainWindow` mounts a single pane, opens a `.md` from the tree (double-click/Enter),
   and **Save** (⌘S) writes byte-faithfully. Round-trip + pane tests green; both sub-apps still build. Zero
   editor forks. (Prompt-on-dirty-replace + multiple tabs come with Phase 2.)
-- **Phase 2 — Both editors + tabs.** Add the Cellestra host; introduce the **tab strip** and N-document
-  lifecycle (dirty/undo per tab, close prompts). Mix notes and sheets.
+- **Phase 2 — Both editors + tabs. ✅ Landed.** Added `SheetPane` (embeds Cellestra's
+  `SpreadsheetEditorView`, which self-hosts its `IAppEnvironment`; the pane implements `IEditorHost` +
+  stream load / atomic snapshot save) and a `TabHost` owning the N-document lifecycle — open/focus/close,
+  a tab strip, next/prev (⌘⇧[ / ⌘⇧]) and close (⌘W) — mixing notes and sheets, each tab with its own
+  dirty state. Dirty-close (and window-close) prompts run through the shared `OverlayHost` +
+  `ChoiceDialog` (Save/Don't-Save/Cancel), resolving the Phase 1 deferral. 11 headless + 9 pure tests
+  green; both sub-apps still build.
 - **Phase 3 — Merged palette + shortcuts.** Compose Puffinote + active-editor catalogs in the palette;
   implement the reserved-global-set resolution and the launch **conflict-warning** modal.
 - **Phase 4 — Sidebar completion.** Full keyboard-operable tree, collapsible sidebar, the **search /
