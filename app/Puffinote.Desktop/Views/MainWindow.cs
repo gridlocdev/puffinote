@@ -39,8 +39,8 @@ public class MainWindow : Window
     private GridLength _lastSidebarWidth = new(260, GridUnitType.Pixel);
 
     // The notebook-scoped recent-files list (PRD §7.2.3), maintained through the shared RecentFiles rule and
-    // shown in the sidebar's Recent panel plus seeded into quick-open. In-memory for now; persistence to
-    // .puffinote/ lands with Phase 5 config.
+    // shown in the sidebar's Recent panel plus seeded into quick-open. Persisted per notebook to
+    // .puffinote/session.json (PRD §7.1) via SessionStore — loaded on open, saved as it changes.
     private List<string> _recent = new();
 
     // The notebook's background full-text search index (PRD §7.2.3), recreated per notebook. Null until a notebook
@@ -105,7 +105,7 @@ public class MainWindow : Window
         Content = new Panel { Children = { root, _overlayHost } };
 
         Closing += OnWindowClosing;
-        Closed += (_, _) => _watcher?.Dispose();
+        Closed += (_, _) => { PersistSession(); _watcher?.Dispose(); };
     }
 
     /// <summary>Open <paramref name="path"/> as the notebook (used by the CLI-arg path and the menu).</summary>
@@ -426,6 +426,8 @@ public class MainWindow : Window
             _sidebar.IsVisible = true;
             _splitter.IsVisible = true;
         }
+
+        PersistSession(); // remember the collapsed/expanded state per notebook (PRD §7.1)
     }
 
     private void ShowAbout()
@@ -443,11 +445,56 @@ public class MainWindow : Window
     private void OnNotebookOpened()
     {
         _sidebarView.SetRoot(_notebook.Root);
-        _recent = new List<string>(); // recency is per-notebook (PRD §7.2.3) — start fresh on a switch
+
+        // Restore the per-notebook session (PRD §7.1): recent files + sidebar layout. Recency is per-notebook, so
+        // a switch loads the new notebook's list (empty when it has none); drop recent entries whose file is
+        // now gone so a stale path never shows.
+        var session = _notebook.RootPath is { } root ? SessionStore.Load(root) : new NotebookSession();
+        _recent = session.Recent.Where(File.Exists).ToList();
         _sidebarView.SetRecent(_notebook.RootPath, _recent);
+        ApplySidebarState(session.SidebarCollapsed, session.SidebarWidth);
+
         StartSearchIndex();
         StartWatching();
         UpdatePaneChrome();
+    }
+
+    /// <summary>Restore the sidebar's persisted collapsed state and width (PRD §7.1).</summary>
+    private void ApplySidebarState(bool collapsed, double width)
+    {
+        _lastSidebarWidth = new GridLength(width > 0 ? width : SessionStore.DefaultSidebarWidth, GridUnitType.Pixel);
+        if (collapsed)
+        {
+            _sidebarColumn.Width = new GridLength(0);
+            _sidebarColumn.MinWidth = 0;
+            _sidebar.IsVisible = false;
+            _splitter.IsVisible = false;
+        }
+        else
+        {
+            _sidebarColumn.MinWidth = 160;
+            _sidebarColumn.Width = _lastSidebarWidth;
+            _sidebar.IsVisible = true;
+            _splitter.IsVisible = true;
+        }
+    }
+
+    /// <summary>Write the current recent list + sidebar layout to the notebook's session file (best-effort).</summary>
+    private void PersistSession()
+    {
+        if (_notebook.RootPath is not { } root)
+        {
+            return;
+        }
+
+        var collapsed = !_sidebar.IsVisible;
+        var width = (collapsed ? _lastSidebarWidth : _sidebarColumn.Width).Value;
+        SessionStore.Save(root, new NotebookSession
+        {
+            Recent = _recent,
+            SidebarCollapsed = collapsed,
+            SidebarWidth = width > 0 ? width : SessionStore.DefaultSidebarWidth,
+        });
     }
 
     /// <summary>Watch the notebook for external changes, refreshing the tree + search index when they land.</summary>
@@ -499,6 +546,7 @@ public class MainWindow : Window
         {
             _recent = RecentFiles.Push(_recent, opened);
             _sidebarView.SetRecent(_notebook.RootPath, _recent);
+            PersistSession();
         }
     }
 
@@ -637,6 +685,7 @@ public class MainWindow : Window
         if (changed)
         {
             _sidebarView.SetRecent(_notebook.RootPath, _recent);
+            PersistSession();
         }
     }
 
@@ -649,6 +698,7 @@ public class MainWindow : Window
         {
             _recent = kept;
             _sidebarView.SetRecent(_notebook.RootPath, _recent);
+            PersistSession();
         }
     }
 
