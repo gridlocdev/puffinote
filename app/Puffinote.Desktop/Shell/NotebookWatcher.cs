@@ -95,10 +95,16 @@ internal sealed class NotebookWatcher : IDisposable
 
     private void Fire()
     {
-        if (!_disposed)
+        // Re-check _disposed on the UI thread at execution time — the check must run where Dispose runs (the
+        // UI thread), so a timer callback in flight can't post a refresh against a torn-down window (C7). A
+        // stale post that survives the threadpool-side check is caught here.
+        Dispatcher.UIThread.Post(() =>
         {
-            Dispatcher.UIThread.Post(_onChanged);
-        }
+            if (!_disposed)
+            {
+                _onChanged();
+            }
+        });
     }
 
     public void Dispose()

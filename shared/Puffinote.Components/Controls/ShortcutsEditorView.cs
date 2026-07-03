@@ -31,6 +31,7 @@ public sealed class ShortcutsEditorView : UserControl
     private readonly StackPanel _list = new() { Spacing = 1 };
     private IReadOnlyList<ShortcutBinding> _bindings = Array.Empty<ShortcutBinding>();
     private string? _capturingId;
+    private string? _captureConflict;
 
     public ShortcutsEditorView()
     {
@@ -55,6 +56,7 @@ public sealed class ShortcutsEditorView : UserControl
     {
         _bindings = bindings.ToList();
         _capturingId = null;
+        _captureConflict = null;
         Rebuild();
     }
 
@@ -98,9 +100,10 @@ public sealed class ShortcutsEditorView : UserControl
         {
             trailing.Children.Add(new TextBlock
             {
-                Text = "Press a key…  (Esc to cancel)",
+                Text = _captureConflict ?? "Press a key…  (Esc to cancel)",
                 Foreground = palette.Accent,
                 VerticalAlignment = VerticalAlignment.Center,
+                TextWrapping = TextWrapping.Wrap,
             });
         }
         else
@@ -154,6 +157,7 @@ public sealed class ShortcutsEditorView : UserControl
     private void BeginCapture(string id)
     {
         _capturingId = id;
+        _captureConflict = null;
         Rebuild();
         Focus(); // own the keyboard so the next chord lands on our handler (headless-drivable)
     }
@@ -168,6 +172,7 @@ public sealed class ShortcutsEditorView : UserControl
         if (e.Key == Key.Escape)
         {
             _capturingId = null;
+            _captureConflict = null;
             Rebuild();
             e.Handled = true;
             return;
@@ -184,9 +189,35 @@ public sealed class ShortcutsEditorView : UserControl
             return; // ignore a chord a plain keypress would type (see IsBindable) — keep waiting; Esc cancels
         }
 
-        _capturingId = null;
+        var shortcut = ShortcutFrom(e.Key, e.KeyModifiers);
         e.Handled = true;
-        Rebound?.Invoke(id, ShortcutFrom(e.Key, e.KeyModifiers));
+
+        // Refuse a chord already bound to another command — otherwise the new binding would silently lose to
+        // the existing one (a reserved key always wins; duplicates are order-dependent). Stay in capture with
+        // a message so the user can pick a different chord or Esc out (C3).
+        if (_bindings.FirstOrDefault(b => b.Id != id && SameChord(b.Shortcut, shortcut)) is { } clash)
+        {
+            _captureConflict = $"{ShortcutFormatter.Format(shortcut)} is already used by “{clash.Title}”.";
+            Rebuild();
+            return;
+        }
+
+        _capturingId = null;
+        _captureConflict = null;
+        Rebound?.Invoke(id, shortcut);
+    }
+
+    // Two shortcuts clash when they resolve to the same platform gesture (key + modifiers).
+    private static bool SameChord(Shortcut? existing, Shortcut candidate)
+    {
+        if (existing is not { } e)
+        {
+            return false;
+        }
+
+        var a = e.ToGesture();
+        var b = candidate.ToGesture();
+        return a.Key == b.Key && a.KeyModifiers == b.KeyModifiers;
     }
 
     private static bool IsModifier(Key key) => key is

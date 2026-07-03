@@ -109,6 +109,27 @@ public sealed class ShortcutsEditorTests
     }
 
     [AvaloniaFact]
+    public void Capturing_a_chord_already_bound_to_another_command_is_refused()
+    {
+        var rebounds = 0;
+        var view = new ShortcutsEditorView();
+        view.Rebound += (_, _) => rebounds++;
+        view.SetBindings(Sample()); // Save (⌘S, rebindable) + Command Palette (⌘K, reserved)
+        var window = new Window { Content = view };
+        window.Show();
+
+        ClickButton(view, "Rebind"); // rebind Save
+        window.KeyPressQwerty(PhysicalKey.K, RawInputModifiers.Control); // ⌘/Ctrl+K — already Command Palette
+
+        Assert.True(view.IsCapturing); // refused → still waiting
+        Assert.Equal(0, rebounds);
+
+        window.KeyPressQwerty(PhysicalKey.J, RawInputModifiers.Control); // a free chord → accepted
+        Assert.False(view.IsCapturing);
+        Assert.Equal(1, rebounds);
+    }
+
+    [AvaloniaFact]
     public void Escape_cancels_capture_without_rebinding()
     {
         var rebounds = 0;

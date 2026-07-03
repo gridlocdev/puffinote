@@ -17,7 +17,7 @@ internal sealed class NotebookSearchService
     private readonly NotebookService _notebook;
     private volatile IReadOnlyList<IndexedFile> _index = Array.Empty<IndexedFile>();
     private int _generation;
-    private bool _loadedCache;
+    private bool _hasPublished;
 
     public NotebookSearchService(NotebookService notebook) => _notebook = notebook;
 
@@ -39,12 +39,14 @@ internal sealed class NotebookSearchService
 
         var root = _notebook.RootPath;
         var previous = _index;
-        var loadCache = !_loadedCache;
-        _loadedCache = true;
+        // Cold-start builds seed from the on-disk cache. This keys off whether a real index has ever been
+        // *published*, not "did some build start" — so a build that races the first (e.g. an external change
+        // during initial indexing) still seeds from the cache instead of re-reading every file (C5).
+        var loadCache = !_hasPublished;
 
         // Enumerate the notebook (a recursive, stat-per-entry tree walk) and reconcile both off the UI thread —
         // the walk used to run on the UI thread and block it on large/slow notebooks (P3).
-        var index = await Task.Run(() => Reconcile(root, _notebook.EnumerateFiles(), previous, loadCache));
+        var (index, changed) = await Task.Run(() => Reconcile(root, _notebook.EnumerateFiles(), previous, loadCache));
 
         if (generation != _generation)
         {
@@ -52,12 +54,15 @@ internal sealed class NotebookSearchService
         }
 
         _index = index;
+        _hasPublished = true; // set only on the publish path, so racing cold builds all still seed the cache
         IsIndexing = false;
         IndexUpdated?.Invoke();
 
-        if (root is not null)
+        if (root is not null && changed)
         {
-            // Persist for the next open. The index is already published + the UI notified above, so awaiting
+            // Persist only when the index actually changed vs the prior/cache — a no-op rebuild (e.g. the
+            // watcher's second pass after a mutation, or re-opening an unchanged notebook) no longer rewrites the
+            // whole index to disk (P2). The index is already published + the UI notified above, so awaiting
             // this only defers RebuildAsync's completion (callers fire-and-forget it) — it never blocks the UI.
             await Task.Run(() => SearchIndexCache.Save(root, index));
         }
@@ -69,8 +74,9 @@ internal sealed class NotebookSearchService
     // Reconcile the current files against a prior index (the in-memory one, seeded from the on-disk cache on
     // the first build): reuse a file's text when its last-write time + size are unchanged, otherwise re-read
     // it; files no longer present simply fall out. This is what makes a re-open cheap — unchanged workbooks
-    // aren't re-parsed.
-    private static IReadOnlyList<IndexedFile> Reconcile(
+    // aren't re-parsed. Returns whether the resulting index differs from the prior/cache, so the caller can
+    // skip re-persisting an unchanged index (P2).
+    private static (IReadOnlyList<IndexedFile> Files, bool Changed) Reconcile(
         string? root, IReadOnlyList<string> paths, IReadOnlyList<IndexedFile> previous, bool loadCache)
     {
         var prior = new Dictionary<string, IndexedFile>(StringComparer.OrdinalIgnoreCase);
@@ -112,7 +118,27 @@ internal sealed class NotebookSearchService
             }
         }
 
-        return files;
+        return (files, DiffersFromPrior(files, prior));
+    }
+
+    // Whether the resulting index differs from the prior/cache (a file added, removed, re-read, or an
+    // unreadable file dropped). A re-read only happens when mtime/size changed, so those always differ here.
+    private static bool DiffersFromPrior(List<IndexedFile> files, Dictionary<string, IndexedFile> prior)
+    {
+        if (files.Count != prior.Count)
+        {
+            return true;
+        }
+
+        foreach (var file in files)
+        {
+            if (!prior.TryGetValue(file.Path, out var p) || p.MTimeTicks != file.MTimeTicks || p.Size != file.Size)
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     // Extract searchable text for a file, or null to skip it (binary / unreadable / a workbook that won't

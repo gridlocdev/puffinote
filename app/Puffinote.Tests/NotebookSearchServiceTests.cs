@@ -70,6 +70,24 @@ public sealed class NotebookSearchServiceTests : IDisposable
     }
 
     [Fact]
+    public async Task An_unchanged_rebuild_does_not_rewrite_the_index_cache()
+    {
+        File.WriteAllText(Path("note.md"), "widgets");
+        var notebook = new NotebookService();
+        notebook.OpenNotebook(_notebook.FullName);
+        var search = new NotebookSearchService(notebook);
+
+        await search.RebuildAsync(); // first build writes the cache
+        var cache = System.IO.Path.Combine(_notebook.FullName, NotebookNode.StateDirectoryName, "search-index.json");
+        Assert.True(File.Exists(cache));
+
+        File.Delete(cache);
+        await search.RebuildAsync(); // nothing changed → the cache must not be rewritten (P2)
+
+        Assert.False(File.Exists(cache));
+    }
+
+    [Fact]
     public async Task Rebuilding_drops_deleted_files_and_picks_up_changed_ones()
     {
         var note = Path("note.md");
