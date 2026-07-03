@@ -98,4 +98,39 @@ public sealed class FileTreeViewTests : IDisposable
         window.KeyTextInput("b"); // from the root, jump to the next name matching "b" → banana.md
         Assert.Equal("banana.md", tree.SelectedNameForTest);
     }
+
+    [AvaloniaFact]
+    public void F2_and_Delete_raise_mutation_requests_for_the_selected_node()
+    {
+        var (tree, window) = Open();
+        string? renamed = null;
+        string? deleted = null;
+        tree.RenameRequested += node => renamed = node.Name;
+        tree.DeleteRequested += node => deleted = node.Name;
+
+        window.KeyPressQwerty(PhysicalKey.ArrowDown, RawInputModifiers.None); // sub
+        window.KeyPressQwerty(PhysicalKey.ArrowDown, RawInputModifiers.None); // apple.md
+        Assert.Equal("apple.md", tree.SelectedNameForTest);
+
+        window.KeyPressQwerty(PhysicalKey.F2, RawInputModifiers.None);
+        Assert.Equal("apple.md", renamed);
+
+        window.KeyPressQwerty(PhysicalKey.Delete, RawInputModifiers.None);
+        Assert.Equal("apple.md", deleted);
+    }
+
+    [AvaloniaFact]
+    public void The_notebook_root_cannot_be_renamed_or_deleted()
+    {
+        var (tree, window) = Open(); // FocusTree selects the root
+        var fired = false;
+        tree.RenameRequested += _ => fired = true;
+        tree.DeleteRequested += _ => fired = true;
+
+        Assert.Equal(_notebook.Name, tree.SelectedNameForTest);
+        window.KeyPressQwerty(PhysicalKey.F2, RawInputModifiers.None);
+        window.KeyPressQwerty(PhysicalKey.Delete, RawInputModifiers.None);
+
+        Assert.False(fired);
+    }
 }

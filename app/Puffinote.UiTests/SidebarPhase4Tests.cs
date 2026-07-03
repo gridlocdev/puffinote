@@ -1,7 +1,10 @@
+using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Headless;
 using Avalonia.Headless.XUnit;
 using Avalonia.Input;
+using Avalonia.Interactivity;
+using Avalonia.VisualTree;
 using Puffinote.Desktop.Shell;
 using Puffinote.Desktop.Sidebar;
 using Puffinote.Desktop.Views;
@@ -116,5 +119,46 @@ public sealed class SidebarPhase4Tests
         {
             dir.Delete(recursive: true);
         }
+    }
+
+    [AvaloniaFact]
+    public async Task Deleting_a_file_from_the_tree_confirms_then_removes_it()
+    {
+        var dir = Directory.CreateTempSubdirectory("puffinote-delete");
+        try
+        {
+            var note = Path.Combine(dir.FullName, "note.md");
+            File.WriteAllText(note, "# note");
+
+            var window = new MainWindow(new NotebookService());
+            window.Show();
+            window.OpenNotebook(dir.FullName);
+
+            // Select the file in the tree and press Delete → the shell opens a confirm dialog.
+            window.SidebarForTest.RevealInTree(note);
+            window.SidebarForTest.FocusTree();
+            window.KeyPressQwerty(PhysicalKey.Delete, RawInputModifiers.None);
+            Assert.True(window.IsOverlayOpenForTest);
+            Assert.True(File.Exists(note)); // not gone until confirmed
+
+            // Confirm it: click the dialog's "Delete" button.
+            ClickButton(window, "Delete");
+            await Task.Yield();
+
+            Assert.False(window.IsOverlayOpenForTest);
+            Assert.False(File.Exists(note));
+        }
+        finally
+        {
+            dir.Delete(recursive: true);
+        }
+    }
+
+    private static void ClickButton(Visual root, string content)
+    {
+        var button = root.GetVisualDescendants()
+            .OfType<Button>()
+            .First(b => (b.Content as string) == content);
+        button.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
     }
 }

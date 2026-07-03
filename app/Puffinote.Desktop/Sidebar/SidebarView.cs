@@ -42,6 +42,11 @@ internal sealed class SidebarView : UserControl
 
         _files.FileActivated += path => FileActivated?.Invoke(path);
         _recent.FileActivated += path => FileActivated?.Invoke(path);
+        _files.SelectionChanged += node => SelectionChanged?.Invoke(node);
+        _files.RenameRequested += node => RenameRequested?.Invoke(node);
+        _files.DeleteRequested += node => DeleteRequested?.Invoke(node);
+        _files.NewFileRequested += node => NewFileRequested?.Invoke(node);
+        _files.NewFolderRequested += node => NewFolderRequested?.Invoke(node);
 
         var palette = Tokens.Dark;
         _header.Foreground = palette.MutedText;
@@ -62,6 +67,28 @@ internal sealed class SidebarView : UserControl
 
     /// <summary>Raised when a file is activated in any panel (tree or recent), to open it in a tab.</summary>
     public event Action<string>? FileActivated;
+
+    /// <summary>Raised when the file-tree selection changes (for command-enablement refresh).</summary>
+    public event Action<NotebookNode?>? SelectionChanged;
+
+    /// <summary>Tree mutation requests (F2 / Delete / context menu), fulfilled by the shell.</summary>
+    public event Action<NotebookNode>? RenameRequested;
+    public event Action<NotebookNode>? DeleteRequested;
+    public event Action<NotebookNode?>? NewFileRequested;
+    public event Action<NotebookNode?>? NewFolderRequested;
+
+    /// <summary>The file tree's selected node, or null.</summary>
+    public NotebookNode? SelectedTreeNode => _files.SelectedNode;
+
+    /// <summary>Re-read the file tree from disk after a mutation.</summary>
+    public void RefreshTree() => _files.Refresh();
+
+    /// <summary>Reveal and select <paramref name="path"/> in the file tree (switching to the Files panel).</summary>
+    public void RevealInTree(string path)
+    {
+        Activate("files");
+        _files.SelectPath(path);
+    }
 
     /// <summary>The id of the currently shown panel (test seam).</summary>
     internal string ActivePanelId => _active.Id;

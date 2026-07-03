@@ -73,6 +73,11 @@ public class MainWindow : Window
         _notebook = notebook;
         _notebook.NotebookOpened += (_, _) => OnNotebookOpened();
         _sidebarView.FileActivated += path => _ = OpenFileAsync(path);
+        _sidebarView.SelectionChanged += _ => RefreshCommandStates();
+        _sidebarView.NewFileRequested += node => _ = PromptNewFileAsync(node);
+        _sidebarView.NewFolderRequested += node => _ = PromptNewFolderAsync(node);
+        _sidebarView.RenameRequested += node => _ = PromptRenameAsync(node);
+        _sidebarView.DeleteRequested += node => _ = PromptDeleteAsync(node);
 
         Width = 1000;
         Height = 700;
@@ -105,6 +110,9 @@ public class MainWindow : Window
 
     /// <summary>The id of the sidebar's active panel (test seam).</summary>
     internal string ActiveSidebarPanelForTest => _sidebarView.ActivePanelId;
+
+    /// <summary>The sidebar (test seam — drive the tree in end-to-end mutation tests).</summary>
+    internal Sidebar.SidebarView SidebarForTest => _sidebarView;
 
     private Control BuildBody(ThemePalette palette)
     {
@@ -147,6 +155,14 @@ public class MainWindow : Window
                 ShowQuickOpen, () => _notebook.Root is not null, icon: "search"),
             new("shell.openNotebook", "Open Notebook…", "Open a folder as the notebook", Shortcut.Cmd(Key.O, KeyModifiers.Shift),
                 () => _ = OpenNotebookInteractiveAsync(), icon: "folder-open"),
+            new("shell.newFile", "New File…", "Create a new file in the selected folder", null,
+                () => _ = PromptNewFileAsync(_sidebarView.SelectedTreeNode), () => _notebook.Root is not null, icon: "file-plus"),
+            new("shell.newFolder", "New Folder…", "Create a new folder in the selected folder", null,
+                () => _ = PromptNewFolderAsync(_sidebarView.SelectedTreeNode), () => _notebook.Root is not null),
+            new("shell.renameEntry", "Rename…", "Rename the selected file or folder", null,
+                () => { if (_sidebarView.SelectedTreeNode is { } n) _ = PromptRenameAsync(n); }, CanMutateSelected, icon: "pencil"),
+            new("shell.deleteEntry", "Delete", "Delete the selected file or folder", null,
+                () => { if (_sidebarView.SelectedTreeNode is { } n) _ = PromptDeleteAsync(n); }, CanMutateSelected, icon: "trash-2"),
             new("shell.save", "Save", "Save the active document", Shortcut.Cmd(Key.S),
                 () => _ = SaveCurrentAsync(), () => _tabHost.ActivePane is not null, icon: "save"),
             new("shell.closeTab", "Close Tab", "Close the active tab", Shortcut.Cmd(Key.W),
@@ -194,7 +210,7 @@ public class MainWindow : Window
             {
                 Items =
                 {
-                    new NativeMenuItem { Header = "File", Menu = BuildNativeMenu("shell.openNotebook", "shell.quickOpen", "shell.save", "shell.closeTab") },
+                    new NativeMenuItem { Header = "File", Menu = BuildNativeMenu("shell.openNotebook", "shell.quickOpen", "shell.newFile", "shell.newFolder", "shell.save", "shell.closeTab") },
                     new NativeMenuItem { Header = "View", Menu = BuildNativeMenu("shell.commandPalette", "shell.toggleSidebar", "shell.nextTab", "shell.prevTab") },
                     new NativeMenuItem { Header = "Help", Menu = BuildNativeMenu("shell.about") },
                 },
@@ -206,7 +222,7 @@ public class MainWindow : Window
         {
             Items =
             {
-                new MenuItem { Header = "_File", ItemsSource = BuildMenuItems("shell.openNotebook", "shell.quickOpen", "shell.save", "shell.closeTab") },
+                new MenuItem { Header = "_File", ItemsSource = BuildMenuItems("shell.openNotebook", "shell.quickOpen", "shell.newFile", "shell.newFolder", "shell.save", "shell.closeTab") },
                 new MenuItem { Header = "_View", ItemsSource = BuildMenuItems("shell.commandPalette", "shell.toggleSidebar", "shell.nextTab", "shell.prevTab") },
                 new MenuItem { Header = "_Help", ItemsSource = BuildMenuItems("shell.about") },
             },
@@ -440,6 +456,141 @@ public class MainWindow : Window
         }
     }
 
+    // ---- Tree mutations (PRD §7.2) ----------------------------------------------------------------
+    // New/rename/delete run through the shell so name-entry and confirmation use the shared overlay
+    // dialogs; the filesystem rules live in the testable NotebookMutations helper. Reached from the tree
+    // (F2 / Delete / context menu) and the command palette / File menu.
+
+    private bool CanMutateSelected() =>
+        _sidebarView.SelectedTreeNode is { } node && !IsRootNode(node);
+
+    private bool IsRootNode(NotebookNode node) =>
+        _notebook.RootPath is { } root && string.Equals(node.Path, root, StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>The folder a new entry lands in: the selection if a folder, else its parent, else the notebook root.</summary>
+    private string? TargetDirectory(NotebookNode? node)
+    {
+        if (node is { IsDirectory: true })
+        {
+            return node.Path;
+        }
+
+        if (node is { } file && System.IO.Path.GetDirectoryName(file.Path) is { } parent)
+        {
+            return parent;
+        }
+
+        return _notebook.RootPath;
+    }
+
+    private async Task PromptNewFileAsync(NotebookNode? context)
+    {
+        if (_overlayHost.IsOpen || TargetDirectory(context) is not { } dir)
+        {
+            return;
+        }
+
+        if (await PromptNameAsync("New File", initial: string.Empty, okLabel: "Create") is not { } name)
+        {
+            return;
+        }
+
+        await MutateAsync("Couldn't create the file", async () =>
+        {
+            var path = NotebookMutations.CreateFile(dir, name);
+            _sidebarView.RevealInTree(path);
+            await OpenFileAsync(path); // opens if it's a supported type; otherwise just reveals it
+        });
+    }
+
+    private async Task PromptNewFolderAsync(NotebookNode? context)
+    {
+        if (_overlayHost.IsOpen || TargetDirectory(context) is not { } dir)
+        {
+            return;
+        }
+
+        if (await PromptNameAsync("New Folder", initial: string.Empty, okLabel: "Create") is not { } name)
+        {
+            return;
+        }
+
+        await MutateAsync("Couldn't create the folder", () =>
+        {
+            _sidebarView.RevealInTree(NotebookMutations.CreateFolder(dir, name));
+            return Task.CompletedTask;
+        });
+    }
+
+    private async Task PromptRenameAsync(NotebookNode node)
+    {
+        if (_overlayHost.IsOpen || IsRootNode(node))
+        {
+            return;
+        }
+
+        if (await PromptNameAsync($"Rename “{node.Name}”", initial: node.Name, okLabel: "Rename") is not { } name)
+        {
+            return;
+        }
+
+        await MutateAsync("Couldn't rename", () =>
+        {
+            _sidebarView.RevealInTree(NotebookMutations.Rename(node.Path, name));
+            return Task.CompletedTask;
+        });
+    }
+
+    private async Task PromptDeleteAsync(NotebookNode node)
+    {
+        if (_overlayHost.IsOpen || IsRootNode(node))
+        {
+            return;
+        }
+
+        var kind = node.IsDirectory ? "folder" : "file";
+        var confirmed = await _overlayHost.ShowModalAsync(new ConfirmDialog(
+            "Delete",
+            $"Delete the {kind} “{node.Name}”? This can't be undone.",
+            confirmLabel: "Delete",
+            denyLabel: "Cancel",
+            confirmIsDefault: false)); // destructive → Enter shouldn't trigger it
+        if (confirmed != true)
+        {
+            return;
+        }
+
+        await MutateAsync("Couldn't delete", () =>
+        {
+            NotebookMutations.Delete(node.Path);
+            _sidebarView.RefreshTree();
+            return Task.CompletedTask;
+        });
+    }
+
+    /// <summary>Prompt for a name in the shared overlay, returning it trimmed, or null on cancel / empty.</summary>
+    private async Task<string?> PromptNameAsync(string heading, string initial, string okLabel)
+    {
+        var box = new TextBox { Text = initial };
+        var pending = _overlayHost.ShowModalAsync(new FormDialog(heading, box, okLabel));
+        Dispatcher.UIThread.Post(() => { box.Focus(); box.SelectAll(); });
+        var accepted = await pending;
+        return accepted == true && !string.IsNullOrWhiteSpace(box.Text) ? box.Text : null;
+    }
+
+    /// <summary>Run a filesystem mutation, surfacing any failure as a message dialog.</summary>
+    private async Task MutateAsync(string errorTitle, Func<Task> mutation)
+    {
+        try
+        {
+            await mutation();
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+        {
+            await _overlayHost.ShowModalAsync(new MessageDialog(errorTitle, e.Message));
+        }
+    }
+
     private async Task SaveCurrentAsync()
     {
         // Don't save (or surface a save-failure message) while a dialog is already open — a second modal
@@ -493,13 +644,18 @@ public class MainWindow : Window
         }
     }
 
-    private void UpdatePaneChrome()
+    /// <summary>Re-query every shell command's enabled state (Save/Close need a tab; rename/delete a selection).</summary>
+    private void RefreshCommandStates()
     {
         foreach (var relay in _relays.Values)
         {
-            relay.RaiseCanExecuteChanged(); // refresh menu/keys enabled state (e.g. Save/Close need a tab)
+            relay.RaiseCanExecuteChanged();
         }
+    }
 
+    private void UpdatePaneChrome()
+    {
+        RefreshCommandStates();
         ScanForShortcutConflicts();
 
         var notebookName = _notebook.Root?.Name;

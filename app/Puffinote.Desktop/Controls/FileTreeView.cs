@@ -48,6 +48,7 @@ internal sealed class FileTreeView : UserControl
         };
         _list.SelectionChanged += (_, _) => SelectionChanged?.Invoke(SelectedNode);
         _list.DoubleTapped += (_, _) => ActivateSelected();
+        _list.ContextMenu = BuildContextMenu();
 
         // The UserControl owns keyboard focus + the whole key map, so navigation is deterministic and
         // doesn't depend on which item container happens to hold focus.
@@ -63,6 +64,18 @@ internal sealed class FileTreeView : UserControl
 
     /// <summary>Raised when a <em>file</em> entry is activated (double-click / Enter), to open it in a pane.</summary>
     public event Action<NotebookNode>? FileActivated;
+
+    /// <summary>Raised to rename <paramref>node</paramref> (F2 / context menu). Never the notebook root.</summary>
+    public event Action<NotebookNode>? RenameRequested;
+
+    /// <summary>Raised to delete a node (Delete / context menu). Never the notebook root.</summary>
+    public event Action<NotebookNode>? DeleteRequested;
+
+    /// <summary>Raised to create a new file; the argument is the selected node (the shell picks the folder).</summary>
+    public event Action<NotebookNode?>? NewFileRequested;
+
+    /// <summary>Raised to create a new folder; the argument is the selected node (the shell picks the folder).</summary>
+    public event Action<NotebookNode?>? NewFolderRequested;
 
     /// <summary>The currently selected node, or null when nothing is selected.</summary>
     public NotebookNode? SelectedNode => (_list.SelectedItem as Row)?.Node;
@@ -243,11 +256,57 @@ internal sealed class FileTreeView : UserControl
             case Key.End:
                 SelectIndex(_list.ItemCount - 1);
                 break;
+            case Key.F2:
+                RequestRename();
+                break;
+            case Key.Delete or Key.Back:
+                RequestDelete();
+                break;
             default:
                 return; // leave other keys (Tab, etc.) to the framework
         }
 
         e.Handled = true;
+    }
+
+    private bool IsRoot(NotebookNode node) => _root is { } r && string.Equals(node.Path, r.Path, StringComparison.OrdinalIgnoreCase);
+
+    private void RequestRename()
+    {
+        if (SelectedNode is { } node && !IsRoot(node))
+        {
+            RenameRequested?.Invoke(node);
+        }
+    }
+
+    private void RequestDelete()
+    {
+        if (SelectedNode is { } node && !IsRoot(node))
+        {
+            DeleteRequested?.Invoke(node);
+        }
+    }
+
+    private ContextMenu BuildContextMenu()
+    {
+        MenuItem Item(string header, Action run)
+        {
+            var item = new MenuItem { Header = header };
+            item.Click += (_, _) => run();
+            return item;
+        }
+
+        return new ContextMenu
+        {
+            ItemsSource = new List<Control>
+            {
+                Item("New File…", () => NewFileRequested?.Invoke(SelectedNode)),
+                Item("New Folder…", () => NewFolderRequested?.Invoke(SelectedNode)),
+                new Separator(),
+                Item("Rename…", RequestRename),
+                Item("Delete", RequestDelete),
+            },
+        };
     }
 
     private void MoveSelection(int delta)
