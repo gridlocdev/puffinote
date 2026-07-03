@@ -1,5 +1,3 @@
-using Puffinote.Desktop.Shell;
-
 namespace Puffinote.Desktop.Panes;
 
 /// <summary>
@@ -14,14 +12,14 @@ internal static class EditorPaneFactory
 
     /// <summary>
     /// Create a pane for <paramref name="path"/>, or null when no editor handles its type yet.
-    /// <paramref name="settings"/> supplies Puffinote's overrides, layered over the editor's own config
-    /// (PRD §7.5); omit it (or pass defaults) to inherit the editor's settings unchanged.
+    /// <paramref name="noteConfig"/> is the already-resolved note config (Typage's own settings with
+    /// Puffinote's overrides layered on, PRD §7.5); omit it to inherit the editor's defaults.
     /// </summary>
-    public static IEditorPane? Create(string path, PuffinoteSettings? settings = null)
+    public static IEditorPane? Create(string path, NoteConfig? noteConfig = null)
     {
         if (IsMarkdown(path))
         {
-            return new MarkdownPane(NoteConfig.Resolve(settings ?? new PuffinoteSettings()));
+            return new MarkdownPane(noteConfig);
         }
 
         if (IsSpreadsheet(path))

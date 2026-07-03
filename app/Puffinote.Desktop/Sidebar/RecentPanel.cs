@@ -54,12 +54,7 @@ internal sealed class RecentPanel : ISidebarPanel
     {
         var name = System.IO.Path.GetFileName(path);
         var folder = System.IO.Path.GetDirectoryName(path) ?? string.Empty;
-        if (_notebookRoot is { } root && folder.StartsWith(root, StringComparison.OrdinalIgnoreCase))
-        {
-            folder = folder[root.Length..].TrimStart(System.IO.Path.DirectorySeparatorChar, '/');
-        }
-
-        return new Entry(path, name, folder);
+        return new Entry(path, name, Shell.NotebookPaths.RelativeTo(_notebookRoot, folder));
     }
 
     private static Control BuildRow(Entry? entry, ThemePalette palette)

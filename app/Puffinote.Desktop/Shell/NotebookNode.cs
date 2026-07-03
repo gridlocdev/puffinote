@@ -25,6 +25,12 @@ public sealed class NotebookNode
 
     public bool IsDirectory { get; }
 
+    /// <summary>Last-write time (UTC ticks) captured during enumeration; 0 for directories / path-only nodes.</summary>
+    public long MTimeTicks { get; private init; }
+
+    /// <summary>File size in bytes captured during enumeration; 0 for directories / path-only nodes.</summary>
+    public long Size { get; private init; }
+
     /// <summary>
     /// Child entries: directories first, then files, each alphabetical (case-insensitive). Hidden
     /// dot-entries and the <see cref="StateDirectoryName"/> are skipped. Returns empty for a file, an
@@ -58,7 +64,14 @@ public sealed class NotebookNode
                 continue; // skip dotfiles and the .puffinote state directory
             }
 
-            nodes.Add(new NotebookNode(entry.FullName, entry is DirectoryInfo));
+            // GetFileSystemInfos already stat'd each entry, so reading a file's time/size here is free (no
+            // second stat) — the search index reuses these instead of re-statting every file (P5).
+            var file = entry as FileInfo;
+            nodes.Add(new NotebookNode(entry.FullName, entry is DirectoryInfo)
+            {
+                MTimeTicks = file?.LastWriteTimeUtc.Ticks ?? 0,
+                Size = file?.Length ?? 0,
+            });
         }
 
         nodes.Sort(static (a, b) =>

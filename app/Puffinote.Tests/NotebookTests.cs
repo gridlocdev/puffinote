@@ -104,4 +104,19 @@ public sealed class NotebookTests : IDisposable
     [Fact]
     public void EnumerateFiles_is_empty_when_no_notebook_is_open() =>
         Assert.Empty(new NotebookService().EnumerateFiles());
+
+    [Fact]
+    public void EnumerateIndexFiles_carries_each_files_size_and_write_time()
+    {
+        var path = Path.Combine(_notebook.FullName, "note.md");
+        File.WriteAllText(path, "hello"); // 5 bytes
+
+        var service = new NotebookService();
+        service.OpenNotebook(_notebook.FullName);
+
+        var file = Assert.Single(service.EnumerateIndexFiles());
+        Assert.Equal(path, file.Path);
+        Assert.Equal(5, file.Size); // captured during enumeration — the search reconcile reuses it (P5)
+        Assert.True(file.MTimeTicks > 0);
+    }
 }

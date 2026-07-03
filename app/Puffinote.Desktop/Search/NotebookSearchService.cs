@@ -46,7 +46,7 @@ internal sealed class NotebookSearchService
 
         // Enumerate the notebook (a recursive, stat-per-entry tree walk) and reconcile both off the UI thread —
         // the walk used to run on the UI thread and block it on large/slow notebooks (P3).
-        var (index, changed) = await Task.Run(() => Reconcile(root, _notebook.EnumerateFiles(), previous, loadCache));
+        var (index, changed) = await Task.Run(() => Reconcile(root, _notebook.EnumerateIndexFiles(), previous, loadCache));
 
         if (generation != _generation)
         {
@@ -77,7 +77,7 @@ internal sealed class NotebookSearchService
     // aren't re-parsed. Returns whether the resulting index differs from the prior/cache, so the caller can
     // skip re-persisting an unchanged index (P2).
     private static (IReadOnlyList<IndexedFile> Files, bool Changed) Reconcile(
-        string? root, IReadOnlyList<string> paths, IReadOnlyList<IndexedFile> previous, bool loadCache)
+        string? root, IReadOnlyList<NotebookFile> current, IReadOnlyList<IndexedFile> previous, bool loadCache)
     {
         var prior = new Dictionary<string, IndexedFile>(StringComparer.OrdinalIgnoreCase);
         foreach (var file in previous)
@@ -94,27 +94,16 @@ internal sealed class NotebookSearchService
         }
 
         var files = new List<IndexedFile>();
-        foreach (var path in paths)
+        foreach (var entry in current)
         {
-            FileInfo info;
-            try
-            {
-                info = new FileInfo(path);
-            }
-            catch (Exception e) when (e is IOException or UnauthorizedAccessException)
-            {
-                continue;
-            }
-
-            var mtime = info.LastWriteTimeUtc.Ticks;
-            var size = info.Length;
-            if (prior.TryGetValue(path, out var cached) && cached.MTimeTicks == mtime && cached.Size == size)
+            // mtime + size came from the enumeration's already-populated FileSystemInfo (P5) — no re-stat.
+            if (prior.TryGetValue(entry.Path, out var cached) && cached.MTimeTicks == entry.MTimeTicks && cached.Size == entry.Size)
             {
                 files.Add(cached); // unchanged → reuse the cached text
             }
-            else if (ReadText(path) is { } text)
+            else if (ReadText(entry.Path) is { } text)
             {
-                files.Add(new IndexedFile(path, text, mtime, size));
+                files.Add(new IndexedFile(entry.Path, text, entry.MTimeTicks, entry.Size));
             }
         }
 

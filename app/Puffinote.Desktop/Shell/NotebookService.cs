@@ -1,5 +1,8 @@
 namespace Puffinote.Desktop.Shell;
 
+/// <summary>A notebook file with the last-write time + size captured during enumeration (feeds the search index).</summary>
+public readonly record struct NotebookFile(string Path, long MTimeTicks, long Size);
+
 /// <summary>
 /// Owns the single open notebook (PRD §7.1 — one root folder at a time). Phase 0 keeps this minimal:
 /// open a folder and expose its root <see cref="NotebookNode"/>. Later phases add per-notebook
@@ -62,6 +65,37 @@ public sealed class NotebookService
             else
             {
                 files.Add(child.Path);
+            }
+        }
+    }
+
+    /// <summary>
+    /// Every notebook file with its enumeration-time last-write time + size (PRD §7.2.3) — the same walk as
+    /// <see cref="EnumerateFiles"/>, but carrying the metadata the search index's reconcile needs, so it
+    /// doesn't re-stat every file (P5).
+    /// </summary>
+    public IReadOnlyList<NotebookFile> EnumerateIndexFiles()
+    {
+        var files = new List<NotebookFile>();
+        if (Root is { } root)
+        {
+            CollectInfo(root, files);
+        }
+
+        return files;
+    }
+
+    private static void CollectInfo(NotebookNode directory, List<NotebookFile> files)
+    {
+        foreach (var child in directory.EnumerateChildren())
+        {
+            if (child.IsDirectory)
+            {
+                CollectInfo(child, files);
+            }
+            else
+            {
+                files.Add(new NotebookFile(child.Path, child.MTimeTicks, child.Size));
             }
         }
     }

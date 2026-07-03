@@ -114,13 +114,5 @@ internal static class SearchQuery
         return sb.ToString().Trim();
     }
 
-    private static string Relative(string path, string? root)
-    {
-        if (root is not null && path.StartsWith(root, StringComparison.OrdinalIgnoreCase))
-        {
-            return path[root.Length..].TrimStart(System.IO.Path.DirectorySeparatorChar, '/');
-        }
-
-        return path;
-    }
+    private static string Relative(string path, string? root) => Shell.NotebookPaths.RelativeTo(root, path);
 }

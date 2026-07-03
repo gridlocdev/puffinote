@@ -97,7 +97,7 @@ public class MainWindow : Window
         _notebook = notebook;
         _notebook.NotebookOpened += (_, _) => OnNotebookOpened();
         _sidebarView.FileActivated += path => _ = OpenFileAsync(path);
-        _sidebarView.SelectionChanged += _ => RefreshCommandStates();
+        _sidebarView.SelectionChanged += _ => RefreshSelectionCommands();
         _sidebarView.PanelActivated += id => { if (id == "outline") RefreshOutline(); };
         _sidebarView.NewFileRequested += node => _ = PromptNewFileAsync(node);
         _sidebarView.NewFolderRequested += node => _ = PromptNewFolderAsync(node);
@@ -389,15 +389,7 @@ public class MainWindow : Window
     }
 
     /// <summary>A notebook file's path relative to the notebook root (for the quick-open / recent secondary line).</summary>
-    private string RelativeToNotebook(string path)
-    {
-        if (_notebook.RootPath is { } root && path.StartsWith(root, StringComparison.OrdinalIgnoreCase))
-        {
-            return path[root.Length..].TrimStart(System.IO.Path.DirectorySeparatorChar, '/');
-        }
-
-        return path;
-    }
+    private string RelativeToNotebook(string path) => NotebookPaths.RelativeTo(_notebook.RootPath, path);
 
     /// <summary>
     /// Reserved global shortcuts win over the focused editor (PRD §7.6): on the tunnelling route — before
@@ -959,6 +951,17 @@ public class MainWindow : Window
         {
             relay.RaiseCanExecuteChanged();
         }
+    }
+
+    /// <summary>
+    /// Re-query only the commands whose enablement tracks the tree selection (rename/delete). The tree
+    /// raises SelectionChanged on every Up/Down/type-ahead keystroke, so refreshing just these two — rather
+    /// than fanning CanExecuteChanged out to the whole catalog per keystroke — keeps navigation cheap (P6).
+    /// </summary>
+    private void RefreshSelectionCommands()
+    {
+        _relays["shell.renameEntry"].RaiseCanExecuteChanged();
+        _relays["shell.deleteEntry"].RaiseCanExecuteChanged();
     }
 
     /// <summary>Pull the active document's outline into the sidebar's Outline panel (empty when no tab).</summary>
