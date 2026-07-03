@@ -1,8 +1,10 @@
 <Solution>
   <Folder Name="/app/">
     <Project Path="Puffinote.Desktop/Puffinote.Desktop.csproj" />
+    <Project Path="Puffinote.Cli/Puffinote.Cli.csproj" />
     <Project Path="Puffinote.Tests/Puffinote.Tests.csproj" />
     <Project Path="Puffinote.UiTests/Puffinote.UiTests.csproj" />
+    <Project Path="Puffinote.Cli.Tests/Puffinote.Cli.Tests.csproj" />
   </Folder>
   <Folder Name="/shared/">
     <Project Path="../shared/Puffinote.Components/Puffinote.Components.csproj" />
@@ -12,7 +14,9 @@
     <!-- Embedded editor surfaces (composed unchanged). -->
     <Project Path="../features/EditMarkdown/Typage.Engine/Typage.Engine.csproj" />
     <Project Path="../features/EditMarkdown/Typage.Control/Typage.Control.csproj" />
+    <Project Path="../features/EditMarkdown/Typage.Cli/Typage.Cli.csproj" />
     <Project Path="../features/EditSpreadsheets/Cellestra.Core/Cellestra.Core.csproj" />
+    <Project Path="../features/EditSpreadsheets/Cellestra.Cli/Cellestra.Cli.csproj" />
     <Project Path="../features/EditSpreadsheets/Cellestra.Charts/Cellestra.Charts.csproj" />
     <Project Path="../features/EditSpreadsheets/Cellestra.Editor/Cellestra.Editor.csproj" />
   </Folder>
