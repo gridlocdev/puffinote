@@ -19,8 +19,15 @@ internal sealed class MarkdownPane : IEditorPane
     private readonly MarkdownEditorView _view = new();
     private readonly MarkdownDocumentSession _session = new();
 
-    public MarkdownPane()
+    public MarkdownPane(NoteConfig? config = null)
     {
+        // Apply the resolved note settings (PRD §7.5): Typage's own config as the base, with any Puffinote
+        // override already layered in. A default config just reproduces the editor's own defaults.
+        var cfg = config ?? new NoteConfig();
+        _view.Editor.IndentWidth = cfg.TabWidth;
+        _view.Editor.HorizontalPadding = cfg.EditorPadding;
+        _view.Editor.VerticalPadding = cfg.EditorPaddingVertical;
+
         // The editor raises TextChanged on every edit; re-surface it so the shell repaints the dirty dot.
         _view.TextChanged += (_, _) => DirtyChanged?.Invoke(this, EventArgs.Empty);
     }

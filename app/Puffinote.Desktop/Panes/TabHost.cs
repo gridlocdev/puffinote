@@ -88,6 +88,9 @@ internal sealed class TabHost : UserControl
     /// <summary>Prompts the user to Save / Don't-Save / Cancel a dirty tab on close. Injected by the shell.</summary>
     public Func<IEditorPane, Task<CloseDecision>>? ConfirmClose { get; set; }
 
+    /// <summary>Puffinote's override settings, layered over each editor's own config as a pane opens (PRD §7.5).</summary>
+    public PuffinoteSettings Settings { get; set; } = new();
+
     /// <summary>Raised on any change to the tabs or the active document's dirty state (for the window title/Save).</summary>
     public event EventHandler? Changed;
 
@@ -112,7 +115,7 @@ internal sealed class TabHost : UserControl
             return;
         }
 
-        var pane = EditorPaneFactory.Create(path);
+        var pane = EditorPaneFactory.Create(path, Settings);
         if (pane is null)
         {
             return; // unsupported type — Phase 3 preview/external

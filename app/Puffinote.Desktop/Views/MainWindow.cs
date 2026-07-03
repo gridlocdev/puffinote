@@ -32,6 +32,12 @@ public class MainWindow : Window
         OperatingSystem.IsMacOS() ? KeyModifiers.Meta : KeyModifiers.Control;
 
     private readonly NotebookService _notebook;
+
+    // Puffinote's per-user override settings (PRD §7.5), loaded once at startup. Resolved against each
+    // notebook's own .puffinote/settings.json on open and handed to the tab host, which layers them over an
+    // editor's own config when a note/sheet pane opens.
+    private readonly PuffinoteSettings _settings = PuffinoteSettings.LoadUser();
+
     private readonly SidebarView _sidebarView = new();
     private ColumnDefinition _sidebarColumn = new(260, GridUnitType.Pixel) { MinWidth = 160 };
     private Border _sidebar = null!;
@@ -125,6 +131,9 @@ public class MainWindow : Window
 
     /// <summary>The notebook search service (test seam — await a deterministic rebuild, then query).</summary>
     internal Search.NotebookSearchService? SearchForTest => _search;
+
+    /// <summary>The active pane's editor control (test seam — assert config inheritance reached the editor).</summary>
+    internal Control? ActiveEditorViewForTest => _tabHost.ActivePane?.View;
 
     private Control BuildBody(ThemePalette palette)
     {
@@ -445,6 +454,10 @@ public class MainWindow : Window
     private void OnNotebookOpened()
     {
         _sidebarView.SetRoot(_notebook.Root);
+
+        // Resolve Puffinote's overrides for this notebook (per-user + the notebook's own .puffinote/settings.json)
+        // before any file opens, so panes inherit the editor's config with these layered on top (PRD §7.5).
+        _tabHost.Settings = PuffinoteSettings.Resolve(_settings, _notebook.RootPath);
 
         // Restore the per-notebook session (PRD §7.1): recent files + sidebar layout. Recency is per-notebook, so
         // a switch loads the new notebook's list (empty when it has none); drop recent entries whose file is

@@ -1,3 +1,5 @@
+using Puffinote.Desktop.Shell;
+
 namespace Puffinote.Desktop.Panes;
 
 /// <summary>
@@ -10,12 +12,16 @@ internal static class EditorPaneFactory
     /// <summary>True when some pane in this build can open <paramref name="path"/>.</summary>
     public static bool CanOpen(string path) => IsMarkdown(path) || IsSpreadsheet(path);
 
-    /// <summary>Create a pane for <paramref name="path"/>, or null when no editor handles its type yet.</summary>
-    public static IEditorPane? Create(string path)
+    /// <summary>
+    /// Create a pane for <paramref name="path"/>, or null when no editor handles its type yet.
+    /// <paramref name="settings"/> supplies Puffinote's overrides, layered over the editor's own config
+    /// (PRD §7.5); omit it (or pass defaults) to inherit the editor's settings unchanged.
+    /// </summary>
+    public static IEditorPane? Create(string path, PuffinoteSettings? settings = null)
     {
         if (IsMarkdown(path))
         {
-            return new MarkdownPane();
+            return new MarkdownPane(NoteConfig.Resolve(settings ?? new PuffinoteSettings()));
         }
 
         if (IsSpreadsheet(path))
