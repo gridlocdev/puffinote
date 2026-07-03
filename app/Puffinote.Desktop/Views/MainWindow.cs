@@ -1,6 +1,7 @@
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Input;
+using Avalonia.Interactivity;
 using Avalonia.Layout;
 using Avalonia.Media;
 using Avalonia.Platform.Storage;
@@ -55,6 +56,18 @@ public class MainWindow : Window
     private Dictionary<string, AppCommand> _shellById = new();
     private Dictionary<string, RelayCommand> _relays = new();
     private bool _closingConfirmed;
+
+    // The moderate reserved global set (PRD §7.6): these shell keys win over the focused editor via a
+    // tunnelling handler, so e.g. ⌘K always opens Puffinote's palette, not the sheet's. focusTree has no
+    // gesture, so it isn't routed. Everything else is focus-dispatched (ordinary bubbling key bindings).
+    private static readonly HashSet<string> ReservedIds = new()
+    {
+        "shell.commandPalette", "shell.openNotebook", "shell.toggleSidebar",
+        "shell.closeTab", "shell.nextTab", "shell.prevTab",
+    };
+    private List<(KeyGesture Gesture, RelayCommand Command)> _reservedBindings = new();
+    private bool _conflictWarned;
+    private IEditorPane? _lastScannedPane;
 
     public MainWindow(NotebookService notebook)
     {
@@ -163,13 +176,21 @@ public class MainWindow : Window
         // their enabled state stays in step — UpdatePaneChrome refreshes them together.
         _relays = _shellCommands.ToDictionary(c => c.Id, c => new RelayCommand(() => c.Execute(), () => c.IsEnabled));
 
+        // Non-reserved shortcuts are ordinary (bubbling) key bindings — the focused editor gets first
+        // refusal. Reserved shortcuts are routed on the tunnel (below) so they always win.
         foreach (var command in _shellCommands)
         {
-            if (command.Gesture is { } gesture)
+            if (command.Gesture is { } gesture && !ReservedIds.Contains(command.Id))
             {
                 KeyBindings.Add(new KeyBinding { Gesture = gesture, Command = _relays[command.Id] });
             }
         }
+
+        _reservedBindings = _shellCommands
+            .Where(c => ReservedIds.Contains(c.Id) && c.Gesture is not null)
+            .Select(c => (c.Gesture!, _relays[c.Id]))
+            .ToList();
+        AddHandler(KeyDownEvent, OnReservedKeyDown, RoutingStrategies.Tunnel);
 
         if (OperatingSystem.IsMacOS())
         {
@@ -238,6 +259,63 @@ public class MainWindow : Window
         };
         _overlayHost.ShowContent(card);
         Dispatcher.UIThread.Post(() => palette.SearchBox.Focus());
+    }
+
+    /// <summary>
+    /// Reserved global shortcuts win over the focused editor (PRD §7.6): on the tunnelling route — before
+    /// the editor's own key handling — a reserved gesture runs its shell command and stops the event. While
+    /// an overlay is open, keys belong to the overlay, so the router stands down.
+    /// </summary>
+    private void OnReservedKeyDown(object? sender, KeyEventArgs e)
+    {
+        if (_overlayHost.IsOpen)
+        {
+            return;
+        }
+
+        foreach (var (gesture, command) in _reservedBindings)
+        {
+            if (gesture.Matches(e))
+            {
+                if (command.CanExecute(null))
+                {
+                    command.Execute(null);
+                }
+
+                e.Handled = true; // reserved: the editor never sees it
+                return;
+            }
+        }
+    }
+
+    /// <summary>
+    /// When the active document's editor first appears, warn once if any of its shortcuts collide with a
+    /// reserved global key — the reserved key wins, so the editor binding is shadowed (PRD §7.6).
+    /// </summary>
+    private void ScanForShortcutConflicts()
+    {
+        if (_conflictWarned || _tabHost.ActivePane is not { } pane || ReferenceEquals(pane, _lastScannedPane))
+        {
+            return;
+        }
+
+        _lastScannedPane = pane;
+        var reserved = _shellCommands.Where(c => ReservedIds.Contains(c.Id));
+        var conflicts = ShortcutConflictScanner.Find(reserved, pane.Commands);
+        if (conflicts.Count == 0)
+        {
+            return;
+        }
+
+        _conflictWarned = true;
+        var lines = conflicts
+            .Select(c => $"•  {c.Editor.ShortcutText}  {c.Editor.Title}  →  “{c.Reserved.Title}” (Puffinote)")
+            .ToList();
+        _ = _overlayHost.ShowModalAsync(new MessageDialog(
+            "Some editor shortcuts are overridden",
+            "This editor defines shortcuts that Puffinote reserves for the shell. Puffinote's shortcut "
+                + "wins, so the editor's is shadowed here:",
+            detail: string.Join("\n", lines) + "\n\nYou'll be able to rebind these in the shortcuts editor."));
     }
 
     private async Task OpenNotebookInteractiveAsync()
@@ -349,6 +427,8 @@ public class MainWindow : Window
         {
             relay.RaiseCanExecuteChanged(); // refresh menu/keys enabled state (e.g. Save/Close need a tab)
         }
+
+        ScanForShortcutConflicts();
 
         var notebookName = _notebook.Root?.Name;
         string title;

@@ -468,8 +468,14 @@ any phase that delivers value.
   dirty state. Dirty-close (and window-close) prompts run through the shared `OverlayHost` +
   `ChoiceDialog` (Save/Don't-Save/Cancel), resolving the Phase 1 deferral. 11 headless + 9 pure tests
   green; both sub-apps still build.
-- **Phase 3 — Merged palette + shortcuts.** Compose Puffinote + active-editor catalogs in the palette;
-  implement the reserved-global-set resolution and the launch **conflict-warning** modal.
+- **Phase 3 — Merged palette + shortcuts. ✅ Landed.** A single shell `AppCommand` catalog drives the
+  menu, key bindings, and a **Command Palette (⌘K)** that merges Puffinote's commands with the active
+  editor's catalog (`IEditorPane.Commands` — Cellestra's full self-hosted catalog; a minimal Typage set
+  until its catalog is extracted). The **moderate reserved set** (⌘K, ⌘⇧O, ⌘\, ⌘W, ⌘⇧[ / ⌘⇧]) wins over
+  the focused editor via a tunnelling handler; everything else is focus-dispatched. A **conflict scanner**
+  warns once (shared `MessageDialog`) when an editor's shortcut collides with a reserved key. 13 pure + 13
+  headless green; both sub-apps still build. (Full Typage catalog extraction + the shortcuts *editor* UI
+  are Phase 5.)
 - **Phase 4 — Sidebar completion.** Full keyboard-operable tree, collapsible sidebar, the **search /
   outline / recent** panels, and the **quick-open (⌘O)** switcher.
 - **Phase 5 — Config inheritance + shortcuts editor.** Sub-app-base → Puffinote-override precedence; the
