@@ -38,6 +38,11 @@ public class MainWindow : Window
     // editor's own config when a note/sheet pane opens.
     private readonly PuffinoteSettings _settings = PuffinoteSettings.LoadUser();
 
+    // The user's custom shell shortcuts (PRD §7.6), edited in the shortcuts editor. BuildShellCommands
+    // resolves each non-reserved command's gesture through this, so a rebound key reaches menu + palette +
+    // key bindings alike. Reserved global keys are fixed and never routed through it.
+    private readonly ShortcutKeymap _keymap = ShortcutKeymap.Load();
+
     private readonly SidebarView _sidebarView = new();
     private ColumnDefinition _sidebarColumn = new(260, GridUnitType.Pixel) { MinWidth = 160 };
     private Border _sidebar = null!;
@@ -168,33 +173,37 @@ public class MainWindow : Window
     /// <summary>Puffinote's shell catalog — defined once; the menu, key bindings, and palette all read it.</summary>
     private void BuildShellCommands()
     {
+        // A command's effective gesture: the user's custom binding (shortcuts editor) if it has one, else the
+        // default below. Reserved global keys are fixed — they're never routed through the keymap (PRD §7.6).
+        Shortcut? Bound(string id, Shortcut? def) => ReservedIds.Contains(id) ? def : _keymap.Resolve(id, def);
+
         _shellCommands = new List<AppCommand>
         {
-            new("shell.commandPalette", "Command Palette", "Search and run any command", Shortcut.Cmd(Key.K),
+            new("shell.commandPalette", "Command Palette", "Search and run any command", Bound("shell.commandPalette", Shortcut.Cmd(Key.K)),
                 ShowCommandPalette, icon: "command"),
-            new("shell.quickOpen", "Quick Open…", "Jump to any file in the notebook", Shortcut.Cmd(Key.O),
+            new("shell.quickOpen", "Quick Open…", "Jump to any file in the notebook", Bound("shell.quickOpen", Shortcut.Cmd(Key.O)),
                 ShowQuickOpen, () => _notebook.Root is not null, icon: "search"),
-            new("shell.openNotebook", "Open Notebook…", "Open a folder as the notebook", Shortcut.Cmd(Key.O, KeyModifiers.Shift),
+            new("shell.openNotebook", "Open Notebook…", "Open a folder as the notebook", Bound("shell.openNotebook", Shortcut.Cmd(Key.O, KeyModifiers.Shift)),
                 () => _ = OpenNotebookInteractiveAsync(), icon: "folder-open"),
-            new("shell.newFile", "New File…", "Create a new file in the selected folder", null,
+            new("shell.newFile", "New File…", "Create a new file in the selected folder", Bound("shell.newFile", null),
                 () => _ = PromptNewFileAsync(_sidebarView.SelectedTreeNode), () => _notebook.Root is not null, icon: "file-plus"),
-            new("shell.newFolder", "New Folder…", "Create a new folder in the selected folder", null,
+            new("shell.newFolder", "New Folder…", "Create a new folder in the selected folder", Bound("shell.newFolder", null),
                 () => _ = PromptNewFolderAsync(_sidebarView.SelectedTreeNode), () => _notebook.Root is not null),
-            new("shell.renameEntry", "Rename…", "Rename the selected file or folder", null,
+            new("shell.renameEntry", "Rename…", "Rename the selected file or folder", Bound("shell.renameEntry", null),
                 () => { if (_sidebarView.SelectedTreeNode is { } n) _ = PromptRenameAsync(n); }, CanMutateSelected, icon: "pencil"),
-            new("shell.deleteEntry", "Delete", "Delete the selected file or folder", null,
+            new("shell.deleteEntry", "Delete", "Delete the selected file or folder", Bound("shell.deleteEntry", null),
                 () => { if (_sidebarView.SelectedTreeNode is { } n) _ = PromptDeleteAsync(n); }, CanMutateSelected, icon: "trash-2"),
-            new("shell.save", "Save", "Save the active document", Shortcut.Cmd(Key.S),
+            new("shell.save", "Save", "Save the active document", Bound("shell.save", Shortcut.Cmd(Key.S)),
                 () => _ = SaveCurrentAsync(), () => _tabHost.ActivePane is not null, icon: "save"),
-            new("shell.closeTab", "Close Tab", "Close the active tab", Shortcut.Cmd(Key.W),
+            new("shell.closeTab", "Close Tab", "Close the active tab", Bound("shell.closeTab", Shortcut.Cmd(Key.W)),
                 () => _ = _tabHost.CloseActiveAsync(), () => _tabHost.ActivePane is not null),
-            new("shell.nextTab", "Next Tab", "Switch to the next tab", Shortcut.Cmd(Key.OemCloseBrackets, KeyModifiers.Shift),
+            new("shell.nextTab", "Next Tab", "Switch to the next tab", Bound("shell.nextTab", Shortcut.Cmd(Key.OemCloseBrackets, KeyModifiers.Shift)),
                 () => _tabHost.ActivateRelative(1)),
-            new("shell.prevTab", "Previous Tab", "Switch to the previous tab", Shortcut.Cmd(Key.OemOpenBrackets, KeyModifiers.Shift),
+            new("shell.prevTab", "Previous Tab", "Switch to the previous tab", Bound("shell.prevTab", Shortcut.Cmd(Key.OemOpenBrackets, KeyModifiers.Shift)),
                 () => _tabHost.ActivateRelative(-1)),
-            new("shell.toggleSidebar", "Toggle Sidebar", "Show or hide the sidebar", Shortcut.Cmd(Key.OemBackslash),
+            new("shell.toggleSidebar", "Toggle Sidebar", "Show or hide the sidebar", Bound("shell.toggleSidebar", Shortcut.Cmd(Key.OemBackslash)),
                 ToggleSidebar),
-            new("shell.focusTree", "Focus File Tree", "Move keyboard focus to the file tree", null,
+            new("shell.focusTree", "Focus File Tree", "Move keyboard focus to the file tree", Bound("shell.focusTree", null),
                 () => _sidebarView.FocusTree()),
             new("shell.about", "About Puffinote", "About this app", null, ShowAbout),
         };
@@ -352,18 +361,14 @@ public class MainWindow : Window
             return;
         }
 
-        foreach (var (gesture, command) in _reservedBindings)
+        if (ShortcutRouter.Match(_reservedBindings, e.Key, e.KeyModifiers) is { } command)
         {
-            if (gesture.Matches(e))
+            if (command.CanExecute(null))
             {
-                if (command.CanExecute(null))
-                {
-                    command.Execute(null);
-                }
-
-                e.Handled = true; // reserved: the editor never sees it
-                return;
+                command.Execute(null);
             }
+
+            e.Handled = true; // reserved: the editor never sees it
         }
     }
 
