@@ -1,5 +1,7 @@
+using Avalonia.Controls;
 using Avalonia.Headless.XUnit;
 using Cellestra.Desktop.Services;
+using Puffinote.Components.Commands;
 using Puffinote.Desktop.Panes;
 using Typage.Control.Views;
 using Xunit;
@@ -9,6 +11,73 @@ namespace Puffinote.UiTests;
 /// <summary>Phase 2B: N-document tab lifecycle — open/focus/close, mixing notes and sheets, dirty prompts.</summary>
 public sealed class TabHostTests
 {
+    /// <summary>A minimal in-memory <see cref="IEditorPane"/> whose dirty state and save behaviour are driven
+    /// by the test — used to exercise close paths a real editor can't easily reach (a save that throws).</summary>
+    private sealed class FakePane : IEditorPane
+    {
+        private bool _dirty;
+
+        public FakePane(string path) => Path = path;
+
+        public Control View { get; } = new Border();
+        public string Title => System.IO.Path.GetFileName(Path ?? string.Empty);
+        public string? Path { get; private set; }
+        public Exception? SaveThrows { get; set; }
+        public bool Saved { get; private set; }
+
+        public bool IsDirty
+        {
+            get => _dirty;
+            set { _dirty = value; DirtyChanged?.Invoke(this, EventArgs.Empty); }
+        }
+
+        public event EventHandler? DirtyChanged;
+
+        public Task LoadAsync(string path) => Task.CompletedTask;
+
+        public Task SaveAsync()
+        {
+            if (SaveThrows is { } ex)
+            {
+                throw ex;
+            }
+
+            Saved = true;
+            IsDirty = false;
+            return Task.CompletedTask;
+        }
+
+        public void Rebind(string newPath) => Path = newPath;
+        public IReadOnlyList<AppCommand> Commands => Array.Empty<AppCommand>();
+        public IReadOnlyList<OutlineItem> GetOutline() => Array.Empty<OutlineItem>();
+        public void Dispose() { }
+    }
+
+    [AvaloniaFact]
+    public async Task Closing_a_dirty_tab_with_no_confirmer_refuses_rather_than_discarding()
+    {
+        var host = new TabHost();
+        host.OpenForTest(new FakePane("/notebook/note.md") { IsDirty = true }, "/notebook/note.md");
+
+        // ConfirmClose left null (a mis-wired host): the dirty tab must be kept, not silently discarded.
+        Assert.False(await host.CloseActiveAsync());
+        Assert.Equal(1, host.Count);
+    }
+
+    [AvaloniaFact]
+    public async Task A_non_IO_save_failure_keeps_the_tab_open_and_does_not_propagate()
+    {
+        var host = new TabHost { ConfirmClose = _ => Task.FromResult(CloseDecision.Save) };
+        host.OpenForTest(
+            new FakePane("/notebook/note.md") { IsDirty = true, SaveThrows = new InvalidOperationException("boom") },
+            "/notebook/note.md");
+
+        // A non-IO exception from SaveAsync must not escape (it would crash the async-void window-close
+        // handler); CloseAsync swallows it, keeps the tab, and reports the close as cancelled.
+        Assert.False(await host.CloseActiveAsync());
+        Assert.Equal(1, host.Count);
+    }
+
     private static (string md, string ods) Seed(DirectoryInfo dir)
     {
         var md = Path.Combine(dir.FullName, "note.md");

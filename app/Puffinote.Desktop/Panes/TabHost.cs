@@ -146,12 +146,23 @@ internal sealed class TabHost : UserControl
             return;
         }
 
-        var tab = new TabItem(pane, full);
+        AddTab(pane, full);
+    }
+
+    /// <summary>Wire a loaded pane into a new tab, subscribe its dirty handler, and activate it.</summary>
+    private TabItem AddTab(IEditorPane pane, string fullPath)
+    {
+        var tab = new TabItem(pane, fullPath);
         tab.DirtyHandler = (_, _) => OnPaneDirtyChanged(tab);
         pane.DirtyChanged += tab.DirtyHandler;
         _tabs.Add(tab);
         Activate(tab);
+        return tab;
     }
+
+    /// <summary>Test seam: open a pre-built pane (bypassing the factory/disk) so tests can inject a fake editor.</summary>
+    internal TabItem OpenForTest(IEditorPane pane, string path) =>
+        AddTab(pane, System.IO.Path.GetFullPath(path));
 
     public void Activate(TabItem tab)
     {
@@ -174,8 +185,16 @@ internal sealed class TabHost : UserControl
             return true;
         }
 
-        if (tab.Pane.IsDirty && ConfirmClose is { } confirm)
+        if (tab.Pane.IsDirty)
         {
+            // A dirty tab needs the shell's Save/Discard/Cancel prompt. With no confirmer wired up, refuse
+            // to close rather than silently discarding the edits — ConfirmClose is always set in-app, so this
+            // only guards a mis-wired host, but a silent data loss there would be the worst outcome.
+            if (ConfirmClose is not { } confirm)
+            {
+                return false;
+            }
+
             var decision = await confirm(tab.Pane);
             if (decision == CloseDecision.Cancel)
             {
@@ -188,9 +207,13 @@ internal sealed class TabHost : UserControl
                 {
                     await tab.Pane.SaveAsync();
                 }
-                catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+                catch (Exception)
                 {
-                    return false; // save failed → keep the tab open rather than lose the edits
+                    // Any save failure keeps the tab open rather than losing the edits. A missing/locked
+                    // file is the common (IO) case; anything else is an unexpected editor bug — but even so
+                    // this must not propagate, because CloseAsync is awaited from async-void callers (window
+                    // close, ⌘W, the tab's ✕ button) where an escaping exception crashes the app.
+                    return false;
                 }
             }
         }
