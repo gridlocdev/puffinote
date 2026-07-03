@@ -47,6 +47,9 @@ public class MainWindow : Window
     // is open. Rebuilt off the UI thread on open and after tree mutations.
     private Search.NotebookSearchService? _search;
 
+    // Watches the notebook for external filesystem changes to refresh the tree + index live (PRD §7.1).
+    private Shell.NotebookWatcher? _watcher;
+
     private readonly TabHost _tabHost = new();
     private readonly OverlayHost _overlayHost = new()
     {
@@ -102,6 +105,7 @@ public class MainWindow : Window
         Content = new Panel { Children = { root, _overlayHost } };
 
         Closing += OnWindowClosing;
+        Closed += (_, _) => _watcher?.Dispose();
     }
 
     /// <summary>Open <paramref name="path"/> as the notebook (used by the CLI-arg path and the menu).</summary>
@@ -442,7 +446,21 @@ public class MainWindow : Window
         _recent = new List<string>(); // recency is per-notebook (PRD §7.2.3) — start fresh on a switch
         _sidebarView.SetRecent(_notebook.RootPath, _recent);
         StartSearchIndex();
+        StartWatching();
         UpdatePaneChrome();
+    }
+
+    /// <summary>Watch the notebook for external changes, refreshing the tree + search index when they land.</summary>
+    private void StartWatching()
+    {
+        _watcher?.Dispose();
+        _watcher = _notebook.RootPath is { } root ? new Shell.NotebookWatcher(root, OnNotebookFilesChanged) : null;
+    }
+
+    private void OnNotebookFilesChanged()
+    {
+        _sidebarView.RefreshTree();
+        _ = _search?.RebuildAsync();
     }
 
     // ---- Notebook search (PRD §7.2.3) ----------------------------------------------------------------
