@@ -2,9 +2,14 @@ using Avalonia;
 using Avalonia.Headless;
 using Puffinote.Desktop;
 using Puffinote.UiTests;
+using Xunit;
 
 // One-time registration of the Avalonia headless platform for the whole UI test assembly.
 [assembly: AvaloniaTestApplication(typeof(TestAppBuilder))]
+
+// All [AvaloniaFact]s share one global Avalonia app + dispatcher, so run them serially rather than letting
+// xUnit parallelize test classes across threads — that keeps the shell/overlay/Tokens state race-free.
+[assembly: CollectionBehavior(DisableTestParallelization = true)]
 
 namespace Puffinote.UiTests;
 

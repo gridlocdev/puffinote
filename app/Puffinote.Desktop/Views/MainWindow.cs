@@ -41,7 +41,7 @@ public class MainWindow : Window
     // The user's custom shell shortcuts (PRD §7.6), edited in the shortcuts editor. BuildShellCommands
     // resolves each non-reserved command's gesture through this, so a rebound key reaches menu + palette +
     // key bindings alike. Reserved global keys are fixed and never routed through it.
-    private readonly ShortcutKeymap _keymap = ShortcutKeymap.Load();
+    private ShortcutKeymap _keymap = ShortcutKeymap.Load();
 
     private readonly SidebarView _sidebarView = new();
     private ColumnDefinition _sidebarColumn = new(260, GridUnitType.Pixel) { MinWidth = 160 };
@@ -85,6 +85,12 @@ public class MainWindow : Window
     private List<(KeyGesture Gesture, RelayCommand Command)> _reservedBindings = new();
     private bool _conflictWarned;
     private IEditorPane? _lastScannedPane;
+
+    // The menu bar is rebuilt when a shortcut is rebound so its gesture labels stay fresh; keep the roots to
+    // swap it (in-window) or re-set it (macOS native).
+    private DockPanel _menuRoot = null!;
+    private Menu? _inWindowMenu;
+    private ShortcutsEditorView? _shortcutsView;
 
     public MainWindow(NotebookService notebook)
     {
@@ -139,6 +145,24 @@ public class MainWindow : Window
 
     /// <summary>The active pane's editor control (test seam — assert config inheritance reached the editor).</summary>
     internal Control? ActiveEditorViewForTest => _tabHost.ActivePane?.View;
+
+    /// <summary>Redirect the shell keymap to a test file (so rebinding tests don't touch the real user config).</summary>
+    internal void UseKeymapForTest(ShortcutKeymap keymap)
+    {
+        _keymap = keymap;
+        BuildShellCommands();
+        ApplyShellShortcuts();
+        RefreshMenus();
+    }
+
+    /// <summary>Drive a rebinding as the shortcuts editor would (test seam).</summary>
+    internal void RebindShellForTest(string id, Puffinote.Components.Commands.Shortcut? shortcut) => OnShortcutRebound(id, shortcut);
+
+    /// <summary>The effective shortcut a shell command currently resolves to (test seam).</summary>
+    internal Puffinote.Components.Commands.Shortcut? ShellShortcutForTest(string id) => _shellById[id].Shortcut;
+
+    /// <summary>Run a shell command by id, as the menu/palette would (test seam).</summary>
+    internal void InvokeShellForTest(string id) => _shellById[id].Execute();
 
     private Control BuildBody(ThemePalette palette)
     {
@@ -205,6 +229,8 @@ public class MainWindow : Window
                 ToggleSidebar),
             new("shell.focusTree", "Focus File Tree", "Move keyboard focus to the file tree", Bound("shell.focusTree", null),
                 () => _sidebarView.FocusTree()),
+            new("shell.shortcuts", "Keyboard Shortcuts…", "View and customize keyboard shortcuts", Bound("shell.shortcuts", null),
+                ShowShortcutsEditor),
             new("shell.about", "About Puffinote", "About this app", null, ShowAbout),
         };
         _shellById = _shellCommands.ToDictionary(c => c.Id);
@@ -212,14 +238,30 @@ public class MainWindow : Window
 
     private void InstallMenu(DockPanel root)
     {
+        _menuRoot = root;
         BuildShellCommands();
 
-        // One shared RelayCommand per catalog entry (menu + native menu + key bindings bind to it), so
-        // their enabled state stays in step — UpdatePaneChrome refreshes them together.
-        _relays = _shellCommands.ToDictionary(c => c.Id, c => new RelayCommand(() => c.Execute(), () => c.IsEnabled));
+        // One shared RelayCommand per catalog entry, resolved by id so it survives a catalog rebuild when a
+        // shortcut is rebound (the menu items and key bindings keep pointing at a live command). Enabled
+        // state is refreshed for all of them together by RefreshCommandStates.
+        _relays = _shellCommands.ToDictionary(
+            c => c.Id,
+            c => new RelayCommand(() => _shellById[c.Id].Execute(), () => _shellById[c.Id].IsEnabled));
 
-        // Non-reserved shortcuts are ordinary (bubbling) key bindings — the focused editor gets first
-        // refusal. Reserved shortcuts are routed on the tunnel (below) so they always win.
+        ApplyShellShortcuts();
+        AddHandler(KeyDownEvent, OnReservedKeyDown, RoutingStrategies.Tunnel);
+        RefreshMenus();
+    }
+
+    /// <summary>
+    /// (Re)apply the shell's key bindings from the current catalog: non-reserved commands become ordinary
+    /// (bubbling) key bindings — the focused editor gets first refusal — while reserved ones are collected
+    /// for the tunnel router so they always win (PRD §7.6). Called at startup and after a rebinding, so a new
+    /// key takes effect live.
+    /// </summary>
+    private void ApplyShellShortcuts()
+    {
+        KeyBindings.Clear();
         foreach (var command in _shellCommands)
         {
             if (command.Gesture is { } gesture && !ReservedIds.Contains(command.Id))
@@ -232,8 +274,11 @@ public class MainWindow : Window
             .Where(c => ReservedIds.Contains(c.Id) && c.Gesture is not null)
             .Select(c => (c.Gesture!, _relays[c.Id]))
             .ToList();
-        AddHandler(KeyDownEvent, OnReservedKeyDown, RoutingStrategies.Tunnel);
+    }
 
+    /// <summary>(Re)build the menu bar from the current catalog so rebound gestures show their new keys.</summary>
+    private void RefreshMenus()
+    {
         if (OperatingSystem.IsMacOS())
         {
             NativeMenu.SetMenu(this, new NativeMenu
@@ -242,23 +287,28 @@ public class MainWindow : Window
                 {
                     new NativeMenuItem { Header = "File", Menu = BuildNativeMenu("shell.openNotebook", "shell.quickOpen", "shell.newFile", "shell.newFolder", "shell.save", "shell.closeTab") },
                     new NativeMenuItem { Header = "View", Menu = BuildNativeMenu("shell.commandPalette", "shell.toggleSidebar", "shell.nextTab", "shell.prevTab") },
-                    new NativeMenuItem { Header = "Help", Menu = BuildNativeMenu("shell.about") },
+                    new NativeMenuItem { Header = "Help", Menu = BuildNativeMenu("shell.shortcuts", "shell.about") },
                 },
             });
             return;
         }
 
-        var menu = new Menu
+        if (_inWindowMenu is { } existing)
+        {
+            _menuRoot.Children.Remove(existing);
+        }
+
+        _inWindowMenu = new Menu
         {
             Items =
             {
                 new MenuItem { Header = "_File", ItemsSource = BuildMenuItems("shell.openNotebook", "shell.quickOpen", "shell.newFile", "shell.newFolder", "shell.save", "shell.closeTab") },
                 new MenuItem { Header = "_View", ItemsSource = BuildMenuItems("shell.commandPalette", "shell.toggleSidebar", "shell.nextTab", "shell.prevTab") },
-                new MenuItem { Header = "_Help", ItemsSource = BuildMenuItems("shell.about") },
+                new MenuItem { Header = "_Help", ItemsSource = BuildMenuItems("shell.shortcuts", "shell.about") },
             },
         };
-        DockPanel.SetDock(menu, Avalonia.Controls.Dock.Top);
-        root.Children.Add(menu);
+        DockPanel.SetDock(_inWindowMenu, Avalonia.Controls.Dock.Top);
+        _menuRoot.Children.Insert(0, _inWindowMenu);
     }
 
     private List<MenuItem> BuildMenuItems(params string[] ids) =>
@@ -392,14 +442,35 @@ public class MainWindow : Window
         }
 
         _conflictWarned = true;
+        _ = WarnAboutShortcutConflictsAsync(conflicts);
+    }
+
+    /// <summary>
+    /// The friendly, actionable conflict notice (PRD §7.6): name the shadowed editor shortcuts, say the
+    /// reserved shell key wins, and offer a one-click path to the shortcuts editor to rebind (or keep as-is).
+    /// </summary>
+    private async Task WarnAboutShortcutConflictsAsync(IReadOnlyList<ShortcutConflict> conflicts)
+    {
+        if (_overlayHost.IsOpen)
+        {
+            return;
+        }
+
         var lines = conflicts
             .Select(c => $"•  {c.Editor.ShortcutText}  {c.Editor.Title}  →  “{c.Reserved.Title}” (Puffinote)")
             .ToList();
-        _ = _overlayHost.ShowModalAsync(new MessageDialog(
+        var openEditor = await _overlayHost.ShowModalAsync(new ConfirmDialog(
             "Some editor shortcuts are overridden",
-            "This editor defines shortcuts that Puffinote reserves for the shell. Puffinote's shortcut "
-                + "wins, so the editor's is shadowed here:",
-            detail: string.Join("\n", lines) + "\n\nYou'll be able to rebind these in the shortcuts editor."));
+            "This editor defines shortcuts that Puffinote reserves for the shell, so Puffinote's shortcut "
+                + "wins and the editor's is shadowed here:\n\n" + string.Join("\n", lines),
+            confirmLabel: "Open Shortcuts Editor",
+            denyLabel: "Keep as-is",
+            confirmIsDefault: false));
+
+        if (openEditor == true)
+        {
+            ShowShortcutsEditor();
+        }
     }
 
     private async Task OpenNotebookInteractiveAsync()
@@ -442,6 +513,88 @@ public class MainWindow : Window
         }
 
         PersistSession(); // remember the collapsed/expanded state per notebook (PRD §7.1)
+    }
+
+    /// <summary>
+    /// Open the shared shortcuts editor (PRD §7.6): every shell binding plus the active editor's, grouped and
+    /// with the reserved global keys marked. Rebinding a shell command persists to the keymap and takes
+    /// effect immediately; editor bindings are listed for reference (they're the editor's own to change).
+    /// </summary>
+    private void ShowShortcutsEditor()
+    {
+        if (_overlayHost.IsOpen)
+        {
+            return;
+        }
+
+        var view = new ShortcutsEditorView();
+        view.Rebound += OnShortcutRebound;
+        view.SetBindings(BuildShortcutRows());
+        _shortcutsView = view;
+
+        var card = new Border
+        {
+            Width = 560,
+            Background = Tokens.Dark.Surface,
+            CornerRadius = new CornerRadius(8),
+            Padding = new Thickness(12),
+            Margin = new Thickness(0, 60, 0, 0),
+            HorizontalAlignment = HorizontalAlignment.Center,
+            VerticalAlignment = VerticalAlignment.Top,
+            Child = new StackPanel
+            {
+                Spacing = 8,
+                Children =
+                {
+                    new TextBlock { Text = "Keyboard Shortcuts", FontWeight = FontWeight.SemiBold, FontSize = 15 },
+                    view,
+                },
+            },
+        };
+
+        _overlayHost.Closed += ForgetShortcutsView;
+        _overlayHost.ShowContent(card);
+        Dispatcher.UIThread.Post(() => view.Focus());
+    }
+
+    private void ForgetShortcutsView(object? sender, EventArgs e)
+    {
+        _shortcutsView = null;
+        _overlayHost.Closed -= ForgetShortcutsView;
+    }
+
+    /// <summary>The rows the shortcuts editor shows: Puffinote's shell catalog, then the active editor's.</summary>
+    private List<ShortcutBinding> BuildShortcutRows()
+    {
+        var rows = _shellCommands.Select(c => new ShortcutBinding(
+            c.Id, c.Title, "Puffinote", c.Shortcut,
+            IsReserved: ReservedIds.Contains(c.Id),
+            IsRebindable: !ReservedIds.Contains(c.Id),
+            IsCustomized: _keymap.For(c.Id) is not null)).ToList();
+
+        if (_tabHost.ActivePane is { } pane)
+        {
+            rows.AddRange(pane.Commands.Select(c => new ShortcutBinding(
+                c.Id, c.Title, "Editor", c.Shortcut, IsReserved: false, IsRebindable: false, IsCustomized: false)));
+        }
+
+        return rows;
+    }
+
+    /// <summary>Apply a rebinding from the shortcuts editor: persist it and re-derive menu/keys/palette live.</summary>
+    private void OnShortcutRebound(string id, Shortcut? shortcut)
+    {
+        if (ReservedIds.Contains(id))
+        {
+            return; // reserved global keys are fixed (PRD §7.6) — never rebound from within Puffinote
+        }
+
+        _keymap.Set(id, shortcut);
+        BuildShellCommands();   // re-resolve every command's gesture through the updated keymap
+        ApplyShellShortcuts();  // the new key binding takes effect immediately
+        RefreshMenus();         // and the menu labels stay truthful
+        RefreshCommandStates();
+        _shortcutsView?.SetBindings(BuildShortcutRows()); // refresh the open editor's rows
     }
 
     private void ShowAbout()
