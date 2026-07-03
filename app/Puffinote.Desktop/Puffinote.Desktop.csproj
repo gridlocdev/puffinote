@@ -24,8 +24,11 @@
     <!-- Shared app-shell / design-system library (Puffinote family). -->
     <ProjectReference Include="..\..\shared\Puffinote.Components\Puffinote.Components.csproj" />
     <!-- Embedded editor #1: the Typage Markdown surface (composed unchanged; its file-host seam is
-         MarkdownDocumentSession). Cellestra.Editor is added in Phase 2. -->
+         MarkdownDocumentSession). -->
     <ProjectReference Include="..\..\features\EditMarkdown\Typage.Control\Typage.Control.csproj" />
+    <!-- Embedded editor #2: the Cellestra spreadsheet surface (SpreadsheetEditorView self-hosts its
+         IAppEnvironment; the shell supplies IEditorHost). -->
+    <ProjectReference Include="..\..\features\EditSpreadsheets\Cellestra.Editor\Cellestra.Editor.csproj" />
   </ItemGroup>
 
   <ItemGroup>

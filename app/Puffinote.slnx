@@ -9,9 +9,12 @@
     <Project Path="../shared/Puffinote.Components.Core/Puffinote.Components.Core.csproj" />
   </Folder>
   <Folder Name="/editors/">
-    <!-- Embedded editor surfaces (composed unchanged). Cellestra.Editor joins in Phase 2. -->
+    <!-- Embedded editor surfaces (composed unchanged). -->
     <Project Path="../features/EditMarkdown/Typage.Engine/Typage.Engine.csproj" />
     <Project Path="../features/EditMarkdown/Typage.Control/Typage.Control.csproj" />
+    <Project Path="../features/EditSpreadsheets/Cellestra.Core/Cellestra.Core.csproj" />
+    <Project Path="../features/EditSpreadsheets/Cellestra.Charts/Cellestra.Charts.csproj" />
+    <Project Path="../features/EditSpreadsheets/Cellestra.Editor/Cellestra.Editor.csproj" />
   </Folder>
 </Solution>
 

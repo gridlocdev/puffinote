@@ -93,10 +93,10 @@ public sealed class MarkdownPaneTests
     }
 
     [AvaloniaFact]
-    public void Factory_declines_non_markdown_files()
+    public void Factory_creates_a_markdown_pane_for_md_and_declines_unsupported_types()
     {
-        Assert.Null(EditorPaneFactory.Create("/x/budget.ods"));
+        Assert.IsType<MarkdownPane>(EditorPaneFactory.Create("/x/note.MD"));
+        Assert.Null(EditorPaneFactory.Create("/x/photo.png")); // no editor for images yet (Phase 3)
         Assert.False(EditorPaneFactory.CanOpen("/x/photo.png"));
-        Assert.True(EditorPaneFactory.CanOpen("/x/note.MD"));
     }
 }
