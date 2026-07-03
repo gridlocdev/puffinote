@@ -16,6 +16,7 @@ namespace Puffinote.Desktop.Sidebar;
 internal sealed class SidebarView : UserControl
 {
     private readonly FilesPanel _files = new();
+    private readonly SearchPanel _search = new();
     private readonly OutlinePanel _outline = new();
     private readonly RecentPanel _recent = new();
     private readonly List<ISidebarPanel> _panels;
@@ -38,10 +39,11 @@ internal sealed class SidebarView : UserControl
 
     public SidebarView()
     {
-        _panels = new List<ISidebarPanel> { _files, _outline, _recent };
+        _panels = new List<ISidebarPanel> { _files, _search, _outline, _recent };
         _active = _files;
 
         _files.FileActivated += path => FileActivated?.Invoke(path);
+        _search.FileActivated += path => FileActivated?.Invoke(path);
         _recent.FileActivated += path => FileActivated?.Invoke(path);
         _files.SelectionChanged += node => SelectionChanged?.Invoke(node);
         _files.RenameRequested += node => RenameRequested?.Invoke(node);
@@ -112,6 +114,12 @@ internal sealed class SidebarView : UserControl
 
     /// <summary>Update the outline panel with the active document's structure (or empty).</summary>
     public void SetOutline(IReadOnlyList<Panes.OutlineItem> items) => _outline.SetItems(items);
+
+    /// <summary>Point the search panel at the shell's search function (queries the background index).</summary>
+    public void ConfigureSearch(Func<string, IReadOnlyList<Search.SearchHit>> search) => _search.SearchFunc = search;
+
+    /// <summary>Set the search panel's background-index status line, re-running any active query.</summary>
+    public void SetSearchStatus(string status) => _search.SetIndexStatus(status);
 
     /// <summary>Activate the file tree and move keyboard focus into it (the shell's "focus file tree" command).</summary>
     public void FocusTree()

@@ -43,6 +43,10 @@ public class MainWindow : Window
     // .puffinote/ lands with Phase 5 config.
     private List<string> _recent = new();
 
+    // The notebook's background full-text search index (PRD §7.2.3), recreated per notebook. Null until a notebook
+    // is open. Rebuilt off the UI thread on open and after tree mutations.
+    private Search.NotebookSearchService? _search;
+
     private readonly TabHost _tabHost = new();
     private readonly OverlayHost _overlayHost = new()
     {
@@ -114,6 +118,9 @@ public class MainWindow : Window
 
     /// <summary>The sidebar (test seam — drive the tree in end-to-end mutation tests).</summary>
     internal Sidebar.SidebarView SidebarForTest => _sidebarView;
+
+    /// <summary>The notebook search service (test seam — await a deterministic rebuild, then query).</summary>
+    internal Search.NotebookSearchService? SearchForTest => _search;
 
     private Control BuildBody(ThemePalette palette)
     {
@@ -434,8 +441,28 @@ public class MainWindow : Window
         _sidebarView.SetRoot(_notebook.Root);
         _recent = new List<string>(); // recency is per-notebook (PRD §7.2.3) — start fresh on a switch
         _sidebarView.SetRecent(_notebook.RootPath, _recent);
+        StartSearchIndex();
         UpdatePaneChrome();
     }
+
+    // ---- Notebook search (PRD §7.2.3) ----------------------------------------------------------------
+
+    /// <summary>Create the per-notebook search service and kick off its first background index build.</summary>
+    private void StartSearchIndex()
+    {
+        if (_search is not null)
+        {
+            _search.IndexUpdated -= OnSearchIndexUpdated;
+        }
+
+        _search = new Search.NotebookSearchService(_notebook);
+        _search.IndexUpdated += OnSearchIndexUpdated;
+        _sidebarView.ConfigureSearch(_search.Search);
+        _ = _search.RebuildAsync();
+    }
+
+    private void OnSearchIndexUpdated() =>
+        _sidebarView.SetSearchStatus(_search is { IsIndexing: false } s ? $"{s.FileCount} files indexed" : "Indexing…");
 
     // ---- Editor tabs ------------------------------------------------------------------------------
 
@@ -585,6 +612,7 @@ public class MainWindow : Window
         try
         {
             await mutation();
+            _ = _search?.RebuildAsync(); // the notebook changed — refresh the search index in the background
         }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException)
         {
