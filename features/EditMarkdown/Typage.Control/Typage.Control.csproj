@@ -22,6 +22,10 @@
 
   <ItemGroup>
     <ProjectReference Include="..\Typage.Engine\Typage.Engine.csproj" />
+    <!-- Shared command types (AppCommand / Shortcut) so the control can publish its own editing catalog
+         for a host's Command Palette, exactly as Cellestra.Editor does. Puffinote.Components is the shared
+         floor (it depends only on Avalonia); this is control -> shared-floor, not an upward reference. -->
+    <ProjectReference Include="..\..\..\shared\Puffinote.Components\Puffinote.Components.csproj" />
   </ItemGroup>
 
   <ItemGroup>

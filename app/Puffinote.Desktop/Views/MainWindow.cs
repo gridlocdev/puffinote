@@ -240,6 +240,8 @@ public class MainWindow : Window
                 () => _tabHost.ActivateRelative(-1)),
             new("shell.toggleSidebar", "Toggle Sidebar", "Show or hide the sidebar", Bound("shell.toggleSidebar", Shortcut.Cmd(Key.OemBackslash)),
                 ToggleSidebar),
+            new("shell.toggleEditorToolbar", "Toggle Editor Toolbar", "Show or hide the formatting toolbar over a note",
+                Bound("shell.toggleEditorToolbar", null), ToggleEditorToolbar, () => _tabHost.ActivePane is MarkdownPane, icon: "type"),
             new("shell.focusTree", "Focus File Tree", "Move keyboard focus to the file tree", Bound("shell.focusTree", null),
                 () => _sidebarView.FocusTree()),
             new("shell.shortcuts", "Keyboard Shortcuts…", "View and customize keyboard shortcuts", Bound("shell.shortcuts", null),
@@ -299,7 +301,7 @@ public class MainWindow : Window
                 Items =
                 {
                     new NativeMenuItem { Header = "File", Menu = BuildNativeMenu("shell.openNotebook", "shell.quickOpen", "shell.newNote", "shell.newSpreadsheet", "shell.newFolder", "shell.save", "shell.closeTab") },
-                    new NativeMenuItem { Header = "View", Menu = BuildNativeMenu("shell.commandPalette", "shell.toggleSidebar", "shell.nextTab", "shell.prevTab") },
+                    new NativeMenuItem { Header = "View", Menu = BuildNativeMenu("shell.commandPalette", "shell.toggleSidebar", "shell.toggleEditorToolbar", "shell.nextTab", "shell.prevTab") },
                     new NativeMenuItem { Header = "Help", Menu = BuildNativeMenu("shell.shortcuts", "shell.about") },
                 },
             });
@@ -316,7 +318,7 @@ public class MainWindow : Window
             Items =
             {
                 new MenuItem { Header = "_File", ItemsSource = BuildMenuItems("shell.openNotebook", "shell.quickOpen", "shell.newNote", "shell.newSpreadsheet", "shell.newFolder", "shell.save", "shell.closeTab") },
-                new MenuItem { Header = "_View", ItemsSource = BuildMenuItems("shell.commandPalette", "shell.toggleSidebar", "shell.nextTab", "shell.prevTab") },
+                new MenuItem { Header = "_View", ItemsSource = BuildMenuItems("shell.commandPalette", "shell.toggleSidebar", "shell.toggleEditorToolbar", "shell.nextTab", "shell.prevTab") },
                 new MenuItem { Header = "_Help", ItemsSource = BuildMenuItems("shell.shortcuts", "shell.about") },
             },
         };
@@ -498,6 +500,15 @@ public class MainWindow : Window
         if (folders.Count > 0 && folders[0].TryGetLocalPath() is { } path)
         {
             OpenNotebook(path);
+        }
+    }
+
+    /// <summary>Toggle the formatting toolbar over the active note (shown by default). No-op for other panes.</summary>
+    private void ToggleEditorToolbar()
+    {
+        if (_tabHost.ActivePane is MarkdownPane note)
+        {
+            note.ToolbarVisible = !note.ToolbarVisible;
         }
     }
 

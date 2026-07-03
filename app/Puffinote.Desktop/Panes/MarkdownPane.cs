@@ -1,5 +1,4 @@
 using Avalonia.Controls;
-using Avalonia.Input;
 using Puffinote.Components.Commands;
 using Typage.Control;
 using Typage.Control.Views;
@@ -28,8 +27,19 @@ internal sealed class MarkdownPane : IEditorPane
         _view.Editor.HorizontalPadding = cfg.EditorPadding;
         _view.Editor.VerticalPadding = cfg.EditorPaddingVertical;
 
+        // Show Typage's formatting toolbar over the editor by default (the standalone app has its own; the
+        // embeddable control keeps it off unless a host asks). Toggle via the shell's View command.
+        _view.ShowCommandBar = true;
+
         // The editor raises TextChanged on every edit; re-surface it so the shell repaints the dirty dot.
         _view.TextChanged += (_, _) => DirtyChanged?.Invoke(this, EventArgs.Empty);
+    }
+
+    /// <summary>Whether the formatting toolbar is shown over the editor (shell View ▸ Toggle command).</summary>
+    public bool ToolbarVisible
+    {
+        get => _view.ShowCommandBar;
+        set => _view.ShowCommandBar = value;
     }
 
     public Control View => _view;
@@ -41,16 +51,10 @@ internal sealed class MarkdownPane : IEditorPane
 
     public bool IsDirty => _view.IsDirty;
 
-    // A minimal editor catalog for the merged palette. Typage's full command catalog lives in its Desktop
-    // shell today; extracting it into Typage.Control (like the file-host seam) is a follow-up — until then
-    // the pane exposes the operations the embeddable control already offers.
-    public IReadOnlyList<AppCommand> Commands =>
-    [
-        new AppCommand("md.undo", "Undo", "Undo the last edit", Shortcut.Cmd(Key.Z),
-            () => _view.Undo(), () => _view.CanUndo, icon: "undo"),
-        new AppCommand("md.redo", "Redo", "Redo the last undone edit", Shortcut.Cmd(Key.Z, KeyModifiers.Shift),
-            () => _view.Redo(), () => _view.CanRedo, icon: "redo"),
-    ];
+    // Typage's editing/formatting catalog, now published by the embeddable control itself (Typage.Control),
+    // so the merged Command Palette shows the note's commands next to Puffinote's — the same way SheetPane
+    // surfaces Cellestra's catalog. Shell commands (file, find, dialogs) stay Puffinote's.
+    public IReadOnlyList<AppCommand> Commands => _view.EditingCommands;
 
     /// <summary>Heading outline (PRD §7.2.3): the same headings <c>typage outline</c> lists, reusing the engine.</summary>
     public IReadOnlyList<OutlineItem> GetOutline()

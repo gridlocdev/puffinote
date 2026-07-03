@@ -2,12 +2,42 @@ using Avalonia.Headless.XUnit;
 using Cellestra.Desktop.Services;
 using Puffinote.Desktop.Shell;
 using Puffinote.Desktop.Views;
+using Typage.Control.Views;
 using Xunit;
 
 namespace Puffinote.UiTests;
 
 public sealed class MainWindowTests
 {
+    [AvaloniaFact]
+    public async Task Toggle_editor_toolbar_command_shows_and_hides_the_note_toolbar()
+    {
+        var dir = Directory.CreateTempSubdirectory("puffinote-toolbar");
+        try
+        {
+            var md = Path.Combine(dir.FullName, "note.md");
+            File.WriteAllText(md, "# hi");
+
+            var window = new MainWindow(new NotebookService());
+            window.Show(); // renders the note toolbar under null drawing
+            window.OpenNotebook(dir.FullName);
+            await window.OpenFileAsync(md);
+
+            var view = Assert.IsType<MarkdownEditorView>(window.ActiveEditorViewForTest);
+            Assert.True(view.ShowCommandBar); // shown by default
+
+            window.InvokeShellForTest("shell.toggleEditorToolbar");
+            Assert.False(view.ShowCommandBar);
+
+            window.InvokeShellForTest("shell.toggleEditorToolbar");
+            Assert.True(view.ShowCommandBar);
+        }
+        finally
+        {
+            dir.Delete(recursive: true);
+        }
+    }
+
     [AvaloniaFact]
     public async Task Opening_a_sheet_does_not_warn_about_superseded_palette_or_quick_open_shortcuts()
     {
