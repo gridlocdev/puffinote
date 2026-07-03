@@ -42,4 +42,11 @@ internal interface IEditorPane : IDisposable
     /// full catalog; Typage exposes a minimal set until its catalog is extracted into the control.
     /// </summary>
     IReadOnlyList<AppCommand> Commands { get; }
+
+    /// <summary>
+    /// The document's outline for the sidebar's Outline panel (PRD §7.2.3): Markdown headings for a note,
+    /// the sheet/chart list for a workbook. Computed on demand from the current document; empty when there
+    /// is no structure. Each item can <see cref="OutlineItem.Reveal"/> its location in the editor.
+    /// </summary>
+    IReadOnlyList<OutlineItem> GetOutline();
 }

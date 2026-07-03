@@ -16,6 +16,7 @@ namespace Puffinote.Desktop.Sidebar;
 internal sealed class SidebarView : UserControl
 {
     private readonly FilesPanel _files = new();
+    private readonly OutlinePanel _outline = new();
     private readonly RecentPanel _recent = new();
     private readonly List<ISidebarPanel> _panels;
 
@@ -37,7 +38,7 @@ internal sealed class SidebarView : UserControl
 
     public SidebarView()
     {
-        _panels = new List<ISidebarPanel> { _files, _recent };
+        _panels = new List<ISidebarPanel> { _files, _outline, _recent };
         _active = _files;
 
         _files.FileActivated += path => FileActivated?.Invoke(path);
@@ -71,6 +72,9 @@ internal sealed class SidebarView : UserControl
     /// <summary>Raised when the file-tree selection changes (for command-enablement refresh).</summary>
     public event Action<NotebookNode?>? SelectionChanged;
 
+    /// <summary>Raised when a panel becomes active (so the shell can refresh e.g. the outline on view).</summary>
+    public event Action<string>? PanelActivated;
+
     /// <summary>Tree mutation requests (F2 / Delete / context menu), fulfilled by the shell.</summary>
     public event Action<NotebookNode>? RenameRequested;
     public event Action<NotebookNode>? DeleteRequested;
@@ -93,6 +97,9 @@ internal sealed class SidebarView : UserControl
     /// <summary>The id of the currently shown panel (test seam).</summary>
     internal string ActivePanelId => _active.Id;
 
+    /// <summary>The outline panel's current items (test seam).</summary>
+    internal IReadOnlyList<Panes.OutlineItem> OutlineItemsForTest => _outline.ItemsForTest;
+
     /// <summary>Rebuild for a newly opened notebook: header text + the file tree (or clear when null).</summary>
     public void SetRoot(NotebookNode? root)
     {
@@ -102,6 +109,9 @@ internal sealed class SidebarView : UserControl
 
     /// <summary>Update the recent-files panel with <paramref name="paths"/> (most-recent first).</summary>
     public void SetRecent(string? notebookRoot, IReadOnlyList<string> paths) => _recent.SetItems(notebookRoot, paths);
+
+    /// <summary>Update the outline panel with the active document's structure (or empty).</summary>
+    public void SetOutline(IReadOnlyList<Panes.OutlineItem> items) => _outline.SetItems(items);
 
     /// <summary>Activate the file tree and move keyboard focus into it (the shell's "focus file tree" command).</summary>
     public void FocusTree()
@@ -121,6 +131,7 @@ internal sealed class SidebarView : UserControl
         _active = panel;
         _body.Child = panel.View;
         RefreshSwitcher();
+        PanelActivated?.Invoke(panel.Id);
     }
 
     private void BuildSwitcher(ThemePalette palette)

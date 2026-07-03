@@ -35,6 +35,15 @@ internal sealed class SheetPane : IEditorPane, IEditorHost
     /// <summary>Cellestra's full command catalog (the view self-hosts it), for the merged palette.</summary>
     public IReadOnlyList<AppCommand> Commands => _view.Commands.All.ToList();
 
+    /// <summary>Outline (PRD §7.2.3): the workbook's sheets (chart sheets marked); selecting one activates it.</summary>
+    public IReadOnlyList<OutlineItem> GetOutline() =>
+        _view.Session.Workbook.Worksheets
+            .Select(sheet => new OutlineItem(
+                sheet.IsChartSheet ? $"{sheet.Name}  (chart)" : sheet.Name,
+                0,
+                () => { _view.Session.SetActiveSheet(sheet); _view.FocusGrid(); }))
+            .ToList();
+
     public event EventHandler? DirtyChanged;
 
     public async Task LoadAsync(string path)

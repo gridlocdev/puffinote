@@ -1,8 +1,6 @@
 using System.Linq;
-using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Controls.Templates;
-using Avalonia.Input;
 using Avalonia.Layout;
 using Avalonia.Media;
 using Puffinote.Components.Theming;
@@ -18,52 +16,29 @@ internal sealed class RecentPanel : ISidebarPanel
 {
     private sealed record Entry(string Path, string Name, string Folder);
 
-    private readonly ListBox _list;
-    private readonly TextBlock _empty;
-    private readonly Panel _root;
+    private readonly KeyboardListView _list;
     private string? _notebookRoot;
 
     public RecentPanel()
     {
         var palette = Tokens.Dark;
-
-        _list = new ListBox
+        _list = new KeyboardListView(new FuncDataTemplate<Entry>((entry, _) => BuildRow(entry, palette), supportsRecycling: true))
         {
-            BorderThickness = new Thickness(0),
-            Background = Brushes.Transparent,
-            ItemTemplate = new FuncDataTemplate<Entry>((entry, _) => BuildRow(entry, palette), supportsRecycling: true),
+            EmptyText = "No recent files yet.",
         };
-        _list.DoubleTapped += (_, _) => ActivateSelected();
-        _list.KeyDown += (_, e) =>
-        {
-            if (e.Key == Key.Enter)
-            {
-                ActivateSelected();
-                e.Handled = true;
-            }
-        };
-
-        _empty = new TextBlock
-        {
-            Text = "No recent files yet.",
-            Foreground = palette.MutedText,
-            Margin = new Thickness(12, 8),
-            IsVisible = true,
-        };
-
-        _root = new Panel { Children = { _list, _empty } };
+        _list.Activated += item => FileActivated?.Invoke(((Entry)item).Path);
     }
 
     public string Id => "recent";
 
     public string Title => "Recent";
 
-    public Control View => _root;
+    public Control View => _list;
 
     /// <summary>Raised when a recent entry is activated (double-click / Enter), to open it in a tab.</summary>
     public event Action<string>? FileActivated;
 
-    public void Focus() => _list.Focus();
+    public void Focus() => _list.FocusList();
 
     /// <summary>
     /// Show <paramref name="paths"/> (already ordered most-recent first), rendered relative to
@@ -72,9 +47,7 @@ internal sealed class RecentPanel : ISidebarPanel
     public void SetItems(string? notebookRoot, IReadOnlyList<string> paths)
     {
         _notebookRoot = notebookRoot;
-        _list.ItemsSource = paths.Select(ToEntry).ToList();
-        _empty.IsVisible = paths.Count == 0;
-        _list.IsVisible = paths.Count > 0;
+        _list.SetItems(paths.Select(ToEntry).ToList());
     }
 
     private Entry ToEntry(string path)
@@ -87,14 +60,6 @@ internal sealed class RecentPanel : ISidebarPanel
         }
 
         return new Entry(path, name, folder);
-    }
-
-    private void ActivateSelected()
-    {
-        if (_list.SelectedItem is Entry entry)
-        {
-            FileActivated?.Invoke(entry.Path);
-        }
     }
 
     private static Control BuildRow(Entry? entry, ThemePalette palette)

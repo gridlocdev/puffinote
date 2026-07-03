@@ -74,6 +74,7 @@ public class MainWindow : Window
         _notebook.NotebookOpened += (_, _) => OnNotebookOpened();
         _sidebarView.FileActivated += path => _ = OpenFileAsync(path);
         _sidebarView.SelectionChanged += _ => RefreshCommandStates();
+        _sidebarView.PanelActivated += id => { if (id == "outline") RefreshOutline(); };
         _sidebarView.NewFileRequested += node => _ = PromptNewFileAsync(node);
         _sidebarView.NewFolderRequested += node => _ = PromptNewFolderAsync(node);
         _sidebarView.RenameRequested += node => _ = PromptRenameAsync(node);
@@ -653,9 +654,14 @@ public class MainWindow : Window
         }
     }
 
+    /// <summary>Pull the active document's outline into the sidebar's Outline panel (empty when no tab).</summary>
+    private void RefreshOutline() =>
+        _sidebarView.SetOutline(_tabHost.ActivePane?.GetOutline() ?? Array.Empty<OutlineItem>());
+
     private void UpdatePaneChrome()
     {
         RefreshCommandStates();
+        RefreshOutline();
         ScanForShortcutConflicts();
 
         var notebookName = _notebook.Root?.Name;

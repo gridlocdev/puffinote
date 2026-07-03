@@ -3,6 +3,8 @@ using Avalonia.Input;
 using Puffinote.Components.Commands;
 using Typage.Control;
 using Typage.Control.Views;
+using Typage.Engine.Document;
+using Typage.Engine.Markdown;
 
 namespace Puffinote.Desktop.Panes;
 
@@ -42,6 +44,32 @@ internal sealed class MarkdownPane : IEditorPane
         new AppCommand("md.redo", "Redo", "Redo the last undone edit", Shortcut.Cmd(Key.Z, KeyModifiers.Shift),
             () => _view.Redo(), () => _view.CanRedo, icon: "redo"),
     ];
+
+    /// <summary>Heading outline (PRD §7.2.3): the same headings <c>typage outline</c> lists, reusing the engine.</summary>
+    public IReadOnlyList<OutlineItem> GetOutline()
+    {
+        var document = TextDocument.FromString(_view.Text);
+        var model = MarkdownModel.Build(document);
+        var items = new List<OutlineItem>();
+        for (var line = 0; line < model.LineCount; line++)
+        {
+            var tokens = model.LineTokens(line);
+            if (tokens.Count < 1 || tokens[0].Type != TokenType.HeadingMarker)
+            {
+                continue;
+            }
+
+            var level = int.TryParse(tokens[0].Meta, out var parsed) ? parsed : 1;
+            var text = document.GetText(tokens[0].End, document.GetLineEnd(line) - tokens[0].End).Trim();
+            var offset = document.GetLineStart(line);
+            items.Add(new OutlineItem(
+                text.Length == 0 ? "(untitled)" : text,
+                level,
+                () => { _view.Editor.Select(offset, 0); _view.Editor.Focus(); }));
+        }
+
+        return items;
+    }
 
     public event EventHandler? DirtyChanged;
 
