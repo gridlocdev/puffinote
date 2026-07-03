@@ -17,6 +17,7 @@ internal sealed class NotebookSearchService
     private readonly NotebookService _notebook;
     private volatile IReadOnlyList<IndexedFile> _index = Array.Empty<IndexedFile>();
     private int _generation;
+    private bool _loadedCache;
 
     public NotebookSearchService(NotebookService notebook) => _notebook = notebook;
 
@@ -36,8 +37,13 @@ internal sealed class NotebookSearchService
         IsIndexing = true;
         IndexUpdated?.Invoke();
 
+        var root = _notebook.RootPath;
         var paths = _notebook.EnumerateFiles();
-        var index = await Task.Run(() => BuildIndex(paths));
+        var previous = _index;
+        var loadCache = !_loadedCache;
+        _loadedCache = true;
+
+        var index = await Task.Run(() => Reconcile(root, paths, previous, loadCache));
 
         if (generation != _generation)
         {
@@ -47,19 +53,61 @@ internal sealed class NotebookSearchService
         _index = index;
         IsIndexing = false;
         IndexUpdated?.Invoke();
+
+        if (root is not null)
+        {
+            // Persist for the next open. The index is already published + the UI notified above, so awaiting
+            // this only defers RebuildAsync's completion (callers fire-and-forget it) — it never blocks the UI.
+            await Task.Run(() => SearchIndexCache.Save(root, index));
+        }
     }
 
     /// <summary>Search the current index (case-insensitive substring, ranked by hit count).</summary>
     public IReadOnlyList<SearchHit> Search(string query) => SearchQuery.Run(_index, query, _notebook.RootPath);
 
-    private static IReadOnlyList<IndexedFile> BuildIndex(IReadOnlyList<string> paths)
+    // Reconcile the current files against a prior index (the in-memory one, seeded from the on-disk cache on
+    // the first build): reuse a file's text when its last-write time + size are unchanged, otherwise re-read
+    // it; files no longer present simply fall out. This is what makes a re-open cheap — unchanged workbooks
+    // aren't re-parsed.
+    private static IReadOnlyList<IndexedFile> Reconcile(
+        string? root, IReadOnlyList<string> paths, IReadOnlyList<IndexedFile> previous, bool loadCache)
     {
+        var prior = new Dictionary<string, IndexedFile>(StringComparer.OrdinalIgnoreCase);
+        foreach (var file in previous)
+        {
+            prior[file.Path] = file;
+        }
+
+        if (loadCache && prior.Count == 0 && root is not null)
+        {
+            foreach (var file in SearchIndexCache.Load(root))
+            {
+                prior[file.Path] = file;
+            }
+        }
+
         var files = new List<IndexedFile>();
         foreach (var path in paths)
         {
-            if (ReadText(path) is { } text)
+            FileInfo info;
+            try
             {
-                files.Add(new IndexedFile(path, text));
+                info = new FileInfo(path);
+            }
+            catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+            {
+                continue;
+            }
+
+            var mtime = info.LastWriteTimeUtc.Ticks;
+            var size = info.Length;
+            if (prior.TryGetValue(path, out var cached) && cached.MTimeTicks == mtime && cached.Size == size)
+            {
+                files.Add(cached); // unchanged → reuse the cached text
+            }
+            else if (ReadText(path) is { } text)
+            {
+                files.Add(new IndexedFile(path, text, mtime, size));
             }
         }
 

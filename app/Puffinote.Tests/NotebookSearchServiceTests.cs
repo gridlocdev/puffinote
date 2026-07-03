@@ -48,6 +48,52 @@ public sealed class NotebookSearchServiceTests : IDisposable
     }
 
     [Fact]
+    public async Task Persists_the_index_to_disk_and_a_fresh_service_reuses_it()
+    {
+        File.WriteAllText(Path("note.md"), "widgets everywhere");
+        WriteOds("book.ods", "widgets");
+
+        var notebook = new NotebookService();
+        notebook.OpenNotebook(_notebook.FullName);
+
+        var first = new NotebookSearchService(notebook);
+        await first.RebuildAsync();
+
+        var cache = System.IO.Path.Combine(_notebook.FullName, NotebookNode.StateDirectoryName, "search-index.json");
+        Assert.True(File.Exists(cache)); // the index was persisted for the next open
+
+        // A brand-new service on the same notebook seeds from the on-disk cache and answers the same.
+        var reopened = new NotebookSearchService(notebook);
+        await reopened.RebuildAsync();
+        Assert.Equal(2, reopened.FileCount);
+        Assert.Equal(2, reopened.Search("widgets").Count);
+    }
+
+    [Fact]
+    public async Task Rebuilding_drops_deleted_files_and_picks_up_changed_ones()
+    {
+        var note = Path("note.md");
+        File.WriteAllText(note, "alpha");
+
+        var notebook = new NotebookService();
+        notebook.OpenNotebook(_notebook.FullName);
+        var search = new NotebookSearchService(notebook);
+
+        await search.RebuildAsync();
+        Assert.Single(search.Search("alpha"));
+
+        File.WriteAllText(note, "beta gamma"); // content (and size) changed → re-read on rebuild
+        await search.RebuildAsync();
+        Assert.Empty(search.Search("alpha"));
+        Assert.Single(search.Search("beta"));
+
+        File.Delete(note);
+        await search.RebuildAsync();
+        Assert.Equal(0, search.FileCount);
+        Assert.Empty(search.Search("beta"));
+    }
+
+    [Fact]
     public async Task An_unreadable_workbook_is_skipped_rather_than_throwing()
     {
         File.WriteAllText(Path("good.md"), "hello");

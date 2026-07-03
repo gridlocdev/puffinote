@@ -3,8 +3,12 @@ using System.Text;
 
 namespace Puffinote.Desktop.Search;
 
-/// <summary>One file in the search index: its absolute path and the plain text searched (PRD §7.2.3).</summary>
-internal sealed record IndexedFile(string Path, string Text);
+/// <summary>
+/// One file in the search index (PRD §7.2.3): its absolute path, the plain text searched, and the
+/// last-write time + size used to validate an on-disk cache entry (so unchanged files aren't re-read on the
+/// next open). The timestamp/size default to 0 for in-memory-only construction (e.g. tests).
+/// </summary>
+internal sealed record IndexedFile(string Path, string Text, long MTimeTicks = 0, long Size = 0);
 
 /// <summary>
 /// A notebook-search result: the file, its notebook-relative label, how many times the query occurs, and a short
