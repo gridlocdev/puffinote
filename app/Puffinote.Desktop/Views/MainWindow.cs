@@ -258,22 +258,28 @@ public class MainWindow : Window
             return;
         }
 
-        _currentPane?.Dispose();
-        _currentPane = pane;
-        pane.DirtyChanged += (_, _) => UpdatePaneChrome();
-        _mainArea.Child = pane.View;
-
+        // Load into the new (unmounted) pane FIRST, so a failed open never disturbs the document that's
+        // already open — swap only once the load succeeds.
         try
         {
             await pane.LoadAsync(path);
         }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException)
         {
-            _currentPane = null;
-            _mainArea.Child = _placeholder;
-            _placeholder.Text = $"Couldn't open “{System.IO.Path.GetFileName(path)}”.\n{e.Message}";
+            pane.Dispose();
+            if (_currentPane is null)
+            {
+                _mainArea.Child = _placeholder;
+                _placeholder.Text = $"Couldn't open “{System.IO.Path.GetFileName(path)}”.\n{e.Message}";
+            }
+
+            return;
         }
 
+        _currentPane?.Dispose();
+        _currentPane = pane;
+        pane.DirtyChanged += (_, _) => UpdatePaneChrome();
+        _mainArea.Child = pane.View;
         UpdatePaneChrome();
     }
 
@@ -297,15 +303,26 @@ public class MainWindow : Window
     private void UpdatePaneChrome()
     {
         _saveCommand?.RaiseCanExecuteChanged();
+
         var notebookName = _notebook.Root?.Name;
+        string title;
         if (_currentPane is { } pane)
         {
             var dirty = pane.IsDirty ? " •" : string.Empty;
-            Title = notebookName is null ? $"Puffinote — {pane.Title}{dirty}" : $"Puffinote — {notebookName} — {pane.Title}{dirty}";
+            title = notebookName is null
+                ? $"Puffinote — {pane.Title}{dirty}"
+                : $"Puffinote — {notebookName} — {pane.Title}{dirty}";
         }
         else
         {
-            Title = notebookName is null ? "Puffinote" : $"Puffinote — {notebookName}";
+            title = notebookName is null ? "Puffinote" : $"Puffinote — {notebookName}";
+        }
+
+        // Guard the assignment: DirtyChanged fires on every keystroke, but Window.Title is an OS call —
+        // only touch it when the text actually changes (e.g. the dirty dot appears/clears).
+        if (Title != title)
+        {
+            Title = title;
         }
     }
 }

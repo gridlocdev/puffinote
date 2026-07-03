@@ -37,10 +37,12 @@ public sealed class NotebookNode
             return Array.Empty<NotebookNode>();
         }
 
-        string[] entries;
+        FileSystemInfo[] entries;
         try
         {
-            entries = Directory.GetFileSystemEntries(Path);
+            // EnumerateFileSystemInfos yields a DirectoryInfo/FileInfo per entry, so file-vs-folder is a
+            // type check (no extra Directory.Exists stat per child, and no throw on a mid-loop bad entry).
+            entries = new DirectoryInfo(Path).GetFileSystemInfos();
         }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException)
         {
@@ -50,13 +52,13 @@ public sealed class NotebookNode
         var nodes = new List<NotebookNode>(entries.Length);
         foreach (var entry in entries)
         {
-            var name = System.IO.Path.GetFileName(entry);
+            var name = entry.Name;
             if (string.IsNullOrEmpty(name) || name[0] == '.')
             {
                 continue; // skip dotfiles and the .puffinote state directory
             }
 
-            nodes.Add(new NotebookNode(entry, Directory.Exists(entry)));
+            nodes.Add(new NotebookNode(entry.FullName, entry is DirectoryInfo));
         }
 
         nodes.Sort(static (a, b) =>

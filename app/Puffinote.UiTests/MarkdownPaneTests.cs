@@ -69,6 +69,30 @@ public sealed class MarkdownPaneTests
     }
 
     [AvaloniaFact]
+    public async Task Opening_a_missing_file_keeps_the_currently_open_document()
+    {
+        var dir = Directory.CreateTempSubdirectory("puffinote-openfail");
+        try
+        {
+            var good = Path.Combine(dir.FullName, "good.md");
+            File.WriteAllText(good, "# good");
+
+            var window = new MainWindow(new NotebookService());
+            window.Show();
+            await window.OpenFileAsync(good);
+            Assert.Contains("good.md", window.Title);
+
+            // A .md that doesn't exist → load throws → the good document must stay open.
+            await window.OpenFileAsync(Path.Combine(dir.FullName, "missing.md"));
+            Assert.Contains("good.md", window.Title);
+        }
+        finally
+        {
+            dir.Delete(recursive: true);
+        }
+    }
+
+    [AvaloniaFact]
     public void Factory_declines_non_markdown_files()
     {
         Assert.Null(EditorPaneFactory.Create("/x/budget.ods"));
