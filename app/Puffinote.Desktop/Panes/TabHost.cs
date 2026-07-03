@@ -29,6 +29,9 @@ internal sealed class TabItem
 
     /// <summary>The pane's <see cref="IEditorPane.DirtyChanged"/> subscription, kept so it can be detached on close.</summary>
     public EventHandler? DirtyHandler { get; set; }
+
+    /// <summary>The dirty state last painted into the tab strip, so a keystroke that doesn't flip it skips a rebuild.</summary>
+    public bool RenderedDirty { get; set; }
 }
 
 /// <summary>
@@ -227,7 +230,15 @@ internal sealed class TabHost : UserControl
 
     private void OnPaneDirtyChanged(TabItem tab)
     {
-        RebuildStrip(); // repaint the dirty dot
+        // Editors raise DirtyChanged on every keystroke, but the tab strip (and the window title) only
+        // change when a tab flips clean⇄dirty. Skip the rebuild and the Changed fan-out otherwise, so
+        // typing doesn't rebuild the whole strip and re-query every command per character.
+        if (tab.RenderedDirty == tab.Pane.IsDirty)
+        {
+            return;
+        }
+
+        RebuildStrip();
         Changed?.Invoke(this, EventArgs.Empty);
     }
 
@@ -237,6 +248,7 @@ internal sealed class TabHost : UserControl
         _strip.Children.Clear();
         foreach (var tab in _tabs)
         {
+            tab.RenderedDirty = tab.Pane.IsDirty;
             _strip.Children.Add(BuildTab(tab));
         }
     }

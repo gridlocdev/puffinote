@@ -238,6 +238,11 @@ public class MainWindow : Window
     /// <summary>Open the merged Command Palette (⌘K): Puffinote's shell commands + the active editor's catalog.</summary>
     private void ShowCommandPalette()
     {
+        if (_overlayHost.IsOpen)
+        {
+            return; // an overlay is already up (e.g. a dialog opened from the native menu) — don't clobber it
+        }
+
         var editor = _tabHost.ActivePane?.Commands ?? (IReadOnlyList<AppCommand>)Array.Empty<AppCommand>();
         var entries = CommandMerge.ToEntries(_shellCommands, editor);
 
@@ -358,10 +363,17 @@ public class MainWindow : Window
         }
     }
 
-    private void ShowAbout() =>
+    private void ShowAbout()
+    {
+        if (_overlayHost.IsOpen)
+        {
+            return;
+        }
+
         _ = _overlayHost.ShowModalAsync(new MessageDialog(
             "Puffinote",
             "A second-brain notes app — composes Typage (Markdown) and Cellestra (spreadsheets)."));
+    }
 
     private void OnNotebookOpened()
     {
@@ -377,7 +389,9 @@ public class MainWindow : Window
 
     private async Task SaveCurrentAsync()
     {
-        if (_tabHost.ActivePane is not { } pane)
+        // Don't save (or surface a save-failure message) while a dialog is already open — a second modal
+        // on the same overlay host would clobber the first and hang its awaiter.
+        if (_overlayHost.IsOpen || _tabHost.ActivePane is not { } pane)
         {
             return;
         }
@@ -395,6 +409,11 @@ public class MainWindow : Window
     /// <summary>The Save / Don't-Save / Cancel prompt the tab host shows before closing a dirty document.</summary>
     private async Task<CloseDecision> PromptCloseAsync(IEditorPane pane)
     {
+        if (_overlayHost.IsOpen)
+        {
+            return CloseDecision.Cancel; // a dialog is already up — cancel this close rather than stack a modal
+        }
+
         var choice = await _overlayHost.ShowModalAsync(new ChoiceDialog<CloseDecision>(
             "Unsaved changes",
             $"“{pane.Title}” has unsaved changes. Save before closing?",

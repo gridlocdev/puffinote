@@ -116,4 +116,33 @@ public sealed class TabHostTests
             dir.Delete(recursive: true);
         }
     }
+
+    [AvaloniaFact]
+    public async Task Editing_while_already_dirty_does_not_refire_tab_changes()
+    {
+        var dir = Directory.CreateTempSubdirectory("puffinote-tabs-perf");
+        try
+        {
+            var (md, _) = Seed(dir);
+            var host = new TabHost();
+            await host.OpenAsync(md);
+            var view = (MarkdownEditorView)host.ActivePane!.View;
+
+            var changed = 0;
+            host.Changed += (_, _) => changed++;
+
+            // Three edits that all keep the tab dirty. Only the first (clean→dirty) may refresh the strip;
+            // the rest must be skipped (the guard), or a doc rebuilds the whole strip on every keystroke.
+            view.LoadRecovered("# note\n\nedit one");
+            view.LoadRecovered("# note\n\nedit two");
+            view.LoadRecovered("# note\n\nedit three");
+
+            Assert.True(host.ActivePane!.IsDirty);
+            Assert.True(changed <= 1, $"expected ≤1 Changed for same-dirty-state edits, got {changed}");
+        }
+        finally
+        {
+            dir.Delete(recursive: true);
+        }
+    }
 }
