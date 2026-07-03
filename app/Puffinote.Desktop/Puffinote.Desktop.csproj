@@ -21,9 +21,11 @@
   </ItemGroup>
 
   <ItemGroup>
-    <!-- Shared app-shell / design-system library (Puffinote family). The editors (Typage.Control,
-         Cellestra.Editor) are added in Phase 1. -->
+    <!-- Shared app-shell / design-system library (Puffinote family). -->
     <ProjectReference Include="..\..\shared\Puffinote.Components\Puffinote.Components.csproj" />
+    <!-- Embedded editor #1: the Typage Markdown surface (composed unchanged; its file-host seam is
+         MarkdownDocumentSession). Cellestra.Editor is added in Phase 2. -->
+    <ProjectReference Include="..\..\features\EditMarkdown\Typage.Control\Typage.Control.csproj" />
   </ItemGroup>
 
   <ItemGroup>

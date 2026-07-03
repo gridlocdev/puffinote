@@ -253,10 +253,10 @@ navigation PKM users expect. (The command palette stays commands-only; file navi
     embed-ready: `Cellestra.Editor.IEditorHost`'s own doc-comment anticipates "a notes-app shell driving
     the editor from a file tree." (Mirrors Proposal 0001's stance on deferring the cross-app embed
     protocol until there's a real consumer — now there is.)
-  - **Asymmetry to resolve:** Cellestra already exposes its file-host + `IAppEnvironment` seams; **Typage
-    does not yet** — its file ops live in `Typage.Desktop`. A symmetric file-host seam is extracted into
-    `Typage.Control` (in the *editor*, never a reach-in from Puffinote), keeping the layering clean. See
-    ARCHITECTURE §4.
+  - **Asymmetry resolved (Phase 1):** Cellestra already exposed its file-host + `IAppEnvironment` seams;
+    Typage did not — its file ops lived in `Typage.Desktop`. A symmetric file-host seam,
+    **`MarkdownDocumentSession`**, was extracted into `Typage.Control` (in the *editor*, never a reach-in
+    from Puffinote), keeping the layering clean. See ARCHITECTURE §4.
 - **Save/dirty/close semantics** are the sub-apps' own (atomic write, encoding/line-ending preservation
   for Typage; `.ods` correctness + unmodeled-content preservation for Cellestra). Puffinote never
   reimplements save.
@@ -456,8 +456,11 @@ any phase that delivers value.
   a `NotebookService`/`NotebookNode` opens a notebook and a collapsible sidebar renders a **read-only, lazy file
   tree**; a placeholder editor area. `Puffinote.Tests` (pure notebook-model) + `Puffinote.UiTests` (headless
   smoke) green; both sub-app solutions still build independently. No editors embedded yet.
-- **Phase 1 — Single-editor host.** Embed **one** editor via the `IEditorHost` seam (Typage first),
-  open→edit→save one `.md` in a single pane. Proves the composition contract with zero editor forks.
+- **Phase 1 — Single-editor host. ✅ Landed.** Extracted the Typage file-host seam
+  (`MarkdownDocumentSession`) into `Typage.Control`; added the shell-side `IEditorPane` + `MarkdownPane` +
+  `EditorPaneFactory`; `MainWindow` mounts a single pane, opens a `.md` from the tree (double-click/Enter),
+  and **Save** (⌘S) writes byte-faithfully. Round-trip + pane tests green; both sub-apps still build. Zero
+  editor forks. (Prompt-on-dirty-replace + multiple tabs come with Phase 2.)
 - **Phase 2 — Both editors + tabs.** Add the Cellestra host; introduce the **tab strip** and N-document
   lifecycle (dirty/undo per tab, close prompts). Mix notes and sheets.
 - **Phase 3 — Merged palette + shortcuts.** Compose Puffinote + active-editor catalogs in the palette;
@@ -506,10 +509,11 @@ Resolved in this draft (from review):
 13. ~~Cellestra embeddable assembly~~ → **`Cellestra.Editor`** (`SpreadsheetEditorView`); it already
     exposes the `IEditorHost` + `IAppEnvironment` seams (§9, ARCHITECTURE §4).
 
+14. ~~Typage file-host seam~~ → **extracted as `MarkdownDocumentSession` in `Typage.Control`** (Phase 1;
+    ARCHITECTURE §4).
+
 Still open:
 
-- **Typage file-host seam:** the exact shape of the file-op seam to extract into `Typage.Control`
-  (symmetric to Cellestra's `IEditorHost`) — a small design task in the *editor* (ARCHITECTURE §4).
 - **Search index format** inside `.puffinote/` (kept out of git per §7.1; on-disk shape is an
   ARCHITECTURE detail).
 - **Default keys** for the reserved commands (the *set* is fixed in §7.6; the exact chords are pinned in

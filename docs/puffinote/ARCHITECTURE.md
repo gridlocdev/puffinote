@@ -96,11 +96,13 @@ shape this:
    *delegates outward* (`NewWorkbookAsync`, `OpenWorkbookAsync`, `SaveWorkbookAsync`, `SaveWorkbookAsAsync`,
    CSV import/export). Cellestra's command catalog reaches the shell through `IAppEnvironment` (Proposal
    0001 §5 — the per-environment `AppCommands`).
-2. **Typage is not embed-ready yet.** `Typage.Control` exposes `MarkdownEditor`/`MarkdownEditorView` and an
-   `IEmbedResolver` (for in-document embeds), but **file operations live in `Typage.Desktop`'s
-   `MainWindow`**, not behind a delegation seam. **Work item:** extract a Typage file-host seam
-   symmetric to Cellestra's `IEditorHost` (open/save/save-as/revert), so `Typage.Control` can be driven by
-   a shell. This lands in the *editor*, not as a reach-in from Puffinote (golden-rule layering).
+2. **Typage — file-host seam extracted (Phase 1).** `Typage.Control` exposes `MarkdownEditor`/
+   `MarkdownEditorView` and an `IEmbedResolver` (for in-document embeds), but file operations lived in
+   `Typage.Desktop`'s `MainWindow`. Phase 1 added **`MarkdownDocumentSession`** to `Typage.Control` — a
+   reusable file host (path + encoding via the engine's pure `TextFileCodec`, byte-faithful atomic
+   temp-then-rename save) so `Typage.Control` can be driven by any shell. It lives in the *editor*, not as
+   a reach-in from Puffinote (golden-rule layering). (Converging `Typage.Desktop` onto the same session —
+   it still has its own working copy — is optional future cleanup, not required, since it already works.)
 
 ### 4.1 The host-side abstraction: `IEditorPane` (new, shell-side)
 
@@ -312,7 +314,7 @@ app/                                     # the composite product
 └── docs/ (PRD.md, ARCHITECTURE.md)      # ← this file
 ```
 
-*(A companion change lands in `features/EditMarkdown/`: the extracted Typage file-host seam in
+*(Landed in `features/EditMarkdown/`: the extracted Typage file-host seam `MarkdownDocumentSession` in
 `Typage.Control` (§4). Cellestra needs no structural change — `Cellestra.Editor` already exposes the
 seams.)*
 

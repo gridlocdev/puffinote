@@ -1,5 +1,6 @@
 using System.Linq;
 using Avalonia.Controls;
+using Avalonia.Input;
 using Puffinote.Desktop.Shell;
 
 namespace Puffinote.Desktop.Controls;
@@ -18,11 +19,31 @@ internal sealed class FileTreeView : UserControl
     {
         _tree.SelectionChanged += (_, _) =>
             SelectionChanged?.Invoke(_tree.SelectedItem is TreeViewItem { Tag: NotebookNode node } ? node : null);
+        // Open a file on double-click or Enter (a folder just toggles, the TreeView's default).
+        _tree.DoubleTapped += (_, _) => ActivateSelectedFile();
+        _tree.KeyDown += (_, e) =>
+        {
+            if (e.Key == Key.Enter)
+            {
+                ActivateSelectedFile();
+            }
+        };
         Content = _tree;
     }
 
     /// <summary>Raised when the selected entry changes (null when the selection is cleared).</summary>
     public event Action<NotebookNode?>? SelectionChanged;
+
+    /// <summary>Raised when a <em>file</em> entry is activated (double-click / Enter), to open it in a pane.</summary>
+    public event Action<NotebookNode>? FileActivated;
+
+    private void ActivateSelectedFile()
+    {
+        if (_tree.SelectedItem is TreeViewItem { Tag: NotebookNode { IsDirectory: false } node })
+        {
+            FileActivated?.Invoke(node);
+        }
+    }
 
     /// <summary>Rebuild the tree for a newly opened notebook (or clear it when <paramref name="root"/> is null).</summary>
     public void SetRoot(NotebookNode? root)

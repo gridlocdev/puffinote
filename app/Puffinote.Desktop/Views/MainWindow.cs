@@ -7,6 +7,7 @@ using Avalonia.Styling;
 using Puffinote.Components.Commands;
 using Puffinote.Components.Theming;
 using Puffinote.Desktop.Controls;
+using Puffinote.Desktop.Panes;
 using Puffinote.Desktop.Shell;
 
 namespace Puffinote.Desktop.Views;
@@ -41,13 +42,18 @@ public class MainWindow : Window
 
     private ColumnDefinition _sidebarColumn = new(260, GridUnitType.Pixel) { MinWidth = 160 };
     private Border _sidebar = null!;
+    private Border _mainArea = null!;
     private GridSplitter _splitter = null!;
     private GridLength _lastSidebarWidth = new(260, GridUnitType.Pixel);
+
+    private IEditorPane? _currentPane;
+    private RelayCommand? _saveCommand;
 
     public MainWindow(NotebookService notebook)
     {
         _notebook = notebook;
         _notebook.NotebookOpened += (_, _) => OnNotebookOpened();
+        _fileTree.FileActivated += node => _ = OpenFileAsync(node.Path);
 
         Width = 1000;
         Height = 700;
@@ -83,7 +89,7 @@ public class MainWindow : Window
 
         _splitter = new GridSplitter { Width = 4, Background = palette.SurfaceBorder };
 
-        var mainArea = new Border { Child = _placeholder };
+        _mainArea = new Border { Child = _placeholder };
 
         var grid = new Grid
         {
@@ -96,10 +102,10 @@ public class MainWindow : Window
         };
         Grid.SetColumn(_sidebar, 0);
         Grid.SetColumn(_splitter, 1);
-        Grid.SetColumn(mainArea, 2);
+        Grid.SetColumn(_mainArea, 2);
         grid.Children.Add(_sidebar);
         grid.Children.Add(_splitter);
-        grid.Children.Add(mainArea);
+        grid.Children.Add(_mainArea);
         return grid;
     }
 
@@ -114,14 +120,18 @@ public class MainWindow : Window
     private void InstallMenu(DockPanel root)
     {
         var openNotebook = new RelayCommand(() => _ = OpenNotebookInteractiveAsync());
+        var save = new RelayCommand(() => _ = SaveCurrentAsync(), () => _currentPane is not null);
+        _saveCommand = save;
         var toggleSidebar = new RelayCommand(ToggleSidebar);
         var about = new RelayCommand(ShowAbout);
 
         var openGesture = new KeyGesture(Key.O, PrimaryModifier | KeyModifiers.Shift);
+        var saveGesture = new KeyGesture(Key.S, PrimaryModifier);
         var sidebarGesture = new KeyGesture(Key.OemBackslash, PrimaryModifier);
 
         // Shortcuts work whether the menu is native (macOS) or in-window (elsewhere).
         KeyBindings.Add(new KeyBinding { Gesture = openGesture, Command = openNotebook });
+        KeyBindings.Add(new KeyBinding { Gesture = saveGesture, Command = save });
         KeyBindings.Add(new KeyBinding { Gesture = sidebarGesture, Command = toggleSidebar });
 
         if (OperatingSystem.IsMacOS())
@@ -131,6 +141,7 @@ public class MainWindow : Window
                 Items =
                 {
                     new NativeMenuItem { Header = "Open Notebook…", Command = openNotebook, Gesture = openGesture },
+                    new NativeMenuItem { Header = "Save", Command = save, Gesture = saveGesture },
                 },
             };
             var viewMenu = new NativeMenu
@@ -160,7 +171,11 @@ public class MainWindow : Window
                 new MenuItem
                 {
                     Header = "_File",
-                    Items = { new MenuItem { Header = "Open Notebook…", Command = openNotebook, InputGesture = openGesture } },
+                    Items =
+                    {
+                        new MenuItem { Header = "Open Notebook…", Command = openNotebook, InputGesture = openGesture },
+                        new MenuItem { Header = "Save", Command = save, InputGesture = saveGesture },
+                    },
                 },
                 new MenuItem
                 {
@@ -225,6 +240,72 @@ public class MainWindow : Window
     {
         _fileTree.SetRoot(_notebook.Root);
         _sidebarHeader.Text = _notebook.Root is { } r ? r.Name.ToUpperInvariant() : "NO NOTEBOOK OPEN";
-        Title = _notebook.Root is { } root ? $"Puffinote — {root.Name}" : "Puffinote";
+        UpdatePaneChrome();
+    }
+
+    // ---- Editor pane (Phase 1: a single pane; Phase 2 turns this into a tab host) ------------------
+
+    /// <summary>
+    /// Open <paramref name="path"/> into the editor area. Phase 1 hosts a single pane, so this replaces
+    /// whatever is open. (Prompt-on-dirty-replace and multiple tabs land with Phase 2's document
+    /// lifecycle.) Unsupported file types are ignored for now (Phase 3 adds preview / open-externally).
+    /// </summary>
+    internal async Task OpenFileAsync(string path)
+    {
+        var pane = EditorPaneFactory.Create(path);
+        if (pane is null)
+        {
+            return;
+        }
+
+        _currentPane?.Dispose();
+        _currentPane = pane;
+        pane.DirtyChanged += (_, _) => UpdatePaneChrome();
+        _mainArea.Child = pane.View;
+
+        try
+        {
+            await pane.LoadAsync(path);
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+        {
+            _currentPane = null;
+            _mainArea.Child = _placeholder;
+            _placeholder.Text = $"Couldn't open “{System.IO.Path.GetFileName(path)}”.\n{e.Message}";
+        }
+
+        UpdatePaneChrome();
+    }
+
+    private async Task SaveCurrentAsync()
+    {
+        if (_currentPane is null)
+        {
+            return;
+        }
+
+        try
+        {
+            await _currentPane.SaveAsync();
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+        {
+            _placeholder.Text = $"Couldn't save.\n{e.Message}";
+        }
+    }
+
+    private void UpdatePaneChrome()
+    {
+        _saveCommand?.RaiseCanExecuteChanged();
+        var notebookName = _notebook.Root?.Name;
+        if (_currentPane is { } pane)
+        {
+            var dirty = pane.IsDirty ? " •" : string.Empty;
+            Title = notebookName is null ? $"Puffinote — {pane.Title}{dirty}" : $"Puffinote — {notebookName} — {pane.Title}{dirty}";
+        }
+        else
+        {
+            Title = notebookName is null ? "Puffinote" : $"Puffinote — {notebookName}";
+        }
     }
 }
