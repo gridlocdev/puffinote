@@ -1,0 +1,11 @@
+<Solution>
+  <Folder Name="/app/">
+    <Project Path="Puffinote.Desktop/Puffinote.Desktop.csproj" />
+    <Project Path="Puffinote.Tests/Puffinote.Tests.csproj" />
+    <Project Path="Puffinote.UiTests/Puffinote.UiTests.csproj" />
+  </Folder>
+  <Folder Name="/shared/">
+    <Project Path="../shared/Puffinote.Components/Puffinote.Components.csproj" />
+    <Project Path="../shared/Puffinote.Components.Core/Puffinote.Components.Core.csproj" />
+  </Folder>
+</Solution>

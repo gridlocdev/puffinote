@@ -451,8 +451,11 @@ sub-apps' `docs/ARCHITECTURE.md`.)*
 Each phase leaves all three apps building clean with green tests (Proposal 0001's discipline). Stop after
 any phase that delivers value.
 
-- **Phase 0 — Shell scaffold.** `Puffinote.Desktop` window + native menu + `Puffinote.Components` theming;
-  open a notebook, render a read-only file tree. No editors yet.
+- **Phase 0 — Shell scaffold. ✅ Landed.** `app/Puffinote.Desktop` (assembly `Puffinote`) window + menu
+  (macOS native bar / in-window bar elsewhere) + `Puffinote.Components` theming (puffin-orange accent);
+  a `NotebookService`/`NotebookNode` opens a notebook and a collapsible sidebar renders a **read-only, lazy file
+  tree**; a placeholder editor area. `Puffinote.Tests` (pure notebook-model) + `Puffinote.UiTests` (headless
+  smoke) green; both sub-app solutions still build independently. No editors embedded yet.
 - **Phase 1 — Single-editor host.** Embed **one** editor via the `IEditorHost` seam (Typage first),
   open→edit→save one `.md` in a single pane. Proves the composition contract with zero editor forks.
 - **Phase 2 — Both editors + tabs.** Add the Cellestra host; introduce the **tab strip** and N-document

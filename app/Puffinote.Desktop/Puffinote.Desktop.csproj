@@ -1,0 +1,35 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- Puffinote — the composite second-brain shell (docs/puffinote/PRD.md). A notebook-rooted file tree,
+       tabs, a merged command palette, and a shortcuts editor that COMPOSE the existing Typage (.md) and
+       Cellestra (.ods) editors. This shell owns no document engine; every document op is delegated to an
+       embedded editor. Phase 0: window + menu + theming + read-only file tree. No editors referenced yet
+       (they land in Phase 1). -->
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <RootNamespace>Puffinote.Desktop</RootNamespace>
+    <AssemblyName>Puffinote</AssemblyName>
+    <AvaloniaUseCompiledBindingsByDefault>true</AvaloniaUseCompiledBindingsByDefault>
+    <BuiltInComInteropSupport>true</BuiltInComInteropSupport>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Avalonia" />
+    <PackageReference Include="Avalonia.Desktop" />
+    <PackageReference Include="Avalonia.Themes.Fluent" />
+    <PackageReference Include="Avalonia.Fonts.Inter" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- Shared app-shell / design-system library (Puffinote family). The editors (Typage.Control,
+         Cellestra.Editor) are added in Phase 1. -->
+    <ProjectReference Include="..\..\shared\Puffinote.Components\Puffinote.Components.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- Headless UI tests reach a few internal test seams. -->
+    <InternalsVisibleTo Include="Puffinote.UiTests" />
+    <InternalsVisibleTo Include="Puffinote.Tests" />
+  </ItemGroup>
+
+</Project>
