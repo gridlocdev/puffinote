@@ -145,4 +145,81 @@ public sealed class TabHostTests
             dir.Delete(recursive: true);
         }
     }
+
+    [AvaloniaFact]
+    public async Task RebindPaths_repoints_an_open_tab_after_a_rename_preserving_edits()
+    {
+        var dir = Directory.CreateTempSubdirectory("puffinote-tabs-rename");
+        try
+        {
+            var (md, _) = Seed(dir);
+            var host = new TabHost();
+            await host.OpenAsync(md);
+            ((MarkdownEditorView)host.ActivePane!.View).LoadRecovered("# note\n\nlive edit");
+            Assert.True(host.ActivePane.IsDirty);
+
+            // Rename on disk (as the tree mutation would), then reconcile the open tab.
+            var renamed = Path.Combine(dir.FullName, "renamed.md");
+            File.Move(md, renamed);
+            host.RebindPaths(md, renamed);
+
+            Assert.Equal("renamed.md", host.ActivePane!.Title);
+            Assert.Equal(renamed, host.ActivePane.Path);
+            Assert.True(host.ActivePane.IsDirty);        // the unsaved edit survived the rename
+
+            await host.ActivePane.SaveAsync();            // and now saves to the new path
+            Assert.Contains("live edit", File.ReadAllText(renamed));
+        }
+        finally
+        {
+            dir.Delete(recursive: true);
+        }
+    }
+
+    [AvaloniaFact]
+    public async Task RebindPaths_reparents_tabs_under_a_renamed_folder()
+    {
+        var dir = Directory.CreateTempSubdirectory("puffinote-tabs-folder-rename");
+        try
+        {
+            var sub = Path.Combine(dir.FullName, "sub");
+            Directory.CreateDirectory(sub);
+            var note = Path.Combine(sub, "note.md");
+            File.WriteAllText(note, "# n");
+            var host = new TabHost();
+            await host.OpenAsync(note);
+
+            var renamedDir = Path.Combine(dir.FullName, "renamed");
+            Directory.Move(sub, renamedDir);
+            host.RebindPaths(sub, renamedDir);
+
+            Assert.Equal(Path.Combine(renamedDir, "note.md"), host.ActivePane!.Path);
+        }
+        finally
+        {
+            dir.Delete(recursive: true);
+        }
+    }
+
+    [AvaloniaFact]
+    public async Task CloseUnder_closes_the_tab_of_a_deleted_file()
+    {
+        var dir = Directory.CreateTempSubdirectory("puffinote-tabs-delete");
+        try
+        {
+            var (md, ods) = Seed(dir);
+            var host = new TabHost();
+            await host.OpenAsync(md);
+            await host.OpenAsync(ods);
+
+            host.CloseUnder(md); // the note was deleted → its tab closes, no save prompt
+
+            Assert.Equal(1, host.Count);
+            Assert.Equal("book.ods", host.ActivePane!.Title);
+        }
+        finally
+        {
+            dir.Delete(recursive: true);
+        }
+    }
 }

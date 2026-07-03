@@ -38,6 +38,13 @@ internal interface IEditorPane : IDisposable
     Task SaveAsync();
 
     /// <summary>
+    /// Rebind to <paramref name="newPath"/> after the open file was moved/renamed on disk (no I/O — the
+    /// bytes already moved). Updates <see cref="Path"/>/<see cref="Title"/> and where the next save writes;
+    /// the document content and dirty state are preserved.
+    /// </summary>
+    void Rebind(string newPath);
+
+    /// <summary>
     /// This editor's command catalog, for the merged Command Palette (PRD §7.4). Cellestra exposes its
     /// full catalog; Typage exposes a minimal set until its catalog is extracted into the control.
     /// </summary>

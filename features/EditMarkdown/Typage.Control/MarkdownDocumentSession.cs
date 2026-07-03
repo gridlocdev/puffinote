@@ -53,6 +53,13 @@ public sealed class MarkdownDocumentSession
         AtomicWrite(CurrentPath, TextFileCodec.Encode(text, Format));
     }
 
+    /// <summary>
+    /// Rebind to <paramref name="path"/> after the file was moved/renamed on disk, without any I/O — the
+    /// bytes already live at the new path, so a host reconciling an external rename only updates where the
+    /// next <see cref="Save"/> writes. The document text, format, and dirty state are untouched.
+    /// </summary>
+    public void Rebind(string path) => CurrentPath = Path.GetFullPath(path);
+
     // Async wrappers for hosts that don't want to block the UI thread on I/O. (Note-sized files are small,
     // so the sync methods above are fine on the UI thread; these exist for symmetry and larger files.)
     public Task<string> LoadAsync(string path) => Task.Run(() => Load(path));

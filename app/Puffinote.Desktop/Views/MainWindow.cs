@@ -564,7 +564,10 @@ public class MainWindow : Window
 
         await MutateAsync("Couldn't rename", () =>
         {
-            _sidebarView.RevealInTree(NotebookMutations.Rename(node.Path, name));
+            var newPath = NotebookMutations.Rename(node.Path, name);
+            _tabHost.RebindPaths(node.Path, newPath);      // keep any open tab pointing at the moved file
+            RemapRecent(node.Path, newPath);
+            _sidebarView.RevealInTree(newPath);
             return Task.CompletedTask;
         });
     }
@@ -591,9 +594,44 @@ public class MainWindow : Window
         await MutateAsync("Couldn't delete", () =>
         {
             NotebookMutations.Delete(node.Path);
+            _tabHost.CloseUnder(node.Path); // the file is gone — close its tab rather than let it be re-saved
+            DropRecentUnder(node.Path);
             _sidebarView.RefreshTree();
             return Task.CompletedTask;
         });
+    }
+
+    /// <summary>Remap recent entries after a rename (a file, or a folder they live under).</summary>
+    private void RemapRecent(string oldPath, string newPath)
+    {
+        var old = System.IO.Path.GetFullPath(oldPath);
+        var updated = System.IO.Path.GetFullPath(newPath);
+        var changed = false;
+        for (var i = 0; i < _recent.Count; i++)
+        {
+            if (PathScope.Remap(_recent[i], old, updated) is { } remapped)
+            {
+                _recent[i] = remapped;
+                changed = true;
+            }
+        }
+
+        if (changed)
+        {
+            _sidebarView.SetRecent(_notebook.RootPath, _recent);
+        }
+    }
+
+    /// <summary>Drop recent entries for a deleted file, or everything under a deleted folder.</summary>
+    private void DropRecentUnder(string path)
+    {
+        var target = System.IO.Path.GetFullPath(path);
+        var kept = _recent.Where(p => !PathScope.IsUnderOrEqual(p, target)).ToList();
+        if (kept.Count != _recent.Count)
+        {
+            _recent = kept;
+            _sidebarView.SetRecent(_notebook.RootPath, _recent);
+        }
     }
 
     /// <summary>Prompt for a name in the shared overlay, returning it trimmed, or null on cancel / empty.</summary>

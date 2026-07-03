@@ -3,6 +3,7 @@ using Avalonia.Controls;
 using Avalonia.Layout;
 using Avalonia.Media;
 using Puffinote.Components.Theming;
+using Puffinote.Desktop.Shell;
 
 namespace Puffinote.Desktop.Panes;
 
@@ -25,7 +26,8 @@ internal sealed class TabItem
 
     public IEditorPane Pane { get; }
 
-    public string Path { get; }
+    /// <summary>The open file's absolute path. Settable so the host can rebind it after an external rename.</summary>
+    public string Path { get; set; }
 
     /// <summary>The pane's <see cref="IEditorPane.DirtyChanged"/> subscription, kept so it can be detached on close.</summary>
     public EventHandler? DirtyHandler { get; set; }
@@ -193,6 +195,45 @@ internal sealed class TabHost : UserControl
         }
 
         return true;
+    }
+
+    /// <summary>
+    /// Reconcile open tabs after a rename in the tree: any tab whose file is <paramref name="oldPath"/> — or
+    /// lives under it, when a folder was renamed — is rebound to its new path (content + dirty state kept).
+    /// </summary>
+    public void RebindPaths(string oldPath, string newPath)
+    {
+        var old = System.IO.Path.GetFullPath(oldPath);
+        var updated = System.IO.Path.GetFullPath(newPath);
+        var changed = false;
+        foreach (var tab in _tabs)
+        {
+            if (PathScope.Remap(tab.Path, old, updated) is { } remapped)
+            {
+                tab.Path = remapped;
+                tab.Pane.Rebind(remapped);
+                changed = true;
+            }
+        }
+
+        if (changed)
+        {
+            RebuildStrip();
+            Changed?.Invoke(this, EventArgs.Empty);
+        }
+    }
+
+    /// <summary>
+    /// Close (without a save prompt) every tab whose file is <paramref name="path"/> or lives under it —
+    /// used when the tree deletes a file or folder, so the just-deleted document can't be re-saved.
+    /// </summary>
+    public void CloseUnder(string path)
+    {
+        var target = System.IO.Path.GetFullPath(path);
+        foreach (var tab in _tabs.Where(t => PathScope.IsUnderOrEqual(t.Path, target)).ToList())
+        {
+            RemoveTab(tab);
+        }
     }
 
     /// <summary>Activate the next (<paramref name="direction"/> = +1) or previous (-1) tab, wrapping around.</summary>

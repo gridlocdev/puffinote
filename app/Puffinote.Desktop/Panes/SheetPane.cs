@@ -71,6 +71,8 @@ internal sealed class SheetPane : IEditorPane, IEditorHost
         DirtyChanged?.Invoke(this, EventArgs.Empty);
     }
 
+    public void Rebind(string newPath) => _path = System.IO.Path.GetFullPath(newPath);
+
     public void Dispose()
     {
         // The editor holds only managed state; nothing unmanaged to release.

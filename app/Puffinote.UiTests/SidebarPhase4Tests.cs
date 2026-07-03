@@ -154,6 +154,36 @@ public sealed class SidebarPhase4Tests
         }
     }
 
+    [AvaloniaFact]
+    public async Task Deleting_a_file_thats_open_in_a_tab_closes_the_tab()
+    {
+        var dir = Directory.CreateTempSubdirectory("puffinote-delete-open");
+        try
+        {
+            var note = Path.Combine(dir.FullName, "note.md");
+            File.WriteAllText(note, "# note");
+
+            var window = new MainWindow(new NotebookService());
+            window.Show();
+            window.OpenNotebook(dir.FullName);
+            await window.OpenFileAsync(note);
+            Assert.Contains("note.md", window.Title); // the note is the active tab
+
+            window.SidebarForTest.RevealInTree(note);
+            window.SidebarForTest.FocusTree();
+            window.KeyPressQwerty(PhysicalKey.Delete, RawInputModifiers.None);
+            ClickButton(window, "Delete"); // confirm
+            await Task.Yield();
+
+            Assert.False(File.Exists(note));
+            Assert.DoesNotContain("note.md", window.Title); // its tab closed with it
+        }
+        finally
+        {
+            dir.Delete(recursive: true);
+        }
+    }
+
     private static void ClickButton(Visual root, string content)
     {
         var button = root.GetVisualDescendants()

@@ -90,6 +90,8 @@ internal sealed class MarkdownPane : IEditorPane
         return Task.CompletedTask;
     }
 
+    public void Rebind(string newPath) => _session.Rebind(newPath);
+
     public void Dispose()
     {
         // The editor holds only managed state; nothing unmanaged to release in Phase 1.
