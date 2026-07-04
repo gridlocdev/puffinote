@@ -15,13 +15,13 @@ Each editor builds, tests, and ships on its own; the shell embeds them without r
 ## Repository map
 
 ```
-app/                        Puffinote — the composite shell (Desktop + CLI) that embeds both editors
-features/EditMarkdown/       Typage — the Markdown editor (engine, control, desktop, CLI, tests)
-features/EditSpreadsheets/   Cellestra — the spreadsheet editor (core, editor, charts, desktop, CLI, tests)
-shared/                     Cross-cutting libraries (Puffinote.Components, …) used by the shell/editors
-docs/                       PRD / ARCHITECTURE / proposals (repo-wide and per-area)
-Directory.Build.props       Shared MSBuild settings (framework, nullable, analyzers, OS-specific bin/obj)
-Directory.Packages.props    Central NuGet version pins — the single source of truth for versions
+app/                          Puffinote — the composite shell (Desktop + CLI) that embeds both editors
+features/EditMarkdown/        Typage — the Markdown editor (engine, control, desktop, CLI, tests)
+features/EditSpreadsheets/    Cellestra — the spreadsheet editor (core, editor, charts, desktop, CLI, tests)
+shared/                       Cross-cutting libraries (Puffinote.Components, …) used by the shell/editors
+docs/                         PRD / ARCHITECTURE / proposals (repo-wide and per-area)
+Directory.Build.props         Shared MSBuild settings (framework, nullable, analyzers, OS-specific bin/obj)
+Directory.Packages.props      Central NuGet version pins — the single source of truth for versions
 ```
 
 There is no single root solution. Each area has its own:
@@ -46,11 +46,24 @@ Versions are pinned centrally in `Directory.Packages.props` (central package man
 ## Build & test
 
 ```bash
-dotnet build <area>.slnx     # e.g. app/Puffinote.slnx
-dotnet test  <area>.slnx
+dotnet build <area>.slnx                                        # e.g. app/Puffinote.slnx
+dotnet test  <area>.slnx                                        # whole suite for that area
+dotnet test  <area>.slnx --filter "FullyQualifiedName~SomeTest" # one test / a subset — prefer this while iterating
 ```
 
-**Definition of done:** the relevant solution builds with **zero new warnings** and its tests are green. A clean build means no warnings. Build artifacts live under OS-specific `bin/<os>/` and `obj/<os>/` paths (so Linux devcontainer builds don't collide with native host builds) and are git-ignored — never commit them.
+**Definition of done:** the relevant solution builds with **zero new warnings** and its tests are green. A clean build means no warnings.
+
+**Format before committing.** Run `dotnet format <area>.slnx` on the area you changed, then confirm `dotnet format <area>.slnx --verify-no-changes` exits zero — a non-zero exit means unformatted code, which is a failure to fix before you commit.
+
+Build artifacts live under OS-specific `bin/<os>/` and `obj/<os>/` paths (so Linux devcontainer builds don't collide with native host builds) and are git-ignored — never commit them.
+
+**Running.** The devcontainer is Linux and headless (no GPU), so GUI `dotnet run` may fail environmentally — verify GUI behavior with headless tests, not by launching the app. The CLI does run headless; to exercise it:
+
+```bash
+dotnet run --project app/Puffinote.Cli -- info            # summarize the notebook in the current directory
+dotnet run --project app/Puffinote.Cli -- search "todo"   # full-text search the notebook (notes + sheet cells)
+dotnet run --project app/Puffinote.Cli -- md --help       # route into Typage's commands; `sheet …` routes to Cellestra
+```
 
 ## Repo-wide golden rules
 
@@ -59,6 +72,13 @@ dotnet test  <area>.slnx
 3. **Guard the supply chain.** Trusted base is the .NET BCL + Avalonia (+ its native deps). No new NuGet package without a stated reason in the PR/commit; **never** add JavaScript/npm. First-party Avalonia-team controls (MIT) are pre-approved.
 4. **macOS-first for 1.0.** The devcontainer is Linux and headless (no GPU) — GUI `dotnet run` may fail environmentally there; verify behavior with headless tests, not by launching the app.
 5. **Nothing left to interpretation.** If a behavior isn't specified, check the area's PRD/ARCHITECTURE (`docs/`); if it truly isn't there, **stop and ask**, then record the answer in the relevant doc.
+
+## Agent workflow
+
+Delegate by read vs. write, mapped onto this repo's structure:
+
+- **Exploring or researching across the areas** (`app/`, `EditMarkdown/`, `EditSpreadsheets/`) → fan out: a subagent per area gathers findings that you synthesize centrally. Reads don't collide, so parallelism is a clean win here.
+- **Implementing a change** — especially one that spans the shell and an editor, or touches the one-way layering contract (golden rule #1) → keep it single-threaded. This is the write-heavy case where parallel agents make conflicting implicit decisions that are costly to reconcile, and the layering has to stay coherent across the edit.
 
 ## Git workflow
 
