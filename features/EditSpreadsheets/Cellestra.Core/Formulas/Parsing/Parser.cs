@@ -85,13 +85,26 @@ public sealed class Parser
             BinaryOperator op;
             switch (Current.Type)
             {
-                case TokenType.Equal: op = BinaryOperator.Equal; break;
-                case TokenType.NotEqual: op = BinaryOperator.NotEqual; break;
-                case TokenType.Less: op = BinaryOperator.Less; break;
-                case TokenType.LessEqual: op = BinaryOperator.LessEqual; break;
-                case TokenType.Greater: op = BinaryOperator.Greater; break;
-                case TokenType.GreaterEqual: op = BinaryOperator.GreaterEqual; break;
-                default: return left;
+                case TokenType.Equal:
+                    op = BinaryOperator.Equal;
+                    break;
+                case TokenType.NotEqual:
+                    op = BinaryOperator.NotEqual;
+                    break;
+                case TokenType.Less:
+                    op = BinaryOperator.Less;
+                    break;
+                case TokenType.LessEqual:
+                    op = BinaryOperator.LessEqual;
+                    break;
+                case TokenType.Greater:
+                    op = BinaryOperator.Greater;
+                    break;
+                case TokenType.GreaterEqual:
+                    op = BinaryOperator.GreaterEqual;
+                    break;
+                default:
+                    return left;
             }
 
             Advance();
@@ -241,7 +254,7 @@ public sealed class Parser
             if (Current.Type == TokenType.Colon)
             {
                 Advance();
-                return ParseRangeEnd(address, nameToken.Position);
+                return ParseRangeEnd(address);
             }
 
             return new ReferenceExpr(address);
@@ -267,7 +280,7 @@ public sealed class Parser
         return new NameExpr(nameToken.Text);
     }
 
-    private Expr ParseRangeEnd(CellAddress start, int position)
+    private Expr ParseRangeEnd(CellAddress start)
     {
         if (Current.Type != TokenType.Name || !CellAddress.TryParse(Current.Text, out var end))
         {

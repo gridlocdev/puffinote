@@ -1,4 +1,3 @@
-using System;
 using Avalonia;
 using Avalonia.Media;
 using Cellestra.Core.Model;
@@ -80,7 +79,7 @@ public sealed partial class SpreadsheetGrid
             return;
         }
 
-        var (thickness, dash) = BorderPenStyle.For(edge.Style, _zoom);
+        var (thickness, dash) = BorderPenStyle.For(edge.Style, Zoom);
         var brush = new SolidColorBrush(ToColor(edge.Color));
 
         if (edge.Style == BorderLineStyle.Double)
@@ -131,8 +130,8 @@ public static class BorderPenStyle
         DashStyle? dash = style switch
         {
             // Dash/dot lengths are in pen-thickness units, so they scale with thickness automatically.
-            BorderLineStyle.Dashed => new DashStyle(new double[] { 3, 2 }, 0),
-            BorderLineStyle.Dotted => new DashStyle(new double[] { 1, 2 }, 0),
+            BorderLineStyle.Dashed => new DashStyle([3, 2], 0),
+            BorderLineStyle.Dotted => new DashStyle([1, 2], 0),
             _ => null,
         };
 

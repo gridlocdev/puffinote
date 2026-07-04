@@ -1,4 +1,3 @@
-using Cellestra.Desktop.Views;
 using Cellestra.Editor;
 using Xunit;
 

@@ -1,5 +1,3 @@
-using System;
-using System.Collections.Generic;
 using Avalonia;
 using Avalonia.Input;
 using Avalonia.Threading;
@@ -22,21 +20,19 @@ public sealed partial class SpreadsheetGrid
 
     private readonly RadialMenuOverlay _radialOverlay = new();
     private DispatcherTimer? _radialHoldTimer;
-
-    private RadialMenuConfig _radialConfig = RadialMenuConfig.Default;
     private Point _radialCenter;
     private bool _radialPending;        // right button down over a cell, waiting out the hold
     private bool _radialActive;         // the radial is up and tracking the cursor
     private bool _radialContextEligible; // a quick release should raise the context menu
     private int _radialActiveSegment = -1;
-    private IReadOnlyList<RadialSegment> _radialSegments = Array.Empty<RadialSegment>();
+    private IReadOnlyList<RadialSegment> _radialSegments = [];
 
     /// <summary>The segment bindings, labels, and count shown by the radial; set by the host from settings.</summary>
     public RadialMenuConfig RadialConfig
     {
-        get => _radialConfig;
-        set => _radialConfig = value ?? RadialMenuConfig.Default;
-    }
+        get;
+        set => field = value ?? RadialMenuConfig.Default;
+    } = RadialMenuConfig.Default;
 
     /// <summary>Raised when a radial wedge is released over an enabled bound command; carries its id.</summary>
     public event Action<string>? RadialCommandActivated;
@@ -44,18 +40,16 @@ public sealed partial class SpreadsheetGrid
     /// <summary>Asked whether a command id is enabled right now, so a disabled wedge dims (default: enabled).</summary>
     public Func<string, bool>? RadialCommandEnabled { get; set; }
 
-    private AppCommands? _commands;
-
     /// <summary>
     /// The host's command catalog, used to resolve a bound wedge's icon/label and to feed the overlay's
     /// hover tooltip. Set by the editor (which owns the one env-bound catalog); the overlay is kept in sync.
     /// </summary>
     public AppCommands? Commands
     {
-        get => _commands;
+        get;
         set
         {
-            _commands = value;
+            field = value;
             _radialOverlay.Commands = value;
         }
     }
@@ -169,12 +163,12 @@ public sealed partial class SpreadsheetGrid
 
     private IReadOnlyList<RadialSegment> BuildRadialSegments()
     {
-        var config = _radialConfig.Normalized();
+        var config = RadialConfig.Normalized();
         var segments = new List<RadialSegment>(config.SegmentCount);
         for (int i = 0; i < config.SegmentCount; i++)
         {
             string? id = config.CommandIdAt(i);
-            var command = id is null ? null : _commands?.ById(id);
+            var command = id is null ? null : Commands?.ById(id);
             bool enabled = command is not null && (RadialCommandEnabled?.Invoke(command.Id) ?? true);
             segments.Add(new RadialSegment(command?.Id, command?.Icon, command?.Title ?? string.Empty, enabled));
         }

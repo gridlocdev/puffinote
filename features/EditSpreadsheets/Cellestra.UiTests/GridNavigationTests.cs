@@ -1,5 +1,4 @@
 using Avalonia.Headless.XUnit;
-using Cellestra.Core.Data;
 using Cellestra.Core.Model;
 using Cellestra.Core.Values;
 using Cellestra.Desktop.Controls.SpreadsheetGrid;

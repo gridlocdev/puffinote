@@ -8,7 +8,7 @@ public sealed class NotebookWatcherTests
     private const string Root = "/notebook";
 
     private static string Under(params string[] segments) =>
-        System.IO.Path.Combine(new[] { Root }.Concat(segments).ToArray());
+        System.IO.Path.Combine([Root, .. segments]);
 
     [Fact]
     public void Ordinary_files_in_the_notebook_are_relevant()

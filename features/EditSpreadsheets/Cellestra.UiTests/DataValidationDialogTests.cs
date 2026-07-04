@@ -61,7 +61,7 @@ public class DataValidationDialogTests
         Assert.NotNull(rule);
         Assert.Equal(ValidationKind.List, rule!.Kind);
         Assert.Null(rule.ListSource);
-        Assert.Equal(new[] { "Red", "Green", "Blue" }, rule.ListValues);
+        Assert.Equal(["Red", "Green", "Blue"], rule.ListValues);
     }
 
     [AvaloniaFact]

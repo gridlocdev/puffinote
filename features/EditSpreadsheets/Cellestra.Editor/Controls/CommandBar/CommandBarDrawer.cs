@@ -1,5 +1,3 @@
-using System;
-using System.Collections.Generic;
 using System.Globalization;
 using Avalonia;
 using Avalonia.Controls;
@@ -138,8 +136,16 @@ public static class CommandBarDrawer
         bool on = false;
         bool hover = false;
         void Paint() => row.Background = on ? CommandBar.ActiveBackground : hover ? CommandBar.HoverBackground : Brushes.Transparent;
-        row.PointerEntered += (_, _) => { hover = true; Paint(); };
-        row.PointerExited += (_, _) => { hover = false; Paint(); };
+        row.PointerEntered += (_, _) =>
+        {
+            hover = true;
+            Paint();
+        };
+        row.PointerExited += (_, _) =>
+        {
+            hover = false;
+            Paint();
+        };
         row.Click += (_, _) =>
         {
             if (command.IsEnabled)
@@ -171,9 +177,9 @@ public static class CommandBarDrawer
 
     // ---- Text-group extras: size stepper + colour swatches ----------------
 
-    private static readonly double[] FontSizes = { 8, 9, 10, 11, 12, 14, 18, 24, 36 };
-    private static readonly string[] TextColours = { "#23211C", "#15734F", "#B9742A", "#B23A35", "#2D5FA8", "#928C7E" };
-    private static readonly string[] FillColours = { "#DCEBE2", "#F3E3CD", "#F6D9D6", "#DDE3F0", "#ECE7DA", "#FFFFFF" };
+    private static readonly double[] FontSizes = [8, 9, 10, 11, 12, 14, 18, 24, 36];
+    private static readonly string[] TextColours = ["#23211C", "#15734F", "#B9742A", "#B23A35", "#2D5FA8", "#928C7E"];
+    private static readonly string[] FillColours = ["#DCEBE2", "#F3E3CD", "#F6D9D6", "#DDE3F0", "#ECE7DA", "#FFFFFF"];
 
     /// <summary>A size stepper: −/+ around the current size, plus a row of common presets.</summary>
     private static Control SizeSection(IAppEnvironment env, Action close)
@@ -224,7 +230,11 @@ public static class CommandBarDrawer
             // Preview on hover, commit on click — same feel as the colour swatches.
             button.PointerEntered += (_, _) => env.PreviewCellStyle(s => s.WithFont(s.Font with { SizePoints = px }));
             button.PointerExited += (_, _) => env.PreviewCellStyle(null);
-            button.Click += (_, _) => { Apply(px); close(); };
+            button.Click += (_, _) =>
+            {
+                Apply(px);
+                close();
+            };
             presets.Children.Add(button);
         }
 
@@ -393,11 +403,11 @@ public static class CommandBarDrawer
         var repainters = new List<Action>();
 
         (string Label, VAlign Value, string Icon)[] options =
-        {
+        [
             ("Top", VAlign.Top, "align-vertical-justify-start"),
             ("Middle", VAlign.Middle, "align-vertical-justify-center"),
             ("Bottom", VAlign.Bottom, "align-vertical-justify-end"),
-        };
+        ];
 
         foreach (var (label, value, iconKey) in options)
         {
@@ -426,8 +436,16 @@ public static class CommandBarDrawer
             bool on = false;
             bool hover = false;
             void Paint() => button.Background = on ? CommandBar.ActiveBackground : hover ? CommandBar.HoverBackground : Brushes.Transparent;
-            button.PointerEntered += (_, _) => { hover = true; Paint(); };
-            button.PointerExited += (_, _) => { hover = false; Paint(); };
+            button.PointerEntered += (_, _) =>
+            {
+                hover = true;
+                Paint();
+            };
+            button.PointerExited += (_, _) =>
+            {
+                hover = false;
+                Paint();
+            };
             button.Click += (_, _) =>
             {
                 env.ApplyCellStyle(s => s.WithAlignment(s.Alignment with { Vertical = value }), "Vertical align");
@@ -469,7 +487,7 @@ public static class CommandBarDrawer
 
     // Grouped, plain-language options, each previewed live against a sample value (PRD §8.3).
     private static readonly FormatOption[] FormatOptions =
-    {
+    [
         new("Automatic (General)", NumberFormat.General, NumberFormatKind.General),
         new("Plain number", new NumberFormat("#,##0.00"), NumberFormatKind.Number),
         new("Whole number", NumberFormat.Integer, NumberFormatKind.Number),
@@ -480,7 +498,7 @@ public static class CommandBarDrawer
         new("Time", new NumberFormat("h:mm:ss AM/PM"), NumberFormatKind.Time),
         new("Date & time", new NumberFormat("yyyy-mm-dd h:mm"), NumberFormatKind.DateTime),
         new("Text", NumberFormat.Text, NumberFormatKind.Text),
-    };
+    ];
 
     private static Control FormatAsSection(IAppEnvironment env, Action close, out Action refresh)
     {
@@ -553,9 +571,19 @@ public static class CommandBarDrawer
         bool hover = false;
         void Paint() => row.Background = on ? CommandBar.ActiveBackground : hover ? CommandBar.HoverBackground : Brushes.Transparent;
 
-        Func<CellStyle, CellStyle> transform = s => s.WithNumberFormat(option.Format);
-        row.PointerEntered += (_, _) => { hover = true; Paint(); env.PreviewCellStyle(transform); };
-        row.PointerExited += (_, _) => { hover = false; Paint(); env.PreviewCellStyle(null); };
+        CellStyle transform(CellStyle s) => s.WithNumberFormat(option.Format);
+        row.PointerEntered += (_, _) =>
+        {
+            hover = true;
+            Paint();
+            env.PreviewCellStyle(transform);
+        };
+        row.PointerExited += (_, _) =>
+        {
+            hover = false;
+            Paint();
+            env.PreviewCellStyle(null);
+        };
         row.Click += (_, _) =>
         {
             env.ApplyCellStyle(transform, "Number format");

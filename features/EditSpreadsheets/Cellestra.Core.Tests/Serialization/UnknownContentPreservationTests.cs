@@ -7,7 +7,7 @@ namespace Cellestra.Core.Tests.Serialization;
 
 public class UnknownContentPreservationTests
 {
-    private static readonly byte[] ExtraPartBytes = { 1, 2, 3, 4, 5 };
+    private static readonly byte[] ExtraPartBytes = [1, 2, 3, 4, 5];
 
     /// <summary>Hand-built .ods with an unmodeled spreadsheet child and an extra binary part.</summary>
     private static byte[] BuildPackageWithUnknownContent()

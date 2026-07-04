@@ -1,5 +1,3 @@
-using System;
-using Avalonia;
 using Avalonia.Media;
 using Avalonia.Threading;
 using Cellestra.Core.Model;
@@ -97,7 +95,7 @@ public sealed partial class SpreadsheetGrid
             : Color.FromRgb(0x1E, 0x88, 0x4E);
         var pen = new Pen(new SolidColorBrush(color), 2)
         {
-            DashStyle = new DashStyle(new double[] { DashOn, DashOff }, _marchPhase),
+            DashStyle = new DashStyle([DashOn, DashOff], _marchPhase),
         };
 
         context.DrawRectangle(null, pen, rect.Deflate(1));

@@ -34,7 +34,7 @@ public sealed class CellSnapshotCommand : IEditCommand
     {
         Label = label;
         _sheetName = sheetName;
-        _positions = Array.Empty<(int, int)>();
+        _positions = [];
         _positionFactory = positionFactory;
         _mutate = mutate;
     }

@@ -43,21 +43,36 @@ public sealed class Lexer
 
         switch (c)
         {
-            case '+': return Single(TokenType.Plus);
-            case '-': return Single(TokenType.Minus);
-            case '*': return Single(TokenType.Star);
-            case '/': return Single(TokenType.Slash);
-            case '^': return Single(TokenType.Caret);
-            case '&': return Single(TokenType.Ampersand);
-            case '%': return Single(TokenType.Percent);
-            case '(': return Single(TokenType.LeftParen);
-            case ')': return Single(TokenType.RightParen);
-            case ',': return Single(TokenType.Comma);
-            case ':': return Single(TokenType.Colon);
-            case '=': return Single(TokenType.Equal);
-            case '<': return LessOrCompound();
-            case '>': return GreaterOrCompound();
-            case '"': return ReadString();
+            case '+':
+                return Single(TokenType.Plus);
+            case '-':
+                return Single(TokenType.Minus);
+            case '*':
+                return Single(TokenType.Star);
+            case '/':
+                return Single(TokenType.Slash);
+            case '^':
+                return Single(TokenType.Caret);
+            case '&':
+                return Single(TokenType.Ampersand);
+            case '%':
+                return Single(TokenType.Percent);
+            case '(':
+                return Single(TokenType.LeftParen);
+            case ')':
+                return Single(TokenType.RightParen);
+            case ',':
+                return Single(TokenType.Comma);
+            case ':':
+                return Single(TokenType.Colon);
+            case '=':
+                return Single(TokenType.Equal);
+            case '<':
+                return LessOrCompound();
+            case '>':
+                return GreaterOrCompound();
+            case '"':
+                return ReadString();
         }
 
         if (char.IsAsciiDigit(c) || (c == '.' && _pos + 1 < _source.Length && char.IsAsciiDigit(_source[_pos + 1])))

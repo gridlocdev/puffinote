@@ -16,8 +16,8 @@ public sealed class EditHistory
 {
     public const int MaxDepth = 1000;
 
-    private readonly List<HistoryEntry> _undo = new();
-    private readonly List<HistoryEntry> _redo = new();
+    private readonly List<HistoryEntry> _undo = [];
+    private readonly List<HistoryEntry> _redo = [];
     private bool _coalesceBreak = true;
 
     public bool CanUndo => _undo.Count > 0;

@@ -13,7 +13,7 @@ public static class SheetName
     public const int MaxLength = 31;
 
     /// <summary>Characters that may not appear in a worksheet name.</summary>
-    public static readonly char[] ForbiddenChars = { ':', '\\', '/', '?', '*', '[', ']' };
+    public static readonly char[] ForbiddenChars = [':', '\\', '/', '?', '*', '[', ']'];
 
     public static bool IsValid(string? name, out string error)
     {

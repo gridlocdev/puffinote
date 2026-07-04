@@ -1,6 +1,4 @@
-using System.Collections.Generic;
 using System.Globalization;
-using System.Linq;
 using Avalonia.Headless.XUnit;
 using Cellestra.Core.Data;
 using Cellestra.Core.Model;
@@ -25,8 +23,9 @@ public class SortFilterDialogTests
     private static Worksheet TaskSheet(FilterSpec? filter = null, SortSpec? sort = null)
     {
         var sheet = new Worksheet("Sheet1");
-        sheet.SetValue(0, 0, CellValue.Text("Name")); sheet.SetValue(0, 1, CellValue.Text("Status"));
-        (string Name, string Status)[] rows = { ("a", "Open"), ("b", "Done"), ("c", "Open"), ("d", "Done") };
+        sheet.SetValue(0, 0, CellValue.Text("Name"));
+        sheet.SetValue(0, 1, CellValue.Text("Status"));
+        (string Name, string Status)[] rows = [("a", "Open"), ("b", "Done"), ("c", "Open"), ("d", "Done")];
         for (int i = 0; i < rows.Length; i++)
         {
             sheet.SetValue(i + 1, 0, CellValue.Text(rows[i].Name));
@@ -42,17 +41,17 @@ public class SortFilterDialogTests
     public void Seeds_from_the_tables_own_sort_and_filter_and_compiles_them_back()
     {
         var sheet = TaskSheet(
-            sort: new SortSpec(new[] { new SortLevel(0, Ascending: true) }),
+            sort: new SortSpec([new SortLevel(0, Ascending: true)]),
             filter: new FilterSpec(new Dictionary<int, ColumnFilter> { [1] = new ColumnFilter { AllowedValues = new HashSet<string> { "Open" } } }));
 
         var dialog = new SortFilterDialog(sheet, TableRange, hasHeader: true, Inv);
         var plan = dialog.BuildPlanForTest();
 
         Assert.NotNull(plan.Sort);
-        Assert.Equal(new[] { 0 }, plan.Sort!.Levels.Select(l => l.Column));
+        Assert.Equal([0], plan.Sort!.Levels.Select(l => l.Column));
         Assert.NotNull(plan.Filter);
         Assert.Contains(1, plan.Filter!.Columns.Keys);
-        Assert.Equal(new[] { "Open" }, plan.Filter.Columns[1].AllowedValues!.OrderBy(v => v));
+        Assert.Equal(["Open"], plan.Filter.Columns[1].AllowedValues!.OrderBy(v => v));
     }
 
     [AvaloniaFact]
@@ -87,12 +86,12 @@ public class SortFilterDialogTests
     [AvaloniaFact]
     public void Step_reorder_and_remove_buttons_have_tooltips()
     {
-        var sheet = TaskSheet(sort: new SortSpec(new[] { new SortLevel(0, Ascending: true) }));
+        var sheet = TaskSheet(sort: new SortSpec([new SortLevel(0, Ascending: true)]));
         var dialog = new SortFilterDialog(sheet, TableRange, hasHeader: true, Inv);
 
-        Assert.Equal(new[] { "Move step up" }, dialog.StepButtonTooltipsForTest("▲"));
-        Assert.Equal(new[] { "Move step down" }, dialog.StepButtonTooltipsForTest("▼"));
-        Assert.Equal(new[] { "Remove step" }, dialog.StepButtonTooltipsForTest("✕"));
+        Assert.Equal(["Move step up"], dialog.StepButtonTooltipsForTest("▲"));
+        Assert.Equal(["Move step down"], dialog.StepButtonTooltipsForTest("▼"));
+        Assert.Equal(["Remove step"], dialog.StepButtonTooltipsForTest("✕"));
     }
 
     [AvaloniaFact]

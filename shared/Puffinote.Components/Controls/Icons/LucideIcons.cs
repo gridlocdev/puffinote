@@ -1,9 +1,7 @@
-using System;
 using System.Collections.Concurrent;
 using System.Globalization;
 using System.Text;
 using System.Xml.Linq;
-using Avalonia;
 using Avalonia.Media;
 using Avalonia.Platform;
 

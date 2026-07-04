@@ -1,6 +1,3 @@
-using System.Collections.Generic;
-using System.IO;
-using System.Linq;
 using Cellestra.Desktop.Commands;
 using Cellestra.Desktop.Services;
 using Xunit;
@@ -19,7 +16,7 @@ public class SettingsTests
             var radial = new RadialMenuConfig
             {
                 SegmentCount = 4,
-                CommandIds = new List<string?> { "edit.cut", null, "edit.paste", "edit.undo" },
+                CommandIds = ["edit.cut", null, "edit.paste", "edit.undo"],
             };
             service.Save(new AppSettings { RadialMenu = radial });
 

@@ -1,4 +1,3 @@
-using System.Linq;
 using System.Text.Json;
 using Puffinote.Desktop.Shell;
 
@@ -31,22 +30,20 @@ internal static class SearchIndexCache
             var path = CachePath(root);
             if (!File.Exists(path))
             {
-                return Array.Empty<IndexedFile>();
+                return [];
             }
 
             var document = JsonSerializer.Deserialize<CacheDocument>(File.ReadAllText(path));
             if (document is null || document.Version != CurrentVersion || document.Files is null)
             {
-                return Array.Empty<IndexedFile>();
+                return [];
             }
 
-            return document.Files
-                .Select(e => new IndexedFile(System.IO.Path.Combine(root, e.Path), e.Text, e.MTime, e.Size))
-                .ToList();
+            return [.. document.Files.Select(e => new IndexedFile(System.IO.Path.Combine(root, e.Path), e.Text, e.MTime, e.Size))];
         }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException or JsonException)
         {
-            return Array.Empty<IndexedFile>();
+            return [];
         }
     }
 
@@ -61,7 +58,7 @@ internal static class SearchIndexCache
 
             var document = new CacheDocument(
                 CurrentVersion,
-                index.Select(f => new Entry(System.IO.Path.GetRelativePath(root, f.Path), f.MTimeTicks, f.Size, f.Text)).ToList());
+                [.. index.Select(f => new Entry(System.IO.Path.GetRelativePath(root, f.Path), f.MTimeTicks, f.Size, f.Text))]);
             File.WriteAllText(CachePath(root), JsonSerializer.Serialize(document));
         }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException)

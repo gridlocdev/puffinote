@@ -1,4 +1,3 @@
-using System.Linq;
 using Puffinote.Desktop.Search;
 using Puffinote.Desktop.Shell;
 using Xunit;

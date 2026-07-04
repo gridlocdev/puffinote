@@ -1,6 +1,4 @@
-using System.Collections.Generic;
 using System.Globalization;
-using System.Linq;
 using Avalonia.Controls;
 using Avalonia.Layout;
 using Avalonia.Media;
@@ -304,11 +302,10 @@ public sealed class SortFilterDialog : ModalDialog<SortFilterPlan?>
 
     /// <summary>The tooltips on every step's button carrying <paramref name="glyph"/> (▲/▼/✕).</summary>
     internal IReadOnlyList<string?> StepButtonTooltipsForTest(string glyph) =>
-        _steps.Children.OfType<StackPanel>()
+        [.. _steps.Children.OfType<StackPanel>()
             .SelectMany(row => row.Children.OfType<Button>())
             .Where(b => b.Content as string == glyph)
-            .Select(b => ToolTip.GetTip(b) as string)
-            .ToList();
+            .Select(b => ToolTip.GetTip(b) as string)];
 
     /// <summary>
     /// Parse a filter cell: a condition (leading comparison operator or a <c>*</c>/<c>?</c> wildcard)

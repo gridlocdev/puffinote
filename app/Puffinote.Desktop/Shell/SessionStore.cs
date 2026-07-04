@@ -1,4 +1,3 @@
-using System.Linq;
 using System.Text.Json;
 
 namespace Puffinote.Desktop.Shell;
@@ -10,7 +9,7 @@ namespace Puffinote.Desktop.Shell;
 /// </summary>
 internal sealed record NotebookSession
 {
-    public IReadOnlyList<string> Recent { get; init; } = Array.Empty<string>();
+    public IReadOnlyList<string> Recent { get; init; } = [];
 
     public bool SidebarCollapsed { get; init; }
 
@@ -53,7 +52,7 @@ internal static class SessionStore
                 return new NotebookSession();
             }
 
-            var recent = (document.Recent ?? new List<string>())
+            var recent = (document.Recent ?? [])
                 .Select(rel => System.IO.Path.GetFullPath(System.IO.Path.Combine(root, rel)))
                 .ToList();
             return new NotebookSession
@@ -80,7 +79,7 @@ internal static class SessionStore
 
             var document = new SessionDocument(
                 CurrentVersion,
-                session.Recent.Select(p => System.IO.Path.GetRelativePath(root, p)).ToList(),
+                [.. session.Recent.Select(p => System.IO.Path.GetRelativePath(root, p))],
                 session.SidebarCollapsed,
                 session.SidebarWidth);
             File.WriteAllText(SessionPath(root), JsonSerializer.Serialize(document, new JsonSerializerOptions { WriteIndented = true }));

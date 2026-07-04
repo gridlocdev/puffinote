@@ -122,7 +122,7 @@ public sealed class Evaluator : IExprVisitor<CellValue>, IFunctionEvaluator
             return range.Values();
         }
 
-        return new[] { Evaluate(expression) };
+        return [Evaluate(expression)];
     }
 
     public bool TryEvaluateRange(Expr expression, out RangeValues range)

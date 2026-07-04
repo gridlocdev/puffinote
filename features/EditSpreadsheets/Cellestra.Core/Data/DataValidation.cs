@@ -1,5 +1,4 @@
 using System.Globalization;
-using Cellestra.Core.Formulas.Evaluation;
 using Cellestra.Core.Model;
 using Cellestra.Core.Values;
 
@@ -134,6 +133,11 @@ public static class Validator
         return false;
     }
 
+    // 'culture' is retained to keep the whole validation chain (IsValid -> MatchesList -> here)
+    // culture-aware by contract; list comparison deliberately uses the invariant text form so
+    // matching is stable across locales. Intentionally unused for now.
+#pragma warning disable IDE0060 // Remove unused parameter
     private static string NumberFormatterToText(CellValue value, CultureInfo culture) =>
         value.IsBoolean ? (value.AsBoolean ? "TRUE" : "FALSE") : value.ToInvariantString();
+#pragma warning restore IDE0060
 }

@@ -21,10 +21,26 @@ public static class DataRegion
         while (grew)
         {
             grew = false;
-            if (RowHasData(sheet, top - 1, left, right)) { top--; grew = true; }
-            if (RowHasData(sheet, bottom + 1, left, right)) { bottom++; grew = true; }
-            if (ColumnHasData(sheet, left - 1, top, bottom)) { left--; grew = true; }
-            if (ColumnHasData(sheet, right + 1, top, bottom)) { right++; grew = true; }
+            if (RowHasData(sheet, top - 1, left, right))
+            {
+                top--;
+                grew = true;
+            }
+            if (RowHasData(sheet, bottom + 1, left, right))
+            {
+                bottom++;
+                grew = true;
+            }
+            if (ColumnHasData(sheet, left - 1, top, bottom))
+            {
+                left--;
+                grew = true;
+            }
+            if (ColumnHasData(sheet, right + 1, top, bottom))
+            {
+                right++;
+                grew = true;
+            }
         }
 
         return new CellRange(new CellAddress(left, top), new CellAddress(right, bottom));

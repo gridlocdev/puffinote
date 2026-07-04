@@ -35,7 +35,7 @@ public class DataEngineTests
             (3, 0, "Cy"), (3, 1, 50));
 
         SortEngine.Sort(sheet, CellRange.Parse("A1:B4"),
-            new SortSpec(new[] { new SortLevel(0, Ascending: true) }));
+            new SortSpec([new SortLevel(0, Ascending: true)]));
 
         Assert.Equal("Name", sheet.GetValue(0, 0).AsText); // header stays
         Assert.Equal("Ada", sheet.GetValue(1, 0).AsText);
@@ -53,7 +53,7 @@ public class DataEngineTests
             (3, 0, "B"), (3, 1, 1));
 
         SortEngine.Sort(sheet, CellRange.Parse("A1:B4"),
-            new SortSpec(new[] { new SortLevel(0, true), new SortLevel(1, true) }));
+            new SortSpec([new SortLevel(0, true), new SortLevel(1, true)]));
 
         Assert.Equal(1, sheet.GetValue(1, 1).AsNumber); // A,1
         Assert.Equal(2, sheet.GetValue(2, 1).AsNumber); // A,2
@@ -106,7 +106,7 @@ public class DataEngineTests
 
         // Sort ascending — data becomes 10, 50, 90. Without re-applying the filter the Hidden flags
         // would stay pinned to the old indices and hide the wrong row.
-        SortEngine.Sort(sheet, range, new SortSpec(new[] { new SortLevel(0, Ascending: true) }), CultureInfo.InvariantCulture);
+        SortEngine.Sort(sheet, range, new SortSpec([new SortLevel(0, Ascending: true)]), CultureInfo.InvariantCulture);
 
         Assert.Equal(10, sheet.GetValue(1, 0).AsNumber);
         Assert.Equal(50, sheet.GetValue(2, 0).AsNumber);
@@ -124,7 +124,7 @@ public class DataEngineTests
         var sheet = SheetWith(
             (0, 0, "x"), (1, 0, "a"), (2, 0, "b"), (3, 0, "a"), (4, 0, "b"), (5, 0, "c"));
 
-        int removed = DuplicateRemover.Remove(sheet, CellRange.Parse("A1:A6"), new[] { 0 }, hasHeader: true);
+        int removed = DuplicateRemover.Remove(sheet, CellRange.Parse("A1:A6"), [0], hasHeader: true);
 
         Assert.Equal(2, removed);
         Assert.Equal("a", sheet.GetValue(1, 0).AsText);
@@ -176,7 +176,7 @@ public class DataEngineTests
     {
         var rule = new DataValidation(ValidationKind.List, CellRange.Parse("A1"))
         {
-            ListValues = new[] { "Red", "Green", "Blue" },
+            ListValues = ["Red", "Green", "Blue"],
         };
 
         Assert.True(Validator.IsValid(rule, CellValue.Text("Green"), CultureInfo.InvariantCulture));

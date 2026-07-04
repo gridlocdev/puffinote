@@ -1,4 +1,3 @@
-using System.Collections.Generic;
 using Cellestra.Desktop.Commands;
 using Cellestra.Desktop.Controls.RadialMenu;
 using Xunit;
@@ -46,7 +45,7 @@ public class RadialMenuLayoutTests
     [Fact]
     public void Normalized_pads_new_slots_from_the_defaults()
     {
-        var config = new RadialMenuConfig { SegmentCount = 8, CommandIds = new() }.Normalized();
+        var config = new RadialMenuConfig { SegmentCount = 8, CommandIds = [] }.Normalized();
         Assert.Equal(8, config.CommandIds.Count);
         Assert.Equal(RadialMenuConfig.DefaultCommandIds[7], config.CommandIdAt(7));
     }
@@ -57,7 +56,7 @@ public class RadialMenuLayoutTests
         var config = new RadialMenuConfig
         {
             SegmentCount = 3,
-            CommandIds = new List<string?> { "edit.copy", null, "edit.paste" },
+            CommandIds = ["edit.copy", null, "edit.paste"],
         }.Normalized();
 
         Assert.Equal("edit.copy", config.CommandIdAt(0));

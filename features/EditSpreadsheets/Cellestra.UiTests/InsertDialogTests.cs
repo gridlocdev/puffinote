@@ -1,9 +1,6 @@
-using System.Linq;
 using Avalonia.Headless.XUnit;
 using Cellestra.Core.Formulas.Functions;
 using Cellestra.Core.Model;
-using Cellestra.Desktop.Commands;
-using Cellestra.Desktop.Views;
 using Cellestra.Desktop.Views.Dialogs;
 using Puffinote.Components.Commands;
 using Xunit;

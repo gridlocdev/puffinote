@@ -19,7 +19,7 @@ public class FormatCellsDialogTests
         var plain = CellStyle.Default; // not bold, size 10
 
         // Open on a selection whose bold and size differ. Touch nothing → both fields are preserved.
-        var dialog = new FormatCellsDialog(bold, new[] { bold, plain });
+        var dialog = new FormatCellsDialog(bold, [bold, plain]);
         var transform = dialog.BuildTransform();
 
         // Each cell keeps its own bold/size — the indeterminate checkbox and empty size box mean "leave".
@@ -49,7 +49,7 @@ public class FormatCellsDialogTests
         var currency = CellStyle.Default.WithNumberFormat(new NumberFormat("$#,##0.00"));
         var percent = CellStyle.Default.WithNumberFormat(new NumberFormat("0%"));
 
-        var dialog = new FormatCellsDialog(currency, new[] { currency, percent });
+        var dialog = new FormatCellsDialog(currency, [currency, percent]);
         var transform = dialog.BuildTransform();
 
         // Format combo seeded to "(varies)" and untouched → each cell keeps its own code.
@@ -79,7 +79,7 @@ public class FormatCellsDialogTests
         var none = CellStyle.Default; // Border.None
 
         // Borders differ across the selection → the dialog leaves them alone unless touched.
-        var dialog = new FormatCellsDialog(boxed, new[] { boxed, none });
+        var dialog = new FormatCellsDialog(boxed, [boxed, none]);
         var transform = dialog.BuildTransform();
 
         Assert.True(transform(boxed).Border.HasAnyEdge);   // the boxed cell keeps its box

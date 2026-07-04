@@ -77,15 +77,51 @@ public static class OdsDataStyles
         int i = 0;
         while (i < lower.Length)
         {
-            if (Starts(lower, i, "yyyy")) { style.Add(Year(true)); i += 4; }
-            else if (Starts(lower, i, "yy")) { style.Add(Year(false)); i += 2; }
-            else if (Starts(lower, i, "mmmm")) { style.Add(Month("long", textual: true)); i += 4; }
-            else if (Starts(lower, i, "mmm")) { style.Add(Month("short", textual: true)); i += 3; }
-            else if (Starts(lower, i, "mm")) { style.Add(Month("long", textual: false)); i += 2; }
-            else if (Starts(lower, i, "m")) { style.Add(Month("short", textual: false)); i += 1; }
-            else if (Starts(lower, i, "dd")) { style.Add(Day(true)); i += 2; }
-            else if (Starts(lower, i, "d")) { style.Add(Day(false)); i += 1; }
-            else { style.Add(new XElement(Number + "text", code[i].ToString())); i += 1; }
+            if (Starts(lower, i, "yyyy"))
+            {
+                style.Add(Year(true));
+                i += 4;
+            }
+            else if (Starts(lower, i, "yy"))
+            {
+                style.Add(Year(false));
+                i += 2;
+            }
+            else if (Starts(lower, i, "mmmm"))
+            {
+                style.Add(Month("long", textual: true));
+                i += 4;
+            }
+            else if (Starts(lower, i, "mmm"))
+            {
+                style.Add(Month("short", textual: true));
+                i += 3;
+            }
+            else if (Starts(lower, i, "mm"))
+            {
+                style.Add(Month("long", textual: false));
+                i += 2;
+            }
+            else if (Starts(lower, i, "m"))
+            {
+                style.Add(Month("short", textual: false));
+                i += 1;
+            }
+            else if (Starts(lower, i, "dd"))
+            {
+                style.Add(Day(true));
+                i += 2;
+            }
+            else if (Starts(lower, i, "d"))
+            {
+                style.Add(Day(false));
+                i += 1;
+            }
+            else
+            {
+                style.Add(new XElement(Number + "text", code[i].ToString()));
+                i += 1;
+            }
         }
 
         return style;

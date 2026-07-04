@@ -2,7 +2,6 @@ using System.CommandLine;
 using System.Diagnostics;
 using System.Globalization;
 using System.Runtime.InteropServices;
-using System.Text;
 using System.Text.Json;
 using System.Text.RegularExpressions;
 using Cellestra.Cli.Infrastructure;
@@ -10,7 +9,6 @@ using Cellestra.Core.Editing;
 using Cellestra.Core.Formulas.Functions;
 using Cellestra.Core.Model;
 using Cellestra.Core.Serialization.Csv;
-using Cellestra.Core.Values;
 using Puffinote.Components.Core.Cli;
 
 namespace Cellestra.Cli.Commands;
@@ -170,8 +168,11 @@ internal static class ExtraCommands
         var file = Options.File();
         var term = new Argument<string>("term") { Description = "Text to search for" };
         var regex = new Option<bool>("--regex") { Description = "Treat the term as a regular expression" };
-        var into = new Option<string>("--in") { Description = "Where to search: values | formulas | both" };
-        into.DefaultValueFactory = _ => "both";
+        var into = new Option<string>("--in")
+        {
+            Description = "Where to search: values | formulas | both",
+            DefaultValueFactory = _ => "both"
+        };
         var locale = Options.Locale();
         var command = new Command("find", "Search cells by value or formula") { file, term, regex, into, locale };
 
@@ -230,8 +231,11 @@ internal static class ExtraCommands
     {
         var left = Options.File("before", "First workbook");
         var right = Options.File("after", "Second workbook");
-        var format = new Option<string>("--format", "-f") { Description = "unified (default)" };
-        format.DefaultValueFactory = _ => "unified";
+        var format = new Option<string>("--format", "-f")
+        {
+            Description = "unified (default)",
+            DefaultValueFactory = _ => "unified"
+        };
         var command = new Command("diff", "Compare two workbooks by value/structure (exit 1 if they differ)") { left, right, format };
 
         command.SetAction(parse =>
@@ -287,8 +291,11 @@ internal static class ExtraCommands
 
     public static Command Functions()
     {
-        var name = new Argument<string?>("name") { Description = "A function to describe (omit to list all)" };
-        name.Arity = ArgumentArity.ZeroOrOne;
+        var name = new Argument<string?>("name")
+        {
+            Description = "A function to describe (omit to list all)",
+            Arity = ArgumentArity.ZeroOrOne
+        };
         var command = new Command("functions", "List supported functions, or describe one") { name };
 
         command.SetAction(parse =>
@@ -382,7 +389,7 @@ internal static class ExtraCommands
             EditEntry[] entries;
             try
             {
-                entries = JsonSerializer.Deserialize<EditEntry[]>(json, JsonOptions) ?? Array.Empty<EditEntry>();
+                entries = JsonSerializer.Deserialize<EditEntry[]>(json, JsonOptions) ?? [];
             }
             catch (JsonException ex)
             {
@@ -526,10 +533,10 @@ internal static class ExtraCommands
         string baseDir = AppContext.BaseDirectory;
         string exeName = RuntimeInformation.IsOSPlatform(OSPlatform.Windows) ? "Cellestra.Desktop.exe" : "Cellestra.Desktop";
         string[] candidates =
-        {
+        [
             Path.Combine(baseDir, exeName),
             Path.Combine(baseDir, "..", "..", "..", "..", "Cellestra.Desktop", "bin", "Debug", "net10.0", exeName),
-        };
+        ];
 
         return candidates.FirstOrDefault(File.Exists);
     }

@@ -1,7 +1,4 @@
-using System;
-using System.Collections.Generic;
 using System.Globalization;
-using System.Linq;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Layout;
@@ -24,7 +21,7 @@ public sealed partial class SpreadsheetGrid
     private static readonly Color TableBorder = Color.FromRgb(0x4A, 0x7E, 0xBB);
 
     private readonly Canvas _popupLayer = new() { IsHitTestVisible = true };
-    private readonly List<(Rect Rect, int Column, CellRange Range, bool HasHeader)> _filterButtons = new();
+    private readonly List<(Rect Rect, int Column, CellRange Range, bool HasHeader)> _filterButtons = [];
     private (Rect Rect, DataValidation Rule)? _validationButton;
 
     private CellRange? _filterRange;
@@ -103,7 +100,8 @@ public sealed partial class SpreadsheetGrid
     private void DrawFilterButtons(DrawingContext context, CellRange range, bool hasHeader)
     {
         int headerRow = range.Top;
-        foreach (var (col, x, w) in _visibleColumns)
+
+        foreach (var (col, _, _) in _visibleColumns)
         {
             if (col < range.Left || col > range.Right)
             {
@@ -368,7 +366,7 @@ public sealed partial class SpreadsheetGrid
     /// <summary>Sort the table/range by the dropdown's column, single-level, replacing any prior sort (#3).</summary>
     private void SortByFilterColumn(Worksheet sheet, CellRange range, int column, bool ascending, bool hasHeader)
     {
-        var sort = new SortSpec(new[] { new SortLevel(column, ascending) }, hasHeader);
+        var sort = new SortSpec([new SortLevel(column, ascending)], hasHeader);
         CommitFromDropdown(sheet, range, sort, DataScope.EffectiveFilter(sheet, range));
     }
 

@@ -1,4 +1,3 @@
-using System.Linq;
 using Avalonia.Headless.XUnit;
 using Typage.Control.Controls;
 using Typage.Control.Rendering;

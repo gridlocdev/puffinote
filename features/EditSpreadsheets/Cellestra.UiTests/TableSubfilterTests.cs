@@ -24,10 +24,14 @@ public class TableSubfilterTests
         window.Show();
         window.Editor.Grid.Zoom = 1.0;
         var sheet = window.Editor.Session.ActiveSheet;
-        sheet.SetValue(0, 0, CellValue.Text("Team")); sheet.SetValue(0, 1, CellValue.Text("City"));
-        sheet.SetValue(1, 0, CellValue.Text("A")); sheet.SetValue(1, 1, CellValue.Text("X"));
-        sheet.SetValue(2, 0, CellValue.Text("A")); sheet.SetValue(2, 1, CellValue.Text("Y"));
-        sheet.SetValue(3, 0, CellValue.Text("B")); sheet.SetValue(3, 1, CellValue.Text("X"));
+        sheet.SetValue(0, 0, CellValue.Text("Team"));
+        sheet.SetValue(0, 1, CellValue.Text("City"));
+        sheet.SetValue(1, 0, CellValue.Text("A"));
+        sheet.SetValue(1, 1, CellValue.Text("X"));
+        sheet.SetValue(2, 0, CellValue.Text("A"));
+        sheet.SetValue(2, 1, CellValue.Text("Y"));
+        sheet.SetValue(3, 0, CellValue.Text("B"));
+        sheet.SetValue(3, 1, CellValue.Text("X"));
         var range = CellRange.Parse("A1:B4");
         sheet.AddTable(new Table("T", range, HasHeader: true));
         window.Editor.Grid.Refresh();
@@ -54,7 +58,7 @@ public class TableSubfilterTests
         Assert.False(sheet.IsRowHidden(1));
         Assert.True(sheet.IsRowHidden(2));  // A,Y rejected by City=X
         Assert.False(sheet.IsRowHidden(3)); // B,X passes (Team filter no longer applies)
-        Assert.Equal(new[] { 1 }, window.Editor.Grid.ActiveFilterColumnsForTest); // a single active filter column
+        Assert.Equal([1], window.Editor.Grid.ActiveFilterColumnsForTest); // a single active filter column
     }
 
     [AvaloniaFact]

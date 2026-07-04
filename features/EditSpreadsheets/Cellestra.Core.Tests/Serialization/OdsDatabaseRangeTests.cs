@@ -48,7 +48,7 @@ public class OdsDatabaseRangeTests
             [1] = new ColumnFilter { Condition = ">2" },
         });
 
-        var sort = new SortSpec(new[] { new SortLevel(1, Ascending: false) });
+        var sort = new SortSpec([new SortLevel(1, Ascending: false)]);
 
         FilterEngine.Apply(sheet, range, spec, CultureInfo.InvariantCulture);
         sheet.ActiveFilter = range;
@@ -68,7 +68,7 @@ public class OdsDatabaseRangeTests
         Assert.NotNull(spec);
         Assert.True(spec!.HasHeader);
         Assert.Equal(2, spec.Columns.Count);
-        Assert.Equal(new[] { "apple" }, spec.Columns[0].AllowedValues!.OrderBy(v => v));
+        Assert.Equal(["apple"], spec.Columns[0].AllowedValues!.OrderBy(v => v));
         Assert.Equal(">2", spec.Columns[1].Condition);
 
         var sort = sheet.ActiveSort;
@@ -104,7 +104,7 @@ public class OdsDatabaseRangeTests
         {
             [0] = new ColumnFilter { AllowedValues = new HashSet<string> { "Oslo", "Lima" } },
         });
-        var sort = new SortSpec(new[] { new SortLevel(0) });
+        var sort = new SortSpec([new SortLevel(0)]);
         sheet.AddTable(new Table("Cities", range, HasHeader: true) { Filter = filter, Sort = sort });
 
         var reopened = RoundTrip(workbook).FindSheet("Sheet1")!;
@@ -138,7 +138,7 @@ public class OdsDatabaseRangeTests
 
         var reopened = RoundTrip(workbook).FindSheet("Sheet1")!;
         Assert.Equal(
-            new[] { "blue", "red" },
+            ["blue", "red"],
             reopened.ActiveFilterSpec!.Columns[0].AllowedValues!.OrderBy(v => v));
     }
 
@@ -148,9 +148,12 @@ public class OdsDatabaseRangeTests
         // The chained pipeline a Sort & Filter dialog produces: sort by two columns, filter on two.
         var workbook = Workbook.CreateNew();
         var sheet = workbook.ActiveSheet;
-        sheet.SetValue(0, 0, CellValue.Text("Region")); sheet.SetValue(0, 1, CellValue.Text("Status"));
-        sheet.SetValue(1, 0, CellValue.Text("West")); sheet.SetValue(1, 1, CellValue.Text("Open"));
-        sheet.SetValue(2, 0, CellValue.Text("East")); sheet.SetValue(2, 1, CellValue.Text("Done"));
+        sheet.SetValue(0, 0, CellValue.Text("Region"));
+        sheet.SetValue(0, 1, CellValue.Text("Status"));
+        sheet.SetValue(1, 0, CellValue.Text("West"));
+        sheet.SetValue(1, 1, CellValue.Text("Open"));
+        sheet.SetValue(2, 0, CellValue.Text("East"));
+        sheet.SetValue(2, 1, CellValue.Text("Done"));
 
         var range = CellRange.Parse("A1:B3");
         sheet.ActiveFilter = range;
@@ -159,13 +162,13 @@ public class OdsDatabaseRangeTests
             [0] = new ColumnFilter { AllowedValues = new HashSet<string> { "West", "East" } },
             [1] = new ColumnFilter { Condition = "Open" },
         });
-        sheet.ActiveSort = new SortSpec(new[] { new SortLevel(0, Ascending: true), new SortLevel(1, Ascending: false) });
+        sheet.ActiveSort = new SortSpec([new SortLevel(0, Ascending: true), new SortLevel(1, Ascending: false)]);
 
         var reopened = RoundTrip(workbook).FindSheet("Sheet1")!;
 
         var sort = reopened.ActiveSort;
         Assert.NotNull(sort);
-        Assert.Equal(new[] { 0, 1 }, sort!.Levels.Select(l => l.Column)); // both levels, in priority order
+        Assert.Equal([0, 1], sort!.Levels.Select(l => l.Column)); // both levels, in priority order
         Assert.True(sort.Levels[0].Ascending);
         Assert.False(sort.Levels[1].Ascending);
         Assert.Equal(2, reopened.ActiveFilterSpec!.Columns.Count);

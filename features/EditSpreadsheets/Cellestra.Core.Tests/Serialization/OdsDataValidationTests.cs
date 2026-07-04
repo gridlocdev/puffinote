@@ -100,7 +100,7 @@ public class OdsDataValidationTests
         var sheet = workbook.ActiveSheet;
         sheet.AddValidation(new DataValidation(ValidationKind.List, CellRange.Parse("A1:A2"))
         {
-            ListValues = new[] { "Red", "Green", "Blue" },
+            ListValues = ["Red", "Green", "Blue"],
             Response = ValidationResponse.Information,
         });
 
@@ -109,7 +109,7 @@ public class OdsDataValidationTests
 
         Assert.Equal(ValidationKind.List, rule.Kind);
         Assert.NotNull(rule.ListValues);
-        Assert.Equal(new[] { "Red", "Green", "Blue" }, rule.ListValues!);
+        Assert.Equal(["Red", "Green", "Blue"], rule.ListValues!);
         Assert.Equal(ValidationResponse.Information, rule.Response);
     }
 
@@ -120,12 +120,12 @@ public class OdsDataValidationTests
         var sheet = workbook.ActiveSheet;
         sheet.AddValidation(new DataValidation(ValidationKind.List, CellRange.Parse("A1"))
         {
-            ListValues = new[] { "a;b", "say \"hi\"" },
+            ListValues = ["a;b", "say \"hi\""],
         });
 
         var reopened = RoundTrip(workbook).FindSheet("Sheet1")!;
         var rule = Assert.Single(reopened.Validations);
-        Assert.Equal(new[] { "a;b", "say \"hi\"" }, rule.ListValues!);
+        Assert.Equal(["a;b", "say \"hi\""], rule.ListValues!);
     }
 
     [Fact]
@@ -169,12 +169,12 @@ public class OdsDataValidationTests
         // No cell values at all — the validated cells are blank and past any used range.
         sheet.AddValidation(new DataValidation(ValidationKind.List, CellRange.Parse("C5:C7"))
         {
-            ListValues = new[] { "Yes", "No" },
+            ListValues = ["Yes", "No"],
         });
 
         var reopened = RoundTrip(workbook).FindSheet("Sheet1")!;
         var rule = Assert.Single(reopened.Validations);
         Assert.Equal(CellRange.Parse("C5:C7"), rule.Target);
-        Assert.Equal(new[] { "Yes", "No" }, rule.ListValues!);
+        Assert.Equal(["Yes", "No"], rule.ListValues!);
     }
 }

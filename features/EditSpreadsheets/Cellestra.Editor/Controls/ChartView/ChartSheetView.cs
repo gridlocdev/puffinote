@@ -1,4 +1,3 @@
-using System;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Layout;
@@ -23,7 +22,6 @@ public sealed class ChartSheetView : UserControl
 {
     private readonly Workbook _workbook;
     private readonly ChartDefinition _chart;
-    private readonly ChartControl _control = new();
 
     /// <summary>The pinned controls below Title/Type, rebuilt whenever the chart type changes.</summary>
     private readonly StackPanel _typeControls = new() { Spacing = 10 };
@@ -53,7 +51,7 @@ public sealed class ChartSheetView : UserControl
     }
 
     private readonly (ChartType Type, string Label)[] _types =
-    {
+    [
         (ChartType.Column, "Column"),
         (ChartType.Bar, "Bar"),
         (ChartType.Line, "Line"),
@@ -64,7 +62,7 @@ public sealed class ChartSheetView : UserControl
         (ChartType.Bubble, "Bubble"),
         (ChartType.Radar, "Radar"),
         (ChartType.FilledRadar, "Filled Radar"),
-    };
+    ];
 
     private static ChartFamily FamilyOf(ChartType type) => type switch
     {
@@ -89,7 +87,7 @@ public sealed class ChartSheetView : UserControl
             Margin = new Thickness(8),
             BorderThickness = new Thickness(1),
             CornerRadius = new CornerRadius(4),
-            Child = _control,
+            Child = ChartControl,
         };
         chartBorder.Bind(Border.BorderBrushProperty, this.GetResourceObservable("ChromeBorder"));
         Grid.SetColumn(chartBorder, 0);
@@ -111,7 +109,7 @@ public sealed class ChartSheetView : UserControl
     public void RefreshData() => RenderChart();
 
     /// <summary>The chart control, exposed for headless tests.</summary>
-    internal ChartControl ChartControl => _control;
+    internal ChartControl ChartControl { get; } = new();
 
     /// <summary>The most recently resolved chart data, exposed for headless tests.</summary>
     internal ResolvedChart? ResolvedForTest { get; private set; }
@@ -500,6 +498,6 @@ public sealed class ChartSheetView : UserControl
     {
         var resolved = ChartDataResolver.Resolve(_workbook, _chart);
         ResolvedForTest = resolved;
-        _control.Show(resolved);
+        ChartControl.Show(resolved);
     }
 }

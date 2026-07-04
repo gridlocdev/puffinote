@@ -10,7 +10,7 @@ namespace Puffinote.Desktop.Shell;
 internal static class NotebookMutations
 {
     /// <summary>Create an empty file named <paramref name="name"/> in <paramref name="directory"/>; returns its path.</summary>
-    public static string CreateFile(string directory, string name) => CreateFile(directory, name, Array.Empty<byte>());
+    public static string CreateFile(string directory, string name) => CreateFile(directory, name, []);
 
     /// <summary>
     /// Create a file named <paramref name="name"/> in <paramref name="directory"/> with the given initial
@@ -98,7 +98,7 @@ internal static class NotebookMutations
         }
 
         if (trimmed is "." or ".."
-            || trimmed.IndexOfAny(new[] { '/', '\\' }) >= 0
+            || trimmed.IndexOfAny(['/', '\\']) >= 0
             || trimmed.IndexOfAny(System.IO.Path.GetInvalidFileNameChars()) >= 0)
         {
             throw new IOException($"“{name}” isn't a valid name.");

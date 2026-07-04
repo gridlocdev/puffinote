@@ -1,17 +1,6 @@
-using System.Globalization;
-using System.Linq;
 using Avalonia;
-using Avalonia.Controls;
-using Avalonia.Controls.Primitives;
-using Avalonia.Input;
-using Avalonia.Input.Platform;
-using Avalonia.Media;
-using Avalonia.Threading;
 using Typage.Control.Rendering;
 using Typage.Engine.Document;
-using Typage.Engine.Editing;
-using Typage.Engine.Markdown;
-
 
 namespace Typage.Control.Controls;
 
@@ -26,16 +15,16 @@ public partial class MarkdownEditor
         }
 
         EnsureLayout();
-        var r = ResolveCaret(_buffer.Selection.Caret);
+        var r = ResolveCaret(Buffer.Selection.Caret);
         var x = r.Visual.ColumnToX(r.Col); // through the offset↔visual map, so hidden markers don't skew the scroll
-        if (!_wordWrap)
+        if (!WordWrap)
         {
             _extentWidth = Math.Max(_extentWidth, x + 12); // ensure we can scroll to a caret on a wide line
         }
 
         // Caret position in scroll-content space (which includes the padding), on its wrapped row.
         var px = x + PaddingLeft;
-        var py = RowTop(r.Block) + r.Visual.RowOf(r.Col) * _theme.LineHeight + PaddingTop;
+        var py = RowTop(r.Block) + r.Visual.RowOf(r.Col) * EditorTheme.LineHeight + PaddingTop;
         const double margin = 8;
 
         var newY = _offset.Y;
@@ -43,9 +32,9 @@ public partial class MarkdownEditor
         {
             newY = py;
         }
-        else if (py + _theme.LineHeight > _offset.Y + _viewport.Height)
+        else if (py + EditorTheme.LineHeight > _offset.Y + _viewport.Height)
         {
-            newY = py + _theme.LineHeight - _viewport.Height;
+            newY = py + EditorTheme.LineHeight - _viewport.Height;
         }
 
         var newX = _offset.X;
@@ -69,9 +58,9 @@ public partial class MarkdownEditor
 
     private void MoveCaret(int newCaret, bool extend, bool keepGoalColumn = false)
     {
-        newCaret = Math.Clamp(newCaret, 0, _buffer.Document.Length);
-        var anchor = extend ? _buffer.Selection.Anchor : newCaret;
-        _buffer.Selection = new Selection(anchor, newCaret);
+        newCaret = Math.Clamp(newCaret, 0, Buffer.Document.Length);
+        var anchor = extend ? Buffer.Selection.Anchor : newCaret;
+        Buffer.Selection = new Selection(anchor, newCaret);
         if (!keepGoalColumn)
         {
             _goalX = double.NaN; // a horizontal move resets the remembered column
@@ -90,13 +79,13 @@ public partial class MarkdownEditor
     /// </summary>
     private int VisualStep(int caret, int dir)
     {
-        var doc = _buffer.Document;
-        var next = Math.Clamp(dir > 0 ? _buffer.NextCaret(caret) : _buffer.PreviousCaret(caret), 0, doc.Length);
+        var doc = Buffer.Document;
+        var next = Math.Clamp(dir > 0 ? Buffer.NextCaret(caret) : Buffer.PreviousCaret(caret), 0, doc.Length);
         var r = ResolveCaret(next);
         var guard = 0;
         while ((IsBetweenHidden(r.Visual, r.Col) || IsCollapsedOffset(next)) && guard++ <= doc.Length)
         {
-            var stepped = Math.Clamp(dir > 0 ? _buffer.NextCaret(next) : _buffer.PreviousCaret(next), 0, doc.Length);
+            var stepped = Math.Clamp(dir > 0 ? Buffer.NextCaret(next) : Buffer.PreviousCaret(next), 0, doc.Length);
             if (stepped == next)
             {
                 break;
@@ -117,7 +106,7 @@ public partial class MarkdownEditor
     /// </summary>
     private int WordBoundary(int offset, int dir)
     {
-        var doc = _buffer.Document;
+        var doc = Buffer.Document;
         var i = Math.Clamp(offset, 0, doc.Length);
         if (dir > 0)
         {
@@ -158,26 +147,26 @@ public partial class MarkdownEditor
     /// <summary>Delete from the start of the caret's visual row to the caret (macOS ⌘⌫).</summary>
     private void DeleteToRowStart(int caret)
     {
-        if (!_buffer.Selection.IsEmpty)
+        if (!Buffer.Selection.IsEmpty)
         {
-            _buffer.Insert(string.Empty);
+            Buffer.Insert(string.Empty);
             return;
         }
 
         var start = RowStartOffset(caret);
         if (start < caret)
         {
-            _buffer.ReplaceRange(start, caret - start, string.Empty);
+            Buffer.ReplaceRange(start, caret - start, string.Empty);
         }
     }
 
     /// <summary>Delete from the caret to the next word boundary in <paramref name="dir"/> (Ctrl/⌥ + Backspace/Delete).</summary>
     private void DeleteWord(int dir)
     {
-        var sel = _buffer.Selection;
+        var sel = Buffer.Selection;
         if (!sel.IsEmpty)
         {
-            _buffer.Insert(string.Empty); // a selection deletes normally
+            Buffer.Insert(string.Empty); // a selection deletes normally
             return;
         }
 
@@ -188,7 +177,7 @@ public partial class MarkdownEditor
         }
 
         var from = Math.Min(sel.Caret, target);
-        _buffer.ReplaceRange(from, Math.Abs(target - sel.Caret), string.Empty);
+        Buffer.ReplaceRange(from, Math.Abs(target - sel.Caret), string.Empty);
     }
 
     /// <summary>The source-column range <c>[start, end)</c> occupied by visual <paramref name="row"/> of <paramref name="visual"/>.</summary>
@@ -228,7 +217,7 @@ public partial class MarkdownEditor
     /// </summary>
     private int SmartHome(int caret)
     {
-        var doc = _buffer.Document;
+        var doc = Buffer.Document;
         var r = ResolveCaret(caret);
         var (start, end) = RowColumns(r.Visual, r.Visual.RowOf(r.Col));
         var content = start;
@@ -246,7 +235,7 @@ public partial class MarkdownEditor
     private int PageRows()
     {
         var h = _viewport.Height > 0 ? _viewport.Height : Bounds.Height;
-        return Math.Max(1, (int)(h / _theme.LineHeight) - 1);
+        return Math.Max(1, (int)(h / EditorTheme.LineHeight) - 1);
     }
 
     /// <summary>
@@ -258,13 +247,13 @@ public partial class MarkdownEditor
     /// </summary>
     private bool TryVisualBackspace()
     {
-        var sel = _buffer.Selection;
+        var sel = Buffer.Selection;
         if (!sel.IsEmpty)
         {
             return false; // a selection deletes normally
         }
 
-        var doc = _buffer.Document;
+        var doc = Buffer.Document;
         var r = ResolveCaret(sel.Caret);
         if (r.Col == 0)
         {
@@ -280,8 +269,8 @@ public partial class MarkdownEditor
         var content = lineText.EndsWith('\r') ? lineText[..^1] : lineText;
         if (content.Length > 0 && content.Trim().Length == 0)
         {
-            _buffer.ReplaceRange(lineStart, content.Length, string.Empty);
-            _buffer.Selection = Selection.At(lineStart);
+            Buffer.ReplaceRange(lineStart, content.Length, string.Empty);
+            Buffer.Selection = Selection.At(lineStart);
             return true;
         }
 
@@ -302,8 +291,8 @@ public partial class MarkdownEditor
         // removes the marker rather than nibbling an indent space. col == 0 is the un-indented case.
         if (col < r.Col && doc.GetText(r.BlockStart, col).Trim().Length == 0)
         {
-            _buffer.ReplaceRange(r.BlockStart + col, r.Col - col, string.Empty);
-            _buffer.Selection = Selection.At(r.BlockStart + col);
+            Buffer.ReplaceRange(r.BlockStart + col, r.Col - col, string.Empty);
+            Buffer.Selection = Selection.At(r.BlockStart + col);
             return true;
         }
 
@@ -311,8 +300,8 @@ public partial class MarkdownEditor
         // backspace at a soft-joined line boundary deletes the joining newline and merges the lines.
         var realText = doc.GetText(r.BlockStart, BlockEndOffset(r.Block) - r.BlockStart);
         var start = Grapheme.PreviousBoundary(realText, col);
-        _buffer.ReplaceRange(r.BlockStart + start, col - start, string.Empty);
-        _buffer.Selection = Selection.At(r.BlockStart + start);
+        Buffer.ReplaceRange(r.BlockStart + start, col - start, string.Empty);
+        Buffer.Selection = Selection.At(r.BlockStart + start);
         return true;
     }
 
@@ -323,13 +312,13 @@ public partial class MarkdownEditor
     /// </summary>
     private bool TryVisualDelete()
     {
-        var sel = _buffer.Selection;
+        var sel = Buffer.Selection;
         if (!sel.IsEmpty)
         {
             return false;
         }
 
-        var doc = _buffer.Document;
+        var doc = Buffer.Document;
         var caretLine = doc.GetPosition(sel.Caret).Line;
         if (TryRestoreBlankLineByRemovingSyntheticParagraphChar(caretLine, sel.Caret, forward: true))
         {
@@ -350,8 +339,8 @@ public partial class MarkdownEditor
 
         var realText = doc.GetText(r.BlockStart, BlockEndOffset(r.Block) - r.BlockStart);
         var end = Grapheme.NextBoundary(realText, col);
-        _buffer.ReplaceRange(r.BlockStart + col, end - col, string.Empty);
-        _buffer.Selection = Selection.At(r.BlockStart + col);
+        Buffer.ReplaceRange(r.BlockStart + col, end - col, string.Empty);
+        Buffer.Selection = Selection.At(r.BlockStart + col);
         return true;
     }
 
@@ -363,7 +352,7 @@ public partial class MarkdownEditor
     /// </summary>
     private bool TryRestoreBlankLineByRemovingSyntheticParagraphChar(int line, int caret, bool forward)
     {
-        var doc = _buffer.Document;
+        var doc = Buffer.Document;
         if (line + 2 >= doc.LineCount || !IsCollapsedBlankLine(line + 1) || IsBlankLine(line) || IsBlankLine(line + 2))
         {
             return false;
@@ -384,8 +373,8 @@ public partial class MarkdownEditor
 
         var removeStart = forward ? lineStart : lineStart;
         var removeEnd = doc.GetLineStart(line + 1); // delete the char plus its supporting newline
-        _buffer.ReplaceRange(removeStart, removeEnd - removeStart, string.Empty);
-        _buffer.Selection = Selection.At(lineStart);
+        Buffer.ReplaceRange(removeStart, removeEnd - removeStart, string.Empty);
+        Buffer.Selection = Selection.At(lineStart);
         return true;
     }
 
@@ -394,7 +383,7 @@ public partial class MarkdownEditor
     /// whole <c>\r\n</c> rather than stranding a bare carriage return.</summary>
     private int ContentEnd(int line)
     {
-        var doc = _buffer.Document;
+        var doc = Buffer.Document;
         var end = doc.GetLineEnd(line);
         return end > doc.GetLineStart(line) && doc[end - 1] == '\r' ? end - 1 : end;
     }
@@ -407,13 +396,13 @@ public partial class MarkdownEditor
     /// </summary>
     private bool TryBackspaceCollapsedBlank()
     {
-        var sel = _buffer.Selection;
+        var sel = Buffer.Selection;
         if (!sel.IsEmpty)
         {
             return false;
         }
 
-        var doc = _buffer.Document;
+        var doc = Buffer.Document;
         var caret = sel.Caret;
         var line = doc.GetPosition(caret).Line;
         if (caret != doc.GetLineStart(line) || line < 1 || !IsCollapsedBlankLine(line - 1))
@@ -430,8 +419,8 @@ public partial class MarkdownEditor
         }
 
         var from = ContentEnd(line - 2); // end of the content line just above the blank (excluding its \r)
-        _buffer.ReplaceRange(from, caret - from, string.Empty);
-        _buffer.Selection = Selection.At(from);
+        Buffer.ReplaceRange(from, caret - from, string.Empty);
+        Buffer.Selection = Selection.At(from);
         return true;
     }
 
@@ -439,13 +428,13 @@ public partial class MarkdownEditor
     /// whole <c>\n\n</c> break, pulling the next paragraph up (the symmetric counterpart of backspace).</summary>
     private bool TryDeleteCollapsedBlank()
     {
-        var sel = _buffer.Selection;
+        var sel = Buffer.Selection;
         if (!sel.IsEmpty)
         {
             return false;
         }
 
-        var doc = _buffer.Document;
+        var doc = Buffer.Document;
         var caret = sel.Caret;
         var line = doc.GetPosition(caret).Line;
         // Compare against the visible content end (which excludes a CRLF's \r) — that's where End/⌘-Right put
@@ -456,8 +445,8 @@ public partial class MarkdownEditor
         }
 
         var to = doc.GetLineStart(line + 2); // start of the content line just below the blank
-        _buffer.ReplaceRange(caret, to - caret, string.Empty);
-        _buffer.Selection = Selection.At(caret);
+        Buffer.ReplaceRange(caret, to - caret, string.Empty);
+        Buffer.Selection = Selection.At(caret);
         return true;
     }
 
@@ -474,7 +463,7 @@ public partial class MarkdownEditor
     /// </summary>
     private void ArrowByLine(int delta, bool extend)
     {
-        var sel = _buffer.Selection;
+        var sel = Buffer.Selection;
         if (!extend && !sel.IsEmpty)
         {
             MoveCaret(delta < 0 ? sel.Start : sel.End, extend: false);
@@ -487,7 +476,7 @@ public partial class MarkdownEditor
     private void MoveCaretByLine(int delta, bool extend)
     {
         EnsureLayout();
-        var r = ResolveCaret(_buffer.Selection.Caret);
+        var r = ResolveCaret(Buffer.Selection.Caret);
         if (double.IsNaN(_goalX))
         {
             _goalX = r.Visual.ColumnToX(r.Col);
@@ -509,7 +498,7 @@ public partial class MarkdownEditor
 
         if (requestedRow > TotalRows - 1)
         {
-            MoveCaret(_buffer.Document.Length, extend);
+            MoveCaret(Buffer.Document.Length, extend);
             return;
         }
 
@@ -518,5 +507,4 @@ public partial class MarkdownEditor
         var localRow = targetRow - _rowPrefix[targetBlock];
         MoveCaret(OffsetAt(targetBlock, localRow, _goalX), extend, keepGoalColumn: true);
     }
-
 }

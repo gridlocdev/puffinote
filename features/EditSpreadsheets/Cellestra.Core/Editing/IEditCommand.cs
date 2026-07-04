@@ -6,12 +6,12 @@ namespace Cellestra.Core.Editing;
 /// <summary>What an edit changed, so the recalculation engine can respond appropriately.</summary>
 public readonly record struct EditResult(IReadOnlyCollection<CellRef> ChangedCells, bool Structural)
 {
-    public static EditResult None { get; } = new(Array.Empty<CellRef>(), false);
+    public static EditResult None { get; } = new([], false);
 
     public static EditResult Cells(IReadOnlyCollection<CellRef> changed) => new(changed, false);
 
     /// <summary>A structural change (insert/delete row/column) — the dependency graph should be rebuilt.</summary>
-    public static EditResult StructuralChange { get; } = new(Array.Empty<CellRef>(), true);
+    public static EditResult StructuralChange { get; } = new([], true);
 }
 
 /// <summary>

@@ -1,5 +1,3 @@
-using System;
-using System.IO;
 using Cellestra.Desktop.Services;
 using Xunit;
 

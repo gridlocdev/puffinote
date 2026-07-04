@@ -64,7 +64,7 @@ public sealed class PasteBlockCommand : IEditCommand
             ?? throw new InvalidOperationException($"Sheet '{_destSheet}' not found.");
         var source = workbook.FindSheet(_block.SourceSheet);
 
-        _before = new Dictionary<(string, int, int), Cell?>();
+        _before = [];
 
         // Snapshot the source cells we are about to clear (cut only).
         if (_block.IsCut && source is not null)
@@ -201,7 +201,7 @@ public sealed class PasteBlockCommand : IEditCommand
     }
 
     private List<CellRef> ChangedRefs() =>
-        _before!.Keys.Select(k => new CellRef(k.Sheet, k.Row, k.Column)).ToList();
+        [.. _before!.Keys.Select(k => new CellRef(k.Sheet, k.Row, k.Column))];
 
     private void Snapshot(Worksheet sheet, int row, int column)
     {

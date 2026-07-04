@@ -1,10 +1,6 @@
-using System.Globalization;
-using System.Linq;
 using Avalonia;
-using Avalonia.Controls;
 using Avalonia.Controls.Primitives;
 using Avalonia.Input;
-using Avalonia.Input.Platform;
 using Avalonia.Media;
 using Avalonia.Threading;
 using Typage.Control.Rendering;
@@ -39,11 +35,9 @@ public partial class MarkdownEditor : Avalonia.Controls.Control, ILogicalScrolla
 
     private readonly record struct TaskSubtree(int StartLine, int EndLine, bool IsComplete);
 
-    private readonly DocumentBuffer _buffer = new();
     private readonly TextMeasurer _measurer; // text measurement + FormattedText/width caches (theme-only dep)
     private readonly LayoutModel _layout; // owns block grouping, row counts, and the VisualLine cache
     private MarkdownModel _model;
-    private MarkdownTheme _theme = MarkdownTheme.Default;
     private IBrush _dimMarker = new SolidColorBrush(Color.FromArgb(0x46, 0x6E, 0x76, 0x81));
 
     // Drop-indicator state for Alt+Shift line reorder: while a reorder "session" is active (consecutive
@@ -55,7 +49,7 @@ public partial class MarkdownEditor : Avalonia.Controls.Control, ILogicalScrolla
 
     // Per-code-block "copy" buttons, rebuilt each render: each holds its hit rect (control space) and the
     // line range of the code run it copies. _copiedFeedbackLine is the run currently showing "Copied!".
-    private readonly List<(Rect Rect, int First, int Last)> _codeCopyButtons = new();
+    private readonly List<(Rect Rect, int First, int Last)> _codeCopyButtons = [];
     private int _copiedFeedbackLine = -1;
     private DispatcherTimer? _copyFeedbackTimer;
 
@@ -64,10 +58,8 @@ public partial class MarkdownEditor : Avalonia.Controls.Control, ILogicalScrolla
     private Vector _offset;
     private Size _viewport;
     private double _extentWidth;
-    private IReadOnlyList<SearchMatch> _searchMatches = Array.Empty<SearchMatch>();
+    private IReadOnlyList<SearchMatch> _searchMatches = [];
     private int _currentMatch = -1;
-    private bool _canHorizontallyScroll = true;
-    private bool _canVerticallyScroll = true;
     private EventHandler? _scrollInvalidated;
 
     public MarkdownEditor()
@@ -75,19 +67,19 @@ public partial class MarkdownEditor : Avalonia.Controls.Control, ILogicalScrolla
         Focusable = true;
         _measurer = new TextMeasurer(() => IndentWidth);
         _layout = new LayoutModel(this, _measurer);
-        _model = MarkdownModel.Build(_buffer.Document);
-        _buffer.TextChanged += (_, _) =>
+        _model = MarkdownModel.Build(Buffer.Document);
+        Buffer.TextChanged += (_, _) =>
         {
             // Incremental re-tokenization: reuse the unchanged prefix and re-run only from the first
             // changed line down (PRD §8.2). Equivalent to a full rebuild — see IncrementalTokenizerTests.
-            _model = _model.Update(_buffer.Document, _buffer.LastChangedLine, out _);
+            _model = _model.Update(Buffer.Document, Buffer.LastChangedLine, out _);
             _goalX = double.NaN; // an edit moves the caret; the next Up/Down recomputes the goal column
-            _layout.MarkDirty(_buffer.LastChangedLine); // reuse blocks above the first changed line
+            _layout.MarkDirty(Buffer.LastChangedLine); // reuse blocks above the first changed line
             RaiseScrollInvalidated(EventArgs.Empty); // line count / extent may have changed
             InvalidateVisual();
             TextChanged?.Invoke(this, EventArgs.Empty);
         };
-        _buffer.Changed += (_, _) =>
+        Buffer.Changed += (_, _) =>
         {
             InvalidateVisual();
             ScrollCaretIntoView();
@@ -108,26 +100,26 @@ public partial class MarkdownEditor : Avalonia.Controls.Control, ILogicalScrolla
     /// <summary>The full document text. Setting it replaces the document and clears undo history.</summary>
     public string Text
     {
-        get => _buffer.Document.GetText();
-        set => _buffer.Load(value);
+        get => Buffer.Document.GetText();
+        set => Buffer.Load(value);
     }
 
     /// <summary>True when the buffer differs from the last-saved snapshot.</summary>
-    public bool IsDirty => _buffer.IsDirty;
+    public bool IsDirty => Buffer.IsDirty;
 
     /// <summary>Live document statistics for the host's status bar (cached; recomputed on text change only).</summary>
-    public DocumentStats Stats => _buffer.Stats;
+    public DocumentStats Stats => Buffer.Stats;
 
     /// <summary>The caret position as a 1-based line:column for the status bar.</summary>
-    public LinePosition CaretPosition => _buffer.Document.GetPosition(_buffer.Selection.Caret);
+    public LinePosition CaretPosition => Buffer.Document.GetPosition(Buffer.Selection.Caret);
 
     /// <summary>The currently selected text (empty when there is no selection).</summary>
     public string SelectedText
     {
         get
         {
-            var sel = _buffer.Selection;
-            return sel.IsEmpty ? string.Empty : _buffer.Document.GetText(sel.Start, sel.Length);
+            var sel = Buffer.Selection;
+            return sel.IsEmpty ? string.Empty : Buffer.Document.GetText(sel.Start, sel.Length);
         }
     }
 
@@ -136,25 +128,24 @@ public partial class MarkdownEditor : Avalonia.Controls.Control, ILogicalScrolla
     {
         get
         {
-            var sel = _buffer.Selection;
-            return sel.IsEmpty ? 0 : Grapheme.Count(_buffer.Document.GetText(sel.Start, sel.Length));
+            var sel = Buffer.Selection;
+            return sel.IsEmpty ? 0 : Grapheme.Count(Buffer.Document.GetText(sel.Start, sel.Length));
         }
     }
 
     /// <summary>The editable model, exposed for the host (save/load/dirty) and tests.</summary>
-    internal DocumentBuffer Buffer => _buffer;
+    internal DocumentBuffer Buffer { get; } = new();
 
-    public bool CanUndo => _buffer.CanUndo;
+    public bool CanUndo => Buffer.CanUndo;
 
-    public bool CanRedo => _buffer.CanRedo;
+    public bool CanRedo => Buffer.CanRedo;
 
     /// <summary>The active theme (presentation seam — swap to re-style without touching the engine).</summary>
     public MarkdownTheme EditorTheme
     {
-        get => _theme;
-        set
+        get; set
         {
-            _theme = value;
+            field = value;
             UpdateDerivedBrushes();
             _measurer.Invalidate(); // cached widths/glyph runs assumed the old theme's fonts/brushes
             _extentWidth = 0;    // fonts changed — let the horizontal extent regrow as lines redraw
@@ -163,12 +154,12 @@ public partial class MarkdownEditor : Avalonia.Controls.Control, ILogicalScrolla
             InvalidateMeasure();
             InvalidateVisual();
         }
-    }
+    } = MarkdownTheme.Default;
 
     /// <summary>The faded marker brush is derived from the theme's marker color so it tracks light/dark/HC.</summary>
     private void UpdateDerivedBrushes()
     {
-        if (_theme.MarkerForeground is ISolidColorBrush b)
+        if (EditorTheme.MarkerForeground is ISolidColorBrush b)
         {
             _dimMarker = new SolidColorBrush(b.Color, 0.32);
         }
@@ -206,15 +197,14 @@ public partial class MarkdownEditor : Avalonia.Controls.Control, ILogicalScrolla
     /// <summary>The active presentation mode (PRD §7.4). Defaults to the WYSIWYG <see cref="ViewMode.Rich"/>.</summary>
     public ViewMode View
     {
-        get => _viewMode;
-        set
+        get; set
         {
-            if (_viewMode == value)
+            if (field == value)
             {
                 return;
             }
 
-            _viewMode = value;
+            field = value;
             // RawText ungroups paragraphs and un-collapses blanks, and concealment/styling differ by mode, so
             // re-group fully and drop the cached visuals.
             _layout.InvalidateAll();
@@ -225,8 +215,6 @@ public partial class MarkdownEditor : Avalonia.Controls.Control, ILogicalScrolla
         }
     }
 
-    private ViewMode _viewMode;
-
     /// <summary>
     /// Legacy toggle kept for existing callers: reveals or conceals the syntax markers. Reading it is true
     /// in both <see cref="ViewMode.Formatted"/> and <see cref="ViewMode.RawText"/>; setting it swaps between
@@ -234,15 +222,15 @@ public partial class MarkdownEditor : Avalonia.Controls.Control, ILogicalScrolla
     /// </summary>
     public bool ShowRawSource
     {
-        get => _viewMode != ViewMode.Rich;
+        get => View != ViewMode.Rich;
         set => View = value ? ViewMode.Formatted : ViewMode.Rich;
     }
 
     /// <summary>Markers are revealed (not concealed) in both the Formatted and RawText views.</summary>
-    private bool MarkersRevealed => _viewMode != ViewMode.Rich;
+    private bool MarkersRevealed => View != ViewMode.Rich;
 
     /// <summary>The plain monospace source view: no concealment, styling, decorations, or paragraph flow.</summary>
-    private bool RawTextMode => _viewMode == ViewMode.RawText;
+    private bool RawTextMode => View == ViewMode.RawText;
 
     /// <summary>
     /// The left/right text inset from the editor edge, in device pixels, applied symmetrically to both
@@ -251,15 +239,14 @@ public partial class MarkdownEditor : Avalonia.Controls.Control, ILogicalScrolla
     /// </summary>
     public double? HorizontalPadding
     {
-        get => _horizontalPadding;
-        set
+        get; set
         {
-            if (_horizontalPadding == value)
+            if (field == value)
             {
                 return;
             }
 
-            _horizontalPadding = value;
+            field = value;
             _layout.InvalidateAll(); // wrap width depends on padding — every block re-measures
             _extentWidth = 0;
             RaiseScrollInvalidated(EventArgs.Empty);
@@ -268,10 +255,8 @@ public partial class MarkdownEditor : Avalonia.Controls.Control, ILogicalScrolla
         }
     }
 
-    private double? _horizontalPadding;
-
     /// <summary>The effective left/right inset: the <see cref="HorizontalPadding"/> override or the theme's default.</summary>
-    private double PaddingLeft => _horizontalPadding ?? _theme.PaddingLeft;
+    private double PaddingLeft => HorizontalPadding ?? EditorTheme.PaddingLeft;
 
     /// <summary>
     /// The top/bottom text inset from the editor edge, in device pixels, applied symmetrically to both ends
@@ -280,25 +265,22 @@ public partial class MarkdownEditor : Avalonia.Controls.Control, ILogicalScrolla
     /// </summary>
     public double? VerticalPadding
     {
-        get => _verticalPadding;
-        set
+        get; set
         {
-            if (_verticalPadding == value)
+            if (field == value)
             {
                 return;
             }
 
-            _verticalPadding = value;
+            field = value;
             RaiseScrollInvalidated(EventArgs.Empty); // the scroll extent grows/shrinks by the new inset
             InvalidateMeasure();
             InvalidateVisual();
         }
     }
 
-    private double? _verticalPadding;
-
     /// <summary>The effective top/bottom inset: the <see cref="VerticalPadding"/> override or the theme's default.</summary>
-    private double PaddingTop => _verticalPadding ?? _theme.PaddingTop;
+    private double PaddingTop => VerticalPadding ?? EditorTheme.PaddingTop;
 
     /// <summary>
     /// When enabled, toggling a task checkbox keeps its sibling checkbox list sorted by completion state.
@@ -312,33 +294,30 @@ public partial class MarkdownEditor : Avalonia.Controls.Control, ILogicalScrolla
     /// </summary>
     public bool WordWrap
     {
-        get => _wordWrap;
-        set
+        get; set
         {
-            if (_wordWrap == value)
+            if (field == value)
             {
                 return;
             }
 
-            _wordWrap = value;
+            field = value;
             _layout.InvalidateAll(); // wrapping changes for every block
             _extentWidth = 0;
             RaiseScrollInvalidated(EventArgs.Empty);
             InvalidateMeasure();
             InvalidateVisual();
         }
-    }
+    } = true;
 
-    private bool _wordWrap = true;
-
-    public void MarkSaved() => _buffer.MarkSaved();
+    public void MarkSaved() => Buffer.MarkSaved();
 
     /// <summary>Replace the document but leave it marked dirty (used for crash recovery, PRD §9.4).</summary>
-    public void LoadDirty(string text) => _buffer.Load(text, markSaved: false);
+    public void LoadDirty(string text) => Buffer.Load(text, markSaved: false);
 
-    public void Undo() => _buffer.Undo();
+    public void Undo() => Buffer.Undo();
 
-    public void Redo() => _buffer.Redo();
+    public void Redo() => Buffer.Redo();
 
     // ----- formatting commands (toolbar / Format menu — PRD §7.5) -----
 
@@ -386,7 +365,7 @@ public partial class MarkdownEditor : Avalonia.Controls.Control, ILogicalScrolla
 
     /// <summary>Select the paragraph block the caret is inside (Format ▸ Select Paragraph).</summary>
     public void SelectCurrentParagraph() =>
-        SelectBlockAt(_buffer.Document.GetPosition(_buffer.Selection.Caret).Line);
+        SelectBlockAt(Buffer.Document.GetPosition(Buffer.Selection.Caret).Line);
 
     // ----- line-range editing helpers (shared by the blockquote/list toggles) -----
 
@@ -395,7 +374,7 @@ public partial class MarkdownEditor : Avalonia.Controls.Control, ILogicalScrolla
         p.HasList ? text[..p.MarkerStart] + text[p.Length..] : text;
 
     /// <summary>Select the whole document.</summary>
-    public void SelectAll() => _buffer.Selection = new Selection(0, _buffer.Document.Length);
+    public void SelectAll() => Buffer.Selection = new Selection(0, Buffer.Document.Length);
 
     // ----- find / replace support (the find bar lives in the shell) -----
 
@@ -409,7 +388,7 @@ public partial class MarkdownEditor : Avalonia.Controls.Control, ILogicalScrolla
 
     public void ClearSearchMatches()
     {
-        _searchMatches = Array.Empty<SearchMatch>();
+        _searchMatches = [];
         _currentMatch = -1;
         InvalidateVisual();
     }
@@ -417,14 +396,14 @@ public partial class MarkdownEditor : Avalonia.Controls.Control, ILogicalScrolla
     /// <summary>Select <c>[start, start+length)</c> and scroll it into view (used by find navigation).</summary>
     public void Select(int start, int length)
     {
-        var len = _buffer.Document.Length;
+        var len = Buffer.Document.Length;
         start = Math.Clamp(start, 0, len);
         var end = Math.Clamp(start + length, 0, len);
-        _buffer.Selection = new Selection(start, end);
+        Buffer.Selection = new Selection(start, end);
     }
 
     /// <summary>Replace <c>[start, start+length)</c> with <paramref name="replacement"/> (used by find &amp; replace).</summary>
-    public void Replace(int start, int length, string replacement) => _buffer.ReplaceRange(start, length, replacement);
+    public void Replace(int start, int length, string replacement) => Buffer.ReplaceRange(start, length, replacement);
 
     // ----- clipboard (PRD §7.2 — copy yields Markdown source) -----
     //
@@ -438,9 +417,9 @@ public partial class MarkdownEditor : Avalonia.Controls.Control, ILogicalScrolla
         get
         {
             EnsureLayout();
-            var height = Math.Max(_theme.LineHeight, TotalRows * _theme.LineHeight) + PaddingTop * 2;
+            var height = Math.Max(EditorTheme.LineHeight, TotalRows * EditorTheme.LineHeight) + PaddingTop * 2;
             // When wrapping, the content never exceeds the viewport width, so there is no horizontal scroll.
-            var width = _wordWrap ? _viewport.Width : Math.Max(PaddingLeft * 2 + _extentWidth, _viewport.Width);
+            var width = WordWrap ? _viewport.Width : Math.Max(PaddingLeft * 2 + _extentWidth, _viewport.Width);
             return new Size(width, height);
         }
     }
@@ -462,22 +441,14 @@ public partial class MarkdownEditor : Avalonia.Controls.Control, ILogicalScrolla
     }
 
     /// <summary>Whether horizontal scrolling is enabled (set by the hosting scroll viewer).</summary>
-    public bool CanHorizontallyScroll
-    {
-        get => _canHorizontallyScroll;
-        set => _canHorizontallyScroll = value;
-    }
+    public bool CanHorizontallyScroll { get; set; } = true;
 
     /// <summary>Whether vertical scrolling is enabled (set by the hosting scroll viewer).</summary>
-    public bool CanVerticallyScroll
-    {
-        get => _canVerticallyScroll;
-        set => _canVerticallyScroll = value;
-    }
+    public bool CanVerticallyScroll { get; set; } = true;
 
     bool ILogicalScrollable.IsLogicalScrollEnabled => true;
 
-    Size ILogicalScrollable.ScrollSize => new(_theme.BaseFontSize, _theme.LineHeight);
+    Size ILogicalScrollable.ScrollSize => new(EditorTheme.BaseFontSize, EditorTheme.LineHeight);
 
     Size ILogicalScrollable.PageScrollSize => new(_viewport.Width, _viewport.Height);
 
@@ -511,9 +482,9 @@ public partial class MarkdownEditor : Avalonia.Controls.Control, ILogicalScrolla
     private int[] _blockStartLine => _layout.BlockStartLine;
 
     // ILayoutHost — the live state LayoutModel reads to group and measure blocks.
-    TextDocument ILayoutHost.Document => _buffer.Document;
+    TextDocument ILayoutHost.Document => Buffer.Document;
     MarkdownModel ILayoutHost.Model => _model;
-    MarkdownTheme ILayoutHost.Theme => _theme;
+    MarkdownTheme ILayoutHost.Theme => EditorTheme;
     double ILayoutHost.WrapWidth => WrapWidth();
     bool ILayoutHost.RawTextMode => RawTextMode;
     bool ILayoutHost.MarkersRevealed => MarkersRevealed;
@@ -555,11 +526,11 @@ public partial class MarkdownEditor : Avalonia.Controls.Control, ILogicalScrolla
     }
 
     /// <summary>Whether <paramref name="line"/> is blank (only whitespace).</summary>
-    private bool IsBlankLine(int line) => _buffer.Document.GetLineText(line).Trim().Length == 0;
+    private bool IsBlankLine(int line) => Buffer.Document.GetLineText(line).Trim().Length == 0;
 
     /// <summary>Whether the caret <paramref name="offset"/> sits on a collapsed blank line (not a valid stop).</summary>
     private bool IsCollapsedOffset(int offset) =>
-        IsCollapsedBlankLine(_buffer.Document.GetPosition(offset).Line);
+        IsCollapsedBlankLine(Buffer.Document.GetPosition(offset).Line);
 
     /// <summary>Move the selected line(s) / subtree up/down; for tests.</summary>
     internal void MoveLinesForTest(int dir) => MoveLines(dir);
@@ -568,7 +539,7 @@ public partial class MarkdownEditor : Avalonia.Controls.Control, ILogicalScrolla
     internal void EnterForTest() => HandleEnter();
 
     /// <summary>Shift+Enter: a plain newline in the document's own line ending, no list continuation.</summary>
-    internal void ShiftEnterForTest() => _buffer.Insert(DetectNewline(_buffer.Document));
+    internal void ShiftEnterForTest() => Buffer.Insert(DetectNewline(Buffer.Document));
 
     internal void TabForTest(bool shift) => HandleTab(shift);
 
@@ -596,7 +567,7 @@ public partial class MarkdownEditor : Avalonia.Controls.Control, ILogicalScrolla
 
     /// <summary>Simulate a click at content-space x <paramref name="contentX"/> on a checkbox glyph; for tests.</summary>
     internal bool ToggleTaskClickForTest(int line, double contentX) =>
-        TryToggleTaskClick(line, new Point(contentX + PaddingLeft - _offset.X, 0), _buffer.Document.GetLineStart(line));
+        TryToggleTaskClick(line, new Point(contentX + PaddingLeft - _offset.X, 0), Buffer.Document.GetLineStart(line));
 
     /// <summary>The laid-out visual line for <paramref name="line"/> (concealment is caret-independent in WYSIWYG mode).</summary>
     private VisualLine LineVisual(int line) => BlockVisual(BlockOf(line));
@@ -608,19 +579,19 @@ public partial class MarkdownEditor : Avalonia.Controls.Control, ILogicalScrolla
         col > 0 && col < visual.RawLength && visual.IsColumnHidden(col - 1) && visual.IsColumnHidden(col);
 
     /// <summary>Move the caret atomically in <paramref name="dir"/>; for tests.</summary>
-    internal void VisualStepForTest(int dir, bool extend = false) => MoveCaret(VisualStep(_buffer.Selection.Caret, dir), extend);
+    internal void VisualStepForTest(int dir, bool extend = false) => MoveCaret(VisualStep(Buffer.Selection.Caret, dir), extend);
 
     /// <summary>Move the caret to <paramref name="dir"/> word boundary; for tests.</summary>
-    internal void WordMoveForTest(int dir, bool extend = false) => MoveCaret(WordBoundary(_buffer.Selection.Caret, dir), extend);
+    internal void WordMoveForTest(int dir, bool extend = false) => MoveCaret(WordBoundary(Buffer.Selection.Caret, dir), extend);
 
     /// <summary>Delete a word in <paramref name="dir"/>; for tests.</summary>
     internal void DeleteWordForTest(int dir) => DeleteWord(dir);
 
     /// <summary>Smart-Home the caret; for tests.</summary>
-    internal void HomeForTest(bool extend = false) => MoveCaret(SmartHome(_buffer.Selection.Caret), extend);
+    internal void HomeForTest(bool extend = false) => MoveCaret(SmartHome(Buffer.Selection.Caret), extend);
 
     /// <summary>Move the caret to the end of its visual row; for tests.</summary>
-    internal void EndForTest(bool extend = false) => MoveCaret(RowEndOffset(_buffer.Selection.Caret), extend);
+    internal void EndForTest(bool extend = false) => MoveCaret(RowEndOffset(Buffer.Selection.Caret), extend);
 
     /// <summary>Up/Down arrow with selection-edge collapse; for tests.</summary>
     internal void ArrowByLineForTest(int delta, bool extend = false) => ArrowByLine(delta, extend);
@@ -633,8 +604,8 @@ public partial class MarkdownEditor : Avalonia.Controls.Control, ILogicalScrolla
 
     // Task-checkbox geometry, shared between the gutter width and the drawn glyph so they stay in sync.
     private const double CheckboxLeftPad = 1;   // small inset before the box
-    private double CheckboxBoxSize => _theme.BaseFontSize * 0.95;
-    private double CheckboxGap => _theme.BaseFontSize * 0.45; // space between the box and the following text
+    private double CheckboxBoxSize => EditorTheme.BaseFontSize * 0.95;
+    private double CheckboxGap => EditorTheme.BaseFontSize * 0.45; // space between the box and the following text
 
     /// <summary>
     /// The checkbox gutter width — the box plus a fixed gap before the text. Deliberately independent of the
@@ -664,6 +635,6 @@ public partial class MarkdownEditor : Avalonia.Controls.Control, ILogicalScrolla
     internal int RawMeasureCount => _measurer.RawMeasureCount;
 
     /// <summary>Measure a run with the default text style, exercising the width cache; for perf tests.</summary>
-    internal double MeasureWidthForTest(string text) => _measurer.MeasureWidth(text, _theme.Resolve(TokenType.Text));
+    internal double MeasureWidthForTest(string text) => _measurer.MeasureWidth(text, EditorTheme.Resolve(TokenType.Text));
 
 }

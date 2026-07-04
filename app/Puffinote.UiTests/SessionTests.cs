@@ -46,7 +46,7 @@ public sealed class SessionTests
             // Seed a session that references a file which no longer exists in the notebook.
             SessionStore.Save(dir.FullName, new NotebookSession
             {
-                Recent = new[] { Path.Combine(dir.FullName, "deleted.md") },
+                Recent = [Path.Combine(dir.FullName, "deleted.md")],
             });
 
             var window = new MainWindow(new NotebookService());

@@ -26,7 +26,7 @@ public sealed class CommandMergeTests
     public void Entry_run_invokes_the_underlying_command()
     {
         var ran = 0;
-        var entries = CommandMerge.ToEntries(new[] { Cmd("s.a", "A", run: () => ran++) }, Array.Empty<AppCommand>());
+        var entries = CommandMerge.ToEntries([Cmd("s.a", "A", run: () => ran++)], []);
 
         entries[0].Run();
 

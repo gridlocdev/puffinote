@@ -19,8 +19,11 @@ internal static class Options
 
     public static Option<string> Format()
     {
-        var option = new Option<string>("--format", "-f") { Description = "table | csv | tsv | json" };
-        option.DefaultValueFactory = _ => "table";
+        var option = new Option<string>("--format", "-f")
+        {
+            Description = "table | csv | tsv | json",
+            DefaultValueFactory = _ => "table"
+        };
         return option;
     }
 

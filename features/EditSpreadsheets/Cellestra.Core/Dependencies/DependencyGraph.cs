@@ -7,10 +7,10 @@ namespace Cellestra.Core.Dependencies;
 /// </summary>
 public sealed class DependencyGraph
 {
-    private readonly Dictionary<CellRef, HashSet<CellRef>> _precedents = new();
-    private readonly Dictionary<CellRef, HashSet<CellRef>> _dependents = new();
+    private readonly Dictionary<CellRef, HashSet<CellRef>> _precedents = [];
+    private readonly Dictionary<CellRef, HashSet<CellRef>> _dependents = [];
 
-    private static readonly IReadOnlyCollection<CellRef> Empty = Array.Empty<CellRef>();
+    private static readonly IReadOnlyCollection<CellRef> Empty = [];
 
     /// <summary>Replace the set of cells that <paramref name="cell"/> reads.</summary>
     public void SetPrecedents(CellRef cell, IReadOnlyCollection<CellRef> precedents)
@@ -32,7 +32,7 @@ public sealed class DependencyGraph
         {
             if (!_dependents.TryGetValue(precedent, out var dependents))
             {
-                dependents = new HashSet<CellRef>();
+                dependents = [];
                 _dependents[precedent] = dependents;
             }
 

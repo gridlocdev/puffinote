@@ -20,7 +20,7 @@ public sealed class AppSettings
 {
     public AppTheme Theme { get; set; } = AppTheme.Dark;
 
-    public List<string> RecentFiles { get; set; } = new();
+    public List<string> RecentFiles { get; set; } = [];
 
     public int TabWidth { get; set; } = 4;
 

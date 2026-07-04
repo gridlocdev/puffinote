@@ -1,4 +1,3 @@
-using System;
 using Avalonia;
 using Avalonia.Input;
 using Avalonia.Media;
@@ -35,11 +34,11 @@ public sealed partial class SpreadsheetGrid
 
     // Per-frame cache of each row's tallest font (in points), so a layout pass scans the sparse cell
     // store only once instead of once per visible row. Rebuilt at the start of each BuildVisible.
-    private readonly Dictionary<int, double> _rowFontPoints = new();
+    private readonly Dictionary<int, double> _rowFontPoints = [];
 
     // Per-frame cache of each row's tallest wrapped-cell height, in model-space pixels (zoom=1), so a
     // Wrap-Text cell grows its row to fit every wrapped line (task 6). Rebuilt alongside _rowFontPoints.
-    private readonly Dictionary<int, double> _rowWrappedPixels = new();
+    private readonly Dictionary<int, double> _rowWrappedPixels = [];
 
     /// <summary>The largest font size (points) used by any cell in <paramref name="row"/>, or 0 if none.</summary>
     private double TallestFontPoints(Worksheet sheet, int row) =>
@@ -244,12 +243,12 @@ public sealed partial class SpreadsheetGrid
     {
         if (_dragColumn is not null)
         {
-            double delta = (point.X - _dragStartPointer) / _zoom; // pointer is zoomed; widths are model-space
+            double delta = (point.X - _dragStartPointer) / Zoom; // pointer is zoomed; widths are model-space
             _dragSize = Math.Max(MinColumnWidth, _dragStartSize + delta);
         }
         else if (_dragRow is not null)
         {
-            double delta = (point.Y - _dragStartPointer) / _zoom;
+            double delta = (point.Y - _dragStartPointer) / Zoom;
             _dragSize = Math.Max(MinRowHeight, _dragStartSize + delta);
         }
 

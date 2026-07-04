@@ -1,7 +1,6 @@
 using Avalonia.Headless.XUnit;
 using Cellestra.Core.Editing;
 using Cellestra.Core.Model;
-using Cellestra.Core.Styling;
 using Cellestra.Core.Values;
 using Cellestra.Desktop.Commands;
 using Cellestra.Desktop.Views;

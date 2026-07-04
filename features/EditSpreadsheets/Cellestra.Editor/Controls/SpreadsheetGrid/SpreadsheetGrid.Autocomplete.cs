@@ -1,4 +1,3 @@
-using System;
 using Cellestra.Core.Model;
 
 namespace Cellestra.Desktop.Controls.SpreadsheetGrid;

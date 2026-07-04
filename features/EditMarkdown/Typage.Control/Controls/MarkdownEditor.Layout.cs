@@ -1,17 +1,6 @@
-using System.Globalization;
-using System.Linq;
 using Avalonia;
-using Avalonia.Controls;
 using Avalonia.Controls.Primitives;
-using Avalonia.Input;
-using Avalonia.Input.Platform;
-using Avalonia.Media;
-using Avalonia.Threading;
-using Typage.Control.Rendering;
-using Typage.Engine.Document;
-using Typage.Engine.Editing;
 using Typage.Engine.Markdown;
-
 
 namespace Typage.Control.Controls;
 
@@ -25,7 +14,7 @@ public partial class MarkdownEditor
         EnsureLayout();
         var h = double.IsFinite(availableSize.Height)
             ? availableSize.Height
-            : Math.Max(_theme.LineHeight, TotalRows * _theme.LineHeight);
+            : Math.Max(EditorTheme.LineHeight, TotalRows * EditorTheme.LineHeight);
         return new Size(w, h);
     }
 
@@ -59,7 +48,7 @@ public partial class MarkdownEditor
     /// <summary>The content width lines wrap to (0 disables wrapping, e.g. before the control is arranged).</summary>
     private double WrapWidth()
     {
-        if (!_wordWrap)
+        if (!WordWrap)
         {
             return 0;
         }
@@ -77,7 +66,7 @@ public partial class MarkdownEditor
     /// </summary>
     private (int Start, int End)? FrontMatterBlock()
     {
-        var doc = _buffer.Document;
+        var doc = Buffer.Document;
         if (doc.LineCount == 0)
         {
             return null;
@@ -119,12 +108,11 @@ public partial class MarkdownEditor
     internal int CaretDrawnRowForTest()
     {
         EnsureLayout();
-        var sel = _buffer.Selection;
+        var sel = Buffer.Selection;
         var caretBlock = ResolveCaret(sel.Caret).Block;
         var blockStart = BlockStartOffset(caretBlock);
         var visual = BlockVisual(caretBlock);
         var col = Math.Clamp(sel.Caret - blockStart, 0, visual.RawLength);
         return _rowPrefix[caretBlock] + visual.RowOf(col);
     }
-
 }

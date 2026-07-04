@@ -33,7 +33,7 @@ public class ValidationListSourceTests
 
         var items = window.Editor.Grid.ValidationDropdownItemsForTest(0, 0);
 
-        Assert.Equal(new[] { "Red", "Green" }, items);
+        Assert.Equal(["Red", "Green"], items);
     }
 
     [AvaloniaFact]
@@ -54,6 +54,6 @@ public class ValidationListSourceTests
 
         var items = window.Editor.Grid.ValidationDropdownItemsForTest(0, 0);
 
-        Assert.Equal(new[] { "Yes", "No" }, items);
+        Assert.Equal(["Yes", "No"], items);
     }
 }

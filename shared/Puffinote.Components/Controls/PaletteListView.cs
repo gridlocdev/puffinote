@@ -1,6 +1,3 @@
-using System;
-using System.Collections.Generic;
-using System.Linq;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Controls.Templates;
@@ -39,10 +36,9 @@ public sealed class PaletteListView : StackPanel
 {
     private sealed record Row(string Title, string Description, string Shortcut, string? IconKey, PaletteEntry? Entry, bool IsHeader);
 
-    private readonly TextBox _search;
     private readonly ListBox _list;
     private readonly Func<string?, Control?>? _iconFactory;
-    private IReadOnlyList<PaletteEntry> _entries = Array.Empty<PaletteEntry>();
+    private IReadOnlyList<PaletteEntry> _entries = [];
 
     /// <param name="iconFactory">
     /// Builds the icon control for a row's <see cref="PaletteEntry.IconKey"/> (return null for none).
@@ -53,7 +49,7 @@ public sealed class PaletteListView : StackPanel
         _iconFactory = iconFactory;
         Spacing = 0;
 
-        _search = new TextBox { Margin = new Thickness(0, 0, 0, 8) };
+        SearchBox = new TextBox { Margin = new Thickness(0, 0, 0, 8) };
         _list = new ListBox
         {
             MaxHeight = 360,
@@ -61,11 +57,11 @@ public sealed class PaletteListView : StackPanel
             ItemTemplate = new FuncDataTemplate<Row>((row, _) => BuildRow(row), supportsRecycling: true),
         };
 
-        Children.Add(_search);
+        Children.Add(SearchBox);
         Children.Add(_list);
 
-        _search.TextChanged += (_, _) => Populate(_search.Text ?? string.Empty);
-        _search.KeyDown += OnSearchKeyDown;
+        SearchBox.TextChanged += (_, _) => Populate(SearchBox.Text ?? string.Empty);
+        SearchBox.KeyDown += OnSearchKeyDown;
         _list.PointerReleased += (_, e) =>
         {
             // Run only when the click actually landed on a row (not the empty space below a short list).
@@ -80,13 +76,13 @@ public sealed class PaletteListView : StackPanel
     }
 
     /// <summary>The search box, so a host can focus it when the overlay opens.</summary>
-    public TextBox SearchBox => _search;
+    public TextBox SearchBox { get; }
 
     /// <summary>The search placeholder text.</summary>
     public string Placeholder
     {
-        get => _search.PlaceholderText ?? string.Empty;
-        set => _search.PlaceholderText = value;
+        get => SearchBox.PlaceholderText ?? string.Empty;
+        set => SearchBox.PlaceholderText = value;
     }
 
     /// <summary>Raised when a row is chosen (Enter or click). The host typically closes, then runs it.</summary>
@@ -99,7 +95,7 @@ public sealed class PaletteListView : StackPanel
     public void SetItems(IReadOnlyList<PaletteEntry> entries)
     {
         _entries = entries;
-        _search.Text = string.Empty;
+        SearchBox.Text = string.Empty;
         Populate(string.Empty);
     }
 
@@ -107,10 +103,22 @@ public sealed class PaletteListView : StackPanel
     {
         switch (e.Key)
         {
-            case Key.Escape: Cancelled?.Invoke(this, EventArgs.Empty); e.Handled = true; break;
-            case Key.Enter: ChooseSelected(); e.Handled = true; break;
-            case Key.Down: Move(+1); e.Handled = true; break;
-            case Key.Up: Move(-1); e.Handled = true; break;
+            case Key.Escape:
+                Cancelled?.Invoke(this, EventArgs.Empty);
+                e.Handled = true;
+                break;
+            case Key.Enter:
+                ChooseSelected();
+                e.Handled = true;
+                break;
+            case Key.Down:
+                Move(+1);
+                e.Handled = true;
+                break;
+            case Key.Up:
+                Move(-1);
+                e.Handled = true;
+                break;
         }
     }
 

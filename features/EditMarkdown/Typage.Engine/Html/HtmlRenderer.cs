@@ -1,4 +1,3 @@
-using System.Linq;
 using System.Text;
 using Typage.Engine.Document;
 using Typage.Engine.Markdown;
@@ -272,7 +271,7 @@ public static class HtmlRenderer
         }
 
         var marker = doc.GetText(first.Value.Start, first.Value.Length);
-        var digits = new string(marker.TakeWhile(char.IsAsciiDigit).ToArray());
+        var digits = new string([.. marker.TakeWhile(char.IsAsciiDigit)]);
         return int.TryParse(digits, out var value) ? value : 1;
     }
 
@@ -377,7 +376,7 @@ public static class HtmlRenderer
 
                 if (text == "![")
                 {
-                    i = RenderImage(doc, tokens, i, to, sb);
+                    i = RenderImage(tokens, i, to, sb);
                     continue;
                 }
 
@@ -435,7 +434,7 @@ public static class HtmlRenderer
         return j + 3; // past LinkUrl and ")"
     }
 
-    private static int RenderImage(TextDocument doc, IReadOnlyList<Token> tokens, int i, int to, StringBuilder sb)
+    private static int RenderImage(IReadOnlyList<Token> tokens, int i, int to, StringBuilder sb)
     {
         // tokens: "![" ImageAlt "](" ImageUrl ")"
         if (i + 4 >= to)
@@ -448,9 +447,6 @@ public static class HtmlRenderer
         sb.Append("<img src=\"").Append(EscapeAttr(src)).Append("\" alt=\"").Append(EscapeAttr(alt)).Append("\">");
         return i + 5;
     }
-
-    private static void RenderToken(TextDocument doc, IReadOnlyList<Token> tokens, ref int _, Token t, StringBuilder sb)
-        => RenderContentToken(doc, t, sb);
 
     private static void RenderContentToken(TextDocument doc, Token t, StringBuilder sb)
     {
@@ -573,10 +569,18 @@ public static class HtmlRenderer
         {
             switch (c)
             {
-                case '&': sb.Append("&amp;"); break;
-                case '<': sb.Append("&lt;"); break;
-                case '>': sb.Append("&gt;"); break;
-                default: sb.Append(c); break;
+                case '&':
+                    sb.Append("&amp;");
+                    break;
+                case '<':
+                    sb.Append("&lt;");
+                    break;
+                case '>':
+                    sb.Append("&gt;");
+                    break;
+                default:
+                    sb.Append(c);
+                    break;
             }
         }
 

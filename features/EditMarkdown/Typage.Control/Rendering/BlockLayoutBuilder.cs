@@ -1,6 +1,3 @@
-using System;
-using System.Collections.Generic;
-using System.Linq;
 using Avalonia.Media;
 using Typage.Engine.Document;
 using Typage.Engine.Markdown;
@@ -46,7 +43,7 @@ internal sealed class BlockLayoutBuilder
     private TextDocument _doc = null!;
     private MarkdownModel _model = null!;
     private MarkdownTheme _theme = null!;
-    private int[] _blockStartLine = Array.Empty<int>();
+    private int[] _blockStartLine = [];
     private bool _rawTextMode;
     private bool _markersRevealed;
     private double _wrapWidth;
@@ -297,7 +294,7 @@ internal sealed class BlockLayoutBuilder
             return;
         }
 
-        var content = blockText.Substring(s, en - s);
+        var content = blockText[s..en];
         var nested = FindNestedConstructs(content);
         if (nested.Count == 0)
         {
@@ -425,7 +422,7 @@ internal sealed class BlockLayoutBuilder
     /// <summary>The synthetic decoration (and its gutter width) that replaces concealed marker <paramref name="t"/>, if any.</summary>
     private (DecorationKind Kind, double Width) DecorationFor(Token t, string lineText, int s, int en, bool hasTask, RunStyle style)
     {
-        var text = lineText.Substring(s, en - s);
+        var text = lineText[s..en];
         switch (t.Type)
         {
             case TokenType.ListMarker:

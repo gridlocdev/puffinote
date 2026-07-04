@@ -1,6 +1,5 @@
 using Avalonia.Headless.XUnit;
 using Cellestra.Core.Data;
-using Cellestra.Core.Editing;
 using Cellestra.Core.Model;
 using Cellestra.Core.Values;
 using Cellestra.Desktop.Commands;
@@ -89,7 +88,7 @@ public class MainWindowSaveAndDataTests
 
         // Simulate conditions/sort having been applied while the filter was on.
         sheet.ActiveFilterSpec = new FilterSpec(new Dictionary<int, ColumnFilter>());
-        sheet.ActiveSort = new SortSpec(new[] { new SortLevel(0) });
+        sheet.ActiveSort = new SortSpec([new SortLevel(0)]);
 
         window.Editor.ToggleFilter(); // off
 

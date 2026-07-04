@@ -25,7 +25,7 @@ public sealed record Table(string Name, CellRange Range, bool HasHeader = true)
     {
         if (!HasHeader)
         {
-            return Enumerable.Range(1, Range.ColumnCount).Select(i => $"Column{i}").ToList();
+            return [.. Enumerable.Range(1, Range.ColumnCount).Select(i => $"Column{i}")];
         }
 
         var labels = new List<string>(Range.ColumnCount);

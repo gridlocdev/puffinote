@@ -20,7 +20,7 @@ public class ProjectWritesTests
     [Fact]
     public void Paste_projection_matches_applied_cells()
     {
-        var (workbook, history, sheet) = New();
+        var (_, history, sheet) = New();
         sheet.SetValue(0, 0, CellValue.Number(10));            // A1
         sheet.SetFormula(0, 1, "A1*2", CellValue.Number(20));  // B1 = A1*2
 

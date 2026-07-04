@@ -91,7 +91,7 @@ public sealed class SheetPaneTests
             // LoadAndRecalc throws. Rather than a blank editor, no tab, or an unobserved crash, the editor
             // area shows the reason in an ErrorPane.
             var empty = Path.Combine(dir.FullName, "broken.ods");
-            File.WriteAllBytes(empty, Array.Empty<byte>());
+            File.WriteAllBytes(empty, []);
             var host = new TabHost();
 
             await host.OpenAsync(empty);

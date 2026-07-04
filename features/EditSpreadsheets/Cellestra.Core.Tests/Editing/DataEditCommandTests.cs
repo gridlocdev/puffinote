@@ -19,7 +19,7 @@ public class DataEditCommandTests
     [Fact]
     public void Sort_is_undoable()
     {
-        var (workbook, history, sheet) = New();
+        var (_, history, sheet) = New();
         sheet.SetValue(0, 0, CellValue.Text("H"));
         sheet.SetValue(1, 0, CellValue.Number(3));
         sheet.SetValue(2, 0, CellValue.Number(1));
@@ -37,9 +37,12 @@ public class DataEditCommandTests
     public void Header_column_styles_the_first_column_like_the_header_and_undoes()
     {
         var (workbook, history, sheet) = New();
-        sheet.SetValue(0, 0, CellValue.Text("Team")); sheet.SetValue(0, 1, CellValue.Text("Pts"));
-        sheet.SetValue(1, 0, CellValue.Text("A")); sheet.SetValue(1, 1, CellValue.Number(3));
-        sheet.SetValue(2, 0, CellValue.Text("B")); sheet.SetValue(2, 1, CellValue.Number(1));
+        sheet.SetValue(0, 0, CellValue.Text("Team"));
+        sheet.SetValue(0, 1, CellValue.Text("Pts"));
+        sheet.SetValue(1, 0, CellValue.Text("A"));
+        sheet.SetValue(1, 1, CellValue.Number(3));
+        sheet.SetValue(2, 0, CellValue.Text("B"));
+        sheet.SetValue(2, 1, CellValue.Number(1));
         var table = new Table("T", CellRange.Parse("A1:B3"), HasHeader: true);
         sheet.AddTable(table);
 
@@ -80,7 +83,7 @@ public class DataEditCommandTests
     [Fact]
     public void Filter_hides_rows_and_undo_restores()
     {
-        var (workbook, history, sheet) = New();
+        var (_, history, sheet) = New();
         sheet.SetValue(0, 0, CellValue.Text("Score"));
         sheet.SetValue(1, 0, CellValue.Number(10));
         sheet.SetValue(2, 0, CellValue.Number(90));
@@ -132,7 +135,7 @@ public class DataEditCommandTests
         sheet.SetValue(2, 0, CellValue.Text("a"));
         sheet.SetValue(3, 0, CellValue.Text("b"));
 
-        var command = DataEditCommands.RemoveDuplicates(sheet.Name, CellRange.Parse("A1:A4"), new[] { 0 }, true, out var removed);
+        var command = DataEditCommands.RemoveDuplicates(sheet.Name, CellRange.Parse("A1:A4"), [0], true, out var removed);
         history.Execute(command);
 
         Assert.Equal(1, removed());
@@ -145,7 +148,7 @@ public class DataEditCommandTests
     [Fact]
     public void Text_to_columns_is_undoable()
     {
-        var (workbook, history, sheet) = New();
+        var (_, history, sheet) = New();
         sheet.SetValue(0, 0, CellValue.Text("a,b,c"));
 
         history.Execute(DataEditCommands.TextToColumns(sheet, CellRange.Parse("A1:A1"), ','));
@@ -159,7 +162,7 @@ public class DataEditCommandTests
     [Fact]
     public void Create_table_is_undoable()
     {
-        var (workbook, history, sheet) = New();
+        var (_, history, sheet) = New();
         var table = new Table("Data", CellRange.Parse("A1:B3"));
 
         history.Execute(DataEditCommands.CreateTable(sheet.Name, table));
@@ -277,8 +280,8 @@ public class DataEditCommandTests
     [Fact]
     public void Set_validation_is_undoable()
     {
-        var (workbook, history, sheet) = New();
-        var rule = new DataValidation(ValidationKind.List, CellRange.Parse("A1")) { ListValues = new[] { "Yes", "No" } };
+        var (_, history, sheet) = New();
+        var rule = new DataValidation(ValidationKind.List, CellRange.Parse("A1")) { ListValues = ["Yes", "No"] };
 
         history.Execute(DataEditCommands.SetValidation(sheet.Name, rule));
         Assert.NotNull(sheet.FindValidation(0, 0));

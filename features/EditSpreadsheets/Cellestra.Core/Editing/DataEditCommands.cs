@@ -24,7 +24,7 @@ public static class DataEditCommands
 
     /// <summary>Quick single-column sort by the active column, ascending or descending.</summary>
     public static IEditCommand SortByColumn(string sheet, CellRange range, int column, bool ascending, bool hasHeader = true, CultureInfo? culture = null) =>
-        Sort(sheet, range, new SortSpec(new[] { new SortLevel(column, ascending) }, hasHeader), culture);
+        Sort(sheet, range, new SortSpec([new SortLevel(column, ascending)], hasHeader), culture);
 
     // ---- Remove duplicates ------------------------------------------------
 
@@ -190,19 +190,19 @@ public static class DataEditCommands
             {
                 var ws = Sheet(wb, sheet);
 
-                removedTables = ws.Tables.Where(t => t.Range.Intersects(range)).ToList();
+                removedTables = [.. ws.Tables.Where(t => t.Range.Intersects(range))];
                 foreach (var table in removedTables)
                 {
                     ws.RemoveTable(table);
                 }
 
-                removedMerges = ws.MergedRegions.Where(m => m.Range.Intersects(range)).ToList();
+                removedMerges = [.. ws.MergedRegions.Where(m => m.Range.Intersects(range))];
                 if (removedMerges.Count > 0)
                 {
-                    ws.ReplaceMerges(ws.MergedRegions.Where(m => !m.Range.Intersects(range)).ToList());
+                    ws.ReplaceMerges([.. ws.MergedRegions.Where(m => !m.Range.Intersects(range))]);
                 }
 
-                removedValidations = ws.Validations.Where(v => v.Target.Intersects(range)).ToList();
+                removedValidations = [.. ws.Validations.Where(v => v.Target.Intersects(range))];
                 foreach (var validation in removedValidations)
                 {
                     ws.RemoveValidation(validation);
@@ -242,10 +242,18 @@ public static class DataEditCommands
 
                 var touchedColumns = wholeColumns
                     ? ws.Columns.Keys.Where(c => c >= range.Left && c <= range.Right).ToList()
-                    : new List<int>();
+                    : [];
 
-                rowState = touchedRows.Select(r => { var row = ws.GetOrCreateRow(r); return (r, row.StyleId, row.Hidden); }).ToList();
-                columnState = touchedColumns.Select(c => { var col = ws.GetOrCreateColumn(c); return (c, col.StyleId, col.Hidden); }).ToList();
+                rowState = [.. touchedRows.Select(r =>
+                {
+                    var row = ws.GetOrCreateRow(r);
+                    return (r, row.StyleId, row.Hidden);
+                })];
+                columnState = [.. touchedColumns.Select(c =>
+                {
+                    var col = ws.GetOrCreateColumn(c);
+                    return (c, col.StyleId, col.Hidden);
+                })];
 
                 if (clearedFilter)
                 {
@@ -345,14 +353,14 @@ public static class DataEditCommands
             wb =>
             {
                 var ws = Sheet(wb, sheet);
-                rowState = ws.Rows.Select(kv => (kv.Key, kv.Value.StyleId, kv.Value.Hidden)).ToList();
-                columnState = ws.Columns.Select(kv => (kv.Key, kv.Value.StyleId, kv.Value.Hidden)).ToList();
+                rowState = [.. ws.Rows.Select(kv => (kv.Key, kv.Value.StyleId, kv.Value.Hidden))];
+                columnState = [.. ws.Columns.Select(kv => (kv.Key, kv.Value.StyleId, kv.Value.Hidden))];
                 filter = ws.ActiveFilter;
                 filterSpec = ws.ActiveFilterSpec;
                 sort = ws.ActiveSort;
-                tables = ws.Tables.ToList();
-                merges = ws.MergedRegions.ToList();
-                validations = ws.Validations.ToList();
+                tables = [.. ws.Tables];
+                merges = [.. ws.MergedRegions];
+                validations = [.. ws.Validations];
                 frozenRows = ws.FrozenRows;
                 frozenColumns = ws.FrozenColumns;
 
@@ -381,7 +389,7 @@ public static class DataEditCommands
                     ws.RemoveValidation(validation);
                 }
 
-                ws.ReplaceMerges(Array.Empty<MergedRegion>());
+                ws.ReplaceMerges([]);
                 ws.FrozenRows = 0;
                 ws.FrozenColumns = 0;
                 return EditResult.None;
@@ -473,7 +481,7 @@ public static class DataEditCommands
             });
 
         var styleHeader = EditCommands.ApplyStyle(workbook, sheet, headerRange, StyleTableHeader, "Create Table");
-        return EditCommands.Composite("Create Table", new[] { add, fillHeaders, styleHeader });
+        return EditCommands.Composite("Create Table", [add, fillHeaders, styleHeader]);
     }
 
     /// <summary>The default header style: bold white text on the green accent fill (PRD §8.10).</summary>
@@ -501,8 +509,16 @@ public static class DataEditCommands
     {
         var replaced = table with { HasHeaderColumn = enabled };
         var flip = new ActionCommand("Header Column",
-            wb => { Sheet(wb, sheet).ReplaceTable(table, replaced); return EditResult.None; },
-            wb => { Sheet(wb, sheet).ReplaceTable(replaced, table); return EditResult.None; });
+            wb =>
+            {
+                Sheet(wb, sheet).ReplaceTable(table, replaced);
+                return EditResult.None;
+            },
+            wb =>
+            {
+                Sheet(wb, sheet).ReplaceTable(replaced, table);
+                return EditResult.None;
+            });
 
         // The header row already styles the corner cell, so the column's run starts just below it.
         int top = table.Range.Top + (table.HasHeader ? 1 : 0);
@@ -516,7 +532,7 @@ public static class DataEditCommands
             new CellAddress(table.Range.Left, table.Range.Bottom));
         var style = EditCommands.ApplyStyle(workbook, sheet, columnRange,
             enabled ? StyleTableHeader : ClearTableHeader, "Header Column");
-        return EditCommands.Composite("Header Column", new[] { flip, style });
+        return EditCommands.Composite("Header Column", [flip, style]);
     }
 
     public static IEditCommand RemoveTable(string sheet, Table table) =>
@@ -578,10 +594,10 @@ public static class DataEditCommands
                 new CellAddress(table.Range.Right + 1, grownRange.Top),
                 new CellAddress(grownRange.Right, grownRange.Top));
             var styleHeader = EditCommands.ApplyStyle(workbook, sheet, newHeaderCells, StyleTableHeader, "Expand Table");
-            return EditCommands.Composite("Expand Table", new[] { replace, styleHeader });
+            return EditCommands.Composite("Expand Table", [replace, styleHeader]);
         }
 
-        return EditCommands.Composite("Expand Table", new[] { replace });
+        return EditCommands.Composite("Expand Table", [replace]);
     }
 
     // ---- Validation -------------------------------------------------------
@@ -623,7 +639,7 @@ public static class DataEditCommands
         public EditResult Apply(Workbook workbook)
         {
             var sheet = Sheet(workbook, _sheetName);
-            _before = new Dictionary<int, bool>();
+            _before = [];
             for (int row = _range.Top; row <= _range.Bottom; row++)
             {
                 _before[row] = sheet.IsRowHidden(row);

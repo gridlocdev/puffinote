@@ -1,17 +1,9 @@
-using System.Globalization;
-using System.Linq;
 using Avalonia;
-using Avalonia.Controls;
-using Avalonia.Controls.Primitives;
-using Avalonia.Input;
-using Avalonia.Input.Platform;
 using Avalonia.Media;
 using Avalonia.Threading;
 using Typage.Control.Rendering;
 using Typage.Engine.Document;
-using Typage.Engine.Editing;
 using Typage.Engine.Markdown;
-
 
 namespace Typage.Control.Controls;
 
@@ -19,11 +11,11 @@ public partial class MarkdownEditor
 {
     public override void Render(DrawingContext context)
     {
-        var doc = _buffer.Document;
-        context.FillRectangle(_theme.Background, new Rect(Bounds.Size));
+        var doc = Buffer.Document;
+        context.FillRectangle(EditorTheme.Background, new Rect(Bounds.Size));
 
         EnsureLayout();
-        var caret = _buffer.Selection;
+        var caret = Buffer.Selection;
         // The block the caret is drawn in is the *resolved* one: if the offset lands on a collapsed blank
         // separator (e.g. Ctrl+End on a doc ending in "\n"), it snaps to the previous content block — whose
         // row is actually drawn — so the caret never disappears into a skipped zero-row block.
@@ -31,7 +23,7 @@ public partial class MarkdownEditor
 
         // Draw only the paragraph blocks whose wrapped rows intersect the viewport (virtualization over
         // variable block heights). The viewport height is 0 until the control is arranged in a scroll viewer.
-        var lineH = _theme.LineHeight;
+        var lineH = EditorTheme.LineHeight;
         var viewportH = _viewport.Height > 0 ? _viewport.Height : Bounds.Height;
         var contentTop = _offset.Y - PaddingTop;
         var firstRow = Math.Max(0, (int)(contentTop / lineH));
@@ -65,7 +57,7 @@ public partial class MarkdownEditor
             }
 
             // Only relevant when wrapping is off: grow the horizontal extent as wide lines come into view.
-            if (!_wordWrap && maxWidth > _extentWidth)
+            if (!WordWrap && maxWidth > _extentWidth)
             {
                 _extentWidth = maxWidth;
                 // Notify the scroll viewer AFTER this render pass — invalidating a visual (the scroll
@@ -95,15 +87,15 @@ public partial class MarkdownEditor
             return;
         }
 
-        var lineH = _theme.LineHeight;
+        var lineH = EditorTheme.LineHeight;
         var viewportW = _viewport.Width > 0 ? _viewport.Width : Bounds.Width;
         var panelRight = Math.Max(220, viewportW - PaddingLeft * 2);
         var startTop = RowTop(startBlock);
         var endBottom = RowTop(endBlock) + _rowCounts[endBlock] * lineH;
-        context.FillRectangle(_theme.PropertiesBackground, new Rect(-8, startTop + 2, panelRight + 8, endBottom - startTop - 4), 6);
+        context.FillRectangle(EditorTheme.PropertiesBackground, new Rect(-8, startTop + 2, panelRight + 8, endBottom - startTop - 4), 6);
 
         // "Properties" label on the opening-fence row (its source is only "---", so no text overlap).
-        var label = _measurer.GetFormattedText("Properties", _theme.Resolve(TokenType.FrontMatterFence), _dimMarker);
+        var label = _measurer.GetFormattedText("Properties", EditorTheme.Resolve(TokenType.FrontMatterFence), _dimMarker);
         var labelY = startTop + (lineH - label.Height) / 2;
         context.DrawText(label, new Point(panelRight - label.Width - 6, labelY));
     }
@@ -120,7 +112,7 @@ public partial class MarkdownEditor
             return;
         }
 
-        var n = _buffer.Document.LineCount;
+        var n = Buffer.Document.LineCount;
         if (_reorderStartLine < 0 || _reorderEndLine >= n || _reorderStartLine > _reorderEndLine)
         {
             _reorderActive = false;
@@ -130,7 +122,7 @@ public partial class MarkdownEditor
         var top = RowTop(BlockOf(_reorderStartLine));
         var bottomBlock = BlockOf(_reorderEndLine);
         var bottom = RowTop(bottomBlock) + _rowCounts[bottomBlock] * lineH;
-        var pen = new Pen(_dimMarker, 1) { DashStyle = new DashStyle(new double[] { 2, 2 }, 0) };
+        var pen = new Pen(_dimMarker, 1) { DashStyle = new DashStyle([2, 2], 0) };
         var left = -6.0;
         var right = ContentRight();
         context.DrawLine(pen, new Point(left, top), new Point(right, top));
@@ -145,7 +137,7 @@ public partial class MarkdownEditor
     private void DrawCodeCopyButtons(DrawingContext context, int firstBlock, int lastBlock, double lineH)
     {
         _codeCopyButtons.Clear();
-        var doc = _buffer.Document;
+        var doc = Buffer.Document;
         for (var b = firstBlock; b < lastBlock; b++)
         {
             var line = _blockStartLine[b];
@@ -165,12 +157,12 @@ public partial class MarkdownEditor
             var x = ContentRight() - w - 6;
             var y = RowTop(b) + 4;
             var rect = new Rect(x, y, w, h);
-            context.FillRectangle(_theme.CodeBlockBackground, rect, 4);
+            context.FillRectangle(EditorTheme.CodeBlockBackground, rect, 4);
             DrawCopyGlyph(context, rect);
 
             if (_copiedFeedbackLine == line)
             {
-                var label = _measurer.GetFormattedText("Copied!", _theme.Resolve(TokenType.CodeText), _theme.LinkForeground);
+                var label = _measurer.GetFormattedText("Copied!", EditorTheme.Resolve(TokenType.CodeText), EditorTheme.LinkForeground);
                 context.DrawText(label, new Point(x - label.Width - 6, y + (h - label.Height) / 2));
             }
 
@@ -182,19 +174,19 @@ public partial class MarkdownEditor
     /// <summary>Draw a two-overlapping-rectangles "copy" glyph centred in <paramref name="button"/>.</summary>
     private void DrawCopyGlyph(DrawingContext context, Rect button)
     {
-        var pen = new Pen(_theme.MarkerForeground, 1.2);
+        var pen = new Pen(EditorTheme.MarkerForeground, 1.2);
         var cx = button.X + button.Width / 2;
         var cy = button.Y + button.Height / 2;
         const double gw = 8, gh = 9, off = 2;
         var back = new Rect(cx - gw / 2 + off, cy - gh / 2 - off, gw, gh);
         var front = new Rect(cx - gw / 2 - off, cy - gh / 2 + off, gw, gh);
-        context.DrawRectangle(_theme.CodeBlockBackground, pen, back, 1.5, 1.5);
-        context.DrawRectangle(_theme.CodeBlockBackground, pen, front, 1.5, 1.5);
+        context.DrawRectangle(EditorTheme.CodeBlockBackground, pen, back, 1.5, 1.5);
+        context.DrawRectangle(EditorTheme.CodeBlockBackground, pen, front, 1.5, 1.5);
     }
 
     private double RenderBlock(DrawingContext context, TextDocument doc, int block, Selection sel, int caretBlock)
     {
-        var lineH = _theme.LineHeight;
+        var lineH = EditorTheme.LineHeight;
         var blockTop = RowTop(block);
         var startLine = _blockStartLine[block];
         var blockStart = doc.GetLineStart(startLine);
@@ -204,7 +196,7 @@ public partial class MarkdownEditor
         // Raw-text view is unstyled, so it draws no panel.
         if (!RawTextMode && IsCodeLine(startLine))
         {
-            context.FillRectangle(_theme.CodeBlockBackground, new Rect(-8, blockTop, ContentRight() + 16, visual.RowCount * lineH));
+            context.FillRectangle(EditorTheme.CodeBlockBackground, new Rect(-8, blockTop, ContentRight() + 16, visual.RowCount * lineH));
         }
 
         // A horizontal rule has no real text to place a visible caret on, so when the caret is on it
@@ -212,7 +204,7 @@ public partial class MarkdownEditor
         // the rule line itself is the focused / selected line.
         if (IsFocused && ShouldHighlightRuleLine(startLine))
         {
-            context.FillRectangle(_theme.SelectionBackground, new Rect(-8, blockTop, ContentRight() + 16, visual.RowCount * lineH));
+            context.FillRectangle(EditorTheme.SelectionBackground, new Rect(-8, blockTop, ContentRight() + 16, visual.RowCount * lineH));
         }
 
         // Search-match highlights (under the text), then the selection on top.
@@ -247,9 +239,9 @@ public partial class MarkdownEditor
         {
             var col = Math.Clamp(sel.Caret - blockStart, 0, visual.RawLength);
             var caretX = visual.ColumnToX(col);
-            var h = _theme.BaseFontSize * 1.3;
+            var h = EditorTheme.BaseFontSize * 1.3;
             var y = blockTop + visual.RowOf(col) * lineH + (lineH - h) / 2;
-            context.FillRectangle(_theme.Caret, new Rect(caretX, y, 1.5, h));
+            context.FillRectangle(EditorTheme.Caret, new Rect(caretX, y, 1.5, h));
         }
 
         return visual.Width;
@@ -259,11 +251,11 @@ public partial class MarkdownEditor
     private void DrawTextRun(DrawingContext context, VisualRun run, double lineTop)
     {
         var ft = _measurer.GetFormattedText(run.Text, run.Style, run.Style.Foreground);
-        var y = lineTop + (_theme.LineHeight - ft.Height) / 2;
+        var y = lineTop + (EditorTheme.LineHeight - ft.Height) / 2;
 
         if (run.Style.Background is not null)
         {
-            context.FillRectangle(run.Style.Background, new Rect(run.X, lineTop + 2, ft.Width, _theme.LineHeight - 4), 3);
+            context.FillRectangle(run.Style.Background, new Rect(run.X, lineTop + 2, ft.Width, EditorTheme.LineHeight - 4), 3);
         }
 
         context.DrawText(ft, new Point(run.X, y));
@@ -277,7 +269,7 @@ public partial class MarkdownEditor
     /// below the baseline. Each line uses its decoration's stroke (link underline in the link colour, strike
     /// in the text colour), defaulting to the run's foreground.
     /// </summary>
-    private void DrawRunDecorations(DrawingContext context, VisualRun run, FormattedText ft, double textTop)
+    private static void DrawRunDecorations(DrawingContext context, VisualRun run, FormattedText ft, double textTop)
     {
         if (run.Style.Decorations is not { } decorations || run.Text.Length == 0)
         {
@@ -300,7 +292,7 @@ public partial class MarkdownEditor
 
     private void DrawSearchMatches(DrawingContext context, int blockStart, double blockTop, VisualLine visual)
     {
-        var lineH = _theme.LineHeight;
+        var lineH = EditorTheme.LineHeight;
         var blockEnd = blockStart + visual.RawLength;
         // Matches are sorted, non-overlapping → both Start and End ascend. Binary-search the first
         // match that could touch this block, then walk forward, so a block only touches its own matches
@@ -320,7 +312,7 @@ public partial class MarkdownEditor
                 continue;
             }
 
-            var brush = i == _currentMatch ? _theme.SearchMatchCurrent : _theme.SearchMatch;
+            var brush = i == _currentMatch ? EditorTheme.SearchMatchCurrent : EditorTheme.SearchMatch;
             foreach (var (row, x1, x2) in visual.Spans(s, e))
             {
                 context.FillRectangle(brush, new Rect(x1, blockTop + row * lineH + 2, x2 - x1, lineH - 4), 2);
@@ -350,7 +342,7 @@ public partial class MarkdownEditor
 
     private void DrawSelection(DrawingContext context, int blockStart, double blockTop, Selection sel, VisualLine visual)
     {
-        var lineH = _theme.LineHeight;
+        var lineH = EditorTheme.LineHeight;
         var contentLen = visual.RawLength;
         var blockEnd = blockStart + contentLen;
         if (sel.Start > blockEnd || sel.End < blockStart)
@@ -367,7 +359,7 @@ public partial class MarkdownEditor
 
         foreach (var (row, x1, x2) in visual.Spans(selStartCol, selEndCol))
         {
-            context.FillRectangle(_theme.SelectionBackground, new Rect(x1, blockTop + row * lineH + 2, x2 - x1, lineH - 4));
+            context.FillRectangle(EditorTheme.SelectionBackground, new Rect(x1, blockTop + row * lineH + 2, x2 - x1, lineH - 4));
         }
     }
 
@@ -375,14 +367,14 @@ public partial class MarkdownEditor
 
     private void DrawDecoration(DrawingContext context, VisualRun run, double lineTop)
     {
-        var lineH = _theme.LineHeight;
+        var lineH = EditorTheme.LineHeight;
         var cy = lineTop + lineH / 2;
         switch (run.Decoration)
         {
             case DecorationKind.Bullet:
                 {
-                    var r = Math.Max(2, _theme.BaseFontSize * 0.14);
-                    context.DrawEllipse(_theme.BulletForeground, null, new Point(run.X + run.Width / 2, cy), r, r);
+                    var r = Math.Max(2, EditorTheme.BaseFontSize * 0.14);
+                    context.DrawEllipse(EditorTheme.BulletForeground, null, new Point(run.X + run.Width / 2, cy), r, r);
                     break;
                 }
 
@@ -392,11 +384,11 @@ public partial class MarkdownEditor
                     var size = CheckboxBoxSize;
                     var box = new Rect(run.X + CheckboxLeftPad, cy - size / 2, size, size);
                     var ticked = run.Decoration == DecorationKind.CheckboxChecked;
-                    context.DrawRectangle(ticked ? _theme.CheckboxForeground : null, new Pen(_theme.CheckboxForeground, 1.4), box, 3, 3);
+                    context.DrawRectangle(ticked ? EditorTheme.CheckboxForeground : null, new Pen(EditorTheme.CheckboxForeground, 1.4), box, 3, 3);
                     if (ticked)
                     {
                         // A check mark in the editor background colour so it reads on the filled box.
-                        var pen = new Pen(_theme.Background, 1.6);
+                        var pen = new Pen(EditorTheme.Background, 1.6);
                         var a = new Point(box.X + size * 0.24, cy);
                         var b = new Point(box.X + size * 0.43, cy + size * 0.22);
                         var c = new Point(box.X + size * 0.78, cy - size * 0.24);
@@ -410,20 +402,19 @@ public partial class MarkdownEditor
             case DecorationKind.OrderedNumber:
                 {
                     // The computed ordinal (e.g. "3. "), drawn in the bullet colour where the digits would be.
-                    var ft = _measurer.GetFormattedText(run.Text, run.Style, _theme.BulletForeground);
-                    var ny = lineTop + (_theme.LineHeight - ft.Height) / 2;
+                    var ft = _measurer.GetFormattedText(run.Text, run.Style, EditorTheme.BulletForeground);
+                    var ny = lineTop + (EditorTheme.LineHeight - ft.Height) / 2;
                     context.DrawText(ft, new Point(run.X, ny));
                     break;
                 }
 
             case DecorationKind.QuoteBar:
-                context.FillRectangle(_theme.QuoteBar, new Rect(run.X + 2, lineTop + 2, 2.5, lineH - 4));
+                context.FillRectangle(EditorTheme.QuoteBar, new Rect(run.X + 2, lineTop + 2, 2.5, lineH - 4));
                 break;
 
             case DecorationKind.HorizontalRule:
-                context.DrawLine(new Pen(_theme.RuleForeground, _theme.RuleThickness), new Point(run.X, cy), new Point(ContentRight(), cy));
+                context.DrawLine(new Pen(EditorTheme.RuleForeground, EditorTheme.RuleThickness), new Point(run.X, cy), new Point(ContentRight(), cy));
                 break;
         }
     }
-
 }

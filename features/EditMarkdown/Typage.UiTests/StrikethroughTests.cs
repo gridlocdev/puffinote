@@ -1,4 +1,3 @@
-using System.Linq;
 using Avalonia.Headless.XUnit;
 using Avalonia.Input;
 using Avalonia.Media;
@@ -6,7 +5,6 @@ using Typage.Control.Controls;
 using Typage.Control.Rendering;
 using Typage.Desktop.Services;
 using Typage.Desktop.Views;
-using Typage.Engine.Document;
 using Xunit;
 
 namespace Typage.UiTests;

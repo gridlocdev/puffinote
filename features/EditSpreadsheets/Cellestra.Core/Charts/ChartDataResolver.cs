@@ -103,7 +103,7 @@ public static class ChartDataResolver
             !CellRange.TryParse(Qualify(reference, fallbackSheet), out var range) ||
             workbook.FindSheet(range.Sheet ?? fallbackSheet) is not { } sheet)
         {
-            return Array.Empty<double>();
+            return [];
         }
 
         var values = new List<double>(range.CellCount);
@@ -122,7 +122,7 @@ public static class ChartDataResolver
             !CellRange.TryParse(Qualify(reference, fallbackSheet), out var range) ||
             workbook.FindSheet(range.Sheet ?? fallbackSheet) is not { } sheet)
         {
-            return Array.Empty<string>();
+            return [];
         }
 
         var labels = new List<string>(range.CellCount);

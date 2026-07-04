@@ -1,4 +1,3 @@
-using System;
 using Avalonia;
 using Avalonia.Input;
 using Avalonia.Media;
@@ -60,7 +59,7 @@ public sealed partial class SpreadsheetGrid
     }
 
     /// <summary>Test seam: the cell/range the point poke currently draws normal selection chrome over, or null.</summary>
-    internal CellRange? PointTargetForTest => _editing && _pointHasTarget ? _pointTarget : null;
+    internal CellRange? PointTargetForTest => IsInlineEditing && _pointHasTarget ? _pointTarget : null;
 
     /// <summary>Mark the cell/range the latest poke points at so it gets the normal selection chrome.</summary>
     private void SetPointTarget(int top, int left, int bottom, int right) =>
@@ -79,7 +78,7 @@ public sealed partial class SpreadsheetGrid
     /// </summary>
     private void DrawPointSelectionFill(DrawingContext context)
     {
-        if (_editing && _pointHasTarget
+        if (IsInlineEditing && _pointHasTarget
             && TryGetRegionRect(_pointTarget.Top, _pointTarget.Left, _pointTarget.Bottom, _pointTarget.Right, out var rect))
         {
             context.FillRectangle(_palette.SelectionFill, rect);
@@ -89,7 +88,7 @@ public sealed partial class SpreadsheetGrid
     /// <summary>Outline the point-mode target with the active-cell pen, drawn on top of the cells.</summary>
     private void DrawPointSelectionOutline(DrawingContext context)
     {
-        if (_editing && _pointHasTarget
+        if (IsInlineEditing && _pointHasTarget
             && TryGetRegionRect(_pointTarget.Top, _pointTarget.Left, _pointTarget.Bottom, _pointTarget.Right, out var rect))
         {
             context.DrawRectangle(null, _palette.ActiveOutline, rect);
@@ -102,7 +101,7 @@ public sealed partial class SpreadsheetGrid
     /// </summary>
     private bool TryPointModeArrow(Key key, bool shift)
     {
-        if (!_editing)
+        if (!IsInlineEditing)
         {
             return false;
         }
@@ -201,7 +200,7 @@ public sealed partial class SpreadsheetGrid
     private void PointModePreviewPressed(object? sender, PointerPressedEventArgs e)
     {
         // The blur-commit was deferred to us (see the editor's LostFocus); _editing is still true.
-        if (!_editing || !IsFormulaEdit() || !e.GetCurrentPoint(this).Properties.IsLeftButtonPressed)
+        if (!IsInlineEditing || !IsFormulaEdit() || !e.GetCurrentPoint(this).Properties.IsLeftButtonPressed)
         {
             return;
         }

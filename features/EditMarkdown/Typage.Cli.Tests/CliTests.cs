@@ -1,4 +1,3 @@
-using Typage.Cli;
 using Xunit;
 
 namespace Typage.Cli.Tests;
@@ -37,7 +36,7 @@ public class CliTests : IDisposable
         return path;
     }
 
-    private (int Code, string Out, string Err) Run(params string[] args)
+    private static (int Code, string Out, string Err) Run(params string[] args)
     {
         var outW = new StringWriter();
         var errW = new StringWriter();

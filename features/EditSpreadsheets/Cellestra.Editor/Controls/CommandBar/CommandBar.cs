@@ -1,6 +1,3 @@
-using System;
-using System.Collections.Generic;
-using System.Linq;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Controls.Primitives;
@@ -44,24 +41,23 @@ public sealed class CommandBar : UserControl
     // left-to-right order. Numbers/Data/Insert lead (the user's call); the rest follow by how often
     // they're reached day to day: borders and AutoSum over the clipboard/text/align tools that are
     // mostly already muscle-memory shortcuts (⌘Z/⌘C/⌘B). Names not listed sort last, in bar order.
-    private static readonly string[] OverflowOrder = { "Numbers", "Data", "Insert", "Border", "Formula", "Edit", "Text", "Align" };
+    private static readonly string[] OverflowOrder = ["Numbers", "Data", "Insert", "Border", "Formula", "Edit", "Text", "Align"];
 
     private readonly IAppEnvironment _env;
-    private readonly List<CommandBarButton> _buttons = new();
+    private readonly List<CommandBarButton> _buttons = [];
     // The group controls and their natural widths, in left-to-right priority order: when the window
     // is too narrow, the rightmost groups are the first to fold into the overflow drawer.
-    private readonly List<Control> _groupControls = new();
-    private readonly List<double> _groupWidths = new();
+    private readonly List<Control> _groupControls = [];
+    private readonly List<double> _groupWidths = [];
     // Each group's display rank in the overflow drawer (see OverflowOrder), parallel to _groupControls.
-    private readonly List<int> _overflowRank = new();
+    private readonly List<int> _overflowRank = [];
     // The parallel sections shown for folded groups in the overflow drawer: each is the group's header
     // over a wrap of icon buttons for its whole toolset (no nested submenu). The buttons are added to
     // _buttons, so RefreshState keeps them in sync just like the bar's own.
-    private readonly List<Control> _overflowPanels = new();
+    private readonly List<Control> _overflowPanels = [];
     private readonly Panel _root;
     private readonly Control _full;
     private readonly Control _slim;
-    private bool _collapsed;
 
     // Adaptive overflow: groups that don't fit on the strip move into a drop-down drawer behind a
     // double-chevron button (Google-Sheets style) rather than scrolling off behind a scrollbar.
@@ -100,15 +96,15 @@ public sealed class CommandBar : UserControl
     /// <summary>Whether the bar is folded down to its slim handle (persisted by the host).</summary>
     public bool Collapsed
     {
-        get => _collapsed;
+        get;
         set
         {
-            if (_collapsed == value)
+            if (field == value)
             {
                 return;
             }
 
-            _collapsed = value;
+            field = value;
             ApplyCollapsed();
             CollapsedChanged?.Invoke(this, EventArgs.Empty);
         }
@@ -125,7 +121,7 @@ public sealed class CommandBar : UserControl
 
     /// <summary>Test hook: the flattened group panels currently mounted in the overflow drawer.</summary>
     internal IReadOnlyList<Control> OverflowDrawerPanels =>
-        _overflowHost.Children.Where(c => _overflowPanels.Contains(c)).ToList();
+        [.. _overflowHost.Children.Where(c => _overflowPanels.Contains(c))];
 
     /// <summary>Re-evaluate every tool's enabled and toggle state against the current selection.</summary>
     public void RefreshState()
@@ -138,8 +134,8 @@ public sealed class CommandBar : UserControl
 
     private void ApplyCollapsed()
     {
-        _full.IsVisible = !_collapsed;
-        _slim.IsVisible = _collapsed;
+        _full.IsVisible = !Collapsed;
+        _slim.IsVisible = Collapsed;
     }
 
     // ---- layout -----------------------------------------------------------
@@ -523,8 +519,16 @@ public sealed class CommandBar : UserControl
             Content = new Panel { Children = { _icon, _dot } };
 
             ToolTip.SetTip(this, BuildTip(command));
-            PointerEntered += (_, _) => { _hover = true; ApplyBackground(); };
-            PointerExited += (_, _) => { _hover = false; ApplyBackground(); };
+            PointerEntered += (_, _) =>
+            {
+                _hover = true;
+                ApplyBackground();
+            };
+            PointerExited += (_, _) =>
+            {
+                _hover = false;
+                ApplyBackground();
+            };
             Click += (_, _) =>
             {
                 if (_command.IsEnabled)

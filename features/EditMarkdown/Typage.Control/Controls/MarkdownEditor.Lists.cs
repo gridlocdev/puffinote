@@ -1,17 +1,7 @@
 using System.Globalization;
-using System.Linq;
-using Avalonia;
-using Avalonia.Controls;
-using Avalonia.Controls.Primitives;
-using Avalonia.Input;
-using Avalonia.Input.Platform;
-using Avalonia.Media;
-using Avalonia.Threading;
-using Typage.Control.Rendering;
 using Typage.Engine.Document;
 using Typage.Engine.Editing;
 using Typage.Engine.Markdown;
-
 
 namespace Typage.Control.Controls;
 
@@ -26,8 +16,8 @@ public partial class MarkdownEditor
     /// </summary>
     private void MoveLines(int dir)
     {
-        var doc = _buffer.Document;
-        var sel = _buffer.Selection;
+        var doc = Buffer.Document;
+        var sel = Buffer.Selection;
         var startLine = doc.GetPosition(sel.Start).Line;
         var endLine = doc.GetPosition(sel.End).Line;
 
@@ -188,7 +178,7 @@ public partial class MarkdownEditor
 
         // Re-place an endpoint by line+column, nudging the column by its line's renumber delta (when the
         // endpoint sits past the marker), so the selection rides along with the moved, renumbered item.
-        var moved = _buffer.Document;
+        var moved = Buffer.Document;
         int Place(int line, int col)
         {
             var i = line - regionStartLine;
@@ -200,7 +190,7 @@ public partial class MarkdownEditor
             return moved.GetLineStart(line) + col;
         }
 
-        _buffer.Selection = new Selection(Place(anchorLine + lineDelta, anchorCol), Place(caretLine + lineDelta, caretCol));
+        Buffer.Selection = new Selection(Place(anchorLine + lineDelta, anchorCol), Place(caretLine + lineDelta, caretCol));
         _goalX = double.NaN;
 
         // Bracket the moved block with the drop indicator at its new line range.
@@ -229,7 +219,7 @@ public partial class MarkdownEditor
     /// </summary>
     private ItemKind ListItemKindOf(int line)
     {
-        var p = LinePrefix.Parse(_buffer.Document.GetLineText(line));
+        var p = LinePrefix.Parse(Buffer.Document.GetLineText(line));
         return p.List switch
         {
             ListKind.Ordered => ItemKind.Numbered,
@@ -255,7 +245,7 @@ public partial class MarkdownEditor
     /// </summary>
     private int LineIndent(int line)
     {
-        var t = _buffer.Document.GetLineText(line);
+        var t = Buffer.Document.GetLineText(line);
         var stop = Math.Max(1, IndentWidth);
         var columns = 0;
         for (var i = 0; i < t.Length && (t[i] == ' ' || t[i] == '\t'); i++)
@@ -274,7 +264,7 @@ public partial class MarkdownEditor
     /// </summary>
     private bool IsEmptyLine(int line)
     {
-        var text = _buffer.Document.GetLineText(line);
+        var text = Buffer.Document.GetLineText(line);
         return text.Length == 0 || (text.Length == 1 && text[0] == '\r');
     }
 
@@ -296,7 +286,7 @@ public partial class MarkdownEditor
             return false;
         }
 
-        var doc = _buffer.Document;
+        var doc = Buffer.Document;
         return line > 0 && line < doc.LineCount
             && IsEmptyLine(line) && !IsBlankLine(line - 1)
             && _model.EnteringState(line).Kind == BlockKind.Normal;
@@ -361,19 +351,19 @@ public partial class MarkdownEditor
     /// </summary>
     private void ReplaceLines(int startLine, int endLine, IReadOnlyList<string> contents)
     {
-        var doc = _buffer.Document;
+        var doc = Buffer.Document;
         var nl = DetectNewline(doc);
         var atDocEnd = endLine >= doc.LineCount - 1;
         var regionStart = doc.GetLineStart(startLine);
         var regionEnd = atDocEnd ? doc.Length : doc.GetLineStart(endLine + 1);
         var text = string.Join(nl, contents) + (atDocEnd ? string.Empty : nl);
-        _buffer.ReplaceRange(regionStart, regionEnd - regionStart, text);
+        Buffer.ReplaceRange(regionStart, regionEnd - regionStart, text);
     }
 
     /// <summary>Resequence the ordered-list run starting at <paramref name="fromLine"/> as one edit (PRD §7.2).</summary>
     private void RenumberOrderedFrom(int fromLine)
     {
-        var doc = _buffer.Document;
+        var doc = Buffer.Document;
         if (fromLine < 0 || fromLine >= doc.LineCount)
         {
             return;
@@ -408,12 +398,12 @@ public partial class MarkdownEditor
         }
 
         // The first line (the just-inserted item) never changes, so the caret offset stays valid.
-        var caret = _buffer.Selection;
+        var caret = Buffer.Selection;
         var lastLine = fromLine + result.EndLineExclusive - 1;
         var regionStart = doc.GetLineStart(fromLine);
         var regionEnd = doc.GetLineEnd(lastLine);
-        _buffer.ReplaceRange(regionStart, regionEnd - regionStart, string.Join("\n", result.Lines));
-        _buffer.Selection = caret;
+        Buffer.ReplaceRange(regionStart, regionEnd - regionStart, string.Join("\n", result.Lines));
+        Buffer.Selection = caret;
     }
 
     private bool TrySortCompletedTaskGroup(int line, Selection selection)
@@ -423,7 +413,7 @@ public partial class MarkdownEditor
             return false;
         }
 
-        var doc = _buffer.Document;
+        var doc = Buffer.Document;
         if (line < 0 || line >= doc.LineCount)
         {
             return false;
@@ -456,7 +446,7 @@ public partial class MarkdownEditor
 
         var sorted = CompletedTaskSorting == CompletedTaskSortMode.Top
             ? items.OrderByDescending(static item => item.IsComplete).ToList()
-            : items.OrderBy(static item => item.IsComplete).ToList();
+            : [.. items.OrderBy(static item => item.IsComplete)];
         if (sorted.SequenceEqual(items))
         {
             return false;
@@ -480,8 +470,8 @@ public partial class MarkdownEditor
         var caret = selection.Caret;
         ReplaceLines(regionStart, regionEnd, contents);
 
-        var moved = _buffer.Document;
-        _buffer.Selection = new Selection(
+        var moved = Buffer.Document;
+        Buffer.Selection = new Selection(
             RemapOffset(anchor, regionStart, regionEnd, lineMap, moved, doc),
             RemapOffset(caret, regionStart, regionEnd, lineMap, moved, doc));
         _goalX = double.NaN;
@@ -501,12 +491,12 @@ public partial class MarkdownEditor
             return -1;
         }
 
-        return LinePrefix.Parse(_buffer.Document.GetLineText(previous)).HasTask ? previous : -1;
+        return LinePrefix.Parse(Buffer.Document.GetLineText(previous)).HasTask ? previous : -1;
     }
 
     private List<TaskSubtree> ReadTaskSiblingGroup(int startLine, int indent)
     {
-        var doc = _buffer.Document;
+        var doc = Buffer.Document;
         var items = new List<TaskSubtree>();
         var line = startLine;
         while (line < doc.LineCount)
@@ -537,7 +527,7 @@ public partial class MarkdownEditor
 
     private bool IsCompletedTaskSubtree(int startLine, int endLine)
     {
-        var doc = _buffer.Document;
+        var doc = Buffer.Document;
         var self = LinePrefix.Parse(doc.GetLineText(startLine));
         if (!self.HasTask || !self.TaskChecked)
         {
@@ -579,7 +569,7 @@ public partial class MarkdownEditor
     /// </summary>
     private int OrderedOrdinal(int line)
     {
-        var doc = _buffer.Document;
+        var doc = Buffer.Document;
         var self = LinePrefix.Parse(doc.GetLineText(line));
         return OrderedOrdinalOf(self, k => doc.GetLineText(k), line);
     }
@@ -683,7 +673,7 @@ public partial class MarkdownEditor
     /// </summary>
     private void RenumberOrderedRun(int line)
     {
-        var doc = _buffer.Document;
+        var doc = Buffer.Document;
         if (line < 0 || line >= doc.LineCount)
         {
             return;
@@ -714,7 +704,7 @@ public partial class MarkdownEditor
             return; // already sequential — nothing to rewrite
         }
 
-        var sel = _buffer.Selection;
+        var sel = Buffer.Selection;
         var caretLine = doc.GetPosition(sel.Caret).Line;
         var anchorLine = doc.GetPosition(sel.Anchor).Line;
         var caretCol = sel.Caret - doc.GetLineStart(caretLine);
@@ -722,7 +712,7 @@ public partial class MarkdownEditor
 
         ReplaceLines(start, end, lines);
 
-        var moved = _buffer.Document;
+        var moved = Buffer.Document;
         int Place(int l, int col)
         {
             var i = l - start;
@@ -734,7 +724,7 @@ public partial class MarkdownEditor
             return moved.GetLineStart(l) + col;
         }
 
-        _buffer.Selection = new Selection(Place(anchorLine, anchorCol), Place(caretLine, caretCol));
+        Buffer.Selection = new Selection(Place(anchorLine, anchorCol), Place(caretLine, caretCol));
     }
 
     /// <summary>The ordered-list delimiter ('.'/')') inside marker columns <c>[s, en)</c>, defaulting to '.'.</summary>
@@ -764,5 +754,4 @@ public partial class MarkdownEditor
 
         return false;
     }
-
 }

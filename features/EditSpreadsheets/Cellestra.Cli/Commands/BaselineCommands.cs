@@ -7,7 +7,6 @@ using Cellestra.Core.Formulas.Functions;
 using Cellestra.Core.Formulas.Parsing;
 using Cellestra.Core.Model;
 using Cellestra.Core.Serialization.Csv;
-using Cellestra.Core.Values;
 using Puffinote.Components.Core.Cli;
 
 namespace Cellestra.Cli.Commands;

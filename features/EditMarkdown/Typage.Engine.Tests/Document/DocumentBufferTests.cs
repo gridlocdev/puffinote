@@ -19,8 +19,10 @@ public class DocumentBufferTests
     [Fact]
     public void Insert_ReplacesSelection()
     {
-        var buf = new DocumentBuffer("hello");
-        buf.Selection = new Selection(0, 5);
+        var buf = new DocumentBuffer("hello")
+        {
+            Selection = new Selection(0, 5)
+        };
         buf.Insert("bye");
         Assert.Equal("bye", buf.Document.GetText());
         Assert.Equal(3, buf.Selection.Caret);
@@ -38,8 +40,10 @@ public class DocumentBufferTests
     [Fact]
     public void ForwardDelete_DeletesGraphemeAfterCaret()
     {
-        var buf = new DocumentBuffer("\U0001F600z");
-        buf.Selection = Selection.At(0);
+        var buf = new DocumentBuffer("\U0001F600z")
+        {
+            Selection = Selection.At(0)
+        };
         buf.Delete();
         Assert.Equal("z", buf.Document.GetText());
     }

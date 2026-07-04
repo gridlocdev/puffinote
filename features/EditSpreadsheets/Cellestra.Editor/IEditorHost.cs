@@ -1,5 +1,3 @@
-using System.Threading.Tasks;
-
 namespace Cellestra.Editor;
 
 /// <summary>

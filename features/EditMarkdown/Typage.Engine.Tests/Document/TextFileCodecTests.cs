@@ -1,4 +1,3 @@
-using System.Linq;
 using System.Text;
 using Typage.Engine.Document;
 using Xunit;

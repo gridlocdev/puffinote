@@ -74,7 +74,7 @@ public readonly record struct LinePrefix(
         }
 
         var indent = i;
-        var indentText = line.Substring(0, i);
+        var indentText = line[..i];
 
         // Blockquote: one or more '>' each optionally followed by spaces/tabs, captured verbatim.
         var quoteStart = i;
@@ -87,7 +87,7 @@ public readonly record struct LinePrefix(
             }
         }
 
-        var quote = line.Substring(quoteStart, i - quoteStart);
+        var quote = line[quoteStart..i];
         var markerStart = i;
 
         var kind = ListKind.None;

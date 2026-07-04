@@ -1,4 +1,3 @@
-using System.Linq;
 using Typage.Engine.Markdown;
 using Xunit;
 using static Typage.Engine.Tests.Markdown.TokenizerTestHelpers;
@@ -15,7 +14,7 @@ public class InlineNodeTests
     private static System.Collections.Generic.List<Token> Tokens(string markdown)
     {
         var (_, model) = Tokenize(markdown);
-        return model.AllTokens().ToList();
+        return [.. model.AllTokens()];
     }
 
     [Fact]

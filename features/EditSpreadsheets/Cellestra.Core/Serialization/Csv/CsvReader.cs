@@ -43,7 +43,7 @@ public static class CsvReader
         {
             EndField();
             rows.Add(row);
-            row = new List<string>();
+            row = [];
         }
 
         for (int i = 0; i < text.Length; i++)

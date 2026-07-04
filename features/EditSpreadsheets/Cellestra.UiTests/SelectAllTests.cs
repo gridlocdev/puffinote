@@ -1,4 +1,3 @@
-using System.Linq;
 using Avalonia.Headless.XUnit;
 using Cellestra.Core.Model;
 using Cellestra.Core.Values;

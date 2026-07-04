@@ -1,4 +1,3 @@
-using System.Linq;
 using Avalonia.Controls;
 using Avalonia.Headless.XUnit;
 using Cellestra.Desktop.Services;
@@ -28,8 +27,8 @@ public sealed class OutlineTests
             await pane.LoadAsync(path);
 
             var outline = pane.GetOutline();
-            Assert.Equal(new[] { "Title", "Section", "Second" }, outline.Select(o => o.Title));
-            Assert.Equal(new[] { 1, 2, 1 }, outline.Select(o => o.Level));
+            Assert.Equal(["Title", "Section", "Second"], outline.Select(o => o.Title));
+            Assert.Equal([1, 2, 1], outline.Select(o => o.Level));
 
             outline[2].Reveal(); // jump to "# Second" (0-based line 6)
             Assert.Equal(6, ((MarkdownEditorView)pane.View).CaretPosition.Line);
@@ -85,7 +84,7 @@ public sealed class OutlineTests
         sidebar.Activate("outline");
         Assert.Equal("outline", sidebar.ActivePanelId);
 
-        sidebar.SetOutline(new[] { new OutlineItem("H1", 1, () => { }) });
+        sidebar.SetOutline([new OutlineItem("H1", 1, () => { })]);
         Assert.Single(sidebar.OutlineItemsForTest);
     }
 
@@ -104,7 +103,7 @@ public sealed class OutlineTests
             await window.OpenFileAsync(path);
 
             window.SidebarForTest.Activate("outline"); // PanelActivated → the shell refreshes the outline
-            Assert.Equal(new[] { "Alpha", "Beta" }, window.SidebarForTest.OutlineItemsForTest.Select(o => o.Title));
+            Assert.Equal(["Alpha", "Beta"], window.SidebarForTest.OutlineItemsForTest.Select(o => o.Title));
         }
         finally
         {

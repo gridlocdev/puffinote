@@ -1,4 +1,3 @@
-using System.Linq;
 using Avalonia.Headless.XUnit;
 using Cellestra.Desktop.Commands;
 using Puffinote.Components.Commands;

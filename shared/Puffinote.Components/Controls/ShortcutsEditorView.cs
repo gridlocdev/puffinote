@@ -1,6 +1,3 @@
-using System;
-using System.Collections.Generic;
-using System.Linq;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Controls.Primitives;
@@ -29,7 +26,7 @@ public sealed record ShortcutBinding(
 public sealed class ShortcutsEditorView : UserControl
 {
     private readonly StackPanel _list = new() { Spacing = 1 };
-    private IReadOnlyList<ShortcutBinding> _bindings = Array.Empty<ShortcutBinding>();
+    private IReadOnlyList<ShortcutBinding> _bindings = [];
     private string? _capturingId;
     private string? _captureConflict;
 
@@ -54,7 +51,7 @@ public sealed class ShortcutsEditorView : UserControl
     /// <summary>Replace the listed bindings (grouped in the order given) and leave capture mode.</summary>
     public void SetBindings(IEnumerable<ShortcutBinding> bindings)
     {
-        _bindings = bindings.ToList();
+        _bindings = [.. bindings];
         _capturingId = null;
         _captureConflict = null;
         Rebuild();

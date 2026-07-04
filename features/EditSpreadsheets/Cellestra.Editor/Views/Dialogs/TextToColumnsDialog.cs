@@ -22,7 +22,7 @@ public sealed class TextToColumnsDialog : ModalDialog<char?>
         _space = new RadioButton { Content = "Space", GroupName = "delim" };
 
         var ok = new Button { Content = "Split", IsDefault = true };
-        ok.Click += (_, _) => Close((char?)Delimiter());
+        ok.Click += (_, _) => Close(Delimiter());
         var cancel = new Button { Content = "Cancel", IsCancel = true };
         cancel.Click += (_, _) => Close(null);
 
@@ -47,9 +47,21 @@ public sealed class TextToColumnsDialog : ModalDialog<char?>
 
     private char Delimiter()
     {
-        if (_semicolon.IsChecked == true) return ';';
-        if (_tab.IsChecked == true) return '\t';
-        if (_space.IsChecked == true) return ' ';
+        if (_semicolon.IsChecked == true)
+        {
+            return ';';
+        }
+
+        if (_tab.IsChecked == true)
+        {
+            return '\t';
+        }
+
+        if (_space.IsChecked == true)
+        {
+            return ' ';
+        }
+
         return ',';
     }
 }

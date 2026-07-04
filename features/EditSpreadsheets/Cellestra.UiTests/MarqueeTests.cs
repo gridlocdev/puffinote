@@ -1,11 +1,8 @@
-using System.Globalization;
-using Avalonia.Headless;
 using Avalonia.Headless.XUnit;
 using Cellestra.Core.Editing;
 using Cellestra.Core.Values;
 using Cellestra.Desktop.Commands;
 using Cellestra.Desktop.Views;
-using Xunit;
 
 namespace Cellestra.UiTests;
 

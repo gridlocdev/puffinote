@@ -76,7 +76,11 @@ internal sealed class MarkdownPane : IEditorPane
             items.Add(new OutlineItem(
                 text.Length == 0 ? "(untitled)" : text,
                 level,
-                () => { _view.Editor.Select(offset, 0); _view.Editor.Focus(); }));
+                () =>
+                {
+                    _view.Editor.Select(offset, 0);
+                    _view.Editor.Focus();
+                }));
         }
 
         return items;

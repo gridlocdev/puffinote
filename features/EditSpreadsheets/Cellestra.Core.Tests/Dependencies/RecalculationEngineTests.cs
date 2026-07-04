@@ -57,7 +57,7 @@ public class RecalculationEngineTests
         engine.RecalculateAll();
 
         sheet.SetValue(0, 0, CellValue.Number(10));
-        var result = engine.RecordEdits(new[] { new CellRef(sheet.Name, 0, 0) });
+        var result = engine.RecordEdits([new CellRef(sheet.Name, 0, 0)]);
 
         Assert.Equal(11, sheet.GetValue(0, 1).AsNumber);
         Assert.Equal(12, sheet.GetValue(0, 2).AsNumber);
@@ -96,7 +96,7 @@ public class RecalculationEngineTests
         Assert.Equal(2, sheet.GetValue(0, 1).AsNumber);
 
         sheet.SetValue(149_999, 0, CellValue.Number(40)); // A150000 — interior, not a corner
-        engine.RecordEdits(new[] { new CellRef(sheet.Name, 149_999, 0) });
+        engine.RecordEdits([new CellRef(sheet.Name, 149_999, 0)]);
 
         Assert.Equal(42, sheet.GetValue(0, 1).AsNumber);
     }
@@ -141,7 +141,7 @@ public class RecalculationEngineTests
         var engine = new RecalculationEngine(workbook);
         engine.RebuildGraph();
 
-        var result = engine.RecordEdits(new[] { new CellRef(sheet.Name, 0, 0) });
+        var result = engine.RecordEdits([new CellRef(sheet.Name, 0, 0)]);
 
         Assert.Equal(0, result.Evaluated);
         Assert.Equal(99, sheet.GetValue(0, 1).AsNumber); // still the cached value

@@ -1,5 +1,3 @@
-using System;
-
 namespace Cellestra.Desktop.Controls.RadialMenu;
 
 /// <summary>

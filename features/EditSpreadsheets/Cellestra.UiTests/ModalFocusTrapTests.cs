@@ -1,5 +1,3 @@
-using System.Collections.Generic;
-using System.Linq;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Headless;
@@ -31,7 +29,7 @@ public class ModalFocusTrapTests
         Dispatcher.UIThread.RunJobs(); // run the palette's deferred focus-into-the-search-box
 
         var overlay = window.GetVisualDescendants().OfType<Panel>().First(p => p.Name == "OverlayHost");
-        var focusManager = ((TopLevel)window).FocusManager!;
+        var focusManager = window.FocusManager!;
 
         // Tab a few times — more than the palette has stops — and focus must never leave the overlay.
         for (int i = 0; i < 6; i++)
@@ -50,7 +48,7 @@ public class ModalFocusTrapTests
         var dialog = new RadialSettingsDialog(new RadialMenuConfig
         {
             SegmentCount = 4,
-            CommandIds = new List<string?> { "edit.cut", "edit.copy", "edit.paste", "edit.undo" },
+            CommandIds = ["edit.cut", "edit.copy", "edit.paste", "edit.undo"],
         });
         var window = new Window { Width = 600, Height = 600, Content = dialog };
         window.Show();
@@ -59,7 +57,7 @@ public class ModalFocusTrapTests
         Dispatcher.UIThread.RunJobs();
 
         var picker = dialog.CommandPickerOverlayForTest;
-        var focusManager = ((TopLevel)window).FocusManager!;
+        var focusManager = window.FocusManager!;
 
         for (int i = 0; i < 5; i++)
         {

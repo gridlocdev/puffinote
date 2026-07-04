@@ -74,6 +74,6 @@ public class TabIndentTests
         var lines = new[] { "\t1. a", "\t1. b" };
         var result = OrderedListRenumber.Compute(lines, 0);
         Assert.NotNull(result);
-        Assert.Equal(new[] { "\t1. a", "\t2. b" }, result!.Value.Lines);
+        Assert.Equal(["\t1. a", "\t2. b"], result!.Value.Lines);
     }
 }

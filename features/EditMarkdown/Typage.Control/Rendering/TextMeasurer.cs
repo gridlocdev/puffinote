@@ -1,5 +1,3 @@
-using System;
-using System.Collections.Generic;
 using System.Globalization;
 using Avalonia.Media;
 
@@ -15,18 +13,16 @@ namespace Typage.Control.Rendering;
 internal sealed class TextMeasurer
 {
     private readonly Func<int> _tabWidth;
-    private readonly Dictionary<FormattedKey, FormattedText> _formattedCache = new();
-    private readonly Dictionary<WidthKey, double> _widthCache = new();
-    private int _formattedBuilds;
-    private int _rawMeasures;
+    private readonly Dictionary<FormattedKey, FormattedText> _formattedCache = [];
+    private readonly Dictionary<WidthKey, double> _widthCache = [];
 
     public TextMeasurer(Func<int> tabWidth) => _tabWidth = tabWidth;
 
     /// <summary>Number of <see cref="FormattedText"/> objects built (cache misses); for perf tests.</summary>
-    public int FormattedBuildCount => _formattedBuilds;
+    public int FormattedBuildCount { get; private set; }
 
     /// <summary>Number of real text-shaping measurements performed (cache misses); for perf tests.</summary>
-    public int RawMeasureCount => _rawMeasures;
+    public int RawMeasureCount { get; private set; }
 
     /// <summary>Drop all cached widths and glyph runs — call when the theme or fonts change.</summary>
     public void Invalidate()
@@ -87,7 +83,7 @@ internal sealed class TextMeasurer
             return cached;
         }
 
-        _formattedBuilds++; // counts FormattedText construction (cache misses); used by perf tests
+        FormattedBuildCount++; // counts FormattedText construction (cache misses); used by perf tests
         // Underline/strikethrough are NOT applied to the FormattedText: Avalonia's text decorations don't
         // render reliably across draw backends (the same reason Cellestra overlays them), so the strike/
         // underline lines are drawn by hand in DrawTextRun instead.
@@ -105,7 +101,7 @@ internal sealed class TextMeasurer
 
     private double RawWidth(string text, RunStyle style)
     {
-        _rawMeasures++; // counts actual FormattedText shaping (cache misses) — used by perf tests
+        RawMeasureCount++; // counts actual FormattedText shaping (cache misses) — used by perf tests
         return new FormattedText(ExpandTabs(text), CultureInfo.CurrentCulture, FlowDirection.LeftToRight,
             style.Typeface, style.FontSize, style.Foreground).Width;
     }

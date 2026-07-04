@@ -62,7 +62,7 @@ public class App : Application
             desktop.MainWindow = window;
 
             // Open a notebook (folder) passed on the command line.
-            var args = desktop.Args ?? Array.Empty<string>();
+            var args = desktop.Args ?? [];
             if (args.Length > 0 && Directory.Exists(args[0]))
             {
                 window.OpenNotebook(args[0]);

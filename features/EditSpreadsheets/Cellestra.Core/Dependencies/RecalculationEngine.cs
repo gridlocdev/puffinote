@@ -26,12 +26,12 @@ public sealed class RecalculationEngine
     private readonly FunctionRegistry _functions;
     private readonly Func<DateTime> _clock;
     private readonly DependencyGraph _graph = new();
-    private readonly Dictionary<CellRef, Expr?> _formulaAst = new();
-    private readonly HashSet<CellRef> _volatile = new();
+    private readonly Dictionary<CellRef, Expr?> _formulaAst = [];
+    private readonly HashSet<CellRef> _volatile = [];
 
     // Formula cells whose precedents include a range too large to expand into the graph; the range
     // is kept here so an edit to its interior still marks the formula for recalculation.
-    private readonly Dictionary<CellRef, List<RangeRef>> _largeRangePrecedents = new();
+    private readonly Dictionary<CellRef, List<RangeRef>> _largeRangePrecedents = [];
     private readonly Dictionary<string, Expr?> _parseCache = new(StringComparer.Ordinal);
 
     public RecalculationEngine(Workbook workbook, FunctionRegistry? functions = null, Func<DateTime>? clock = null)
@@ -65,7 +65,7 @@ public sealed class RecalculationEngine
     }
 
     /// <summary>Recompute every formula cell in dependency order.</summary>
-    public RecalculationResult RecalculateAll() => Evaluate(_formulaAst.Keys.ToList());
+    public RecalculationResult RecalculateAll() => Evaluate([.. _formulaAst.Keys]);
 
     /// <summary>
     /// Update the graph for cells whose content just changed, then recompute them and
@@ -83,12 +83,12 @@ public sealed class RecalculationEngine
 
         if (_workbook.Settings.CalculationMode == CalculationMode.Manual)
         {
-            return new RecalculationResult(0, Array.Empty<CellRef>());
+            return new RecalculationResult(0, []);
         }
 
         var affected = CollectAffected(seeds);
         affected.UnionWith(_volatile);
-        return Evaluate(affected.ToList());
+        return Evaluate([.. affected]);
     }
 
     /// <summary>
@@ -125,7 +125,7 @@ public sealed class RecalculationEngine
     {
         var affected = CollectAffected(_volatile);
         affected.UnionWith(_volatile);
-        return Evaluate(affected.ToList());
+        return Evaluate([.. affected]);
     }
 
     // ---- Graph maintenance ------------------------------------------------
@@ -154,7 +154,7 @@ public sealed class RecalculationEngine
 
         if (ast is null)
         {
-            _graph.SetPrecedents(cell, Array.Empty<CellRef>());
+            _graph.SetPrecedents(cell, []);
             _volatile.Remove(cell);
             _largeRangePrecedents.Remove(cell);
             return;
@@ -257,10 +257,10 @@ public sealed class RecalculationEngine
     {
         if (nodes.Count == 0)
         {
-            return new RecalculationResult(0, Array.Empty<CellRef>());
+            return new RecalculationResult(0, []);
         }
 
-        var nodeSet = nodes as HashSet<CellRef> ?? new HashSet<CellRef>(nodes);
+        var nodeSet = nodes as HashSet<CellRef> ?? [.. nodes];
         var ordered = TopologicalSort(nodeSet, out var circular);
 
         int evaluated = 0;
@@ -351,7 +351,7 @@ public sealed class RecalculationEngine
             }
         }
 
-        circular = new HashSet<CellRef>();
+        circular = [];
         if (ordered.Count != nodes.Count)
         {
             var placed = new HashSet<CellRef>(ordered);

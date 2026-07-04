@@ -360,9 +360,21 @@ public static class OdsContentXml
     /// </summary>
     private static string FloatValueText(double number)
     {
-        if (double.IsNaN(number)) return "NaN";
-        if (double.IsPositiveInfinity(number)) return "INF";
-        if (double.IsNegativeInfinity(number)) return "-INF";
+        if (double.IsNaN(number))
+        {
+            return "NaN";
+        }
+
+        if (double.IsPositiveInfinity(number))
+        {
+            return "INF";
+        }
+
+        if (double.IsNegativeInfinity(number))
+        {
+            return "-INF";
+        }
+
         return number.ToString("R", CultureInfo.InvariantCulture);
     }
 
@@ -501,7 +513,7 @@ public static class OdsContentXml
                 return $"of:cell-content-is-in-list([{OdfRangeAddress(source.WithSheet(source.Sheet ?? sheetName), sheetName)}])";
             }
 
-            string items = string.Join(";", (validation.ListValues ?? Array.Empty<string>())
+            string items = string.Join(";", (validation.ListValues ?? [])
                 .Select(v => "\"" + v.Replace("\"", "\"\"", StringComparison.Ordinal) + "\""));
             return $"of:cell-content-is-in-list({items})";
         }
@@ -941,9 +953,9 @@ public static class OdsContentXml
     };
 
     private static readonly (string Prefix, string Operator)[] ConditionOperators =
-    {
+    [
         (">=", ">="), ("<=", "<="), ("<>", "!="), (">", ">"), ("<", "<"), ("=", "="),
-    };
+    ];
 
     private const string AnonymousDatabaseRangeName = "__Anonymous_Sheet__";
 
@@ -975,10 +987,10 @@ public static class OdsContentXml
     private sealed class StyleRegistry
     {
         private readonly XElement _autoStyles;
-        private readonly Dictionary<int, string> _cellStyleNames = new();
+        private readonly Dictionary<int, string> _cellStyleNames = [];
         private readonly Dictionary<string, string> _dataStyleNames = new(StringComparer.Ordinal);
-        private readonly Dictionary<double, string> _columnStyleNames = new();
-        private readonly Dictionary<double, string> _rowStyleNames = new();
+        private readonly Dictionary<double, string> _columnStyleNames = [];
+        private readonly Dictionary<double, string> _rowStyleNames = [];
         private int _next;
 
         public StyleRegistry(StylePool styles, XElement autoStyles)
@@ -1445,7 +1457,7 @@ public static class OdsContentXml
         if (validationName is not null)
         {
             var key = (sheet.Name, validationName);
-            (validationCells.TryGetValue(key, out var list) ? list : validationCells[key] = new List<(int, int)>())
+            (validationCells.TryGetValue(key, out var list) ? list : validationCells[key] = [])
                 .Add((row, column));
         }
 
@@ -1569,9 +1581,15 @@ public static class OdsContentXml
     {
         switch (text)
         {
-            case "INF": value = double.PositiveInfinity; return true;
-            case "-INF": value = double.NegativeInfinity; return true;
-            case "NaN": value = double.NaN; return true;
+            case "INF":
+                value = double.PositiveInfinity;
+                return true;
+            case "-INF":
+                value = double.NegativeInfinity;
+                return true;
+            case "NaN":
+                value = double.NaN;
+                return true;
         }
 
         return double.TryParse(text, NumberStyles.Float, CultureInfo.InvariantCulture, out value);

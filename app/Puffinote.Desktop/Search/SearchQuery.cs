@@ -1,4 +1,3 @@
-using System.Linq;
 using System.Text;
 
 namespace Puffinote.Desktop.Search;
@@ -33,7 +32,7 @@ internal static class SearchQuery
         var trimmed = query.Trim();
         if (trimmed.Length == 0)
         {
-            return Array.Empty<SearchHit>();
+            return [];
         }
 
         var hits = new List<SearchHit>();
@@ -47,11 +46,10 @@ internal static class SearchQuery
         }
 
         // Most hits first, then alphabetical by label so the order is stable.
-        return hits
+        return [.. hits
             .OrderByDescending(h => h.MatchCount)
             .ThenBy(h => h.RelativePath, StringComparer.OrdinalIgnoreCase)
-            .Take(maxResults)
-            .ToList();
+            .Take(maxResults)];
     }
 
     private static int CountOccurrences(string text, string query)

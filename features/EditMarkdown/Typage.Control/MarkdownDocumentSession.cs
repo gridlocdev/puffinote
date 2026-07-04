@@ -1,4 +1,3 @@
-using System.Threading.Tasks;
 using Typage.Engine.Document;
 
 namespace Typage.Control;

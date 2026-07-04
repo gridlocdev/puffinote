@@ -19,8 +19,11 @@ internal static class ChartCommands
     public static Command Chart()
     {
         var file = Options.File();
-        var type = new Option<string>("--type") { Description = "column|bar|line|area|pie|doughnut|scatter|bubble|radar|filled-radar" };
-        type.DefaultValueFactory = _ => "column";
+        var type = new Option<string>("--type")
+        {
+            Description = "column|bar|line|area|pie|doughnut|scatter|bubble|radar|filled-radar",
+            DefaultValueFactory = _ => "column"
+        };
         var title = new Option<string?>("--title") { Description = "Chart title" };
         var from = new Option<string?>("--from") { Description = "Seed from a tabular range: 1st column = categories (or X for scatter/bubble), the rest = series; a text header row names them" };
         var categories = new Option<string?>("--categories") { Description = "Category-label range (category & pie families)" };
@@ -58,10 +61,10 @@ internal static class ChartCommands
                 Stacking = ParseStacking(parse.GetValue(stacking), chartType),
             };
 
-            var explicitValues = parse.GetValue(values) ?? Array.Empty<string>();
+            var explicitValues = parse.GetValue(values) ?? [];
             if (explicitValues.Length > 0)
             {
-                BuildExplicit(definition, chartType, explicitValues, parse.GetValue(names) ?? Array.Empty<string>(),
+                BuildExplicit(definition, chartType, explicitValues, parse.GetValue(names) ?? [],
                     parse.GetValue(categories), parse.GetValue(xValues), parse.GetValue(bubbleSizes));
             }
             else if (parse.GetValue(from) is { Length: > 0 } fromRange)

@@ -15,7 +15,7 @@ internal sealed class NotebookWatcher : IDisposable
     private readonly string _root;
     private readonly Action _onChanged;
     private readonly FileSystemWatcher _watcher;
-    private readonly object _gate = new();
+    private readonly Lock _gate = new();
     private Timer? _debounce;
     private bool _disposed;
 

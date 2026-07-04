@@ -1,17 +1,7 @@
-using System.Globalization;
-using System.Linq;
-using Avalonia;
-using Avalonia.Controls;
-using Avalonia.Controls.Primitives;
 using Avalonia.Input;
-using Avalonia.Input.Platform;
-using Avalonia.Media;
-using Avalonia.Threading;
-using Typage.Control.Rendering;
 using Typage.Engine.Document;
 using Typage.Engine.Editing;
 using Typage.Engine.Markdown;
-
 
 namespace Typage.Control.Controls;
 
@@ -46,8 +36,8 @@ public partial class MarkdownEditor
         var alt = e.KeyModifiers.HasFlag(KeyModifiers.Alt);
         var isMac = OperatingSystem.IsMacOS();
         var wordMod = isMac ? alt : control; // word-wise nav/delete: ⌥ on macOS, Ctrl elsewhere
-        var doc = _buffer.Document;
-        var caret = _buffer.Selection.Caret;
+        var doc = Buffer.Document;
+        var caret = Buffer.Selection.Caret;
         var handled = true;
 
         // Any key other than a continued line move ends the reorder drop-indicator session.
@@ -59,63 +49,155 @@ public partial class MarkdownEditor
         switch (e.Key)
         {
             // --- deletion (⌘⌫ to line start on macOS, then word-wise) ---
-            case Key.Back when isMac && meta: DeleteToRowStart(caret); break;
-            case Key.Back when wordMod: DeleteWord(-1); break;
-            case Key.Delete when wordMod: DeleteWord(1); break;
-            case Key.Back: if (!TryBackspacePair() && !TryBackspaceCollapsedBlank() && !TryVisualBackspace()) { _buffer.Backspace(); } break;
-            case Key.Delete: if (!TryDeleteCollapsedBlank() && !TryVisualDelete()) { _buffer.Delete(); } break;
+            case Key.Back when isMac && meta:
+                DeleteToRowStart(caret);
+                break;
+            case Key.Back when wordMod:
+                DeleteWord(-1);
+                break;
+            case Key.Delete when wordMod:
+                DeleteWord(1);
+                break;
+            case Key.Back:
+                if (!TryBackspacePair() && !TryBackspaceCollapsedBlank() && !TryVisualBackspace())
+                {
+                    Buffer.Backspace();
+                }
+                break;
+            case Key.Delete:
+                if (!TryDeleteCollapsedBlank() && !TryVisualDelete())
+                {
+                    Buffer.Delete();
+                }
+                break;
 
-            case Key.Enter when shift: _buffer.Insert(DetectNewline(_buffer.Document)); break; // plain newline (doc's ending), no list continuation
-            case Key.Enter: HandleEnter(); break;
-            case Key.Tab: HandleTab(shift); break;
+            case Key.Enter when shift:
+                Buffer.Insert(DetectNewline(Buffer.Document));
+                break; // plain newline (doc's ending), no list continuation
+            case Key.Enter:
+                HandleEnter();
+                break;
+            case Key.Tab:
+                HandleTab(shift);
+                break;
 
             // --- horizontal navigation: word, then macOS ⌘-line, then by grapheme ---
-            case Key.Left when wordMod: MoveCaret(WordBoundary(caret, -1), shift); break;
-            case Key.Right when wordMod: MoveCaret(WordBoundary(caret, 1), shift); break;
-            case Key.Left when isMac && meta: MoveCaret(RowStartOffset(caret), shift); break;
-            case Key.Right when isMac && meta: MoveCaret(RowEndOffset(caret), shift); break;
-            case Key.Left: MoveCaret(VisualStep(caret, -1), shift); break;
-            case Key.Right: MoveCaret(VisualStep(caret, 1), shift); break;
+            case Key.Left when wordMod:
+                MoveCaret(WordBoundary(caret, -1), shift);
+                break;
+            case Key.Right when wordMod:
+                MoveCaret(WordBoundary(caret, 1), shift);
+                break;
+            case Key.Left when isMac && meta:
+                MoveCaret(RowStartOffset(caret), shift);
+                break;
+            case Key.Right when isMac && meta:
+                MoveCaret(RowEndOffset(caret), shift);
+                break;
+            case Key.Left:
+                MoveCaret(VisualStep(caret, -1), shift);
+                break;
+            case Key.Right:
+                MoveCaret(VisualStep(caret, 1), shift);
+                break;
 
             // --- vertical navigation: move lines, doc ends (⌘↑/↓ on macOS), else by visual row ---
-            case Key.Up when alt && shift: MoveLines(-1); break;
-            case Key.Down when alt && shift: MoveLines(1); break;
-            case Key.Up when isMac && meta: MoveCaret(0, shift); break;
-            case Key.Down when isMac && meta: MoveCaret(doc.Length, shift); break;
-            case Key.Up: ArrowByLine(-1, shift); break;
-            case Key.Down: ArrowByLine(1, shift); break;
-            case Key.PageUp: MoveCaretByLine(-PageRows(), shift); break;
-            case Key.PageDown: MoveCaretByLine(PageRows(), shift); break;
+            case Key.Up when alt && shift:
+                MoveLines(-1);
+                break;
+            case Key.Down when alt && shift:
+                MoveLines(1);
+                break;
+            case Key.Up when isMac && meta:
+                MoveCaret(0, shift);
+                break;
+            case Key.Down when isMac && meta:
+                MoveCaret(doc.Length, shift);
+                break;
+            case Key.Up:
+                ArrowByLine(-1, shift);
+                break;
+            case Key.Down:
+                ArrowByLine(1, shift);
+                break;
+            case Key.PageUp:
+                MoveCaretByLine(-PageRows(), shift);
+                break;
+            case Key.PageDown:
+                MoveCaretByLine(PageRows(), shift);
+                break;
 
             // --- line / document extents ---
-            case Key.Home when control: MoveCaret(0, shift); break;        // Ctrl+Home → document start
-            case Key.End when control: MoveCaret(doc.Length, shift); break; // Ctrl+End → document end
-            case Key.Home: MoveCaret(SmartHome(caret), shift); break;       // content start ⇄ visual-row start
-            case Key.End: MoveCaret(RowEndOffset(caret), shift); break;     // end of the visual row
+            case Key.Home when control:
+                MoveCaret(0, shift);
+                break;        // Ctrl+Home → document start
+            case Key.End when control:
+                MoveCaret(doc.Length, shift);
+                break; // Ctrl+End → document end
+            case Key.Home:
+                MoveCaret(SmartHome(caret), shift);
+                break;       // content start ⇄ visual-row start
+            case Key.End:
+                MoveCaret(RowEndOffset(caret), shift);
+                break;     // end of the visual row
 
-            case Key.Escape when !_buffer.Selection.IsEmpty: MoveCaret(_buffer.Selection.Caret, extend: false); break;
+            case Key.Escape when !Buffer.Selection.IsEmpty:
+                MoveCaret(Buffer.Selection.Caret, extend: false);
+                break;
 
             // Clipboard. (⌘⇧X is strikethrough below — it must be matched before plain ⌘X = Cut.)
-            case Key.C when ctrl: _ = CopyAsync(); break;
-            case Key.X when ctrl && shift: ToggleStrikethrough(); break;
-            case Key.X when ctrl: _ = CutAsync(); break;
-            case Key.V when ctrl: _ = PasteAsync(); break;
+            case Key.C when ctrl:
+                _ = CopyAsync();
+                break;
+            case Key.X when ctrl && shift:
+                ToggleStrikethrough();
+                break;
+            case Key.X when ctrl:
+                _ = CutAsync();
+                break;
+            case Key.V when ctrl:
+                _ = PasteAsync();
+                break;
 
             // Formatting (the shortcuts a Markdown editor is expected to have).
-            case Key.B when ctrl: ToggleBold(); break;
-            case Key.I when ctrl: ToggleItalic(); break;
-            case Key.E when ctrl && shift: InsertCodeBlock(); break; // ⌘⇧E fenced block (before ⌘E inline code)
-            case Key.E when ctrl: ToggleInlineCode(); break;
+            case Key.B when ctrl:
+                ToggleBold();
+                break;
+            case Key.I when ctrl:
+                ToggleItalic();
+                break;
+            case Key.E when ctrl && shift:
+                InsertCodeBlock();
+                break; // ⌘⇧E fenced block (before ⌘E inline code)
+            case Key.E when ctrl:
+                ToggleInlineCode();
+                break;
             // ⌘K is owned by the shell: it bubbles to the window, which opens the link dialog (display + location).
-            case Key.L when ctrl: ToggleTask(); break;
-            case Key.D0 when ctrl: SetParagraph(); break;
-            case >= Key.D1 and <= Key.D6 when ctrl: ApplyHeading(e.Key - Key.D1 + 1); break;
+            case Key.L when ctrl:
+                ToggleTask();
+                break;
+            case Key.D0 when ctrl:
+                SetParagraph();
+                break;
+            case >= Key.D1 and <= Key.D6 when ctrl:
+                ApplyHeading(e.Key - Key.D1 + 1);
+                break;
 
-            case Key.A when ctrl: SelectAll(); break;
-            case Key.Z when ctrl && shift: _buffer.Redo(); break;
-            case Key.Z when ctrl: _buffer.Undo(); break;
-            case Key.Y when ctrl: _buffer.Redo(); break;
-            default: handled = false; break;
+            case Key.A when ctrl:
+                SelectAll();
+                break;
+            case Key.Z when ctrl && shift:
+                Buffer.Redo();
+                break;
+            case Key.Z when ctrl:
+                Buffer.Undo();
+                break;
+            case Key.Y when ctrl:
+                Buffer.Redo();
+                break;
+            default:
+                handled = false;
+                break;
         }
 
         e.Handled = handled;
@@ -127,8 +209,8 @@ public partial class MarkdownEditor
     /// <summary>Enter: continue or exit a list/blockquote, auto-indent, or insert a plain newline (PRD §7.2).</summary>
     private void HandleEnter()
     {
-        var sel = _buffer.Selection;
-        var doc = _buffer.Document;
+        var sel = Buffer.Selection;
+        var doc = Buffer.Document;
 
         // A plain paragraph break is "\n\n", so the two halves are separate Markdown paragraphs (a single
         // newline is a soft break the tokenizer flows back together — the old "teleport"). Two refinements
@@ -151,11 +233,11 @@ public partial class MarkdownEditor
         var paraBreak = beforeContent && !afterNewline ? nl + nl : nl;
         var paraCaret = sel.Start + (beforeContent ? 2 : 1) * nl.Length; // past the break, skipping a collapsed first blank
 
-        void PlaceParaCaret() => _buffer.Selection = Selection.At(Math.Clamp(paraCaret, 0, _buffer.Document.Length));
+        void PlaceParaCaret() => Buffer.Selection = Selection.At(Math.Clamp(paraCaret, 0, Buffer.Document.Length));
 
         if (!sel.IsEmpty)
         {
-            _buffer.ReplaceRange(sel.Start, sel.Length, paraBreak); // replace the selection with the break
+            Buffer.ReplaceRange(sel.Start, sel.Length, paraBreak); // replace the selection with the break
             PlaceParaCaret();
             return;
         }
@@ -173,8 +255,8 @@ public partial class MarkdownEditor
         if ((prefix.HasList || prefix.HasQuote) && caretCol < prefix.Length
             && lineText.AsSpan(prefix.Length).Trim().Length > 0)
         {
-            _buffer.ReplaceRange(lineStart, 0, nl);
-            _buffer.Selection = Selection.At(sel.Caret + nl.Length);
+            Buffer.ReplaceRange(lineStart, 0, nl);
+            Buffer.Selection = Selection.At(sel.Caret + nl.Length);
             return;
         }
 
@@ -183,14 +265,14 @@ public partial class MarkdownEditor
         switch (result.Kind)
         {
             case EnterKind.Exit:
-                _buffer.ReplaceRange(lineStart + result.ExitStart, result.ExitLength, string.Empty);
+                Buffer.ReplaceRange(lineStart + result.ExitStart, result.ExitLength, string.Empty);
                 break;
             case EnterKind.Continue:
-                _buffer.ReplaceRange(sel.Caret, 0, result.Text.Replace("\n", nl)); // match the doc's line ending
+                Buffer.ReplaceRange(sel.Caret, 0, result.Text.Replace("\n", nl)); // match the doc's line ending
                 RenumberOrderedFrom(line + 1); // resequence following items if we split an ordered list
                 break;
             default:
-                _buffer.ReplaceRange(sel.Caret, 0, paraBreak);
+                Buffer.ReplaceRange(sel.Caret, 0, paraBreak);
                 PlaceParaCaret();
                 break;
         }
@@ -199,8 +281,8 @@ public partial class MarkdownEditor
     /// <summary>Tab/Shift+Tab: indent or outdent list items / selected lines; otherwise insert spaces.</summary>
     private void HandleTab(bool shift)
     {
-        var sel = _buffer.Selection;
-        var doc = _buffer.Document;
+        var sel = Buffer.Selection;
+        var doc = Buffer.Document;
         var startLine = doc.GetPosition(sel.Start).Line;
         var endLine = doc.GetPosition(sel.End).Line;
         var caretLine = doc.GetPosition(sel.Caret).Line;
@@ -211,7 +293,7 @@ public partial class MarkdownEditor
         // line already uses tabs, otherwise spaces).
         if (!shift && !multiLine && sel.IsEmpty && !prefix.HasList)
         {
-            _buffer.Insert(IndentUnit(caretLine, caretLine));
+            Buffer.Insert(IndentUnit(caretLine, caretLine));
             return;
         }
 
@@ -222,8 +304,8 @@ public partial class MarkdownEditor
         {
             var lineStart = doc.GetLineStart(caretLine);
             var caret = sel.Caret;
-            _buffer.ReplaceRange(lineStart, prefix.Length, string.Empty);
-            _buffer.Selection = Selection.At(Math.Max(lineStart, caret - prefix.Length));
+            Buffer.ReplaceRange(lineStart, prefix.Length, string.Empty);
+            Buffer.Selection = Selection.At(Math.Max(lineStart, caret - prefix.Length));
             RenumberOrderedRun(caretLine); // exiting an item may renumber the remaining ordered list
             return;
         }
@@ -240,7 +322,7 @@ public partial class MarkdownEditor
     /// </summary>
     private string IndentUnit(int startLine, int endLine)
     {
-        var doc = _buffer.Document;
+        var doc = Buffer.Document;
         bool StartsWithTab(int l)
         {
             var t = doc.GetLineText(l);
@@ -270,8 +352,8 @@ public partial class MarkdownEditor
     /// </summary>
     private void IndentLines(int startLine, int endLine, bool outdent)
     {
-        var doc = _buffer.Document;
-        var sel = _buffer.Selection;
+        var doc = Buffer.Document;
+        var sel = Buffer.Selection;
         var unit = IndentUnit(startLine, endLine);
         var maxSpaces = Math.Max(1, IndentWidth);
 
@@ -330,7 +412,7 @@ public partial class MarkdownEditor
 
         // Re-place the selection by line+column: a line's head insert/remove shifts its content, and a
         // renumber past the marker shifts a caret sitting in the item's content.
-        var moved = _buffer.Document;
+        var moved = Buffer.Document;
         int Place(int line, int col)
         {
             var i = line - startLine;
@@ -350,21 +432,21 @@ public partial class MarkdownEditor
         var endL = doc.GetPosition(sel.End).Line;
         var ns = Place(startL, sel.Start - doc.GetLineStart(startL));
         var ne = Place(endL, sel.End - doc.GetLineStart(endL));
-        _buffer.Selection = sel.Anchor <= sel.Caret ? new Selection(ns, ne) : new Selection(ne, ns);
+        Buffer.Selection = sel.Anchor <= sel.Caret ? new Selection(ns, ne) : new Selection(ne, ns);
     }
 
     /// <summary>Wrap a selection in a pair, type through a closer, or auto-close a bracket. Returns true if it consumed the key.</summary>
     private bool TryAutoPair(char c)
     {
-        var sel = _buffer.Selection;
-        var doc = _buffer.Document;
+        var sel = Buffer.Selection;
+        var doc = Buffer.Document;
 
         // Wrap a non-empty selection in the typed pair, keeping the original text selected inside it.
         if (!sel.IsEmpty && AutoPairs.TryGetValue(c, out var closeWrap))
         {
             var inner = doc.GetText(sel.Start, sel.Length);
-            _buffer.ReplaceRange(sel.Start, sel.Length, c + inner + closeWrap);
-            _buffer.Selection = new Selection(sel.Start + 1, sel.Start + 1 + inner.Length);
+            Buffer.ReplaceRange(sel.Start, sel.Length, c + inner + closeWrap);
+            Buffer.Selection = new Selection(sel.Start + 1, sel.Start + 1 + inner.Length);
             return true;
         }
 
@@ -379,7 +461,7 @@ public partial class MarkdownEditor
         // Type-through: typing a ')'/']' already sitting under the caret just steps over it.
         if ((c == ')' || c == ']') && next == c)
         {
-            _buffer.Selection = Selection.At(caret + 1);
+            Buffer.Selection = Selection.At(caret + 1);
             return true;
         }
 
@@ -388,8 +470,8 @@ public partial class MarkdownEditor
         if ((c == '(' || c == '[' || c == '`')
             && (next is '\0' or '\r' or '\n' or ')' or ']' or '}' || char.IsWhiteSpace(next)))
         {
-            _buffer.ReplaceRange(caret, 0, $"{c}{AutoPairs[c]}");
-            _buffer.Selection = Selection.At(caret + 1);
+            Buffer.ReplaceRange(caret, 0, $"{c}{AutoPairs[c]}");
+            Buffer.Selection = Selection.At(caret + 1);
             return true;
         }
 
@@ -399,8 +481,8 @@ public partial class MarkdownEditor
     /// <summary>Backspace between an empty auto-pair (e.g. <c>(|)</c>) removes both halves. Returns true if it did.</summary>
     private bool TryBackspacePair()
     {
-        var sel = _buffer.Selection;
-        var doc = _buffer.Document;
+        var sel = Buffer.Selection;
+        var doc = Buffer.Document;
         if (!sel.IsEmpty || sel.Caret == 0 || sel.Caret >= doc.Length)
         {
             return false;
@@ -410,7 +492,7 @@ public partial class MarkdownEditor
         var next = doc[sel.Caret];
         if (prev is '(' or '[' or '`' && AutoPairs.TryGetValue(prev, out var close) && next == close)
         {
-            _buffer.ReplaceRange(sel.Caret - 1, 2, string.Empty);
+            Buffer.ReplaceRange(sel.Caret - 1, 2, string.Empty);
             return true;
         }
 
@@ -429,12 +511,12 @@ public partial class MarkdownEditor
     {
         if (TryExpandTypedEmptyLineIntoParagraph(text, out var inserted, out var caretAfter))
         {
-            var sel = _buffer.Selection;
-            _buffer.ReplaceRange(sel.Start, sel.Length, inserted, caretAfter);
+            var sel = Buffer.Selection;
+            Buffer.ReplaceRange(sel.Start, sel.Length, inserted, caretAfter);
             return;
         }
 
-        _buffer.Insert(text);
+        Buffer.Insert(text);
     }
 
     /// <summary>
@@ -452,13 +534,13 @@ public partial class MarkdownEditor
             return false;
         }
 
-        var sel = _buffer.Selection;
+        var sel = Buffer.Selection;
         if (!sel.IsEmpty)
         {
             return false;
         }
 
-        var doc = _buffer.Document;
+        var doc = Buffer.Document;
         var line = doc.GetPosition(sel.Caret).Line;
         if (!IsEmptyLine(line) || line + 1 >= doc.LineCount || IsBlankLine(line + 1)
             || _model.EnteringState(line).Kind != BlockKind.Normal)
@@ -475,7 +557,7 @@ public partial class MarkdownEditor
     {
         if (!TryBackspacePair() && !TryBackspaceCollapsedBlank() && !TryVisualBackspace())
         {
-            _buffer.Backspace();
+            Buffer.Backspace();
         }
     }
 
@@ -483,8 +565,7 @@ public partial class MarkdownEditor
     {
         if (!TryDeleteCollapsedBlank() && !TryVisualDelete())
         {
-            _buffer.Delete();
+            Buffer.Delete();
         }
     }
-
 }

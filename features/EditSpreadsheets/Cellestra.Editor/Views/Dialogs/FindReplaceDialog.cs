@@ -1,6 +1,3 @@
-using System;
-using System.Collections.Generic;
-using System.Globalization;
 using Avalonia.Controls;
 using Avalonia.Layout;
 using Cellestra.Core.Editing;
@@ -29,7 +26,7 @@ public sealed class FindReplaceDialog : ModalDialog<bool>
     private readonly TextBox _replace = new() { Width = 200 };
     private readonly TextBlock _status = new();
     private readonly ListBox _results = new() { MaxHeight = 220, MinWidth = 320 };
-    private readonly List<(int Row, int Column)> _matches = new();
+    private readonly List<(int Row, int Column)> _matches = [];
     private bool _suppressNavigate;
 
     public FindReplaceDialog(IAppEnvironment env, bool showReplace)

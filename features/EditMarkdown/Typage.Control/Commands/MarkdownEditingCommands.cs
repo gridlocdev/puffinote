@@ -18,8 +18,8 @@ public static class MarkdownEditingCommands
     public static IReadOnlyList<AppCommand> Build(MarkdownEditorView view)
     {
         var ed = view.Editor;
-        return new List<AppCommand>
-        {
+        return
+        [
             new("edit.undo", "Undo", "Step backward through your changes.", Shortcut.Cmd(Key.Z),
                 () => view.Undo(), () => view.CanUndo, icon: "undo"),
             new("edit.redo", "Redo", "Re-apply a change you undid.", Shortcut.Cmd(Key.Z, KeyModifiers.Shift),
@@ -61,6 +61,6 @@ public static class MarkdownEditingCommands
 
             new("insert.codeBlock", "Code Block", "Insert a fenced code block.", Shortcut.Cmd(Key.E, KeyModifiers.Shift), ed.InsertCodeBlock),
             new("insert.hr", "Horizontal Rule", "Insert a horizontal rule.", null, ed.InsertHorizontalRule),
-        };
+        ];
     }
 }

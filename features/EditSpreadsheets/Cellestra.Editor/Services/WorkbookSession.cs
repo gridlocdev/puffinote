@@ -1,6 +1,3 @@
-using System;
-using System.Collections.Generic;
-using System.IO;
 using Cellestra.Core.Dependencies;
 using Cellestra.Core.Editing;
 using Cellestra.Core.Model;
@@ -16,7 +13,6 @@ namespace Cellestra.Desktop.Services;
 /// </summary>
 public sealed class WorkbookSession
 {
-    private Workbook _workbook;
     private RecalculationEngine _recalc;
     private EditHistory _history;
     private OdsPackage? _sourcePackage;
@@ -28,7 +24,7 @@ public sealed class WorkbookSession
 
     public WorkbookSession(Workbook workbook)
     {
-        _workbook = workbook;
+        Workbook = workbook;
         _recalc = new RecalculationEngine(workbook);
         _history = new EditHistory(workbook);
         _recalc.RebuildGraph();
@@ -37,7 +33,7 @@ public sealed class WorkbookSession
 
     public static WorkbookSession NewBlank() => new(Workbook.CreateNew());
 
-    public Workbook Workbook => _workbook;
+    public Workbook Workbook { get; private set; }
 
     public Worksheet ActiveSheet { get; private set; }
 
@@ -46,13 +42,12 @@ public sealed class WorkbookSession
     // (the "stamp"); the painter is then "armed" until that formatting is applied once. The stamp
     // lives here (not in a private static) so both the command catalog and the grid observe one shared
     // state through a clean seam — the grid arms its paintbrush cursor and drag-to-paint off it.
-    private FormatBlock? _formatStamp;
 
     /// <summary>The captured formatting waiting to be painted, or null when the painter isn't armed.</summary>
-    public FormatBlock? FormatStamp => _formatStamp;
+    public FormatBlock? FormatStamp { get; private set; }
 
     /// <summary>True while the Format Painter holds a captured stamp ready to apply.</summary>
-    public bool IsFormatPainterArmed => _formatStamp is not null;
+    public bool IsFormatPainterArmed => FormatStamp is not null;
 
     /// <summary>Raised when the painter is armed or disarmed, so the grid can update its cursor and repaint.</summary>
     public event EventHandler? FormatPainterArmedChanged;
@@ -60,19 +55,19 @@ public sealed class WorkbookSession
     /// <summary>Capture <paramref name="stamp"/> and arm the painter (replaces any prior stamp).</summary>
     public void ArmFormatPainter(FormatBlock stamp)
     {
-        _formatStamp = stamp;
+        FormatStamp = stamp;
         FormatPainterArmedChanged?.Invoke(this, EventArgs.Empty);
     }
 
     /// <summary>Disarm the painter without applying (Esc, or after a single-shot paint).</summary>
     public void DisarmFormatPainter()
     {
-        if (_formatStamp is null)
+        if (FormatStamp is null)
         {
             return;
         }
 
-        _formatStamp = null;
+        FormatStamp = null;
         FormatPainterArmedChanged?.Invoke(this, EventArgs.Empty);
     }
 
@@ -103,7 +98,7 @@ public sealed class WorkbookSession
 
     public Worksheet AddSheet()
     {
-        var sheet = _workbook.AddSheet();
+        var sheet = Workbook.AddSheet();
         SetActiveSheet(sheet);
         return sheet;
     }
@@ -111,7 +106,7 @@ public sealed class WorkbookSession
     /// <summary>Add a chart sheet for <paramref name="chart"/>, make it active, and mark the workbook modified.</summary>
     public Worksheet AddChartSheet(Cellestra.Charts.ChartDefinition chart)
     {
-        var sheet = _workbook.AddChartSheet(chart);
+        var sheet = Workbook.AddChartSheet(chart);
         IsModified = true;
         SetActiveSheet(sheet); // raises StructureChanged so the UI swaps in the chart view
         return sheet;
@@ -130,26 +125,26 @@ public sealed class WorkbookSession
 
     public void SetActiveSheet(Worksheet sheet)
     {
-        if (_workbook.IndexOf(sheet) < 0)
+        if (Workbook.IndexOf(sheet) < 0)
         {
             return;
         }
 
         ActiveSheet = sheet;
-        _workbook.Settings.ActiveSheetIndex = _workbook.IndexOf(sheet);
+        Workbook.Settings.ActiveSheetIndex = Workbook.IndexOf(sheet);
         StructureChanged?.Invoke(this, EventArgs.Empty);
     }
 
     /// <summary>Delete a worksheet (no-op on the last one) and activate a neighbour. Marks the workbook modified.</summary>
     public void DeleteSheet(Worksheet sheet)
     {
-        if (_workbook.Worksheets.Count <= 1)
+        if (Workbook.Worksheets.Count <= 1)
         {
             return;
         }
 
-        int index = _workbook.IndexOf(sheet);
-        if (!_workbook.RemoveSheet(sheet))
+        int index = Workbook.IndexOf(sheet);
+        if (!Workbook.RemoveSheet(sheet))
         {
             return;
         }
@@ -158,7 +153,7 @@ public sealed class WorkbookSession
         // edits throw. Sheet structure changes aren't undoable (PRD §8.5) — clear the stacks.
         ClearHistory();
         IsModified = true;
-        var next = _workbook.Worksheets[System.Math.Min(index, _workbook.Worksheets.Count - 1)];
+        var next = Workbook.Worksheets[System.Math.Min(index, Workbook.Worksheets.Count - 1)];
         SetActiveSheet(next); // raises StructureChanged
     }
 
@@ -169,7 +164,7 @@ public sealed class WorkbookSession
     /// </summary>
     public Worksheet DuplicateSheet(Worksheet sheet)
     {
-        var copy = _workbook.DuplicateSheet(sheet);
+        var copy = Workbook.DuplicateSheet(sheet);
         ClearHistory(); // older undo commands resolve sheets by name; a new sheet would desync replay
         IsModified = true;
         SetActiveSheet(copy); // raises StructureChanged so the tabs rebuild and the view swaps in
@@ -179,7 +174,7 @@ public sealed class WorkbookSession
     /// <summary>Rename a worksheet (throws on an invalid or duplicate name so the UI can explain it).</summary>
     public void RenameSheet(Worksheet sheet, string newName)
     {
-        _workbook.RenameSheet(sheet, newName);
+        Workbook.RenameSheet(sheet, newName);
         // Older undo commands reference the previous sheet name and would throw on replay; drop them.
         ClearHistory();
         IsModified = true;
@@ -190,8 +185,8 @@ public sealed class WorkbookSession
     public void MoveSheet(int fromIndex, int toIndex)
     {
         var active = ActiveSheet;
-        _workbook.MoveSheet(fromIndex, toIndex);
-        _workbook.Settings.ActiveSheetIndex = _workbook.IndexOf(active);
+        Workbook.MoveSheet(fromIndex, toIndex);
+        Workbook.Settings.ActiveSheetIndex = Workbook.IndexOf(active);
         IsModified = true;
         StructureChanged?.Invoke(this, EventArgs.Empty);
     }
@@ -310,7 +305,7 @@ public sealed class WorkbookSession
 
     public void SaveTo(Stream stream, string? path = null)
     {
-        OdsWriter.Write(_workbook, stream, _sourcePackage);
+        OdsWriter.Write(Workbook, stream, _sourcePackage);
         if (path is not null)
         {
             FilePath = path;
@@ -337,7 +332,7 @@ public sealed class WorkbookSession
     /// serialized the live model directly on a background <c>Task.Run</c> while the grid still had
     /// keyboard focus, so a keystroke mid-save mutated the model under the serializer.)
     /// </summary>
-    public byte[] SerializeToBytes() => OdsWriter.WriteToBytes(_workbook, _sourcePackage);
+    public byte[] SerializeToBytes() => OdsWriter.WriteToBytes(Workbook, _sourcePackage);
 
     /// <summary>
     /// Atomically write a pre-serialized <c>.ods</c> image to disk: a sibling temp file, then a rename
@@ -470,14 +465,14 @@ public sealed class WorkbookSession
     public void AdoptWorkbook(LoadedWorkbook loaded, string? path)
     {
         ArgumentNullException.ThrowIfNull(loaded);
-        _workbook = loaded.Workbook;
+        Workbook = loaded.Workbook;
         _sourcePackage = loaded.Package;
         _recalc = loaded.Recalc;
         LoadRecalcMismatches = loaded.Mismatches;
-        _history = new EditHistory(_workbook);
+        _history = new EditHistory(Workbook);
         _undoSelections.Clear();
         _redoSelections.Clear();
-        ActiveSheet = _workbook.ActiveSheet;
+        ActiveSheet = Workbook.ActiveSheet;
         FilePath = path;
         IsModified = false;
         StructureChanged?.Invoke(this, EventArgs.Empty);

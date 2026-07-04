@@ -1,7 +1,6 @@
 using System.Globalization;
 using System.Text;
 using System.Text.RegularExpressions;
-using Cellestra.Core.Formulas.Evaluation;
 using Cellestra.Core.Values;
 
 namespace Cellestra.Core.Formulas.Functions;
@@ -118,9 +117,15 @@ public sealed class CriteriaMatcher
         {
             switch (c)
             {
-                case '*': sb.Append(".*"); break;
-                case '?': sb.Append('.'); break;
-                default: sb.Append(Regex.Escape(c.ToString())); break;
+                case '*':
+                    sb.Append(".*");
+                    break;
+                case '?':
+                    sb.Append('.');
+                    break;
+                default:
+                    sb.Append(Regex.Escape(c.ToString()));
+                    break;
             }
         }
 

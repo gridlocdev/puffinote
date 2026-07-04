@@ -13,11 +13,11 @@ public class CompositeEditCommandTests
         var workbook = Workbook.CreateNew();
         var sheet = workbook.ActiveSheet;
 
-        var composite = EditCommands.Composite("Two edits", new[]
-        {
+        var composite = EditCommands.Composite("Two edits",
+        [
             EditCommands.SetValue(sheet.Name, 0, 0, CellValue.Number(1)),
             EditCommands.SetValue(sheet.Name, 0, 1, CellValue.Number(2)),
-        });
+        ]);
 
         composite.Apply(workbook);
         Assert.Equal(1, sheet.GetValue(0, 0).AsNumber);

@@ -1,4 +1,3 @@
-using System;
 using Avalonia;
 using Avalonia.Media;
 using Cellestra.Core.Editing;
@@ -23,7 +22,7 @@ public sealed partial class SpreadsheetGrid
     private bool TryGetFillHandleRect(out Rect rect)
     {
         rect = default;
-        if (_session is null || _editing)
+        if (_session is null || IsInlineEditing)
         {
             return false;
         }
@@ -151,7 +150,7 @@ public sealed partial class SpreadsheetGrid
 
         var pen = new Pen(new SolidColorBrush(Color.FromRgb(0x2A, 0x7D, 0xE1)), 1)
         {
-            DashStyle = new DashStyle(new double[] { 3, 2 }, 0),
+            DashStyle = new DashStyle([3, 2], 0),
         };
         context.DrawRectangle(null, pen, rect);
     }

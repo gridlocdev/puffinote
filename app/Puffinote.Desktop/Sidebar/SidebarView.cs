@@ -1,4 +1,3 @@
-using System.Linq;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Layout;
@@ -39,7 +38,7 @@ internal sealed class SidebarView : UserControl
 
     public SidebarView()
     {
-        _panels = new List<ISidebarPanel> { _files, _search, _outline, _recent };
+        _panels = [_files, _search, _outline, _recent];
         _active = _files;
 
         _files.FileActivated += path => FileActivated?.Invoke(path);

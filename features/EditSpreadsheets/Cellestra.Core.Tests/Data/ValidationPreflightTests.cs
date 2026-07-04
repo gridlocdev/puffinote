@@ -36,7 +36,7 @@ public class ValidationPreflightTests
 
         var violations = ValidationPreflight.FindStopViolations(sheet, incoming, Culture);
 
-        Assert.Equal(new[] { (1, 0) }, violations);
+        Assert.Equal([(1, 0)], violations);
     }
 
     [Fact]
@@ -91,6 +91,6 @@ public class ValidationPreflightTests
             (1, 0, CellValue.Text("Blue"), false),  // not in list → violation
         };
 
-        Assert.Equal(new[] { (1, 0) }, ValidationPreflight.FindStopViolations(sheet, incoming, Culture, Resolve));
+        Assert.Equal([(1, 0)], ValidationPreflight.FindStopViolations(sheet, incoming, Culture, Resolve));
     }
 }

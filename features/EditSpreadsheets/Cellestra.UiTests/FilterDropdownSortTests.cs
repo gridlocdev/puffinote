@@ -103,8 +103,10 @@ public class FilterDropdownSortTests
         // Two-column table; sort by column B should carry column A's cells along with each row.
         sheet.SetValue(0, 0, CellValue.Text("Name"));
         sheet.SetValue(0, 1, CellValue.Text("Score"));
-        sheet.SetValue(1, 0, CellValue.Text("Cara")); sheet.SetValue(1, 1, CellValue.Number(30));
-        sheet.SetValue(2, 0, CellValue.Text("Ana")); sheet.SetValue(2, 1, CellValue.Number(10));
+        sheet.SetValue(1, 0, CellValue.Text("Cara"));
+        sheet.SetValue(1, 1, CellValue.Number(30));
+        sheet.SetValue(2, 0, CellValue.Text("Ana"));
+        sheet.SetValue(2, 1, CellValue.Number(10));
         sheet.AddTable(new Table("T", CellRange.Parse("A1:B3"), HasHeader: true));
         window.Editor.Grid.Refresh();
         window.CaptureRenderedFrame();
@@ -126,9 +128,12 @@ public class FilterDropdownSortTests
         window.Show();
         window.Editor.Grid.Zoom = 1.0;
         var sheet = window.Editor.Session.ActiveSheet;
-        sheet.SetValue(0, 0, CellValue.Text("Team")); sheet.SetValue(0, 1, CellValue.Text("Score"));
-        sheet.SetValue(1, 0, CellValue.Text("A")); sheet.SetValue(1, 1, CellValue.Number(30));
-        sheet.SetValue(2, 0, CellValue.Text("B")); sheet.SetValue(2, 1, CellValue.Number(10));
+        sheet.SetValue(0, 0, CellValue.Text("Team"));
+        sheet.SetValue(0, 1, CellValue.Text("Score"));
+        sheet.SetValue(1, 0, CellValue.Text("A"));
+        sheet.SetValue(1, 1, CellValue.Number(30));
+        sheet.SetValue(2, 0, CellValue.Text("B"));
+        sheet.SetValue(2, 1, CellValue.Number(10));
         sheet.AddTable(new Table("T", CellRange.Parse("A1:B3"), HasHeader: true));
         window.Editor.Grid.Refresh();
         window.CaptureRenderedFrame();
@@ -145,7 +150,7 @@ public class FilterDropdownSortTests
         // The table owns its sort; only column B remains (multi-column "then by" is the dialog's job).
         var table = Assert.Single(sheet.Tables);
         Assert.NotNull(table.Sort);
-        Assert.Equal(new[] { 1 }, table.Sort!.Levels.Select(l => l.Column));
+        Assert.Equal([1], table.Sort!.Levels.Select(l => l.Column));
         Assert.Null(sheet.ActiveSort); // a table never leaks its sort to the sheet AutoFilter
     }
 

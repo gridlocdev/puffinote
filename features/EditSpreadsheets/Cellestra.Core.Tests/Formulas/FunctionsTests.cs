@@ -86,12 +86,12 @@ public class FunctionsTests
     [Fact]
     public void Count_and_counta()
     {
-        Action<Worksheet> setup = s =>
+        static void setup(Worksheet s)
         {
             s.SetValue(0, 0, CellValue.Number(1));
             s.SetValue(1, 0, CellValue.Text("x"));
             s.SetValue(2, 0, CellValue.Number(3));
-        };
+        }
 
         Assert.Equal(2, FormulaHarness.Number("COUNT(A1:A3)", setup));
         Assert.Equal(3, FormulaHarness.Number("COUNTA(A1:A3)", setup));
@@ -119,11 +119,11 @@ public class FunctionsTests
     [Fact]
     public void Sumif_with_separate_sum_range()
     {
-        Action<Worksheet> setup = s =>
+        static void setup(Worksheet s)
         {
             Column(0, 1, 2, 3, 4, 5)(s);
             Column(1, 10, 20, 30, 40, 50)(s);
-        };
+        }
 
         Assert.Equal(120, FormulaHarness.Number("SUMIF(A1:A5,\">2\",B1:B5)", setup));
     }
@@ -133,11 +133,11 @@ public class FunctionsTests
     {
         // sum_range B1:B3 is smaller than the criteria range A1:A5; Excel/Calc anchor it at B1 and
         // reshape it to A1:A5's shape, so the matched rows 3,4,5 read B3,B4,B5 = 30+40+50 = 120.
-        Action<Worksheet> setup = s =>
+        static void setup(Worksheet s)
         {
             Column(0, 1, 2, 3, 4, 5)(s);
             Column(1, 10, 20, 30, 40, 50)(s);
-        };
+        }
 
         Assert.Equal(120, FormulaHarness.Number("SUMIF(A1:A5,\">2\",B1:B3)", setup));
     }
@@ -147,11 +147,11 @@ public class FunctionsTests
     {
         // A single-cell sum_range B1 is anchored and reshaped to A1:A5; matched rows 3,4,5 read
         // B3,B4,B5 = 30+40+50 = 120 (it must not be clamped to B1 nor yield #REF!).
-        Action<Worksheet> setup = s =>
+        static void setup(Worksheet s)
         {
             Column(0, 1, 2, 3, 4, 5)(s);
             Column(1, 10, 20, 30, 40, 50)(s);
-        };
+        }
 
         Assert.Equal(120, FormulaHarness.Number("SUMIF(A1:A5,\">2\",B1)", setup));
     }
@@ -161,14 +161,14 @@ public class FunctionsTests
     {
         // sum_range C2:C6 is offset from the criteria range; anchored at C2, matched rows 3,4,5
         // (offsets 2,3,4) read C4,C5,C6 = 300+400+500 = 1200.
-        Action<Worksheet> setup = s =>
+        static void setup(Worksheet s)
         {
             Column(0, 1, 2, 3, 4, 5)(s);
             for (int i = 0; i < 5; i++)
             {
                 s.SetValue(1 + i, 2, CellValue.Number((i + 1) * 100)); // C2..C6 = 100..500
             }
-        };
+        }
 
         Assert.Equal(1200, FormulaHarness.Number("SUMIF(A1:A5,\">2\",C2:C6)", setup));
     }
@@ -252,20 +252,25 @@ public class FunctionsTests
     [Fact]
     public void Vlookup_exact()
     {
-        Action<Worksheet> setup = s =>
+        static void setup(Worksheet s)
         {
-            s.SetValue(0, 0, CellValue.Number(1)); s.SetValue(0, 1, CellValue.Text("one"));
-            s.SetValue(1, 0, CellValue.Number(2)); s.SetValue(1, 1, CellValue.Text("two"));
-            s.SetValue(2, 0, CellValue.Number(3)); s.SetValue(2, 1, CellValue.Text("three"));
-        };
+            s.SetValue(0, 0, CellValue.Number(1));
+            s.SetValue(0, 1, CellValue.Text("one"));
+            s.SetValue(1, 0, CellValue.Number(2));
+            s.SetValue(1, 1, CellValue.Text("two"));
+            s.SetValue(2, 0, CellValue.Number(3));
+            s.SetValue(2, 1, CellValue.Text("three"));
+        }
 
         Assert.Equal("two", FormulaHarness.Text("VLOOKUP(2,A1:B3,2,FALSE)", setup));
         Assert.Equal("three", FormulaHarness.Text("INDEX(A1:B3,3,2)", setup));
         Assert.Equal("two", FormulaHarness.Text("HLOOKUP(\"two\",A1:B3,1)", s =>
         {
             // For HLOOKUP search the first row.
-            s.SetValue(0, 0, CellValue.Text("one")); s.SetValue(0, 1, CellValue.Text("two"));
-            s.SetValue(1, 0, CellValue.Number(1)); s.SetValue(1, 1, CellValue.Number(2));
+            s.SetValue(0, 0, CellValue.Text("one"));
+            s.SetValue(0, 1, CellValue.Text("two"));
+            s.SetValue(1, 0, CellValue.Number(1));
+            s.SetValue(1, 1, CellValue.Number(2));
         }));
     }
 
@@ -310,14 +315,14 @@ public class FunctionsTests
     {
         var registry = Cellestra.Core.Formulas.Functions.FunctionRegistry.CreateDefault();
         string[] expected =
-        {
+        [
             "SUM", "AVERAGE", "MIN", "MAX", "COUNT", "COUNTA", "PRODUCT", "ABS", "INT", "MOD",
             "ROUND", "ROUNDUP", "ROUNDDOWN", "POWER", "SQRT", "SUMIF", "COUNTIF",
             "IF", "IFERROR", "AND", "OR", "NOT", "TRUE", "FALSE",
             "LEFT", "RIGHT", "MID", "LEN", "LOWER", "UPPER", "TRIM", "SUBSTITUTE", "TEXT", "VALUE", "CONCAT",
             "VLOOKUP", "HLOOKUP", "INDEX", "MATCH",
             "TODAY", "NOW", "DATE", "YEAR", "MONTH", "DAY", "WEEKDAY", "NETWORKDAYS",
-        };
+        ];
 
         foreach (string name in expected)
         {

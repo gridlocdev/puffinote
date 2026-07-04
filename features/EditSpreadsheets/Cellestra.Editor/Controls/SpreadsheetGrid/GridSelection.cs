@@ -1,5 +1,3 @@
-using System;
-using System.Collections.Generic;
 using Cellestra.Core.Model;
 
 namespace Cellestra.Desktop.Controls.SpreadsheetGrid;
@@ -11,31 +9,29 @@ namespace Cellestra.Desktop.Controls.SpreadsheetGrid;
 /// </summary>
 public sealed class GridSelection
 {
-    private int _activeRow;
-    private int _activeColumn;
     private int _anchorRow;
     private int _anchorColumn;
 
     // Ranges committed by earlier Cmd+clicks; the live anchor/active rectangle is appended to these.
-    private readonly List<CellRange> _committed = new();
+    private readonly List<CellRange> _committed = [];
 
-    public int ActiveRow => _activeRow;
+    public int ActiveRow { get; private set; }
 
-    public int ActiveColumn => _activeColumn;
+    public int ActiveColumn { get; private set; }
 
-    public int Top => Math.Min(_anchorRow, _activeRow);
+    public int Top => Math.Min(_anchorRow, ActiveRow);
 
-    public int Bottom => Math.Max(_anchorRow, _activeRow);
+    public int Bottom => Math.Max(_anchorRow, ActiveRow);
 
-    public int Left => Math.Min(_anchorColumn, _activeColumn);
+    public int Left => Math.Min(_anchorColumn, ActiveColumn);
 
-    public int Right => Math.Max(_anchorColumn, _activeColumn);
+    public int Right => Math.Max(_anchorColumn, ActiveColumn);
 
     public bool IsSingleCell => Top == Bottom && Left == Right;
 
     public event EventHandler? Changed;
 
-    public CellAddress ActiveAddress => new(_activeColumn, _activeRow);
+    public CellAddress ActiveAddress => new(ActiveColumn, ActiveRow);
 
     public CellRange Range => new(new CellAddress(Left, Top), new CellAddress(Right, Bottom));
 
@@ -56,8 +52,8 @@ public sealed class GridSelection
     public void MoveTo(int row, int column)
     {
         _committed.Clear();
-        _activeRow = _anchorRow = ClampRow(row);
-        _activeColumn = _anchorColumn = ClampColumn(column);
+        ActiveRow = _anchorRow = ClampRow(row);
+        ActiveColumn = _anchorColumn = ClampColumn(column);
         Changed?.Invoke(this, EventArgs.Empty);
     }
 
@@ -71,8 +67,8 @@ public sealed class GridSelection
     public void AddPoint(int row, int column)
     {
         _committed.Add(Range);
-        _activeRow = _anchorRow = ClampRow(row);
-        _activeColumn = _anchorColumn = ClampColumn(column);
+        ActiveRow = _anchorRow = ClampRow(row);
+        ActiveColumn = _anchorColumn = ClampColumn(column);
         Changed?.Invoke(this, EventArgs.Empty);
     }
 
@@ -82,8 +78,8 @@ public sealed class GridSelection
         _committed.Add(Range);
         _anchorRow = ClampRow(top);
         _anchorColumn = ClampColumn(left);
-        _activeRow = ClampRow(bottom);
-        _activeColumn = ClampColumn(right);
+        ActiveRow = ClampRow(bottom);
+        ActiveColumn = ClampColumn(right);
         Changed?.Invoke(this, EventArgs.Empty);
     }
 
@@ -94,8 +90,8 @@ public sealed class GridSelection
     public void ExtendRowBand(int row)
     {
         _anchorColumn = 0;
-        _activeColumn = ClampColumn(SheetDimensions.MaxColumns - 1);
-        _activeRow = ClampRow(row);
+        ActiveColumn = ClampColumn(SheetDimensions.MaxColumns - 1);
+        ActiveRow = ClampRow(row);
         Changed?.Invoke(this, EventArgs.Empty);
     }
 
@@ -103,16 +99,16 @@ public sealed class GridSelection
     public void ExtendColumnBand(int column)
     {
         _anchorRow = 0;
-        _activeRow = ClampRow(SheetDimensions.MaxRows - 1);
-        _activeColumn = ClampColumn(column);
+        ActiveRow = ClampRow(SheetDimensions.MaxRows - 1);
+        ActiveColumn = ClampColumn(column);
         Changed?.Invoke(this, EventArgs.Empty);
     }
 
     /// <summary>Extend the selection to a new active cell, keeping the anchor.</summary>
     public void ExtendTo(int row, int column)
     {
-        _activeRow = ClampRow(row);
-        _activeColumn = ClampColumn(column);
+        ActiveRow = ClampRow(row);
+        ActiveColumn = ClampColumn(column);
         Changed?.Invoke(this, EventArgs.Empty);
     }
 
@@ -122,8 +118,8 @@ public sealed class GridSelection
         _committed.Clear();
         _anchorRow = ClampRow(top);
         _anchorColumn = ClampColumn(left);
-        _activeRow = ClampRow(bottom);
-        _activeColumn = ClampColumn(right);
+        ActiveRow = ClampRow(bottom);
+        ActiveColumn = ClampColumn(right);
         Changed?.Invoke(this, EventArgs.Empty);
     }
 
@@ -134,8 +130,8 @@ public sealed class GridSelection
     public void Restore(int top, int left, int bottom, int right, int activeRow, int activeColumn)
     {
         _committed.Clear();
-        _activeRow = ClampRow(activeRow);
-        _activeColumn = ClampColumn(activeColumn);
+        ActiveRow = ClampRow(activeRow);
+        ActiveColumn = ClampColumn(activeColumn);
         _anchorRow = ClampRow(activeRow == top ? bottom : top);
         _anchorColumn = ClampColumn(activeColumn == left ? right : left);
         Changed?.Invoke(this, EventArgs.Empty);

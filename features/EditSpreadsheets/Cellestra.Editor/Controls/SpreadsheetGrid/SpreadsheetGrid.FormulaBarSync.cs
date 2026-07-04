@@ -1,5 +1,3 @@
-using System;
-
 namespace Cellestra.Desktop.Controls.SpreadsheetGrid;
 
 /// <summary>
@@ -23,10 +21,10 @@ public sealed partial class SpreadsheetGrid
     public event Action<string>? InlineEditTextChanged;
 
     /// <summary>Whether an inline cell edit is currently in progress.</summary>
-    public bool IsInlineEditing => _editing;
+    public bool IsInlineEditing { get; private set; }
 
     /// <summary>Whether an inline edit is in progress and its text is a formula (starts with '=').</summary>
-    public bool IsInlineFormulaEdit => _editing && IsFormulaEdit();
+    public bool IsInlineFormulaEdit => IsInlineEditing && IsFormulaEdit();
 
     /// <summary>
     /// Commit the active inline edit through the grid's normal path (validation, SetInput, selection
@@ -48,7 +46,7 @@ public sealed partial class SpreadsheetGrid
     {
         text ??= string.Empty;
 
-        if (!_editing)
+        if (!IsInlineEditing)
         {
             // Mirror the bar without stealing focus: the user is typing in the formula bar. Flag the
             // seeded text as a bar echo so BeginEdit's TextChanged doesn't bounce straight back.

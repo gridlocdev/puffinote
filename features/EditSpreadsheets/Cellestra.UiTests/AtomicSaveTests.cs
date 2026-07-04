@@ -1,6 +1,3 @@
-using System;
-using System.IO;
-using System.Linq;
 using Cellestra.Core.Values;
 using Cellestra.Desktop.Services;
 using Xunit;
@@ -62,5 +59,5 @@ public class AtomicSaveTests
     }
 
     private static string[] TempFiles(string dir) =>
-        Directory.GetFiles(dir).Where(f => Path.GetFileName(f).Contains(".tmp", StringComparison.Ordinal)).ToArray();
+        [.. Directory.GetFiles(dir).Where(f => Path.GetFileName(f).Contains(".tmp", StringComparison.Ordinal))];
 }

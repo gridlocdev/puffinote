@@ -184,10 +184,10 @@ public static class LookupFunctions
         if (range.RowCount != 1 && range.ColumnCount != 1)
         {
             error = CellValue.FromError(CellError.NotAvailable("MATCH needs a single row or column."));
-            return Array.Empty<CellValue>();
+            return [];
         }
 
-        return range.Values().ToArray();
+        return [.. range.Values()];
     }
 
     private static int Search(CellValue[] values, CellValue lookup, int matchType, System.Globalization.CultureInfo culture, out CellValue? error)

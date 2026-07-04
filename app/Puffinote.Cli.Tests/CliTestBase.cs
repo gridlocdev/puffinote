@@ -1,5 +1,3 @@
-using Puffinote.Cli;
-
 namespace Puffinote.Cli.Tests;
 
 /// <summary>

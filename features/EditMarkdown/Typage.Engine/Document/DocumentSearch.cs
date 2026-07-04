@@ -21,7 +21,7 @@ public static class DocumentSearch
         ArgumentNullException.ThrowIfNull(text);
         if (string.IsNullOrEmpty(query) || text.Length == 0)
         {
-            return Array.Empty<SearchMatch>();
+            return [];
         }
 
         return useRegex

@@ -1,4 +1,3 @@
-using Cellestra.Core;
 using Cellestra.Core.Model;
 using Cellestra.Core.Values;
 using Xunit;

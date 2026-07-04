@@ -1,14 +1,7 @@
-using System;
-using System.Collections.Generic;
-using System.IO;
-using System.Threading.Tasks;
 using Avalonia.Controls;
-using Avalonia.Input;
 using Avalonia.Layout;
-using Avalonia.Markup.Xaml;
 using Avalonia.Media;
 using Avalonia.Platform.Storage;
-using Cellestra.Desktop.Commands;
 using Cellestra.Desktop.Services;
 using Cellestra.Editor;
 using Puffinote.Components.Commands;
@@ -31,7 +24,7 @@ public partial class MainWindow : Window, IEditorHost
 
     // The native-menu items gate on the editor's modal/text-input state; held so opening/closing an
     // overlay (which the editor signals via CommandStateChanged) can re-publish their CanExecute.
-    private readonly List<RelayCommand> _menuGatedCommands = new();
+    private readonly List<RelayCommand> _menuGatedCommands = [];
 
     public MainWindow()
     {
@@ -168,7 +161,7 @@ public partial class MainWindow : Window, IEditorHost
 
     private NativeMenuItem BuildOpenRecent()
     {
-        var item = new NativeMenuItem("Open Recent") { Menu = new NativeMenu() };
+        var item = new NativeMenuItem("Open Recent") { Menu = [] };
         PopulateOpenRecent(item.Menu);
         return item;
     }
@@ -328,7 +321,7 @@ public partial class MainWindow : Window, IEditorHost
         {
             Title = "Open Spreadsheet",
             AllowMultiple = false,
-            FileTypeFilter = new[] { OdsFileType },
+            FileTypeFilter = [OdsFileType],
         });
 
         if (files.Count == 0)
@@ -439,7 +432,7 @@ public partial class MainWindow : Window, IEditorHost
             Title = "Save Spreadsheet",
             DefaultExtension = "ods",
             SuggestedFileName = "Untitled.ods",
-            FileTypeChoices = new[] { OdsFileType },
+            FileTypeChoices = [OdsFileType],
         });
 
         if (file is null)
@@ -489,7 +482,7 @@ public partial class MainWindow : Window, IEditorHost
         {
             Title = "Import CSV",
             AllowMultiple = false,
-            FileTypeFilter = new[] { CsvFileType },
+            FileTypeFilter = [CsvFileType],
         });
 
         if (files.Count == 0)
@@ -516,7 +509,7 @@ public partial class MainWindow : Window, IEditorHost
             Title = "Export CSV",
             DefaultExtension = "csv",
             SuggestedFileName = Editor.Session.ActiveSheet.Name + ".csv",
-            FileTypeChoices = new[] { CsvFileType },
+            FileTypeChoices = [CsvFileType],
         });
 
         if (file is null)
@@ -565,14 +558,14 @@ public partial class MainWindow : Window, IEditorHost
 
     private static readonly FilePickerFileType OdsFileType = new("OpenDocument Spreadsheet")
     {
-        Patterns = new[] { "*.ods" },
-        MimeTypes = new[] { "application/vnd.oasis.opendocument.spreadsheet" },
+        Patterns = ["*.ods"],
+        MimeTypes = ["application/vnd.oasis.opendocument.spreadsheet"],
     };
 
     private static readonly FilePickerFileType CsvFileType = new("CSV")
     {
-        Patterns = new[] { "*.csv" },
-        MimeTypes = new[] { "text/csv" },
+        Patterns = ["*.csv"],
+        MimeTypes = ["text/csv"],
     };
 }
 

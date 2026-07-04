@@ -1,23 +1,13 @@
-using System;
-using System.Collections.Generic;
 using System.Globalization;
-using System.IO;
-using System.Linq;
 using System.Text;
-using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Controls;
-using Avalonia.Controls.Templates;
 using Avalonia.Input;
 using Avalonia.Input.Platform;
 using Avalonia.Interactivity;
 using Avalonia.Layout;
-using Avalonia.Markup.Xaml;
 using Avalonia.Media;
-using Avalonia.Platform.Storage;
-using Avalonia.VisualTree;
 using Cellestra.Charts;
-using Cellestra.Core.Data;
 using Cellestra.Core.Editing;
 using Cellestra.Core.Model;
 using Cellestra.Core.Values;
@@ -46,7 +36,6 @@ namespace Cellestra.Editor;
 /// </summary>
 public partial class SpreadsheetEditorView : UserControl, IAppEnvironment
 {
-    private WorkbookSession _session = WorkbookSession.NewBlank();
 
     /// <summary>The embedder that fulfils file/document operations (New/Open/Save/Import/Export).</summary>
     public IEditorHost? Host { get; set; }
@@ -59,7 +48,7 @@ public partial class SpreadsheetEditorView : UserControl, IAppEnvironment
     public event EventHandler? ModifiedChanged;
 
     /// <summary>Whether the document has unsaved changes (embedding contract).</summary>
-    public bool IsModified => _session.IsModified;
+    public bool IsModified => Session.IsModified;
 
     /// <summary>Raised when overlay/modal state changes, so a host can re-gate native-menu commands.</summary>
     public event EventHandler? CommandStateChanged;
@@ -73,7 +62,7 @@ public partial class SpreadsheetEditorView : UserControl, IAppEnvironment
     // Gated shortcut commands backing this control's KeyBindings. A command backs off (CanExecute=false)
     // while a modal overlay is open or a focused text input owns the key, so the overlay/editor handles
     // it instead (see RefreshCommandStates).
-    private readonly List<RelayCommand> _gatedCommands = new();
+    private readonly List<RelayCommand> _gatedCommands = [];
 
     // The rich in-app clipboard (values + formulas + styles) and the exact text we mirrored to the
     // OS clipboard; an in-app paste uses the block only while the OS clipboard still matches.
@@ -86,24 +75,23 @@ public partial class SpreadsheetEditorView : UserControl, IAppEnvironment
     // The one command catalog, built once against this view (which is the IAppEnvironment). Each command
     // closes over this environment (proposal 0001 §5), so the menu bar, command bar, Command Palette, and
     // key bindings all read the same env-bound entries.
-    private readonly AppCommands _commands;
 
     /// <inheritdoc />
-    public AppCommands Commands => _commands;
+    public AppCommands Commands { get; }
 
     public SpreadsheetEditorView()
     {
         InitializeComponent();
 
-        _commands = new AppCommands(this);
+        Commands = new AppCommands(this);
 
-        Grid.Attach(_session);
+        Grid.Attach(Session);
         Grid.SelectionChanged += (_, _) => OnSelectionChanged();
         Grid.ContextRequested += OnGridContextRequested;
         Grid.ContextMenuRequested += ShowGridContextMenuAt;
         Grid.RadialCommandActivated += RunRadialCommand;
-        Grid.Commands = _commands;
-        Grid.RadialCommandEnabled = id => _commands.ById(id) is { } command && command.IsEnabled;
+        Grid.Commands = Commands;
+        Grid.RadialCommandEnabled = id => Commands.ById(id) is { } command && command.IsEnabled;
 
         SheetTabs.PointerPressed += SheetTabsPointerPressed;
         SheetTabs.PointerMoved += SheetTabsPointerMoved;
@@ -113,8 +101,19 @@ public partial class SpreadsheetEditorView : UserControl, IAppEnvironment
         Grid.EnterPasteRequested += (_, _) => EnterPaste();
         Grid.MoveSelectionRequested += MoveSelection;
         WireSelectionUndo();
-        _session.Changed += (_, _) => { Grid.Refresh(); UpdateChrome(); RefreshChartData(); };
-        _session.StructureChanged += (_, _) => { BuildSheetTabs(); Grid.Refresh(); UpdateChrome(); RefreshSheetView(); };
+        Session.Changed += (_, _) =>
+        {
+            Grid.Refresh();
+            UpdateChrome();
+            RefreshChartData();
+        };
+        Session.StructureChanged += (_, _) =>
+        {
+            BuildSheetTabs();
+            Grid.Refresh();
+            UpdateChrome();
+            RefreshSheetView();
+        };
 
         FormulaInput.KeyDown += FormulaInputKeyDown;
         FormulaInput.TextChanged += FormulaInputTextChanged;
@@ -136,8 +135,17 @@ public partial class SpreadsheetEditorView : UserControl, IAppEnvironment
 
         // The shared overlay host owns show/dismiss + the Tab-trap; the app supplies the blur and the
         // grid-shortcut suspend/restore around it (an open overlay must stop the grid reacting to keys).
-        OverlayHost.Opened += (_, _) => { RefreshCommandStates(); SetBackgroundBlur(true); };
-        OverlayHost.Closed += (_, _) => { RefreshCommandStates(); SetBackgroundBlur(false); Grid.Focus(); };
+        OverlayHost.Opened += (_, _) =>
+        {
+            RefreshCommandStates();
+            SetBackgroundBlur(true);
+        };
+        OverlayHost.Closed += (_, _) =>
+        {
+            RefreshCommandStates();
+            SetBackgroundBlur(false);
+            Grid.Focus();
+        };
 
         // Esc closes any open overlay (command palette / sheet switcher / internal modal) no matter
         // where focus sits inside it. Handled on the tunnelling route so it fires before any inner
@@ -163,14 +171,7 @@ public partial class SpreadsheetEditorView : UserControl, IAppEnvironment
     /// <summary>Whether the adaptive command bar is collapsed to its slim handle; the host persists it.</summary>
     public bool CommandBarCollapsed
     {
-        get => _commandBar?.Collapsed ?? false;
-        set
-        {
-            if (_commandBar is not null)
-            {
-                _commandBar.Collapsed = value;
-            }
-        }
+        get => _commandBar?.Collapsed ?? false; set => _commandBar?.Collapsed = value;
     }
 
     /// <summary>The press-and-hold radial menu's bindings; pushed in from settings and edited via its dialog.</summary>
@@ -183,7 +184,7 @@ public partial class SpreadsheetEditorView : UserControl, IAppEnvironment
     /// <summary>Run a command a radial wedge was released over (it is already known to be enabled).</summary>
     private void RunRadialCommand(string commandId)
     {
-        if (_commands.ById(commandId) is { } command && command.IsEnabled)
+        if (Commands.ById(commandId) is { } command && command.IsEnabled)
         {
             command.Execute();
         }
@@ -195,7 +196,7 @@ public partial class SpreadsheetEditorView : UserControl, IAppEnvironment
     /// </summary>
     public async void ShowRadialSettings()
     {
-        var updated = await ShowModalAsync(new RadialSettingsDialog(RadialConfig, _commands));
+        var updated = await ShowModalAsync(new RadialSettingsDialog(RadialConfig, Commands));
         if (updated is not null)
         {
             RadialConfig = updated;
@@ -215,7 +216,7 @@ public partial class SpreadsheetEditorView : UserControl, IAppEnvironment
 
     // ---- IAppEnvironment --------------------------------------------------
 
-    public WorkbookSession Session => _session;
+    public WorkbookSession Session { get; private set; } = WorkbookSession.NewBlank();
 
     public GridSelection Selection => Grid.Selection;
 
@@ -261,9 +262,9 @@ public partial class SpreadsheetEditorView : UserControl, IAppEnvironment
     /// </summary>
     public void AdoptLoaded(WorkbookSession.LoadedWorkbook loaded, string? path)
     {
-        _session.AdoptWorkbook(loaded, path);
+        Session.AdoptWorkbook(loaded, path);
         _lastSavedAt = DateTime.Now;
-        Grid.Attach(_session);
+        Grid.Attach(Session);
         BuildSheetTabs();
         UpdateChrome();
     }
@@ -274,7 +275,7 @@ public partial class SpreadsheetEditorView : UserControl, IAppEnvironment
     /// </summary>
     public void ReplaceSession(WorkbookSession session)
     {
-        _session = session;
+        Session = session;
         _lastSavedAt = null;
         RewireSession();
     }
@@ -311,11 +312,11 @@ public partial class SpreadsheetEditorView : UserControl, IAppEnvironment
     /// </summary>
     public async Task SaveAsync(Stream target)
     {
-        byte[] image = _session.SerializeToBytes();
+        byte[] image = Session.SerializeToBytes();
         await target.WriteAsync(image);
-        if (_session.FilePath is { } path)
+        if (Session.FilePath is { } path)
         {
-            _session.MarkSaved(path);
+            Session.MarkSaved(path);
         }
 
         MarkSavedNow();
@@ -333,13 +334,13 @@ public partial class SpreadsheetEditorView : UserControl, IAppEnvironment
         // (so an external copy in between falls back to plain text).
         if (_clipboard is { } block && text == _clipboardText)
         {
-            var command = new PasteBlockCommand(_session.ActiveSheet.Name, Selection.Range, block);
+            var command = new PasteBlockCommand(Session.ActiveSheet.Name, Selection.Range, block);
             if (!Grid.TryEnforceValidation(command)) // reject the whole paste on a Stop-rule violation (#B)
             {
                 return;
             }
 
-            _session.Execute(command);
+            Session.Execute(command);
             if (block.IsCut)
             {
                 ClearClipboard(); // a cut is a move, consumed by its first paste
@@ -398,7 +399,7 @@ public partial class SpreadsheetEditorView : UserControl, IAppEnvironment
             return;
         }
 
-        var sheet = _session.ActiveSheet;
+        var sheet = Session.ActiveSheet;
         var destRange = new CellRange(new CellAddress(destLeft, destTop), new CellAddress(destRight, destBottom));
 
         if (IntersectsMerge(sheet, range) || IntersectsMerge(sheet, destRange))
@@ -413,7 +414,7 @@ public partial class SpreadsheetEditorView : UserControl, IAppEnvironment
             // it a plain move). References into either block follow it (ReferenceAdjuster.ForSwap),
             // scoped to just the formulas the dependency graph says are affected (no workbook scan).
             var affected = AffectedFormulas(sheet.Name, range, rowDelta, columnDelta);
-            _session.Execute(new SwapCellsCommand(sheet.Name, range, rowDelta, columnDelta, affected));
+            Session.Execute(new SwapCellsCommand(sheet.Name, range, rowDelta, columnDelta, affected));
         }
         else
         {
@@ -426,7 +427,7 @@ public partial class SpreadsheetEditorView : UserControl, IAppEnvironment
                 return;
             }
 
-            _session.Execute(command);
+            Session.Execute(command);
         }
 
         Selection.SetRange(destTop, destLeft, destBottom, destRight);
@@ -450,7 +451,7 @@ public partial class SpreadsheetEditorView : UserControl, IAppEnvironment
             cells.Add(new Cellestra.Core.Dependencies.CellRef(sheetName, r + rowDelta, c + columnDelta));
         }
 
-        return _session.FormulasReferencing(cells);
+        return Session.FormulasReferencing(cells);
     }
 
     /// <summary>Whether any merged region on <paramref name="sheet"/> overlaps <paramref name="range"/>.</summary>
@@ -511,13 +512,13 @@ public partial class SpreadsheetEditorView : UserControl, IAppEnvironment
             return; // the clipboard cleared (e.g. an edit) between opening the chooser and picking
         }
 
-        var command = new PasteBlockCommand(_session.ActiveSheet.Name, Selection.Range, block, mode);
+        var command = new PasteBlockCommand(Session.ActiveSheet.Name, Selection.Range, block, mode);
         if (!Grid.TryEnforceValidation(command)) // reject the whole paste on a Stop-rule violation (#B)
         {
             return;
         }
 
-        _session.Execute(command);
+        Session.Execute(command);
         if (block.IsCut)
         {
             ClearClipboard(); // a cut is a move, consumed by its first paste
@@ -533,7 +534,7 @@ public partial class SpreadsheetEditorView : UserControl, IAppEnvironment
 
     public void ShowCommandPalette()
     {
-        var items = _commands.All
+        var items = Commands.All
             .Where(c => c.IsEnabled)
             .Select(c => new PaletteItem(c.Title, c.Icon, c.Description, c.MacShortcut(), () => c.Execute(), CommandCategory(c.Id)))
             .ToList();
@@ -561,15 +562,21 @@ public partial class SpreadsheetEditorView : UserControl, IAppEnvironment
 
     public void ShowSheetSwitcher()
     {
-        var items = _session.Workbook.Worksheets
-            .Select(s => new PaletteItem(s.Name, "list", "Worksheet", string.Empty, () => { _session.SetActiveSheet(s); BuildSheetTabs(); Grid.Refresh(); OnSelectionChanged(); }, "Sheets"))
+        var items = Session.Workbook.Worksheets
+            .Select(s => new PaletteItem(s.Name, "list", "Worksheet", string.Empty, () =>
+            {
+                Session.SetActiveSheet(s);
+                BuildSheetTabs();
+                Grid.Refresh();
+                OnSelectionChanged();
+            }, "Sheets"))
             .ToList();
         ShowPalette("Go to sheet", items);
     }
 
     public void AddSheet()
     {
-        _session.AddSheet();
+        Session.AddSheet();
         BuildSheetTabs();
         // The new sheet is empty and active: reset the active cell to A1 and resync the chrome so the
         // formula bar reflects the new empty cell instead of stale text from the previous sheet (#7).
@@ -585,13 +592,13 @@ public partial class SpreadsheetEditorView : UserControl, IAppEnvironment
         // When the sheet has exactly one table, autofill the chart from it — first column for the
         // category labels and the first numeric column for the values (task 6). Otherwise fall back to
         // the current selection (and to the table if that seeding finds nothing usable).
-        var sheet = _session.ActiveSheet;
+        var sheet = Session.ActiveSheet;
         if (!(!sheet.IsChartSheet && sheet.Tables.Count == 1 && SeedChartFromTable(definition, sheet.Tables[0])))
         {
             SeedChartFromSelection(definition);
         }
 
-        _session.AddChartSheet(definition); // raises StructureChanged → RefreshSheetView swaps in the chart view
+        Session.AddChartSheet(definition); // raises StructureChanged → RefreshSheetView swaps in the chart view
         BuildSheetTabs();
         UpdateChrome();
         Narrate("Added chart sheet");
@@ -605,7 +612,7 @@ public partial class SpreadsheetEditorView : UserControl, IAppEnvironment
     /// </summary>
     private bool SeedChartFromTable(ChartDefinition definition, Cellestra.Core.Data.Table table)
     {
-        var sheet = _session.ActiveSheet;
+        var sheet = Session.ActiveSheet;
         var range = table.Range;
         int dataTop = table.HasHeader ? range.Top + 1 : range.Top;
         if (dataTop > range.Bottom)
@@ -663,7 +670,7 @@ public partial class SpreadsheetEditorView : UserControl, IAppEnvironment
     /// </summary>
     private void SeedChartFromSelection(ChartDefinition definition)
     {
-        var sheet = _session.ActiveSheet;
+        var sheet = Session.ActiveSheet;
         if (sheet.IsChartSheet)
         {
             return; // a chart sheet has no grid data to seed from
@@ -711,7 +718,7 @@ public partial class SpreadsheetEditorView : UserControl, IAppEnvironment
     /// </summary>
     private void RefreshSheetView()
     {
-        var sheet = _session.ActiveSheet;
+        var sheet = Session.ActiveSheet;
         bool isChart = sheet.IsChartSheet;
 
         Grid.IsVisible = !isChart;
@@ -720,8 +727,12 @@ public partial class SpreadsheetEditorView : UserControl, IAppEnvironment
 
         if (isChart && sheet.Chart is { } definition)
         {
-            var view = new ChartSheetView(_session.Workbook, definition);
-            view.ChartChanged += (_, _) => { _session.MarkChartModified(); UpdateChrome(); };
+            var view = new ChartSheetView(Session.Workbook, definition);
+            view.ChartChanged += (_, _) =>
+            {
+                Session.MarkChartModified();
+                UpdateChrome();
+            };
             ChartHost.Content = view;
         }
         else
@@ -755,7 +766,7 @@ public partial class SpreadsheetEditorView : UserControl, IAppEnvironment
         // The tab's context menu activates the right-clicked sheet first, so the active sheet is the
         // one to duplicate (works for data and chart sheets alike). StructureChanged rebuilds the tabs
         // and swaps in the right view; reset to A1 so a duplicated data sheet reads cleanly.
-        var copy = _session.DuplicateSheet(_session.ActiveSheet);
+        var copy = Session.DuplicateSheet(Session.ActiveSheet);
         Selection.MoveTo(0, 0);
         OnSelectionChanged();
         Narrate($"Duplicated sheet as “{copy.Name}”");
@@ -763,7 +774,7 @@ public partial class SpreadsheetEditorView : UserControl, IAppEnvironment
 
     public async void RenameActiveSheet()
     {
-        var sheet = _session.ActiveSheet;
+        var sheet = Session.ActiveSheet;
         string? name = await ShowModalAsync(new TextPromptDialog("Rename sheet", "Name", sheet.Name));
         if (name is null || name == sheet.Name)
         {
@@ -779,7 +790,7 @@ public partial class SpreadsheetEditorView : UserControl, IAppEnvironment
     {
         try
         {
-            _session.RenameSheet(sheet, name); // raises StructureChanged → rebuilds tabs/chrome
+            Session.RenameSheet(sheet, name); // raises StructureChanged → rebuilds tabs/chrome
             OnSelectionChanged();
             Narrate($"Renamed sheet to {name}");
             return true;
@@ -793,18 +804,18 @@ public partial class SpreadsheetEditorView : UserControl, IAppEnvironment
 
     public async void DeleteActiveSheet()
     {
-        if (_session.Workbook.Worksheets.Count <= 1)
+        if (Session.Workbook.Worksheets.Count <= 1)
         {
             ShowMessage("Can't delete the last sheet", "A workbook must keep at least one worksheet.");
             return;
         }
 
-        var sheet = _session.ActiveSheet;
+        var sheet = Session.ActiveSheet;
         bool confirmed = await ShowModalAsync(new ConfirmDialog("Delete sheet?",
             $"Delete “{sheet.Name}” and all its data? This can’t be undone.", "Delete"));
         if (confirmed)
         {
-            _session.DeleteSheet(sheet); // raises StructureChanged → rebuilds tabs/chrome
+            Session.DeleteSheet(sheet); // raises StructureChanged → rebuilds tabs/chrome
             OnSelectionChanged();
             Narrate($"Deleted sheet {sheet.Name}");
         }
@@ -812,7 +823,7 @@ public partial class SpreadsheetEditorView : UserControl, IAppEnvironment
 
     public async void ResetSheetData()
     {
-        var sheet = _session.ActiveSheet;
+        var sheet = Session.ActiveSheet;
         var used = sheet.GetUsedRange();
         if (used is null)
         {
@@ -835,11 +846,11 @@ public partial class SpreadsheetEditorView : UserControl, IAppEnvironment
         // ClearAll wipes value, formula, style, and hyperlink over the range; ResetSheetLayout adds
         // the sheet-level state ClearAll can't see — row/column fills, hidden flags, and any active
         // AutoFilter/sort — so a reset truly clears background colours and filters. One undoable step.
-        _session.Execute(EditCommands.Composite("Reset Sheet Data", new IEditCommand[]
-        {
+        Session.Execute(EditCommands.Composite("Reset Sheet Data",
+        [
             EditCommands.ClearAll(sheet.Name, used.Value),
             DataEditCommands.ResetSheetLayout(sheet.Name),
-        }));
+        ]));
         Selection.MoveTo(0, 0);
         Refresh();
         Narrate($"Reset {sheet.Name}");
@@ -872,7 +883,7 @@ public partial class SpreadsheetEditorView : UserControl, IAppEnvironment
                 continue;
             }
 
-            if (_commands.ById(id) is { } command)
+            if (Commands.ById(id) is { } command)
             {
                 flyout.Items.Add(new MenuItem
                 {
@@ -932,12 +943,12 @@ public partial class SpreadsheetEditorView : UserControl, IAppEnvironment
         // Inside a table, offer the table-specific actions (task 5: designate a header column). The
         // command's IsActive shows a check when the first column is already a header column.
         if (target == SpreadsheetGrid.ContextTarget.Cell && ActiveTable is not null
-            && _commands.ById("data.headerColumn") is { } headerColumn)
+            && Commands.ById("data.headerColumn") is { } headerColumn)
         {
             flyout.Items.Add(new Separator());
 
             // Right-clicking any cell in a table offers the Sort & Filter dialog for that table (#1).
-            if (_commands.ById("data.sortAndFilter") is { } sortAndFilter)
+            if (Commands.ById("data.sortAndFilter") is { } sortAndFilter)
             {
                 flyout.Items.Add(new MenuItem
                 {
@@ -978,7 +989,7 @@ public partial class SpreadsheetEditorView : UserControl, IAppEnvironment
         var (sheet, range, _) = AppCommands.DataTarget(this);
         if (sheet.ActiveFilter is not null)
         {
-            _session.Execute(DataEditCommands.ClearFilter(sheet.Name, sheet.ActiveFilter.Value));
+            Session.Execute(DataEditCommands.ClearFilter(sheet.Name, sheet.ActiveFilter.Value));
             sheet.ActiveFilter = null;
             // Also drop the conditions and sort so they don't linger and resurrect when the filter
             // is turned back on.
@@ -995,7 +1006,7 @@ public partial class SpreadsheetEditorView : UserControl, IAppEnvironment
 
     /// <summary>The table the active cell sits in, or null when it isn't inside one.</summary>
     public Cellestra.Core.Data.Table? ActiveTable =>
-        _session.ActiveSheet.FindTable(Selection.ActiveRow, Selection.ActiveColumn);
+        Session.ActiveSheet.FindTable(Selection.ActiveRow, Selection.ActiveColumn);
 
     public void ToggleTableHeaderColumn()
     {
@@ -1004,8 +1015,8 @@ public partial class SpreadsheetEditorView : UserControl, IAppEnvironment
             return;
         }
 
-        _session.Execute(DataEditCommands.SetTableHeaderColumn(
-            _session.Workbook, _session.ActiveSheet.Name, table, !table.HasHeaderColumn));
+        Session.Execute(DataEditCommands.SetTableHeaderColumn(
+            Session.Workbook, Session.ActiveSheet.Name, table, !table.HasHeaderColumn));
         Refresh();
         Narrate(table.HasHeaderColumn ? "Removed header column" : "Added header column");
     }
@@ -1016,7 +1027,7 @@ public partial class SpreadsheetEditorView : UserControl, IAppEnvironment
         var spec = await ShowModalAsync(new SortDialog(sheet, range, header));
         if (spec is { Levels.Count: > 0 })
         {
-            _session.Execute(DataEditCommands.Sort(sheet.Name, range, spec));
+            Session.Execute(DataEditCommands.Sort(sheet.Name, range, spec));
             // Persist the sort so it round-trips like the dropdown quick-sort, and remember the sorted
             // range as the active filter region if one isn't already set.
             sheet.ActiveSort = spec;
@@ -1028,7 +1039,7 @@ public partial class SpreadsheetEditorView : UserControl, IAppEnvironment
     public async void ShowSortFilterDialog()
     {
         var (sheet, range, header) = AppCommands.DataTarget(this);
-        var culture = _session.Workbook.Settings.EffectiveLocale;
+        var culture = Session.Workbook.Settings.EffectiveLocale;
         var plan = await ShowModalAsync(new SortFilterDialog(sheet, range, header, culture));
         if (plan is null)
         {
@@ -1036,7 +1047,7 @@ public partial class SpreadsheetEditorView : UserControl, IAppEnvironment
         }
 
         // Route to the table's own state or the sheet AutoFilter, as one undo step (see SortFilterCommit).
-        SortFilterCommit.Commit(_session, sheet, range, plan.Sort, plan.Filter, culture);
+        SortFilterCommit.Commit(Session, sheet, range, plan.Sort, plan.Filter, culture);
         Refresh();
     }
 
@@ -1046,7 +1057,7 @@ public partial class SpreadsheetEditorView : UserControl, IAppEnvironment
         var result = await ShowModalAsync(new RemoveDuplicatesDialog(sheet, range, header));
         if (result is not null)
         {
-            _session.Execute(DataEditCommands.RemoveDuplicates(sheet.Name, range, result.KeyColumns, result.HasHeader, out var removedCount));
+            Session.Execute(DataEditCommands.RemoveDuplicates(sheet.Name, range, result.KeyColumns, result.HasHeader, out var removedCount));
             Refresh();
 
             int removed = removedCount();
@@ -1062,7 +1073,7 @@ public partial class SpreadsheetEditorView : UserControl, IAppEnvironment
 
     public async void ShowTextToColumnsDialog()
     {
-        var sheet = _session.ActiveSheet;
+        var sheet = Session.ActiveSheet;
         var selection = Selection.Range;
         var source = new CellRange(new CellAddress(selection.Left, selection.Top), new CellAddress(selection.Left, selection.Bottom));
         var delimiter = await ShowModalAsync(new TextToColumnsDialog());
@@ -1081,7 +1092,7 @@ public partial class SpreadsheetEditorView : UserControl, IAppEnvironment
                 }
             }
 
-            _session.Execute(DataEditCommands.TextToColumns(sheet, source, d));
+            Session.Execute(DataEditCommands.TextToColumns(sheet, source, d));
             Refresh();
         }
     }
@@ -1113,11 +1124,11 @@ public partial class SpreadsheetEditorView : UserControl, IAppEnvironment
 
     public async void ShowDataValidationDialog()
     {
-        var sheet = _session.ActiveSheet;
+        var sheet = Session.ActiveSheet;
         var rule = await ShowModalAsync(new DataValidationDialog(Selection.Range));
         if (rule is not null)
         {
-            _session.Execute(DataEditCommands.SetValidation(sheet.Name, rule));
+            Session.Execute(DataEditCommands.SetValidation(sheet.Name, rule));
             Refresh();
         }
     }
@@ -1130,7 +1141,7 @@ public partial class SpreadsheetEditorView : UserControl, IAppEnvironment
         Refresh();
     }
 
-    public void ShowKeyboardShortcuts() => _ = ShowModalAsync(new KeyboardShortcutsDialog(_commands));
+    public void ShowKeyboardShortcuts() => _ = ShowModalAsync(new KeyboardShortcutsDialog(Commands));
 
     public void ShowAbout() => _ = ShowModalAsync(new AboutDialog());
 
@@ -1153,14 +1164,14 @@ public partial class SpreadsheetEditorView : UserControl, IAppEnvironment
 
     public async void ShowFormatCellsDialog()
     {
-        var sheet = _session.ActiveSheet;
+        var sheet = Session.ActiveSheet;
         var active = sheet.Find(Selection.ActiveRow, Selection.ActiveColumn);
-        var current = _session.Workbook.Styles.Get(active?.StyleId ?? Cellestra.Core.Styling.StylePool.DefaultId);
+        var current = Session.Workbook.Styles.Get(active?.StyleId ?? Cellestra.Core.Styling.StylePool.DefaultId);
 
         var transform = await ShowModalAsync(new FormatCellsDialog(current, DistinctSelectionStyles(sheet)));
         if (transform is not null)
         {
-            _session.Execute(EditCommands.ApplyStyle(_session.Workbook, sheet.Name, Selection.Range, transform, "Format Cells"));
+            Session.Execute(EditCommands.ApplyStyle(Session.Workbook, sheet.Name, Selection.Range, transform, "Format Cells"));
             Refresh();
         }
     }
@@ -1191,11 +1202,11 @@ public partial class SpreadsheetEditorView : UserControl, IAppEnvironment
     /// </summary>
     public async void ShowNamedRangeManager()
     {
-        var selection = Selection.Range.WithSheet(_session.ActiveSheet.Name);
-        bool changed = await ShowModalAsync(new NamedRangeDialog(_session.Workbook, selection));
+        var selection = Selection.Range.WithSheet(Session.ActiveSheet.Name);
+        bool changed = await ShowModalAsync(new NamedRangeDialog(Session.Workbook, selection));
         if (changed)
         {
-            _session.RecalculateAll();
+            Session.RecalculateAll();
             Refresh();
         }
     }
@@ -1207,7 +1218,7 @@ public partial class SpreadsheetEditorView : UserControl, IAppEnvironment
     /// </summary>
     public async void ShowHyperlinkDialog()
     {
-        var sheet = _session.ActiveSheet;
+        var sheet = Session.ActiveSheet;
         int row = Selection.ActiveRow, column = Selection.ActiveColumn;
         var cell = sheet.Find(row, column);
         var value = sheet.GetValue(row, column);
@@ -1223,11 +1234,11 @@ public partial class SpreadsheetEditorView : UserControl, IAppEnvironment
         var commands = new List<IEditCommand>();
         if (outcome.DisplayText is { } text)
         {
-            commands.Add(EditCommands.SetInput(_session.Workbook, sheet.Name, row, column, text, _session.Workbook.Settings.EffectiveLocale));
+            commands.Add(EditCommands.SetInput(Session.Workbook, sheet.Name, row, column, text, Session.Workbook.Settings.EffectiveLocale));
         }
 
-        commands.Add(EditCommands.SetHyperlink(_session.Workbook, sheet.Name, row, column, outcome.Link));
-        _session.Execute(commands.Count == 1 ? commands[0] : EditCommands.Composite("Set Hyperlink", commands));
+        commands.Add(EditCommands.SetHyperlink(Session.Workbook, sheet.Name, row, column, outcome.Link));
+        Session.Execute(commands.Count == 1 ? commands[0] : EditCommands.Composite("Set Hyperlink", commands));
         Refresh();
     }
 
@@ -1255,13 +1266,13 @@ public partial class SpreadsheetEditorView : UserControl, IAppEnvironment
             ids.Add(Cellestra.Core.Styling.StylePool.DefaultId);
         }
 
-        return ids.Select(id => _session.Workbook.Styles.Get(id)).ToList();
+        return [.. ids.Select(id => Session.Workbook.Styles.Get(id))];
     }
 
     public void ApplyCellStyle(System.Func<Cellestra.Core.Styling.CellStyle, Cellestra.Core.Styling.CellStyle> transform, string label)
     {
         Grid.ClearStylePreview();
-        _session.Execute(EditCommands.ApplyStyle(_session.Workbook, _session.ActiveSheet.Name, Selection.Range, transform, label));
+        Session.Execute(EditCommands.ApplyStyle(Session.Workbook, Session.ActiveSheet.Name, Selection.Range, transform, label));
         Refresh();
     }
 
@@ -1283,10 +1294,21 @@ public partial class SpreadsheetEditorView : UserControl, IAppEnvironment
 
     private void RewireSession()
     {
-        _session.Changed += (_, _) => { Grid.Refresh(); UpdateChrome(); RefreshChartData(); };
-        _session.StructureChanged += (_, _) => { BuildSheetTabs(); Grid.Refresh(); UpdateChrome(); RefreshSheetView(); };
+        Session.Changed += (_, _) =>
+        {
+            Grid.Refresh();
+            UpdateChrome();
+            RefreshChartData();
+        };
+        Session.StructureChanged += (_, _) =>
+        {
+            BuildSheetTabs();
+            Grid.Refresh();
+            UpdateChrome();
+            RefreshSheetView();
+        };
         WireSelectionUndo();
-        Grid.Attach(_session);
+        Grid.Attach(Session);
         BuildSheetTabs();
         UpdateChrome();
         RefreshSheetView();
@@ -1296,10 +1318,10 @@ public partial class SpreadsheetEditorView : UserControl, IAppEnvironment
     /// <summary>Let the session capture/restore the grid selection so undo returns there (#33).</summary>
     private void WireSelectionUndo()
     {
-        _session.SelectionProvider = () => new SelectionMemento(
+        Session.SelectionProvider = () => new SelectionMemento(
             Selection.Top, Selection.Left, Selection.Bottom, Selection.Right,
             Selection.ActiveRow, Selection.ActiveColumn);
-        _session.SelectionRestorer = m =>
+        Session.SelectionRestorer = m =>
             Selection.Restore(m.Top, m.Left, m.Bottom, m.Right, m.ActiveRow, m.ActiveColumn);
     }
 
@@ -1317,7 +1339,7 @@ public partial class SpreadsheetEditorView : UserControl, IAppEnvironment
         // Grid.ActiveCellName reports a selected merge as its whole span (e.g. B2:C3); fall back to the
         // single active address for ordinary cells.
         NameBox.Text = Grid.ActiveCellName;
-        var cell = _session.ActiveSheet.Find(Selection.ActiveRow, Selection.ActiveColumn);
+        var cell = Session.ActiveSheet.Find(Selection.ActiveRow, Selection.ActiveColumn);
         _syncingFormulaBar = true; // a programmatic refresh, not the user typing — don't echo into the cell
         FormulaInput.Text = cell is null ? string.Empty : (cell.IsFormula ? "=" + cell.Formula : cell.Value.ToInvariantString());
         _syncingFormulaBar = false;
@@ -1359,8 +1381,8 @@ public partial class SpreadsheetEditorView : UserControl, IAppEnvironment
     private void UpdateChrome()
     {
         StatusZoom.Text = $"{Grid.Zoom * 100:0}%";
-        StatusCalc.Text = _session.Workbook.Settings.CalculationMode == CalculationMode.Manual ? "Manual" : "Auto";
-        StatusSaved.Text = _session.IsModified ? "Edited"
+        StatusCalc.Text = Session.Workbook.Settings.CalculationMode == CalculationMode.Manual ? "Manual" : "Auto";
+        StatusSaved.Text = Session.IsModified ? "Edited"
             : _lastSavedAt is { } saved ? $"Saved {saved:HH:mm}" : "Not saved";
         _commandBar?.RefreshState();
 
@@ -1372,7 +1394,7 @@ public partial class SpreadsheetEditorView : UserControl, IAppEnvironment
 
     private void UpdateStatus()
     {
-        var sheet = _session.ActiveSheet;
+        var sheet = Session.ActiveSheet;
         StatusCell.Text = new CellAddress(Selection.ActiveColumn, Selection.ActiveRow).ToString();
 
         // Aggregate over the union of all selected ranges, deduped so overlaps aren't double-counted.
@@ -1418,9 +1440,9 @@ public partial class SpreadsheetEditorView : UserControl, IAppEnvironment
     private void BuildSheetTabs()
     {
         SheetTabs.Children.Clear();
-        foreach (var sheet in _session.Workbook.Worksheets)
+        foreach (var sheet in Session.Workbook.Worksheets)
         {
-            bool active = ReferenceEquals(sheet, _session.ActiveSheet);
+            bool active = ReferenceEquals(sheet, Session.ActiveSheet);
             // Tabs are Borders (not Buttons) so pointer events bubble to the strip for click-to-switch
             // and drag-to-reorder; the active/click/drag logic lives in the SheetTabs* handlers.
             var tab = new Border
@@ -1441,7 +1463,7 @@ public partial class SpreadsheetEditorView : UserControl, IAppEnvironment
                 // Right-clicking a tab activates it, then offers sheet actions (incl. delete — there's
                 // no other way to remove a sheet). Anchor on the stable strip, since activating the
                 // sheet rebuilds the tab elements.
-                _session.SetActiveSheet(captured);
+                Session.SetActiveSheet(captured);
                 Grid.Refresh();
                 OnSelectionChanged();
                 BuildCommandFlyout("sheet.rename", "sheet.duplicate", null, "insert.sheet", "insert.chartSheet", null, "sheet.delete").ShowAt(SheetTabs, showAtPointer: true);
@@ -1476,13 +1498,13 @@ public partial class SpreadsheetEditorView : UserControl, IAppEnvironment
         // Editing implies focusing this sheet. But SetActiveSheet raises StructureChanged, which runs
         // BuildSheetTabs and rebuilds the strip — orphaning the `tab` we were handed. So switch FIRST
         // (only when needed), then re-find the freshly-built tab Border to host the editor.
-        if (!ReferenceEquals(_session.ActiveSheet, sheet))
+        if (!ReferenceEquals(Session.ActiveSheet, sheet))
         {
-            _session.SetActiveSheet(sheet); // rebuilds the strip via StructureChanged
+            Session.SetActiveSheet(sheet); // rebuilds the strip via StructureChanged
             Grid.Refresh();
             OnSelectionChanged();
 
-            int index = _session.Workbook.IndexOf(sheet);
+            int index = Session.Workbook.IndexOf(sheet);
             if (index < 0 || index >= SheetTabs.Children.Count || SheetTabs.Children[index] is not Border rebuilt)
             {
                 return; // strip changed out from under us; nothing safe to edit
@@ -1564,7 +1586,7 @@ public partial class SpreadsheetEditorView : UserControl, IAppEnvironment
     /// <summary>Index of the worksheet tab under <paramref name="point"/> (in strip coordinates), or -1 (e.g. the ＋ button).</summary>
     private int TabIndexAt(Point point)
     {
-        int sheets = _session.Workbook.Worksheets.Count;
+        int sheets = Session.Workbook.Worksheets.Count;
         for (int i = 0; i < sheets && i < SheetTabs.Children.Count; i++)
         {
             if (SheetTabs.Children[i].Bounds.Contains(point))
@@ -1601,7 +1623,7 @@ public partial class SpreadsheetEditorView : UserControl, IAppEnvironment
         if (e.ClickCount == 2 && SheetTabs.Children[index] is Border doubleClicked)
         {
             _tabDragFrom = -1; // cancel any pending click/drag gesture from the first press
-            BeginInlineSheetRename(doubleClicked, _session.Workbook.Worksheets[index]);
+            BeginInlineSheetRename(doubleClicked, Session.Workbook.Worksheets[index]);
             e.Pointer.Capture(null);
             e.Handled = true;
             return;
@@ -1611,7 +1633,7 @@ public partial class SpreadsheetEditorView : UserControl, IAppEnvironment
         // invalidate the tab bounds the release needs to compute the drop target. Activation (and any
         // reorder) happens on release, against the still-laid-out tabs.
         _tabDragFrom = index;
-        _tabDragSheet = _session.Workbook.Worksheets[index];
+        _tabDragSheet = Session.Workbook.Worksheets[index];
         _tabDragStartX = point.X;
         _tabDragging = false;
         e.Pointer.Capture(SheetTabs);
@@ -1659,11 +1681,11 @@ public partial class SpreadsheetEditorView : UserControl, IAppEnvironment
 
                 if (target != _tabDragFrom)
                 {
-                    _session.MoveSheet(_tabDragFrom, target);
+                    Session.MoveSheet(_tabDragFrom, target);
                 }
             }
 
-            _session.SetActiveSheet(dragged); // click-to-switch / activate the dragged tab (rebuilds the strip)
+            Session.SetActiveSheet(dragged); // click-to-switch / activate the dragged tab (rebuilds the strip)
             Grid.Refresh();
             OnSelectionChanged();
         }
@@ -1679,7 +1701,7 @@ public partial class SpreadsheetEditorView : UserControl, IAppEnvironment
     /// <summary>The insertion slot (0..count) the pointer at <paramref name="x"/> would drop into.</summary>
     private int TabDropSlot(double x)
     {
-        int sheets = _session.Workbook.Worksheets.Count;
+        int sheets = Session.Workbook.Worksheets.Count;
         int slot = 0;
         for (int i = 0; i < sheets && i < SheetTabs.Children.Count; i++)
         {
@@ -1695,7 +1717,7 @@ public partial class SpreadsheetEditorView : UserControl, IAppEnvironment
     /// <summary>Place the green insertion marker in the gap where the dragged tab would land.</summary>
     private void UpdateTabDropIndicator(double x)
     {
-        int sheets = _session.Workbook.Worksheets.Count;
+        int sheets = Session.Workbook.Worksheets.Count;
         if (sheets == 0 || SheetTabs.Children.Count == 0)
         {
             return;
@@ -1714,7 +1736,7 @@ public partial class SpreadsheetEditorView : UserControl, IAppEnvironment
 
     private void SetTabCursors(Avalonia.Input.Cursor cursor)
     {
-        int sheets = _session.Workbook.Worksheets.Count;
+        int sheets = Session.Workbook.Worksheets.Count;
         for (int i = 0; i < sheets && i < SheetTabs.Children.Count; i++)
         {
             SheetTabs.Children[i].Cursor = cursor;
@@ -1898,7 +1920,7 @@ public partial class SpreadsheetEditorView : UserControl, IAppEnvironment
             Selection.MoveTo(address.Row, address.Column);
             JumpFromNameBox();
         }
-        else if (_session.Workbook.FindNamedRange(text) is { } named)
+        else if (Session.Workbook.FindNamedRange(text) is { } named)
         {
             Selection.SetRange(named.Target.Top, named.Target.Left, named.Target.Bottom, named.Target.Right);
             JumpFromNameBox();
@@ -1927,9 +1949,9 @@ public partial class SpreadsheetEditorView : UserControl, IAppEnvironment
 
     private async void CopyToClipboard(bool cut)
     {
-        var sheet = _session.ActiveSheet;
+        var sheet = Session.ActiveSheet;
         var range = Selection.Range;
-        var culture = _session.Workbook.Settings.EffectiveLocale;
+        var culture = Session.Workbook.Settings.EffectiveLocale;
         var sb = new StringBuilder();
 
         for (int row = range.Top; row <= range.Bottom; row++)
@@ -1944,7 +1966,7 @@ public partial class SpreadsheetEditorView : UserControl, IAppEnvironment
                 var cell = sheet.Find(row, column);
                 if (cell is not null && !cell.Value.IsEmpty)
                 {
-                    sb.Append(NumberFormatter.Format(cell.Value, _session.Workbook.Styles.Get(cell.StyleId).NumberFormat, culture));
+                    sb.Append(NumberFormatter.Format(cell.Value, Session.Workbook.Styles.Get(cell.StyleId).NumberFormat, culture));
                 }
             }
 
@@ -1977,13 +1999,13 @@ public partial class SpreadsheetEditorView : UserControl, IAppEnvironment
     {
         if (_clipboard is { } block)
         {
-            var command = new PasteBlockCommand(_session.ActiveSheet.Name, Selection.Range, block);
+            var command = new PasteBlockCommand(Session.ActiveSheet.Name, Selection.Range, block);
             if (!Grid.TryEnforceValidation(command)) // reject the whole paste on a Stop-rule violation (#B)
             {
                 return;
             }
 
-            _session.Execute(command);
+            Session.Execute(command);
             ClearClipboard();
             Grid.Refresh();
         }
@@ -1995,7 +2017,7 @@ public partial class SpreadsheetEditorView : UserControl, IAppEnvironment
         int rows = lines.Length;
         int columns = lines.Max(l => l.Split('\t').Length);
         var values = new CellValue[rows, columns];
-        var culture = _session.Workbook.Settings.EffectiveLocale;
+        var culture = Session.Workbook.Settings.EffectiveLocale;
 
         for (int r = 0; r < rows; r++)
         {
@@ -2027,7 +2049,7 @@ public partial class SpreadsheetEditorView : UserControl, IAppEnvironment
             return;
         }
 
-        _session.Execute(EditCommands.SetBlock(_session.ActiveSheet.Name, top, left, values));
+        Session.Execute(EditCommands.SetBlock(Session.ActiveSheet.Name, top, left, values));
         Grid.Refresh();
     }
 
@@ -2035,7 +2057,7 @@ public partial class SpreadsheetEditorView : UserControl, IAppEnvironment
 
     private void RegisterKeyBindings()
     {
-        foreach (var command in _commands.All)
+        foreach (var command in Commands.All)
         {
             if (command.Gesture is null)
             {
@@ -2163,11 +2185,13 @@ public partial class SpreadsheetEditorView : UserControl, IAppEnvironment
         {
             Placeholder = placeholder,
         };
-        palette.SetItems(items
-            .Select(i => new PaletteEntry(i.Label, i.Run, i.Description, i.Shortcut, i.Icon, i.Category))
-            .ToList());
+        palette.SetItems([.. items.Select(i => new PaletteEntry(i.Label, i.Run, i.Description, i.Shortcut, i.Icon, i.Category))]);
         palette.Cancelled += (_, _) => OverlayHost.Close();
-        palette.Chosen += entry => { OverlayHost.Close(); entry.Run(); };
+        palette.Chosen += entry =>
+        {
+            OverlayHost.Close();
+            entry.Run();
+        };
 
         var box = new Border
         {

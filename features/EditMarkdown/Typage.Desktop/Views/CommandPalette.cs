@@ -1,8 +1,5 @@
-using System.Collections.Generic;
-using System.Linq;
 using Avalonia;
 using Avalonia.Controls;
-using Avalonia.Input;
 using Avalonia.Layout;
 using Avalonia.VisualTree;
 using Puffinote.Components.Commands;
@@ -51,16 +48,19 @@ public sealed class CommandPalette : Panel
         }, handledEventsToo: true);
 
         _palette.Cancelled += (_, _) => Close();
-        _palette.Chosen += entry => { Close(); entry.Run(); };
+        _palette.Chosen += entry =>
+        {
+            Close();
+            entry.Run();
+        };
     }
 
     /// <summary>Open the palette over the given (enabled) commands and focus the search box.</summary>
     public void Open(IReadOnlyList<AppCommand> commands)
     {
-        _palette.SetItems(commands
+        _palette.SetItems([.. commands
             .Where(c => c.IsEnabled)
-            .Select(c => new PaletteEntry(c.Title, c.Execute, c.Description, c.ShortcutText))
-            .ToList());
+            .Select(c => new PaletteEntry(c.Title, c.Execute, c.Description, c.ShortcutText))]);
         IsVisible = true;
         _palette.SearchBox.Focus();
     }

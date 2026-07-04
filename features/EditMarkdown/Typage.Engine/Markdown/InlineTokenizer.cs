@@ -178,7 +178,7 @@ internal sealed class InlineTokenizer
                 var node = _nextNode++;
                 FlushText(i);
                 Emit(i, 3, TokenType.Marker, TokenRole.Marker, node: node);
-                var target = _text.Substring(i + 3, close - (i + 3));
+                var target = _text[(i + 3)..close];
                 Emit(i + 3, close - (i + 3), TokenType.Embed, TokenRole.Content, target, node);
                 Emit(close, 2, TokenType.Marker, TokenRole.Marker, node: node);
                 return close + 2 - i;
@@ -201,7 +201,7 @@ internal sealed class InlineTokenizer
                     var (urlStart, urlLen) = Destination(altClose + 2, urlClose);
                     FlushText(i);
                     Emit(i, 2, TokenType.Marker, TokenRole.Marker, node: node); // ![
-                    var alt = _text.Substring(altStart, altClose - altStart);
+                    var alt = _text[altStart..altClose];
                     Emit(altStart, altClose - altStart, TokenType.ImageAlt, TokenRole.Content, alt, node);
                     Emit(altClose, 2, TokenType.Marker, TokenRole.Marker, node: node); // ](
                     var url = _text.Substring(urlStart, urlLen);
@@ -227,7 +227,7 @@ internal sealed class InlineTokenizer
                 var node = _nextNode++;
                 FlushText(i);
                 Emit(i, 2, TokenType.Marker, TokenRole.Marker, node: node);
-                var target = _text.Substring(i + 2, close - (i + 2));
+                var target = _text[(i + 2)..close];
                 Emit(i + 2, close - (i + 2), TokenType.WikiLink, TokenRole.Content, target, node);
                 Emit(close, 2, TokenType.Marker, TokenRole.Marker, node: node);
                 return close + 2 - i;
@@ -269,7 +269,7 @@ internal sealed class InlineTokenizer
             return 0;
         }
 
-        var inner = _text.Substring(i + 1, close - (i + 1));
+        var inner = _text[(i + 1)..close];
         if (inner.Length == 0 || inner.Contains(' ') || !LooksLikeUri(inner))
         {
             return 0;
@@ -314,7 +314,7 @@ internal sealed class InlineTokenizer
         }
 
         FlushText(i);
-        var url = _text.Substring(i, j - i);
+        var url = _text[i..j];
         Emit(i, j - i, TokenType.Autolink, TokenRole.Content, url);
         return j - i;
     }
@@ -326,8 +326,8 @@ internal sealed class InlineTokenizer
         var candidates = run >= 3
             ? new[] { (3, TokenType.StrongEmphasis), (2, TokenType.Strong), (1, TokenType.Emphasis) }
             : run == 2
-                ? new[] { (2, TokenType.Strong), (1, TokenType.Emphasis) }
-                : new[] { (1, TokenType.Emphasis) };
+                ? [(2, TokenType.Strong), (1, TokenType.Emphasis)]
+                : [(1, TokenType.Emphasis)];
 
         foreach (var (count, type) in candidates)
         {

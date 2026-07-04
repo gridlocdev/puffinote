@@ -1,5 +1,3 @@
-using System;
-using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Automation;
 using Avalonia.Controls;
@@ -89,7 +87,7 @@ public abstract class ModalDialog<TResult> : ContentControl, IModalDialog
     {
         base.OnAttachedToVisualTree(e);
         // Defer so the template is realized before we grab focus (mirrors the old Window.Opened hook).
-        Avalonia.Threading.Dispatcher.UIThread.Post(() => (InitialFocus ?? (Control)this).Focus());
+        Avalonia.Threading.Dispatcher.UIThread.Post(() => (InitialFocus ?? this).Focus());
     }
 
     protected override void OnKeyDown(KeyEventArgs e)

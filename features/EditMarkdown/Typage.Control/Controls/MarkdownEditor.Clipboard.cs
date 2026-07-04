@@ -1,17 +1,8 @@
-using System.Globalization;
-using System.Linq;
-using Avalonia;
 using Avalonia.Controls;
-using Avalonia.Controls.Primitives;
 using Avalonia.Input;
 using Avalonia.Input.Platform;
-using Avalonia.Media;
 using Avalonia.Threading;
-using Typage.Control.Rendering;
-using Typage.Engine.Document;
-using Typage.Engine.Editing;
 using Typage.Engine.Markdown;
-
 
 namespace Typage.Control.Controls;
 
@@ -19,13 +10,13 @@ public partial class MarkdownEditor
 {
     public async Task CopyAsync()
     {
-        var sel = _buffer.Selection;
+        var sel = Buffer.Selection;
         if (sel.IsEmpty || TopLevel.GetTopLevel(this)?.Clipboard is not { } clipboard)
         {
             return;
         }
 
-        var text = _buffer.Document.GetText(sel.Start, sel.Length); // read before the await (UI thread)
+        var text = Buffer.Document.GetText(sel.Start, sel.Length); // read before the await (UI thread)
         try
         {
             await clipboard.SetTextAsync(text);
@@ -38,13 +29,13 @@ public partial class MarkdownEditor
 
     public async Task CutAsync()
     {
-        if (_buffer.Selection.IsEmpty)
+        if (Buffer.Selection.IsEmpty)
         {
             return;
         }
 
         await CopyAsync();
-        RunOnUiThread(() => _buffer.Insert(string.Empty)); // delete the selection on the UI thread
+        RunOnUiThread(() => Buffer.Insert(string.Empty)); // delete the selection on the UI thread
     }
 
     public async Task PasteAsync()
@@ -70,9 +61,9 @@ public partial class MarkdownEditor
             // style, so a paste doesn't sprinkle foreign newlines through the file (golden rule #5).
             RunOnUiThread(() =>
             {
-                var nl = DetectNewline(_buffer.Document);
+                var nl = DetectNewline(Buffer.Document);
                 var normalized = text.Replace("\r\n", "\n").Replace('\r', '\n');
-                _buffer.Insert(nl == "\n" ? normalized : normalized.Replace("\n", nl));
+                Buffer.Insert(nl == "\n" ? normalized : normalized.Replace("\n", nl));
             });
         }
     }
@@ -112,8 +103,8 @@ public partial class MarkdownEditor
         menu.Items.Add(Item("Strikethrough", ToggleStrikethrough));
         menu.Items.Add(Item("Link…", InsertLink));
         menu.Items.Add(new Separator());
-        menu.Items.Add(Item("Undo", () => _buffer.Undo()));
-        menu.Items.Add(Item("Redo", () => _buffer.Redo()));
+        menu.Items.Add(Item("Undo", () => Buffer.Undo()));
+        menu.Items.Add(Item("Redo", () => Buffer.Redo()));
         return menu;
     }
 
@@ -156,7 +147,7 @@ public partial class MarkdownEditor
     /// lines (without the <c>```</c> fences), or an indented block's lines dedented by one level.</summary>
     private string CodeBlockText(int firstLine, int lastLine)
     {
-        var doc = _buffer.Document;
+        var doc = Buffer.Document;
         var openToks = _model.LineTokens(firstLine);
         var fenced = openToks.Count > 0 && openToks[0].Type == TokenType.CodeFence;
         var from = firstLine;
@@ -197,5 +188,4 @@ public partial class MarkdownEditor
 
         return text[spaces..];
     }
-
 }

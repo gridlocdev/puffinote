@@ -1,4 +1,3 @@
-using System.Linq;
 using Avalonia;
 using Avalonia.Automation;
 using Avalonia.Controls;
@@ -85,7 +84,7 @@ internal sealed class FileTreeView : UserControl
 
     /// <summary>The names of the currently visible rows, top to bottom (test seam).</summary>
     internal IReadOnlyList<string> VisibleNamesForTest =>
-        (_list.ItemsSource as IReadOnlyList<Row>)?.Select(r => r.Node.Name).ToList() ?? new List<string>();
+        (_list.ItemsSource as IReadOnlyList<Row>)?.Select(r => r.Node.Name).ToList() ?? [];
 
     /// <summary>The selected row's name, or null (test seam).</summary>
     internal string? SelectedNameForTest => SelectedNode?.Name;

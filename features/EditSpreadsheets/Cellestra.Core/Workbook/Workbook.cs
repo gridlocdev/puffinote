@@ -10,8 +10,8 @@ namespace Cellestra.Core.Model;
 /// </summary>
 public sealed class Workbook
 {
-    private readonly List<Worksheet> _worksheets = new();
-    private readonly List<NamedRange> _namedRanges = new();
+    private readonly List<Worksheet> _worksheets = [];
+    private readonly List<NamedRange> _namedRanges = [];
 
     public IReadOnlyList<Worksheet> Worksheets => _worksheets;
 
@@ -83,7 +83,7 @@ public sealed class Workbook
     /// <summary>Add a worksheet with the next unused default name (Sheet2, Sheet3, …).</summary>
     public Worksheet AddSheet()
     {
-        string name = Defaults.NextSheetName(_worksheets.Select(s => s.Name).ToList());
+        string name = Defaults.NextSheetName([.. _worksheets.Select(s => s.Name)]);
         return AddSheet(name);
     }
 
@@ -94,7 +94,7 @@ public sealed class Workbook
     public Worksheet AddChartSheet(ChartDefinition chart)
     {
         ArgumentNullException.ThrowIfNull(chart);
-        string name = Defaults.NextChartSheetName(_worksheets.Select(s => s.Name).ToList());
+        string name = Defaults.NextChartSheetName([.. _worksheets.Select(s => s.Name)]);
         var sheet = AddSheet(name);
         sheet.Chart = chart;
         return sheet;

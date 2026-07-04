@@ -46,7 +46,7 @@ public sealed class SwapCellsCommand : IEditCommand
     {
         var sheet = workbook.FindSheet(_sheetName)
             ?? throw new InvalidOperationException($"Sheet '{_sheetName}' not found.");
-        _before = new Dictionary<(string, int, int), Cell?>();
+        _before = [];
 
         int rows = _blockA.RowCount;
         int cols = _blockA.ColumnCount;
@@ -157,7 +157,7 @@ public sealed class SwapCellsCommand : IEditCommand
     }
 
     private List<CellRef> ChangedRefs() =>
-        _before!.Keys.Select(k => new CellRef(k.Sheet, k.Row, k.Column)).ToList();
+        [.. _before!.Keys.Select(k => new CellRef(k.Sheet, k.Row, k.Column))];
 
     private void Snapshot(Worksheet sheet, int row, int column)
     {

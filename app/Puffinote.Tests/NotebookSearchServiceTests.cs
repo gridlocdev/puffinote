@@ -30,7 +30,7 @@ public sealed class NotebookSearchServiceTests : IDisposable
     {
         File.WriteAllText(Path("note.md"), "meeting notes about widgets");
         WriteOds("book.ods", "widgets", "revenue");
-        File.WriteAllBytes(Path("image.png"), new byte[] { 1, 2, 3, 4 }); // binary → skipped
+        File.WriteAllBytes(Path("image.png"), [1, 2, 3, 4]); // binary → skipped
 
         var notebook = new NotebookService();
         notebook.OpenNotebook(_notebook.FullName);
@@ -115,7 +115,7 @@ public sealed class NotebookSearchServiceTests : IDisposable
     public async Task An_unreadable_workbook_is_skipped_rather_than_throwing()
     {
         File.WriteAllText(Path("good.md"), "hello");
-        File.WriteAllBytes(Path("broken.ods"), new byte[] { 0, 1, 2, 3 }); // not a real .ods
+        File.WriteAllBytes(Path("broken.ods"), [0, 1, 2, 3]); // not a real .ods
 
         var notebook = new NotebookService();
         notebook.OpenNotebook(_notebook.FullName);

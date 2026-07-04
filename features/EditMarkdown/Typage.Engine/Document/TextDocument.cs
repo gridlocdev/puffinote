@@ -57,10 +57,9 @@ public sealed class TextDocument
     private readonly AddBuffer _add;   // the lineage's append buffer (inserts live here)
     private readonly Piece[] _pieces;
     private int[]? _lineStarts;   // lazily computed offsets of the first char of each line
-    private int[]? _pieceOffsets; // lazily computed cumulative start offset of each piece (for binary search)
 
     /// <summary>The empty document.</summary>
-    public static readonly TextDocument Empty = new(string.Empty, EmptyAdd, Array.Empty<Piece>(), 0);
+    public static readonly TextDocument Empty = new(string.Empty, EmptyAdd, [], 0);
 
     private TextDocument(string original, AddBuffer add, Piece[] pieces, int length, int[]? lineStarts = null)
     {
@@ -89,7 +88,7 @@ public sealed class TextDocument
             return Empty;
         }
 
-        return new TextDocument(text, EmptyAdd, new[] { new Piece(false, 0, text.Length) }, text.Length);
+        return new TextDocument(text, EmptyAdd, [new Piece(false, 0, text.Length)], text.Length);
     }
 
     /// <summary>The full document text, materialized.</summary>
@@ -186,7 +185,7 @@ public sealed class TextDocument
 
         var add = InsertBuffer();
         var inserted = new Piece(true, add.Append(text), text.Length);
-        var rebuilt = SpliceAt(offset, 0, new[] { inserted });
+        var rebuilt = SpliceAt(offset, 0, [inserted]);
         return new TextDocument(_original, add, rebuilt, Length + text.Length, PatchedLineStarts(offset, 0, text));
     }
 
@@ -205,7 +204,7 @@ public sealed class TextDocument
             return this;
         }
 
-        var rebuilt = SpliceAt(offset, length, Array.Empty<Piece>());
+        var rebuilt = SpliceAt(offset, length, []);
         return new TextDocument(_original, _add, rebuilt, Length - length, PatchedLineStarts(offset, length, string.Empty));
     }
 
@@ -223,7 +222,7 @@ public sealed class TextDocument
         }
 
         var add = InsertBuffer();
-        var rebuilt = SpliceAt(offset, length, new[] { new Piece(true, add.Append(text), text.Length) });
+        var rebuilt = SpliceAt(offset, length, [new Piece(true, add.Append(text), text.Length)]);
         return new TextDocument(_original, add, rebuilt, Length - length + text.Length, PatchedLineStarts(offset, length, text));
     }
 
@@ -297,7 +296,7 @@ public sealed class TextDocument
             AddCoalescing(p);
         }
 
-        return result.ToArray();
+        return [.. result];
     }
 
     // ----- Piece index (binary search by absolute offset) -----
@@ -308,9 +307,9 @@ public sealed class TextDocument
     {
         get
         {
-            if (_pieceOffsets is not null)
+            if (field is not null)
             {
-                return _pieceOffsets;
+                return field;
             }
 
             var offsets = new int[_pieces.Length + 1];
@@ -319,7 +318,7 @@ public sealed class TextDocument
                 offsets[i + 1] = offsets[i] + _pieces[i].Length;
             }
 
-            return _pieceOffsets = offsets;
+            return field = offsets;
         }
     }
 
@@ -424,7 +423,7 @@ public sealed class TextDocument
             }
         }
 
-        return starts.ToArray();
+        return [.. starts];
     }
 
     /// <summary>Number of lines. An empty document has one (empty) line.</summary>
@@ -444,7 +443,7 @@ public sealed class TextDocument
     /// <summary>Offset just past the last content character of <paramref name="line"/>, excluding the trailing <c>\n</c>.</summary>
     public int GetLineEnd(int line)
     {
-        var start = GetLineStart(line);
+        _ = GetLineStart(line);
         if (line + 1 < LineCount)
         {
             return LineStarts[line + 1] - 1; // drop the '\n'

@@ -1,4 +1,3 @@
-using System.Linq;
 using BenchmarkDotNet.Attributes;
 using Typage.Engine.Document;
 using Typage.Engine.Editing;

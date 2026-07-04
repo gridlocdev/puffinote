@@ -7,8 +7,8 @@ namespace Cellestra.Core.Styling;
 /// </summary>
 public sealed class StylePool
 {
-    private readonly List<CellStyle> _styles = new();
-    private readonly Dictionary<CellStyle, int> _index = new();
+    private readonly List<CellStyle> _styles = [];
+    private readonly Dictionary<CellStyle, int> _index = [];
 
     public StylePool()
     {

@@ -154,7 +154,7 @@ public sealed class VisualLine
                 continue;
             }
 
-            var text = lineText.Substring(s.From, s.To - s.From);
+            var text = lineText[s.From..s.To];
             if (!wrap)
             {
                 Place(VisualRunKind.Text, s.From, s.To - s.From, measure(text, s.Style), text, s.Style, DecorationKind.None);
@@ -174,7 +174,7 @@ public sealed class VisualLine
                     j++;
                 }
 
-                var piece = text.Substring(i, j - i);
+                var piece = text[i..j];
                 var w = measure(piece, s.Style);
                 if (!space && x + w > wrapWidth && x > gutter)
                 {

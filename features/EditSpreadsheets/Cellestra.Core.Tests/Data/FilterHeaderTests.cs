@@ -39,7 +39,7 @@ public class FilterHeaderTests
     {
         var sheet = ScoreSheet();
         SortEngine.Sort(sheet, CellRange.Parse("A1:A4"),
-            new SortSpec(new[] { new SortLevel(0, Ascending: true) }, HasHeader: true));
+            new SortSpec([new SortLevel(0, Ascending: true)], HasHeader: true));
 
         Assert.Equal("Score", sheet.GetValue(0, 0).AsText); // header untouched
         Assert.Equal(10, sheet.GetValue(1, 0).AsNumber);    // data sorted below it

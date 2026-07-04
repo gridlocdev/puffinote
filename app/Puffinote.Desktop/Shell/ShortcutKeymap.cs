@@ -1,4 +1,3 @@
-using System.Linq;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using Puffinote.Components.Commands;
@@ -46,7 +45,7 @@ internal sealed class ShortcutKeymap
     public Shortcut? Resolve(string id, Shortcut? fallback) => For(id) ?? fallback;
 
     /// <summary>The ids that currently carry a custom binding (for the editor's "reset" affordance).</summary>
-    public IReadOnlyCollection<string> CustomizedIds => _bindings.Keys.ToList();
+    public IReadOnlyCollection<string> CustomizedIds => [.. _bindings.Keys];
 
     /// <summary>Rebind <paramref name="id"/> to <paramref name="shortcut"/> (null clears it), then persist.</summary>
     public void Set(string id, Shortcut? shortcut)

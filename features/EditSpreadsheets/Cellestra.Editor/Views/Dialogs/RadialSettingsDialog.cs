@@ -1,6 +1,3 @@
-using System;
-using System.Collections.Generic;
-using System.Linq;
 using Avalonia.Controls;
 using Avalonia.Controls.Templates;
 using Avalonia.Input;
@@ -51,8 +48,8 @@ public sealed class RadialSettingsDialog : ModalDialog<RadialMenuConfig>
     private readonly AppCommands? _commands;
 
     // Per-segment widgets, in segment order, so the preview can bold/highlight the matching row.
-    private readonly List<TextBlock> _segmentLabels = new();
-    private readonly List<Border> _rowBorders = new();
+    private readonly List<TextBlock> _segmentLabels = [];
+    private readonly List<Border> _rowBorders = [];
 
     // Inline confirmations layered over the dialog body (one modal at a time is hosted by the editor, so
     // these can't be a second ShowModalAsync — they live in here): "reset to defaults?" and, when Escape
@@ -65,7 +62,6 @@ public sealed class RadialSettingsDialog : ModalDialog<RadialMenuConfig>
     private TextBox _pickerSearch = null!;
     private ListBox _pickerList = null!;
     private TextBlock _pickerTitle = null!;
-    private int _pickerSegment = -1; // the wedge currently being (re)bound (-1 = picker closed)
 
     // The config as it stood when the dialog opened, to tell whether Escape is discarding real changes.
     private readonly RadialMenuConfig _originalConfig;
@@ -73,8 +69,6 @@ public sealed class RadialSettingsDialog : ModalDialog<RadialMenuConfig>
     // A full-length working buffer of per-segment bindings (kept the maximum length so shrinking then
     // growing the count remembers earlier picks); only the first N are shown and saved.
     private readonly List<string?> _bindings;
-
-    private int _selectedSegment = -1; // the row targeted by ⌥⇧↑/↓ and arrow navigation (-1 = none)
     private int _hoverSegment = -1;    // the wedge the pointer is over (transient; takes the preview highlight)
     private bool _labelHasFocus;       // a row's drag-handle label currently holds keyboard focus
     private int _rowDragIndex = -1;    // segment being dragged by its left-hand label (-1 = not dragging)
@@ -90,7 +84,7 @@ public sealed class RadialSettingsDialog : ModalDialog<RadialMenuConfig>
 
         var normalized = config.Normalized();
         _originalConfig = normalized;
-        _bindings = (config with { SegmentCount = RadialMenuConfig.MaxSegments }).Normalized().CommandIds.ToList();
+        _bindings = [.. (config with { SegmentCount = RadialMenuConfig.MaxSegments }).Normalized().CommandIds];
 
         _countField = new NumericUpDown
         {
@@ -148,7 +142,13 @@ public sealed class RadialSettingsDialog : ModalDialog<RadialMenuConfig>
         // events: hovering highlights a wedge + bolds its row, dragging swaps wedges, and a plain click
         // focuses the wedge's picker.
         _previewBox.PointerMoved += OnPreviewPointerMoved;
-        _previewBox.PointerExited += (_, _) => { if (_radialDragIndex < 0) { SetHover(-1); } };
+        _previewBox.PointerExited += (_, _) =>
+        {
+            if (_radialDragIndex < 0)
+            {
+                SetHover(-1);
+            }
+        };
         _previewBox.PointerPressed += OnPreviewPointerPressed;
         _previewBox.PointerReleased += OnPreviewPointerReleased;
 
@@ -225,9 +225,9 @@ public sealed class RadialSettingsDialog : ModalDialog<RadialMenuConfig>
         _segmentLabels.Clear();
         _rowBorders.Clear();
 
-        if (_selectedSegment >= SegmentCount)
+        if (SelectedSegmentForTest >= SegmentCount)
         {
-            _selectedSegment = -1;
+            SelectedSegmentForTest = -1;
         }
 
         for (int i = 0; i < SegmentCount; i++)
@@ -244,7 +244,11 @@ public sealed class RadialSettingsDialog : ModalDialog<RadialMenuConfig>
                 Focusable = true,
                 Cursor = HandCursor,
             };
-            name.GotFocus += (_, _) => { _labelHasFocus = true; SelectSegment(index, focus: false); };
+            name.GotFocus += (_, _) =>
+            {
+                _labelHasFocus = true;
+                SelectSegment(index, focus: false);
+            };
             name.LostFocus += (_, _) => _labelHasFocus = false;
             name.PointerPressed += (_, e) => OnLabelPressed(index, e);
 
@@ -296,26 +300,26 @@ public sealed class RadialSettingsDialog : ModalDialog<RadialMenuConfig>
     /// wedge without popping a tip that would linger over other windows.
     /// </summary>
     private void UpdatePreviewHighlight() =>
-        _preview.SetActiveSegment(_hoverSegment >= 0 ? _hoverSegment : _selectedSegment, showTooltip: _hoverSegment >= 0);
+        _preview.SetActiveSegment(_hoverSegment >= 0 ? _hoverSegment : SelectedSegmentForTest, showTooltip: _hoverSegment >= 0);
 
     /// <summary>Paint the selected row's background so the ⌥⇧-arrow / drag target is visible.</summary>
     private void ApplySelectionHighlight()
     {
         for (int i = 0; i < _rowBorders.Count; i++)
         {
-            _rowBorders[i].Background = i == _selectedSegment ? SelectedRowBrush : null;
+            _rowBorders[i].Background = i == SelectedSegmentForTest ? SelectedRowBrush : null;
         }
     }
 
     /// <summary>Mark <paramref name="index"/> as the selected row (optionally focusing its label).</summary>
     private void SelectSegment(int index, bool focus)
     {
-        _selectedSegment = InRange(index) ? index : -1;
+        SelectedSegmentForTest = InRange(index) ? index : -1;
         ApplySelectionHighlight();
         UpdatePreviewHighlight(); // mirror the selection onto the preview wedge
-        if (focus && _selectedSegment >= 0)
+        if (focus && SelectedSegmentForTest >= 0)
         {
-            _segmentLabels[_selectedSegment].Focus();
+            _segmentLabels[SelectedSegmentForTest].Focus();
         }
     }
 
@@ -327,29 +331,29 @@ public sealed class RadialSettingsDialog : ModalDialog<RadialMenuConfig>
             (_bindings[a], _bindings[b]) = (_bindings[b], _bindings[a]);
         }
 
-        _selectedSegment = InRange(select) ? select : -1;
+        SelectedSegmentForTest = InRange(select) ? select : -1;
         RebuildBindingRows();
-        if (focus && _selectedSegment >= 0)
+        if (focus && SelectedSegmentForTest >= 0)
         {
-            _segmentLabels[_selectedSegment].Focus();
+            _segmentLabels[SelectedSegmentForTest].Focus();
         }
     }
 
     /// <summary>Move the selected row one place up (-1) or down (+1), keeping it selected and focused.</summary>
     private void MoveSelected(int delta)
     {
-        if (_selectedSegment < 0)
+        if (SelectedSegmentForTest < 0)
         {
             return;
         }
 
-        int target = _selectedSegment + delta;
+        int target = SelectedSegmentForTest + delta;
         if (!InRange(target))
         {
             return;
         }
 
-        Reorder(_selectedSegment, target, target, focus: true);
+        Reorder(SelectedSegmentForTest, target, target, focus: true);
     }
 
     // --- Left-hand label drag ------------------------------------------------------------------------
@@ -393,9 +397,9 @@ public sealed class RadialSettingsDialog : ModalDialog<RadialMenuConfig>
         _rowDragIndex = -1;
         _bindingRows.Cursor = null;
         e.Pointer.Capture(null);
-        if (_selectedSegment >= 0)
+        if (SelectedSegmentForTest >= 0)
         {
-            _segmentLabels[_selectedSegment].Focus();
+            _segmentLabels[SelectedSegmentForTest].Focus();
         }
     }
 
@@ -494,7 +498,11 @@ public sealed class RadialSettingsDialog : ModalDialog<RadialMenuConfig>
         "Reset radial menu?",
         "This restores the default segment count and command bindings. Your current changes will be discarded.",
         ("Cancel", false, HideResetConfirm),
-        ("Reset", true, () => { ApplyDefaults(); HideResetConfirm(); }
+        ("Reset", true, () =>
+        {
+            ApplyDefaults();
+            HideResetConfirm();
+        }
     ));
 
     /// <summary>
@@ -627,10 +635,22 @@ public sealed class RadialSettingsDialog : ModalDialog<RadialMenuConfig>
         {
             switch (e.Key)
             {
-                case Key.Escape: HideCommandPicker(); e.Handled = true; break;
-                case Key.Return: CommitPicker(); e.Handled = true; break;
-                case Key.Down: MovePicker(+1); e.Handled = true; break;
-                case Key.Up: MovePicker(-1); e.Handled = true; break;
+                case Key.Escape:
+                    HideCommandPicker();
+                    e.Handled = true;
+                    break;
+                case Key.Return:
+                    CommitPicker();
+                    e.Handled = true;
+                    break;
+                case Key.Down:
+                    MovePicker(+1);
+                    e.Handled = true;
+                    break;
+                case Key.Up:
+                    MovePicker(-1);
+                    e.Handled = true;
+                    break;
             }
         };
 
@@ -697,7 +717,7 @@ public sealed class RadialSettingsDialog : ModalDialog<RadialMenuConfig>
             return;
         }
 
-        _pickerSegment = segment;
+        CommandPickerSegmentForTest = segment;
         _pickerTitle.Text = $"Bind command to Segment {segment + 1}";
         _pickerSearch.Text = string.Empty;
         PopulatePicker(string.Empty);
@@ -708,7 +728,7 @@ public sealed class RadialSettingsDialog : ModalDialog<RadialMenuConfig>
     private void HideCommandPicker()
     {
         _commandPicker.IsVisible = false;
-        _pickerSegment = -1;
+        CommandPickerSegmentForTest = -1;
     }
 
     /// <summary>Rank the commands against <paramref name="query"/> (fuzzy), with an "unbind" row on top.</summary>
@@ -720,7 +740,7 @@ public sealed class RadialSettingsDialog : ModalDialog<RadialMenuConfig>
             items.Add(new PickerItem(null, "— None —", null, "Leave this wedge empty"));
         }
 
-        items.AddRange((_commands?.All ?? Array.Empty<AppCommand>())
+        items.AddRange((_commands?.All ?? [])
             .Select(c => (Command: c, Score: FuzzyMatcher.Score(c.Title, query)))
             .Where(x => x.Score >= 0)
             .OrderByDescending(x => x.Score)
@@ -743,13 +763,13 @@ public sealed class RadialSettingsDialog : ModalDialog<RadialMenuConfig>
     /// <summary>Assign the highlighted command (or unbind) to the wedge being edited, then close.</summary>
     private void CommitPicker()
     {
-        if (_pickerSegment < 0 || _pickerList.SelectedItem is not PickerItem item)
+        if (CommandPickerSegmentForTest < 0 || _pickerList.SelectedItem is not PickerItem item)
         {
             return;
         }
 
-        _bindings[_pickerSegment] = item.Id;
-        _selectedSegment = _pickerSegment;
+        _bindings[CommandPickerSegmentForTest] = item.Id;
+        SelectedSegmentForTest = CommandPickerSegmentForTest;
         HideCommandPicker();
         RebuildBindingRows();
     }
@@ -764,7 +784,7 @@ public sealed class RadialSettingsDialog : ModalDialog<RadialMenuConfig>
 
         var dock = new DockPanel { LastChildFill = true };
 
-        if (_pickerSegment >= 0 && item.Id is { } id && id == _bindings[_pickerSegment])
+        if (CommandPickerSegmentForTest >= 0 && item.Id is { } id && id == _bindings[CommandPickerSegmentForTest])
         {
             var current = new TextBlock
             {
@@ -830,7 +850,7 @@ public sealed class RadialSettingsDialog : ModalDialog<RadialMenuConfig>
             _bindings[i] = i < fullBindings.Count ? fullBindings[i] : null;
         }
 
-        _selectedSegment = -1;
+        SelectedSegmentForTest = -1;
         _countField.Value = defaults.SegmentCount;
         RebuildBindingRows(); // covers the case where the count was already at the default (no ValueChanged)
     }
@@ -892,22 +912,32 @@ public sealed class RadialSettingsDialog : ModalDialog<RadialMenuConfig>
 
         bool alt = e.KeyModifiers.HasFlag(KeyModifiers.Alt);
         bool shift = e.KeyModifiers.HasFlag(KeyModifiers.Shift);
-        if (_selectedSegment >= 0)
+        if (SelectedSegmentForTest >= 0)
         {
             // ⌥⇧↑/↓ reorders the selected command; plain ↑/↓ (while a row label has focus) moves the
             // selection so it can be reordered without the mouse.
-            if (alt && shift && e.Key == Key.Up) { MoveSelected(-1); e.Handled = true; return; }
-            if (alt && shift && e.Key == Key.Down) { MoveSelected(1); e.Handled = true; return; }
-            if (!alt && !shift && _labelHasFocus && e.Key == Key.Up && InRange(_selectedSegment - 1))
+            if (alt && shift && e.Key == Key.Up)
             {
-                SelectSegment(_selectedSegment - 1, focus: true);
+                MoveSelected(-1);
+                e.Handled = true;
+                return;
+            }
+            if (alt && shift && e.Key == Key.Down)
+            {
+                MoveSelected(1);
+                e.Handled = true;
+                return;
+            }
+            if (!alt && !shift && _labelHasFocus && e.Key == Key.Up && InRange(SelectedSegmentForTest - 1))
+            {
+                SelectSegment(SelectedSegmentForTest - 1, focus: true);
                 e.Handled = true;
                 return;
             }
 
-            if (!alt && !shift && _labelHasFocus && e.Key == Key.Down && InRange(_selectedSegment + 1))
+            if (!alt && !shift && _labelHasFocus && e.Key == Key.Down && InRange(SelectedSegmentForTest + 1))
             {
-                SelectSegment(_selectedSegment + 1, focus: true);
+                SelectSegment(SelectedSegmentForTest + 1, focus: true);
                 e.Handled = true;
                 return;
             }
@@ -919,7 +949,7 @@ public sealed class RadialSettingsDialog : ModalDialog<RadialMenuConfig>
     private RadialMenuConfig BuildConfig() => new RadialMenuConfig
     {
         SegmentCount = SegmentCount,
-        CommandIds = _bindings.Take(SegmentCount).ToList(),
+        CommandIds = [.. _bindings.Take(SegmentCount)],
     }.Normalized();
 
     // --- Test seams ----------------------------------------------------------------------------------
@@ -949,7 +979,7 @@ public sealed class RadialSettingsDialog : ModalDialog<RadialMenuConfig>
 
     internal void DragReorderForTest(int from, int to) => Reorder(from, to, to, focus: false);
 
-    internal int SelectedSegmentForTest => _selectedSegment;
+    internal int SelectedSegmentForTest { get; private set; } = -1;
 
     internal bool IsRowSelectedForTest(int segment) =>
         segment >= 0 && segment < _rowBorders.Count && ReferenceEquals(_rowBorders[segment].Background, SelectedRowBrush);
@@ -977,13 +1007,13 @@ public sealed class RadialSettingsDialog : ModalDialog<RadialMenuConfig>
     /// <summary>Test seam: the picker's scrim element, to assert Tab focus stays inside it.</summary>
     internal Control CommandPickerOverlayForTest => _commandPicker;
 
-    internal int CommandPickerSegmentForTest => _pickerSegment;
+    internal int CommandPickerSegmentForTest { get; private set; } = -1;
 
     /// <summary>Test seam: command ids the picker lists for <paramref name="query"/>, in ranked order.</summary>
     internal IReadOnlyList<string?> PickerResultIdsForTest(string query)
     {
         PopulatePicker(query);
-        return _pickerList.ItemsSource!.Cast<PickerItem>().Select(i => i.Id).ToList();
+        return [.. _pickerList.ItemsSource!.Cast<PickerItem>().Select(i => i.Id)];
     }
 
     /// <summary>Test seam: pick the row with <paramref name="commandId"/> (null = unbind) and commit it.</summary>

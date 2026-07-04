@@ -1,4 +1,3 @@
-using System;
 using Avalonia;
 using Avalonia.Input;
 using Avalonia.Media;
@@ -149,7 +148,7 @@ public sealed partial class SpreadsheetGrid
 
         var pen = new Pen(new SolidColorBrush(Color.FromRgb(0x2A, 0x7D, 0xE1)), 1)
         {
-            DashStyle = new DashStyle(new double[] { 3, 2 }, 0),
+            DashStyle = new DashStyle([3, 2], 0),
         };
         context.DrawRectangle(null, pen, rect);
     }

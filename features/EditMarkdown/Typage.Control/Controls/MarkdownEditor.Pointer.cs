@@ -1,17 +1,8 @@
-using System.Globalization;
-using System.Linq;
 using Avalonia;
-using Avalonia.Controls;
-using Avalonia.Controls.Primitives;
 using Avalonia.Input;
-using Avalonia.Input.Platform;
-using Avalonia.Media;
-using Avalonia.Threading;
 using Typage.Control.Rendering;
 using Typage.Engine.Document;
-using Typage.Engine.Editing;
 using Typage.Engine.Markdown;
-
 
 namespace Typage.Control.Controls;
 
@@ -49,7 +40,7 @@ public partial class MarkdownEditor
         // Resolve the click to a document offset (hit-testing handles padding, scroll, and wrapped rows),
         // then take its document line for word-select / checkbox hit-testing.
         var offset = OffsetAtPoint(point);
-        var line = _buffer.Document.GetPosition(offset).Line;
+        var line = Buffer.Document.GetPosition(offset).Line;
         var shift = e.KeyModifiers.HasFlag(KeyModifiers.Shift);
 
         // A double-click selects the word (or run) under the cursor; a triple-click selects the whole
@@ -116,7 +107,7 @@ public partial class MarkdownEditor
     /// </summary>
     private void SelectWordAt(int line, int offset)
     {
-        var doc = _buffer.Document;
+        var doc = Buffer.Document;
         var lineStart = doc.GetLineStart(line);
         var text = doc.GetText(lineStart, doc.GetLineEnd(line) - lineStart).TrimEnd('\r');
         if (text.Length == 0)
@@ -144,7 +135,7 @@ public partial class MarkdownEditor
         // Snap to grapheme boundaries (a surrogate pair / combining sequence stays whole).
         start = Grapheme.PreviousBoundary(text, Math.Min(start + 1, text.Length));
         end = Grapheme.NextBoundary(text, Math.Max(0, end - 1));
-        _buffer.Selection = new Selection(lineStart + start, lineStart + end);
+        Buffer.Selection = new Selection(lineStart + start, lineStart + end);
         _goalX = double.NaN;
     }
 
@@ -152,7 +143,7 @@ public partial class MarkdownEditor
     private void SelectBlockAt(int line)
     {
         var block = BlockOf(line);
-        _buffer.Selection = new Selection(BlockStartOffset(block), BlockEndOffset(block));
+        Buffer.Selection = new Selection(BlockStartOffset(block), BlockEndOffset(block));
         _goalX = double.NaN;
     }
 
@@ -215,17 +206,17 @@ public partial class MarkdownEditor
     /// <summary>Flip the <c>[ ]</c>/<c>[x]</c> box character at <paramref name="box"/>, leaving the caret put.</summary>
     private bool ToggleBoxAt(int line, int box)
     {
-        if (box < 0 || box >= _buffer.Document.Length)
+        if (box < 0 || box >= Buffer.Document.Length)
         {
             return false;
         }
 
-        var replacement = _buffer.Document[box] == ' ' ? "x" : " ";
-        var caret = _buffer.Selection;
-        _buffer.ReplaceRange(box, 1, replacement);
+        var replacement = Buffer.Document[box] == ' ' ? "x" : " ";
+        var caret = Buffer.Selection;
+        Buffer.ReplaceRange(box, 1, replacement);
         if (!TrySortCompletedTaskGroup(line, caret))
         {
-            _buffer.Selection = caret; // toggling a checkbox shouldn't move the caret
+            Buffer.Selection = caret; // toggling a checkbox shouldn't move the caret
         }
 
         return true;
@@ -237,7 +228,7 @@ public partial class MarkdownEditor
         EnsureLayout();
         var contentY = point.Y - PaddingTop + _offset.Y;
         var contentX = point.X - PaddingLeft + _offset.X;
-        var globalRow = Math.Max(0, (int)(contentY / _theme.LineHeight));
+        var globalRow = Math.Max(0, (int)(contentY / EditorTheme.LineHeight));
         var block = BlockAtRow(globalRow);
         var localRow = Math.Clamp(globalRow - _rowPrefix[block], 0, Math.Max(0, _rowCounts[block] - 1));
         return OffsetAt(block, localRow, contentX);
@@ -256,7 +247,7 @@ public partial class MarkdownEditor
         // A CRLF soft-break inside a flow-joined paragraph renders as a column for the \r and one for the \n;
         // never let a click resolve strictly between them — an edit there would split the \r\n into a stray
         // bare \r. Snap to the content side (before the \r).
-        var doc = _buffer.Document;
+        var doc = Buffer.Document;
         if (offset > 0 && offset < doc.Length && doc[offset - 1] == '\r' && doc[offset] == '\n')
         {
             offset--;

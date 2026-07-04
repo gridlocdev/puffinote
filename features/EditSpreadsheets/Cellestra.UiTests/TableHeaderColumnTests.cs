@@ -21,8 +21,10 @@ public class TableHeaderColumnTests
         window.Show();
         window.Editor.Grid.Zoom = 1.0;
         var sheet = window.Editor.Session.ActiveSheet;
-        sheet.SetValue(0, 0, CellValue.Text("Team")); sheet.SetValue(0, 1, CellValue.Text("Pts"));
-        sheet.SetValue(1, 0, CellValue.Text("A")); sheet.SetValue(1, 1, CellValue.Number(3));
+        sheet.SetValue(0, 0, CellValue.Text("Team"));
+        sheet.SetValue(0, 1, CellValue.Text("Pts"));
+        sheet.SetValue(1, 0, CellValue.Text("A"));
+        sheet.SetValue(1, 1, CellValue.Number(3));
         sheet.AddTable(new Table("T", CellRange.Parse("A1:B2"), HasHeader: true));
         window.Editor.Grid.Refresh();
         window.CaptureRenderedFrame();

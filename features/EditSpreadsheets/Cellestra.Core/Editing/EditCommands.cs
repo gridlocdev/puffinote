@@ -1,5 +1,4 @@
 using System.Globalization;
-using Cellestra.Core.Dependencies;
 using Cellestra.Core.Model;
 using Cellestra.Core.Styling;
 using Cellestra.Core.Values;
@@ -9,7 +8,6 @@ namespace Cellestra.Core.Editing;
 /// <summary>Builders for the common edit commands. Each returns an undoable <see cref="IEditCommand"/>.</summary>
 public static class EditCommands
 {
-    private static IReadOnlyList<(int, int)> Positions(CellRange range) => range.Positions().ToList();
 
     /// <summary>
     /// The cells an in-place edit must touch, clamped to the worksheet's used range. A whole-sheet
@@ -71,10 +69,10 @@ public static class EditCommands
     // ---- Cell content -----------------------------------------------------
 
     public static IEditCommand SetValue(string sheet, int row, int column, CellValue value) =>
-        new CellSnapshotCommand("Set Value", sheet, new[] { (row, column) }, ws => ws.SetValue(row, column, value));
+        new CellSnapshotCommand("Set Value", sheet, [(row, column)], ws => ws.SetValue(row, column, value));
 
     public static IEditCommand SetFormula(string sheet, int row, int column, string formula) =>
-        new CellSnapshotCommand("Set Formula", sheet, new[] { (row, column) },
+        new CellSnapshotCommand("Set Formula", sheet, [(row, column)],
             ws => ws.SetFormula(row, column, formula, CellValue.Empty));
 
     /// <summary>Set a cell from raw user input, choosing formula vs value (PRD §5).</summary>
@@ -89,7 +87,7 @@ public static class EditCommands
     public static IEditCommand SetInput(Workbook? workbook, string sheet, int row, int column, string text, CultureInfo culture)
     {
         var parsed = InputParser.Parse(text, culture);
-        return new CellSnapshotCommand("Edit Cell", sheet, new[] { (row, column) }, ws =>
+        return new CellSnapshotCommand("Edit Cell", sheet, [(row, column)], ws =>
         {
             if (parsed.IsFormula)
             {
@@ -119,7 +117,7 @@ public static class EditCommands
     /// one cell like the other single-cell edits, so undo/redo restores the prior link (or its absence).
     /// </summary>
     public static IEditCommand SetHyperlink(Workbook workbook, string sheet, int row, int column, Hyperlink? hyperlink) =>
-        new CellSnapshotCommand("Set Hyperlink", sheet, new[] { (row, column) }, ws =>
+        new CellSnapshotCommand("Set Hyperlink", sheet, [(row, column)], ws =>
         {
             var cell = ws.GetOrCreate(row, column);
             cell.Hyperlink = hyperlink;

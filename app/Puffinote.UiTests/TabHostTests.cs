@@ -15,8 +15,6 @@ public sealed class TabHostTests
     /// by the test — used to exercise close paths a real editor can't easily reach (a save that throws).</summary>
     private sealed class FakePane : IEditorPane
     {
-        private bool _dirty;
-
         public FakePane(string path) => Path = path;
 
         public Control View { get; } = new Border();
@@ -27,8 +25,12 @@ public sealed class TabHostTests
 
         public bool IsDirty
         {
-            get => _dirty;
-            set { _dirty = value; DirtyChanged?.Invoke(this, EventArgs.Empty); }
+            get;
+            set
+            {
+                field = value;
+                DirtyChanged?.Invoke(this, EventArgs.Empty);
+            }
         }
 
         public event EventHandler? DirtyChanged;
@@ -48,8 +50,8 @@ public sealed class TabHostTests
         }
 
         public void Rebind(string newPath) => Path = newPath;
-        public IReadOnlyList<AppCommand> Commands => Array.Empty<AppCommand>();
-        public IReadOnlyList<OutlineItem> GetOutline() => Array.Empty<OutlineItem>();
+        public IReadOnlyList<AppCommand> Commands => [];
+        public IReadOnlyList<OutlineItem> GetOutline() => [];
         public void Dispose() { }
     }
 

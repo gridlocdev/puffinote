@@ -15,7 +15,7 @@ namespace Puffinote.Desktop.Search;
 internal sealed class NotebookSearchService
 {
     private readonly NotebookService _notebook;
-    private volatile IReadOnlyList<IndexedFile> _index = Array.Empty<IndexedFile>();
+    private volatile IReadOnlyList<IndexedFile> _index = [];
     private int _generation;
     private bool _hasPublished;
 

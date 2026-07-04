@@ -1,5 +1,3 @@
-using System;
-using System.Collections.Generic;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Media;
@@ -38,8 +36,7 @@ public sealed class RadialMenuOverlay : Control
     private static readonly ImmutablePen RimPen = new(new ImmutableSolidColorBrush(Color.FromArgb(0x60, 0x00, 0x00, 0x00)), 1);
 
     private Point _center;
-    private IReadOnlyList<RadialSegment> _segments = Array.Empty<RadialSegment>();
-    private int _activeSegment = -1;
+    private IReadOnlyList<RadialSegment> _segments = [];
     private Point _drawCenter;
     private double _drawScale = 1;
 
@@ -90,13 +87,13 @@ public sealed class RadialMenuOverlay : Control
     {
         _center = center;
         _segments = segments;
-        _activeSegment = -1;
+        ActiveSegment = -1;
         UpdateTooltip(show: false);
         InvalidateVisual();
     }
 
     /// <summary>The currently highlighted segment (-1 for none).</summary>
-    public int ActiveSegment => _activeSegment;
+    public int ActiveSegment { get; private set; } = -1;
 
     /// <summary>
     /// The host's command catalog, used to enrich the hover tooltip (shortcut + description). Optional: with
@@ -106,7 +103,7 @@ public sealed class RadialMenuOverlay : Control
 
     /// <summary>The command id bound to the active wedge, or null in the dead zone / on an unbound wedge.</summary>
     private string? ActiveSegmentCommandId =>
-        _activeSegment >= 0 && _activeSegment < _segments.Count ? _segments[_activeSegment].CommandId : null;
+        ActiveSegment >= 0 && ActiveSegment < _segments.Count ? _segments[ActiveSegment].CommandId : null;
 
     /// <summary>Test seam: the id of the command whose tip the active wedge floats (null when none).</summary>
     internal string? ActiveTooltipCommandIdForTest => TooltipOpenForTest ? ActiveSegmentCommandId : null;
@@ -122,9 +119,9 @@ public sealed class RadialMenuOverlay : Control
     /// </summary>
     public void SetActiveSegment(int segment, bool showTooltip = true)
     {
-        if (segment != _activeSegment)
+        if (segment != ActiveSegment)
         {
-            _activeSegment = segment;
+            ActiveSegment = segment;
             InvalidateVisual();
         }
 
@@ -133,8 +130,8 @@ public sealed class RadialMenuOverlay : Control
 
     public void Hide()
     {
-        _segments = Array.Empty<RadialSegment>();
-        _activeSegment = -1;
+        _segments = [];
+        ActiveSegment = -1;
         UpdateTooltip(show: false);
         InvalidateVisual();
     }
@@ -191,7 +188,7 @@ public sealed class RadialMenuOverlay : Control
         var command = ActiveCommand();
         object tip = command is not null
             ? CommandBarControl.BuildTip(command)
-            : new TooltipCard(_segments[_activeSegment].Label, string.Empty, string.Empty);
+            : new TooltipCard(_segments[ActiveSegment].Label, string.Empty, string.Empty);
 
         AnchorTooltipToWedge();
         ToolTip.SetTip(this, tip);
@@ -207,7 +204,7 @@ public sealed class RadialMenuOverlay : Control
     private void AnchorTooltipToWedge()
     {
         var (center, scale) = ComputeLayout();
-        double angle = RadialMenuLayout.SegmentCenterAngle(_activeSegment, _segments.Count);
+        double angle = RadialMenuLayout.SegmentCenterAngle(ActiveSegment, _segments.Count);
         var (px, py) = RadialMenuLayout.Polar(center.X, center.Y, OuterRadius * scale, angle);
 
         double w = Bounds.Width;
@@ -254,7 +251,7 @@ public sealed class RadialMenuOverlay : Control
             double to = centerAngle + (step / 2);
 
             var segment = _segments[i];
-            IBrush fill = i == _activeSegment
+            IBrush fill = i == ActiveSegment
                 ? (segment.Enabled ? ActiveFill : ActiveDisabledFill)
                 : GlassFill;
 
@@ -302,7 +299,7 @@ public sealed class RadialMenuOverlay : Control
     {
         var segment = _segments[index];
         IBrush brush = segment.Enabled ? GlyphBrush : DisabledGlyphBrush;
-        if (index == _activeSegment && segment.Enabled)
+        if (index == ActiveSegment && segment.Enabled)
         {
             brush = GlyphBrush; // stays light on the accent fill
         }

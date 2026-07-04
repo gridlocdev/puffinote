@@ -1,5 +1,4 @@
 using Avalonia.Headless.XUnit;
-using Cellestra.Core.Editing;
 using Cellestra.Core.Values;
 using Cellestra.Desktop.Commands;
 using Cellestra.Desktop.Views;
@@ -19,9 +18,12 @@ public class DataCommandTests
 
         sheet.SetValue(0, 0, CellValue.Text("Name"));
         sheet.SetValue(0, 1, CellValue.Text("Score"));
-        sheet.SetValue(1, 0, CellValue.Text("Cy")); sheet.SetValue(1, 1, CellValue.Number(3));
-        sheet.SetValue(2, 0, CellValue.Text("Ada")); sheet.SetValue(2, 1, CellValue.Number(1));
-        sheet.SetValue(3, 0, CellValue.Text("Bev")); sheet.SetValue(3, 1, CellValue.Number(2));
+        sheet.SetValue(1, 0, CellValue.Text("Cy"));
+        sheet.SetValue(1, 1, CellValue.Number(3));
+        sheet.SetValue(2, 0, CellValue.Text("Ada"));
+        sheet.SetValue(2, 1, CellValue.Number(1));
+        sheet.SetValue(3, 0, CellValue.Text("Bev"));
+        sheet.SetValue(3, 1, CellValue.Number(2));
         env.Selection.MoveTo(1, 0); // inside the region, active column = Name
 
         env.Commands.ById("data.sortAsc")!.Execute();
@@ -117,7 +119,7 @@ public class DataCommandTests
                 },
             });
         sheet.ActiveSort = new Cellestra.Core.Data.SortSpec(
-            new[] { new Cellestra.Core.Data.SortLevel(0, true) });
+            [new Cellestra.Core.Data.SortLevel(0, true)]);
 
         env.Commands.ById("data.clearFilter")!.Execute();
 

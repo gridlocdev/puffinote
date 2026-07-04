@@ -16,7 +16,7 @@ public sealed class SessionStoreTests : IDisposable
     {
         var session = new NotebookSession
         {
-            Recent = new[] { At("note.md"), At(System.IO.Path.Combine("sub", "deep.md")) },
+            Recent = [At("note.md"), At(System.IO.Path.Combine("sub", "deep.md"))],
             SidebarCollapsed = true,
             SidebarWidth = 320,
         };
@@ -29,7 +29,7 @@ public sealed class SessionStoreTests : IDisposable
         Assert.Contains("session.json", File.ReadAllText(System.IO.Path.Combine(stateDir, ".gitignore")));
 
         var loaded = SessionStore.Load(_root.FullName);
-        Assert.Equal(new[] { At("note.md"), At(System.IO.Path.Combine("sub", "deep.md")) }, loaded.Recent);
+        Assert.Equal([At("note.md"), At(System.IO.Path.Combine("sub", "deep.md"))], loaded.Recent);
         Assert.True(loaded.SidebarCollapsed);
         Assert.Equal(320, loaded.SidebarWidth);
     }
@@ -37,7 +37,7 @@ public sealed class SessionStoreTests : IDisposable
     [Fact]
     public void Recent_paths_are_stored_relative_so_a_moved_notebook_still_resolves_them()
     {
-        SessionStore.Save(_root.FullName, new NotebookSession { Recent = new[] { At("note.md") } });
+        SessionStore.Save(_root.FullName, new NotebookSession { Recent = [At("note.md")] });
 
         // The on-disk form is relative to the notebook root — no absolute path leaks into the file.
         var json = File.ReadAllText(System.IO.Path.Combine(_root.FullName, NotebookNode.StateDirectoryName, "session.json"));

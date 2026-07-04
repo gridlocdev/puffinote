@@ -29,7 +29,7 @@ public sealed class SearchTests
     {
         var panel = new SearchPanel();
         var hit = new SearchHit("/v/a.md", "a.md", 1, "…a match…");
-        panel.SearchFunc = q => q == "foo" ? new[] { hit } : Array.Empty<SearchHit>();
+        panel.SearchFunc = q => q == "foo" ? new[] { hit } : [];
         string? opened = null;
         panel.FileActivated += path => opened = path;
 

@@ -5,7 +5,6 @@ using Avalonia.Interactivity;
 using Avalonia.Layout;
 using Avalonia.Media;
 using Avalonia.Platform.Storage;
-using Avalonia.Styling;
 using Avalonia.Threading;
 using Cellestra.Desktop.Services;
 using Puffinote.Components.Commands;
@@ -29,9 +28,6 @@ namespace Puffinote.Desktop.Views;
 /// </summary>
 public class MainWindow : Window
 {
-    private static readonly KeyModifiers PrimaryModifier =
-        OperatingSystem.IsMacOS() ? KeyModifiers.Meta : KeyModifiers.Control;
-
     private readonly NotebookService _notebook;
 
     // Puffinote's per-user override settings (PRD §7.5), loaded once at startup. Resolved against each
@@ -43,8 +39,6 @@ public class MainWindow : Window
     // resolves each non-reserved command's gesture through this, so a rebound key reaches menu + palette +
     // key bindings alike. Reserved global keys are fixed and never routed through it.
     private ShortcutKeymap _keymap = ShortcutKeymap.Load();
-
-    private readonly SidebarView _sidebarView = new();
     private readonly ColumnDefinition _sidebarColumn = new(260, GridUnitType.Pixel) { MinWidth = 160 };
     private Border _sidebar = null!;
     private GridSplitter _splitter = null!;
@@ -53,11 +47,10 @@ public class MainWindow : Window
     // The notebook-scoped recent-files list (PRD §7.2.3), maintained through the shared RecentFiles rule and
     // shown in the sidebar's Recent panel plus seeded into quick-open. Persisted per notebook to
     // .puffinote/session.json (PRD §7.1) via SessionStore — loaded on open, saved as it changes.
-    private List<string> _recent = new();
+    private List<string> _recent = [];
 
     // The notebook's background full-text search index (PRD §7.2.3), recreated per notebook. Null until a notebook
     // is open. Rebuilt off the UI thread on open and after tree mutations.
-    private Search.NotebookSearchService? _search;
 
     // Watches the notebook for external filesystem changes to refresh the tree + index live (PRD §7.1).
     private Shell.NotebookWatcher? _watcher;
@@ -70,29 +63,29 @@ public class MainWindow : Window
 
     // Puffinote's one shell command catalog (PRD §7.4): menu, key bindings, and the palette all derive
     // from it. _relays holds one shared RelayCommand per entry so their enabled state stays in step.
-    private List<AppCommand> _shellCommands = new();
-    private Dictionary<string, AppCommand> _shellById = new();
-    private Dictionary<string, RelayCommand> _relays = new();
+    private List<AppCommand> _shellCommands = [];
+    private Dictionary<string, AppCommand> _shellById = [];
+    private Dictionary<string, RelayCommand> _relays = [];
     private bool _closingConfirmed;
 
     // The moderate reserved global set (PRD §7.6): these shell keys win over the focused editor via a
     // tunnelling handler, so e.g. ⌘K always opens Puffinote's palette, not the sheet's. focusTree has no
     // gesture, so it isn't routed. Everything else is focus-dispatched (ordinary bubbling key bindings).
-    private static readonly HashSet<string> ReservedIds = new()
-    {
+    private static readonly HashSet<string> ReservedIds =
+    [
         "shell.commandPalette", "shell.quickOpen", "shell.openNotebook", "shell.toggleSidebar",
         "shell.closeTab", "shell.nextTab", "shell.prevTab",
-    };
+    ];
 
     // Reserved keys whose capability the shell already provides, so shadowing an editor's binding on them
     // loses nothing and isn't a real conflict: the merged palette (⌘K) is a superset of the editor's own
     // palette, and quick-open (⌘O) is the shell's file-open. These are excluded from the conflict warning so
     // it only fires when an editor binding is genuinely lost.
-    private static readonly HashSet<string> ShellSupersedesEditor = new()
-    {
+    private static readonly HashSet<string> ShellSupersedesEditor =
+    [
         "shell.commandPalette", "shell.quickOpen",
-    };
-    private List<(KeyGesture Gesture, RelayCommand Command)> _reservedBindings = new();
+    ];
+    private List<(KeyGesture Gesture, RelayCommand Command)> _reservedBindings = [];
     private bool _conflictWarned;
     private IEditorPane? _lastScannedPane;
 
@@ -106,14 +99,20 @@ public class MainWindow : Window
     {
         _notebook = notebook;
         _notebook.NotebookOpened += (_, _) => OnNotebookOpened();
-        _sidebarView.FileActivated += path => _ = OpenFileAsync(path);
-        _sidebarView.SelectionChanged += _ => RefreshSelectionCommands();
-        _sidebarView.PanelActivated += id => { if (id == "outline") RefreshOutline(); };
-        _sidebarView.NewNoteRequested += node => _ = PromptNewNoteAsync(node);
-        _sidebarView.NewSpreadsheetRequested += node => _ = PromptNewSpreadsheetAsync(node);
-        _sidebarView.NewFolderRequested += node => _ = PromptNewFolderAsync(node);
-        _sidebarView.RenameRequested += node => _ = PromptRenameAsync(node);
-        _sidebarView.DeleteRequested += node => _ = PromptDeleteAsync(node);
+        SidebarForTest.FileActivated += path => _ = OpenFileAsync(path);
+        SidebarForTest.SelectionChanged += _ => RefreshSelectionCommands();
+        SidebarForTest.PanelActivated += id =>
+        {
+            if (id == "outline")
+            {
+                RefreshOutline();
+            }
+        };
+        SidebarForTest.NewNoteRequested += node => _ = PromptNewNoteAsync(node);
+        SidebarForTest.NewSpreadsheetRequested += node => _ = PromptNewSpreadsheetAsync(node);
+        SidebarForTest.NewFolderRequested += node => _ = PromptNewFolderAsync(node);
+        SidebarForTest.RenameRequested += node => _ = PromptRenameAsync(node);
+        SidebarForTest.DeleteRequested += node => _ = PromptDeleteAsync(node);
 
         Width = 1000;
         Height = 700;
@@ -133,7 +132,11 @@ public class MainWindow : Window
         Content = new Panel { Children = { root, _overlayHost } };
 
         Closing += OnWindowClosing;
-        Closed += (_, _) => { PersistSession(); _watcher?.Dispose(); };
+        Closed += (_, _) =>
+        {
+            PersistSession();
+            _watcher?.Dispose();
+        };
     }
 
     /// <summary>Open <paramref name="path"/> as the notebook (used by the CLI-arg path and the menu).</summary>
@@ -146,13 +149,13 @@ public class MainWindow : Window
     internal bool IsOverlayOpenForTest => _overlayHost.IsOpen;
 
     /// <summary>The id of the sidebar's active panel (test seam).</summary>
-    internal string ActiveSidebarPanelForTest => _sidebarView.ActivePanelId;
+    internal string ActiveSidebarPanelForTest => SidebarForTest.ActivePanelId;
 
     /// <summary>The sidebar (test seam — drive the tree in end-to-end mutation tests).</summary>
-    internal Sidebar.SidebarView SidebarForTest => _sidebarView;
+    internal Sidebar.SidebarView SidebarForTest { get; } = new();
 
     /// <summary>The notebook search service (test seam — await a deterministic rebuild, then query).</summary>
-    internal Search.NotebookSearchService? SearchForTest => _search;
+    internal Search.NotebookSearchService? SearchForTest { get; private set; }
 
     /// <summary>The active pane's editor control (test seam — assert config inheritance reached the editor).</summary>
     internal Control? ActiveEditorViewForTest => _tabHost.ActivePane?.View;
@@ -180,19 +183,19 @@ public class MainWindow : Window
         _sidebar = new Border
         {
             Background = palette.Surface,
-            Child = _sidebarView,
+            Child = SidebarForTest,
         };
 
         _splitter = new GridSplitter { Width = 4, Background = palette.SurfaceBorder };
 
         var grid = new Grid
         {
-            ColumnDefinitions = new ColumnDefinitions
-            {
+            ColumnDefinitions =
+            [
                 _sidebarColumn,
                 new ColumnDefinition(GridLength.Auto),
                 new ColumnDefinition(GridLength.Star),
-            },
+            ],
         };
         Grid.SetColumn(_sidebar, 0);
         Grid.SetColumn(_splitter, 1);
@@ -212,8 +215,8 @@ public class MainWindow : Window
         // default below. Reserved global keys are fixed — they're never routed through the keymap (PRD §7.6).
         Shortcut? Bound(string id, Shortcut? def) => ReservedIds.Contains(id) ? def : _keymap.Resolve(id, def);
 
-        _shellCommands = new List<AppCommand>
-        {
+        _shellCommands =
+        [
             new("shell.commandPalette", "Command Palette", "Search and run any command", Bound("shell.commandPalette", Shortcut.Cmd(Key.K)),
                 ShowCommandPalette, icon: "command"),
             new("shell.quickOpen", "Quick Open…", "Jump to any file in the notebook", Bound("shell.quickOpen", Shortcut.Cmd(Key.O)),
@@ -221,15 +224,27 @@ public class MainWindow : Window
             new("shell.openNotebook", "Open Notebook…", "Open a folder as the notebook", Bound("shell.openNotebook", Shortcut.Cmd(Key.O, KeyModifiers.Shift)),
                 () => _ = OpenNotebookInteractiveAsync(), icon: "folder-open"),
             new("shell.newNote", "New Note…", "Create a new Markdown note in the selected folder", Bound("shell.newNote", null),
-                () => _ = PromptNewNoteAsync(_sidebarView.SelectedTreeNode), () => _notebook.Root is not null, icon: "file-plus"),
+                () => _ = PromptNewNoteAsync(SidebarForTest.SelectedTreeNode), () => _notebook.Root is not null, icon: "file-plus"),
             new("shell.newSpreadsheet", "New Spreadsheet…", "Create a new spreadsheet in the selected folder", Bound("shell.newSpreadsheet", null),
-                () => _ = PromptNewSpreadsheetAsync(_sidebarView.SelectedTreeNode), () => _notebook.Root is not null, icon: "table"),
+                () => _ = PromptNewSpreadsheetAsync(SidebarForTest.SelectedTreeNode), () => _notebook.Root is not null, icon: "table"),
             new("shell.newFolder", "New Folder…", "Create a new folder in the selected folder", Bound("shell.newFolder", null),
-                () => _ = PromptNewFolderAsync(_sidebarView.SelectedTreeNode), () => _notebook.Root is not null),
+                () => _ = PromptNewFolderAsync(SidebarForTest.SelectedTreeNode), () => _notebook.Root is not null),
             new("shell.renameEntry", "Rename…", "Rename the selected file or folder", Bound("shell.renameEntry", null),
-                () => { if (_sidebarView.SelectedTreeNode is { } n) _ = PromptRenameAsync(n); }, CanMutateSelected, icon: "pencil"),
+                () =>
+                {
+                    if (SidebarForTest.SelectedTreeNode is { } n)
+                    {
+                        _ = PromptRenameAsync(n);
+                    }
+                }, CanMutateSelected, icon: "pencil"),
             new("shell.deleteEntry", "Delete", "Delete the selected file or folder", Bound("shell.deleteEntry", null),
-                () => { if (_sidebarView.SelectedTreeNode is { } n) _ = PromptDeleteAsync(n); }, CanMutateSelected, icon: "trash-2"),
+                () =>
+                {
+                    if (SidebarForTest.SelectedTreeNode is { } n)
+                    {
+                        _ = PromptDeleteAsync(n);
+                    }
+                }, CanMutateSelected, icon: "trash-2"),
             new("shell.save", "Save", "Save the active document", Bound("shell.save", Shortcut.Cmd(Key.S)),
                 () => _ = SaveCurrentAsync(), () => _tabHost.ActivePane is not null, icon: "save"),
             new("shell.closeTab", "Close Tab", "Close the active tab", Bound("shell.closeTab", Shortcut.Cmd(Key.W)),
@@ -243,11 +258,11 @@ public class MainWindow : Window
             new("shell.toggleEditorToolbar", "Toggle Editor Toolbar", "Show or hide the formatting toolbar over a note",
                 Bound("shell.toggleEditorToolbar", null), ToggleEditorToolbar, () => _tabHost.ActivePane is MarkdownPane, icon: "type"),
             new("shell.focusTree", "Focus File Tree", "Move keyboard focus to the file tree", Bound("shell.focusTree", null),
-                () => _sidebarView.FocusTree()),
+                () => SidebarForTest.FocusTree()),
             new("shell.shortcuts", "Keyboard Shortcuts…", "View and customize keyboard shortcuts", Bound("shell.shortcuts", null),
                 ShowShortcutsEditor),
             new("shell.about", "About Puffinote", "About this app", null, ShowAbout),
-        };
+        ];
         _shellById = _shellCommands.ToDictionary(c => c.Id);
     }
 
@@ -285,10 +300,9 @@ public class MainWindow : Window
             }
         }
 
-        _reservedBindings = _shellCommands
+        _reservedBindings = [.. _shellCommands
             .Where(c => ReservedIds.Contains(c.Id) && c.Gesture is not null)
-            .Select(c => (c.Gesture!, _relays[c.Id]))
-            .ToList();
+            .Select(c => (c.Gesture!, _relays[c.Id]))];
     }
 
     /// <summary>(Re)build the menu bar from the current catalog so rebound gestures show their new keys.</summary>
@@ -327,8 +341,8 @@ public class MainWindow : Window
     }
 
     private List<MenuItem> BuildMenuItems(params string[] ids) =>
-        ids.Select(id => _shellById[id]).Select(c =>
-            new MenuItem { Header = c.Title, Command = _relays[c.Id], InputGesture = c.Gesture }).ToList();
+        [.. ids.Select(id => _shellById[id]).Select(c =>
+            new MenuItem { Header = c.Title, Command = _relays[c.Id], InputGesture = c.Gesture })];
 
     private NativeMenu BuildNativeMenu(params string[] ids)
     {
@@ -350,12 +364,16 @@ public class MainWindow : Window
             return; // an overlay is already up (e.g. a dialog opened from the native menu) — don't clobber it
         }
 
-        var editor = _tabHost.ActivePane?.Commands ?? (IReadOnlyList<AppCommand>)Array.Empty<AppCommand>();
+        var editor = _tabHost.ActivePane?.Commands ?? [];
         var entries = CommandMerge.ToEntries(_shellCommands, editor);
 
         var palette = new PaletteListView { Placeholder = "Type a command…" };
         palette.SetItems(entries);
-        palette.Chosen += entry => { _overlayHost.Close(); entry.Run(); };
+        palette.Chosen += entry =>
+        {
+            _overlayHost.Close();
+            entry.Run();
+        };
         palette.Cancelled += (_, _) => _overlayHost.Close();
         ShowPaletteOverlay(palette);
     }
@@ -380,7 +398,11 @@ public class MainWindow : Window
 
         var palette = new PaletteListView { Placeholder = "Go to file…" };
         palette.SetItems(entries);
-        palette.Chosen += entry => { _overlayHost.Close(); entry.Run(); };
+        palette.Chosen += entry =>
+        {
+            _overlayHost.Close();
+            entry.Run();
+        };
         palette.Cancelled += (_, _) => _overlayHost.Close();
         ShowPaletteOverlay(palette);
     }
@@ -477,7 +499,7 @@ public class MainWindow : Window
             denyLabel: "Keep as-is",
             confirmIsDefault: false));
 
-        if (openEditor == true)
+        if (openEditor)
         {
             ShowShortcutsEditor();
         }
@@ -630,7 +652,7 @@ public class MainWindow : Window
 
     private void OnNotebookOpened()
     {
-        _sidebarView.SetRoot(_notebook.Root);
+        SidebarForTest.SetRoot(_notebook.Root);
 
         // Resolve Puffinote's overrides for this notebook (per-user + the notebook's own .puffinote/settings.json)
         // before any file opens, so panes inherit the editor's config with these layered on top (PRD §7.5).
@@ -640,8 +662,8 @@ public class MainWindow : Window
         // a switch loads the new notebook's list (empty when it has none); drop recent entries whose file is
         // now gone so a stale path never shows.
         var session = _notebook.RootPath is { } root ? SessionStore.Load(root) : new NotebookSession();
-        _recent = session.Recent.Where(File.Exists).ToList();
-        _sidebarView.SetRecent(_notebook.RootPath, _recent);
+        _recent = [.. session.Recent.Where(File.Exists)];
+        SidebarForTest.SetRecent(_notebook.RootPath, _recent);
         ApplySidebarState(session.SidebarCollapsed, session.SidebarWidth);
 
         StartSearchIndex();
@@ -696,8 +718,8 @@ public class MainWindow : Window
 
     private void OnNotebookFilesChanged()
     {
-        _sidebarView.RefreshTree();
-        _ = _search?.RebuildAsync();
+        SidebarForTest.RefreshTree();
+        _ = SearchForTest?.RebuildAsync();
     }
 
     // ---- Notebook search (PRD §7.2.3) ----------------------------------------------------------------
@@ -705,19 +727,16 @@ public class MainWindow : Window
     /// <summary>Create the per-notebook search service and kick off its first background index build.</summary>
     private void StartSearchIndex()
     {
-        if (_search is not null)
-        {
-            _search.IndexUpdated -= OnSearchIndexUpdated;
-        }
+        SearchForTest?.IndexUpdated -= OnSearchIndexUpdated;
 
-        _search = new Search.NotebookSearchService(_notebook);
-        _search.IndexUpdated += OnSearchIndexUpdated;
-        _sidebarView.ConfigureSearch(_search.Search);
-        _ = _search.RebuildAsync();
+        SearchForTest = new Search.NotebookSearchService(_notebook);
+        SearchForTest.IndexUpdated += OnSearchIndexUpdated;
+        SidebarForTest.ConfigureSearch(SearchForTest.Search);
+        _ = SearchForTest.RebuildAsync();
     }
 
     private void OnSearchIndexUpdated() =>
-        _sidebarView.SetSearchStatus(_search is { IsIndexing: false } s ? $"{s.FileCount} files indexed" : "Indexing…");
+        SidebarForTest.SetSearchStatus(SearchForTest is { IsIndexing: false } s ? $"{s.FileCount} files indexed" : "Indexing…");
 
     // ---- Editor tabs ------------------------------------------------------------------------------
 
@@ -735,7 +754,7 @@ public class MainWindow : Window
         if (_tabHost.ActivePane?.Path is { } opened && string.Equals(opened, full, StringComparison.OrdinalIgnoreCase))
         {
             _recent = RecentFiles.Push(_recent, opened);
-            _sidebarView.SetRecent(_notebook.RootPath, _recent);
+            SidebarForTest.SetRecent(_notebook.RootPath, _recent);
             PersistSession();
         }
     }
@@ -746,7 +765,7 @@ public class MainWindow : Window
     // (F2 / Delete / context menu) and the command palette / File menu.
 
     private bool CanMutateSelected() =>
-        _sidebarView.SelectedTreeNode is { } node && !IsRootNode(node);
+        SidebarForTest.SelectedTreeNode is { } node && !IsRootNode(node);
 
     private bool IsRootNode(NotebookNode node) =>
         _notebook.RootPath is { } root && string.Equals(node.Path, root, StringComparison.OrdinalIgnoreCase);
@@ -769,7 +788,7 @@ public class MainWindow : Window
 
     private Task PromptNewNoteAsync(NotebookNode? context) =>
         // A note is a plain Markdown file — an empty .md opens fine.
-        PromptNewDocumentAsync(context, ".md", "New Note", "note", static () => Array.Empty<byte>());
+        PromptNewDocumentAsync(context, ".md", "New Note", "note", static () => []);
 
     private Task PromptNewSpreadsheetAsync(NotebookNode? context) =>
         // A spreadsheet must be seeded with a blank-workbook image: an empty (0-byte) .ods isn't a valid
@@ -807,8 +826,12 @@ public class MainWindow : Window
         };
 
         var pending = _overlayHost.ShowModalAsync(new FormDialog(heading, body, "Create"));
-        Dispatcher.UIThread.Post(() => { box.Focus(); box.SelectAll(); });
-        if (await pending != true || string.IsNullOrWhiteSpace(box.Text))
+        Dispatcher.UIThread.Post(() =>
+        {
+            box.Focus();
+            box.SelectAll();
+        });
+        if (!await pending || string.IsNullOrWhiteSpace(box.Text))
         {
             return;
         }
@@ -823,7 +846,7 @@ public class MainWindow : Window
         await MutateAsync($"Couldn't create the {kind}", async () =>
         {
             var path = NotebookMutations.CreateFile(dir, baseName + extension, content());
-            _sidebarView.RevealInTree(path);
+            SidebarForTest.RevealInTree(path);
             await OpenFileAsync(path);
         });
     }
@@ -842,7 +865,7 @@ public class MainWindow : Window
 
         await MutateAsync("Couldn't create the folder", () =>
         {
-            _sidebarView.RevealInTree(NotebookMutations.CreateFolder(dir, name));
+            SidebarForTest.RevealInTree(NotebookMutations.CreateFolder(dir, name));
             return Task.CompletedTask;
         });
     }
@@ -864,7 +887,7 @@ public class MainWindow : Window
             var newPath = NotebookMutations.Rename(node.Path, name);
             _tabHost.RebindPaths(node.Path, newPath);      // keep any open tab pointing at the moved file
             RemapRecent(node.Path, newPath);
-            _sidebarView.RevealInTree(newPath);
+            SidebarForTest.RevealInTree(newPath);
             return Task.CompletedTask;
         });
     }
@@ -883,7 +906,7 @@ public class MainWindow : Window
             confirmLabel: "Delete",
             denyLabel: "Cancel",
             confirmIsDefault: false)); // destructive → Enter shouldn't trigger it
-        if (confirmed != true)
+        if (!confirmed)
         {
             return;
         }
@@ -893,7 +916,7 @@ public class MainWindow : Window
             NotebookMutations.Delete(node.Path);
             _tabHost.CloseUnder(node.Path); // the file is gone — close its tab rather than let it be re-saved
             DropRecentUnder(node.Path);
-            _sidebarView.RefreshTree();
+            SidebarForTest.RefreshTree();
             return Task.CompletedTask;
         });
     }
@@ -915,7 +938,7 @@ public class MainWindow : Window
 
         if (changed)
         {
-            _sidebarView.SetRecent(_notebook.RootPath, _recent);
+            SidebarForTest.SetRecent(_notebook.RootPath, _recent);
             PersistSession();
         }
     }
@@ -928,7 +951,7 @@ public class MainWindow : Window
         if (kept.Count != _recent.Count)
         {
             _recent = kept;
-            _sidebarView.SetRecent(_notebook.RootPath, _recent);
+            SidebarForTest.SetRecent(_notebook.RootPath, _recent);
             PersistSession();
         }
     }
@@ -938,9 +961,13 @@ public class MainWindow : Window
     {
         var box = new TextBox { Text = initial };
         var pending = _overlayHost.ShowModalAsync(new FormDialog(heading, box, okLabel));
-        Dispatcher.UIThread.Post(() => { box.Focus(); box.SelectAll(); });
+        Dispatcher.UIThread.Post(() =>
+        {
+            box.Focus();
+            box.SelectAll();
+        });
         var accepted = await pending;
-        return accepted == true && !string.IsNullOrWhiteSpace(box.Text) ? box.Text : null;
+        return accepted && !string.IsNullOrWhiteSpace(box.Text) ? box.Text : null;
     }
 
     /// <summary>Run a filesystem mutation, surfacing any failure as a message dialog.</summary>
@@ -949,7 +976,7 @@ public class MainWindow : Window
         try
         {
             await mutation();
-            _ = _search?.RebuildAsync(); // the notebook changed — refresh the search index in the background
+            _ = SearchForTest?.RebuildAsync(); // the notebook changed — refresh the search index in the background
         }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException)
         {
@@ -1032,7 +1059,7 @@ public class MainWindow : Window
 
     /// <summary>Pull the active document's outline into the sidebar's Outline panel (empty when no tab).</summary>
     private void RefreshOutline() =>
-        _sidebarView.SetOutline(_tabHost.ActivePane?.GetOutline() ?? Array.Empty<OutlineItem>());
+        SidebarForTest.SetOutline(_tabHost.ActivePane?.GetOutline() ?? []);
 
     private void UpdatePaneChrome()
     {

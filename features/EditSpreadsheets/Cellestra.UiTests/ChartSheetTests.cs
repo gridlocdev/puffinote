@@ -1,6 +1,4 @@
 using System.Globalization;
-using System.Linq;
-using Avalonia.Headless;
 using Avalonia.Headless.XUnit;
 using Cellestra.Core.Editing;
 using Cellestra.Desktop.Commands;
@@ -93,7 +91,7 @@ public class ChartSheetTests
 
         var resolved = window.Editor.ActiveChartViewForTest!.ResolvedForTest;
         Assert.NotNull(resolved);
-        Assert.Equal(new[] { 10d, 20d }, resolved!.Series[0].Values);
+        Assert.Equal([10d, 20d], resolved!.Series[0].Values);
     }
 
     [AvaloniaFact]

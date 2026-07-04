@@ -1,5 +1,3 @@
-using System;
-using System.Collections.Generic;
 using Typage.Engine.Document;
 using Typage.Engine.Markdown;
 
@@ -39,13 +37,8 @@ internal sealed class LayoutModel
 {
     private readonly ILayoutHost _host;
     private readonly BlockLayoutBuilder _builder;
-
-    private int[] _blockStartLine = { 0, 0 };
-    private int[] _blockOfLine = Array.Empty<int>();
-    private int[] _rowCounts = Array.Empty<int>();
-    private int[] _rowPrefix = new int[1];
-    private readonly Dictionary<int, VisualLine> _blockVisualCache = new();
-    private readonly List<int> _blockVisualEvict = new(); // scratch reused by EvictBlockVisualsFrom
+    private readonly Dictionary<int, VisualLine> _blockVisualCache = [];
+    private readonly List<int> _blockVisualEvict = []; // scratch reused by EvictBlockVisualsFrom
     private bool _layoutDirty = true;
     private double _layoutWidth = double.NaN;
     private int _firstDirtyLine;
@@ -56,13 +49,13 @@ internal sealed class LayoutModel
         _builder = new BlockLayoutBuilder(measurer);
     }
 
-    public int[] BlockStartLine => _blockStartLine;
-    public int[] BlockOfLine => _blockOfLine;
-    public int[] RowCounts => _rowCounts;
-    public int[] RowPrefix => _rowPrefix;
+    public int[] BlockStartLine { get; private set; } = [0, 0];
+    public int[] BlockOfLine { get; private set; } = [];
+    public int[] RowCounts { get; private set; } = [];
+    public int[] RowPrefix { get; private set; } = new int[1];
 
     /// <summary>The total visual-row count across the document at the current width.</summary>
-    public int TotalRows => _rowPrefix.Length > 0 ? _rowPrefix[^1] : 0;
+    public int TotalRows => RowPrefix.Length > 0 ? RowPrefix[^1] : 0;
 
     /// <summary>Mark the layout stale from <paramref name="fromLine"/> down (an incremental edit); blocks above
     /// it are reused on the next <see cref="EnsureLayout"/>.</summary>
@@ -81,12 +74,12 @@ internal sealed class LayoutModel
         _blockVisualCache.Clear();
     }
 
-    public int BlockStartOffset(int block) => _host.Document.GetLineStart(_blockStartLine[block]);
+    public int BlockStartOffset(int block) => _host.Document.GetLineStart(BlockStartLine[block]);
 
-    public int BlockEndOffset(int block) => _host.Document.GetLineEnd(_blockStartLine[block + 1] - 1);
+    public int BlockEndOffset(int block) => _host.Document.GetLineEnd(BlockStartLine[block + 1] - 1);
 
     /// <summary>The Y coordinate (content space) at which <paramref name="block"/>'s first row begins.</summary>
-    public double RowTop(int block) => _rowPrefix[Math.Clamp(block, 0, _rowPrefix.Length - 1)] * _host.Theme.LineHeight;
+    public double RowTop(int block) => RowPrefix[Math.Clamp(block, 0, RowPrefix.Length - 1)] * _host.Theme.LineHeight;
 
     /// <summary>
     /// Rebuild the paragraph-block grouping and per-block row-count cache (with prefix sums) when the text,
@@ -97,7 +90,7 @@ internal sealed class LayoutModel
     {
         var n = _host.Document.LineCount;
         var width = _host.WrapWidth;
-        if (!_layoutDirty && _layoutWidth == width && _blockOfLine.Length == n)
+        if (!_layoutDirty && _layoutWidth == width && BlockOfLine.Length == n)
         {
             return;
         }
@@ -124,8 +117,8 @@ internal sealed class LayoutModel
         }
 
         var blockCount = starts.Count;
-        var oldStarts = _blockStartLine;
-        var oldRowCounts = _rowCounts;
+        var oldStarts = BlockStartLine;
+        var oldRowCounts = RowCounts;
 
         var newStartLine = new int[blockCount + 1];
         for (var b = 0; b < blockCount; b++)
@@ -151,8 +144,8 @@ internal sealed class LayoutModel
         // blocks); the reused prefix stays. BlockVisual repopulates the rest as the row loop measures them.
         EvictBlockVisualsFrom(reuse);
 
-        _blockStartLine = newStartLine;
-        _blockOfLine = ofLine;
+        BlockStartLine = newStartLine;
+        BlockOfLine = ofLine;
 
         var rowCounts = new int[blockCount];
         var rowPrefix = new int[blockCount + 1];
@@ -174,8 +167,8 @@ internal sealed class LayoutModel
             rowPrefix[b + 1] = rowPrefix[b] + rowCounts[b];
         }
 
-        _rowCounts = rowCounts;
-        _rowPrefix = rowPrefix;
+        RowCounts = rowCounts;
+        RowPrefix = rowPrefix;
         _layoutWidth = width;
         _layoutDirty = false;
         _firstDirtyLine = int.MaxValue;
@@ -274,13 +267,13 @@ internal sealed class LayoutModel
     public int BlockOf(int line)
     {
         EnsureLayout();
-        return _blockOfLine[Math.Clamp(line, 0, _blockOfLine.Length - 1)];
+        return BlockOfLine[Math.Clamp(line, 0, BlockOfLine.Length - 1)];
     }
 
     /// <summary>The block containing global visual <paramref name="row"/> (binary search over the prefix sums).</summary>
     public int BlockAtRow(int row)
     {
-        var n = _rowCounts.Length;
+        var n = RowCounts.Length;
         if (n == 0)
         {
             return 0;
@@ -291,7 +284,7 @@ internal sealed class LayoutModel
         while (lo < hi)
         {
             var mid = (lo + hi + 1) >> 1;
-            if (_rowPrefix[mid] <= row)
+            if (RowPrefix[mid] <= row)
             {
                 lo = mid;
             }
@@ -315,7 +308,7 @@ internal sealed class LayoutModel
         }
 
         var visual = _builder.Build(block, new BlockLayoutContext(
-            _host.Document, _host.Model, _host.Theme, _blockStartLine,
+            _host.Document, _host.Model, _host.Theme, BlockStartLine,
             _host.RawTextMode, _host.MarkersRevealed, _host.WrapWidth, _host.CheckboxGutter,
             _host.OrderedMarkerText));
         _blockVisualCache[block] = visual;
@@ -331,7 +324,7 @@ internal sealed class LayoutModel
 
         // A collapsed blank block has no rows to position a caret on; snap to the end of the previous
         // (content) block so an offset that lands on a separator still resolves to a drawn position.
-        while (block > 0 && _rowCounts.Length > block && _rowCounts[block] == 0)
+        while (block > 0 && RowCounts.Length > block && RowCounts[block] == 0)
         {
             block--;
             offset = BlockEndOffset(block);

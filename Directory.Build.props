@@ -6,9 +6,19 @@
     <LangVersion>latest</LangVersion>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
-    <TreatWarningsAsErrors>false</TreatWarningsAsErrors>
-    <WarningsAsErrors>nullable</WarningsAsErrors>
-    <GenerateDocumentationFile>false</GenerateDocumentationFile>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <!-- IDE0060 (unused parameter) has no code-fixer and can't be auto-resolved: the parameter is
+         often required by a delegate/interface/override signature, or is a placeholder for an
+         as-yet-unwired feature (removing it would hide that signal). Keep it a visible warning
+         rather than a build-breaking error so it surfaces without gating CI. -->
+    <WarningsNotAsErrors>IDE0060</WarningsNotAsErrors>
+    <!-- Generate the doc file so IDE0005 (unused usings) actually reports at build time. The doc
+         file is a means to that end, not a shipped artifact, so suppress the XML-doc *validation*
+         family: CS1591 (missing doc), CS1573 (partial <param>), CS1572/CS1734 (stale <param>/paramref).
+         plus the cref-resolution family CS1574/CS0419/CS1580 (broken/ambiguous <see cref>).
+         These flag doc-comment prose, not code; re-enable if you ever publish API docs. -->
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <NoWarn>$(NoWarn);CS1591;CS1573;CS1572;CS1734;CS1574;CS0419;CS1580;CS1570</NoWarn>
     <ManagePackageVersionsCentrally>true</ManagePackageVersionsCentrally>
     <EnableNETAnalyzers>true</EnableNETAnalyzers>
     <AnalysisLevel>latest</AnalysisLevel>

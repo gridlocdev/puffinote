@@ -42,15 +42,15 @@ public static class AutoSumPlanner
         // Prefer the contiguous run of numbers directly above; otherwise the run directly to the left.
         if (RunAbove(sheet, row, column) is { } above)
         {
-            return new[] { new AutoSumProposal(row, column, SumFormula(above)) };
+            return [new AutoSumProposal(row, column, SumFormula(above))];
         }
 
         if (RunLeft(sheet, row, column) is { } left)
         {
-            return new[] { new AutoSumProposal(row, column, SumFormula(left)) };
+            return [new AutoSumProposal(row, column, SumFormula(left))];
         }
 
-        return Array.Empty<AutoSumProposal>();
+        return [];
     }
 
     private static IReadOnlyList<AutoSumProposal> PlanColumnTotals(Worksheet sheet, CellRange selection)
@@ -58,7 +58,7 @@ public static class AutoSumPlanner
         int targetRow = selection.Bottom + 1;
         if (targetRow >= SheetDimensions.MaxRows)
         {
-            return Array.Empty<AutoSumProposal>();
+            return [];
         }
 
         var proposals = new List<AutoSumProposal>();

@@ -1,5 +1,4 @@
 using System.Diagnostics;
-using Cellestra.Core.Dependencies;
 using Cellestra.Core.Editing;
 using Cellestra.Core.Model;
 using Cellestra.Core.Styling;
@@ -64,7 +63,7 @@ public class ClearCommandTests
         // The expanding-⌘A "whole sheet" selection is 16384×1048576 ≈ 17 billion cells. A clear
         // that materialized every position would hang/crash (the reported bug). Clamping to the
         // used range must keep it instant on a tiny populated sheet.
-        var (workbook, history, sheet) = New();
+        var (_, history, sheet) = New();
         sheet.SetValue(0, 0, CellValue.Number(1));
         sheet.SetValue(2, 3, CellValue.Text("x"));
 

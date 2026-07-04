@@ -1,4 +1,3 @@
-using System.Linq;
 using Cellestra.Core.Model;
 
 namespace Cellestra.Core.Data;

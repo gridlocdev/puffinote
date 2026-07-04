@@ -1,4 +1,3 @@
-using Avalonia.Controls;
 using Typage.Engine.Markdown;
 
 namespace Typage.Control;

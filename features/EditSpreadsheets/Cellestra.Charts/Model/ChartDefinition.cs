@@ -21,7 +21,7 @@ public sealed class ChartDefinition
     public string? CategoriesReference { get; set; }
 
     /// <summary>The plotted series, drawn in order.</summary>
-    public List<ChartSeries> Series { get; } = new();
+    public List<ChartSeries> Series { get; } = [];
 
     /// <summary>Whether to draw the legend.</summary>
     public bool ShowLegend { get; set; } = true;

@@ -1,4 +1,3 @@
-using System.Linq;
 using Typage.Engine.Document;
 using Xunit;
 
@@ -11,7 +10,7 @@ public class DocumentSearchTests
     {
         var matches = DocumentSearch.FindAll("ababab", "ab", useRegex: false, caseSensitive: true);
         Assert.Equal(3, matches.Count);
-        Assert.Equal(new[] { 0, 2, 4 }, matches.Select(m => m.Start));
+        Assert.Equal([0, 2, 4], matches.Select(m => m.Start));
         Assert.All(matches, m => Assert.Equal(2, m.Length));
     }
 

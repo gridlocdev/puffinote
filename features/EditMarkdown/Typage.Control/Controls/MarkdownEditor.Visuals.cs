@@ -1,15 +1,4 @@
-using System.Globalization;
-using System.Linq;
-using Avalonia;
-using Avalonia.Controls;
-using Avalonia.Controls.Primitives;
-using Avalonia.Input;
-using Avalonia.Input.Platform;
 using Avalonia.Media;
-using Avalonia.Threading;
-using Typage.Control.Rendering;
-using Typage.Engine.Document;
-using Typage.Engine.Editing;
 using Typage.Engine.Markdown;
 
 namespace Typage.Control.Controls;
@@ -48,7 +37,7 @@ public partial class MarkdownEditor
 
         if (entering == BlockKind.IndentedCode)
         {
-            for (var l = line + 1; l < _buffer.Document.LineCount; l++)
+            for (var l = line + 1; l < Buffer.Document.LineCount; l++)
             {
                 var toks = _model.LineTokens(l);
                 if (toks.Count == 0)
@@ -84,14 +73,14 @@ public partial class MarkdownEditor
     /// </summary>
     internal bool ShouldHighlightRuleLine(int line)
         => !MarkersRevealed
-           && _buffer.Selection.Length == 0
+           && Buffer.Selection.Length == 0
            && IsHorizontalRuleLine(line)
-           && _buffer.Document.GetPosition(_buffer.Selection.Caret).Line == line;
+           && Buffer.Document.GetPosition(Buffer.Selection.Caret).Line == line;
 
     /// <summary>Fetch a run's <see cref="FormattedText"/> through the cache, exercising it; for perf tests.</summary>
     internal void GetFormattedTextForTest(string text)
     {
-        var style = _theme.Resolve(TokenType.Text);
+        var style = EditorTheme.Resolve(TokenType.Text);
         _measurer.GetFormattedText(text, style, style.Foreground);
     }
 }

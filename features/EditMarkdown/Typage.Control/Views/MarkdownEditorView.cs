@@ -17,8 +17,6 @@ namespace Typage.Control.Views;
 /// </summary>
 public class MarkdownEditorView : UserControl
 {
-    private readonly MarkdownEditor _editor = new();
-
     private readonly MarkdownCommandBar _commandBar;
 
     public MarkdownEditorView()
@@ -27,7 +25,7 @@ public class MarkdownEditorView : UserControl
         {
             HorizontalScrollBarVisibility = ScrollBarVisibility.Auto,
             VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
-            Content = _editor,
+            Content = Editor,
         };
 
         // An optional formatting toolbar over the editor's own command catalog. Hidden by default so the
@@ -36,8 +34,8 @@ public class MarkdownEditorView : UserControl
         DockPanel.SetDock(_commandBar, Dock.Top);
         Content = new DockPanel { Children = { _commandBar, scroll } };
 
-        _editor.TextChanged += (_, e) => TextChanged?.Invoke(this, e);
-        _editor.SelectionChanged += (_, e) => SelectionChanged?.Invoke(this, e);
+        Editor.TextChanged += (_, e) => TextChanged?.Invoke(this, e);
+        Editor.SelectionChanged += (_, e) => SelectionChanged?.Invoke(this, e);
     }
 
     /// <summary>
@@ -57,54 +55,54 @@ public class MarkdownEditorView : UserControl
     public event EventHandler? SelectionChanged;
 
     /// <summary>The underlying surface, for hosts that need direct access (e.g. the format toolbar).</summary>
-    public MarkdownEditor Editor => _editor;
+    public MarkdownEditor Editor { get; } = new();
 
     public string Text
     {
-        get => _editor.Text;
-        set => _editor.Text = value;
+        get => Editor.Text;
+        set => Editor.Text = value;
     }
 
-    public bool IsDirty => _editor.IsDirty;
+    public bool IsDirty => Editor.IsDirty;
 
-    public DocumentStats Stats => _editor.Stats;
+    public DocumentStats Stats => Editor.Stats;
 
-    public LinePosition CaretPosition => _editor.CaretPosition;
+    public LinePosition CaretPosition => Editor.CaretPosition;
 
     /// <summary>Number of grapheme clusters currently selected (0 when empty).</summary>
-    public int SelectedCharacterCount => _editor.SelectedCharacterCount;
+    public int SelectedCharacterCount => Editor.SelectedCharacterCount;
 
-    public bool CanUndo => _editor.CanUndo;
+    public bool CanUndo => Editor.CanUndo;
 
-    public bool CanRedo => _editor.CanRedo;
+    public bool CanRedo => Editor.CanRedo;
 
     public MarkdownTheme EditorTheme
     {
-        get => _editor.EditorTheme;
-        set => _editor.EditorTheme = value;
+        get => Editor.EditorTheme;
+        set => Editor.EditorTheme = value;
     }
 
     public IEmbedResolver EmbedResolver
     {
-        get => _editor.EmbedResolver;
-        set => _editor.EmbedResolver = value;
+        get => Editor.EmbedResolver;
+        set => Editor.EmbedResolver = value;
     }
 
     /// <summary>Load text and mark it as the saved baseline (open / revert).</summary>
     public void LoadText(string text)
     {
-        _editor.Text = text;
-        _editor.MarkSaved();
+        Editor.Text = text;
+        Editor.MarkSaved();
     }
 
-    public void MarkSaved() => _editor.MarkSaved();
+    public void MarkSaved() => Editor.MarkSaved();
 
     /// <summary>Load recovered text, leaving it marked dirty (unsaved) for crash recovery (PRD §9.4).</summary>
-    public void LoadRecovered(string text) => _editor.LoadDirty(text);
+    public void LoadRecovered(string text) => Editor.LoadDirty(text);
 
-    public void Undo() => _editor.Undo();
+    public void Undo() => Editor.Undo();
 
-    public void Redo() => _editor.Redo();
+    public void Redo() => Editor.Redo();
 
     /// <summary>
     /// This editor's own command catalog (editing/formatting operations) for a host's Command Palette, menu,

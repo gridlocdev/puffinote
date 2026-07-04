@@ -40,8 +40,8 @@ internal sealed class MarkdownCommandBar : Border
 
         Child = row;
         BorderThickness = new Thickness(0, 0, 0, 1);
-        this.Bind(BackgroundProperty, this.GetResourceObservable("ChromeBackground"));
-        this.Bind(BorderBrushProperty, this.GetResourceObservable("ChromeBorder"));
+        Bind(BackgroundProperty, this.GetResourceObservable("ChromeBackground"));
+        Bind(BorderBrushProperty, this.GetResourceObservable("ChromeBorder"));
     }
 
     private static void AddGroup(Panel row, IReadOnlyDictionary<string, AppCommand> byId, params string[] ids)

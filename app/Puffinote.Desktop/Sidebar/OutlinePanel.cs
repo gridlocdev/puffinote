@@ -16,7 +16,6 @@ namespace Puffinote.Desktop.Sidebar;
 internal sealed class OutlinePanel : ISidebarPanel
 {
     private readonly KeyboardListView _list;
-    private IReadOnlyList<OutlineItem> _items = Array.Empty<OutlineItem>();
 
     public OutlinePanel()
     {
@@ -38,12 +37,12 @@ internal sealed class OutlinePanel : ISidebarPanel
     /// <summary>Show <paramref name="items"/> (the active document's structure, or empty).</summary>
     public void SetItems(IReadOnlyList<OutlineItem> items)
     {
-        _items = items;
+        ItemsForTest = items;
         _list.SetItems(items);
     }
 
     /// <summary>The items currently shown (test seam).</summary>
-    internal IReadOnlyList<OutlineItem> ItemsForTest => _items;
+    internal IReadOnlyList<OutlineItem> ItemsForTest { get; private set; } = [];
 
     private static Control BuildRow(OutlineItem? item)
     {

@@ -1,4 +1,3 @@
-using System;
 using Avalonia.Controls;
 using Cellestra.Core.Model;
 
@@ -62,12 +61,12 @@ public sealed partial class SpreadsheetGrid
 
     /// <summary>The schemes the grid will hand to the OS launcher, each with its <c>scheme:</c> prefix.</summary>
     private static readonly string[] AllowedSchemePrefixes =
-    {
+    [
         Uri.UriSchemeHttp + ":",
         Uri.UriSchemeHttps + ":",
         Uri.UriSchemeMailto + ":",
         Uri.UriSchemeFile + ":",
-    };
+    ];
 
     /// <summary>
     /// The URI-safety guard (pure, unit-testable): accept <paramref name="target"/> only when it both

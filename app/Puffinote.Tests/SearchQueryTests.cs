@@ -1,4 +1,3 @@
-using System.Linq;
 using Puffinote.Desktop.Search;
 using Xunit;
 
@@ -20,7 +19,7 @@ public sealed class SearchQueryTests
 
         var hits = SearchQuery.Run(files, "todo", root: "/v");
 
-        Assert.Equal(new[] { "one.md", "two.md" }, hits.Select(h => h.RelativePath));
+        Assert.Equal(["one.md", "two.md"], hits.Select(h => h.RelativePath));
         Assert.Equal(3, hits[0].MatchCount);
     }
 

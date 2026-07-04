@@ -180,7 +180,7 @@ public static class ReferenceAdjuster
                 Rewrite(binary.Left, mapAddress, mapRange),
                 Rewrite(binary.Right, mapAddress, mapRange)),
             FunctionCallExpr call => new FunctionCallExpr(call.Name,
-                call.Arguments.Select(a => Rewrite(a, mapAddress, mapRange)).ToList()),
+                [.. call.Arguments.Select(a => Rewrite(a, mapAddress, mapRange))]),
             _ => expr, // literals, names, ref-errors are unchanged
         };
 

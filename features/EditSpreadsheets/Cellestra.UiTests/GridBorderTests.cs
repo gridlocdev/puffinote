@@ -1,5 +1,4 @@
 using Avalonia;
-using Avalonia.Headless;
 using Avalonia.Headless.XUnit;
 using Cellestra.Core.Model;
 using Cellestra.Core.Styling;

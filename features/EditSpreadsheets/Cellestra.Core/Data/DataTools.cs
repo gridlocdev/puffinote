@@ -22,7 +22,7 @@ public static class DuplicateRemover
 
         var keys = keyColumns.Count > 0
             ? keyColumns
-            : Enumerable.Range(range.Left, range.ColumnCount).ToList();
+            : [.. Enumerable.Range(range.Left, range.ColumnCount)];
 
         var seen = new HashSet<string>(StringComparer.Ordinal);
         var survivors = new List<Cell?[]>();
@@ -92,7 +92,7 @@ public static class TextToColumns
             }
 
             var rows = CsvReader.Parse(value.AsText, options);
-            var fields = rows.Count > 0 ? rows[0] : new List<string>();
+            var fields = rows.Count > 0 ? rows[0] : [];
             maxColumns = Math.Max(maxColumns, fields.Count);
 
             for (int i = 0; i < fields.Count; i++)

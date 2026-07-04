@@ -1,7 +1,5 @@
 using Avalonia;
 using Avalonia.Controls;
-using Avalonia.Input;
-using Cellestra.Core.Model;
 
 namespace Cellestra.Desktop.Controls.SpreadsheetGrid;
 

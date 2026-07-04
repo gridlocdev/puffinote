@@ -43,7 +43,7 @@ public sealed class FileTreeViewTests : IDisposable
         var (tree, _) = Open();
 
         // Root shown and expanded; its children are folder-first (sub) then files alphabetically.
-        Assert.Equal(new[] { _notebook.Name, "sub", "apple.md", "banana.md" }, tree.VisibleNamesForTest);
+        Assert.Equal([_notebook.Name, "sub", "apple.md", "banana.md"], tree.VisibleNamesForTest);
         Assert.Equal(_notebook.Name, tree.SelectedNameForTest);
     }
 

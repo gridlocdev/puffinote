@@ -1,5 +1,4 @@
 using System.Globalization;
-using System.Linq;
 using Cellestra.Core.Data;
 using Cellestra.Core.Editing;
 using Cellestra.Core.Model;

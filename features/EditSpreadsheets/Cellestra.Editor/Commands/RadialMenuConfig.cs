@@ -1,6 +1,3 @@
-using System;
-using System.Collections.Generic;
-
 namespace Cellestra.Desktop.Commands;
 
 /// <summary>
@@ -27,17 +24,17 @@ public sealed record RadialMenuConfig
     /// unbound (inert) segment. Stored verbatim; call <see cref="Normalized"/> before use so the list
     /// length matches <see cref="SegmentCount"/>.
     /// </summary>
-    public List<string?> CommandIds { get; init; } = new();
+    public List<string?> CommandIds { get; init; } = [];
 
     /// <summary>
     /// The commands a fresh radial seeds its segments with, in order — the most common cell actions.
     /// New segments (when the count grows past what the user has bound) fill from this list.
     /// </summary>
-    public static IReadOnlyList<string> DefaultCommandIds { get; } = new[]
-    {
+    public static IReadOnlyList<string> DefaultCommandIds { get; } =
+    [
         "edit.cut", "edit.copy", "edit.paste", "edit.undo", "edit.redo", "edit.delete",
         "format.bold", "edit.autoSum", "data.toggleFilter", "format.cells", "insert.rowsAbove", "edit.clearAll",
-    };
+    ];
 
     /// <summary>A ready-to-use default radial (six segments, seeded from the common actions).</summary>
     public static RadialMenuConfig Default => new RadialMenuConfig().Normalized();

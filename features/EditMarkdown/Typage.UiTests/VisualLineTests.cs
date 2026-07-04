@@ -1,7 +1,5 @@
-using System.Collections.Generic;
 using Avalonia.Media;
 using Typage.Control.Rendering;
-using Typage.Engine.Markdown;
 using Xunit;
 
 namespace Typage.UiTests;
@@ -97,7 +95,7 @@ public class VisualLineTests
     // ----- word wrap (1 unit per char, wrapWidth in the same units) -----
 
     private static VisualLine Wrapped(string text, double wrapWidth) =>
-        VisualLine.Build(text, new[] { new VisualLine.Segment(0, text.Length, Plain, false) }, Unit, wrapWidth);
+        VisualLine.Build(text, [new VisualLine.Segment(0, text.Length, Plain, false)], Unit, wrapWidth);
 
     [Fact]
     public void NoWrapWidth_KeepsASingleRow()

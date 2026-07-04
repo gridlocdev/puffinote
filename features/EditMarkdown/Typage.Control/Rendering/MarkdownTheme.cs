@@ -177,19 +177,12 @@ public class MarkdownTheme
     private Typeface Mono() => new(_mono);
 
     /// <summary>
-    /// A strikethrough decoration with an <b>explicit</b> stroke pen in the text colour. The stroke is given
-    /// rather than left null because relying on a decoration to inherit the run's foreground is unreliable
-    /// across draw backends — an explicit pen guarantees the line actually renders through the text.
-    /// </summary>
-    private TextDecorationCollection? _linkUnderline;
-
-    /// <summary>
     /// The underline decoration for link text — a solid rule in <see cref="LinkForeground"/>, so links read
     /// like HTML hyperlinks (coloured <i>and</i> underlined). Built once per theme instance (themes are
     /// immutable) and shared, so the FormattedText cache keys on a stable decoration object.
     /// </summary>
-    public TextDecorationCollection LinkUnderline => _linkUnderline ??= new()
-    {
+    public TextDecorationCollection LinkUnderline => field ??=
+    [
         new TextDecoration
         {
             Location = TextDecorationLocation.Underline,
@@ -197,11 +190,10 @@ public class MarkdownTheme
             StrokeThickness = 1,
             StrokeThicknessUnit = TextDecorationUnit.Pixel,
         },
-    };
+    ];
 
     private static TextDecorationCollection Strike(IBrush foreground) =>
-        new()
-        {
+        [
             new TextDecoration
             {
                 Location = TextDecorationLocation.Strikethrough,
@@ -209,5 +201,5 @@ public class MarkdownTheme
                 StrokeThickness = 1,
                 StrokeThicknessUnit = TextDecorationUnit.Pixel,
             },
-        };
+        ];
 }

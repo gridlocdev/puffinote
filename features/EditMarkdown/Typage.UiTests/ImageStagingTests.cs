@@ -1,5 +1,3 @@
-using System.IO;
-using System.Linq;
 using Typage.Desktop.Services;
 using Xunit;
 
@@ -126,8 +124,8 @@ public class ImageStagingTests
         // reconcile against a target doc path and verify the files land in ./images/ and the links update.
         var srcA = Path.Combine(Path.GetTempPath(), $"a-{System.Guid.NewGuid():N}.png");
         var srcB = Path.Combine(Path.GetTempPath(), $"b {System.Guid.NewGuid():N}.png"); // spaced name
-        File.WriteAllBytes(srcA, new byte[] { 1 });
-        File.WriteAllBytes(srcB, new byte[] { 2 });
+        File.WriteAllBytes(srcA, [1]);
+        File.WriteAllBytes(srcB, [2]);
         var stagedA = ImageStaging.Stage(srcA, "ida");
         var stagedB = ImageStaging.Stage(srcB, "idb");
 
@@ -171,7 +169,7 @@ public class ImageStagingTests
     public void Stage_CopiesIntoTheStagingRoot_AndIsDetectedAsStaged()
     {
         var src = Path.Combine(Path.GetTempPath(), $"src-{System.Guid.NewGuid():N}.png");
-        File.WriteAllBytes(src, new byte[] { 1, 2, 3 });
+        File.WriteAllBytes(src, [1, 2, 3]);
         try
         {
             var staged = ImageStaging.Stage(src, "testid");

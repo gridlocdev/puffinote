@@ -40,7 +40,7 @@ public sealed class NotebookNode
     {
         if (!IsDirectory)
         {
-            return Array.Empty<NotebookNode>();
+            return [];
         }
 
         FileSystemInfo[] entries;
@@ -52,7 +52,7 @@ public sealed class NotebookNode
         }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException)
         {
-            return Array.Empty<NotebookNode>();
+            return [];
         }
 
         var nodes = new List<NotebookNode>(entries.Length);

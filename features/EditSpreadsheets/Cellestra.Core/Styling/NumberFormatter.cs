@@ -106,8 +106,18 @@ public static class NumberFormatter
         int i = 0;
         while (i < lower.Length)
         {
-            if (StartsWith(lower, i, "am/pm")) { sb.Append("tt"); i += 5; continue; }
-            if (StartsWith(lower, i, "a/p")) { sb.Append('t'); i += 3; continue; }
+            if (StartsWith(lower, i, "am/pm"))
+            {
+                sb.Append("tt");
+                i += 5;
+                continue;
+            }
+            if (StartsWith(lower, i, "a/p"))
+            {
+                sb.Append('t');
+                i += 3;
+                continue;
+            }
 
             char c = lower[i];
             switch (c)

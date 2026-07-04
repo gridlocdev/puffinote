@@ -21,7 +21,7 @@ public static class PastePlanner
         // A move, or a paste onto a single active cell: anchor once at the top-left and expand.
         if (isCut || (selectionRows == 1 && selectionColumns == 1))
         {
-            return new PastePlan(new[] { (selection.Top, selection.Left) }, Tiled: false, ShapeMismatch: false);
+            return new PastePlan([(selection.Top, selection.Left)], Tiled: false, ShapeMismatch: false);
         }
 
         // A single source cell fills the whole selection.
@@ -46,7 +46,7 @@ public static class PastePlanner
         }
 
         // Sizes don't reconcile: paste once at the top-left and flag the mismatch.
-        return new PastePlan(new[] { (selection.Top, selection.Left) }, Tiled: false, ShapeMismatch: true);
+        return new PastePlan([(selection.Top, selection.Left)], Tiled: false, ShapeMismatch: true);
     }
 
     private static List<(int, int)> EveryCell(CellRange selection)

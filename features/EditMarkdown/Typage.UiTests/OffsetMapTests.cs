@@ -1,6 +1,5 @@
 using Avalonia.Headless.XUnit;
 using Typage.Control.Controls;
-using Typage.Control.Rendering;
 using Typage.Engine.Document;
 using Xunit;
 

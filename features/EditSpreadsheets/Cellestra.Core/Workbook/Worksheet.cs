@@ -13,12 +13,12 @@ namespace Cellestra.Core.Model;
 /// </summary>
 public sealed class Worksheet
 {
-    private readonly Dictionary<(int Row, int Column), Cell> _cells = new();
-    private readonly Dictionary<int, Row> _rows = new();
-    private readonly Dictionary<int, Column> _columns = new();
-    private readonly List<MergedRegion> _mergedRegions = new();
-    private readonly List<Table> _tables = new();
-    private readonly List<DataValidation> _validations = new();
+    private readonly Dictionary<(int Row, int Column), Cell> _cells = [];
+    private readonly Dictionary<int, Row> _rows = [];
+    private readonly Dictionary<int, Column> _columns = [];
+    private readonly List<MergedRegion> _mergedRegions = [];
+    private readonly List<Table> _tables = [];
+    private readonly List<DataValidation> _validations = [];
 
     public Worksheet(string name)
     {
@@ -256,10 +256,22 @@ public sealed class Worksheet
         // off the whole span rather than into a still-covered cell.
         if (FindMerge(row, column) is { } from)
         {
-            if (rowDelta > 0) { row = from.Range.Bottom; }
-            else if (rowDelta < 0) { row = from.Range.Top; }
-            if (columnDelta > 0) { column = from.Range.Right; }
-            else if (columnDelta < 0) { column = from.Range.Left; }
+            if (rowDelta > 0)
+            {
+                row = from.Range.Bottom;
+            }
+            else if (rowDelta < 0)
+            {
+                row = from.Range.Top;
+            }
+            if (columnDelta > 0)
+            {
+                column = from.Range.Right;
+            }
+            else if (columnDelta < 0)
+            {
+                column = from.Range.Left;
+            }
         }
 
         int targetRow = Math.Clamp(row + rowDelta, 0, SheetDimensions.MaxRows - 1);
@@ -437,8 +449,8 @@ public sealed class Worksheet
         Cells = _cells.ToDictionary(kv => kv.Key, kv => kv.Value.Clone()),
         Rows = _rows.ToDictionary(kv => kv.Key, kv => kv.Value.Clone()),
         Columns = _columns.ToDictionary(kv => kv.Key, kv => kv.Value.Clone()),
-        Merges = new List<MergedRegion>(_mergedRegions),
-        Tables = new List<Table>(_tables), // Table is an immutable record — a shallow list copy is a full snapshot.
+        Merges = [.. _mergedRegions],
+        Tables = [.. _tables], // Table is an immutable record — a shallow list copy is a full snapshot.
         FrozenRows = FrozenRows,
         FrozenColumns = FrozenColumns,
     };

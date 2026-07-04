@@ -1,4 +1,3 @@
-using System.Collections.Generic;
 using Cellestra.Desktop.Commands;
 using RecentFilesHelper = Puffinote.Components.Shell.RecentFiles;
 
@@ -23,7 +22,7 @@ public sealed record AppSettings
 
     public double WindowHeight { get; init; } = 720;
 
-    public List<string> RecentFiles { get; init; } = new();
+    public List<string> RecentFiles { get; init; } = [];
 
     public const int MaxRecentFiles = 10;
 

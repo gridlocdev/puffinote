@@ -1,7 +1,4 @@
-using System;
-using System.Collections.Generic;
 using System.Globalization;
-using System.Linq;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Media;
@@ -22,7 +19,7 @@ public sealed class ChartControl : Control
 {
     // A categorical palette with reasonable contrast; series cycle through it.
     private static readonly Color[] Palette =
-    {
+    [
         Color.FromRgb(0x2B, 0x6C, 0xB0), // blue
         Color.FromRgb(0x15, 0x73, 0x4F), // green
         Color.FromRgb(0xC2, 0x5A, 0x1A), // orange
@@ -31,7 +28,7 @@ public sealed class ChartControl : Control
         Color.FromRgb(0x1F, 0x9E, 0xA8), // teal
         Color.FromRgb(0xB8, 0x8A, 0x00), // gold
         Color.FromRgb(0x55, 0x6B, 0x2F), // olive
-    };
+    ];
 
     private ResolvedChart? _chart;
 
@@ -182,7 +179,7 @@ public sealed class ChartControl : Control
         DrawAxisTitles(context, chart, plot, area, horizontal);
     }
 
-    private void DrawBars(DrawingContext context, ResolvedChart chart, List<ResolvedSeries> barSeries, Rect area, int categoryCount, double min, double max, bool stacked, bool percent, bool horizontal, double bandSize)
+    private static void DrawBars(DrawingContext context, ResolvedChart chart, List<ResolvedSeries> barSeries, Rect area, int categoryCount, double min, double max, bool stacked, bool percent, bool horizontal, double bandSize)
     {
         if (barSeries.Count == 0)
         {
@@ -244,7 +241,7 @@ public sealed class ChartControl : Control
         context.FillRectangle(brush, rect);
     }
 
-    private void DrawLineSeries(DrawingContext context, ResolvedSeries series, int seriesIndex, Rect area, int categoryCount, double min, double max, double bandSize, bool horizontal)
+    private static void DrawLineSeries(DrawingContext context, ResolvedSeries series, int seriesIndex, Rect area, int categoryCount, double min, double max, double bandSize, bool horizontal)
     {
         var pen = new Pen(SeriesBrush(seriesIndex), 2) { LineJoin = PenLineJoin.Round };
         Point? prev = null;
@@ -268,7 +265,7 @@ public sealed class ChartControl : Control
         }
     }
 
-    private void DrawAreaSeries(DrawingContext context, ResolvedSeries series, int seriesIndex, Rect area, int categoryCount, double min, double max, double bandSize, bool horizontal)
+    private static void DrawAreaSeries(DrawingContext context, ResolvedSeries series, int seriesIndex, Rect area, int categoryCount, double min, double max, double bandSize, bool horizontal)
     {
         var fill = new SolidColorBrush(((SolidColorBrush)SeriesBrush(seriesIndex)).Color, 0.35);
         var pen = new Pen(SeriesBrush(seriesIndex), 2);
@@ -310,7 +307,7 @@ public sealed class ChartControl : Control
         }
     }
 
-    private Point CategoryPoint(int category, double value, Rect area, double min, double max, double bandSize, bool horizontal)
+    private static Point CategoryPoint(int category, double value, Rect area, double min, double max, double bandSize, bool horizontal)
     {
         double along = bandSize * (category + 0.5);
         double across = ValuePos(value, min, max, area, horizontal);
@@ -362,7 +359,7 @@ public sealed class ChartControl : Control
 
     private void DrawPie(DrawingContext context, ResolvedChart chart, Rect plot, bool doughnut)
     {
-        var series = chart.Series.FirstOrDefault();
+        var series = chart.Series.Count > 0 ? chart.Series[0] : null;
         if (series is null)
         {
             return;
@@ -446,8 +443,10 @@ public sealed class ChartControl : Control
                     continue;
                 }
 
-                xMin = Math.Min(xMin, x); xMax = Math.Max(xMax, x);
-                yMin = Math.Min(yMin, y); yMax = Math.Max(yMax, y);
+                xMin = Math.Min(xMin, x);
+                xMax = Math.Max(xMax, x);
+                yMin = Math.Min(yMin, y);
+                yMax = Math.Max(yMax, y);
             }
         }
 
@@ -457,8 +456,14 @@ public sealed class ChartControl : Control
         }
 
         yMin = Math.Min(yMin, 0);
-        if (Math.Abs(xMax - xMin) < 1e-9) { xMax = xMin + 1; }
-        if (Math.Abs(yMax - yMin) < 1e-9) { yMax = yMin + 1; }
+        if (Math.Abs(xMax - xMin) < 1e-9)
+        {
+            xMax = xMin + 1;
+        }
+        if (Math.Abs(yMax - yMin) < 1e-9)
+        {
+            yMax = yMin + 1;
+        }
 
         context.DrawRectangle(null, AxisPen, area);
         DrawValueAxis(context, area, yMin, yMax, percent: false, horizontal: false);
@@ -466,7 +471,7 @@ public sealed class ChartControl : Control
         double maxSize = 1;
         if (bubble)
         {
-            maxSize = chart.Series.SelectMany(s => s.BubbleSizes ?? Array.Empty<double>())
+            maxSize = chart.Series.SelectMany(s => s.BubbleSizes ?? [])
                 .Where(v => !double.IsNaN(v) && v > 0).DefaultIfEmpty(1).Max();
         }
 
@@ -564,13 +569,13 @@ public sealed class ChartControl : Control
 
     private sealed record LegendModel(IReadOnlyList<(string Name, int Index)> Items, double Height);
 
-    private LegendModel BuildLegend(ResolvedChart chart)
+    private static LegendModel BuildLegend(ResolvedChart chart)
     {
         // Pie/doughnut draw a single series as slices, so the legend names the slices (categories),
         // colour-keyed by slice index to match DrawPie — not the lone, unhelpful series name.
         if (chart.Type is ChartType.Pie or ChartType.Doughnut)
         {
-            var series = chart.Series.FirstOrDefault();
+            var series = chart.Series.Count > 0 ? chart.Series[0] : null;
             var slices = new List<(string Name, int Index)>();
             if (series is not null)
             {
@@ -650,8 +655,18 @@ public sealed class ChartControl : Control
                 foreach (var s in bars)
                 {
                     double v = ValueAt(s, c);
-                    if (double.IsNaN(v)) { continue; }
-                    if (v >= 0) { pos += v; } else { neg += v; }
+                    if (double.IsNaN(v))
+                    {
+                        continue;
+                    }
+                    if (v >= 0)
+                    {
+                        pos += v;
+                    }
+                    else
+                    {
+                        neg += v;
+                    }
                 }
 
                 max = Math.Max(max, pos);
@@ -662,7 +677,10 @@ public sealed class ChartControl : Control
                 foreach (var s in bars)
                 {
                     double v = ValueAt(s, c);
-                    if (double.IsNaN(v)) { continue; }
+                    if (double.IsNaN(v))
+                    {
+                        continue;
+                    }
                     max = Math.Max(max, v);
                     min = Math.Min(min, v);
                 }
@@ -671,7 +689,10 @@ public sealed class ChartControl : Control
             foreach (var s in others)
             {
                 double v = ValueAt(s, c);
-                if (double.IsNaN(v)) { continue; }
+                if (double.IsNaN(v))
+                {
+                    continue;
+                }
                 max = Math.Max(max, v);
                 min = Math.Min(min, v);
             }
@@ -691,7 +712,7 @@ public sealed class ChartControl : Control
         return horizontal ? area.X + t * area.Width : area.Bottom - t * area.Height;
     }
 
-    private IBrush SeriesBrush(int index) => new SolidColorBrush(Palette[index % Palette.Length]);
+    private static IBrush SeriesBrush(int index) => new SolidColorBrush(Palette[index % Palette.Length]);
 
     private static string FormatNumber(double value)
     {
@@ -704,7 +725,7 @@ public sealed class ChartControl : Control
         return value.ToString("0.##", CultureInfo.InvariantCulture);
     }
 
-    private FormattedText Text(string text, double size, IBrush brush, bool bold = false) => new(
+    private static FormattedText Text(string text, double size, IBrush brush, bool bold = false) => new(
         text,
         CultureInfo.CurrentCulture,
         FlowDirection.LeftToRight,
@@ -712,7 +733,7 @@ public sealed class ChartControl : Control
         size,
         brush);
 
-    private void DrawCentered(DrawingContext context, string message, Rect area, IBrush brush, double size)
+    private static void DrawCentered(DrawingContext context, string message, Rect area, IBrush brush, double size)
     {
         var ft = Text(message, size, brush);
         context.DrawText(ft, new Point(area.X + (area.Width - ft.Width) / 2, area.Y + (area.Height - ft.Height) / 2));

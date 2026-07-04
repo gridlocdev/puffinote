@@ -1,5 +1,3 @@
-using System.Collections.Generic;
-
 namespace Cellestra.Desktop.Controls.CommandBar;
 
 /// <summary>
@@ -41,39 +39,39 @@ public static class CommandBarModel
         _ => Cell,
     };
 
-    private static readonly IReadOnlyList<CommandBarGroup> Cell = new[]
-    {
+    private static readonly IReadOnlyList<CommandBarGroup> Cell =
+    [
         new CommandBarGroup("Edit",
-            new[] { "edit.undo", "edit.redo" },
+            ["edit.undo", "edit.redo"],
             // Format Painter sits with the clipboard tools — it's a "copy the look, paste it" action.
             // Paste Special and Fill Down/Right round out the clipboard/fill actions.
-            new[] { "edit.cut", "edit.copy", "edit.paste", "edit.pasteSpecial", "edit.formatPainter", "fill.down", "fill.right", "edit.delete", "edit.clearFormats", "edit.clearAll" }),
+            ["edit.cut", "edit.copy", "edit.paste", "edit.pasteSpecial", "edit.formatPainter", "fill.down", "fill.right", "edit.delete", "edit.clearFormats", "edit.clearAll"]),
         new CommandBarGroup("Text",
-            new[] { "format.bold", "format.italic", "format.underline" },
-            new[] { "format.strikethrough", "format.cells" }),
+            ["format.bold", "format.italic", "format.underline"],
+            ["format.strikethrough", "format.cells"]),
         new CommandBarGroup("Align",
-            new[] { "format.alignLeft", "format.alignCenter", "format.alignRight" },
-            new[] { "format.wrap", "format.merge" }),
+            ["format.alignLeft", "format.alignCenter", "format.alignRight"],
+            ["format.wrap", "format.merge"]),
         // Borders: a small group whose chevron drawer lists the common presets (recognition over
         // recall). The primary tool is "All Borders"; the rest live behind the drawer.
         new CommandBarGroup("Border",
-            new[] { "format.borderAll" },
-            new[] { "format.borderOutline", "format.borderNone", "format.borderBottom", "format.borderTop", "format.borderLeft", "format.borderRight" }),
+            ["format.borderAll"],
+            ["format.borderOutline", "format.borderNone", "format.borderBottom", "format.borderTop", "format.borderLeft", "format.borderRight"]),
         new CommandBarGroup("Numbers",
-            new[] { "format.currency", "format.percent" },
+            ["format.currency", "format.percent"],
             // The increase/decrease-decimal steppers live in the drawer (greyed on text, like the
             // other number tools); the previewed "Format as" picker (HasNumberDrawer) covers the
             // discrete formats, so no "Date" toggle is duplicated here.
-            new[] { "format.increaseDecimal", "format.decreaseDecimal" }),
+            ["format.increaseDecimal", "format.decreaseDecimal"]),
         // AutoSum: a flagship one-click "sum the column/row" action, surfaced on its own.
         new CommandBarGroup("Formula",
-            new[] { "edit.autoSum" },
-            System.Array.Empty<string>()),
+            ["edit.autoSum"],
+            []),
         new CommandBarGroup("Insert",
-            new[] { "insert.rowsAbove", "insert.columnsLeft" },
-            new[] { "insert.sheet", "data.createTable" }),
+            ["insert.rowsAbove", "insert.columnsLeft"],
+            ["insert.sheet", "data.createTable"]),
         new CommandBarGroup("Data",
-            new[] { "data.sortAsc", "data.sortDesc", "data.sortAndFilter" },
-            new[] { "data.customSort", "data.toggleFilter", "data.clearFilter", "data.removeDuplicates", "data.textToColumns", "data.validation" }),
-    };
+            ["data.sortAsc", "data.sortDesc", "data.sortAndFilter"],
+            ["data.customSort", "data.toggleFilter", "data.clearFilter", "data.removeDuplicates", "data.textToColumns", "data.validation"]),
+    ];
 }

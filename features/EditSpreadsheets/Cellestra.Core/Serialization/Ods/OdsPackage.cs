@@ -16,7 +16,7 @@ public sealed class OdsPackage
     private readonly Dictionary<string, byte[]> _parts = new(StringComparer.Ordinal);
 
     /// <summary>Unmodeled <c>&lt;office:spreadsheet&gt;</c> children captured on read, re-emitted on write (PRD §8.1).</summary>
-    public List<ForeignXml> ForeignSpreadsheetChildren { get; } = new();
+    public List<ForeignXml> ForeignSpreadsheetChildren { get; } = [];
 
     public IReadOnlyCollection<string> PartNames => _parts.Keys;
 

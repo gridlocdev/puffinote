@@ -69,10 +69,7 @@ public sealed class StructuralEditCommand : IEditCommand
         foreach (var (cellRef, formula) in _otherFormulasBefore)
         {
             var cell = workbook.FindSheet(cellRef.Sheet)?.Find(cellRef.Row, cellRef.Column);
-            if (cell is not null)
-            {
-                cell.Formula = formula;
-            }
+            cell?.Formula = formula;
         }
 
         return EditResult.StructuralChange;

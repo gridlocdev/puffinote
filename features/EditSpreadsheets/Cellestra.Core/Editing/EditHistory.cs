@@ -11,8 +11,8 @@ public sealed class EditHistory
 {
     public const int MaxDepth = 1000;
 
-    private readonly List<IEditCommand> _undo = new();
-    private readonly List<IEditCommand> _redo = new();
+    private readonly List<IEditCommand> _undo = [];
+    private readonly List<IEditCommand> _redo = [];
     private readonly Workbook _workbook;
 
     public EditHistory(Workbook workbook) => _workbook = workbook ?? throw new ArgumentNullException(nameof(workbook));

@@ -99,7 +99,7 @@ public static class OdsSupportXml
 
         // Each embedded chart sub-document needs its directory declared with the chart media type
         // (the inner content.xml is added by the per-part loop below as text/xml).
-        foreach (string dir in chartObjectDirs ?? Enumerable.Empty<string>())
+        foreach (string dir in chartObjectDirs ?? [])
         {
             manifest.Add(FileEntry($"{dir}/", ChartMediaType));
         }

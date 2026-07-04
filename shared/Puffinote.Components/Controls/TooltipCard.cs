@@ -1,4 +1,3 @@
-using System.Collections.Generic;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Layout;
@@ -15,7 +14,7 @@ namespace Puffinote.Components.Controls;
 /// </summary>
 public sealed class TooltipCard : StackPanel
 {
-    private readonly List<TextBlock> _muted = new();
+    private readonly List<TextBlock> _muted = [];
 
     public TooltipCard(string title, string? shortcut = null, string? description = null)
     {

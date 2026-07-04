@@ -14,8 +14,8 @@ public class ChartDataResolverTests
         var sheet = workbook.ActiveSheet; // Sheet1
         sheet.SetValue(0, 1, CellValue.Text("Sales"));    // B1 header / series name
         sheet.SetValue(0, 0, CellValue.Text("Category")); // A1
-        string[] labels = { "Jan", "Feb", "Mar" };
-        double[] values = { 5, 8, 3 };
+        string[] labels = ["Jan", "Feb", "Mar"];
+        double[] values = [5, 8, 3];
         for (int i = 0; i < labels.Length; i++)
         {
             sheet.SetValue(i + 1, 0, CellValue.Text(labels[i]));
@@ -37,10 +37,10 @@ public class ChartDataResolverTests
 
         var resolved = ChartDataResolver.Resolve(workbook, chart);
 
-        Assert.Equal(new[] { "Jan", "Feb", "Mar" }, resolved.Categories);
+        Assert.Equal(["Jan", "Feb", "Mar"], resolved.Categories);
         Assert.Single(resolved.Series);
         Assert.Equal("Sales", resolved.Series[0].Name);
-        Assert.Equal(new[] { 5d, 8d, 3d }, resolved.Series[0].Values);
+        Assert.Equal([5d, 8d, 3d], resolved.Series[0].Values);
         Assert.False(resolved.IsEmpty);
     }
 
@@ -53,7 +53,7 @@ public class ChartDataResolverTests
 
         var resolved = ChartDataResolver.Resolve(workbook, chart);
 
-        Assert.Equal(new[] { 5d, 8d, 3d }, resolved.Series[0].Values);
+        Assert.Equal([5d, 8d, 3d], resolved.Series[0].Values);
         Assert.Equal("Series 1", resolved.Series[0].Name); // no name reference / literal → fallback
     }
 

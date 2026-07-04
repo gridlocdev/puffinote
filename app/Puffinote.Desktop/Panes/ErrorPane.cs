@@ -15,11 +15,9 @@ namespace Puffinote.Desktop.Panes;
 /// </summary>
 internal sealed class ErrorPane : IEditorPane
 {
-    private readonly string _title;
-
     public ErrorPane(string path, string message)
     {
-        _title = System.IO.Path.GetFileName(path);
+        Title = System.IO.Path.GetFileName(path);
         View = new TextBlock
         {
             Text = message,
@@ -35,7 +33,7 @@ internal sealed class ErrorPane : IEditorPane
 
     public Control View { get; }
 
-    public string Title => _title;
+    public string Title { get; }
 
     /// <summary>Null — this isn't a real document, so it's never recorded as recent, saved, or rebound.</summary>
     public string? Path => null;
@@ -51,9 +49,9 @@ internal sealed class ErrorPane : IEditorPane
 
     public void Rebind(string newPath) { }
 
-    public IReadOnlyList<AppCommand> Commands => Array.Empty<AppCommand>();
+    public IReadOnlyList<AppCommand> Commands => [];
 
-    public IReadOnlyList<OutlineItem> GetOutline() => Array.Empty<OutlineItem>();
+    public IReadOnlyList<OutlineItem> GetOutline() => [];
 
     public void Dispose() { }
 }

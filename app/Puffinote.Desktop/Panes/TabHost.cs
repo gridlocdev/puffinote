@@ -48,7 +48,7 @@ internal sealed class TabHost : UserControl
     private readonly Border _stripBar;
     private readonly Border _content = new();
     private readonly Control _placeholder;
-    private readonly List<TabItem> _tabs = new();
+    private readonly List<TabItem> _tabs = [];
     private TabItem? _active;
 
     public TabHost()
@@ -88,7 +88,6 @@ internal sealed class TabHost : UserControl
     /// <summary>Prompts the user to Save / Don't-Save / Cancel a dirty tab on close. Injected by the shell.</summary>
     public Func<IEditorPane, Task<CloseDecision>>? ConfirmClose { get; set; }
 
-    private PuffinoteSettings _settings = new();
     private NoteConfig _noteConfig = NoteConfig.Resolve(new PuffinoteSettings());
 
     /// <summary>
@@ -98,13 +97,13 @@ internal sealed class TabHost : UserControl
     /// </summary>
     public PuffinoteSettings Settings
     {
-        get => _settings;
+        get;
         set
         {
-            _settings = value;
+            field = value;
             _noteConfig = NoteConfig.Resolve(value);
         }
-    }
+    } = new();
 
     /// <summary>Raised on any change to the tabs or the active document's dirty state (for the window title/Save).</summary>
     public event EventHandler? Changed;

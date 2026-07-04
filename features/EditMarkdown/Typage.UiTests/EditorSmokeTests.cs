@@ -21,11 +21,13 @@ public class EditorSmokeTests
     [AvaloniaFact]
     public void EditorView_Constructs_AndReflectsText()
     {
-        var view = new MarkdownEditorView();
-        view.Text =
-            "---\ntitle: Demo\n---\n# Heading\n\n" +
-            "Body with **bold**, *italic*, `code`, ~~strike~~, ==mark==, [link](https://x.com).\n\n" +
-            "- [x] done\n- [ ] todo\n\n> quote\n\n```python\nx = 1\n```\n\n| A | B |\n| - | - |\n| 1 | 2 |\n";
+        var view = new MarkdownEditorView
+        {
+            Text =
+                "---\ntitle: Demo\n---\n# Heading\n\n" +
+                "Body with **bold**, *italic*, `code`, ~~strike~~, ==mark==, [link](https://x.com).\n\n" +
+                "- [x] done\n- [ ] todo\n\n> quote\n\n```python\nx = 1\n```\n\n| A | B |\n| - | - |\n| 1 | 2 |\n"
+        };
 
         Assert.True(view.Stats.Words > 0);
         Assert.False(view.IsDirty); // setting text marks it as the saved baseline
@@ -123,12 +125,11 @@ public class EditorSmokeTests
     {
         var editor = new MarkdownEditor { Text = new string('x', 100) };
         editor.SetSearchMatches(
-            new[]
-            {
+            [
                 new Engine.Document.SearchMatch(5, 2),  // ends at 7
                 new Engine.Document.SearchMatch(20, 2), // ends at 22
                 new Engine.Document.SearchMatch(50, 2), // ends at 52
-            },
+            ],
             current: 0);
 
         Assert.Equal(0, editor.FirstMatchReaching(0));

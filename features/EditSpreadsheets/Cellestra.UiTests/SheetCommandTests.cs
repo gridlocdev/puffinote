@@ -1,5 +1,3 @@
-using System;
-using System.Linq;
 using Avalonia.Headless.XUnit;
 using Cellestra.Core.Editing;
 using Cellestra.Core.Model;

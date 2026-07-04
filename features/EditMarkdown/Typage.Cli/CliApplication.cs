@@ -1,7 +1,6 @@
 using System.CommandLine;
 using Puffinote.Components.Core.Cli;
 using Typage.Cli.Commands;
-using Typage.Cli.Infrastructure;
 
 namespace Typage.Cli;
 

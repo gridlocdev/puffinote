@@ -44,7 +44,11 @@ public static class EdgeNavigator
         bool next = Filled(row + rowDelta, column + columnDelta);
 
         int r2 = row, c2 = column;
-        void Step() { r2 += rowDelta; c2 += columnDelta; }
+        void Step()
+        {
+            r2 += rowDelta;
+            c2 += columnDelta;
+        }
 
         if (here && next)
         {

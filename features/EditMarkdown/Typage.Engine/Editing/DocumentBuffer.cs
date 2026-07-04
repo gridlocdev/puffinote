@@ -12,15 +12,14 @@ namespace Typage.Engine.Editing;
 public sealed class DocumentBuffer
 {
     private readonly EditHistory _history = new();
-    private TextDocument _document;
     private Selection _selection;
     private DocumentStats? _stats;
 
     public DocumentBuffer(string? text = null)
     {
-        _document = TextDocument.FromString(text);
+        Document = TextDocument.FromString(text);
         _selection = Selection.At(0);
-        SavedDocument = _document;
+        SavedDocument = Document;
     }
 
     /// <summary>Raised after any change to the document or selection.</summary>
@@ -30,7 +29,7 @@ public sealed class DocumentBuffer
     public event EventHandler? TextChanged;
 
     /// <summary>The current immutable snapshot.</summary>
-    public TextDocument Document => _document;
+    public TextDocument Document { get; private set; }
 
     /// <summary>The snapshot last marked saved; the dirty flag compares against it.</summary>
     public TextDocument SavedDocument { get; private set; }
@@ -62,7 +61,7 @@ public sealed class DocumentBuffer
     }
 
     /// <summary>True when the buffer differs from the last-saved snapshot (drives the title/status dirty mark).</summary>
-    public bool IsDirty => !ReferenceEquals(_document, SavedDocument);
+    public bool IsDirty => !ReferenceEquals(Document, SavedDocument);
 
     public bool CanUndo => _history.CanUndo;
 
@@ -104,7 +103,7 @@ public sealed class DocumentBuffer
             return;
         }
 
-        if (sel.Caret >= _document.Length)
+        if (sel.Caret >= Document.Length)
         {
             return;
         }
@@ -125,17 +124,17 @@ public sealed class DocumentBuffer
     /// </summary>
     public void ReplaceRange(int start, int length, string text, int? caretAfter)
     {
-        var edit = TextEdit.Replace(_document, start, length, text ?? string.Empty);
+        var edit = TextEdit.Replace(Document, start, length, text ?? string.Empty);
         if (edit.OldLength == 0 && edit.NewLength == 0)
         {
             return;
         }
 
         var before = _selection;
-        _document = edit.Apply(_document);
+        Document = edit.Apply(Document);
         _selection = Selection.At(caretAfter ?? edit.CaretAfter);
         _history.Record(edit, before, _selection);
-        RaiseTextChanged(_document.GetPosition(edit.Start).Line);
+        RaiseTextChanged(Document.GetPosition(edit.Start).Line);
     }
 
     /// <summary>Undo the most recent step. Returns false if there was nothing to undo.</summary>
@@ -147,9 +146,9 @@ public sealed class DocumentBuffer
             return false;
         }
 
-        _document = entry.Value.Edit.Invert().Apply(_document);
+        Document = entry.Value.Edit.Invert().Apply(Document);
         _selection = Clamp(entry.Value.Before);
-        RaiseTextChanged(_document.GetPosition(entry.Value.Edit.Start).Line);
+        RaiseTextChanged(Document.GetPosition(entry.Value.Edit.Start).Line);
         return true;
     }
 
@@ -162,19 +161,19 @@ public sealed class DocumentBuffer
             return false;
         }
 
-        _document = entry.Value.Edit.Apply(_document);
+        Document = entry.Value.Edit.Apply(Document);
         _selection = Clamp(entry.Value.After);
-        RaiseTextChanged(_document.GetPosition(entry.Value.Edit.Start).Line);
+        RaiseTextChanged(Document.GetPosition(entry.Value.Edit.Start).Line);
         return true;
     }
 
     /// <summary>Replace the whole document (open / revert / external reload). Clears undo history.</summary>
     public void Load(string? text, bool markSaved = true)
     {
-        _document = TextDocument.FromString(text);
+        Document = TextDocument.FromString(text);
         if (markSaved)
         {
-            SavedDocument = _document;
+            SavedDocument = Document;
         }
 
         _selection = Selection.At(0);
@@ -183,7 +182,7 @@ public sealed class DocumentBuffer
     }
 
     /// <summary>Mark the current snapshot as the saved baseline (after a successful save).</summary>
-    public void MarkSaved() => SavedDocument = _document;
+    public void MarkSaved() => SavedDocument = Document;
 
     /// <summary>
     /// The caret-legal offset one grapheme after <paramref name="offset"/>. Operates on the
@@ -193,40 +192,40 @@ public sealed class DocumentBuffer
     /// </summary>
     public int NextCaret(int offset)
     {
-        offset = Math.Clamp(offset, 0, _document.Length);
-        if (offset >= _document.Length)
+        offset = Math.Clamp(offset, 0, Document.Length);
+        if (offset >= Document.Length)
         {
-            return _document.Length;
+            return Document.Length;
         }
 
-        var line = _document.GetPosition(offset).Line;
-        var start = _document.GetLineStart(line);
-        var end = line + 1 < _document.LineCount ? _document.GetLineStart(line + 1) : _document.Length;
-        var window = _document.GetText(start, end - start);
+        var line = Document.GetPosition(offset).Line;
+        var start = Document.GetLineStart(line);
+        var end = line + 1 < Document.LineCount ? Document.GetLineStart(line + 1) : Document.Length;
+        var window = Document.GetText(start, end - start);
         return start + Grapheme.NextBoundary(window, offset - start);
     }
 
     /// <summary>The caret-legal offset one grapheme before <paramref name="offset"/> (O(line), see <see cref="NextCaret"/>).</summary>
     public int PreviousCaret(int offset)
     {
-        offset = Math.Clamp(offset, 0, _document.Length);
+        offset = Math.Clamp(offset, 0, Document.Length);
         if (offset <= 0)
         {
             return 0;
         }
 
-        var line = _document.GetPosition(offset).Line;
-        var start = _document.GetLineStart(line);
+        var line = Document.GetPosition(offset).Line;
+        var start = Document.GetLineStart(line);
         if (offset == start)
         {
             // At a line start, step back over the previous line's newline (kept whole for \r\n).
-            var prevStart = _document.GetLineStart(line - 1);
-            var prevWindow = _document.GetText(prevStart, start - prevStart);
+            var prevStart = Document.GetLineStart(line - 1);
+            var prevWindow = Document.GetText(prevStart, start - prevStart);
             return prevStart + Grapheme.PreviousBoundary(prevWindow, start - prevStart);
         }
 
-        var end = line + 1 < _document.LineCount ? _document.GetLineStart(line + 1) : _document.Length;
-        var window = _document.GetText(start, end - start);
+        var end = line + 1 < Document.LineCount ? Document.GetLineStart(line + 1) : Document.Length;
+        var window = Document.GetText(start, end - start);
         return start + Grapheme.PreviousBoundary(window, offset - start);
     }
 
@@ -235,11 +234,11 @@ public sealed class DocumentBuffer
     /// caret move. The status bar reads this on every selection change, so computing it eagerly
     /// would scan the whole document on each arrow keypress.
     /// </summary>
-    public DocumentStats Stats => _stats ??= DocumentStats.Compute(_document);
+    public DocumentStats Stats => _stats ??= DocumentStats.Compute(Document);
 
     private Selection Clamp(Selection sel)
     {
-        var len = _document.Length;
+        var len = Document.Length;
         return new Selection(Math.Clamp(sel.Anchor, 0, len), Math.Clamp(sel.Caret, 0, len));
     }
 

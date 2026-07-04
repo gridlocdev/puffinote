@@ -67,6 +67,6 @@ public sealed class MarkdownDocumentSessionTests : IDisposable
         session.Save("b");
 
         Assert.Equal("b", File.ReadAllText(path));
-        Assert.Equal(new[] { "clean.md" }, Directory.GetFiles(_dir.FullName).Select(System.IO.Path.GetFileName));
+        Assert.Equal(["clean.md"], Directory.GetFiles(_dir.FullName).Select(System.IO.Path.GetFileName));
     }
 }

@@ -1,4 +1,3 @@
-using System.Collections.Generic;
 using Avalonia.Controls;
 using Avalonia.Headless.XUnit;
 using Cellestra.Core.Values;
@@ -97,7 +96,7 @@ public class RadialMenuTests
         window.Editor.RadialConfig = new RadialMenuConfig
         {
             SegmentCount = 3,
-            CommandIds = new List<string?> { "edit.copy", null, "edit.paste" },
+            CommandIds = ["edit.copy", null, "edit.paste"],
         };
 
         var segments = window.Editor.Grid.RadialSegmentsForTest();
@@ -133,7 +132,7 @@ public class RadialMenuTests
         var dialog = new RadialSettingsDialog(new RadialMenuConfig
         {
             SegmentCount = 4,
-            CommandIds = new List<string?> { "edit.cut", "edit.copy", "edit.paste", "edit.undo" },
+            CommandIds = ["edit.cut", "edit.copy", "edit.paste", "edit.undo"],
         });
 
         var result = dialog.BuildConfigForTest();
@@ -149,7 +148,7 @@ public class RadialMenuTests
         var dialog = new RadialSettingsDialog(new RadialMenuConfig
         {
             SegmentCount = 4,
-            CommandIds = new List<string?> { "edit.cut", "edit.copy", "edit.paste", "edit.undo" },
+            CommandIds = ["edit.cut", "edit.copy", "edit.paste", "edit.undo"],
         });
 
         dialog.HoverSegmentForTest(2);
@@ -166,7 +165,7 @@ public class RadialMenuTests
         var dialog = new RadialSettingsDialog(new RadialMenuConfig
         {
             SegmentCount = 4,
-            CommandIds = new List<string?> { "edit.cut", "edit.copy", "edit.paste", "edit.undo" },
+            CommandIds = ["edit.cut", "edit.copy", "edit.paste", "edit.undo"],
         });
 
         dialog.OpenResetConfirmForTest();
@@ -187,7 +186,7 @@ public class RadialMenuTests
         var dialog = new RadialSettingsDialog(new RadialMenuConfig
         {
             SegmentCount = 4,
-            CommandIds = new List<string?> { "edit.cut", "edit.copy", "edit.paste", "edit.undo" },
+            CommandIds = ["edit.cut", "edit.copy", "edit.paste", "edit.undo"],
         });
 
         dialog.DragReorderForTest(0, 2); // drag segment 1 onto segment 3 — they swap
@@ -205,7 +204,7 @@ public class RadialMenuTests
         var dialog = new RadialSettingsDialog(new RadialMenuConfig
         {
             SegmentCount = 4,
-            CommandIds = new List<string?> { "edit.cut", "edit.copy", "edit.paste", "edit.undo" },
+            CommandIds = ["edit.cut", "edit.copy", "edit.paste", "edit.undo"],
         });
 
         dialog.SelectSegmentForTest(1);
@@ -228,7 +227,7 @@ public class RadialMenuTests
         var dialog = new RadialSettingsDialog(new RadialMenuConfig
         {
             SegmentCount = 4,
-            CommandIds = new List<string?> { "edit.cut", "edit.copy", "edit.paste", "edit.undo" },
+            CommandIds = ["edit.cut", "edit.copy", "edit.paste", "edit.undo"],
         });
 
         Assert.Equal(-1, dialog.PreviewActiveSegmentForTest); // nothing selected, nothing hovered
@@ -249,7 +248,7 @@ public class RadialMenuTests
         var dialog = new RadialSettingsDialog(new RadialMenuConfig
         {
             SegmentCount = 4,
-            CommandIds = new List<string?> { "edit.cut", "edit.copy", "edit.paste", "edit.undo" },
+            CommandIds = ["edit.cut", "edit.copy", "edit.paste", "edit.undo"],
         });
 
         Assert.False(dialog.IsDirtyForTest); // nothing touched yet
@@ -270,7 +269,7 @@ public class RadialMenuTests
         var dialog = new RadialSettingsDialog(new RadialMenuConfig
         {
             SegmentCount = 4,
-            CommandIds = new List<string?> { "edit.cut", "edit.copy", "edit.paste", "edit.undo" },
+            CommandIds = ["edit.cut", "edit.copy", "edit.paste", "edit.undo"],
         });
 
         Assert.False(dialog.PressEscapeForTest());     // not intercepted — the dialog just cancels
@@ -290,7 +289,7 @@ public class RadialMenuTests
         var dialog = new RadialSettingsDialog(new RadialMenuConfig
         {
             SegmentCount = 4,
-            CommandIds = new List<string?> { "edit.cut", "edit.copy", "edit.paste", "edit.undo" },
+            CommandIds = ["edit.cut", "edit.copy", "edit.paste", "edit.undo"],
         }, window.Editor.Commands);
 
         dialog.OpenCommandPickerForTest(2);
@@ -328,7 +327,7 @@ public class RadialMenuTests
         var dialog = new RadialSettingsDialog(new RadialMenuConfig
         {
             SegmentCount = 3,
-            CommandIds = new List<string?> { "edit.cut", null, "edit.paste" },
+            CommandIds = ["edit.cut", null, "edit.paste"],
         }, commands);
 
         var cut = commands.ById("edit.cut")!.Title;
@@ -348,7 +347,7 @@ public class RadialMenuTests
         var dialog = new RadialSettingsDialog(new RadialMenuConfig
         {
             SegmentCount = 4,
-            CommandIds = new List<string?> { "edit.cut", "edit.copy", "edit.paste", "edit.undo" },
+            CommandIds = ["edit.cut", "edit.copy", "edit.paste", "edit.undo"],
         });
 
         dialog.OpenCommandPickerForTest(1);
@@ -366,12 +365,12 @@ public class RadialMenuTests
         var window = new Window { Width = 280, Height = 280, Content = overlay };
         window.Show();
 
-        overlay.Open(new Avalonia.Point(140, 140), new[]
-        {
+        overlay.Open(new Avalonia.Point(140, 140),
+        [
             new RadialSegment("edit.copy", "copy", "Copy", true),
             new RadialSegment("edit.paste", "clipboard", "Paste", true),
             new RadialSegment(null, null, string.Empty, false),
-        });
+        ]);
 
         overlay.SetActiveSegment(0); // top wedge — tip anchored above its outer edge
         Assert.True(overlay.TooltipOpenForTest);
@@ -397,11 +396,11 @@ public class RadialMenuTests
         var overlay = new RadialMenuOverlay { FitToBounds = true };
         var window = new Window { Width = 280, Height = 280, Content = overlay };
         window.Show();
-        overlay.Open(new Avalonia.Point(140, 140), new[]
-        {
+        overlay.Open(new Avalonia.Point(140, 140),
+        [
             new RadialSegment("edit.copy", "copy", "Copy", true),
             new RadialSegment("edit.paste", "clipboard", "Paste", true),
-        });
+        ]);
 
         overlay.SetActiveSegment(0, showTooltip: false); // e.g. a keyboard selection on the settings list
         Assert.Equal(0, overlay.ActiveSegment);          // the wedge still highlights...
@@ -420,7 +419,7 @@ public class RadialMenuTests
         var overlay = new RadialMenuOverlay { FitToBounds = true };
         var window = new Window { Width = 280, Height = 280, Content = overlay };
         window.Show();
-        overlay.Open(new Avalonia.Point(140, 140), new[] { new RadialSegment("edit.copy", "copy", "Copy", true) });
+        overlay.Open(new Avalonia.Point(140, 140), [new RadialSegment("edit.copy", "copy", "Copy", true)]);
         overlay.SetActiveSegment(0);
         Assert.True(overlay.TooltipOpenForTest);
 

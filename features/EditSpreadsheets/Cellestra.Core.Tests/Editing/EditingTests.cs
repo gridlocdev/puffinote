@@ -1,5 +1,4 @@
 using System.Globalization;
-using Cellestra.Core.Dependencies;
 using Cellestra.Core.Editing;
 using Cellestra.Core.Model;
 using Cellestra.Core.Styling;

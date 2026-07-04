@@ -20,10 +20,8 @@ internal sealed class SearchPanel : ISidebarPanel
     private readonly TextBox _search;
     private readonly TextBlock _status;
     private readonly KeyboardListView _results;
-    private readonly Control _root;
     private readonly DispatcherTimer _debounce;
     private string _indexStatus = string.Empty;
-    private IReadOnlyList<SearchHit> _lastHits = Array.Empty<SearchHit>();
     private int _searchGeneration;
 
     public SearchPanel()
@@ -33,7 +31,11 @@ internal sealed class SearchPanel : ISidebarPanel
         // Coalesce keystrokes: the scan is O(total notebook text), so re-running it on every character (and on
         // the UI thread) janks a large notebook. Debounce, then run the scan off-thread (P1).
         _debounce = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(150) };
-        _debounce.Tick += (_, _) => { _debounce.Stop(); _ = SearchAsync(); };
+        _debounce.Tick += (_, _) =>
+        {
+            _debounce.Stop();
+            _ = SearchAsync();
+        };
 
         _search = new TextBox { PlaceholderText = "Search the notebook…", Margin = new Thickness(8, 0, 8, 6) };
         _search.TextChanged += (_, _) => ScheduleSearch();
@@ -55,14 +57,14 @@ internal sealed class SearchPanel : ISidebarPanel
         body.Children.Add(_search);
         body.Children.Add(_status);
         body.Children.Add(_results);
-        _root = body;
+        View = body;
     }
 
     public string Id => "search";
 
     public string Title => "Search";
 
-    public Control View => _root;
+    public Control View { get; }
 
     /// <summary>Raised when a result is activated (Enter / double-click), to open it in a tab.</summary>
     public event Action<string>? FileActivated;
@@ -73,7 +75,7 @@ internal sealed class SearchPanel : ISidebarPanel
     public void Focus() => _search.Focus();
 
     /// <summary>The current result set (test seam).</summary>
-    internal IReadOnlyList<SearchHit> ResultsForTest => _lastHits;
+    internal IReadOnlyList<SearchHit> ResultsForTest { get; private set; } = [];
 
     /// <summary>Set the background-index status line (e.g. "Indexing…" / "142 files indexed").</summary>
     public void SetIndexStatus(string text)
@@ -111,8 +113,8 @@ internal sealed class SearchPanel : ISidebarPanel
 
         if (query.Length == 0)
         {
-            _lastHits = Array.Empty<SearchHit>();
-            _results.SetItems(_lastHits);
+            ResultsForTest = [];
+            _results.SetItems(ResultsForTest);
             _status.Text = _indexStatus;
             return;
         }
@@ -129,7 +131,7 @@ internal sealed class SearchPanel : ISidebarPanel
             return;
         }
 
-        _lastHits = hits;
+        ResultsForTest = hits;
         _results.SetItems(hits);
         _status.Text = hits.Count == 0 ? "No matches" : $"{hits.Count} result{(hits.Count == 1 ? "" : "s")}";
     }

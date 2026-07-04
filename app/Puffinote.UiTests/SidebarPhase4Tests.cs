@@ -56,10 +56,10 @@ public sealed class SidebarPhase4Tests
             await window.OpenFileAsync(b);
 
             // Most-recent first; re-opening a promotes it back to the front without duplicating it.
-            Assert.Equal(new[] { b, a }, window.RecentForTest);
+            Assert.Equal([b, a], window.RecentForTest);
 
             await window.OpenFileAsync(a);
-            Assert.Equal(new[] { a, b }, window.RecentForTest);
+            Assert.Equal([a, b], window.RecentForTest);
         }
         finally
         {
@@ -86,7 +86,7 @@ public sealed class SidebarPhase4Tests
             await window.OpenFileAsync(image);                               // no pane → not recorded
             await window.OpenFileAsync(Path.Combine(dir.FullName, "gone.md")); // missing → not recorded
 
-            Assert.Equal(new[] { note }, window.RecentForTest);
+            Assert.Equal([note], window.RecentForTest);
         }
         finally
         {

@@ -1,6 +1,3 @@
-using System.Collections.Generic;
-using System.IO;
-using System.Linq;
 using Typage.Engine.Document;
 using Typage.Engine.Markdown;
 
@@ -32,9 +29,9 @@ public static class ImageStaging
 
     /// <summary>The image file types offered in the insert-image picker (PRD §8.3 image set + common aliases).</summary>
     public static readonly string[] ImagePatterns =
-    {
+    [
         "*.png", "*.jpg", "*.jpeg", "*.jfif", "*.pjpeg", "*.gif", "*.webp", "*.svg",
-    };
+    ];
 
     /// <summary>
     /// Copy <paramref name="sourcePath"/> into the staging root under a collision-proof name and return the
@@ -106,12 +103,11 @@ public static class ImageStaging
     public static IReadOnlyList<StagedRef> StagedReferences(string documentText)
     {
         var model = MarkdownModel.Build(TextDocument.FromString(documentText));
-        return model.AllTokens()
+        return [.. model.AllTokens()
             .Where(t => t.Type == TokenType.ImageUrl && t.Meta is not null)
             .Select(t => new StagedRef(t.Start, t.Length, DecodeUrl(t.Meta!))) // decode "%20" etc. to the real path
             .Where(r => IsStaged(r.Url))
-            .OrderBy(r => r.Start)
-            .ToList();
+            .OrderBy(r => r.Start)];
     }
 
     /// <summary>The relative, forward-slashed URL for an image at <paramref name="targetFullPath"/> as seen

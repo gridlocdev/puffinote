@@ -1,8 +1,5 @@
-using System.Collections.Generic;
-using System.Linq;
 using Avalonia.Controls;
 using Avalonia.Layout;
-using Avalonia.Media;
 using Cellestra.Core.Data;
 using Cellestra.Core.Model;
 using Puffinote.Components.Overlays;
@@ -77,8 +74,12 @@ public sealed class SortDialog : ModalDialog<SortSpec?>
     private void AddLevel(int column, bool ascending)
     {
         var combo = new ComboBox { Width = 220, Tag = column };
-        var directions = new ComboBox { Width = 120, SelectedIndex = ascending ? 0 : 1 };
-        directions.ItemsSource = new[] { "Ascending", "Descending" };
+        var directions = new ComboBox
+        {
+            Width = 120,
+            SelectedIndex = ascending ? 0 : 1,
+            ItemsSource = new[] { "Ascending", "Descending" }
+        };
         combo.ItemsSource = ColumnChoices().Select(c => c.Label).ToList();
         combo.SelectedIndex = column - _range.Left;
 

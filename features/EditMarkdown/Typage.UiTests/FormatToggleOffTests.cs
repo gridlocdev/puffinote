@@ -1,7 +1,6 @@
 using Avalonia.Headless.XUnit;
 using Typage.Control.Controls;
 using Typage.Engine.Document;
-using Typage.Engine.Markdown;
 using Xunit;
 
 namespace Typage.UiTests;

@@ -1,5 +1,3 @@
-using System;
-using System.Collections.Generic;
 using System.Globalization;
 using Avalonia;
 using Avalonia.Controls;
@@ -58,17 +56,17 @@ public sealed partial class SpreadsheetGrid : Panel
     // whole cells: the anchor is drawn partially clipped and advances/retreats as the offset crosses a
     // cell boundary (see NormalizeVerticalScroll/NormalizeHorizontalScroll). Offsets are in post-zoom
     // device pixels and kept in [0, size-of-anchor).
+    // Mutated directly across the partials (++/+=/=); the internal ScrollRow/ColumnForTest accessors
+    // only expose them read-only, so these are not auto-property candidates despite IDE0032.
+#pragma warning disable IDE0032 // Use auto property
     private int _scrollRow;
     private int _scrollColumn;
-    private double _scrollRowOffset;
-    private double _scrollColumnOffset;
-    private double _zoom = 1.0;
-    private bool _editing;
+#pragma warning restore IDE0032
     private bool _selecting;
     private int? _tabOriginColumn; // the column a Tab sequence began at, so Enter returns to it (#19)
 
-    private readonly List<(int Index, double Offset, double Size)> _visibleColumns = new();
-    private readonly List<(int Index, double Offset, double Size)> _visibleRows = new();
+    private readonly List<(int Index, double Offset, double Size)> _visibleColumns = [];
+    private readonly List<(int Index, double Offset, double Size)> _visibleRows = [];
 
     private GridPalette _palette = GridPalette.For(Avalonia.Styling.ThemeVariant.Light);
 
@@ -242,21 +240,20 @@ public sealed partial class SpreadsheetGrid : Panel
 
     public double Zoom
     {
-        get => _zoom;
-        set
+        get; set
         {
-            _zoom = Math.Clamp(value, Cellestra.Core.Defaults.MinZoom, Cellestra.Core.Defaults.MaxZoom);
+            field = Math.Clamp(value, Cellestra.Core.Defaults.MinZoom, Cellestra.Core.Defaults.MaxZoom);
             Redraw();
         }
-    }
+    } = 1.0;
 
     public void Attach(WorkbookSession session)
     {
         _session = session;
         _scrollRow = 0;
         _scrollColumn = 0;
-        _scrollRowOffset = 0;
-        _scrollColumnOffset = 0;
+        ScrollRowOffsetForTest = 0;
+        ScrollColumnOffsetForTest = 0;
         Selection.MoveTo(0, 0);
         WireFormatPainter(session); // paintbrush cursor + drag-to-paint follow the session's armed stamp
         Redraw();
@@ -268,7 +265,7 @@ public sealed partial class SpreadsheetGrid : Panel
         // A formatting command (bold, colour, alignment, number format…) can run while a cell is being
         // edited — the toolbar buttons don't steal focus. Re-skin the live editor so the text you're
         // typing immediately takes on the new style, matching how the cell will look once committed.
-        if (_editing && _session is not null)
+        if (IsInlineEditing && _session is not null)
         {
             ApplyEditorFont(Sheet?.Find(Selection.ActiveRow, Selection.ActiveColumn));
         }
@@ -311,8 +308,8 @@ public sealed partial class SpreadsheetGrid : Panel
         // a whole-cell boundary — the anchor still advances smoothly as the accumulated offset crosses a
         // cell, but nothing is drawn half-clipped under the frozen rows/columns. Axes without a freeze
         // keep full sub-cell smoothness.
-        double rowDrawOffset = frozenRows > 0 ? 0 : _scrollRowOffset;
-        double colDrawOffset = frozenColumns > 0 ? 0 : _scrollColumnOffset;
+        double rowDrawOffset = frozenRows > 0 ? 0 : ScrollRowOffsetForTest;
+        double colDrawOffset = frozenColumns > 0 ? 0 : ScrollColumnOffsetForTest;
 
         // Frozen columns are always shown, pinned just right of the row header.
         double x = HeaderWidth;
@@ -323,7 +320,7 @@ public sealed partial class SpreadsheetGrid : Panel
                 continue;
             }
 
-            double w = EffectiveColumnWidth(sheet, col) * _zoom;
+            double w = EffectiveColumnWidth(sheet, col) * Zoom;
             _visibleColumns.Add((col, x, w));
             x += w;
         }
@@ -339,7 +336,7 @@ public sealed partial class SpreadsheetGrid : Panel
                 continue;
             }
 
-            double w = EffectiveColumnWidth(sheet, col) * _zoom;
+            double w = EffectiveColumnWidth(sheet, col) * Zoom;
             _visibleColumns.Add((col, x, w));
             x += w;
         }
@@ -352,7 +349,7 @@ public sealed partial class SpreadsheetGrid : Panel
                 continue;
             }
 
-            double h = EffectiveRowHeight(sheet, row) * _zoom;
+            double h = EffectiveRowHeight(sheet, row) * Zoom;
             _visibleRows.Add((row, y, h));
             y += h;
         }
@@ -368,7 +365,7 @@ public sealed partial class SpreadsheetGrid : Panel
                 continue;
             }
 
-            double h = EffectiveRowHeight(sheet, row) * _zoom;
+            double h = EffectiveRowHeight(sheet, row) * Zoom;
             _visibleRows.Add((row, y, h));
             y += h;
         }
@@ -579,7 +576,7 @@ public sealed partial class SpreadsheetGrid : Panel
             style.Font.Family,
             style.Font.Italic ? FontStyle.Italic : FontStyle.Normal,
             style.Font.Bold ? FontWeight.Bold : FontWeight.Normal);
-        double fontSize = style.Font.SizePoints * 96.0 / 72.0 * _zoom;
+        double fontSize = style.Font.SizePoints * 96.0 / 72.0 * Zoom;
         // A hyperlink draws in the themed link colour and is always underlined, regardless of the
         // cell's own font colour/decorations, so links read as links in both light and dark mode.
         var brush = isLink ? _palette.Hyperlink : TextBrushFor(style, cell.Value);
@@ -729,7 +726,7 @@ public sealed partial class SpreadsheetGrid : Panel
         return extra;
     }
 
-    private void DrawHashes(DrawingContext context, Rect rect, Typeface typeface, double fontSize, IBrush brush, double available)
+    private static void DrawHashes(DrawingContext context, Rect rect, Typeface typeface, double fontSize, IBrush brush, double available)
     {
         var one = new FormattedText("#", CultureInfo.CurrentCulture, FlowDirection.LeftToRight, typeface, fontSize, brush);
         int count = Math.Max(1, (int)(available / Math.Max(1, one.Width)));
@@ -795,7 +792,7 @@ public sealed partial class SpreadsheetGrid : Panel
 
         var typeface = new Typeface(Cellestra.Core.Defaults.FontFamily);
         // Header labels scale with the zoom level, like the cell text, but stay legible at small zoom.
-        double headerFontSize = Math.Clamp(11 * _zoom, 8, HeaderHeight - 4);
+        double headerFontSize = Math.Clamp(11 * Zoom, 8, HeaderHeight - 4);
 
         // Clip each header strip to its own band so a partially-scrolled first column/row (drawn shifted
         // by its sub-cell offset) doesn't bleed its label into the corner.
@@ -902,7 +899,7 @@ public sealed partial class SpreadsheetGrid : Panel
             style.Font.Family,
             style.Font.Italic ? FontStyle.Italic : FontStyle.Normal,
             style.Font.Bold ? FontWeight.Bold : FontWeight.Normal);
-        double fontSize = style.Font.SizePoints * 96.0 / 72.0 * _zoom;
+        double fontSize = style.Font.SizePoints * 96.0 / 72.0 * Zoom;
         var formatted = new FormattedText(text, CultureInfo.CurrentCulture, FlowDirection.LeftToRight, typeface, fontSize, Brushes.Black);
 
         var horizontal = style.Alignment.Horizontal switch
@@ -992,7 +989,7 @@ public sealed partial class SpreadsheetGrid : Panel
         // this gesture owns pointer-driven menus.
         if (e.GetCurrentPoint(this).Properties.IsRightButtonPressed)
         {
-            if (_editing)
+            if (IsInlineEditing)
             {
                 CommitEdit(0, 0);
             }
@@ -1004,7 +1001,7 @@ public sealed partial class SpreadsheetGrid : Panel
         }
 
         Focus();
-        if (_editing)
+        if (IsInlineEditing)
         {
             CommitEdit(0, 0);
         }
@@ -1349,13 +1346,13 @@ public sealed partial class SpreadsheetGrid : Panel
 
         if (deltaY != 0)
         {
-            _scrollRowOffset -= deltaY * WheelPixelsPerNotch;
+            ScrollRowOffsetForTest -= deltaY * WheelPixelsPerNotch;
             NormalizeVerticalScroll(sheet);
         }
 
         if (deltaX != 0)
         {
-            _scrollColumnOffset -= deltaX * WheelPixelsPerNotch;
+            ScrollColumnOffsetForTest -= deltaX * WheelPixelsPerNotch;
             NormalizeHorizontalScroll(sheet);
         }
 
@@ -1375,7 +1372,7 @@ public sealed partial class SpreadsheetGrid : Panel
             return; // a modal is open above the grid — let the key reach the overlay, not the grid
         }
 
-        if (_editing)
+        if (IsInlineEditing)
         {
             return;
         }
@@ -1422,11 +1419,25 @@ public sealed partial class SpreadsheetGrid : Panel
 
         switch (e.Key)
         {
-            case Key.Up: _tabOriginColumn = null; Step(-1, 0, extend, jump); break;
-            case Key.Down: _tabOriginColumn = null; Step(1, 0, extend, jump); break;
-            case Key.Left: _tabOriginColumn = null; Step(0, -1, extend, jump); break;
-            case Key.Right: _tabOriginColumn = null; Step(0, 1, extend, jump); break;
-            case Key.Tab: MoveStep(0, e.KeyModifiers.HasFlag(KeyModifiers.Shift) ? -1 : 1, false); break;
+            case Key.Up:
+                _tabOriginColumn = null;
+                Step(-1, 0, extend, jump);
+                break;
+            case Key.Down:
+                _tabOriginColumn = null;
+                Step(1, 0, extend, jump);
+                break;
+            case Key.Left:
+                _tabOriginColumn = null;
+                Step(0, -1, extend, jump);
+                break;
+            case Key.Right:
+                _tabOriginColumn = null;
+                Step(0, 1, extend, jump);
+                break;
+            case Key.Tab:
+                MoveStep(0, e.KeyModifiers.HasFlag(KeyModifiers.Shift) ? -1 : 1, false);
+                break;
             case Key.Return:
                 // Cmd+Return opens the active cell's hyperlink (mirroring the Cmd-click gesture);
                 // plain Return keeps its established meaning — paste a marquee, else move down — so
@@ -1447,8 +1458,12 @@ public sealed partial class SpreadsheetGrid : Panel
                 }
 
                 break;
-            case Key.F2: BeginEdit(null); break;
-            case Key.Delete or Key.Back: ClearSelection(); break;
+            case Key.F2:
+                BeginEdit(null);
+                break;
+            case Key.Delete or Key.Back:
+                ClearSelection();
+                break;
             case Key.Escape:
                 // A first Esc cancels a pending copy/cut marquee (keeping the selection); once there's
                 // no marquee, Esc collapses a multi-cell or disjoint selection back to its origin cell.
@@ -1491,7 +1506,7 @@ public sealed partial class SpreadsheetGrid : Panel
             return;
         }
 
-        if (!_editing && !string.IsNullOrEmpty(e.Text) && e.Text[0] >= ' ')
+        if (!IsInlineEditing && !string.IsNullOrEmpty(e.Text) && e.Text[0] >= ' ')
         {
             BeginEdit(e.Text);
             e.Handled = true;
@@ -1635,16 +1650,16 @@ public sealed partial class SpreadsheetGrid : Panel
             if (row < _scrollRow)
             {
                 _scrollRow = row;
-                _scrollRowOffset = 0;
+                ScrollRowOffsetForTest = 0;
             }
-            else if (row == _scrollRow && _scrollRowOffset > 0)
+            else if (row == _scrollRow && ScrollRowOffsetForTest > 0)
             {
-                _scrollRowOffset = 0; // the anchor itself was partly scrolled off the top — reveal it
+                ScrollRowOffsetForTest = 0; // the anchor itself was partly scrolled off the top — reveal it
             }
             else if (_visibleRows.Count > 0 && (row > _visibleRows[^1].Index || RowPartlyBelowFold(row)))
             {
                 _scrollRow += Math.Max(1, row - _visibleRows[^1].Index);
-                _scrollRowOffset = 0;
+                ScrollRowOffsetForTest = 0;
             }
         }
 
@@ -1653,16 +1668,16 @@ public sealed partial class SpreadsheetGrid : Panel
             if (column < _scrollColumn)
             {
                 _scrollColumn = column;
-                _scrollColumnOffset = 0;
+                ScrollColumnOffsetForTest = 0;
             }
-            else if (column == _scrollColumn && _scrollColumnOffset > 0)
+            else if (column == _scrollColumn && ScrollColumnOffsetForTest > 0)
             {
-                _scrollColumnOffset = 0;
+                ScrollColumnOffsetForTest = 0;
             }
             else if (_visibleColumns.Count > 0 && (column > _visibleColumns[^1].Index || ColumnPartlyPastFold(column)))
             {
                 _scrollColumn += Math.Max(1, column - _visibleColumns[^1].Index);
-                _scrollColumnOffset = 0;
+                ScrollColumnOffsetForTest = 0;
             }
         }
 
@@ -1756,7 +1771,7 @@ public sealed partial class SpreadsheetGrid : Panel
     {
         var style = _session!.Workbook.Styles.Get(cell?.StyleId ?? StylePool.DefaultId);
         _editor.FontFamily = new FontFamily(style.Font.Family);
-        _editor.FontSize = style.Font.SizePoints * 96.0 / 72.0 * _zoom;
+        _editor.FontSize = style.Font.SizePoints * 96.0 / 72.0 * Zoom;
         _editor.FontWeight = style.Font.Bold ? FontWeight.Bold : FontWeight.Normal;
         _editor.FontStyle = style.Font.Italic ? FontStyle.Italic : FontStyle.Normal;
 
@@ -1780,7 +1795,7 @@ public sealed partial class SpreadsheetGrid : Panel
     /// <summary>Draw the editor's underline/strikethrough on the overlay, measured against the live text so they line up with the glyphs.</summary>
     private void DrawEditorDecorations(DrawingContext context)
     {
-        if (!_editing || _session is null)
+        if (!IsInlineEditing || _session is null)
         {
             return;
         }
@@ -1802,7 +1817,7 @@ public sealed partial class SpreadsheetGrid : Panel
             style.Font.Family,
             style.Font.Italic ? FontStyle.Italic : FontStyle.Normal,
             style.Font.Bold ? FontWeight.Bold : FontWeight.Normal);
-        double fontSize = style.Font.SizePoints * 96.0 / 72.0 * _zoom;
+        double fontSize = style.Font.SizePoints * 96.0 / 72.0 * Zoom;
         var brush = _editor.Foreground ?? Brushes.Black;
         var formatted = new FormattedText(text, CultureInfo.CurrentCulture, FlowDirection.LeftToRight, typeface, fontSize, brush);
 
@@ -1864,7 +1879,7 @@ public sealed partial class SpreadsheetGrid : Panel
 
         InvalidateClipboard(); // starting an edit drops any pending cut/copy marquee (#5)
         ResetPointMode();
-        _editing = true;
+        IsInlineEditing = true;
         var cell = sheet.Find(Selection.ActiveRow, Selection.ActiveColumn);
         ApplyEditorFont(cell); // match the cell's drawn font so the text doesn't change size on edit
         _editor.Text = seed ?? CellEditText(cell);
@@ -1949,7 +1964,7 @@ public sealed partial class SpreadsheetGrid : Panel
     /// </param>
     private void CommitEdit(int moveRow, int moveColumn, bool refocus = true)
     {
-        if (!_editing || _session is null)
+        if (!IsInlineEditing || _session is null)
         {
             return;
         }
@@ -1966,7 +1981,7 @@ public sealed partial class SpreadsheetGrid : Panel
             return; // keep editing so the user can correct it
         }
 
-        _editing = false;
+        IsInlineEditing = false;
         _editor.IsVisible = false;
         HideSignatureHelp();
 
@@ -2034,7 +2049,7 @@ public sealed partial class SpreadsheetGrid : Panel
 
     private void CancelEdit()
     {
-        _editing = false;
+        IsInlineEditing = false;
         _editor.IsVisible = false;
         HideSignatureHelp();
         Focus();
@@ -2046,7 +2061,7 @@ public sealed partial class SpreadsheetGrid : Panel
         _popupLayer.Arrange(new Rect(finalSize));
         _radialOverlay.Arrange(new Rect(finalSize));
         BuildVisible(finalSize);
-        if (_editing && TryGetActiveCellRect(out var rect))
+        if (IsInlineEditing && TryGetActiveCellRect(out var rect))
         {
             rect = ExpandedEditorRect(rect, finalSize); // grow rightward over neighbours as the text widens
             _editor.Arrange(rect);

@@ -112,7 +112,7 @@ public sealed class FormatBlock
                 _cellSnapshot.Add((row, column, sheet.Find(row, column)?.Clone()));
             }
 
-            _mergeSnapshot = sheet.MergedRegions.ToList();
+            _mergeSnapshot = [.. sheet.MergedRegions];
 
             // Stamp styles, tiling the source pattern over the target.
             var changed = new List<CellRef>(_target.RowCount * _target.ColumnCount);

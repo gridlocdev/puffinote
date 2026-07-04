@@ -79,7 +79,7 @@ public static class InputParser
         const DateTimeStyles Styles = DateTimeStyles.NoCurrentDateDefault | DateTimeStyles.AllowWhiteSpaces;
 
         if (IsIsoDate(trimmed) &&
-            DateTime.TryParseExact(trimmed, new[] { "yyyy-M-d", "yyyy-MM-dd" },
+            DateTime.TryParseExact(trimmed, ["yyyy-M-d", "yyyy-MM-dd"],
                 CultureInfo.InvariantCulture, Styles, out var isoDate))
         {
             serial = DateConversion.ToSerial(isoDate.Date);

@@ -1,4 +1,3 @@
-using System.Linq;
 using Avalonia.Controls;
 using Cellestra.Desktop.Services;
 using Cellestra.Editor;
@@ -16,7 +15,6 @@ namespace Puffinote.Desktop.Panes;
 internal sealed class SheetPane : IEditorPane, IEditorHost
 {
     private readonly SpreadsheetEditorView _view = new();
-    private string? _path;
 
     public SheetPane()
     {
@@ -26,23 +24,26 @@ internal sealed class SheetPane : IEditorPane, IEditorHost
 
     public Control View => _view;
 
-    public string Title => _path is { } p ? System.IO.Path.GetFileName(p) : "Untitled";
+    public string Title => Path is { } p ? System.IO.Path.GetFileName(p) : "Untitled";
 
-    public string? Path => _path;
+    public string? Path { get; private set; }
 
     public bool IsDirty => _view.IsModified;
 
     /// <summary>Cellestra's full command catalog (the view self-hosts it), for the merged palette.</summary>
-    public IReadOnlyList<AppCommand> Commands => _view.Commands.All.ToList();
+    public IReadOnlyList<AppCommand> Commands => [.. _view.Commands.All];
 
     /// <summary>Outline (PRD §7.2.3): the workbook's sheets (chart sheets marked); selecting one activates it.</summary>
     public IReadOnlyList<OutlineItem> GetOutline() =>
-        _view.Session.Workbook.Worksheets
+        [.. _view.Session.Workbook.Worksheets
             .Select(sheet => new OutlineItem(
                 sheet.IsChartSheet ? $"{sheet.Name}  (chart)" : sheet.Name,
                 0,
-                () => { _view.Session.SetActiveSheet(sheet); _view.FocusGrid(); }))
-            .ToList();
+                () =>
+                {
+                    _view.Session.SetActiveSheet(sheet);
+                    _view.FocusGrid();
+                }))];
 
     public event EventHandler? DirtyChanged;
 
@@ -50,13 +51,13 @@ internal sealed class SheetPane : IEditorPane, IEditorHost
     {
         await using var stream = File.OpenRead(path);
         await _view.LoadAsync(stream, path); // deserialize + initial recalc off the UI thread, then adopt
-        _path = System.IO.Path.GetFullPath(path);
+        Path = System.IO.Path.GetFullPath(path);
         DirtyChanged?.Invoke(this, EventArgs.Empty);
     }
 
     public async Task SaveAsync()
     {
-        if (_path is null)
+        if (Path is null)
         {
             return;
         }
@@ -65,13 +66,13 @@ internal sealed class SheetPane : IEditorPane, IEditorHost
         // mark saved — so a failed write leaves the document dirty rather than falsely "saved". Mirrors
         // Cellestra.Desktop's own save path.
         var bytes = _view.Session.SerializeToBytes();
-        await Task.Run(() => WorkbookSession.WriteBytesAtomically(_path!, bytes));
-        _view.Session.MarkSaved(_path);
+        await Task.Run(() => WorkbookSession.WriteBytesAtomically(Path!, bytes));
+        _view.Session.MarkSaved(Path);
         _view.MarkSavedNow();
         DirtyChanged?.Invoke(this, EventArgs.Empty);
     }
 
-    public void Rebind(string newPath) => _path = System.IO.Path.GetFullPath(newPath);
+    public void Rebind(string newPath) => Path = System.IO.Path.GetFullPath(newPath);
 
     public void Dispose()
     {

@@ -1,9 +1,7 @@
-using System;
 using Avalonia;
 using Avalonia.Controls.Primitives;
 using Avalonia.Layout;
 using Cellestra.Core.Model;
-using Cellestra.Core.Styling;
 using SAlign = Cellestra.Core.Styling.HorizontalAlignment;
 
 namespace Cellestra.Desktop.Controls.SpreadsheetGrid;
@@ -62,10 +60,10 @@ public sealed partial class SpreadsheetGrid
     internal int ScrollColumnForTest => _scrollColumn;
 
     /// <summary>The sub-cell vertical scroll offset in pixels (how far the anchor row is scrolled off the top).</summary>
-    internal double ScrollRowOffsetForTest => _scrollRowOffset;
+    internal double ScrollRowOffsetForTest { get; private set; }
 
     /// <summary>The sub-cell horizontal scroll offset in pixels (how far the anchor column is scrolled off the left).</summary>
-    internal double ScrollColumnOffsetForTest => _scrollColumnOffset;
+    internal double ScrollColumnOffsetForTest { get; private set; }
 
     /// <summary>Drive a wheel/trackpad gesture as the pointer handler would (deltas in wheel units).</summary>
     internal void WheelScrollForTest(double deltaX, double deltaY) => ApplyWheelScroll(deltaX, deltaY);
@@ -95,23 +93,10 @@ public sealed partial class SpreadsheetGrid
     {
         int frozen = Sheet?.FrozenRows ?? 0;
         int clamped = Math.Clamp(row, frozen, SheetDimensions.MaxRows - 1);
-        if (clamped != _scrollRow || _scrollRowOffset != 0)
+        if (clamped != _scrollRow || ScrollRowOffsetForTest != 0)
         {
             _scrollRow = clamped;
-            _scrollRowOffset = 0;
-            Redraw();
-            InvalidateArrange();
-        }
-    }
-
-    private void ScrollToColumn(int column)
-    {
-        int frozen = Sheet?.FrozenColumns ?? 0;
-        int clamped = Math.Clamp(column, frozen, SheetDimensions.MaxColumns - 1);
-        if (clamped != _scrollColumn || _scrollColumnOffset != 0)
-        {
-            _scrollColumn = clamped;
-            _scrollColumnOffset = 0;
+            ScrollRowOffsetForTest = 0;
             Redraw();
             InvalidateArrange();
         }
@@ -134,7 +119,7 @@ public sealed partial class SpreadsheetGrid
         value = Math.Max(0, value);
         int anchor = Math.Clamp(frozen + (int)Math.Floor(value), frozen, SheetDimensions.MaxRows - 1);
         _scrollRow = anchor;
-        _scrollRowOffset = (value - Math.Floor(value)) * RowPixels(sheet, anchor);
+        ScrollRowOffsetForTest = (value - Math.Floor(value)) * RowPixels(sheet, anchor);
         NormalizeVerticalScroll(sheet);
         Redraw();
         InvalidateArrange();
@@ -153,7 +138,7 @@ public sealed partial class SpreadsheetGrid
         value = Math.Max(0, value);
         int anchor = Math.Clamp(frozen + (int)Math.Floor(value), frozen, SheetDimensions.MaxColumns - 1);
         _scrollColumn = anchor;
-        _scrollColumnOffset = (value - Math.Floor(value)) * ColumnPixels(sheet, anchor);
+        ScrollColumnOffsetForTest = (value - Math.Floor(value)) * ColumnPixels(sheet, anchor);
         NormalizeHorizontalScroll(sheet);
         Redraw();
         InvalidateArrange();
@@ -161,11 +146,11 @@ public sealed partial class SpreadsheetGrid
 
     /// <summary>The drawn (post-zoom) height of a row, or 0 if it's hidden and takes no space.</summary>
     private double RowPixels(Worksheet sheet, int row) =>
-        sheet.IsRowHidden(row) ? 0 : EffectiveRowHeight(sheet, row) * _zoom;
+        sheet.IsRowHidden(row) ? 0 : EffectiveRowHeight(sheet, row) * Zoom;
 
     /// <summary>The drawn (post-zoom) width of a column, or 0 if it's hidden and takes no space.</summary>
     private double ColumnPixels(Worksheet sheet, int column) =>
-        sheet.IsColumnHidden(column) ? 0 : EffectiveColumnWidth(sheet, column) * _zoom;
+        sheet.IsColumnHidden(column) ? 0 : EffectiveColumnWidth(sheet, column) * Zoom;
 
     /// <summary>
     /// Settle the vertical anchor/offset so the offset sits within the anchor row's height: advance the
@@ -180,10 +165,10 @@ public sealed partial class SpreadsheetGrid
             _scrollRow = frozen;
         }
 
-        while (_scrollRowOffset < 0 && _scrollRow > frozen)
+        while (ScrollRowOffsetForTest < 0 && _scrollRow > frozen)
         {
             _scrollRow--;
-            _scrollRowOffset += RowPixels(sheet, _scrollRow);
+            ScrollRowOffsetForTest += RowPixels(sheet, _scrollRow);
         }
 
         while (_scrollRow < SheetDimensions.MaxRows - 1)
@@ -193,9 +178,9 @@ public sealed partial class SpreadsheetGrid
             {
                 _scrollRow++;
             }
-            else if (_scrollRowOffset >= h)
+            else if (ScrollRowOffsetForTest >= h)
             {
-                _scrollRowOffset -= h;
+                ScrollRowOffsetForTest -= h;
                 _scrollRow++;
             }
             else
@@ -204,9 +189,9 @@ public sealed partial class SpreadsheetGrid
             }
         }
 
-        if (_scrollRowOffset < 0)
+        if (ScrollRowOffsetForTest < 0)
         {
-            _scrollRowOffset = 0; // scrolled above the very first scrollable row — pin to the top
+            ScrollRowOffsetForTest = 0; // scrolled above the very first scrollable row — pin to the top
         }
     }
 
@@ -219,10 +204,10 @@ public sealed partial class SpreadsheetGrid
             _scrollColumn = frozen;
         }
 
-        while (_scrollColumnOffset < 0 && _scrollColumn > frozen)
+        while (ScrollColumnOffsetForTest < 0 && _scrollColumn > frozen)
         {
             _scrollColumn--;
-            _scrollColumnOffset += ColumnPixels(sheet, _scrollColumn);
+            ScrollColumnOffsetForTest += ColumnPixels(sheet, _scrollColumn);
         }
 
         while (_scrollColumn < SheetDimensions.MaxColumns - 1)
@@ -232,9 +217,9 @@ public sealed partial class SpreadsheetGrid
             {
                 _scrollColumn++;
             }
-            else if (_scrollColumnOffset >= w)
+            else if (ScrollColumnOffsetForTest >= w)
             {
-                _scrollColumnOffset -= w;
+                ScrollColumnOffsetForTest -= w;
                 _scrollColumn++;
             }
             else
@@ -243,9 +228,9 @@ public sealed partial class SpreadsheetGrid
             }
         }
 
-        if (_scrollColumnOffset < 0)
+        if (ScrollColumnOffsetForTest < 0)
         {
-            _scrollColumnOffset = 0;
+            ScrollColumnOffsetForTest = 0;
         }
     }
 
@@ -289,7 +274,7 @@ public sealed partial class SpreadsheetGrid
             _vScroll.LargeChange = Math.Max(1, visibleRows);
             _vScroll.SmallChange = 1;
             double rowPixels = RowPixels(sheet, _scrollRow);
-            double rowFraction = rowPixels > 0 ? _scrollRowOffset / rowPixels : 0;
+            double rowFraction = rowPixels > 0 ? ScrollRowOffsetForTest / rowPixels : 0;
             _vScroll.Value = Math.Clamp(_scrollRow - frozenRows + rowFraction, 0, maxRow);
             var rect = new Rect(bounds.Width - ScrollThickness, HeaderHeight, ScrollThickness, Math.Max(0, vBottom - HeaderHeight));
             _vScroll.Measure(rect.Size);
@@ -304,7 +289,7 @@ public sealed partial class SpreadsheetGrid
             _hScroll.LargeChange = Math.Max(1, visibleColumns);
             _hScroll.SmallChange = 1;
             double colPixels = ColumnPixels(sheet, _scrollColumn);
-            double colFraction = colPixels > 0 ? _scrollColumnOffset / colPixels : 0;
+            double colFraction = colPixels > 0 ? ScrollColumnOffsetForTest / colPixels : 0;
             _hScroll.Value = Math.Clamp(_scrollColumn - frozenColumns + colFraction, 0, maxColumn);
             var rect = new Rect(HeaderWidth, bounds.Height - ScrollThickness, Math.Max(0, hRight - HeaderWidth), ScrollThickness);
             _hScroll.Measure(rect.Size);

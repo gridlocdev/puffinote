@@ -1,5 +1,3 @@
-using System;
-using System.Collections.Generic;
 using Avalonia.Input;
 using Cellestra.Core.Editing;
 using Cellestra.Core.Styling;
@@ -29,8 +27,8 @@ public sealed class AppCommands
 
     public AppCommand? ById(string id) => _byId.GetValueOrDefault(id);
 
-    private static List<AppCommand> Build(IAppEnvironment e) => new()
-    {
+    private static List<AppCommand> Build(IAppEnvironment e) =>
+    [
         // File
         new("file.new", "New", "Start a new, empty workbook.", Shortcut.Cmd(Key.N), () => _ = e.NewWorkbookAsync(), icon: "file-plus"),
         new("file.open", "Open…", "Open a spreadsheet from disk.", Shortcut.Cmd(Key.O), () => _ = e.OpenWorkbookAsync(), icon: "folder-open"),
@@ -40,10 +38,16 @@ public sealed class AppCommands
         new("file.exportCsv", "Export CSV…", "Write the active sheet to a CSV file.", null, () => _ = e.ExportCsvAsync(), icon: "file-up"),
 
         // Edit
-        new("edit.undo", "Undo", "Step backward through your changes.", Shortcut.Cmd(Key.Z), () => { e.Session.Undo(); e.Refresh(); },
-            canExecute: () => e.Session.CanUndo, icon: "undo"),
-        new("edit.redo", "Redo", "Re-apply a change you undid.", Shortcut.Cmd(Key.Z, KeyModifiers.Shift), () => { e.Session.Redo(); e.Refresh(); },
-            canExecute: () => e.Session.CanRedo, icon: "redo"),
+        new("edit.undo", "Undo", "Step backward through your changes.", Shortcut.Cmd(Key.Z), () =>
+        {
+            e.Session.Undo();
+            e.Refresh();
+        }, canExecute: () => e.Session.CanUndo, icon: "undo"),
+        new("edit.redo", "Redo", "Re-apply a change you undid.", Shortcut.Cmd(Key.Z, KeyModifiers.Shift), () =>
+        {
+            e.Session.Redo();
+            e.Refresh();
+        }, canExecute: () => e.Session.CanRedo, icon: "redo"),
         new("edit.cut", "Cut", "Move the selection to the clipboard.", Shortcut.Cmd(Key.X), () => e.Cut(), icon: "scissors"),
         new("edit.copy", "Copy", "Copy the selection to the clipboard.", Shortcut.Cmd(Key.C), () => e.Copy(), icon: "copy"),
         new("edit.paste", "Paste", "Paste from the clipboard.", Shortcut.Cmd(Key.V), () => e.Paste(), icon: "clipboard"),
@@ -188,7 +192,7 @@ public sealed class AppCommands
         new("help.shortcuts", "Keyboard Shortcuts", "List every keyboard shortcut.", Shortcut.Bare(Key.OemQuestion, KeyModifiers.Shift),
             () => e.ShowKeyboardShortcuts(), canExecute: () => !e.IsTextInputFocused, icon: "keyboard"),
         new("help.about", "About Cellestra", "About Cellestra — version, pronunciation, and license.", null, () => e.ShowAbout(), icon: "info"),
-    };
+    ];
 
     // Number-format codes the bar's one-tap toggles apply. They classify (NumberFormatParser) as
     // Currency/Date so the toggle can tell when a cell already has that format and revert it.
@@ -272,11 +276,11 @@ public sealed class AppCommands
         // ClearAll wipes the cells; ClearRangeStructure adds the sheet-level structure overlapping the
         // selection that cells don't carry — tables (filter dropdowns + header fill), the AutoFilter,
         // merges, validations, and whole-row/column fills — so "Clear All" truly clears it all.
-        session.Execute(EditCommands.Composite("Clear All", new IEditCommand[]
-        {
+        session.Execute(EditCommands.Composite("Clear All",
+        [
             EditCommands.ClearAll(sheet, range),
             DataEditCommands.ClearRangeStructure(sheet, range),
-        }));
+        ]));
         e.Refresh();
     }
 

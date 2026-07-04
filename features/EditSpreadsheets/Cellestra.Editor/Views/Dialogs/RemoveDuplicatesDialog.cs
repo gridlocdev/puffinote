@@ -1,5 +1,3 @@
-using System.Collections.Generic;
-using System.Linq;
 using Avalonia.Controls;
 using Avalonia.Layout;
 using Cellestra.Core.Model;
@@ -14,7 +12,7 @@ public sealed class RemoveDuplicatesDialog : ModalDialog<RemoveDuplicatesDialog.
     public sealed record Outcome(IReadOnlyList<int> KeyColumns, bool HasHeader);
 
     private readonly CheckBox _headerCheck;
-    private readonly List<(int Column, CheckBox Check)> _columnChecks = new();
+    private readonly List<(int Column, CheckBox Check)> _columnChecks = [];
 
     public RemoveDuplicatesDialog(Worksheet sheet, CellRange range, bool hasHeader)
     {
@@ -34,7 +32,7 @@ public sealed class RemoveDuplicatesDialog : ModalDialog<RemoveDuplicatesDialog.
 
         var ok = new Button { Content = "Remove", IsDefault = true };
         ok.Click += (_, _) => Close(new Outcome(
-            _columnChecks.Where(x => x.Check.IsChecked == true).Select(x => x.Column).ToList(),
+            [.. _columnChecks.Where(x => x.Check.IsChecked == true).Select(x => x.Column)],
             _headerCheck.IsChecked == true));
         var cancel = new Button { Content = "Cancel", IsCancel = true };
         cancel.Click += (_, _) => Close(null);

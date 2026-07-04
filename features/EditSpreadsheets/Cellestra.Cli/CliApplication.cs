@@ -1,6 +1,5 @@
 using System.CommandLine;
 using Cellestra.Cli.Commands;
-using Cellestra.Cli.Infrastructure;
 using Puffinote.Components.Core.Cli;
 
 namespace Cellestra.Cli;

@@ -1,6 +1,3 @@
-using System;
-using System.Collections.Generic;
-using System.Linq;
 using Avalonia.Controls;
 using Avalonia.Layout;
 using Cellestra.Core.Styling;
@@ -31,12 +28,12 @@ public sealed class FormatCellsDialog : ModalDialog<Func<CellStyle, CellStyle>?>
     private const string Varies = "(varies)";
 
     private static readonly (string Label, string Code)[] Formats =
-    {
+    [
         ("General", "General"), ("Number (0)", "0"), ("Number (0.00)", "0.00"),
         ("Thousands (#,##0)", "#,##0"), ("Thousands (#,##0.00)", "#,##0.00"),
         ("Percent (0%)", "0%"), ("Percent (0.00%)", "0.00%"),
         ("Currency ($#,##0.00)", "$#,##0.00"), ("Date (yyyy-mm-dd)", "yyyy-mm-dd"),
-    };
+    ];
 
     private readonly ComboBox _format;
     private readonly CheckBox _bold;
@@ -64,10 +61,10 @@ public sealed class FormatCellsDialog : ModalDialog<Func<CellStyle, CellStyle>?>
     private bool _borderTouched;
 
     private static readonly (string Label, SBorderLineStyle Style)[] BorderStyles =
-    {
+    [
         ("Thin", SBorderLineStyle.Thin), ("Medium", SBorderLineStyle.Medium), ("Thick", SBorderLineStyle.Thick),
         ("Dashed", SBorderLineStyle.Dashed), ("Dotted", SBorderLineStyle.Dotted), ("Double", SBorderLineStyle.Double),
-    };
+    ];
 
     // When the selection's styles disagree on a field, the matching control seeds to a neutral
     // "varies" state and we leave that field untouched unless the user changes it.
@@ -93,7 +90,7 @@ public sealed class FormatCellsDialog : ModalDialog<Func<CellStyle, CellStyle>?>
     {
         Title = "Format Cells";
 
-        var all = styles is { Count: > 0 } ? styles : new[] { current };
+        var all = styles is { Count: > 0 } ? styles : [current];
 
         _formatVaries = !AllSame(all, s => s.NumberFormat.Code);
         _sizeVaries = !AllSame(all, s => s.Font.SizePoints);
@@ -108,10 +105,14 @@ public sealed class FormatCellsDialog : ModalDialog<Func<CellStyle, CellStyle>?>
             formatLabels.Add(Varies);
         }
 
-        _format = new ComboBox { Width = 220, ItemsSource = formatLabels };
-        _format.SelectedIndex = _formatVaries
-            ? formatLabels.Count - 1
-            : Math.Max(0, Array.FindIndex(Formats, f => f.Code == current.NumberFormat.Code));
+        _format = new ComboBox
+        {
+            Width = 220,
+            ItemsSource = formatLabels,
+            SelectedIndex = _formatVaries
+                ? formatLabels.Count - 1
+                : Math.Max(0, Array.FindIndex(Formats, f => f.Code == current.NumberFormat.Code))
+        };
 
         _bold = EmphasisBox("Bold", all, f => f.Bold);
         _italic = EmphasisBox("Italic", all, f => f.Italic);
@@ -119,8 +120,13 @@ public sealed class FormatCellsDialog : ModalDialog<Func<CellStyle, CellStyle>?>
         _strikethrough = EmphasisBox("Strikethrough", all, f => f.Strikethrough);
 
         // Wider than the 90px it used to be so the value (e.g. "10") isn't clipped by the spin buttons.
-        _size = new NumericUpDown { Width = 130, Minimum = 6, Maximum = 96 };
-        _size.Value = _sizeVaries ? null : (decimal)current.Font.SizePoints;
+        _size = new NumericUpDown
+        {
+            Width = 130,
+            Minimum = 6,
+            Maximum = 96,
+            Value = _sizeVaries ? null : (decimal)current.Font.SizePoints
+        };
 
         _textColor = new ColorPicker { Color = ToAvalonia(current.Font.Color.IsTransparent ? ArgbColor.Black : current.Font.Color) };
         _textColor.ColorChanged += (_, _) => _textColorTouched = true;
@@ -151,8 +157,12 @@ public sealed class FormatCellsDialog : ModalDialog<Func<CellStyle, CellStyle>?>
             alignItems.Add(Varies);
         }
 
-        _align = new ComboBox { Width = 140, ItemsSource = alignItems };
-        _align.SelectedIndex = _alignVaries ? alignItems.Count - 1 : (int)current.Alignment.Horizontal;
+        _align = new ComboBox
+        {
+            Width = 140,
+            ItemsSource = alignItems,
+            SelectedIndex = _alignVaries ? alignItems.Count - 1 : (int)current.Alignment.Horizontal
+        };
 
         var valignItems = new List<string> { "Top", "Middle", "Bottom" };
         if (_valignVaries)
@@ -160,8 +170,12 @@ public sealed class FormatCellsDialog : ModalDialog<Func<CellStyle, CellStyle>?>
             valignItems.Add(Varies);
         }
 
-        _valign = new ComboBox { Width = 140, ItemsSource = valignItems };
-        _valign.SelectedIndex = _valignVaries ? valignItems.Count - 1 : (int)current.Alignment.Vertical;
+        _valign = new ComboBox
+        {
+            Width = 140,
+            ItemsSource = valignItems,
+            SelectedIndex = _valignVaries ? valignItems.Count - 1 : (int)current.Alignment.Vertical
+        };
 
         // ---- Border section -------------------------------------------------
         _borderVaries = !AllSame(all, s => s.Border);
@@ -284,7 +298,11 @@ public sealed class FormatCellsDialog : ModalDialog<Func<CellStyle, CellStyle>?>
     private Button BorderPreset(string label, Action apply)
     {
         var button = new Button { Content = label };
-        button.Click += (_, _) => { apply(); _borderTouched = true; };
+        button.Click += (_, _) =>
+        {
+            apply();
+            _borderTouched = true;
+        };
         return button;
     }
 

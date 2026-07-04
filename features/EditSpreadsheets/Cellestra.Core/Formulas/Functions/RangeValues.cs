@@ -13,20 +13,19 @@ public sealed class RangeValues
 {
     private readonly IEvaluationContext _context;
     private readonly string? _sheet;
-    private readonly CellRange _range;
 
     public RangeValues(CellRange range, IEvaluationContext context)
     {
-        _range = range;
+        Range = range;
         _context = context;
         _sheet = range.Sheet ?? context.CurrentSheet;
     }
 
-    public int RowCount => _range.RowCount;
+    public int RowCount => Range.RowCount;
 
-    public int ColumnCount => _range.ColumnCount;
+    public int ColumnCount => Range.ColumnCount;
 
-    public CellRange Range => _range;
+    public CellRange Range { get; }
 
     public CellValue Get(int rowWithin, int columnWithin)
     {
@@ -35,7 +34,7 @@ public sealed class RangeValues
             return CellValue.FromError(CellError.Reference("Index outside the range."));
         }
 
-        return _context.GetCell(_sheet, _range.Top + rowWithin, _range.Left + columnWithin);
+        return _context.GetCell(_sheet, Range.Top + rowWithin, Range.Left + columnWithin);
     }
 
     /// <summary>Every value in the range, row-major.</summary>

@@ -1,6 +1,3 @@
-using System;
-using System.Collections.Generic;
-using System.Linq;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Layout;
@@ -19,7 +16,7 @@ public sealed class KeyboardShortcutsDialog : ModalDialog<bool>
 {
     // Catalog id prefix → section heading, in display order.
     private static readonly (string Prefix, string Title)[] Categories =
-    {
+    [
         ("file", "File"),
         ("edit", "Edit"),
         ("format", "Format"),
@@ -28,11 +25,11 @@ public sealed class KeyboardShortcutsDialog : ModalDialog<bool>
         ("formula", "Formulas"),
         ("view", "View"),
         ("help", "Help"),
-    };
+    ];
 
     // Grid navigation keys handled directly by SpreadsheetGrid, so they aren't in the catalog.
     private static readonly (string Keys, string Label)[] Navigation =
-    {
+    [
         ("↑ ↓ ← →", "Move between cells"),
         ("⇧ + arrows", "Extend selection"),
         ("Tab / ⇧Tab", "Move right / left"),
@@ -40,7 +37,7 @@ public sealed class KeyboardShortcutsDialog : ModalDialog<bool>
         ("F2", "Edit active cell"),
         ("⎋", "Cancel edit"),
         ("F4", "Cycle reference type (while editing a formula)"),
-    };
+    ];
 
     public KeyboardShortcutsDialog(AppCommands commands)
     {

@@ -23,8 +23,6 @@ public sealed class FindBar : Border
     private readonly ToggleButton _regex = new() { Content = ".*", Padding = new Avalonia.Thickness(6, 2) };
     private readonly TextBlock _count = new() { VerticalAlignment = VerticalAlignment.Center, MinWidth = 80 };
     private readonly StackPanel _replaceRow;
-
-    private IReadOnlyList<SearchMatch> _matches = System.Array.Empty<SearchMatch>();
     private int _current = -1;
     private bool _suppressReindex; // true while the bar itself is editing the document
 
@@ -74,8 +72,16 @@ public sealed class FindBar : Border
         };
         _replace.KeyDown += (_, e) =>
         {
-            if (e.Key == Key.Enter) { ReplaceCurrent(); e.Handled = true; }
-            else if (e.Key == Key.Escape) { Hide(); e.Handled = true; }
+            if (e.Key == Key.Enter)
+            {
+                ReplaceCurrent();
+                e.Handled = true;
+            }
+            else if (e.Key == Key.Escape)
+            {
+                Hide();
+                e.Handled = true;
+            }
         };
     }
 
@@ -127,20 +133,20 @@ public sealed class FindBar : Border
         var query = _find.Text ?? string.Empty;
         var useRegex = _regex.IsChecked == true;
         var caseSensitive = _matchCase.IsChecked == true;
-        _matches = DocumentSearch.FindAll(_view.Text, query, useRegex, caseSensitive);
+        Matches = DocumentSearch.FindAll(_view.Text, query, useRegex, caseSensitive);
 
-        if (_matches.Count == 0)
+        if (Matches.Count == 0)
         {
             _current = -1;
             _count.Text = query.Length == 0 ? string.Empty : "No results";
         }
         else
         {
-            _current = resetCurrent ? 0 : System.Math.Clamp(_current, 0, _matches.Count - 1);
-            _count.Text = $"{_current + 1} of {_matches.Count}";
+            _current = resetCurrent ? 0 : System.Math.Clamp(_current, 0, Matches.Count - 1);
+            _count.Text = $"{_current + 1} of {Matches.Count}";
         }
 
-        _view.Editor.SetSearchMatches(_matches, _current);
+        _view.Editor.SetSearchMatches(Matches, _current);
         if (selectMatch)
         {
             SelectCurrent();
@@ -153,14 +159,14 @@ public sealed class FindBar : Border
 
     private void Step(int delta)
     {
-        if (_matches.Count == 0)
+        if (Matches.Count == 0)
         {
             return;
         }
 
-        _current = (_current + delta + _matches.Count) % _matches.Count; // wrap
-        _count.Text = $"{_current + 1} of {_matches.Count}";
-        _view.Editor.SetSearchMatches(_matches, _current);
+        _current = (_current + delta + Matches.Count) % Matches.Count; // wrap
+        _count.Text = $"{_current + 1} of {Matches.Count}";
+        _view.Editor.SetSearchMatches(Matches, _current);
         SelectCurrent();
     }
 
@@ -180,28 +186,28 @@ public sealed class FindBar : Border
 
     private void SelectCurrent()
     {
-        if (_current >= 0 && _current < _matches.Count)
+        if (_current >= 0 && _current < Matches.Count)
         {
-            var m = _matches[_current];
+            var m = Matches[_current];
             _view.Editor.Select(m.Start, m.Length);
         }
     }
 
     private void ReplaceCurrent()
     {
-        if (_current < 0 || _current >= _matches.Count)
+        if (_current < 0 || _current >= Matches.Count)
         {
             return;
         }
 
-        var m = _matches[_current];
+        var m = Matches[_current];
         SelfEdit(() => _view.Editor.Replace(m.Start, m.Length, _replace.Text ?? string.Empty));
         Recompute(resetCurrent: false, selectMatch: true); // offsets shifted; re-find and keep position
     }
 
     private void ReplaceAll()
     {
-        if (_matches.Count == 0)
+        if (Matches.Count == 0)
         {
             return;
         }
@@ -211,11 +217,11 @@ public sealed class FindBar : Border
 
         // Build the whole replaced span once and apply it as a single undoable edit, so Replace All
         // is one operation (one undo step) instead of N — and offsets can't drift mid-loop.
-        var first = _matches[0].Start;
-        var last = _matches[^1].End;
+        var first = Matches[0].Start;
+        var last = Matches[^1].End;
         var sb = new StringBuilder(last - first);
         var pos = first;
-        foreach (var m in _matches)
+        foreach (var m in Matches)
         {
             sb.Append(text, pos, m.Start - pos);
             sb.Append(replacement);
@@ -228,7 +234,7 @@ public sealed class FindBar : Border
     }
 
     // ----- internal test hooks -----
-    internal IReadOnlyList<SearchMatch> Matches => _matches;
+    internal IReadOnlyList<SearchMatch> Matches { get; private set; } = [];
 
     internal void SetQuery(string query)
     {

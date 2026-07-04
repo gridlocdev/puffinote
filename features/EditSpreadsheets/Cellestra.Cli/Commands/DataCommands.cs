@@ -36,7 +36,7 @@ internal static class DataCommands
             var (sheet, cellRange) = Cells.ResolveRange(wb, parse.GetValue(range)!);
             var levels = ParseSortLevels(parse.GetValue(by)!);
             var spec = new SortSpec(levels, HasHeader: !parse.GetValue(noHeader));
-            return new[] { DataEditCommands.Sort(sheet.Name, cellRange, spec, culture) };
+            return [DataEditCommands.Sort(sheet.Name, cellRange, spec, culture)];
         }));
 
         return command;
@@ -99,8 +99,11 @@ internal static class DataCommands
     {
         var file = Options.File();
         var range = new Argument<string>("column") { Description = "Single-column range to split, e.g. Sheet1.A1:A100" };
-        var delimiter = new Option<string>("--delimiter", "-d") { Description = "Delimiter to split on (default ,)" };
-        delimiter.DefaultValueFactory = _ => ",";
+        var delimiter = new Option<string>("--delimiter", "-d")
+        {
+            Description = "Delimiter to split on (default ,)",
+            DefaultValueFactory = _ => ","
+        };
         var inPlace = Options.InPlace();
         var output = Options.Output();
         var command = new Command("split", "Split a delimited column into multiple columns (text to columns)") { file, range, delimiter, inPlace, output };
@@ -114,7 +117,7 @@ internal static class DataCommands
                 throw new CliException("--delimiter must be a single character.");
             }
 
-            return new[] { DataEditCommands.TextToColumns(sheet, cellRange, d[0]) };
+            return [DataEditCommands.TextToColumns(sheet, cellRange, d[0])];
         }));
 
         return command;
@@ -142,7 +145,7 @@ internal static class DataCommands
 
             string tableName = parse.GetValue(name) ?? NextTableName(sheet);
             var table = new Core.Data.Table(tableName, cellRange, HasHeader: !parse.GetValue(noHeader));
-            return new[] { DataEditCommands.CreateTable(wb, sheet.Name, table) };
+            return [DataEditCommands.CreateTable(wb, sheet.Name, table)];
         }));
 
         return command;
@@ -201,7 +204,7 @@ internal static class DataCommands
                 throw new CliException("Give either --list \"a,b,c\" or --source <range>.");
             }
 
-            return new[] { DataEditCommands.SetValidation(sheet.Name, rule) };
+            return [DataEditCommands.SetValidation(sheet.Name, rule)];
         }));
 
         return command;
@@ -251,7 +254,7 @@ internal static class DataCommands
             // Store fully sheet-qualified so the name resolves regardless of the active sheet.
             var target = cellRange.WithSheet(cellRange.Sheet ?? sheet.Name);
             wb.AddNamedRange(new NamedRange(parse.GetValue(nameArg)!, target));
-            return Array.Empty<IEditCommand>();
+            return [];
         }));
 
         return command;
@@ -272,7 +275,7 @@ internal static class DataCommands
                 throw new CliException($"No named range called '{parse.GetValue(nameArg)}'.");
             }
 
-            return Array.Empty<IEditCommand>();
+            return [];
         }));
 
         return command;
@@ -284,8 +287,11 @@ internal static class DataCommands
     {
         var file = Options.File();
         var cell = new Argument<string>("cell") { Description = "Cell to link, e.g. Sheet1.B2" };
-        var url = new Argument<string?>("url") { Description = "Link target (omit with --remove)" };
-        url.Arity = ArgumentArity.ZeroOrOne;
+        var url = new Argument<string?>("url")
+        {
+            Description = "Link target (omit with --remove)",
+            Arity = ArgumentArity.ZeroOrOne
+        };
         var tooltip = new Option<string?>("--tooltip") { Description = "Hover tooltip" };
         var remove = new Option<bool>("--remove") { Description = "Remove the cell's hyperlink" };
         var inPlace = Options.InPlace();
@@ -307,7 +313,7 @@ internal static class DataCommands
                 link = new Core.Model.Hyperlink(target) { Tooltip = parse.GetValue(tooltip) };
             }
 
-            return new[] { EditCommands.SetHyperlink(wb, sheet.Name, address.Row, address.Column, link) };
+            return [EditCommands.SetHyperlink(wb, sheet.Name, address.Row, address.Column, link)];
         }));
 
         return command;
@@ -331,8 +337,11 @@ internal static class DataCommands
         {
             Description = isRow ? "Row number (1-based), e.g. 3" : "Column letter or number, e.g. B",
         };
-        var count = new Option<int>("--count") { Description = "How many lines (default 1)" };
-        count.DefaultValueFactory = _ => 1;
+        var count = new Option<int>("--count")
+        {
+            Description = "How many lines (default 1)",
+            DefaultValueFactory = _ => 1
+        };
         var sheet = Options.Sheet();
         var inPlace = Options.InPlace();
         var output = Options.Output();
@@ -348,7 +357,7 @@ internal static class DataCommands
                 throw new CliException("--count must be at least 1.");
             }
 
-            return new[] { (IEditCommand)new StructuralEditCommand(worksheet.Name, axis, operation, index, n) };
+            return [(new StructuralEditCommand(worksheet.Name, axis, operation, index, n))];
         }));
 
         return command;
@@ -383,7 +392,7 @@ internal static class DataCommands
             var edit = isRow
                 ? EditCommands.SetRowsHidden(worksheet.Name, first, last, hidden)
                 : EditCommands.SetColumnsHidden(worksheet.Name, first, last, hidden);
-            return new[] { edit };
+            return [edit];
         }));
 
         return command;
@@ -402,7 +411,7 @@ internal static class DataCommands
         command.SetAction(parse => RunEdit(parse, file, inPlace, output, locale: null, (wb, _) =>
         {
             var (sheet, cellRange) = Cells.ResolveRange(wb, parse.GetValue(range)!);
-            return new[] { EditCommands.MergeCells(sheet.Name, cellRange) };
+            return [EditCommands.MergeCells(sheet.Name, cellRange)];
         }));
 
         return command;
@@ -419,7 +428,7 @@ internal static class DataCommands
         command.SetAction(parse => RunEdit(parse, file, inPlace, output, locale: null, (wb, _) =>
         {
             var (sheet, address) = Cells.ResolveCell(wb, parse.GetValue(cell)!);
-            return new[] { EditCommands.UnmergeCells(sheet.Name, address.Row, address.Column) };
+            return [EditCommands.UnmergeCells(sheet.Name, address.Row, address.Column)];
         }));
 
         return command;

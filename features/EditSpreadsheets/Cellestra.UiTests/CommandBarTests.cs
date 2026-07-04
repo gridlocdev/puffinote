@@ -1,10 +1,8 @@
-using System.Linq;
 using Avalonia.Controls;
 using Avalonia.Headless.XUnit;
 using Avalonia.LogicalTree;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
-using Cellestra.Desktop.Commands;
 using Cellestra.Desktop.Controls.CommandBar;
 using Cellestra.Desktop.Views;
 using Xunit;
@@ -204,7 +202,7 @@ public class CommandBarTests
         // The drawer follows the usefulness ranking (Numbers, Data, Insert, Border, Formula, …), so the
         // shown headers must be that ranking filtered to the folded groups — never the bar's left-to-right
         // order (which would lead with Data/Insert, the rightmost groups that fold first).
-        string[] ranking = { "Numbers", "Data", "Insert", "Border", "Formula", "Edit", "Text", "Align" };
+        string[] ranking = ["Numbers", "Data", "Insert", "Border", "Formula", "Edit", "Text", "Align"];
         var expected = ranking.Where(headers.Contains).ToList();
         Assert.Equal(expected, headers);
     }

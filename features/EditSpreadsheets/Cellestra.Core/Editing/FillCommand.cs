@@ -39,7 +39,7 @@ public sealed class FillCommand : IEditCommand
         int height = _source.RowCount;
         int width = _source.ColumnCount;
 
-        _before = new Dictionary<(int, int), Cell?>();
+        _before = [];
         foreach (var (row, column) in _fill.Positions())
         {
             if (_source.Contains(row, column))
@@ -111,7 +111,7 @@ public sealed class FillCommand : IEditCommand
     }
 
     private List<CellRef> ChangedRefs() =>
-        _before!.Keys.Select(k => new CellRef(_sheetName, k.Row, k.Column)).ToList();
+        [.. _before!.Keys.Select(k => new CellRef(_sheetName, k.Row, k.Column))];
 
     private static void WriteCell(Worksheet sheet, int row, int column, ClipboardCell? source, int rowDelta, int columnDelta)
     {

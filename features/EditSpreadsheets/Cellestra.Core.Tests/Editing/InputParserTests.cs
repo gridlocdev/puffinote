@@ -2,7 +2,6 @@ using System.Globalization;
 using Cellestra.Core.Editing;
 using Cellestra.Core.Formulas.Evaluation;
 using Cellestra.Core.Styling;
-using Cellestra.Core.Values;
 using Xunit;
 
 namespace Cellestra.Core.Tests.Editing;

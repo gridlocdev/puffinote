@@ -1,4 +1,3 @@
-using System.Linq;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Controls.Templates;
@@ -80,12 +79,23 @@ internal sealed class KeyboardListView : UserControl
     {
         switch (e.Key)
         {
-            case Key.Down: Move(+1); break;
-            case Key.Up: Move(-1); break;
-            case Key.Home: Select(0); break;
-            case Key.End: Select(_list.ItemCount - 1); break;
-            case Key.Enter: ActivateSelected(); break;
-            default: return;
+            case Key.Down:
+                Move(+1);
+                break;
+            case Key.Up:
+                Move(-1);
+                break;
+            case Key.Home:
+                Select(0);
+                break;
+            case Key.End:
+                Select(_list.ItemCount - 1);
+                break;
+            case Key.Enter:
+                ActivateSelected();
+                break;
+            default:
+                return;
         }
 
         e.Handled = true;

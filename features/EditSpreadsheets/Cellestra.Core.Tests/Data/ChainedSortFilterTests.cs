@@ -1,6 +1,4 @@
-using System.Collections.Generic;
 using System.Globalization;
-using System.Linq;
 using Cellestra.Core.Data;
 using Cellestra.Core.Editing;
 using Cellestra.Core.Model;
@@ -28,7 +26,7 @@ public class ChainedSortFilterTests
         var sheet = new Worksheet("Sheet1");
         sheet.SetValue(0, 0, CellValue.Text("Name"));
         sheet.SetValue(0, 1, CellValue.Text("Status"));
-        (string Name, string Status)[] rows = { ("a", "Open"), ("b", "Done"), ("c", "Open"), ("d", "Done") };
+        (string Name, string Status)[] rows = [("a", "Open"), ("b", "Done"), ("c", "Open"), ("d", "Done")];
         for (int i = 0; i < rows.Length; i++)
         {
             sheet.SetValue(i + 1, 0, CellValue.Text(rows[i].Name));
@@ -76,7 +74,7 @@ public class ChainedSortFilterTests
         var sheet = TaskSheet();
         var names = FilterEngine.DistinctValues(sheet, CellRange.Parse("A1:B5"), 0, hasHeader: true)
             .Select(v => v.AsText);
-        Assert.Equal(new[] { "a", "b", "c", "d" }, names);
+        Assert.Equal(["a", "b", "c", "d"], names);
     }
 
     [Fact]
@@ -98,13 +96,17 @@ public class ChainedSortFilterTests
         var workbook = Workbook.CreateNew();
         var history = new EditHistory(workbook);
         var sheet = workbook.ActiveSheet;
-        sheet.SetValue(0, 0, CellValue.Text("N")); sheet.SetValue(0, 1, CellValue.Text("S"));
-        sheet.SetValue(1, 0, CellValue.Number(3)); sheet.SetValue(1, 1, CellValue.Text("Open"));
-        sheet.SetValue(2, 0, CellValue.Number(1)); sheet.SetValue(2, 1, CellValue.Text("Done"));
-        sheet.SetValue(3, 0, CellValue.Number(2)); sheet.SetValue(3, 1, CellValue.Text("Open"));
+        sheet.SetValue(0, 0, CellValue.Text("N"));
+        sheet.SetValue(0, 1, CellValue.Text("S"));
+        sheet.SetValue(1, 0, CellValue.Number(3));
+        sheet.SetValue(1, 1, CellValue.Text("Open"));
+        sheet.SetValue(2, 0, CellValue.Number(1));
+        sheet.SetValue(2, 1, CellValue.Text("Done"));
+        sheet.SetValue(3, 0, CellValue.Number(2));
+        sheet.SetValue(3, 1, CellValue.Text("Open"));
 
         var range = CellRange.Parse("A1:B4");
-        var sort = new SortSpec(new[] { new SortLevel(0, Ascending: true) });
+        var sort = new SortSpec([new SortLevel(0, Ascending: true)]);
         var filter = StatusFilter("Open");
 
         // The handler sets these before executing so the sort's ReapplyActiveFilter sees the new filter.
@@ -135,15 +137,19 @@ public class ChainedSortFilterTests
         var workbook = Workbook.CreateNew();
         var history = new EditHistory(workbook);
         var sheet = workbook.ActiveSheet;
-        sheet.SetValue(0, 0, CellValue.Text("N")); sheet.SetValue(0, 1, CellValue.Text("S"));
-        sheet.SetValue(1, 0, CellValue.Number(3)); sheet.SetValue(1, 1, CellValue.Text("Open"));
-        sheet.SetValue(2, 0, CellValue.Number(1)); sheet.SetValue(2, 1, CellValue.Text("Done"));
-        sheet.SetValue(3, 0, CellValue.Number(2)); sheet.SetValue(3, 1, CellValue.Text("Open"));
+        sheet.SetValue(0, 0, CellValue.Text("N"));
+        sheet.SetValue(0, 1, CellValue.Text("S"));
+        sheet.SetValue(1, 0, CellValue.Number(3));
+        sheet.SetValue(1, 1, CellValue.Text("Open"));
+        sheet.SetValue(2, 0, CellValue.Number(1));
+        sheet.SetValue(2, 1, CellValue.Text("Done"));
+        sheet.SetValue(3, 0, CellValue.Number(2));
+        sheet.SetValue(3, 1, CellValue.Text("Open"));
         var range = CellRange.Parse("A1:B4");
         var table = new Table("T", range, HasHeader: true);
         sheet.AddTable(table);
 
-        var sort = new SortSpec(new[] { new SortLevel(0, Ascending: true) });
+        var sort = new SortSpec([new SortLevel(0, Ascending: true)]);
         var filter = StatusFilter("Open");
         history.Execute(DataEditCommands.ApplyTableSortAndFilter(sheet.Name, table, sort, filter, Inv));
 

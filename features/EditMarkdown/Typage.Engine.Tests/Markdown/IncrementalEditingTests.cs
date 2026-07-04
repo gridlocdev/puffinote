@@ -1,4 +1,3 @@
-using System.Linq;
 using Typage.Engine.Editing;
 using Typage.Engine.Markdown;
 using Xunit;

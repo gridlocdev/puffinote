@@ -62,7 +62,7 @@ public sealed partial class SpreadsheetGrid
     private void UpdateSignatureHelp()
     {
         string text = _editor.Text ?? string.Empty;
-        if (!_editing || text.Length == 0 || text[0] != '=')
+        if (!IsInlineEditing || text.Length == 0 || text[0] != '=')
         {
             HideSignatureHelp();
             return;

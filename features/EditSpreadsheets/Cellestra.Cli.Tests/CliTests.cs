@@ -1,6 +1,3 @@
-using System;
-using System.IO;
-using Cellestra.Cli;
 using Cellestra.Core.Model;
 using Cellestra.Core.Serialization.Ods;
 using Cellestra.Core.Values;
@@ -154,7 +151,7 @@ public sealed class CliTests : IDisposable
         var workbook = Workbook.CreateNew();
         workbook.ActiveSheet.SetValue(0, 0, CellValue.Number(1));
         var package = OdsPackage.Read(new MemoryStream(OdsWriter.WriteToBytes(workbook)));
-        package.SetBytes("Pictures/chart.bin", new byte[] { 1, 2, 3, 4 });
+        package.SetBytes("Pictures/chart.bin", [1, 2, 3, 4]);
         using (var stream = File.Create(ods))
         {
             package.Write(stream);
@@ -329,7 +326,7 @@ public sealed class CliTests : IDisposable
 
         var reopened = OdsReader.Read(File.OpenRead(ods)).FindSheet("Sheet1")!;
         var rule = Assert.Single(reopened.Validations);
-        Assert.Equal(new[] { "Red", "Green", "Blue" }, rule.ListValues!);
+        Assert.Equal(["Red", "Green", "Blue"], rule.ListValues!);
     }
 
     [Fact]

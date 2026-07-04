@@ -1,17 +1,6 @@
-using System.Globalization;
-using System.Linq;
-using Avalonia;
-using Avalonia.Controls;
-using Avalonia.Controls.Primitives;
-using Avalonia.Input;
-using Avalonia.Input.Platform;
-using Avalonia.Media;
-using Avalonia.Threading;
-using Typage.Control.Rendering;
 using Typage.Engine.Document;
 using Typage.Engine.Editing;
 using Typage.Engine.Markdown;
-
 
 namespace Typage.Control.Controls;
 
@@ -21,13 +10,13 @@ public partial class MarkdownEditor
     public void ApplyHeading(int level)
     {
         level = Math.Clamp(level, 1, 6);
-        var doc = _buffer.Document;
-        var line = doc.GetPosition(_buffer.Selection.Caret).Line;
+        var doc = Buffer.Document;
+        var line = doc.GetPosition(Buffer.Selection.Caret).Line;
         var lineStart = doc.GetLineStart(line);
         var text = doc.GetLineText(line).TrimEnd('\r');
         var trimmed = text.TrimStart('#', ' ');
         var replacement = new string('#', level) + " " + trimmed;
-        _buffer.ReplaceRange(lineStart, text.Length, replacement);
+        Buffer.ReplaceRange(lineStart, text.Length, replacement);
     }
 
     /// <summary>
@@ -43,7 +32,7 @@ public partial class MarkdownEditor
     /// used to detect an existing run so a second press toggles it off.</param>
     public void ToggleEmphasis(string left, string right, TokenType contentType)
     {
-        var sel = _buffer.Selection;
+        var sel = Buffer.Selection;
         int start, end;
         if (!sel.IsEmpty)
         {
@@ -55,8 +44,8 @@ public partial class MarkdownEditor
         }
         else
         {
-            _buffer.ReplaceRange(sel.Caret, 0, left + right);
-            _buffer.Selection = Selection.At(sel.Caret + left.Length);
+            Buffer.ReplaceRange(sel.Caret, 0, left + right);
+            Buffer.Selection = Selection.At(sel.Caret + left.Length);
             Focus();
             return;
         }
@@ -64,16 +53,16 @@ public partial class MarkdownEditor
         // Already wrapped in exactly this format? Strip the markers (one undo step) and re-select the content.
         if (FindEmphasisRun(start, end, contentType) is { } run)
         {
-            var inner = _buffer.Document.GetText(run.InnerStart, run.InnerEnd - run.InnerStart);
-            _buffer.ReplaceRange(run.OuterStart, run.OuterEnd - run.OuterStart, inner);
-            _buffer.Selection = new Selection(run.OuterStart, run.OuterStart + inner.Length);
+            var inner = Buffer.Document.GetText(run.InnerStart, run.InnerEnd - run.InnerStart);
+            Buffer.ReplaceRange(run.OuterStart, run.OuterEnd - run.OuterStart, inner);
+            Buffer.Selection = new Selection(run.OuterStart, run.OuterStart + inner.Length);
             Focus();
             return;
         }
 
-        var content = _buffer.Document.GetText(start, end - start);
-        _buffer.ReplaceRange(start, end - start, left + content + right);
-        _buffer.Selection = new Selection(start + left.Length, start + left.Length + content.Length);
+        var content = Buffer.Document.GetText(start, end - start);
+        Buffer.ReplaceRange(start, end - start, left + content + right);
+        Buffer.Selection = new Selection(start + left.Length, start + left.Length + content.Length);
         Focus();
     }
 
@@ -86,7 +75,7 @@ public partial class MarkdownEditor
     /// </summary>
     private (int OuterStart, int OuterEnd, int InnerStart, int InnerEnd)? FindEmphasisRun(int start, int end, TokenType contentType)
     {
-        var doc = _buffer.Document;
+        var doc = Buffer.Document;
         if (start < 0 || end > doc.Length || start >= end)
         {
             return null;
@@ -135,7 +124,7 @@ public partial class MarkdownEditor
     /// </summary>
     private void ToggleStarEmphasis(bool bold)
     {
-        var sel = _buffer.Selection;
+        var sel = Buffer.Selection;
         int start, end;
         if (!sel.IsEmpty)
         {
@@ -148,8 +137,8 @@ public partial class MarkdownEditor
         else
         {
             var d = bold ? "**" : "*";
-            _buffer.ReplaceRange(sel.Caret, 0, d + d);
-            _buffer.Selection = Selection.At(sel.Caret + d.Length);
+            Buffer.ReplaceRange(sel.Caret, 0, d + d);
+            Buffer.Selection = Selection.At(sel.Caret + d.Length);
             Focus();
             return;
         }
@@ -171,13 +160,13 @@ public partial class MarkdownEditor
         }
 
         var newLevel = (hasBold ? 2 : 0) + (hasItalic ? 1 : 0);
-        var content = _buffer.Document.GetText(start, end - start);
+        var content = Buffer.Document.GetText(start, end - start);
         var delim = new string(ch, newLevel);
         var outerStart = existing?.OuterStart ?? start;
         var outerEnd = existing?.OuterEnd ?? end;
 
-        _buffer.ReplaceRange(outerStart, outerEnd - outerStart, delim + content + delim);
-        _buffer.Selection = new Selection(outerStart + delim.Length, outerStart + delim.Length + content.Length);
+        Buffer.ReplaceRange(outerStart, outerEnd - outerStart, delim + content + delim);
+        Buffer.Selection = new Selection(outerStart + delim.Length, outerStart + delim.Length + content.Length);
         Focus();
     }
 
@@ -187,7 +176,7 @@ public partial class MarkdownEditor
     /// </summary>
     private (int OuterStart, int OuterEnd, int RunLength, char Delim)? FindStarEmphasis(int start, int end)
     {
-        var doc = _buffer.Document;
+        var doc = Buffer.Document;
         if (start < 0 || end > doc.Length || start >= end)
         {
             return null;
@@ -242,7 +231,7 @@ public partial class MarkdownEditor
     /// </summary>
     private (int Start, int End)? WordAround(int caret)
     {
-        var doc = _buffer.Document;
+        var doc = Buffer.Document;
         bool IsWordChar(int i) => i >= 0 && i < doc.Length && CharClass(doc[i]) == 0;
 
         if (!IsWordChar(caret - 1) && !IsWordChar(caret))
@@ -276,8 +265,8 @@ public partial class MarkdownEditor
         var (start, end, existing) = LinkTarget();
         var display = text.Length > 0 ? text : url.Length > 0 ? url : existing;
         var replacement = $"[{display}]({url})";
-        _buffer.ReplaceRange(start, end - start, replacement);
-        _buffer.Selection = Selection.At(start + replacement.Length);
+        Buffer.ReplaceRange(start, end - start, replacement);
+        Buffer.Selection = Selection.At(start + replacement.Length);
         Focus();
     }
 
@@ -286,13 +275,13 @@ public partial class MarkdownEditor
         var (start, end, text) = LinkTarget();
         var lead = image ? "![" : "[";
         var replacement = $"{lead}{text}]()";
-        _buffer.ReplaceRange(start, end - start, replacement);
+        Buffer.ReplaceRange(start, end - start, replacement);
 
         // Caret in the URL slot when there's link text to keep; otherwise in the (empty) text slot to type into.
         var caret = text.Length > 0
             ? start + replacement.Length - 1
             : start + lead.Length;
-        _buffer.Selection = Selection.At(caret);
+        Buffer.Selection = Selection.At(caret);
         Focus();
     }
 
@@ -304,8 +293,8 @@ public partial class MarkdownEditor
     /// </summary>
     private (int Start, int End, string Text) LinkTarget()
     {
-        var sel = _buffer.Selection;
-        var doc = _buffer.Document;
+        var sel = Buffer.Selection;
+        var doc = Buffer.Document;
         int start, end;
         if (!sel.IsEmpty)
         {
@@ -352,7 +341,7 @@ public partial class MarkdownEditor
     /// just its visible text (link text / image alt) — emphasis and other formatting are left intact.</summary>
     private string StripSpans(int start, int end, List<InlineLinkSpan> spans)
     {
-        var doc = _buffer.Document;
+        var doc = Buffer.Document;
         var result = string.Empty;
         var p = start;
         foreach (var s in spans.Where(s => s.FullStart >= start && s.FullEnd <= end).OrderBy(s => s.FullStart))
@@ -439,14 +428,14 @@ public partial class MarkdownEditor
     /// <summary>Strip any heading marker from the caret's line, turning it back into a paragraph.</summary>
     public void SetParagraph()
     {
-        var doc = _buffer.Document;
-        var line = doc.GetPosition(_buffer.Selection.Caret).Line;
+        var doc = Buffer.Document;
+        var line = doc.GetPosition(Buffer.Selection.Caret).Line;
         var lineStart = doc.GetLineStart(line);
         var text = doc.GetLineText(line).TrimEnd('\r');
         var trimmed = text.TrimStart('#', ' ');
         if (trimmed.Length != text.Length)
         {
-            _buffer.ReplaceRange(lineStart, text.Length, trimmed);
+            Buffer.ReplaceRange(lineStart, text.Length, trimmed);
         }
     }
 
@@ -458,8 +447,8 @@ public partial class MarkdownEditor
     /// </summary>
     public void ToggleTask()
     {
-        var doc = _buffer.Document;
-        var line = doc.GetPosition(_buffer.Selection.Caret).Line;
+        var doc = Buffer.Document;
+        var line = doc.GetPosition(Buffer.Selection.Caret).Line;
         var prefix = LinePrefix.Parse(doc.GetLineText(line));
 
         if (prefix.HasTask)
@@ -471,9 +460,9 @@ public partial class MarkdownEditor
             // Insert "[ ] " after an existing list marker, or a whole "- [ ] " item after the indentation.
             var insertAt = doc.GetLineStart(line) + (prefix.HasList ? prefix.Length : prefix.Indent);
             var inserted = prefix.HasList ? "[ ] " : "- [ ] ";
-            var caret = _buffer.Selection.Caret;
-            _buffer.ReplaceRange(insertAt, 0, inserted);
-            _buffer.Selection = Selection.At(caret >= insertAt ? caret + inserted.Length : caret);
+            var caret = Buffer.Selection.Caret;
+            Buffer.ReplaceRange(insertAt, 0, inserted);
+            Buffer.Selection = Selection.At(caret >= insertAt ? caret + inserted.Length : caret);
         }
 
         Focus();
@@ -489,18 +478,18 @@ public partial class MarkdownEditor
         var (start, end, text) = LinkTarget();
         var alt = text.Length > 0 ? text : altFallback ?? string.Empty;
         var replacement = $"![{alt}]({url})";
-        _buffer.ReplaceRange(start, end - start, replacement);
-        _buffer.Selection = Selection.At(start + replacement.Length);
+        Buffer.ReplaceRange(start, end - start, replacement);
+        Buffer.Selection = Selection.At(start + replacement.Length);
         Focus();
     }
 
     /// <summary>Wrap the selection in a fenced code block (<c>```</c>…<c>```</c>), or insert empty fences.</summary>
     public void InsertCodeBlock()
     {
-        var sel = _buffer.Selection;
-        var inner = sel.IsEmpty ? string.Empty : _buffer.Document.GetText(sel.Start, sel.Length);
-        _buffer.ReplaceRange(sel.Start, sel.Length, "```\n" + inner + "\n```");
-        _buffer.Selection = sel.IsEmpty
+        var sel = Buffer.Selection;
+        var inner = sel.IsEmpty ? string.Empty : Buffer.Document.GetText(sel.Start, sel.Length);
+        Buffer.ReplaceRange(sel.Start, sel.Length, "```\n" + inner + "\n```");
+        Buffer.Selection = sel.IsEmpty
             ? Selection.At(sel.Start + 4) // the empty content line between the fences
             : new Selection(sel.Start + 4, sel.Start + 4 + inner.Length);
         Focus();
@@ -509,19 +498,19 @@ public partial class MarkdownEditor
     /// <summary>Insert a horizontal rule (<c>---</c>) on its own line.</summary>
     public void InsertHorizontalRule()
     {
-        var doc = _buffer.Document;
-        var line = doc.GetPosition(_buffer.Selection.Caret).Line;
+        var doc = Buffer.Document;
+        var line = doc.GetPosition(Buffer.Selection.Caret).Line;
         if (IsBlankLine(line))
         {
             var start = doc.GetLineStart(line);
-            _buffer.ReplaceRange(start, doc.GetLineEnd(line) - start, "---");
-            _buffer.Selection = Selection.At(start + 3);
+            Buffer.ReplaceRange(start, doc.GetLineEnd(line) - start, "---");
+            Buffer.Selection = Selection.At(start + 3);
         }
         else
         {
             var end = doc.GetLineEnd(line);
-            _buffer.ReplaceRange(end, 0, "\n\n---\n");
-            _buffer.Selection = Selection.At(end + 5); // just after the inserted "---"
+            Buffer.ReplaceRange(end, 0, "\n\n---\n");
+            Buffer.Selection = Selection.At(end + 5); // just after the inserted "---"
         }
 
         Focus();
@@ -597,22 +586,22 @@ public partial class MarkdownEditor
     /// <summary>Duplicate the caret line / selected lines, placing the copy below and moving onto it.</summary>
     public void DuplicateLine()
     {
-        var doc = _buffer.Document;
+        var doc = Buffer.Document;
         var (startLine, endLine) = SelectedLineRange();
         var start = doc.GetLineStart(startLine);
         var end = doc.GetLineEnd(endLine);
         var block = doc.GetText(start, end - start);
-        var sel = _buffer.Selection;
-        _buffer.ReplaceRange(end, 0, "\n" + block);
+        var sel = Buffer.Selection;
+        Buffer.ReplaceRange(end, 0, "\n" + block);
         var delta = end - start + 1; // the block plus its joining newline
-        _buffer.Selection = new Selection(sel.Anchor + delta, sel.Caret + delta);
+        Buffer.Selection = new Selection(sel.Anchor + delta, sel.Caret + delta);
         Focus();
     }
 
     /// <summary>Delete the caret line / selected lines entirely (including a line break).</summary>
     public void DeleteLine()
     {
-        var doc = _buffer.Document;
+        var doc = Buffer.Document;
         var (startLine, endLine) = SelectedLineRange();
         var start = doc.GetLineStart(startLine);
         int end;
@@ -629,24 +618,24 @@ public partial class MarkdownEditor
             }
         }
 
-        _buffer.ReplaceRange(start, end - start, string.Empty);
-        _buffer.Selection = Selection.At(Math.Min(start, _buffer.Document.Length));
+        Buffer.ReplaceRange(start, end - start, string.Empty);
+        Buffer.Selection = Selection.At(Math.Min(start, Buffer.Document.Length));
         Focus();
     }
 
     /// <summary>Select the word the caret is inside (Format ▸ Select Word).</summary>
     public void SelectCurrentWord()
     {
-        var caret = _buffer.Selection.Caret;
-        SelectWordAt(_buffer.Document.GetPosition(caret).Line, caret);
+        var caret = Buffer.Selection.Caret;
+        SelectWordAt(Buffer.Document.GetPosition(caret).Line, caret);
     }
 
     /// <summary>The inclusive line range the current selection spans (a selection ending at a line start
     /// doesn't include that last line).</summary>
     private (int Start, int End) SelectedLineRange()
     {
-        var doc = _buffer.Document;
-        var sel = _buffer.Selection;
+        var doc = Buffer.Document;
+        var sel = Buffer.Selection;
         var startLine = doc.GetPosition(sel.Start).Line;
         var endLine = doc.GetPosition(sel.End).Line;
         if (endLine > startLine && doc.GetPosition(sel.End).Column == 0)
@@ -660,7 +649,7 @@ public partial class MarkdownEditor
     /// <summary>Whether every non-blank line in <c>[startLine, endLine]</c> satisfies <paramref name="predicate"/>.</summary>
     private bool AllNonBlank(int startLine, int endLine, Func<LinePrefix, bool> predicate)
     {
-        var doc = _buffer.Document;
+        var doc = Buffer.Document;
         for (var l = startLine; l <= endLine; l++)
         {
             if (IsBlankLine(l))
@@ -681,7 +670,7 @@ public partial class MarkdownEditor
     /// leaving the rewritten region selected (so a toggle can be repeated). Line endings are preserved.</summary>
     private void EditLineRange(int startLine, int endLine, Func<int, string, string> transform)
     {
-        var doc = _buffer.Document;
+        var doc = Buffer.Document;
         var regionStart = doc.GetLineStart(startLine);
         var regionEnd = doc.GetLineEnd(endLine);
         var lines = new List<string>(endLine - startLine + 1);
@@ -691,11 +680,10 @@ public partial class MarkdownEditor
         }
 
         var joined = string.Join("\n", lines);
-        _buffer.ReplaceRange(regionStart, regionEnd - regionStart, joined);
-        _buffer.Selection = startLine == endLine
+        Buffer.ReplaceRange(regionStart, regionEnd - regionStart, joined);
+        Buffer.Selection = startLine == endLine
             ? Selection.At(regionStart + joined.Length)
             : new Selection(regionStart, regionStart + joined.Length);
         Focus();
     }
-
 }

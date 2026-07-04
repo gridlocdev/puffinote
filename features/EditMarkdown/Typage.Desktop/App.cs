@@ -31,7 +31,7 @@ public class App : Application
             desktop.MainWindow = window;
 
             // Open a file passed on the command line (file association / "Open With" / CLI arg).
-            var args = desktop.Args ?? Array.Empty<string>();
+            var args = desktop.Args ?? [];
             if (args.Length > 0 && File.Exists(args[0]))
             {
                 window.OpenPath(args[0]);

@@ -174,7 +174,13 @@ csharp_style_namespace_declarations = file_scoped:warning
 dotnet_sort_system_directives_first = true
 dotnet_separate_import_directive_groups = false
 # Namespace should mirror the folder structure (IDE0130).
-dotnet_style_namespace_match_folder = true:warning
+# DISABLED: IDE0130's code fix changes a document's folder/namespace association,
+# which MSBuildWorkspace rejects — it crashes `dotnet format` with
+# "Changing document properties is not supported" (dotnet/format #1623).
+# The rule reports fine under `dotnet build`, but since this repo's primary flow
+# is `dotnet format` in VSCode, it's left off. Re-enable only if you enforce it
+# build-only and never let `dotnet format` try to fix it.
+# dotnet_style_namespace_match_folder = true:warning
 
 #-----------------------------------------------------------------------------
 # Braces & blocks
@@ -357,7 +363,7 @@ dotnet_diagnostic.CS8625.severity = error   # Cannot convert null literal to non
 # --- Reliability ------------------------------------------------------------
 dotnet_diagnostic.CA2007.severity = none     # ConfigureAwait — noisy outside libraries; enable per-project if needed
 dotnet_diagnostic.CA1063.severity = warning  # Implement IDisposable correctly
-dotnet_diagnostic.CA2000.severity = warning  # Dispose objects before losing scope
+dotnet_diagnostic.CA2000.severity = suggestion  # Dispose objects before losing scope — no auto-fix; kept as IDE hint, not a build gate
 dotnet_diagnostic.CA2016.severity = warning  # Forward CancellationToken
 dotnet_diagnostic.CA1816.severity = warning  # Call GC.SuppressFinalize correctly
 
@@ -383,7 +389,7 @@ dotnet_diagnostic.IDE0160.severity = warning  # Use file-scoped namespace (paire
 dotnet_diagnostic.IDE0161.severity = warning  # Convert to file-scoped namespace
 
 # Unused code — surface it so it gets cleaned up.
-dotnet_code_quality_unused_parameters = all:warning
+dotnet_code_quality_unused_parameters = non_public:warning
 dotnet_remove_unnecessary_suppression_exclusions = none
 
 # ============================================================================
@@ -416,3 +422,15 @@ dotnet_diagnostic.IDE0080.severity = warning  # Remove unnecessary '!' suppressi
 # Idiom nudges Rider makes constantly
 dotnet_diagnostic.IDE0082.severity = warning  # Convert typeof(X).Name to nameof(X)
 dotnet_diagnostic.IDE0120.severity = warning  # Simplify LINQ (e.g. .Where(p).First() -> .First(p))
+
+# ============================================================================
+# Test projects — relax library-hygiene rules that don't apply to xUnit fixtures.
+# A test fixture's IDisposable is just per-test cleanup; the full Dispose(bool)/
+# finalizer ceremony (CA1063) and the GC.SuppressFinalize demand (CA1816) are noise here.
+# Glob note: '**.cs' (not '**/*.cs') so it matches files sitting directly in the
+# Tests dir — Roslyn's '**/' requires a slash and would skip those. Kept last so it
+# overrides the [*.cs] severities above for test code only.
+# ============================================================================
+[**/*Tests/**.cs]
+dotnet_diagnostic.CA1063.severity = none  # Implement IDisposable correctly
+dotnet_diagnostic.CA1816.severity = none  # Call GC.SuppressFinalize correctly

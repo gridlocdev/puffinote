@@ -1,4 +1,3 @@
-using System.Collections.Generic;
 using Avalonia.Media;
 using Cellestra.Core.Formulas.Ast;
 using Cellestra.Core.Formulas.Parsing;
@@ -15,18 +14,18 @@ namespace Cellestra.Desktop.Controls.SpreadsheetGrid;
 public sealed partial class SpreadsheetGrid
 {
     private static readonly Color[] ReferenceColors =
-    {
+    [
         Color.FromRgb(0x1A, 0x73, 0xE8), // blue
         Color.FromRgb(0x1E, 0x88, 0x4E), // green
         Color.FromRgb(0xE8, 0x71, 0x0A), // orange
         Color.FromRgb(0x8E, 0x24, 0xAA), // purple
         Color.FromRgb(0x00, 0x83, 0x9B), // teal
         Color.FromRgb(0xC6, 0x28, 0x28), // red
-    };
+    ];
 
     private void DrawReferenceHighlights(DrawingContext context)
     {
-        if (!_editing || Sheet is null)
+        if (!IsInlineEditing || Sheet is null)
         {
             return;
         }

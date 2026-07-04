@@ -13,11 +13,10 @@ public class LexerParserTests
         var tokens = Lexer.Tokenize("SUM(A1:A3, 5)");
 
         Assert.Equal(
-            new[]
-            {
+            [
                 TokenType.Name, TokenType.LeftParen, TokenType.Name, TokenType.Colon, TokenType.Name,
                 TokenType.Comma, TokenType.Number, TokenType.RightParen, TokenType.EndOfInput,
-            },
+            ],
             tokens.Select(t => t.Type).ToArray());
     }
 

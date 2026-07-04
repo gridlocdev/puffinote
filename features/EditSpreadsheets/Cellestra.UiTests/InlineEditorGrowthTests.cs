@@ -1,8 +1,6 @@
 using Avalonia;
-using Avalonia.Headless;
 using Avalonia.Headless.XUnit;
 using Avalonia.Threading;
-using Cellestra.Core.Values;
 using Cellestra.Desktop.Commands;
 using Cellestra.Desktop.Controls.SpreadsheetGrid;
 using Cellestra.Desktop.Views;

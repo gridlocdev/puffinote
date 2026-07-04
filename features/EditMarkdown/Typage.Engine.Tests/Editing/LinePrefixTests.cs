@@ -130,7 +130,7 @@ public class LinePrefixTests
         var lines = new[] { "1. a", "1. b", "1. c" };
         var result = OrderedListRenumber.Compute(lines, 0);
         Assert.NotNull(result);
-        Assert.Equal(new[] { "1. a", "2. b", "3. c" }, result!.Value.Lines);
+        Assert.Equal(["1. a", "2. b", "3. c"], result!.Value.Lines);
         Assert.Equal(0, result.Value.StartLine);
         Assert.Equal(3, result.Value.EndLineExclusive);
     }
@@ -142,7 +142,7 @@ public class LinePrefixTests
         var lines = new[] { "1. a", "2. b", "3. inserted", "3. c", "4. d" };
         var result = OrderedListRenumber.Compute(lines, 2);
         Assert.NotNull(result);
-        Assert.Equal(new[] { "3. inserted", "4. c", "5. d" }, result!.Value.Lines);
+        Assert.Equal(["3. inserted", "4. c", "5. d"], result!.Value.Lines);
         Assert.Equal(2, result.Value.StartLine);
     }
 

@@ -1,4 +1,3 @@
-using System.Linq;
 using Avalonia.Headless.XUnit;
 using Avalonia.Media;
 using Typage.Control.Controls;

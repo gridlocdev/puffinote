@@ -1,4 +1,3 @@
-using System.Linq;
 using System.Text;
 using Avalonia;
 using Avalonia.Controls;
@@ -28,7 +27,6 @@ namespace Typage.Desktop.Views;
 public class MainWindow : Window
 {
     private readonly SettingsService _settings;
-    private readonly MarkdownEditorView _editorView = new();
     private readonly TextBlock _statusPosition = new();
     private readonly TextBlock _statusCounts = new();
     private readonly TextBlock _statusState = new();
@@ -40,13 +38,13 @@ public class MainWindow : Window
     // Hosts internal modal dialogs (confirm prompts, etc.) over a dimmed backdrop, instead of native
     // OS dialog windows — the shared host the editors share.
     private readonly OverlayHost _overlayHost = new() { Background = new SolidColorBrush(Color.FromArgb(0x40, 0, 0, 0)) };
-    private Dictionary<string, AppCommand> _commandsById = new();
+    private Dictionary<string, AppCommand> _commandsById = [];
     private readonly FindBar? _findBar;
     private readonly Border? _toolbar;
     private readonly Border? _statusBar;
     private CheckItem? _toggleToolbarItem;
     private CheckItem? _toggleFocusItem;
-    private readonly List<(MarkdownEditor.ViewMode Mode, CheckItem Item)> _viewModeItems = new();
+    private readonly List<(MarkdownEditor.ViewMode Mode, CheckItem Item)> _viewModeItems = [];
     private bool _focusMode;
 
     // External-change detection (PRD §7.1): watch the open file, and remember the exact text last
@@ -59,7 +57,7 @@ public class MainWindow : Window
     private readonly RecoveryService _recovery = new();
     private DispatcherTimer? _autosaveTimer;
     private DispatcherTimer? _statsTimer; // debounces the whole-document word/char scan while typing
-    private readonly List<(AppTheme Theme, CheckItem Item)> _themeItems = new();
+    private readonly List<(AppTheme Theme, CheckItem Item)> _themeItems = [];
 
     /// <summary>
     /// A checkable/radio menu item that may live in either the in-window menu (Windows/Linux) or the
@@ -79,15 +77,9 @@ public class MainWindow : Window
         {
             set
             {
-                if (_menu is not null)
-                {
-                    _menu.IsChecked = value;
-                }
+                _menu?.IsChecked = value;
 
-                if (_native is not null)
-                {
-                    _native.IsChecked = value;
-                }
+                _native?.IsChecked = value;
             }
         }
     }
@@ -101,7 +93,7 @@ public class MainWindow : Window
 
     private static readonly FilePickerFileType MarkdownType = new("Markdown")
     {
-        Patterns = new[] { "*.md", "*.markdown", "*.mdown", "*.txt" },
+        Patterns = ["*.md", "*.markdown", "*.mdown", "*.txt"],
     };
 
     private static readonly FilePickerFileType ImageType = new("Images")
@@ -121,19 +113,19 @@ public class MainWindow : Window
         _toolbar = BuildToolbar();
         _toolbar.IsVisible = _settings.Settings.ShowToolbar; // restore the persisted toolbar visibility
         root.Children.Add(_toolbar);
-        _findBar = new FindBar(_editorView, _chromeBg, _chromeBorder);
+        _findBar = new FindBar(EditorView, _chromeBg, _chromeBorder);
         DockPanel.SetDock(_findBar, Dock.Top);
         root.Children.Add(_findBar);
         _statusBar = BuildStatusBar();
         root.Children.Add(_statusBar);
-        root.Children.Add(_editorView);
+        root.Children.Add(EditorView);
 
         // The command palette and the modal overlay host float over everything; the host sits on top so
         // a dialog renders above the palette. When a modal closes, return focus to the editor.
         Content = new Panel { Children = { root, _palette, _overlayHost } };
-        _overlayHost.Closed += (_, _) => _editorView.Focus();
+        _overlayHost.Closed += (_, _) => EditorView.Focus();
 
-        _editorView.TextChanged += (_, _) =>
+        EditorView.TextChanged += (_, _) =>
         {
             // The title + caret status are cheap; refresh them now. The word/char counts scan the whole
             // document, so debounce them — recompute once typing pauses instead of on every keystroke.
@@ -141,7 +133,7 @@ public class MainWindow : Window
             UpdateCaretStatus();
             ScheduleDocumentStatus();
         };
-        _editorView.SelectionChanged += (_, _) => UpdateCaretStatus();
+        EditorView.SelectionChanged += (_, _) => UpdateCaretStatus();
         Closing += OnClosing;
         Closed += (_, _) =>
         {
@@ -163,11 +155,11 @@ public class MainWindow : Window
         }
 
         ApplyTheme(_settings.Settings.Theme);
-        _editorView.Editor.IndentWidth = _settings.Settings.TabWidth;
-        _editorView.Editor.View = _settings.Settings.View; // restore the view-mode default
-        _editorView.Editor.CompletedTaskSorting = _settings.Settings.CompletedTaskSort; // restore task-sort default
-        _editorView.Editor.HorizontalPadding = _settings.Settings.EditorPadding; // restore editor padding
-        _editorView.Editor.VerticalPadding = _settings.Settings.EditorPaddingVertical;
+        EditorView.Editor.IndentWidth = _settings.Settings.TabWidth;
+        EditorView.Editor.View = _settings.Settings.View; // restore the view-mode default
+        EditorView.Editor.CompletedTaskSorting = _settings.Settings.CompletedTaskSort; // restore task-sort default
+        EditorView.Editor.HorizontalPadding = _settings.Settings.EditorPadding; // restore editor padding
+        EditorView.Editor.VerticalPadding = _settings.Settings.EditorPaddingVertical;
 
         SetupAutosave();
         Opened += async (_, _) => await CheckForRecoveryAsync(); // offer recovery once the window is up
@@ -177,7 +169,7 @@ public class MainWindow : Window
     }
 
     /// <summary>The embedded editor view, exposed for the headless UI tests.</summary>
-    internal MarkdownEditorView EditorView => _editorView;
+    internal MarkdownEditorView EditorView { get; } = new();
 
     // Test hooks for the view toggles (the chrome controls are private).
     internal bool StatusBarVisibleForTest => _statusBar?.IsVisible ?? false;
@@ -425,7 +417,7 @@ public class MainWindow : Window
         var file = NativeSubmenu("File");
         file.Menu!.Items.Add(NativeItem("file.new"));
         file.Menu.Items.Add(NativeItem("file.open"));
-        _nativeRecentItem = new NativeMenuItem("Open Recent") { Menu = new NativeMenu() };
+        _nativeRecentItem = new NativeMenuItem("Open Recent") { Menu = [] };
         file.Menu.Items.Add(_nativeRecentItem);
         file.Menu.Items.Add(NativeItem("file.save"));
         file.Menu.Items.Add(NativeItem("file.saveAs"));
@@ -531,7 +523,7 @@ public class MainWindow : Window
         return item;
     }
 
-    private static NativeMenuItem NativeSubmenu(string header) => new(header) { Menu = new NativeMenu() };
+    private static NativeMenuItem NativeSubmenu(string header) => new(header) { Menu = [] };
 
     private static NativeMenuItem AddNativeCheck(NativeMenu parent, string header, bool initial, Action onClick, KeyGesture? gesture = null)
     {
@@ -553,9 +545,9 @@ public class MainWindow : Window
     private Border BuildToolbar()
     {
         var panel = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 2, Margin = new Avalonia.Thickness(8, 5) };
-        panel.Children.Add(ToolButton("B", "Bold", () => _editorView.Editor.ToggleBold(), bold: true));
-        panel.Children.Add(ToolButton("I", "Italic", () => _editorView.Editor.ToggleItalic(), italic: true));
-        panel.Children.Add(ToolButton("</>", "Inline code", () => _editorView.Editor.ToggleInlineCode()));
+        panel.Children.Add(ToolButton("B", "Bold", () => EditorView.Editor.ToggleBold(), bold: true));
+        panel.Children.Add(ToolButton("I", "Italic", () => EditorView.Editor.ToggleItalic(), italic: true));
+        panel.Children.Add(ToolButton("</>", "Inline code", () => EditorView.Editor.ToggleInlineCode()));
 
         // Cellestra-style popout groups: a button opens a rich drawer of related commands (icon + title +
         // description + shortcut), so the common Markdown controls are one click away from the toolbar.
@@ -607,7 +599,7 @@ public class MainWindow : Window
         return border;
     }
 
-    private Button ToolButton(string label, string tooltip, Action action, bool bold = false, bool italic = false)
+    private static Button ToolButton(string label, string tooltip, Action action, bool bold = false, bool italic = false)
     {
         var button = new Button
         {
@@ -742,7 +734,7 @@ public class MainWindow : Window
                 }
 
                 close();
-                _editorView.Editor.Focus();
+                EditorView.Editor.Focus();
             }, () => command.IsEnabled),
         };
         ToolTip.SetTip(row, command.Description);
@@ -759,7 +751,7 @@ public class MainWindow : Window
 
     /// <summary>The number of command rows a drawer built for <paramref name="ids"/> produces; for tests.</summary>
     internal int DrawerRowCountForTest(params string[] ids) =>
-        ((StackPanel)BuildCommandDrawer("Test", ids.Select(i => (i, "•")).ToArray(), () => { }))
+        ((StackPanel)BuildCommandDrawer("Test", [.. ids.Select(i => (i, "•"))], () => { }))
             .Children.OfType<Button>().Count();
 
     private Border BuildStatusBar()
@@ -842,7 +834,7 @@ public class MainWindow : Window
             AppTheme.Dark => MarkdownTheme.Dark,
             _ => app.ActualThemeVariant == ThemeVariant.Light ? MarkdownTheme.Light : MarkdownTheme.Dark,
         };
-        _editorView.EditorTheme = editorTheme;
+        EditorView.EditorTheme = editorTheme;
 
         var isLight = ReferenceEquals(editorTheme, MarkdownTheme.Light);
         ApplyChromeColors(isLight, theme == AppTheme.HighContrast);
@@ -881,15 +873,9 @@ public class MainWindow : Window
     private void ToggleToolbar()
     {
         var show = !(_toolbar?.IsVisible ?? true);
-        if (_toolbar is not null)
-        {
-            _toolbar.IsVisible = show;
-        }
+        _toolbar?.IsVisible = show;
 
-        if (_toggleToolbarItem is not null)
-        {
-            _toggleToolbarItem.IsChecked = show;
-        }
+        _toggleToolbarItem?.IsChecked = show;
 
         _settings.Settings.ShowToolbar = show;
         _settings.Save();
@@ -906,7 +892,7 @@ public class MainWindow : Window
     /// <summary>Switch the editing surface to <paramref name="mode"/>; the new mode becomes the persisted default (PRD §7.4).</summary>
     private void SetViewMode(MarkdownEditor.ViewMode mode)
     {
-        _editorView.Editor.View = mode;
+        EditorView.Editor.View = mode;
         _settings.Settings.View = mode;
         _settings.Save();
         foreach (var (m, item) in _viewModeItems)
@@ -919,21 +905,12 @@ public class MainWindow : Window
     private void ToggleFocusMode()
     {
         _focusMode = !_focusMode;
-        if (_toolbar is not null)
-        {
-            // In focus mode the toolbar is hidden; otherwise restore the user's toolbar preference.
-            _toolbar.IsVisible = !_focusMode && _settings.Settings.ShowToolbar;
-        }
+        // In focus mode the toolbar is hidden; otherwise restore the user's toolbar preference.
+        _toolbar?.IsVisible = !_focusMode && _settings.Settings.ShowToolbar;
 
-        if (_statusBar is not null)
-        {
-            _statusBar.IsVisible = !_focusMode;
-        }
+        _statusBar?.IsVisible = !_focusMode;
 
-        if (_toggleFocusItem is not null)
-        {
-            _toggleFocusItem.IsChecked = _focusMode;
-        }
+        _toggleFocusItem?.IsChecked = _focusMode;
     }
 
     /// <summary>
@@ -943,19 +920,19 @@ public class MainWindow : Window
     /// </summary>
     private List<AppCommand> BuildCommands()
     {
-        var ed = _editorView.Editor;
-        return new List<AppCommand>
-        {
+        var ed = EditorView.Editor;
+        return
+        [
             new("file.new", "New", "Start a new, empty document.", Shortcut.Cmd(Key.N), () => _ = NewDocumentAsync()),
             new("file.open", "Open…", "Open a Markdown file from disk.", Shortcut.Cmd(Key.O), () => _ = OpenAsync()),
             new("file.save", "Save", "Save changes to the current file.", Shortcut.Cmd(Key.S), () => _ = SaveAsync()),
             new("file.saveAs", "Save As…", "Save a copy under a new name.", Shortcut.Cmd(Key.S, KeyModifiers.Shift), () => _ = SaveAsAsync()),
             new("file.revert", "Revert to Saved", "Discard changes since the last save.", null,
-                () => _ = RevertAsync(), () => _currentPath is not null && _editorView.IsDirty),
+                () => _ = RevertAsync(), () => _currentPath is not null && EditorView.IsDirty),
             new("file.exportHtml", "Export HTML…", "Render the document to a self-contained HTML file.", null, () => _ = ExportHtmlAsync()),
 
-            new("edit.undo", "Undo", "Step backward through your changes.", Shortcut.Cmd(Key.Z), () => _editorView.Undo(), () => _editorView.CanUndo),
-            new("edit.redo", "Redo", "Re-apply a change you undid.", Shortcut.Cmd(Key.Z, KeyModifiers.Shift), () => _editorView.Redo(), () => _editorView.CanRedo),
+            new("edit.undo", "Undo", "Step backward through your changes.", Shortcut.Cmd(Key.Z), () => EditorView.Undo(), () => EditorView.CanUndo),
+            new("edit.redo", "Redo", "Re-apply a change you undid.", Shortcut.Cmd(Key.Z, KeyModifiers.Shift), () => EditorView.Redo(), () => EditorView.CanRedo),
             new("edit.cut", "Cut", "Move the selection to the clipboard.", Shortcut.Cmd(Key.X), () => _ = ed.CutAsync()),
             new("edit.copy", "Copy", "Copy the selection to the clipboard.", Shortcut.Cmd(Key.C), () => _ = ed.CopyAsync()),
             new("edit.paste", "Paste", "Paste from the clipboard.", Shortcut.Cmd(Key.V), () => _ = ed.PasteAsync()),
@@ -999,7 +976,7 @@ public class MainWindow : Window
             new("view.toggleFocus", "Toggle Focus Mode", "Distraction-free: hide the toolbar and status bar.", Shortcut.Bare(Key.F11), ToggleFocusMode),
             new("app.preferences", "Preferences…", "Theme, tab width, and toolbar settings.", Shortcut.Cmd(Key.OemComma), ShowSettings),
             new("help.reference", "Markdown Reference", "Open the offline syntax & shortcut reference.", null, ShowHelp),
-        };
+        ];
     }
 
     // ----- file operations -----
@@ -1010,7 +987,7 @@ public class MainWindow : Window
         {
             var (text, format) = TextFileCodec.Decode(File.ReadAllBytes(path));
             _format = format; // remember the encoding/BOM so a save round-trips it
-            _editorView.LoadText(text);
+            EditorView.LoadText(text);
             _currentPath = path;
             _lastKnownDiskText = text; // the on-disk baseline for external-change detection
             _settings.Settings.PushRecent(path);
@@ -1091,7 +1068,7 @@ public class MainWindow : Window
             return;
         }
 
-        _editorView.LoadText(string.Empty);
+        EditorView.LoadText(string.Empty);
         _currentPath = null;
         _lastKnownDiskText = null;
         _format = TextFileFormat.Utf8NoBom; // new documents default to UTF-8 (no BOM)
@@ -1110,7 +1087,7 @@ public class MainWindow : Window
         {
             Title = "Open Markdown",
             AllowMultiple = false,
-            FileTypeFilter = new[] { MarkdownType, FilePickerFileTypes.All },
+            FileTypeFilter = [MarkdownType, FilePickerFileTypes.All],
         });
 
         if (files.Count > 0 && files[0].TryGetLocalPath() is { } path)
@@ -1135,7 +1112,7 @@ public class MainWindow : Window
         {
             Title = "Insert Image",
             AllowMultiple = false,
-            FileTypeFilter = new[] { ImageType, FilePickerFileTypes.All },
+            FileTypeFilter = [ImageType, FilePickerFileTypes.All],
         });
 
         if (files.Count == 0 || files[0].TryGetLocalPath() is not { } source)
@@ -1145,7 +1122,7 @@ public class MainWindow : Window
 
         await Dispatcher.UIThread.InvokeAsync(() =>
         {
-            var ed = _editorView.Editor;
+            var ed = EditorView.Editor;
             var alt = Path.GetFileNameWithoutExtension(source);
             try
             {
@@ -1171,7 +1148,7 @@ public class MainWindow : Window
     /// </summary>
     private async Task ReconcileStagedImagesAsync(string targetPath)
     {
-        var staged = ImageStaging.StagedReferences(_editorView.Text);
+        var staged = ImageStaging.StagedReferences(EditorView.Text);
         if (staged.Count == 0)
         {
             return;
@@ -1185,16 +1162,16 @@ public class MainWindow : Window
             return;
         }
 
-        var (newText, error) = ImageStaging.Reconcile(_editorView.Text, targetPath, staged);
+        var (newText, error) = ImageStaging.Reconcile(EditorView.Text, targetPath, staged);
         if (error is not null)
         {
             ShowError("Couldn't copy some staged images.",
                 $"{error}\n\nThe document will be saved with its current image links.");
         }
 
-        if (newText != _editorView.Text)
+        if (newText != EditorView.Text)
         {
-            var buffer = _editorView.Editor.Buffer;
+            var buffer = EditorView.Editor.Buffer;
             buffer.ReplaceRange(0, buffer.Document.Length, newText);
         }
     }
@@ -1217,7 +1194,7 @@ public class MainWindow : Window
             Title = "Save Markdown",
             DefaultExtension = "md",
             SuggestedFileName = Path.GetFileName(_currentPath) ?? "Untitled.md",
-            FileTypeChoices = new[] { MarkdownType },
+            FileTypeChoices = [MarkdownType],
         });
 
         if (file?.TryGetLocalPath() is { } path)
@@ -1247,9 +1224,9 @@ public class MainWindow : Window
     {
         try
         {
-            AtomicWrite(path, TextFileCodec.Encode(_editorView.Text, _format));
-            _lastKnownDiskText = _editorView.Text; // so the watcher recognises this as our own save
-            _editorView.MarkSaved();
+            AtomicWrite(path, TextFileCodec.Encode(EditorView.Text, _format));
+            _lastKnownDiskText = EditorView.Text; // so the watcher recognises this as our own save
+            EditorView.MarkSaved();
             _recovery.Clear(); // the save is durable now; drop the crash-recovery snapshot
             UpdateChrome();
             return true;
@@ -1264,7 +1241,7 @@ public class MainWindow : Window
 
     private async Task RevertAsync()
     {
-        if (_currentPath is null || !_editorView.IsDirty)
+        if (_currentPath is null || !EditorView.IsDirty)
         {
             return;
         }
@@ -1282,7 +1259,7 @@ public class MainWindow : Window
             Title = "Export HTML",
             DefaultExtension = "html",
             SuggestedFileName = (Path.GetFileNameWithoutExtension(_currentPath) ?? "Untitled") + ".html",
-            FileTypeChoices = new[] { new FilePickerFileType("HTML") { Patterns = new[] { "*.html", "*.htm" } } },
+            FileTypeChoices = [new FilePickerFileType("HTML") { Patterns = ["*.html", "*.htm"] }],
         });
 
         if (file?.TryGetLocalPath() is { } path)
@@ -1291,7 +1268,7 @@ public class MainWindow : Window
             await Dispatcher.UIThread.InvokeAsync(() =>
             {
                 var title = Path.GetFileNameWithoutExtension(path);
-                var html = HtmlRenderer.RenderDocument(Engine.Document.TextDocument.FromString(_editorView.Text), title);
+                var html = HtmlRenderer.RenderDocument(Engine.Document.TextDocument.FromString(EditorView.Text), title);
                 try
                 {
                     AtomicWrite(path, new UTF8Encoding(false).GetBytes(html)); // HTML export is always UTF-8
@@ -1346,9 +1323,9 @@ public class MainWindow : Window
     /// <summary>Snapshot the buffer if it has unsaved changes, else drop any stale snapshot.</summary>
     private void AutosaveTick()
     {
-        if (_editorView.IsDirty)
+        if (EditorView.IsDirty)
         {
-            _recovery.Save(_currentPath, _editorView.Text);
+            _recovery.Save(_currentPath, EditorView.Text);
         }
         else
         {
@@ -1394,7 +1371,7 @@ public class MainWindow : Window
                 _currentPath = snapshot.Path;
             }
 
-            _editorView.LoadRecovered(snapshot.Text);
+            EditorView.LoadRecovered(snapshot.Text);
             UpdateChrome();
             WatchCurrentFile();
         }
@@ -1427,7 +1404,7 @@ public class MainWindow : Window
             return DiskChange.None;
         }
 
-        return _editorView.IsDirty ? DiskChange.Conflict : DiskChange.ReloadClean;
+        return EditorView.IsDirty ? DiskChange.Conflict : DiskChange.ReloadClean;
     }
 
     private void WatchCurrentFile()
@@ -1543,7 +1520,7 @@ public class MainWindow : Window
 
     private async void OnClosing(object? sender, WindowClosingEventArgs e)
     {
-        if (_editorView.IsDirty && !_closingConfirmed)
+        if (EditorView.IsDirty && !_closingConfirmed)
         {
             e.Cancel = true;
             if (await EnsureCanDiscardAsync())
@@ -1571,7 +1548,7 @@ public class MainWindow : Window
     /// </summary>
     private async Task<bool> EnsureCanDiscardAsync()
     {
-        if (!_editorView.IsDirty)
+        if (!EditorView.IsDirty)
         {
             return true;
         }
@@ -1620,7 +1597,7 @@ public class MainWindow : Window
     /// </summary>
     private async Task ShowLinkDialogAsync()
     {
-        var ed = _editorView.Editor;
+        var ed = EditorView.Editor;
         var entered = await _overlayHost.ShowModalAsync(new LinkDialog(ed.SuggestedLinkText()));
         if (entered is not { } values)
         {
@@ -1700,27 +1677,24 @@ public class MainWindow : Window
         s.Theme = theme;
         ApplyTheme(theme);
         s.TabWidth = (int)(tabWidth.Value ?? 4);
-        _editorView.Editor.IndentWidth = s.TabWidth;
+        EditorView.Editor.IndentWidth = s.TabWidth;
         s.EditorPadding = (int)(padding.Value ?? 20);
-        _editorView.Editor.HorizontalPadding = s.EditorPadding;
+        EditorView.Editor.HorizontalPadding = s.EditorPadding;
         s.EditorPaddingVertical = (int)(paddingY.Value ?? 14);
-        _editorView.Editor.VerticalPadding = s.EditorPaddingVertical;
+        EditorView.Editor.VerticalPadding = s.EditorPaddingVertical;
         s.ShowToolbar = showToolbar.IsChecked == true;
         if (_toolbar is not null && !_focusMode)
         {
             _toolbar.IsVisible = s.ShowToolbar;
         }
 
-        if (_toggleToolbarItem is not null)
-        {
-            _toggleToolbarItem.IsChecked = s.ShowToolbar;
-        }
+        _toggleToolbarItem?.IsChecked = s.ShowToolbar;
 
         s.AutosaveSeconds = (int)(autosave.Value ?? 30);
         SetupAutosave(); // pick up the new interval (or disable when 0)
 
         s.CompletedTaskSort = (MarkdownEditor.CompletedTaskSortMode)System.Math.Clamp(completedTasks.SelectedIndex, 0, 2);
-        _editorView.Editor.CompletedTaskSorting = s.CompletedTaskSort;
+        EditorView.Editor.CompletedTaskSorting = s.CompletedTaskSort;
 
         SetViewMode((MarkdownEditor.ViewMode)System.Math.Clamp(viewMode.SelectedIndex, 0, 2)); // applies + syncs menu + saves
 
@@ -1767,7 +1741,7 @@ public class MainWindow : Window
     private void UpdateTitle()
     {
         var name = _currentPath is null ? "Untitled" : Path.GetFileName(_currentPath);
-        Title = (_editorView.IsDirty ? "• " : string.Empty) + name + " — Typage";
+        Title = (EditorView.IsDirty ? "• " : string.Empty) + name + " — Typage";
     }
 
     /// <summary>
@@ -1797,8 +1771,8 @@ public class MainWindow : Window
     private void UpdateDocumentStatus()
     {
         _statsTimer?.Stop(); // a synchronous refresh supersedes any pending debounced one
-        var stats = _editorView.Stats; // cached; whole-document scan only on text change
-        _statusState.Text = _editorView.IsDirty ? "Modified" : "Saved";
+        var stats = EditorView.Stats; // cached; whole-document scan only on text change
+        _statusState.Text = EditorView.IsDirty ? "Modified" : "Saved";
         _statusCounts.Text =
             $"{stats.Words} words · {stats.Characters} chars · ~{stats.ReadingMinutes} min · {_format.DisplayName} · {stats.NewlineLabel}";
     }
@@ -1806,8 +1780,8 @@ public class MainWindow : Window
     /// <summary>Caret/selection status — cheap, updated on every selection change.</summary>
     private void UpdateCaretStatus()
     {
-        var pos = _editorView.CaretPosition;
-        var selected = _editorView.SelectedCharacterCount;
+        var pos = EditorView.CaretPosition;
+        var selected = EditorView.SelectedCharacterCount;
         _statusPosition.Text = selected > 0
             ? $"Ln {pos.DisplayLine}, Col {pos.DisplayColumn}  ({selected} selected)"
             : $"Ln {pos.DisplayLine}, Col {pos.DisplayColumn}";

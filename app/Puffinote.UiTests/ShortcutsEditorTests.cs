@@ -1,4 +1,3 @@
-using System.Linq;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Headless;
@@ -21,11 +20,11 @@ public sealed class ShortcutsEditorTests
             .First(b => (b.Content as string) == content)
             .RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
 
-    private static ShortcutBinding[] Sample() => new[]
-    {
+    private static ShortcutBinding[] Sample() =>
+    [
         new ShortcutBinding("shell.save", "Save", "Puffinote", Shortcut.Cmd(Key.S), false, true, false),
         new ShortcutBinding("shell.commandPalette", "Command Palette", "Puffinote", Shortcut.Cmd(Key.K), true, false, false),
-    };
+    ];
 
     // ---- The shared control ------------------------------------------------------------------------
 
@@ -35,7 +34,11 @@ public sealed class ShortcutsEditorTests
         string? id = null;
         Shortcut? captured = null;
         var view = new ShortcutsEditorView();
-        view.Rebound += (i, s) => { id = i; captured = s; };
+        view.Rebound += (i, s) =>
+        {
+            id = i;
+            captured = s;
+        };
         view.SetBindings(Sample());
 
         var window = new Window { Content = view };
@@ -69,11 +72,15 @@ public sealed class ShortcutsEditorTests
         string? id = null;
         Shortcut? captured = Shortcut.Cmd(Key.S);
         var view = new ShortcutsEditorView();
-        view.Rebound += (i, s) => { id = i; captured = s; };
-        view.SetBindings(new[]
+        view.Rebound += (i, s) =>
         {
+            id = i;
+            captured = s;
+        };
+        view.SetBindings(
+        [
             new ShortcutBinding("shell.save", "Save", "Puffinote", Shortcut.Cmd(Key.J), false, true, IsCustomized: true),
-        });
+        ]);
         var window = new Window { Content = view };
         window.Show();
 
