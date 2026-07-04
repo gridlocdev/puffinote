@@ -93,4 +93,4 @@ Delegate by read vs. write, mapped onto this repo's structure:
 - Keep commits small and coherent; split unrelated changes into separate commits.
 - Use **Conventional Commits** with an area scope, matching the existing history: `feat(puffinote): …`, `fix(cellestra): …`, `refactor(typage): …`, `test(typage): …`, `perf(…): …`.
 - Add a co-author line for your commit signature, e.g. `Co-Authored-By: <name> <email>`.
-- Commit or push only when asked. Only commit work whose solution builds clean and tests green.
+- You may commit without approval, but do not commit if there are outstanding questions. Only commit work whose solution builds clean and tests green.
