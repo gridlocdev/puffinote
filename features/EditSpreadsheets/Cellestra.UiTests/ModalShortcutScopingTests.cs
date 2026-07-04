@@ -16,6 +16,13 @@ namespace Cellestra.UiTests;
 /// </summary>
 public class ModalShortcutScopingTests
 {
+    // The command modifier is ⌘ (Meta) on macOS and Ctrl elsewhere — mirror Shortcut.ModifiersFor so the
+    // gesture we press matches the one the app actually binds. Hardcoding Meta makes ⌘-shortcuts a no-op on
+    // Linux/Windows (the binding is Ctrl there), which silently turned these into vacuous tests — and broke
+    // the one that asserts a shortcut fires again after the palette closes.
+    private static readonly RawInputModifiers Cmd =
+        OperatingSystem.IsMacOS() ? RawInputModifiers.Meta : RawInputModifiers.Control;
+
     private static bool IsBold(MainWindow window)
     {
         var sheet = ((IAppEnvironment)window.Editor).Session.ActiveSheet;
@@ -78,7 +85,7 @@ public class ModalShortcutScopingTests
         env.Selection.MoveTo(0, 0);
 
         env.ShowCommandPalette();
-        window.KeyPressQwerty(PhysicalKey.A, RawInputModifiers.Meta);
+        window.KeyPressQwerty(PhysicalKey.A, Cmd);
 
         // ⌘A belongs to the palette, not the grid behind it — the selection stays a single cell.
         Assert.Equal(0, env.Selection.Top);
@@ -99,12 +106,12 @@ public class ModalShortcutScopingTests
 
         // Palette open: ⌘B must not bold the cell behind it.
         env.ShowCommandPalette();
-        window.KeyPressQwerty(PhysicalKey.B, RawInputModifiers.Meta);
+        window.KeyPressQwerty(PhysicalKey.B, Cmd);
         Assert.False(IsBold(window));
 
         // Palette closed: the same shortcut works again.
         window.KeyPressQwerty(PhysicalKey.Escape, RawInputModifiers.None);
-        window.KeyPressQwerty(PhysicalKey.B, RawInputModifiers.Meta);
+        window.KeyPressQwerty(PhysicalKey.B, Cmd);
         Assert.True(IsBold(window));
     }
 }
