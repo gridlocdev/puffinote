@@ -16,27 +16,6 @@ namespace Typage.Control.Controls;
 
 public partial class MarkdownEditor
 {
-    /// <summary>
-    /// The laid-out <see cref="VisualLine"/> for <paramref name="block"/>, cached while the layout is stable
-    /// (the cache is cleared by EnsureLayout on any structural or width change). Callers always run
-    /// EnsureLayout first, so the block boundaries behind a cached entry are current. On a miss the
-    /// <see cref="BlockLayoutBuilder"/> builds it from a snapshot of the current document/model/theme/view state.
-    /// </summary>
-    private VisualLine BlockVisual(int block)
-    {
-        if (_blockVisualCache.TryGetValue(block, out var cached))
-        {
-            return cached;
-        }
-
-        var visual = _layout.Build(block, new BlockLayoutContext(
-            _buffer.Document, _model, _theme, _blockStartLine,
-            RawTextMode, MarkersRevealed, WrapWidth(), CheckboxGutter,
-            OrderedMarkerText));
-        _blockVisualCache[block] = visual;
-        return visual;
-    }
-
     /// <summary>The displayed number text (<c>"N. "</c>) for an ordered-list marker at the line-relative span
     /// [<paramref name="sLine"/>, <paramref name="enLine"/>) on <paramref name="line"/>, or <c>null</c> when
     /// that span is not an ordered marker. The number is computed from the list's document structure, so it

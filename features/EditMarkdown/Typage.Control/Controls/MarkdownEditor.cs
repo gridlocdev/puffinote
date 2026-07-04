@@ -28,7 +28,7 @@ namespace Typage.Control.Controls;
 /// Full glyph-hiding with an offset↔visual map, IME, and an automation peer are the dedicated later
 /// phases (PRD §11). The public API and the engine seam below are stable so that work slots in.
 /// </remarks>
-public partial class MarkdownEditor : Avalonia.Controls.Control, ILogicalScrollable
+public partial class MarkdownEditor : Avalonia.Controls.Control, ILogicalScrollable, ILayoutHost
 {
     public enum CompletedTaskSortMode
     {
@@ -41,7 +41,7 @@ public partial class MarkdownEditor : Avalonia.Controls.Control, ILogicalScrolla
 
     private readonly DocumentBuffer _buffer = new();
     private readonly TextMeasurer _measurer; // text measurement + FormattedText/width caches (theme-only dep)
-    private readonly BlockLayoutBuilder _layout; // builds a block's VisualLine from a document/model/theme snapshot
+    private readonly LayoutModel _layout; // owns block grouping, row counts, and the VisualLine cache
     private MarkdownModel _model;
     private MarkdownTheme _theme = MarkdownTheme.Default;
     private IBrush _dimMarker = new SolidColorBrush(Color.FromArgb(0x46, 0x6E, 0x76, 0x81));
@@ -70,33 +70,11 @@ public partial class MarkdownEditor : Avalonia.Controls.Control, ILogicalScrolla
     private bool _canVerticallyScroll = true;
     private EventHandler? _scrollInvalidated;
 
-    // Wrapped-layout cache, keyed by *paragraph block* — a maximal run of consecutive plain-paragraph
-    // source lines that flow together (their newlines render as spaces, PRD §7.3); every other line is its
-    // own singleton block. _blockStartLine[b] is block b's first document line (with a trailing sentinel =
-    // LineCount), _blockOfLine[l] is line l's block, and _rowCounts/_rowPrefix hold each block's wrapped
-    // row count and running sum. All are rebuilt when the text, theme, or wrap width changes.
-    private int[] _blockStartLine = { 0, 0 };
-    private int[] _blockOfLine = Array.Empty<int>();
-    private int[] _rowCounts = Array.Empty<int>();
-    private int[] _rowPrefix = new int[1];
-    private bool _layoutDirty = true;
-    private double _layoutWidth = double.NaN;
-    // Smallest line changed since the last layout. EnsureLayout reuses every block before it (their layout
-    // and all preceding context are unchanged). `int.MaxValue` = clean; 0 = a structural/width/theme change
-    // that forces a full rebuild.
-    private int _firstDirtyLine;
-
-    // Laid-out, measured visual line per block, reused across renders / caret moves / hit-tests until the
-    // layout is rebuilt (EnsureLayout clears it). Building one is expensive — tokens → segments → word-wrap
-    // → text measurement — and it was previously redone on every frame and every caret step.
-    private readonly Dictionary<int, VisualLine> _blockVisualCache = new();
-    private readonly List<int> _blockVisualEvict = new(); // scratch reused by EvictBlockVisualsFrom
-
     public MarkdownEditor()
     {
         Focusable = true;
         _measurer = new TextMeasurer(() => IndentWidth);
-        _layout = new BlockLayoutBuilder(_measurer);
+        _layout = new LayoutModel(this, _measurer);
         _model = MarkdownModel.Build(_buffer.Document);
         _buffer.TextChanged += (_, _) =>
         {
@@ -104,8 +82,7 @@ public partial class MarkdownEditor : Avalonia.Controls.Control, ILogicalScrolla
             // changed line down (PRD §8.2). Equivalent to a full rebuild — see IncrementalTokenizerTests.
             _model = _model.Update(_buffer.Document, _buffer.LastChangedLine, out _);
             _goalX = double.NaN; // an edit moves the caret; the next Up/Down recomputes the goal column
-            _layoutDirty = true; // line/row counts may have changed → rebuild the wrapped-layout cache
-            _firstDirtyLine = Math.Min(_firstDirtyLine, _buffer.LastChangedLine); // reuse blocks above this
+            _layout.MarkDirty(_buffer.LastChangedLine); // reuse blocks above the first changed line
             RaiseScrollInvalidated(EventArgs.Empty); // line count / extent may have changed
             InvalidateVisual();
             TextChanged?.Invoke(this, EventArgs.Empty);
@@ -181,8 +158,7 @@ public partial class MarkdownEditor : Avalonia.Controls.Control, ILogicalScrolla
             UpdateDerivedBrushes();
             _measurer.Invalidate(); // cached widths/glyph runs assumed the old theme's fonts/brushes
             _extentWidth = 0;    // fonts changed — let the horizontal extent regrow as lines redraw
-            _layoutDirty = true; // line heights/wrapping depend on the font metrics
-            _firstDirtyLine = 0; // every block re-measures under new metrics
+            _layout.InvalidateAll(); // line heights/wrapping depend on the font metrics — every block re-measures
             RaiseScrollInvalidated(EventArgs.Empty);
             InvalidateMeasure();
             InvalidateVisual();
@@ -239,10 +215,10 @@ public partial class MarkdownEditor : Avalonia.Controls.Control, ILogicalScrolla
             }
 
             _viewMode = value;
-            _layoutDirty = true;   // RawText ungroups paragraphs and un-collapses blanks, so re-group fully
-            _firstDirtyLine = 0;
+            // RawText ungroups paragraphs and un-collapses blanks, and concealment/styling differ by mode, so
+            // re-group fully and drop the cached visuals.
+            _layout.InvalidateAll();
             _extentWidth = 0;
-            _blockVisualCache.Clear(); // concealment/styling differ by mode, so cached visuals are stale
             RaiseScrollInvalidated(EventArgs.Empty);
             InvalidateMeasure();
             InvalidateVisual();
@@ -284,10 +260,8 @@ public partial class MarkdownEditor : Avalonia.Controls.Control, ILogicalScrolla
             }
 
             _horizontalPadding = value;
-            _layoutDirty = true;
-            _firstDirtyLine = 0; // wrap width depends on padding — every block re-measures
+            _layout.InvalidateAll(); // wrap width depends on padding — every block re-measures
             _extentWidth = 0;
-            _blockVisualCache.Clear();
             RaiseScrollInvalidated(EventArgs.Empty);
             InvalidateMeasure();
             InvalidateVisual();
@@ -347,8 +321,7 @@ public partial class MarkdownEditor : Avalonia.Controls.Control, ILogicalScrolla
             }
 
             _wordWrap = value;
-            _layoutDirty = true;
-            _firstDirtyLine = 0; // wrapping changes for every block
+            _layout.InvalidateAll(); // wrapping changes for every block
             _extentWidth = 0;
             RaiseScrollInvalidated(EventArgs.Empty);
             InvalidateMeasure();
@@ -522,17 +495,32 @@ public partial class MarkdownEditor : Avalonia.Controls.Control, ILogicalScrolla
 
     private void RaiseScrollInvalidated(EventArgs e) => _scrollInvalidated?.Invoke(this, e);
 
-    /// <summary>The document offset of <paramref name="block"/>'s first character.</summary>
-    private int BlockStartOffset(int block) => _buffer.Document.GetLineStart(_blockStartLine[block]);
+    // ----- layout forwarders — the wrapped-layout state and grouping/measurement algorithm live in
+    // LayoutModel; these keep the control's many call sites unchanged and expose the model to ILayoutHost. -----
+    private void EnsureLayout() => _layout.EnsureLayout();
+    private int BlockOf(int line) => _layout.BlockOf(line);
+    private int BlockAtRow(int row) => _layout.BlockAtRow(row);
+    private (int Block, int BlockStart, VisualLine Visual, int Col) ResolveCaret(int offset) => _layout.ResolveCaret(offset);
+    private VisualLine BlockVisual(int block) => _layout.BlockVisual(block);
+    private int BlockStartOffset(int block) => _layout.BlockStartOffset(block);
+    private int BlockEndOffset(int block) => _layout.BlockEndOffset(block);
+    private int TotalRows => _layout.TotalRows;
+    private double RowTop(int block) => _layout.RowTop(block);
+    private int[] _rowCounts => _layout.RowCounts;
+    private int[] _rowPrefix => _layout.RowPrefix;
+    private int[] _blockStartLine => _layout.BlockStartLine;
 
-    /// <summary>The document offset just past <paramref name="block"/>'s last content character.</summary>
-    private int BlockEndOffset(int block) => _buffer.Document.GetLineEnd(_blockStartLine[block + 1] - 1);
-
-    /// <summary>Total number of visual rows across the whole document.</summary>
-    private int TotalRows => _rowPrefix.Length > 0 ? _rowPrefix[^1] : 0;
-
-    /// <summary>The top of <paramref name="block"/>'s first row in content space (before padding/offset).</summary>
-    private double RowTop(int block) => _rowPrefix[Math.Clamp(block, 0, _rowPrefix.Length - 1)] * _theme.LineHeight;
+    // ILayoutHost — the live state LayoutModel reads to group and measure blocks.
+    TextDocument ILayoutHost.Document => _buffer.Document;
+    MarkdownModel ILayoutHost.Model => _model;
+    MarkdownTheme ILayoutHost.Theme => _theme;
+    double ILayoutHost.WrapWidth => WrapWidth();
+    bool ILayoutHost.RawTextMode => RawTextMode;
+    bool ILayoutHost.MarkersRevealed => MarkersRevealed;
+    double ILayoutHost.CheckboxGutter => CheckboxGutter;
+    bool ILayoutHost.IsCollapsedBlankLine(int line) => IsCollapsedBlankLine(line);
+    string? ILayoutHost.OrderedMarkerText(int line, string lineText, int sLine, int enLine)
+        => OrderedMarkerText(line, lineText, sLine, enLine);
 
     /// <summary>The detected front-matter block range; for tests.</summary>
     internal (int Start, int End)? FrontMatterBlockForTest() => FrontMatterBlock();
