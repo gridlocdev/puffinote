@@ -5,9 +5,9 @@ using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Layout;
 using Avalonia.VisualTree;
+using Puffinote.Components.Commands;
 using Puffinote.Components.Controls;
 using Puffinote.Components.Theming;
-using Puffinote.Components.Commands;
 
 namespace Typage.Desktop.Views;
 

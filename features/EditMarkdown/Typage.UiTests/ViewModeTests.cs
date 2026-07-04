@@ -1,7 +1,7 @@
+using Avalonia.Headless.XUnit;
 using Typage.Control.Controls;
 using Typage.Desktop.Services;
 using Typage.Desktop.Views;
-using Avalonia.Headless.XUnit;
 using Xunit;
 
 namespace Typage.UiTests;

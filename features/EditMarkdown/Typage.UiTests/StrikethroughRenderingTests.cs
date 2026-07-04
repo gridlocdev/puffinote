@@ -1,6 +1,6 @@
 using System.Linq;
-using Avalonia.Media;
 using Avalonia.Headless.XUnit;
+using Avalonia.Media;
 using Typage.Control.Controls;
 using Typage.Control.Rendering;
 using Typage.Engine.Document;

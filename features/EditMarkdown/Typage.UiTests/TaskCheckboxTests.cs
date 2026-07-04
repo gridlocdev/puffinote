@@ -1,5 +1,5 @@
-using Typage.Control.Controls;
 using Avalonia.Headless.XUnit;
+using Typage.Control.Controls;
 using Xunit;
 
 namespace Typage.UiTests;

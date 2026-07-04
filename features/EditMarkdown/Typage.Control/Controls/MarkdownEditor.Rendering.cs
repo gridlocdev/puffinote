@@ -380,41 +380,41 @@ public partial class MarkdownEditor
         switch (run.Decoration)
         {
             case DecorationKind.Bullet:
-            {
-                var r = Math.Max(2, _theme.BaseFontSize * 0.14);
-                context.DrawEllipse(_theme.BulletForeground, null, new Point(run.X + run.Width / 2, cy), r, r);
-                break;
-            }
+                {
+                    var r = Math.Max(2, _theme.BaseFontSize * 0.14);
+                    context.DrawEllipse(_theme.BulletForeground, null, new Point(run.X + run.Width / 2, cy), r, r);
+                    break;
+                }
 
             case DecorationKind.CheckboxUnchecked:
             case DecorationKind.CheckboxChecked:
-            {
-                var size = CheckboxBoxSize;
-                var box = new Rect(run.X + CheckboxLeftPad, cy - size / 2, size, size);
-                var ticked = run.Decoration == DecorationKind.CheckboxChecked;
-                context.DrawRectangle(ticked ? _theme.CheckboxForeground : null, new Pen(_theme.CheckboxForeground, 1.4), box, 3, 3);
-                if (ticked)
                 {
-                    // A check mark in the editor background colour so it reads on the filled box.
-                    var pen = new Pen(_theme.Background, 1.6);
-                    var a = new Point(box.X + size * 0.24, cy);
-                    var b = new Point(box.X + size * 0.43, cy + size * 0.22);
-                    var c = new Point(box.X + size * 0.78, cy - size * 0.24);
-                    context.DrawLine(pen, a, b);
-                    context.DrawLine(pen, b, c);
+                    var size = CheckboxBoxSize;
+                    var box = new Rect(run.X + CheckboxLeftPad, cy - size / 2, size, size);
+                    var ticked = run.Decoration == DecorationKind.CheckboxChecked;
+                    context.DrawRectangle(ticked ? _theme.CheckboxForeground : null, new Pen(_theme.CheckboxForeground, 1.4), box, 3, 3);
+                    if (ticked)
+                    {
+                        // A check mark in the editor background colour so it reads on the filled box.
+                        var pen = new Pen(_theme.Background, 1.6);
+                        var a = new Point(box.X + size * 0.24, cy);
+                        var b = new Point(box.X + size * 0.43, cy + size * 0.22);
+                        var c = new Point(box.X + size * 0.78, cy - size * 0.24);
+                        context.DrawLine(pen, a, b);
+                        context.DrawLine(pen, b, c);
+                    }
+
+                    break;
                 }
 
-                break;
-            }
-
             case DecorationKind.OrderedNumber:
-            {
-                // The computed ordinal (e.g. "3. "), drawn in the bullet colour where the digits would be.
-                var ft = _measurer.GetFormattedText(run.Text, run.Style, _theme.BulletForeground);
-                var ny = lineTop + (_theme.LineHeight - ft.Height) / 2;
-                context.DrawText(ft, new Point(run.X, ny));
-                break;
-            }
+                {
+                    // The computed ordinal (e.g. "3. "), drawn in the bullet colour where the digits would be.
+                    var ft = _measurer.GetFormattedText(run.Text, run.Style, _theme.BulletForeground);
+                    var ny = lineTop + (_theme.LineHeight - ft.Height) / 2;
+                    context.DrawText(ft, new Point(run.X, ny));
+                    break;
+                }
 
             case DecorationKind.QuoteBar:
                 context.FillRectangle(_theme.QuoteBar, new Rect(run.X + 2, lineTop + 2, 2.5, lineH - 4));

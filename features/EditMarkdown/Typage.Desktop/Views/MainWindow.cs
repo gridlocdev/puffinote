@@ -41,9 +41,9 @@ public class MainWindow : Window
     // OS dialog windows — the shared host the editors share.
     private readonly OverlayHost _overlayHost = new() { Background = new SolidColorBrush(Color.FromArgb(0x40, 0, 0, 0)) };
     private Dictionary<string, AppCommand> _commandsById = new();
-    private FindBar? _findBar;
-    private Border? _toolbar;
-    private Border? _statusBar;
+    private readonly FindBar? _findBar;
+    private readonly Border? _toolbar;
+    private readonly Border? _statusBar;
     private CheckItem? _toggleToolbarItem;
     private CheckItem? _toggleFocusItem;
     private readonly List<(MarkdownEditor.ViewMode Mode, CheckItem Item)> _viewModeItems = new();

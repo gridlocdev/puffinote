@@ -1,6 +1,6 @@
 using System.Linq;
-using Avalonia.Input;
 using Avalonia.Headless.XUnit;
+using Avalonia.Input;
 using Typage.Desktop.Services;
 using Typage.Desktop.Views;
 using Xunit;
