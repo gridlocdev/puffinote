@@ -5,12 +5,12 @@ using Cellestra.Core.Serialization.Ods.Mapping;
 using Cellestra.Core.Styling;
 using Cellestra.Core.Values;
 using static Cellestra.Core.Serialization.Ods.OdsXmlNames;
-using DataTable = Cellestra.Core.Data.Table;
-using FilterSpec = Cellestra.Core.Data.FilterSpec;
 using ColumnFilter = Cellestra.Core.Data.ColumnFilter;
-using SortSpec = Cellestra.Core.Data.SortSpec;
-using SortLevel = Cellestra.Core.Data.SortLevel;
+using DataTable = Cellestra.Core.Data.Table;
 using FilterEngine = Cellestra.Core.Data.FilterEngine;
+using FilterSpec = Cellestra.Core.Data.FilterSpec;
+using SortLevel = Cellestra.Core.Data.SortLevel;
+using SortSpec = Cellestra.Core.Data.SortSpec;
 
 namespace Cellestra.Core.Serialization.Ods;
 

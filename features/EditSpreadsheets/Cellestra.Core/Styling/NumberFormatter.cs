@@ -113,50 +113,50 @@ public static class NumberFormatter
             switch (c)
             {
                 case 'y':
-                {
-                    int n = RunLength(lower, i, 'y');
-                    sb.Append(n >= 3 ? "yyyy" : "yy");
-                    i += n;
-                    break;
-                }
+                    {
+                        int n = RunLength(lower, i, 'y');
+                        sb.Append(n >= 3 ? "yyyy" : "yy");
+                        i += n;
+                        break;
+                    }
                 case 'd':
-                {
-                    int n = RunLength(lower, i, 'd');
-                    sb.Append(n >= 4 ? "dddd" : n == 3 ? "ddd" : n == 2 ? "dd" : "d");
-                    i += n;
-                    break;
-                }
+                    {
+                        int n = RunLength(lower, i, 'd');
+                        sb.Append(n >= 4 ? "dddd" : n == 3 ? "ddd" : n == 2 ? "dd" : "d");
+                        i += n;
+                        break;
+                    }
                 case 'h':
-                {
-                    int n = RunLength(lower, i, 'h');
-                    char h = twelveHour ? 'h' : 'H';
-                    sb.Append(h, System.Math.Min(n, 2));
-                    i += n;
-                    break;
-                }
+                    {
+                        int n = RunLength(lower, i, 'h');
+                        char h = twelveHour ? 'h' : 'H';
+                        sb.Append(h, System.Math.Min(n, 2));
+                        i += n;
+                        break;
+                    }
                 case 's':
-                {
-                    int n = RunLength(lower, i, 's');
-                    sb.Append('s', System.Math.Min(n, 2));
-                    i += n;
-                    break;
-                }
+                    {
+                        int n = RunLength(lower, i, 's');
+                        sb.Append('s', System.Math.Min(n, 2));
+                        i += n;
+                        break;
+                    }
                 case 'm':
-                {
-                    int n = RunLength(lower, i, 'm');
-                    if (n >= 3)
                     {
-                        sb.Append(n >= 4 ? "MMMM" : "MMM"); // month names are never minutes
-                    }
-                    else
-                    {
-                        char m = IsMinuteContext(lower, i, i + n) ? 'm' : 'M';
-                        sb.Append(m, n);
-                    }
+                        int n = RunLength(lower, i, 'm');
+                        if (n >= 3)
+                        {
+                            sb.Append(n >= 4 ? "MMMM" : "MMM"); // month names are never minutes
+                        }
+                        else
+                        {
+                            char m = IsMinuteContext(lower, i, i + n) ? 'm' : 'M';
+                            sb.Append(m, n);
+                        }
 
-                    i += n;
-                    break;
-                }
+                        i += n;
+                        break;
+                    }
                 default:
                     sb.Append(code[i]); // preserve the original-case literal (separators, "AM/PM" already handled)
                     i++;

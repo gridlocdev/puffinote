@@ -3,10 +3,10 @@ using Avalonia.Controls;
 using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Markup.Xaml;
 using Avalonia.Media;
-using Puffinote.Components.Commands;
-using Puffinote.Components.Theming;
 using Cellestra.Desktop.Commands;
 using Cellestra.Desktop.Views;
+using Puffinote.Components.Commands;
+using Puffinote.Components.Theming;
 
 namespace Cellestra.Desktop;
 

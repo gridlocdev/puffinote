@@ -7,10 +7,10 @@ using Cellestra.Core.Styling;
 using Puffinote.Components.Overlays;
 using AvColor = Avalonia.Media.Color;
 using SAlign = Cellestra.Core.Styling.HorizontalAlignment;
-using SVAlign = Cellestra.Core.Styling.VerticalAlignment;
 using SBorder = Cellestra.Core.Styling.Border;
 using SBorderEdge = Cellestra.Core.Styling.BorderEdge;
 using SBorderLineStyle = Cellestra.Core.Styling.BorderLineStyle;
+using SVAlign = Cellestra.Core.Styling.VerticalAlignment;
 
 namespace Cellestra.Desktop.Views.Dialogs;
 

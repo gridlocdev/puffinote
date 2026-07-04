@@ -39,13 +39,20 @@ public sealed class DataValidationDialog : ModalDialog<DataValidation?>
         _operator = new ComboBox { Width = 160, ItemsSource = new[] { "between", "not between", "equal to", "not equal to", "greater than", "less than", "greater or equal", "less or equal" }, SelectedIndex = 0 };
         _response = new ComboBox { Width = 160, ItemsSource = new[] { "Stop", "Warning", "Information" }, SelectedIndex = 0 };
 
-        _numberPanel = new StackPanel { Spacing = 6, Children =
+        _numberPanel = new StackPanel
+        {
+            Spacing = 6,
+            Children =
         {
             Row("Condition", _operator),
             Row("Value", _operand1),
             Row("And", _operand2),
-        } };
-        _listPanel = new StackPanel { Spacing = 6, Children =
+        }
+        };
+        _listPanel = new StackPanel
+        {
+            Spacing = 6,
+            Children =
         {
             Row("Values", _listValues),
             Row("Cell range", _listSource),
@@ -57,7 +64,8 @@ public sealed class DataValidationDialog : ModalDialog<DataValidation?>
                 Opacity = 0.7,
                 Margin = new Thickness(88, 0, 0, 0),
             },
-        } };
+        }
+        };
 
         _kind.SelectionChanged += (_, _) => UpdateVisibility();
         // The "And" operand only applies to between/not-between, so its enabled state depends on the

@@ -1,7 +1,7 @@
 using System.Text;
-using Puffinote.Components.Core.Cli;
 using System.Text.Json;
 using Cellestra.Core.Model;
+using Puffinote.Components.Core.Cli;
 
 namespace Cellestra.Cli.Infrastructure;
 

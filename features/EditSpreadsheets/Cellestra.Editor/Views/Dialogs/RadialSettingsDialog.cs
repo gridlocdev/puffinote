@@ -7,12 +7,12 @@ using Avalonia.Input;
 using Avalonia.Layout;
 using Avalonia.Media;
 using Avalonia.VisualTree;
-using Puffinote.Components.Commands;
-using Puffinote.Components.Theming;
 using Cellestra.Desktop.Commands;
-using Puffinote.Components.Controls.Icons;
 using Cellestra.Desktop.Controls.RadialMenu;
+using Puffinote.Components.Commands;
+using Puffinote.Components.Controls.Icons;
 using Puffinote.Components.Overlays;
+using Puffinote.Components.Theming;
 
 namespace Cellestra.Desktop.Views.Dialogs;
 

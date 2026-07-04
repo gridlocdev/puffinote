@@ -7,34 +7,34 @@ using System.Text;
 using System.Threading.Tasks;
 using Avalonia;
 using Avalonia.Controls;
+using Avalonia.Controls.Templates;
 using Avalonia.Input;
 using Avalonia.Input.Platform;
 using Avalonia.Interactivity;
 using Avalonia.Layout;
-using Avalonia.Controls.Templates;
 using Avalonia.Markup.Xaml;
 using Avalonia.Media;
 using Avalonia.Platform.Storage;
 using Avalonia.VisualTree;
-using Puffinote.Components.Commands;
-using Puffinote.Components.Controls;
 using Cellestra.Charts;
-// The view moved to the Cellestra.Editor namespace; the moved command bar keeps its original
-// Cellestra.Desktop.Controls.CommandBar namespace. Alias it to disambiguate from Avalonia's own
-// CommandBar control (Icons and Views.Overlays types are already imported below).
-using CommandBar = Cellestra.Desktop.Controls.CommandBar.CommandBar;
 using Cellestra.Core.Data;
 using Cellestra.Core.Editing;
 using Cellestra.Core.Model;
 using Cellestra.Core.Values;
-using Cellestra.Desktop.Controls.ChartView;
-using Cellestra.Desktop.Views.Dialogs;
-using NumberFormatter = Cellestra.Core.Styling.NumberFormatter;
 using Cellestra.Desktop.Commands;
-using Puffinote.Components.Controls.Icons;
+using Cellestra.Desktop.Controls.ChartView;
 using Cellestra.Desktop.Controls.SpreadsheetGrid;
 using Cellestra.Desktop.Services;
+using Cellestra.Desktop.Views.Dialogs;
+using Puffinote.Components.Commands;
+using Puffinote.Components.Controls;
+using Puffinote.Components.Controls.Icons;
 using Puffinote.Components.Overlays;
+// The view moved to the Cellestra.Editor namespace; the moved command bar keeps its original
+// Cellestra.Desktop.Controls.CommandBar namespace. Alias it to disambiguate from Avalonia's own
+// CommandBar control (Icons and Views.Overlays types are already imported below).
+using CommandBar = Cellestra.Desktop.Controls.CommandBar.CommandBar;
+using NumberFormatter = Cellestra.Core.Styling.NumberFormatter;
 
 namespace Cellestra.Editor;
 
@@ -80,7 +80,7 @@ public partial class SpreadsheetEditorView : UserControl, IAppEnvironment
     private ClipboardBlock? _clipboard;
     private string? _clipboardText;
 
-    private CommandBar? _commandBar;
+    private readonly CommandBar? _commandBar;
     private System.DateTime? _lastSavedAt;
 
     // The one command catalog, built once against this view (which is the IAppEnvironment). Each command

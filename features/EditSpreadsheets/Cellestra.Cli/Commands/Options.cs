@@ -1,7 +1,7 @@
 using System.CommandLine;
-using Puffinote.Components.Core.Cli;
-using Cellestra.Core.Serialization.Csv;
 using Cellestra.Cli.Infrastructure;
+using Cellestra.Core.Serialization.Csv;
+using Puffinote.Components.Core.Cli;
 
 namespace Cellestra.Cli.Commands;
 

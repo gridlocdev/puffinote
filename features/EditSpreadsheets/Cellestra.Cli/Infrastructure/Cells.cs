@@ -1,8 +1,8 @@
 using System.Globalization;
-using Puffinote.Components.Core.Cli;
 using Cellestra.Core.Model;
 using Cellestra.Core.Styling;
 using Cellestra.Core.Values;
+using Puffinote.Components.Core.Cli;
 
 namespace Cellestra.Cli.Infrastructure;
 

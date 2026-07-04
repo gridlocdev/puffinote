@@ -1,6 +1,6 @@
+using Cellestra.Core.Formulas.Evaluation;
 using Cellestra.Core.Model;
 using Cellestra.Core.Values;
-using Cellestra.Core.Formulas.Evaluation;
 
 namespace Cellestra.Core.Formulas.Functions;
 

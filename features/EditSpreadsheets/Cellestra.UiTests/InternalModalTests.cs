@@ -1,10 +1,10 @@
 using Avalonia.Headless;
 using Avalonia.Headless.XUnit;
 using Avalonia.Input;
-using Puffinote.Components.Overlays;
 using Cellestra.Desktop.Commands;
 using Cellestra.Desktop.Views;
 using Cellestra.Desktop.Views.Dialogs;
+using Puffinote.Components.Overlays;
 using Xunit;
 
 namespace Cellestra.UiTests;

@@ -1,5 +1,4 @@
 using System.CommandLine;
-using Puffinote.Components.Core.Cli;
 using System.Globalization;
 using Cellestra.Cli.Infrastructure;
 using Cellestra.Core.Editing;
@@ -9,6 +8,7 @@ using Cellestra.Core.Formulas.Parsing;
 using Cellestra.Core.Model;
 using Cellestra.Core.Serialization.Csv;
 using Cellestra.Core.Values;
+using Puffinote.Components.Core.Cli;
 
 namespace Cellestra.Cli.Commands;
 

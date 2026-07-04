@@ -29,7 +29,7 @@ public sealed class SortFilterDialog : ModalDialog<SortFilterPlan?>
     private readonly CheckBox _headerCheck;
     private readonly StackPanel _steps;
     private readonly TextBlock _count;
-    private bool _ready;
+    private readonly bool _ready;
 
     public SortFilterDialog(Worksheet sheet, CellRange range, bool hasHeader, CultureInfo? culture = null)
     {

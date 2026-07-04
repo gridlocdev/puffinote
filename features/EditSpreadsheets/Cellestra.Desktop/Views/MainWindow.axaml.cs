@@ -8,11 +8,11 @@ using Avalonia.Layout;
 using Avalonia.Markup.Xaml;
 using Avalonia.Media;
 using Avalonia.Platform.Storage;
-using Puffinote.Components.Commands;
 using Cellestra.Desktop.Commands;
 using Cellestra.Desktop.Services;
-using Puffinote.Components.Overlays;
 using Cellestra.Editor;
+using Puffinote.Components.Commands;
+using Puffinote.Components.Overlays;
 
 namespace Cellestra.Desktop.Views;
 

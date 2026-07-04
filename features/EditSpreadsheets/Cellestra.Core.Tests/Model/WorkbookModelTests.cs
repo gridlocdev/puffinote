@@ -1,6 +1,6 @@
 using Cellestra.Core;
-using Cellestra.Core.Values;
 using Cellestra.Core.Model;
+using Cellestra.Core.Values;
 using Xunit;
 
 namespace Cellestra.Core.Tests.Model;

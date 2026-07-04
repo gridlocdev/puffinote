@@ -1,10 +1,10 @@
 using System.CommandLine;
-using Puffinote.Components.Core.Cli;
 using System.Globalization;
 using Cellestra.Cli.Infrastructure;
 using Cellestra.Core.Data;
 using Cellestra.Core.Editing;
 using Cellestra.Core.Model;
+using Puffinote.Components.Core.Cli;
 
 namespace Cellestra.Cli.Commands;
 
