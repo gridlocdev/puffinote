@@ -113,6 +113,7 @@ public class MainWindow : Window
         SidebarForTest.NewFolderRequested += node => _ = PromptNewFolderAsync(node);
         SidebarForTest.RenameRequested += node => _ = PromptRenameAsync(node);
         SidebarForTest.DeleteRequested += node => _ = PromptDeleteAsync(node);
+        SidebarForTest.PinnedChanged += PersistSession;
 
         Width = 1000;
         Height = 700;
@@ -664,6 +665,7 @@ public class MainWindow : Window
         var session = _notebook.RootPath is { } root ? SessionStore.Load(root) : new NotebookSession();
         _recent = [.. session.Recent.Where(File.Exists)];
         SidebarForTest.SetRecent(_notebook.RootPath, _recent);
+        SidebarForTest.SetPinnedFolders(session.Pinned);
         ApplySidebarState(session.SidebarCollapsed, session.SidebarWidth);
 
         StartSearchIndex();
@@ -704,6 +706,7 @@ public class MainWindow : Window
         SessionStore.Save(root, new NotebookSession
         {
             Recent = _recent,
+            Pinned = SidebarForTest.PinnedFolders,
             SidebarCollapsed = collapsed,
             SidebarWidth = width > 0 ? width : SessionStore.DefaultSidebarWidth,
         });

@@ -35,6 +35,32 @@ public sealed class SessionStoreTests : IDisposable
     }
 
     [Fact]
+    public void Save_then_load_round_trips_pinned_folders_in_order()
+    {
+        SessionStore.Save(_root.FullName, new NotebookSession
+        {
+            Pinned = [At("Projects"), At(System.IO.Path.Combine("Projects", "Neural Nets"))],
+        });
+
+        var loaded = SessionStore.Load(_root.FullName);
+        Assert.Equal([At("Projects"), At(System.IO.Path.Combine("Projects", "Neural Nets"))], loaded.Pinned);
+    }
+
+    [Fact]
+    public void A_session_written_before_pinned_folders_existed_still_loads()
+    {
+        // A v1 file with no "Pinned" field must load (as no pins), not be discarded as unreadable.
+        var stateDir = Directory.CreateDirectory(System.IO.Path.Combine(_root.FullName, NotebookNode.StateDirectoryName));
+        File.WriteAllText(
+            System.IO.Path.Combine(stateDir.FullName, "session.json"),
+            """{ "Version": 1, "Recent": ["note.md"], "SidebarCollapsed": false, "SidebarWidth": 260 }""");
+
+        var loaded = SessionStore.Load(_root.FullName);
+        Assert.Equal([At("note.md")], loaded.Recent);
+        Assert.Empty(loaded.Pinned);
+    }
+
+    [Fact]
     public void Recent_paths_are_stored_relative_so_a_moved_notebook_still_resolves_them()
     {
         SessionStore.Save(_root.FullName, new NotebookSession { Recent = [At("note.md")] });

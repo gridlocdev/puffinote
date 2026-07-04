@@ -11,6 +11,9 @@ internal sealed record NotebookSession
 {
     public IReadOnlyList<string> Recent { get; init; } = [];
 
+    /// <summary>The sidebar's pinned folders (PRD §7.2), in the user's chosen chip order; absolute paths here.</summary>
+    public IReadOnlyList<string> Pinned { get; init; } = [];
+
     public bool SidebarCollapsed { get; init; }
 
     public double SidebarWidth { get; init; } = SessionStore.DefaultSidebarWidth;
@@ -30,7 +33,10 @@ internal static class SessionStore
 
     private const int CurrentVersion = 1;
 
-    private sealed record SessionDocument(int Version, List<string> Recent, bool SidebarCollapsed, double SidebarWidth);
+    // Pinned is nullable so a session written before pinned folders existed (no field) still loads at Version 1
+    // rather than being discarded — an absent list simply means "no pins yet".
+    private sealed record SessionDocument(
+        int Version, List<string> Recent, bool SidebarCollapsed, double SidebarWidth, List<string>? Pinned = null);
 
     private static string SessionPath(string root) =>
         System.IO.Path.Combine(root, NotebookNode.StateDirectoryName, "session.json");
@@ -52,12 +58,13 @@ internal static class SessionStore
                 return new NotebookSession();
             }
 
-            var recent = (document.Recent ?? [])
-                .Select(rel => System.IO.Path.GetFullPath(System.IO.Path.Combine(root, rel)))
-                .ToList();
+            List<string> ToAbsolute(IEnumerable<string>? relatives) =>
+                [.. (relatives ?? []).Select(rel => System.IO.Path.GetFullPath(System.IO.Path.Combine(root, rel)))];
+
             return new NotebookSession
             {
-                Recent = recent,
+                Recent = ToAbsolute(document.Recent),
+                Pinned = ToAbsolute(document.Pinned),
                 SidebarCollapsed = document.SidebarCollapsed,
                 SidebarWidth = document.SidebarWidth > 0 ? document.SidebarWidth : DefaultSidebarWidth,
             };
@@ -81,7 +88,8 @@ internal static class SessionStore
                 CurrentVersion,
                 [.. session.Recent.Select(p => System.IO.Path.GetRelativePath(root, p))],
                 session.SidebarCollapsed,
-                session.SidebarWidth);
+                session.SidebarWidth,
+                [.. session.Pinned.Select(p => System.IO.Path.GetRelativePath(root, p))]);
             File.WriteAllText(SessionPath(root), JsonSerializer.Serialize(document, new JsonSerializerOptions { WriteIndented = true }));
         }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException)

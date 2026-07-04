@@ -6,6 +6,8 @@ using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.Layout;
 using Avalonia.Media;
+using Avalonia.VisualTree;
+using Puffinote.Components.Controls.Icons;
 using Puffinote.Components.Theming;
 using Puffinote.Desktop.Shell;
 
@@ -33,6 +35,9 @@ internal sealed class FileTreeView : UserControl
     private readonly ListBox _list;
     private NotebookNode? _root;
     private readonly HashSet<string> _expanded = new(StringComparer.OrdinalIgnoreCase);
+    private IReadOnlySet<string> _pinned = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+    private MenuItem _pinItem = null!;
+    private MenuItem _unpinItem = null!;
     private string _typeahead = string.Empty;
     private DateTime _lastKeystroke = DateTime.MinValue;
 
@@ -48,6 +53,9 @@ internal sealed class FileTreeView : UserControl
         _list.SelectionChanged += (_, _) => SelectionChanged?.Invoke(SelectedNode);
         _list.DoubleTapped += (_, _) => ActivateSelected();
         _list.ContextMenu = BuildContextMenu();
+        // A right-click selects the row under the pointer first, so the context menu (Pin, Rename, …) always
+        // targets what was clicked rather than whatever happened to be selected before.
+        _list.AddHandler(PointerPressedEvent, OnListPointerPressed, RoutingStrategies.Tunnel);
 
         // The UserControl owns keyboard focus + the whole key map, so navigation is deterministic and
         // doesn't depend on which item container happens to hold focus.
@@ -79,6 +87,12 @@ internal sealed class FileTreeView : UserControl
     /// <summary>Raised to create a new folder; the argument is the selected node (the shell picks the folder).</summary>
     public event Action<NotebookNode?>? NewFolderRequested;
 
+    /// <summary>Raised to pin a folder to the sidebar's chips (context menu). Always a directory.</summary>
+    public event Action<NotebookNode>? PinRequested;
+
+    /// <summary>Raised to unpin an already-pinned folder from the sidebar's chips (context menu).</summary>
+    public event Action<NotebookNode>? UnpinRequested;
+
     /// <summary>The currently selected node, or null when nothing is selected.</summary>
     public NotebookNode? SelectedNode => (_list.SelectedItem as Row)?.Node;
 
@@ -102,15 +116,31 @@ internal sealed class FileTreeView : UserControl
     /// <summary>Rebuild the tree for a newly opened notebook (or clear it when <paramref name="root"/> is null).</summary>
     public void SetRoot(NotebookNode? root)
     {
-        _root = root;
-        _expanded.Clear();
-        if (root is not null)
+        if (root is null)
         {
-            _expanded.Add(root.Path); // show the notebook's top level immediately
+            _root = null;
+            _expanded.Clear();
+            Rebuild(selectPath: null);
+            return;
         }
 
-        Rebuild(selectPath: root?.Path);
+        SetScope(root);
     }
+
+    /// <summary>
+    /// Re-root the visible tree at <paramref name="displayRoot"/> — the notebook root for "All notes", or a
+    /// pinned sub-folder when a chip scopes the tree (PRD §7.2). Expansion resets to just the new root.
+    /// </summary>
+    public void SetScope(NotebookNode displayRoot)
+    {
+        _root = displayRoot;
+        _expanded.Clear();
+        _expanded.Add(displayRoot.Path); // show the scoped level immediately
+        Rebuild(selectPath: displayRoot.Path);
+    }
+
+    /// <summary>The paths currently pinned to the sidebar, so the context menu can offer Pin vs. Unpin.</summary>
+    public void SetPinnedPaths(IReadOnlySet<string> pinned) => _pinned = pinned;
 
     /// <summary>Re-read the tree from disk, preserving expansion and (when it still exists) the selection.</summary>
     public void Refresh() => Rebuild(selectPath: SelectedNode?.Path);
@@ -188,13 +218,19 @@ internal sealed class FileTreeView : UserControl
         }
 
         var palette = Tokens.Dark;
-        var chevron = new TextBlock
-        {
-            Text = row.Node.IsDirectory ? (_expanded.Contains(row.Node.Path) ? "▾" : "▸") : string.Empty,
-            Width = 14,
-            Foreground = palette.MutedText,
-            VerticalAlignment = VerticalAlignment.Center,
-        };
+
+        // A folder gets a Lucide glyph that reflects its disclosure state — folder-open when expanded, folder
+        // when collapsed — instead of a literal folder emoji or a bare chevron. Files reserve the same-width
+        // slot (drawn empty) so names stay aligned under their sibling folders.
+        Control glyph = row.Node.IsDirectory
+            ? new LucideIcon
+            {
+                IconKey = _expanded.Contains(row.Node.Path) ? "folder-open" : "folder",
+                Size = 15,
+                Foreground = palette.MutedText,
+                VerticalAlignment = VerticalAlignment.Center,
+            }
+            : new Control { Width = 15 };
 
         var name = new TextBlock
         {
@@ -210,8 +246,9 @@ internal sealed class FileTreeView : UserControl
         var stack = new StackPanel
         {
             Orientation = Orientation.Horizontal,
+            Spacing = 7,
             Margin = new Thickness(row.Depth * 14, 0, 0, 0),
-            Children = { chevron, name },
+            Children = { glyph, name },
         };
         AutomationProperties.SetName(stack, row.Node.Name);
         return stack;
@@ -298,10 +335,29 @@ internal sealed class FileTreeView : UserControl
             return item;
         }
 
-        return new ContextMenu
+        _pinItem = Item("Pin to Sidebar", () =>
+        {
+            if (SelectedNode is { IsDirectory: true } dir)
+            {
+                PinRequested?.Invoke(dir);
+            }
+        });
+        _unpinItem = Item("Unpin from Sidebar", () =>
+        {
+            if (SelectedNode is { IsDirectory: true } dir)
+            {
+                UnpinRequested?.Invoke(dir);
+            }
+        });
+        var pinSeparator = new Separator();
+
+        var menu = new ContextMenu
         {
             ItemsSource = new List<Control>
             {
+                _pinItem,
+                _unpinItem,
+                pinSeparator,
                 Item("New Note…", () => NewNoteRequested?.Invoke(SelectedNode)),
                 Item("New Spreadsheet…", () => NewSpreadsheetRequested?.Invoke(SelectedNode)),
                 Item("New Folder…", () => NewFolderRequested?.Invoke(SelectedNode)),
@@ -310,6 +366,30 @@ internal sealed class FileTreeView : UserControl
                 Item("Delete", RequestDelete),
             },
         };
+
+        // Pin/Unpin only make sense on a folder, and are mutually exclusive by its current pinned state.
+        menu.Opening += (_, _) =>
+        {
+            bool isFolder = SelectedNode is { IsDirectory: true };
+            bool pinned = isFolder && _pinned.Contains(SelectedNode!.Path);
+            _pinItem.IsVisible = isFolder && !pinned;
+            _unpinItem.IsVisible = isFolder && pinned;
+            pinSeparator.IsVisible = isFolder;
+        };
+        return menu;
+    }
+
+    private void OnListPointerPressed(object? sender, PointerPressedEventArgs e)
+    {
+        if (!e.GetCurrentPoint(_list).Properties.IsRightButtonPressed)
+        {
+            return;
+        }
+
+        if ((e.Source as Visual)?.FindAncestorOfType<ListBoxItem>() is { DataContext: Row row })
+        {
+            _list.SelectedItem = row;
+        }
     }
 
     private void MoveSelection(int delta)
