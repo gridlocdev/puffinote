@@ -45,7 +45,7 @@ public class MainWindow : Window
     private ShortcutKeymap _keymap = ShortcutKeymap.Load();
 
     private readonly SidebarView _sidebarView = new();
-    private ColumnDefinition _sidebarColumn = new(260, GridUnitType.Pixel) { MinWidth = 160 };
+    private readonly ColumnDefinition _sidebarColumn = new(260, GridUnitType.Pixel) { MinWidth = 160 };
     private Border _sidebar = null!;
     private GridSplitter _splitter = null!;
     private GridLength _lastSidebarWidth = new(260, GridUnitType.Pixel);
