@@ -12,6 +12,7 @@
     <ManagePackageVersionsCentrally>true</ManagePackageVersionsCentrally>
     <EnableNETAnalyzers>true</EnableNETAnalyzers>
     <AnalysisLevel>latest</AnalysisLevel>
+    <EnforceCodeStyleInBuild>true</EnforceCodeStyleInBuild>
     <Deterministic>true</Deterministic>
     <InvariantGlobalization>false</InvariantGlobalization>
   </PropertyGroup>
