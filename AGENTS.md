@@ -41,7 +41,7 @@ When this file and an area guide or a linked doc disagree, the deeper doc wins f
 - **xUnit v3** for tests; headless UI via `Avalonia.Headless.XUnit`.
 - **MIT** licensed.
 
-Versions are pinned centrally in `Directory.Packages.props` (central package management is on) — never hardcode a version elsewhere. `Directory.Build.props` sets `nullable` enable with `WarningsAsErrors=nullable` and `EnableNETAnalyzers`.
+Versions are pinned centrally in `Directory.Packages.props` (central package management is on) — never hardcode a version elsewhere. `Directory.Build.props` makes the SDK analyzers an enforced gate: `nullable` enable, `EnableNETAnalyzers`, `AnalysisLevel=latest`, `EnforceCodeStyleInBuild=true`, and **`TreatWarningsAsErrors=true`** — so any analyzer or style warning fails the build (see [Build & test](#build--test)).
 
 ## Build & test
 
@@ -51,9 +51,16 @@ dotnet test  <area>.slnx                                        # whole suite fo
 dotnet test  <area>.slnx --filter "FullyQualifiedName~SomeTest" # one test / a subset — prefer this while iterating
 ```
 
-**Definition of done:** the relevant solution builds with **zero new warnings** and its tests are green. A clean build means no warnings.
+**Definition of done:** the relevant solution builds clean and its tests are green. Warnings **are** errors here (`TreatWarningsAsErrors=true`), so a warning fails the build — "builds" already means "no warnings," this is not advisory.
 
 **Format before committing.** Run `dotnet format <area>.slnx` on the area you changed, then confirm `dotnet format <area>.slnx --verify-no-changes` exits zero — a non-zero exit means unformatted code, which is a failure to fix before you commit.
+
+**Working with the analyzer/style rules.** The `.editorconfig` at the repo root is the single source of truth for style and diagnostic severities; `dotnet format` auto-fixes the large majority of violations, so run it first before fixing anything by hand. When something still fails the build:
+
+- **Fix the code, don't silence the rule.** Don't add blanket `#pragma`/`NoWarn` or downgrade a severity just to go green. Some rules have no code-fixer and must be fixed by hand — e.g. `CA2000` (dispose), `CA1063` (IDisposable pattern). Only edit `.editorconfig` to change a rule when that's genuinely the right call, and say why in the commit.
+- **`IDE0060` (unused parameter) is a non-blocking *warning*, not an error** (`WarningsNotAsErrors`), because the param is often required by a delegate/interface/override signature or is a placeholder for unwired behavior. Surface it — but **don't blind-delete a parameter to clear it**; a `sheet`/`hasHeader`-style unused param may be an incomplete feature, not cruft. Remove only when it's genuinely dead.
+- **Don't re-enable XML-doc validation.** `GenerateDocumentationFile=true` exists only so `IDE0005` (unused usings) reports at build; the doc-prose warnings (`CS1591`, `CS15xx`) are `NoWarn`ed on purpose. Don't remove those from `NoWarn` or start writing `<param>` docs to satisfy them — this isn't a published-docs library.
+- Test projects (`**/*Tests/**`) relax `CA1063`/`CA1816` — xUnit fixtures don't need the full `IDisposable` ceremony.
 
 Build artifacts live under OS-specific `bin/<os>/` and `obj/<os>/` paths (so Linux devcontainer builds don't collide with native host builds) and are git-ignored — never commit them.
 
