@@ -10,7 +10,6 @@ using Cellestra.Desktop.Services;
 using Puffinote.Components.Commands;
 using Puffinote.Components.Controls;
 using Puffinote.Components.Overlays;
-using Puffinote.Components.Shell;
 using Puffinote.Components.Theming;
 using Puffinote.Desktop.Commands;
 using Puffinote.Desktop.Panes;
@@ -44,10 +43,10 @@ public class MainWindow : Window
     private GridSplitter _splitter = null!;
     private GridLength _lastSidebarWidth = new(260, GridUnitType.Pixel);
 
-    // The notebook-scoped recent-files list (PRD §7.2.3), maintained through the shared RecentFiles rule and
-    // shown in the sidebar's Recent panel plus seeded into quick-open. Persisted per notebook to
-    // .puffinote/session.json (PRD §7.1) via SessionStore — loaded on open, saved as it changes.
-    private List<string> _recent = [];
+    // The notebook-scoped recent-files list (PRD §7.2.3): promotion, rename-remap, and delete-drop all live in
+    // RecentFilesList; the shell mirrors changes into the sidebar's Recent panel + quick-open and persists them
+    // per notebook to .puffinote/session.json (PRD §7.1) via SessionStore — loaded on open, saved as it changes.
+    private readonly RecentFilesList _recent = new();
 
     // The notebook's background full-text search index (PRD §7.2.3), recreated per notebook. Null until a notebook
     // is open. Rebuilt off the UI thread on open and after tree mutations.
@@ -144,7 +143,7 @@ public class MainWindow : Window
     public void OpenNotebook(string path) => _notebook.OpenNotebook(path);
 
     /// <summary>The notebook's recent-files list, most-recent first (test seam).</summary>
-    internal IReadOnlyList<string> RecentForTest => _recent;
+    internal IReadOnlyList<string> RecentForTest => _recent.Paths;
 
     /// <summary>Whether a modal/overlay is currently shown (test seam).</summary>
     internal bool IsOverlayOpenForTest => _overlayHost.IsOpen;
@@ -391,7 +390,7 @@ public class MainWindow : Window
             return;
         }
 
-        var ordered = QuickOpen.OrderByRecency(_notebook.EnumerateFiles(), _recent);
+        var ordered = QuickOpen.OrderByRecency(_notebook.EnumerateFiles(), _recent.Paths);
         var entries = ordered.Select(path => new PaletteEntry(
             Title: System.IO.Path.GetFileName(path),
             Run: () => _ = OpenFileAsync(path),
@@ -663,8 +662,8 @@ public class MainWindow : Window
         // a switch loads the new notebook's list (empty when it has none); drop recent entries whose file is
         // now gone so a stale path never shows.
         var session = _notebook.RootPath is { } root ? SessionStore.Load(root) : new NotebookSession();
-        _recent = [.. session.Recent.Where(File.Exists)];
-        SidebarForTest.SetRecent(_notebook.RootPath, _recent);
+        _recent.Load(session.Recent);
+        SidebarForTest.SetRecent(_notebook.RootPath, _recent.Paths);
         SidebarForTest.SetPinnedFolders(session.Pinned);
         ApplySidebarState(session.SidebarCollapsed, session.SidebarWidth);
 
@@ -705,7 +704,7 @@ public class MainWindow : Window
         var width = (collapsed ? _lastSidebarWidth : _sidebarColumn.Width).Value;
         SessionStore.Save(root, new NotebookSession
         {
-            Recent = _recent,
+            Recent = _recent.Paths,
             Pinned = SidebarForTest.PinnedFolders,
             SidebarCollapsed = collapsed,
             SidebarWidth = width > 0 ? width : SessionStore.DefaultSidebarWidth,
@@ -756,8 +755,8 @@ public class MainWindow : Window
         var full = System.IO.Path.GetFullPath(path);
         if (_tabHost.ActivePane?.Path is { } opened && string.Equals(opened, full, StringComparison.OrdinalIgnoreCase))
         {
-            _recent = RecentFiles.Push(_recent, opened);
-            SidebarForTest.SetRecent(_notebook.RootPath, _recent);
+            _recent.Push(opened);
+            SidebarForTest.SetRecent(_notebook.RootPath, _recent.Paths);
             PersistSession();
         }
     }
@@ -927,21 +926,9 @@ public class MainWindow : Window
     /// <summary>Remap recent entries after a rename (a file, or a folder they live under).</summary>
     private void RemapRecent(string oldPath, string newPath)
     {
-        var old = System.IO.Path.GetFullPath(oldPath);
-        var updated = System.IO.Path.GetFullPath(newPath);
-        var changed = false;
-        for (var i = 0; i < _recent.Count; i++)
+        if (_recent.Remap(oldPath, newPath))
         {
-            if (PathScope.Remap(_recent[i], old, updated) is { } remapped)
-            {
-                _recent[i] = remapped;
-                changed = true;
-            }
-        }
-
-        if (changed)
-        {
-            SidebarForTest.SetRecent(_notebook.RootPath, _recent);
+            SidebarForTest.SetRecent(_notebook.RootPath, _recent.Paths);
             PersistSession();
         }
     }
@@ -949,12 +936,9 @@ public class MainWindow : Window
     /// <summary>Drop recent entries for a deleted file, or everything under a deleted folder.</summary>
     private void DropRecentUnder(string path)
     {
-        var target = System.IO.Path.GetFullPath(path);
-        var kept = _recent.Where(p => !PathScope.IsUnderOrEqual(p, target)).ToList();
-        if (kept.Count != _recent.Count)
+        if (_recent.DropUnder(path))
         {
-            _recent = kept;
-            SidebarForTest.SetRecent(_notebook.RootPath, _recent);
+            SidebarForTest.SetRecent(_notebook.RootPath, _recent.Paths);
             PersistSession();
         }
     }
