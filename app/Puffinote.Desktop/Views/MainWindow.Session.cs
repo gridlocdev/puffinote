@@ -1,12 +1,72 @@
+using Puffinote.Components.Overlays;
 using Puffinote.Desktop.Shell;
 
 namespace Puffinote.Desktop.Views;
 
 public partial class MainWindow
 {
+    /// <summary>The open notebook's root path, or null when none is open (test seam).</summary>
+    internal string? OpenNotebookPathForTest => _notebook.RootPath;
+
+    /// <summary>
+    /// On a plain launch (no notebook on the command line), reopen the notebook from the last session (PRD §5).
+    /// If that folder has since moved or been deleted, show a modal offering to open another instead. A launch
+    /// where nothing was ever opened simply starts on the empty shell.
+    /// </summary>
+    public void RestoreLastNotebook()
+    {
+        if (AppState.Load().LastNotebookPath is not { } path)
+        {
+            return;
+        }
+
+        if (Directory.Exists(path))
+        {
+            OpenNotebook(path);
+            return;
+        }
+
+        // The remembered notebook is gone. Defer the prompt until the window is shown — both the overlay
+        // (it reads the live theme) and the folder picker (it needs a TopLevel) require a shown window.
+        void PromptWhenShown(object? sender, EventArgs e)
+        {
+            Opened -= PromptWhenShown;
+            _ = ShowMissingNotebookPromptAsync();
+        }
+
+        Opened += PromptWhenShown;
+    }
+
+    /// <summary>Tell the user the remembered notebook has moved, and offer to open one via the folder picker.</summary>
+    private async Task ShowMissingNotebookPromptAsync()
+    {
+        if (_overlayHost.IsOpen)
+        {
+            return;
+        }
+
+        var open = await _overlayHost.ShowModalAsync(new ConfirmDialog(
+            "Notebook Moved",
+            "The previous notebook has moved or is no longer available. Click below to open a notebook.",
+            confirmLabel: "Open Notebook…",
+            denyLabel: "Cancel"));
+
+        if (open)
+        {
+            await OpenNotebookInteractiveAsync();
+        }
+    }
+
     private void OnNotebookOpened()
     {
         SidebarForTest.SetRoot(_notebook.Root);
+
+        // Remember this as the notebook to reopen on the next launch (PRD §5). Global, per-user state — kept
+        // apart from the per-notebook session below — so a plain launch (no CLI path) comes back here.
+        if (_notebook.RootPath is { } opened)
+        {
+            new AppState { LastNotebookPath = opened }.Save();
+        }
 
         // Resolve Puffinote's overrides for this notebook (per-user + the notebook's own .puffinote/settings.json)
         // before any file opens, so panes inherit the editor's config with these layered on top (PRD §7.5).

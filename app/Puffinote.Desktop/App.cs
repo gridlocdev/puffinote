@@ -61,11 +61,16 @@ public class App : Application
             var window = new MainWindow(notebook);
             desktop.MainWindow = window;
 
-            // Open a notebook (folder) passed on the command line.
+            // Open a notebook (folder) passed on the command line; otherwise reopen the last one from the
+            // previous session (PRD §5), prompting if that folder has since moved.
             var args = desktop.Args ?? [];
             if (args.Length > 0 && Directory.Exists(args[0]))
             {
                 window.OpenNotebook(args[0]);
+            }
+            else
+            {
+                window.RestoreLastNotebook();
             }
         }
 

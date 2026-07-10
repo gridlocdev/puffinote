@@ -1,6 +1,8 @@
+using System.Runtime.CompilerServices;
 using Avalonia;
 using Avalonia.Headless;
 using Puffinote.Desktop;
+using Puffinote.Desktop.Shell;
 using Puffinote.UiTests;
 using Xunit;
 
@@ -15,6 +17,12 @@ namespace Puffinote.UiTests;
 
 public static class TestAppBuilder
 {
+    // Any test that opens a notebook records it as the "last notebook" in per-user app state. Redirect that
+    // store to a throwaway temp file for the whole assembly so tests never read or clobber the real user's.
+    [ModuleInitializer]
+    internal static void RedirectAppState() =>
+        AppState.PathOverrideForTest = Path.Combine(Path.GetTempPath(), "puffinote-uitests", "app-state.json");
+
     // Pure headless drawing (no Skia/GPU). These tests drive the shell through its public API and never
     // capture a rendered frame, so null drawing is correct here — and it avoids the GPU/display the Skia
     // path needs (which a headless CI host lacks). Mirrors Typage.UiTests.
