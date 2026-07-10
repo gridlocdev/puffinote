@@ -225,6 +225,11 @@ public partial class MainWindow
     /// <summary>Present <paramref name="palette"/> in the shared overlay card and focus its search box.</summary>
     private void ShowPaletteOverlay(PaletteListView palette)
     {
+        // Remember where focus was (typically the editor's caret) so opening the palette doesn't strand it: on
+        // close we return focus there unless a chosen command deliberately moved it (e.g. Focus Sidebar) or
+        // opened a follow-on dialog. This is what makes ⌘K feel non-disruptive — you land back where you were.
+        var origin = FocusManager?.GetFocusedElement();
+
         var card = new Border
         {
             Width = 560,
@@ -236,6 +241,23 @@ public partial class MainWindow
             VerticalAlignment = VerticalAlignment.Top,
             Child = palette,
         };
+
+        void RestoreFocus(object? sender, EventArgs e)
+        {
+            _overlayHost.Closed -= RestoreFocus;
+            Dispatcher.UIThread.Post(() =>
+            {
+                // Only reclaim focus if it was stranded by the close — a command that opened another overlay,
+                // or one that intentionally moved focus somewhere real (the tree, a new editor), keeps it.
+                var current = FocusManager?.GetFocusedElement();
+                if (!_overlayHost.IsOpen && (current is null || ReferenceEquals(current, palette.SearchBox)))
+                {
+                    origin?.Focus();
+                }
+            });
+        }
+
+        _overlayHost.Closed += RestoreFocus;
         _overlayHost.ShowContent(card);
         Dispatcher.UIThread.Post(() => palette.SearchBox.Focus());
     }

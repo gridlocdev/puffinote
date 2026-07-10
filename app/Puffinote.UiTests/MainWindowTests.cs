@@ -128,6 +128,41 @@ public sealed class MainWindowTests
         }
     }
 
+    [AvaloniaFact]
+    public async Task Closing_the_command_palette_returns_focus_to_where_it_was_in_the_editor()
+    {
+        var dir = Directory.CreateTempSubdirectory("puffinote-palette-focus");
+        try
+        {
+            var ods = Path.Combine(dir.FullName, "book.ods");
+            File.WriteAllBytes(ods, WorkbookSession.NewBlank().SerializeToBytes());
+
+            var window = new MainWindow(new NotebookService());
+            window.Show();
+            window.OpenNotebook(dir.FullName);
+            await window.OpenFileAsync(ods);
+            Dispatcher.UIThread.RunJobs();
+
+            window.InvokeShellForTest("shell.focusEditor"); // caret is in the grid
+            Assert.True(FocusIsWithin(window, window.ActiveEditorViewForTest));
+
+            window.InvokeShellForTest("shell.commandPalette");
+            Dispatcher.UIThread.RunJobs(); // the palette's search box takes focus
+            Assert.True(window.IsOverlayOpenForTest);
+            Assert.False(FocusIsWithin(window, window.ActiveEditorViewForTest)); // focus moved to the palette
+
+            window.KeyPressQwerty(PhysicalKey.Escape, RawInputModifiers.None); // dismiss the palette
+            Dispatcher.UIThread.RunJobs();
+
+            Assert.False(window.IsOverlayOpenForTest);
+            Assert.True(FocusIsWithin(window, window.ActiveEditorViewForTest)); // focus is back in the editor
+        }
+        finally
+        {
+            dir.Delete(recursive: true);
+        }
+    }
+
     /// <summary>True when keyboard focus currently rests on <paramref name="host"/> or a descendant of it.</summary>
     private static bool FocusIsWithin(MainWindow window, Control? host)
     {
