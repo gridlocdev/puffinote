@@ -44,6 +44,9 @@ internal sealed class MarkdownPane : IEditorPane
 
     public Control View => _view;
 
+    /// <summary>Put the caret back in the note's text area (delegates to Typage's editor).</summary>
+    public void Focus() => _view.Editor.Focus();
+
     public string Title =>
         _session.CurrentPath is { } p ? System.IO.Path.GetFileName(p) : "Untitled";
 

@@ -24,6 +24,9 @@ internal sealed class SheetPane : IEditorPane, IEditorHost
 
     public Control View => _view;
 
+    /// <summary>Put keyboard focus back on the sheet grid (delegates to Cellestra's editor).</summary>
+    public void Focus() => _view.FocusGrid();
+
     public string Title => Path is { } p ? System.IO.Path.GetFileName(p) : "Untitled";
 
     public string? Path { get; private set; }

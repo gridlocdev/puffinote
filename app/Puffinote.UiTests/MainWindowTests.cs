@@ -1,4 +1,10 @@
+using Avalonia;
+using Avalonia.Controls;
+using Avalonia.Headless;
 using Avalonia.Headless.XUnit;
+using Avalonia.Input;
+using Avalonia.Threading;
+using Avalonia.VisualTree;
 using Cellestra.Desktop.Services;
 using Puffinote.Desktop.Shell;
 using Puffinote.Desktop.Views;
@@ -86,5 +92,48 @@ public sealed class MainWindowTests
         {
             dir.Delete(recursive: true);
         }
+    }
+
+    [AvaloniaFact]
+    public async Task Focus_editor_and_focus_sidebar_commands_move_keyboard_focus_between_the_two()
+    {
+        var dir = Directory.CreateTempSubdirectory("puffinote-focus");
+        try
+        {
+            var ods = Path.Combine(dir.FullName, "book.ods");
+            File.WriteAllBytes(ods, WorkbookSession.NewBlank().SerializeToBytes());
+
+            var window = new MainWindow(new NotebookService());
+            window.Show();
+            window.OpenNotebook(dir.FullName);
+            await window.OpenFileAsync(ods);
+            Dispatcher.UIThread.RunJobs(); // let the tab content lay out before focus can land on it
+
+            // Focus Editor puts keyboard focus inside the active document.
+            window.InvokeShellForTest("shell.focusEditor");
+            Assert.True(FocusIsWithin(window, window.ActiveEditorViewForTest));
+
+            // Focus Sidebar switches to the Files panel and pulls focus off the editor and into the tree.
+            window.InvokeShellForTest("shell.focusTree");
+            Assert.Equal("files", window.ActiveSidebarPanelForTest);
+            Assert.False(FocusIsWithin(window, window.ActiveEditorViewForTest));
+
+            // The default gesture ⌘⌥E (Ctrl+Alt+E off-mac) is wired to Focus Editor and works from the tree.
+            window.KeyPressQwerty(PhysicalKey.E, RawInputModifiers.Control | RawInputModifiers.Alt);
+            Assert.True(FocusIsWithin(window, window.ActiveEditorViewForTest));
+        }
+        finally
+        {
+            dir.Delete(recursive: true);
+        }
+    }
+
+    /// <summary>True when keyboard focus currently rests on <paramref name="host"/> or a descendant of it.</summary>
+    private static bool FocusIsWithin(MainWindow window, Control? host)
+    {
+        Dispatcher.UIThread.RunJobs(); // let the posted focus change settle
+        return host is { }
+            && window.FocusManager?.GetFocusedElement() is Visual focused
+            && focused.GetSelfAndVisualAncestors().Contains(host);
     }
 }

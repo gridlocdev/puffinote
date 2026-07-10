@@ -18,6 +18,7 @@ public sealed class TabHostTests
         public FakePane(string path) => Path = path;
 
         public Control View { get; } = new Border();
+        public void Focus() => View.Focus();
         public string Title => System.IO.Path.GetFileName(Path ?? string.Empty);
         public string? Path { get; private set; }
         public Exception? SaveThrows { get; set; }

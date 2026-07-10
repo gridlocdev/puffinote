@@ -33,6 +33,9 @@ internal sealed class ErrorPane : IEditorPane
 
     public Control View { get; }
 
+    /// <summary>Focus the message surface — there's no editor here, but honor the seam.</summary>
+    public void Focus() => View.Focus();
+
     public string Title { get; }
 
     /// <summary>Null — this isn't a real document, so it's never recorded as recent, saved, or rebound.</summary>

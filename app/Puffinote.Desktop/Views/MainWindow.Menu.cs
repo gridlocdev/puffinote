@@ -69,8 +69,11 @@ public partial class MainWindow
                 ToggleSidebar),
             new("shell.toggleEditorToolbar", "Toggle Editor Toolbar", "Show or hide the formatting toolbar over a note",
                 Bound("shell.toggleEditorToolbar", null), ToggleEditorToolbar, () => _tabHost.ActivePane is MarkdownPane, icon: "type"),
-            new("shell.focusTree", "Focus File Tree", "Move keyboard focus to the file tree", Bound("shell.focusTree", null),
-                () => SidebarForTest.FocusTree()),
+            new("shell.focusTree", "Focus Sidebar", "Move keyboard focus to the sidebar's file tree",
+                Bound("shell.focusTree", Shortcut.Cmd(Key.S, KeyModifiers.Alt)), () => SidebarForTest.FocusTree(), icon: "panel-left"),
+            new("shell.focusEditor", "Focus Editor", "Move keyboard focus back into the active document",
+                Bound("shell.focusEditor", Shortcut.Cmd(Key.E, KeyModifiers.Alt)), () => _tabHost.ActivePane?.Focus(),
+                () => _tabHost.ActivePane is not null, icon: "pen-line"),
             new("shell.shortcuts", "Keyboard Shortcuts…", "View and customize keyboard shortcuts", Bound("shell.shortcuts", null),
                 ShowShortcutsEditor),
             new("shell.about", "About Puffinote", "About this app", null, ShowAbout),
@@ -127,7 +130,7 @@ public partial class MainWindow
                 Items =
                 {
                     new NativeMenuItem { Header = "File", Menu = BuildNativeMenu("shell.openNotebook", "shell.quickOpen", "shell.newNote", "shell.newSpreadsheet", "shell.newFolder", "shell.save", "shell.closeTab") },
-                    new NativeMenuItem { Header = "View", Menu = BuildNativeMenu("shell.commandPalette", "shell.toggleSidebar", "shell.toggleEditorToolbar", "shell.nextTab", "shell.prevTab") },
+                    new NativeMenuItem { Header = "View", Menu = BuildNativeMenu("shell.commandPalette", "shell.toggleSidebar", "shell.focusTree", "shell.focusEditor", "shell.toggleEditorToolbar", "shell.nextTab", "shell.prevTab") },
                     new NativeMenuItem { Header = "Help", Menu = BuildNativeMenu("shell.shortcuts", "shell.about") },
                 },
             });
@@ -144,7 +147,7 @@ public partial class MainWindow
             Items =
             {
                 new MenuItem { Header = "_File", ItemsSource = BuildMenuItems("shell.openNotebook", "shell.quickOpen", "shell.newNote", "shell.newSpreadsheet", "shell.newFolder", "shell.save", "shell.closeTab") },
-                new MenuItem { Header = "_View", ItemsSource = BuildMenuItems("shell.commandPalette", "shell.toggleSidebar", "shell.toggleEditorToolbar", "shell.nextTab", "shell.prevTab") },
+                new MenuItem { Header = "_View", ItemsSource = BuildMenuItems("shell.commandPalette", "shell.toggleSidebar", "shell.focusTree", "shell.focusEditor", "shell.toggleEditorToolbar", "shell.nextTab", "shell.prevTab") },
                 new MenuItem { Header = "_Help", ItemsSource = BuildMenuItems("shell.shortcuts", "shell.about") },
             },
         };

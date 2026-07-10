@@ -19,6 +19,13 @@ internal interface IEditorPane : IDisposable
     /// <summary>The editor control to mount in the editor area.</summary>
     Control View { get; }
 
+    /// <summary>
+    /// Move keyboard focus into the editor itself (the note's text area / the sheet's grid), not merely the
+    /// hosting control — so the shell's "focus editor" command and focus-restoration land the caret where the
+    /// user can type. Delegates to the embedded editor's own focus seam.
+    /// </summary>
+    void Focus();
+
     /// <summary>The tab/title label (typically the file name).</summary>
     string Title { get; }
 
