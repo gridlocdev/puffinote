@@ -20,6 +20,7 @@ namespace Typage.Control.Controls;
 internal sealed class MarkdownCommandBar : UserControl
 {
     private readonly Dictionary<string, AppCommand> _byId;
+    private readonly List<CommandTool> _tools = [];
 
     public MarkdownCommandBar(IReadOnlyList<AppCommand> commands)
     {
@@ -50,6 +51,15 @@ internal sealed class MarkdownCommandBar : UserControl
     /// <summary>Every command id the bar surfaces (inline or in a dropdown), across all groups (test seam).</summary>
     internal IReadOnlySet<string> SurfacedIdsForTest { get; }
 
+    /// <summary>Re-evaluate each inline tool's lit (toggle-active) state — the host calls this as the caret moves.</summary>
+    public void RefreshState()
+    {
+        foreach (var tool in _tools)
+        {
+            tool.UpdateState();
+        }
+    }
+
     private AppCommand[] Resolve(IEnumerable<string> ids) => [.. ids.Where(_byId.ContainsKey).Select(id => _byId[id])];
 
     private AdaptiveCommandBar.Section Section(string name, int rank, Avalonia.Controls.Control inline, string[] foldedIds) =>
@@ -61,7 +71,9 @@ internal sealed class MarkdownCommandBar : UserControl
         var row = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center };
         foreach (var command in Resolve(primaryIds))
         {
-            row.Children.Add(new CommandTool(command));
+            var tool = new CommandTool(command);
+            _tools.Add(tool); // tracked so RefreshState can light it when its format is active at the caret
+            row.Children.Add(tool);
         }
 
         var drawer = Resolve(drawerIds);

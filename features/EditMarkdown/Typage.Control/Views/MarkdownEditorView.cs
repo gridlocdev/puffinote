@@ -34,8 +34,16 @@ public class MarkdownEditorView : UserControl
         DockPanel.SetDock(_commandBar, Dock.Top);
         Content = new DockPanel { Children = { _commandBar, scroll } };
 
-        Editor.TextChanged += (_, e) => TextChanged?.Invoke(this, e);
-        Editor.SelectionChanged += (_, e) => SelectionChanged?.Invoke(this, e);
+        Editor.TextChanged += (_, e) =>
+        {
+            _commandBar.RefreshState(); // an edit can change the format under the caret (e.g. typing past a **)
+            TextChanged?.Invoke(this, e);
+        };
+        Editor.SelectionChanged += (_, e) =>
+        {
+            _commandBar.RefreshState(); // light the tools for the format at the new caret position
+            SelectionChanged?.Invoke(this, e);
+        };
     }
 
     /// <summary>
