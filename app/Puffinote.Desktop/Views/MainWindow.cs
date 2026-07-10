@@ -67,23 +67,6 @@ public class MainWindow : Window
     private Dictionary<string, RelayCommand> _relays = [];
     private bool _closingConfirmed;
 
-    // The moderate reserved global set (PRD §7.6): these shell keys win over the focused editor via a
-    // tunnelling handler, so e.g. ⌘K always opens Puffinote's palette, not the sheet's. focusTree has no
-    // gesture, so it isn't routed. Everything else is focus-dispatched (ordinary bubbling key bindings).
-    private static readonly HashSet<string> ReservedIds =
-    [
-        "shell.commandPalette", "shell.quickOpen", "shell.openNotebook", "shell.toggleSidebar",
-        "shell.closeTab", "shell.nextTab", "shell.prevTab",
-    ];
-
-    // Reserved keys whose capability the shell already provides, so shadowing an editor's binding on them
-    // loses nothing and isn't a real conflict: the merged palette (⌘K) is a superset of the editor's own
-    // palette, and quick-open (⌘O) is the shell's file-open. These are excluded from the conflict warning so
-    // it only fires when an editor binding is genuinely lost.
-    private static readonly HashSet<string> ShellSupersedesEditor =
-    [
-        "shell.commandPalette", "shell.quickOpen",
-    ];
     private List<(KeyGesture Gesture, RelayCommand Command)> _reservedBindings = [];
     private bool _conflictWarned;
     private IEditorPane? _lastScannedPane;
@@ -215,7 +198,7 @@ public class MainWindow : Window
     {
         // A command's effective gesture: the user's custom binding (shortcuts editor) if it has one, else the
         // default below. Reserved global keys are fixed — they're never routed through the keymap (PRD §7.6).
-        Shortcut? Bound(string id, Shortcut? def) => ReservedIds.Contains(id) ? def : _keymap.Resolve(id, def);
+        Shortcut? Bound(string id, Shortcut? def) => ShellCommandCatalog.ResolveGesture(_keymap, id, def);
 
         _shellCommands =
         [
@@ -296,14 +279,14 @@ public class MainWindow : Window
         KeyBindings.Clear();
         foreach (var command in _shellCommands)
         {
-            if (command.Gesture is { } gesture && !ReservedIds.Contains(command.Id))
+            if (command.Gesture is { } gesture && !ShellCommandCatalog.IsReserved(command.Id))
             {
                 KeyBindings.Add(new KeyBinding { Gesture = gesture, Command = _relays[command.Id] });
             }
         }
 
         _reservedBindings = [.. _shellCommands
-            .Where(c => ReservedIds.Contains(c.Id) && c.Gesture is not null)
+            .Where(c => ShellCommandCatalog.IsReserved(c.Id) && c.Gesture is not null)
             .Select(c => (c.Gesture!, _relays[c.Id]))];
     }
 
@@ -473,7 +456,8 @@ public class MainWindow : Window
 
         _lastScannedPane = pane;
         // Warn only about reserved keys the shell doesn't already supersede (skip ⌘K palette / ⌘O quick-open).
-        var reserved = _shellCommands.Where(c => ReservedIds.Contains(c.Id) && !ShellSupersedesEditor.Contains(c.Id));
+        var reserved = _shellCommands.Where(c =>
+            ShellCommandCatalog.IsReserved(c.Id) && !ShellCommandCatalog.ShellSupersedesEditor.Contains(c.Id));
         var conflicts = ShortcutConflictScanner.Find(reserved, pane.Commands);
         if (conflicts.Count == 0)
         {
@@ -595,8 +579,8 @@ public class MainWindow : Window
     {
         var rows = _shellCommands.Select(c => new ShortcutBinding(
             c.Id, c.Title, "Puffinote", c.Shortcut,
-            IsReserved: ReservedIds.Contains(c.Id),
-            IsRebindable: !ReservedIds.Contains(c.Id),
+            IsReserved: ShellCommandCatalog.IsReserved(c.Id),
+            IsRebindable: !ShellCommandCatalog.IsReserved(c.Id),
             IsCustomized: _keymap.For(c.Id) is not null)).ToList();
 
         if (_tabHost.ActivePane is { } pane)
@@ -611,7 +595,7 @@ public class MainWindow : Window
     /// <summary>Apply a rebinding from the shortcuts editor: persist it and re-derive menu/keys/palette live.</summary>
     private void OnShortcutRebound(string id, Shortcut? shortcut)
     {
-        if (ReservedIds.Contains(id))
+        if (ShellCommandCatalog.IsReserved(id))
         {
             return; // reserved global keys are fixed (PRD §7.6) — never rebound from within Puffinote
         }
