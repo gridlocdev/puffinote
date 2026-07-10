@@ -227,7 +227,7 @@ public partial class MainWindow : Window, IEditorHost
                     // grid's OnKeyDown (selection mode), the editors (edit mode), and the gated KeyBinding as
                     // the cross-platform fallback. Other shortcuts (⌘S, ⌘B…) keep their equivalent for the
                     // menu hint and still back off from a focused text input.
-                    Gesture = SpreadsheetEditorView.YieldsToTextInput(command.Gesture) ? null : command.Gesture,
+                    Gesture = KeyGestureRules.YieldsToTextInput(command.Gesture) ? null : command.Gesture,
                     Command = menuCommand,
                 });
             }

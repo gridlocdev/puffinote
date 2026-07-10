@@ -42,8 +42,8 @@ public class MainWindowChromeTests
     public void Plain_Delete_yields_to_a_focused_text_input()
     {
         var delete = new KeyGesture(Key.Delete);
-        Assert.True(SpreadsheetEditorView.ShouldYieldToTextInput(delete, textInputFocused: true));
-        Assert.False(SpreadsheetEditorView.ShouldYieldToTextInput(delete, textInputFocused: false));
+        Assert.True(KeyGestureRules.ShouldYieldToTextInput(delete, textInputFocused: true));
+        Assert.False(KeyGestureRules.ShouldYieldToTextInput(delete, textInputFocused: false));
     }
 
     [Theory]
@@ -58,8 +58,8 @@ public class MainWindowChromeTests
     public void Text_editing_chords_yield_to_a_focused_text_input(Key key, KeyModifiers mods)
     {
         var gesture = new KeyGesture(key, mods);
-        Assert.True(SpreadsheetEditorView.ShouldYieldToTextInput(gesture, textInputFocused: true));
-        Assert.False(SpreadsheetEditorView.ShouldYieldToTextInput(gesture, textInputFocused: false));
+        Assert.True(KeyGestureRules.ShouldYieldToTextInput(gesture, textInputFocused: true));
+        Assert.False(KeyGestureRules.ShouldYieldToTextInput(gesture, textInputFocused: false));
     }
 
     [Theory]
@@ -73,13 +73,13 @@ public class MainWindowChromeTests
     [InlineData(Key.V, KeyModifiers.Meta | KeyModifiers.Alt)]
     public void Non_text_modifier_shortcuts_still_fire_while_a_text_input_is_focused(Key key, KeyModifiers mods)
     {
-        Assert.False(SpreadsheetEditorView.ShouldYieldToTextInput(new KeyGesture(key, mods), textInputFocused: true));
+        Assert.False(KeyGestureRules.ShouldYieldToTextInput(new KeyGesture(key, mods), textInputFocused: true));
     }
 
     [Fact]
     public void Commands_without_a_shortcut_are_never_blocked()
     {
-        Assert.False(SpreadsheetEditorView.ShouldYieldToTextInput(gesture: null, textInputFocused: true));
+        Assert.False(KeyGestureRules.ShouldYieldToTextInput(gesture: null, textInputFocused: true));
     }
 
     // ---- launch focus: the grid is keyboard-ready without a priming click ----
