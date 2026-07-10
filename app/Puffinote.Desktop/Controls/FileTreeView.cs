@@ -21,6 +21,8 @@ namespace Puffinote.Desktop.Controls;
 ///   <item>Up/Down move the selection, Home/End jump to first/last (the ListBox).</item>
 ///   <item>Left collapses an open folder or ascends to the parent; Right expands a folder or descends into it.</item>
 ///   <item>Enter opens a file into a tab, or toggles a folder.</item>
+///   <item>F2 renames the selection; Delete/Backspace deletes it.</item>
+///   <item>⌘N makes a new note, ⌘⇧N a new folder (in / beside the selection).</item>
 ///   <item>Type-to-search jumps to the next node whose name matches the typed prefix.</item>
 /// </list>
 /// The <see cref="NotebookNode"/> model is unchanged; mutation actions (new/rename/delete) drive this through
@@ -272,6 +274,24 @@ internal sealed class FileTreeView : UserControl
 
     private void OnKeyDown(object? sender, KeyEventArgs e)
     {
+        // Tree-scoped creation chords: ⌘N new note, ⌘⇧N new folder. These live on the tree (not the global
+        // shell catalog) so they only fire while the tree holds focus — no collision with an editor's ⌘N, and
+        // the shell picks the target folder from the current selection. Handled before the bare-key map below.
+        var command = OperatingSystem.IsMacOS() ? KeyModifiers.Meta : KeyModifiers.Control;
+        if (e.Key == Key.N && e.KeyModifiers == command)
+        {
+            NewNoteRequested?.Invoke(SelectedNode);
+            e.Handled = true;
+            return;
+        }
+
+        if (e.Key == Key.N && e.KeyModifiers == (command | KeyModifiers.Shift))
+        {
+            NewFolderRequested?.Invoke(SelectedNode);
+            e.Handled = true;
+            return;
+        }
+
         // The tree owns its whole key map (rather than leaning on the ListBox's container-focus-based
         // navigation) so selection moves deterministically whether or not an item container has focus.
         switch (e.Key)

@@ -118,6 +118,35 @@ public sealed class FileTreeViewTests : IDisposable
     }
 
     [AvaloniaFact]
+    public void Cmd_N_and_Cmd_Shift_N_request_a_new_note_and_a_new_folder_at_the_selection()
+    {
+        var (tree, window) = Open();
+        NotebookNode? noteContext = null;
+        NotebookNode? folderContext = null;
+        var noteFired = 0;
+        tree.NewNoteRequested += node =>
+        {
+            noteContext = node;
+            noteFired++;
+        };
+        tree.NewFolderRequested += node => folderContext = node;
+
+        window.KeyPressQwerty(PhysicalKey.ArrowDown, RawInputModifiers.None); // sub → apple.md
+        Assert.Equal("apple.md", tree.SelectedNameForTest);
+
+        // ⌘N (Ctrl+N off-mac) → new note, passing the current selection as the placement context.
+        window.KeyPressQwerty(PhysicalKey.N, RawInputModifiers.Control);
+        Assert.Equal(1, noteFired);
+        Assert.Equal("apple.md", noteContext?.Name);
+
+        // ⌘⇧N → new folder.
+        window.KeyPressQwerty(PhysicalKey.N, RawInputModifiers.Control | RawInputModifiers.Shift);
+        Assert.Equal("apple.md", folderContext?.Name);
+
+        Assert.Equal(1, noteFired); // the folder chord didn't also fire the note request
+    }
+
+    [AvaloniaFact]
     public void The_notebook_root_is_not_shown_as_a_row_so_it_can_never_be_targeted()
     {
         var (tree, _) = Open();
