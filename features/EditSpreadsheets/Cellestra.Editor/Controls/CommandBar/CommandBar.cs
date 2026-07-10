@@ -42,7 +42,7 @@ public sealed class CommandBar : UserControl
         }
 
         string shortcut = _env.Commands.ById("view.commandPalette")?.MacShortcut() ?? string.Empty;
-        var search = new AdaptiveCommandBar.SearchPill("Find a tool…", shortcut, _env.ShowCommandPalette, "Search and run any command");
+        var search = new AdaptiveCommandBar.SearchPill("Find a tool…", shortcut, "Search and run any command", OnClick: _env.ShowCommandPalette);
 
         _bar = new AdaptiveCommandBar(sections, search);
         _bar.CollapsedChanged += (_, _) => CollapsedChanged?.Invoke(this, EventArgs.Empty);

@@ -24,8 +24,12 @@ public sealed class AdaptiveCommandBar : UserControl
     /// </summary>
     public sealed record Section(string Name, Control Inline, Control Folded, int OverflowRank);
 
-    /// <summary>The optional right-hand "search a tool" pill: its placeholder, the palette shortcut it shows, the action it runs, and its tooltip.</summary>
-    public sealed record SearchPill(string Placeholder, string Shortcut, Action Invoke, string Tooltip);
+    /// <summary>
+    /// The optional right-hand "search a tool" pill: its placeholder, the palette shortcut it shows, and its
+    /// tooltip. Give it either an <paramref name="OnClick"/> (opens the host's own palette) or a
+    /// <paramref name="Flyout"/> (a self-contained palette that drops from the pill) — the flyout wins.
+    /// </summary>
+    public sealed record SearchPill(string Placeholder, string Shortcut, string Tooltip, Action? OnClick = null, Flyout? Flyout = null);
 
     /// <summary>The expanded bar's row height — sections are measured against it to size the reflow.</summary>
     private const double BarHeight = 34;
@@ -296,7 +300,15 @@ public sealed class AdaptiveCommandBar : UserControl
         };
         CommandBarChrome.AddHover(pill, pill.Background);
         ToolTip.SetTip(pill, spec.Tooltip);
-        pill.Click += (_, _) => spec.Invoke();
+        if (spec.Flyout is { } flyout)
+        {
+            pill.Flyout = flyout; // a self-contained palette drops from the pill
+        }
+        else if (spec.OnClick is { } onClick)
+        {
+            pill.Click += (_, _) => onClick();
+        }
+
         return pill;
     }
 
