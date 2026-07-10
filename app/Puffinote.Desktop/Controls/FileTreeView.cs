@@ -20,10 +20,17 @@ namespace Puffinote.Desktop.Controls;
 /// <list type="bullet">
 ///   <item>Up/Down move the selection, Home/End jump to first/last (the ListBox).</item>
 ///   <item>Left collapses an open folder or ascends to the parent; Right expands a folder or descends into it.</item>
-///   <item>Enter opens a file into a tab, or toggles a folder.</item>
-///   <item>F2 renames the selection; Delete/Backspace deletes it.</item>
-///   <item>⌘N makes a new note, ⌘⇧N a new folder (in / beside the selection).</item>
+///   <item>F2 renames the selection; ⌘N makes a new note, ⌘⇧N a new folder (in / beside the selection).</item>
 ///   <item>Type-to-search jumps to the next node whose name matches the typed prefix.</item>
+/// </list>
+/// The bare-key <em>activation</em> and <em>delete</em> keys follow the host platform's editors (see
+/// <see cref="UseMacKeymap"/>) so muscle memory carries over:
+/// <list type="bullet">
+///   <item><b>macOS</b> (Finder / Xcode / VS Code): <c>Return</c> renames, <c>Space</c> or <c>⌘↓</c> opens a
+///   file / toggles a folder, <c>⌘↑</c> jumps to the enclosing folder, and <c>⌘⌫</c> deletes — a bare
+///   <c>Delete</c> is deliberately inert so nothing is thrown away by a stray keypress.</item>
+///   <item><b>Elsewhere</b>: <c>Enter</c> opens a file / toggles a folder and <c>Delete</c>/<c>Backspace</c>
+///   deletes, as on Windows/Linux explorers.</item>
 /// </list>
 /// The <see cref="NotebookNode"/> model is unchanged; mutation actions (new/rename/delete) drive this through
 /// <see cref="Refresh"/> / <see cref="SelectPath"/>.
@@ -42,6 +49,13 @@ internal sealed class FileTreeView : UserControl
     private MenuItem _unpinItem = null!;
     private string _typeahead = string.Empty;
     private DateTime _lastKeystroke = DateTime.MinValue;
+
+    /// <summary>
+    /// Whether the bare-key map follows macOS editor conventions (Return renames, Space/⌘↓ opens, ⌘↑ ascends,
+    /// ⌘⌫ deletes) rather than the Windows/Linux one (Enter opens, Delete deletes). Defaults to the running OS;
+    /// a test seam so either map can be exercised on the headless Linux CI.
+    /// </summary>
+    internal bool UseMacKeymap { get; set; } = OperatingSystem.IsMacOS();
 
     public FileTreeView()
     {
@@ -274,10 +288,13 @@ internal sealed class FileTreeView : UserControl
 
     private void OnKeyDown(object? sender, KeyEventArgs e)
     {
+        // The "Command" chord modifier is ⌘ on macOS, Ctrl elsewhere — matching the platform's editors and the
+        // shell's own catalog.
+        var command = UseMacKeymap ? KeyModifiers.Meta : KeyModifiers.Control;
+
         // Tree-scoped creation chords: ⌘N new note, ⌘⇧N new folder. These live on the tree (not the global
         // shell catalog) so they only fire while the tree holds focus — no collision with an editor's ⌘N, and
         // the shell picks the target folder from the current selection. Handled before the bare-key map below.
-        var command = OperatingSystem.IsMacOS() ? KeyModifiers.Meta : KeyModifiers.Control;
         if (e.Key == Key.N && e.KeyModifiers == command)
         {
             NewNoteRequested?.Invoke(SelectedNode);
@@ -292,12 +309,47 @@ internal sealed class FileTreeView : UserControl
             return;
         }
 
+        // Finder-style command chords macOS users reach for on a file list: ⌘↓ opens, ⌘↑ jumps to the enclosing
+        // folder, ⌘⌫ moves to trash. Off macOS these modifiers are left alone for the framework.
+        if (UseMacKeymap && e.KeyModifiers == command)
+        {
+            switch (e.Key)
+            {
+                case Key.Down:
+                    ActivateSelected();
+                    break;
+                case Key.Up:
+                    AscendToParent();
+                    break;
+                case Key.Back or Key.Delete:
+                    RequestDelete();
+                    break;
+                default:
+                    return; // other ⌘-chords aren't ours
+            }
+
+            e.Handled = true;
+            return;
+        }
+
         // The tree owns its whole key map (rather than leaning on the ListBox's container-focus-based
-        // navigation) so selection moves deterministically whether or not an item container has focus.
+        // navigation) so selection moves deterministically whether or not an item container has focus. The
+        // activation / delete keys split by platform (see UseMacKeymap); navigation is shared.
         switch (e.Key)
         {
             case Key.Enter:
-                ActivateSelected();
+                if (UseMacKeymap)
+                {
+                    RequestRename(); // Finder / Xcode / VS Code: Return renames the selection
+                }
+                else
+                {
+                    ActivateSelected();
+                }
+
+                break;
+            case Key.Space when UseMacKeymap:
+                ActivateSelected(); // opens the file / toggles the folder in the macOS map
                 break;
             case Key.Right:
                 MoveRight();
@@ -320,11 +372,12 @@ internal sealed class FileTreeView : UserControl
             case Key.F2:
                 RequestRename();
                 break;
-            case Key.Delete or Key.Back:
+            // Off macOS a bare Delete/Backspace deletes; on macOS deletion is ⌘⌫ only, so a stray Delete is inert.
+            case Key.Delete or Key.Back when !UseMacKeymap:
                 RequestDelete();
                 break;
             default:
-                return; // leave other keys (Tab, etc.) to the framework
+                return; // leave other keys (Tab, macOS bare Delete, etc.) to the framework
         }
 
         e.Handled = true;
@@ -462,7 +515,13 @@ internal sealed class FileTreeView : UserControl
             return;
         }
 
-        // A file, or a collapsed folder → ascend to the parent row (the nearest shallower row above).
+        // A file, or a collapsed folder → ascend to the parent row.
+        AscendToParent();
+    }
+
+    /// <summary>Select the enclosing folder — the nearest shallower row above the selection (Left / ⌘↑).</summary>
+    private void AscendToParent()
+    {
         if (_list.ItemsSource is not IReadOnlyList<Row> rows || _list.SelectedIndex < 0)
         {
             return;

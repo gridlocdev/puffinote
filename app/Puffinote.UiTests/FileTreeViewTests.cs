@@ -90,6 +90,54 @@ public sealed class FileTreeViewTests : IDisposable
     }
 
     [AvaloniaFact]
+    public void On_macOS_Return_renames_and_Space_opens_the_selection()
+    {
+        var (tree, window) = Open();
+        tree.UseMacKeymap = true; // exercise the macOS map on the Linux CI
+        string? renamed = null;
+        string? activated = null;
+        tree.RenameRequested += node => renamed = node.Name;
+        tree.FileActivated += node => activated = node.Name;
+
+        window.KeyPressQwerty(PhysicalKey.ArrowDown, RawInputModifiers.None); // sub → apple.md
+        Assert.Equal("apple.md", tree.SelectedNameForTest);
+
+        window.KeyPressQwerty(PhysicalKey.Enter, RawInputModifiers.None); // Finder: Return renames, doesn't open
+        Assert.Equal("apple.md", renamed);
+        Assert.Null(activated);
+
+        window.KeyPressQwerty(PhysicalKey.Space, RawInputModifiers.None); // Space opens the file
+        Assert.Equal("apple.md", activated);
+    }
+
+    [AvaloniaFact]
+    public void On_macOS_Cmd_chords_open_ascend_to_the_enclosing_folder_and_delete()
+    {
+        var (tree, window) = Open();
+        tree.UseMacKeymap = true;
+        string? activated = null;
+        string? deleted = null;
+        tree.FileActivated += node => activated = node.Name;
+        tree.DeleteRequested += node => deleted = node.Name;
+
+        window.KeyPressQwerty(PhysicalKey.ArrowRight, RawInputModifiers.None); // expand sub
+        window.KeyPressQwerty(PhysicalKey.ArrowRight, RawInputModifiers.None); // descend to child.md
+        Assert.Equal("child.md", tree.SelectedNameForTest);
+
+        window.KeyPressQwerty(PhysicalKey.ArrowDown, RawInputModifiers.Meta); // ⌘↓ opens the file
+        Assert.Equal("child.md", activated);
+
+        window.KeyPressQwerty(PhysicalKey.ArrowUp, RawInputModifiers.Meta); // ⌘↑ jumps to the enclosing folder
+        Assert.Equal("sub", tree.SelectedNameForTest);
+
+        window.KeyPressQwerty(PhysicalKey.Delete, RawInputModifiers.None); // a bare Delete is inert on macOS
+        Assert.Null(deleted);
+
+        window.KeyPressQwerty(PhysicalKey.Delete, RawInputModifiers.Meta); // ⌘⌫ moves to trash
+        Assert.Equal("sub", deleted);
+    }
+
+    [AvaloniaFact]
     public void Type_to_search_jumps_to_a_matching_name()
     {
         var (tree, window) = Open();

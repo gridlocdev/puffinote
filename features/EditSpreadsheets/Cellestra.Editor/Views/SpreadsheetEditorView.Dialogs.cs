@@ -5,8 +5,8 @@ using Cellestra.Desktop.Commands;
 using Cellestra.Desktop.Controls.SpreadsheetGrid;
 using Cellestra.Desktop.Views.Dialogs;
 using Puffinote.Components.Commands;
-using Puffinote.Components.Overlays;
 using Puffinote.Components.Controls.Icons;
+using Puffinote.Components.Overlays;
 
 namespace Cellestra.Editor;
 
