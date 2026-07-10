@@ -6,6 +6,7 @@ using Avalonia.Media;
 using Cellestra.Core.Values;
 using Cellestra.Desktop.Commands;
 using Puffinote.Components.Commands;
+using Puffinote.Components.Controls.CommandBar;
 using Puffinote.Components.Controls.Icons;
 using ArgbColor = Cellestra.Core.Styling.ArgbColor;
 using AvColor = Avalonia.Media.Color;
@@ -135,7 +136,7 @@ public static class CommandBarDrawer
         };
         bool on = false;
         bool hover = false;
-        void Paint() => row.Background = on ? CommandBar.ActiveBackground : hover ? CommandBar.HoverBackground : Brushes.Transparent;
+        void Paint() => row.Background = on ? CommandBarChrome.ActiveBackground : hover ? CommandBarChrome.HoverBackground : Brushes.Transparent;
         row.PointerEntered += (_, _) =>
         {
             hover = true;
@@ -164,7 +165,7 @@ public static class CommandBarDrawer
             Paint();
             if (on)
             {
-                icon.Foreground = CommandBar.ActiveForeground;
+                icon.Foreground = CommandBarChrome.ActiveForeground;
             }
             else
             {
@@ -226,7 +227,7 @@ public static class CommandBarDrawer
                 Margin = new Thickness(0, 0, 5, 5),
                 FontSize = 11.5,
             };
-            CommandBar.AddHover(button, ChipBrush);
+            CommandBarChrome.AddHover(button, ChipBrush);
             // Preview on hover, commit on click — same feel as the colour swatches.
             button.PointerEntered += (_, _) => env.PreviewCellStyle(s => s.WithFont(s.Font with { SizePoints = px }));
             button.PointerExited += (_, _) => env.PreviewCellStyle(null);
@@ -259,7 +260,7 @@ public static class CommandBarDrawer
             HorizontalContentAlignment = HorizontalAlignment.Center,
             VerticalContentAlignment = VerticalAlignment.Center,
         };
-        CommandBar.AddHover(button, ChipBrush);
+        CommandBarChrome.AddHover(button, ChipBrush);
         button.Click += (_, _) => onClick();
         return button;
     }
@@ -352,7 +353,7 @@ public static class CommandBarDrawer
         };
         ToolTip.SetTip(button, "Pick any colour…");
         Avalonia.Automation.AutomationProperties.SetName(button, "Pick a custom colour");
-        CommandBar.AddHover(button, ChipBrush);
+        CommandBarChrome.AddHover(button, ChipBrush);
 
         // A live ColorView (first-party Avalonia control, Golden Rule #6) plus an Apply button.
         var picker = new ColorView
@@ -435,7 +436,7 @@ public static class CommandBarDrawer
 
             bool on = false;
             bool hover = false;
-            void Paint() => button.Background = on ? CommandBar.ActiveBackground : hover ? CommandBar.HoverBackground : Brushes.Transparent;
+            void Paint() => button.Background = on ? CommandBarChrome.ActiveBackground : hover ? CommandBarChrome.HoverBackground : Brushes.Transparent;
             button.PointerEntered += (_, _) =>
             {
                 hover = true;
@@ -459,7 +460,7 @@ public static class CommandBarDrawer
                 Paint();
                 if (on)
                 {
-                    icon.Foreground = CommandBar.ActiveForeground;
+                    icon.Foreground = CommandBarChrome.ActiveForeground;
                 }
                 else
                 {
@@ -542,7 +543,7 @@ public static class CommandBarDrawer
         {
             IconKey = "check",
             Size = 14,
-            Foreground = CommandBar.ActiveForeground,
+            Foreground = CommandBarChrome.ActiveForeground,
             VerticalAlignment = VerticalAlignment.Center,
             Width = 16,
             Margin = new Thickness(0, 0, 6, 0),
@@ -569,7 +570,7 @@ public static class CommandBarDrawer
 
         bool on = false;
         bool hover = false;
-        void Paint() => row.Background = on ? CommandBar.ActiveBackground : hover ? CommandBar.HoverBackground : Brushes.Transparent;
+        void Paint() => row.Background = on ? CommandBarChrome.ActiveBackground : hover ? CommandBarChrome.HoverBackground : Brushes.Transparent;
 
         CellStyle transform(CellStyle s) => s.WithNumberFormat(option.Format);
         row.PointerEntered += (_, _) =>
