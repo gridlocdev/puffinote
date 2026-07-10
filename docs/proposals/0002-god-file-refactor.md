@@ -1,6 +1,6 @@
 # Proposal 0002 — God-file refactor: taming the oversized files
 
-- **Status:** Tier 1 (the big four) **done**; Tiers 2–3 planned. See §6.
+- **Status:** Tier 1 (the big four) **done**; Tier 2 `app` `MainWindow` **done**; rest of Tier 2 + Tier 3 planned. See §6.
 - **Author:** (you) · drafted with Claude
 - **Affects:** `features/EditSpreadsheets` (Cellestra), `features/EditMarkdown` (Typage), `app/` (Puffinote shell)
 
@@ -93,10 +93,19 @@ Convert to `partial`; root keeps fields, ctor, nested `CheckItem`, test seams:
 ## 5. Tiers 2–3 (planned, not in this pass)
 
 ### Tier 2 — large, mixed concerns
-- **`app/Puffinote.Desktop/Views/MainWindow.cs` — 1,094 · Mode B + A.** Top layering offender. Extract to
-  `Shell/`: `ShellCommandCatalog` (the 17-entry catalog + reserved-key sets), a sidebar-state helper
-  (dedupe collapsed/width logic across `ToggleSidebar`/`ApplySidebarState`/`PersistSession`), recent-list
-  maintenance into a recent-files service. Then partial-split residual UI (`.Menu`, `.Mutations`, `.Session`).
+- **`app/Puffinote.Desktop/Views/MainWindow.cs` — 1,094 · Mode B + A · ✅ done.** Top layering offender.
+  Landed as four commits, each area-green (build clean + tests + `dotnet format`):
+  - `RecentFilesList` (`Shell/`) — the recent list + its promotion / rename-remap / delete-drop maintenance,
+    now returning whether it changed so the shell re-renders only when it did (+ tests).
+  - `SidebarLayout` (`Sidebar/`, not `Shell/` — it owns Avalonia controls, so it lives with the sidebar UI)
+    — dedupes the collapse/width logic across `ToggleSidebar`/`ApplySidebarState`/`PersistSession`,
+    preserving the two distinct collapse paths (+ tests).
+  - `ShellCommandCatalog` (`Shell/`) — the **reserved-key sets + effective-gesture rule** (+ tests). The
+    17-entry *table* itself stayed in the window: each entry's action closes over live window state, so
+    transplanting it would mean plumbing ~20 delegates back in — the pure, testable rules were the real seam.
+  - Partial-split the residual UI into `.Menu` / `.Shortcuts` / `.Mutations` / `.Session` (a `.Shortcuts`
+    partial beyond the three planned keeps the shortcuts-editor/conflict concern out of `.Menu`). Root
+    1,094 → **186** lines.
 - **`RadialSettingsDialog.cs` — 1,026 · A + one B.** Extract the command-picker sub-dialog (~230 + its
   `PickerItem`) to a `CommandPickerOverlay`; partials `.Drag.cs`, `.Confirm.cs`; keep `…ForTest` in root.
 - **`ChartControl.cs` — 741 · Mode A.** Per-chart-family partials: `.Cartesian` (~250), `.Pie`, `.Scatter`,
@@ -122,9 +131,12 @@ Convert to `partial`; root keeps fields, ctor, nested `CheckItem`, test seams:
    (`SpreadsheetGrid`)** — lowest risk.~~ **✅ Done** — all four landed as `refactor` commits on `main`
    (4d `ce8d12b`, 4b `6a63cea`, 4c `6dd950e`, 4a `773b619`); each area solution builds clean and its
    tests are green.
-2. **Tier 2 `app` `MainWindow`** *(next)* as a focused effort — biggest *architectural* win (fixes layering-in-UI),
-   adds real test coverage; treat as more than a move.
-3. Tier 2 remainder, then Tier 3 opportunistically. **Defer `TextDocument`** unless it causes friction.
+2. ~~**Tier 2 `app` `MainWindow`** as a focused effort — biggest *architectural* win (fixes layering-in-UI),
+   adds real test coverage; treat as more than a move.~~ **✅ Done** — four `refactor(shell)` commits on
+   `main` (`RecentFilesList` `9cb0872`, `SidebarLayout` `ee96423`, `ShellCommandCatalog` `29140bb`, the
+   partial-split `d5448a6`); Puffinote solution builds clean and its tests are green.
+3. **Tier 2 remainder** *(next)* — `RadialSettingsDialog`, `ChartControl`, `CommandBarDrawer` — then Tier 3
+   opportunistically. **Defer `TextDocument`** unless it causes friction.
 
 **Effort:** Tier 1–2 ≈ 10 files, each a 0.5–1.5h mechanical-plus-verify unit (`app` `MainWindow` larger,
 ~half a day). Tier 3 is optional polish.
