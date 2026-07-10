@@ -1,6 +1,6 @@
 # Proposal 0002 — God-file refactor: taming the oversized files
 
-- **Status:** Tier 1 (the big four) **in progress**; Tiers 2–3 planned. See §6.
+- **Status:** Tier 1 (the big four) **done**; Tiers 2–3 planned. See §6.
 - **Author:** (you) · drafted with Claude
 - **Affects:** `features/EditSpreadsheets` (Cellestra), `features/EditMarkdown` (Typage), `app/` (Puffinote shell)
 
@@ -57,7 +57,10 @@ its own scoped `using`s. Same namespace, same folder, `Type.Concern.cs` naming.
 
 ## 4. Tier 1 — the four biggest (this proposal executes these)
 
-### 4a. `Cellestra.Editor/Views/SpreadsheetEditorView.axaml.cs` — 2,235 → ~6 partials · **Mode A**
+**All four landed** — one `refactor(<scope>): …` commit each, straight on `main`, area solution
+green (build clean + tests + `dotnet format`). Final root sizes: 4a 504, 4b 417, 4c 180, 4d 44 lines.
+
+### 4a. `Cellestra.Editor/Views/SpreadsheetEditorView.axaml.cs` — 2,235 → ~6 partials · **Mode A** · ✅ done
 Already `partial` for XAML. Root keeps fields/ctor/host wiring; add siblings:
 - `.Sheets.cs` — add/chart/rename/delete/reset (~300)
 - `.Tabs.cs` — sheet-tab strip build + drag-reorder + inline rename (~320, self-contained)
@@ -67,17 +70,19 @@ Already `partial` for XAML. Root keeps fields/ctor/host wiring; add siblings:
 - `.KeyBindings.cs` — key bindings + gating; **extract pure static gesture helpers**
   (`ShouldYieldToTextInput`, `IsPlainKeyGesture`, `IsTextEditingChord`…) to a testable `KeyGestureRules`.
 
-### 4b. `Cellestra.Editor/Controls/SpreadsheetGrid/SpreadsheetGrid.cs` — 2,196 → 4 more partials · **Mode A**
+### 4b. `Cellestra.Editor/Controls/SpreadsheetGrid/SpreadsheetGrid.cs` — 2,196 → 4 more partials · **Mode A** · ✅ done
 Root partial of an already-18-way split; carve the core the same way:
 - `.Rendering.cs` (~400) · `.Pointer.cs` (~390) · `.Keyboard.cs` (~250) · `.Editor.cs` (inline editor, ~310)
 - `.Layers.cs` — move nested `Surface` + `EditorDecorationLayer` out of root.
 
-### 4c. `Typage.Desktop/Views/MainWindow.cs` — 1,802 → ~6 partials · **Mode A**
+### 4c. `Typage.Desktop/Views/MainWindow.cs` — 1,802 → ~6 partials · **Mode A** · ✅ done
 Convert to `partial`; root keeps fields, ctor, nested `CheckItem`, test seams:
 - `.Menu.cs` (~350) · `.Toolbar.cs` (~210) · `.Files.cs` (~320) · `.Watcher.cs` (autosave/recovery/
   external-change/conflict, ~210) · `.Dialogs.cs` · `.Theme.cs` (~80).
+- *As landed:* split into `.Menu` / `.Files` / `.Dialogs` / `.Toolbar` / `.Watcher` / `.Theme` **plus a
+  small `.Status.cs`** (status-bar build + title/count/caret updates), keeping each file single-purpose.
 
-### 4d. `Cellestra.Core/Serialization/Ods/OdsContentXml.cs` — 1,639 → partial-static + 1 extraction · **Mode B**
+### 4d. `Cellestra.Core/Serialization/Ods/OdsContentXml.cs` — 1,639 → partial-static + 1 extraction · **Mode B** · ✅ done
 `partial static class` along a **feature axis** (read+write of a feature stay together):
 - `.Write.cs` · `.Read.cs` · `.Validation.cs` · `.DatabaseRanges.cs`
 - **Extract `StyleRegistry`** (self-contained nested class) to its own file.
@@ -113,9 +118,11 @@ Convert to `partial`; root keeps fields, ctor, nested `CheckItem`, test seams:
 
 ## 6. Execution order & status
 
-1. **Tier 1**, one file per area, parallel across areas. Start with **4d (`OdsContentXml`)** and **4b
-   (`SpreadsheetGrid`)** — lowest risk. *(← this proposal)*
-2. **Tier 2 `app` `MainWindow`** as a focused effort — biggest *architectural* win (fixes layering-in-UI),
+1. ~~**Tier 1**, one file per area, parallel across areas. Start with **4d (`OdsContentXml`)** and **4b
+   (`SpreadsheetGrid`)** — lowest risk.~~ **✅ Done** — all four landed as `refactor` commits on `main`
+   (4d `ce8d12b`, 4b `6a63cea`, 4c `6dd950e`, 4a `773b619`); each area solution builds clean and its
+   tests are green.
+2. **Tier 2 `app` `MainWindow`** *(next)* as a focused effort — biggest *architectural* win (fixes layering-in-UI),
    adds real test coverage; treat as more than a move.
 3. Tier 2 remainder, then Tier 3 opportunistically. **Defer `TextDocument`** unless it causes friction.
 
