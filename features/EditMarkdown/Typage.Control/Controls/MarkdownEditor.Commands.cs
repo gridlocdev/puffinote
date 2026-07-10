@@ -469,6 +469,33 @@ public partial class MarkdownEditor
     }
 
     /// <summary>
+    /// Remove the task checkbox from the caret's line (⌘⇧L), turning <c>- [ ] text</c> back into <c>- text</c>
+    /// — the list marker and indentation stay, only the <c>[ ]</c>/<c>[x]</c> box (and its trailing space) go.
+    /// The inverse of the create half of <see cref="ToggleTask"/>. A no-op on a line without a checkbox.
+    /// </summary>
+    public void RemoveTask()
+    {
+        var doc = Buffer.Document;
+        var line = doc.GetPosition(Buffer.Selection.Caret).Line;
+        var prefix = LinePrefix.Parse(doc.GetLineText(line));
+        if (!prefix.HasTask)
+        {
+            return;
+        }
+
+        var boxStart = doc.GetLineStart(line) + prefix.AfterMarker;
+        var boxLength = prefix.Length - prefix.AfterMarker; // "[ ] " / "[x] "
+        var caret = Buffer.Selection.Caret;
+        Buffer.ReplaceRange(boxStart, boxLength, string.Empty);
+
+        // Keep the caret with the text: shift it back past a removed box that sat before it, or clamp it to
+        // where the box was if it sat inside it.
+        var moved = caret >= boxStart + boxLength ? caret - boxLength : Math.Min(caret, boxStart);
+        Buffer.Selection = Selection.At(moved);
+        Focus();
+    }
+
+    /// <summary>
     /// Insert an image reference pointing at <paramref name="url"/> (a resolved relative/staged path). The
     /// selection or word under the caret becomes the alt text; if there is none, <paramref name="altFallback"/>
     /// (typically the image's file name) is used. The caret lands just after the inserted reference.

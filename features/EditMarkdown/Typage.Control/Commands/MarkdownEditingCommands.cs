@@ -46,6 +46,8 @@ public static class MarkdownEditingCommands
                 ed.ToggleHighlight, icon: "paintbrush"),
             new("format.task", "Checkbox", "Add a task checkbox to this line, or toggle it.", Shortcut.Cmd(Key.L),
                 ed.ToggleTask, icon: "square-check"),
+            new("format.removeTask", "Remove Checkbox", "Remove the task checkbox from this line.", Shortcut.Cmd(Key.L, KeyModifiers.Shift),
+                ed.RemoveTask, icon: "square-x"),
             new("format.quote", "Blockquote", "Toggle a blockquote on the line(s).", null, ed.ToggleBlockquote),
             new("format.bulletList", "Bulleted List", "Toggle a bulleted list on the line(s).", Shortcut.Cmd(Key.D8, KeyModifiers.Shift),
                 ed.ToggleBulletList, icon: "list"),

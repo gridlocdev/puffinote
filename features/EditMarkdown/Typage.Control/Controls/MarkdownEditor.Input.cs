@@ -173,6 +173,9 @@ public partial class MarkdownEditor
                 ToggleInlineCode();
                 break;
             // ⌘K is owned by the shell: it bubbles to the window, which opens the link dialog (display + location).
+            case Key.L when ctrl && shift:
+                RemoveTask();
+                break; // ⌘⇧L removes a checkbox (matched before ⌘L, which adds/toggles one)
             case Key.L when ctrl:
                 ToggleTask();
                 break;

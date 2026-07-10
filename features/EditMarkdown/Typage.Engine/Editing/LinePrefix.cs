@@ -56,6 +56,18 @@ public readonly record struct LinePrefix(
     /// <summary>True when the line carries a blockquote prefix.</summary>
     public bool HasQuote => Quote.Length > 0;
 
+    /// <summary>
+    /// The column just past the list marker (<c>"- "</c> / <c>"1. "</c>) — where a task checkbox sits, so
+    /// <c>[AfterMarker, Length)</c> spans the <c>"[ ] "</c>/<c>"[x] "</c> when <see cref="HasTask"/>. Equals
+    /// <see cref="MarkerStart"/> when there is no list marker.
+    /// </summary>
+    public int AfterMarker => List switch
+    {
+        ListKind.Unordered => MarkerStart + 2,     // "- "
+        ListKind.Ordered => MarkerStart + DigitCount + 2, // digits + delimiter + space
+        _ => MarkerStart,
+    };
+
     /// <summary>Parse the leading structure of <paramref name="line"/> (a single line, trailing CR tolerated).</summary>
     public static LinePrefix Parse(string line)
     {
