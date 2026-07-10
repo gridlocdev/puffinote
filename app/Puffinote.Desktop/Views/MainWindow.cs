@@ -41,7 +41,7 @@ public class MainWindow : Window
     private readonly ColumnDefinition _sidebarColumn = new(260, GridUnitType.Pixel) { MinWidth = 160 };
     private Border _sidebar = null!;
     private GridSplitter _splitter = null!;
-    private GridLength _lastSidebarWidth = new(260, GridUnitType.Pixel);
+    private SidebarLayout _sidebarLayout = null!;
 
     // The notebook-scoped recent-files list (PRD §7.2.3): promotion, rename-remap, and delete-drop all live in
     // RecentFilesList; the shell mirrors changes into the sidebar's Recent panel + quick-open and persists them
@@ -203,6 +203,8 @@ public class MainWindow : Window
         grid.Children.Add(_sidebar);
         grid.Children.Add(_splitter);
         grid.Children.Add(_tabHost);
+
+        _sidebarLayout = new SidebarLayout(_sidebarColumn, _sidebar, _splitter, SessionStore.DefaultSidebarWidth);
         return grid;
     }
 
@@ -536,23 +538,7 @@ public class MainWindow : Window
 
     private void ToggleSidebar()
     {
-        var collapsing = _sidebarColumn.Width.Value > 0;
-        if (collapsing)
-        {
-            _lastSidebarWidth = _sidebarColumn.Width;
-            _sidebarColumn.Width = new GridLength(0);
-            _sidebarColumn.MinWidth = 0;
-            _sidebar.IsVisible = false;
-            _splitter.IsVisible = false;
-        }
-        else
-        {
-            _sidebarColumn.MinWidth = 160;
-            _sidebarColumn.Width = _lastSidebarWidth;
-            _sidebar.IsVisible = true;
-            _splitter.IsVisible = true;
-        }
-
+        _sidebarLayout.Toggle();
         PersistSession(); // remember the collapsed/expanded state per notebook (PRD §7.1)
     }
 
@@ -665,31 +651,11 @@ public class MainWindow : Window
         _recent.Load(session.Recent);
         SidebarForTest.SetRecent(_notebook.RootPath, _recent.Paths);
         SidebarForTest.SetPinnedFolders(session.Pinned);
-        ApplySidebarState(session.SidebarCollapsed, session.SidebarWidth);
+        _sidebarLayout.Apply(session.SidebarCollapsed, session.SidebarWidth);
 
         StartSearchIndex();
         StartWatching();
         UpdatePaneChrome();
-    }
-
-    /// <summary>Restore the sidebar's persisted collapsed state and width (PRD §7.1).</summary>
-    private void ApplySidebarState(bool collapsed, double width)
-    {
-        _lastSidebarWidth = new GridLength(width > 0 ? width : SessionStore.DefaultSidebarWidth, GridUnitType.Pixel);
-        if (collapsed)
-        {
-            _sidebarColumn.Width = new GridLength(0);
-            _sidebarColumn.MinWidth = 0;
-            _sidebar.IsVisible = false;
-            _splitter.IsVisible = false;
-        }
-        else
-        {
-            _sidebarColumn.MinWidth = 160;
-            _sidebarColumn.Width = _lastSidebarWidth;
-            _sidebar.IsVisible = true;
-            _splitter.IsVisible = true;
-        }
     }
 
     /// <summary>Write the current recent list + sidebar layout to the notebook's session file (best-effort).</summary>
@@ -700,13 +666,12 @@ public class MainWindow : Window
             return;
         }
 
-        var collapsed = !_sidebar.IsVisible;
-        var width = (collapsed ? _lastSidebarWidth : _sidebarColumn.Width).Value;
+        var width = _sidebarLayout.PersistedWidth;
         SessionStore.Save(root, new NotebookSession
         {
             Recent = _recent.Paths,
             Pinned = SidebarForTest.PinnedFolders,
-            SidebarCollapsed = collapsed,
+            SidebarCollapsed = _sidebarLayout.IsCollapsed,
             SidebarWidth = width > 0 ? width : SessionStore.DefaultSidebarWidth,
         });
     }
