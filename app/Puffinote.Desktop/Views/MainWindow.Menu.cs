@@ -1,0 +1,303 @@
+using Avalonia;
+using Avalonia.Controls;
+using Avalonia.Input;
+using Avalonia.Interactivity;
+using Avalonia.Layout;
+using Avalonia.Platform.Storage;
+using Avalonia.Threading;
+using Puffinote.Components.Commands;
+using Puffinote.Components.Controls;
+using Puffinote.Components.Overlays;
+using Puffinote.Components.Theming;
+using Puffinote.Desktop.Commands;
+using Puffinote.Desktop.Panes;
+using Puffinote.Desktop.Shell;
+using Puffinote.Desktop.Sidebar;
+
+namespace Puffinote.Desktop.Views;
+
+public partial class MainWindow
+{
+    // ---- Command catalog → menu (macOS native / in-window), key bindings, and palette --------------
+
+    /// <summary>Puffinote's shell catalog — defined once; the menu, key bindings, and palette all read it.</summary>
+    private void BuildShellCommands()
+    {
+        // A command's effective gesture: the user's custom binding (shortcuts editor) if it has one, else the
+        // default below. Reserved global keys are fixed — they're never routed through the keymap (PRD §7.6).
+        Shortcut? Bound(string id, Shortcut? def) => ShellCommandCatalog.ResolveGesture(_keymap, id, def);
+
+        _shellCommands =
+        [
+            new("shell.commandPalette", "Command Palette", "Search and run any command", Bound("shell.commandPalette", Shortcut.Cmd(Key.K)),
+                ShowCommandPalette, icon: "command"),
+            new("shell.quickOpen", "Quick Open…", "Jump to any file in the notebook", Bound("shell.quickOpen", Shortcut.Cmd(Key.O)),
+                ShowQuickOpen, () => _notebook.Root is not null, icon: "search"),
+            new("shell.openNotebook", "Open Notebook…", "Open a folder as the notebook", Bound("shell.openNotebook", Shortcut.Cmd(Key.O, KeyModifiers.Shift)),
+                () => _ = OpenNotebookInteractiveAsync(), icon: "folder-open"),
+            new("shell.newNote", "New Note…", "Create a new Markdown note in the selected folder", Bound("shell.newNote", null),
+                () => _ = PromptNewNoteAsync(SidebarForTest.SelectedTreeNode), () => _notebook.Root is not null, icon: "file-plus"),
+            new("shell.newSpreadsheet", "New Spreadsheet…", "Create a new spreadsheet in the selected folder", Bound("shell.newSpreadsheet", null),
+                () => _ = PromptNewSpreadsheetAsync(SidebarForTest.SelectedTreeNode), () => _notebook.Root is not null, icon: "table"),
+            new("shell.newFolder", "New Folder…", "Create a new folder in the selected folder", Bound("shell.newFolder", null),
+                () => _ = PromptNewFolderAsync(SidebarForTest.SelectedTreeNode), () => _notebook.Root is not null),
+            new("shell.renameEntry", "Rename…", "Rename the selected file or folder", Bound("shell.renameEntry", null),
+                () =>
+                {
+                    if (SidebarForTest.SelectedTreeNode is { } n)
+                    {
+                        _ = PromptRenameAsync(n);
+                    }
+                }, CanMutateSelected, icon: "pencil"),
+            new("shell.deleteEntry", "Delete", "Delete the selected file or folder", Bound("shell.deleteEntry", null),
+                () =>
+                {
+                    if (SidebarForTest.SelectedTreeNode is { } n)
+                    {
+                        _ = PromptDeleteAsync(n);
+                    }
+                }, CanMutateSelected, icon: "trash-2"),
+            new("shell.save", "Save", "Save the active document", Bound("shell.save", Shortcut.Cmd(Key.S)),
+                () => _ = SaveCurrentAsync(), () => _tabHost.ActivePane is not null, icon: "save"),
+            new("shell.closeTab", "Close Tab", "Close the active tab", Bound("shell.closeTab", Shortcut.Cmd(Key.W)),
+                () => _ = _tabHost.CloseActiveAsync(), () => _tabHost.ActivePane is not null),
+            new("shell.nextTab", "Next Tab", "Switch to the next tab", Bound("shell.nextTab", Shortcut.Cmd(Key.OemCloseBrackets, KeyModifiers.Shift)),
+                () => _tabHost.ActivateRelative(1)),
+            new("shell.prevTab", "Previous Tab", "Switch to the previous tab", Bound("shell.prevTab", Shortcut.Cmd(Key.OemOpenBrackets, KeyModifiers.Shift)),
+                () => _tabHost.ActivateRelative(-1)),
+            new("shell.toggleSidebar", "Toggle Sidebar", "Show or hide the sidebar", Bound("shell.toggleSidebar", Shortcut.Cmd(Key.OemBackslash)),
+                ToggleSidebar),
+            new("shell.toggleEditorToolbar", "Toggle Editor Toolbar", "Show or hide the formatting toolbar over a note",
+                Bound("shell.toggleEditorToolbar", null), ToggleEditorToolbar, () => _tabHost.ActivePane is MarkdownPane, icon: "type"),
+            new("shell.focusTree", "Focus File Tree", "Move keyboard focus to the file tree", Bound("shell.focusTree", null),
+                () => SidebarForTest.FocusTree()),
+            new("shell.shortcuts", "Keyboard Shortcuts…", "View and customize keyboard shortcuts", Bound("shell.shortcuts", null),
+                ShowShortcutsEditor),
+            new("shell.about", "About Puffinote", "About this app", null, ShowAbout),
+        ];
+        _shellById = _shellCommands.ToDictionary(c => c.Id);
+    }
+
+    private void InstallMenu(DockPanel root)
+    {
+        _menuRoot = root;
+        BuildShellCommands();
+
+        // One shared RelayCommand per catalog entry, resolved by id so it survives a catalog rebuild when a
+        // shortcut is rebound (the menu items and key bindings keep pointing at a live command). Enabled
+        // state is refreshed for all of them together by RefreshCommandStates.
+        _relays = _shellCommands.ToDictionary(
+            c => c.Id,
+            c => new RelayCommand(() => _shellById[c.Id].Execute(), () => _shellById[c.Id].IsEnabled));
+
+        ApplyShellShortcuts();
+        AddHandler(KeyDownEvent, OnReservedKeyDown, RoutingStrategies.Tunnel);
+        RefreshMenus();
+    }
+
+    /// <summary>
+    /// (Re)apply the shell's key bindings from the current catalog: non-reserved commands become ordinary
+    /// (bubbling) key bindings — the focused editor gets first refusal — while reserved ones are collected
+    /// for the tunnel router so they always win (PRD §7.6). Called at startup and after a rebinding, so a new
+    /// key takes effect live.
+    /// </summary>
+    private void ApplyShellShortcuts()
+    {
+        KeyBindings.Clear();
+        foreach (var command in _shellCommands)
+        {
+            if (command.Gesture is { } gesture && !ShellCommandCatalog.IsReserved(command.Id))
+            {
+                KeyBindings.Add(new KeyBinding { Gesture = gesture, Command = _relays[command.Id] });
+            }
+        }
+
+        _reservedBindings = [.. _shellCommands
+            .Where(c => ShellCommandCatalog.IsReserved(c.Id) && c.Gesture is not null)
+            .Select(c => (c.Gesture!, _relays[c.Id]))];
+    }
+
+    /// <summary>(Re)build the menu bar from the current catalog so rebound gestures show their new keys.</summary>
+    private void RefreshMenus()
+    {
+        if (OperatingSystem.IsMacOS())
+        {
+            NativeMenu.SetMenu(this, new NativeMenu
+            {
+                Items =
+                {
+                    new NativeMenuItem { Header = "File", Menu = BuildNativeMenu("shell.openNotebook", "shell.quickOpen", "shell.newNote", "shell.newSpreadsheet", "shell.newFolder", "shell.save", "shell.closeTab") },
+                    new NativeMenuItem { Header = "View", Menu = BuildNativeMenu("shell.commandPalette", "shell.toggleSidebar", "shell.toggleEditorToolbar", "shell.nextTab", "shell.prevTab") },
+                    new NativeMenuItem { Header = "Help", Menu = BuildNativeMenu("shell.shortcuts", "shell.about") },
+                },
+            });
+            return;
+        }
+
+        if (_inWindowMenu is { } existing)
+        {
+            _menuRoot.Children.Remove(existing);
+        }
+
+        _inWindowMenu = new Menu
+        {
+            Items =
+            {
+                new MenuItem { Header = "_File", ItemsSource = BuildMenuItems("shell.openNotebook", "shell.quickOpen", "shell.newNote", "shell.newSpreadsheet", "shell.newFolder", "shell.save", "shell.closeTab") },
+                new MenuItem { Header = "_View", ItemsSource = BuildMenuItems("shell.commandPalette", "shell.toggleSidebar", "shell.toggleEditorToolbar", "shell.nextTab", "shell.prevTab") },
+                new MenuItem { Header = "_Help", ItemsSource = BuildMenuItems("shell.shortcuts", "shell.about") },
+            },
+        };
+        DockPanel.SetDock(_inWindowMenu, Avalonia.Controls.Dock.Top);
+        _menuRoot.Children.Insert(0, _inWindowMenu);
+    }
+
+    private List<MenuItem> BuildMenuItems(params string[] ids) =>
+        [.. ids.Select(id => _shellById[id]).Select(c =>
+            new MenuItem { Header = c.Title, Command = _relays[c.Id], InputGesture = c.Gesture })];
+
+    private NativeMenu BuildNativeMenu(params string[] ids)
+    {
+        var menu = new NativeMenu();
+        foreach (var id in ids)
+        {
+            var c = _shellById[id];
+            menu.Items.Add(new NativeMenuItem { Header = c.Title, Command = _relays[c.Id], Gesture = c.Gesture });
+        }
+
+        return menu;
+    }
+
+    /// <summary>Open the merged Command Palette (⌘K): Puffinote's shell commands + the active editor's catalog.</summary>
+    private void ShowCommandPalette()
+    {
+        if (_overlayHost.IsOpen)
+        {
+            return; // an overlay is already up (e.g. a dialog opened from the native menu) — don't clobber it
+        }
+
+        var editor = _tabHost.ActivePane?.Commands ?? [];
+        var entries = CommandMerge.ToEntries(_shellCommands, editor);
+
+        var palette = new PaletteListView { Placeholder = "Type a command…" };
+        palette.SetItems(entries);
+        palette.Chosen += entry =>
+        {
+            _overlayHost.Close();
+            entry.Run();
+        };
+        palette.Cancelled += (_, _) => _overlayHost.Close();
+        ShowPaletteOverlay(palette);
+    }
+
+    /// <summary>
+    /// Quick-open (⌘O, PRD §7.2.5): a fuzzy file switcher, separate from the command palette. It lists every
+    /// notebook file — most-recent first for an empty query — and opens the chosen file into a tab. Reuses the
+    /// shared <see cref="PaletteListView"/> (which fuzzy-ranks by name as you type).
+    /// </summary>
+    private void ShowQuickOpen()
+    {
+        if (_overlayHost.IsOpen || _notebook.Root is null)
+        {
+            return;
+        }
+
+        var ordered = QuickOpen.OrderByRecency(_notebook.EnumerateFiles(), _recent.Paths);
+        var entries = ordered.Select(path => new PaletteEntry(
+            Title: System.IO.Path.GetFileName(path),
+            Run: () => _ = OpenFileAsync(path),
+            Description: RelativeToNotebook(path))).ToList();
+
+        var palette = new PaletteListView { Placeholder = "Go to file…" };
+        palette.SetItems(entries);
+        palette.Chosen += entry =>
+        {
+            _overlayHost.Close();
+            entry.Run();
+        };
+        palette.Cancelled += (_, _) => _overlayHost.Close();
+        ShowPaletteOverlay(palette);
+    }
+
+    /// <summary>Present <paramref name="palette"/> in the shared overlay card and focus its search box.</summary>
+    private void ShowPaletteOverlay(PaletteListView palette)
+    {
+        var card = new Border
+        {
+            Width = 560,
+            Background = Tokens.Dark.Surface,
+            CornerRadius = new CornerRadius(8),
+            Padding = new Thickness(12),
+            Margin = new Thickness(0, 80, 0, 0),
+            HorizontalAlignment = HorizontalAlignment.Center,
+            VerticalAlignment = VerticalAlignment.Top,
+            Child = palette,
+        };
+        _overlayHost.ShowContent(card);
+        Dispatcher.UIThread.Post(() => palette.SearchBox.Focus());
+    }
+
+    /// <summary>A notebook file's path relative to the notebook root (for the quick-open / recent secondary line).</summary>
+    private string RelativeToNotebook(string path) => NotebookPaths.RelativeTo(_notebook.RootPath, path);
+
+    private async Task OpenNotebookInteractiveAsync()
+    {
+        var top = GetTopLevel(this);
+        if (top is null)
+        {
+            return;
+        }
+
+        var folders = await top.StorageProvider.OpenFolderPickerAsync(new FolderPickerOpenOptions
+        {
+            Title = "Open Notebook",
+            AllowMultiple = false,
+        });
+
+        if (folders.Count > 0 && folders[0].TryGetLocalPath() is { } path)
+        {
+            OpenNotebook(path);
+        }
+    }
+
+    /// <summary>Toggle the formatting toolbar over the active note (shown by default). No-op for other panes.</summary>
+    private void ToggleEditorToolbar()
+    {
+        if (_tabHost.ActivePane is MarkdownPane note)
+        {
+            note.ToolbarVisible = !note.ToolbarVisible;
+        }
+    }
+
+    private void ShowAbout()
+    {
+        if (_overlayHost.IsOpen)
+        {
+            return;
+        }
+
+        _ = _overlayHost.ShowModalAsync(new MessageDialog(
+            "Puffinote",
+            "A second-brain notes app — composes Typage (Markdown) and Cellestra (spreadsheets)."));
+    }
+
+    /// <summary>Re-query every shell command's enabled state (Save/Close need a tab; rename/delete a selection).</summary>
+    private void RefreshCommandStates()
+    {
+        foreach (var relay in _relays.Values)
+        {
+            relay.RaiseCanExecuteChanged();
+        }
+    }
+
+    /// <summary>
+    /// Re-query only the commands whose enablement tracks the tree selection (rename/delete). The tree
+    /// raises SelectionChanged on every Up/Down/type-ahead keystroke, so refreshing just these two — rather
+    /// than fanning CanExecuteChanged out to the whole catalog per keystroke — keeps navigation cheap (P6).
+    /// </summary>
+    private void RefreshSelectionCommands()
+    {
+        _relays["shell.renameEntry"].RaiseCanExecuteChanged();
+        _relays["shell.deleteEntry"].RaiseCanExecuteChanged();
+    }
+}
