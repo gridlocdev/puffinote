@@ -54,6 +54,11 @@ internal sealed class MarkdownCommandBar : UserControl
     /// <summary>Re-evaluate each inline tool's lit (toggle-active) state — the host calls this as the caret moves.</summary>
     public void RefreshState()
     {
+        if (!IsVisible)
+        {
+            return; // the standalone app hides this bar and ships its own — don't scan tokens for nobody
+        }
+
         foreach (var tool in _tools)
         {
             tool.UpdateState();

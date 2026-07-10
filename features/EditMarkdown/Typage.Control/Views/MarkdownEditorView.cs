@@ -53,7 +53,11 @@ public class MarkdownEditorView : UserControl
     public bool ShowCommandBar
     {
         get => _commandBar.IsVisible;
-        set => _commandBar.IsVisible = value;
+        set
+        {
+            _commandBar.IsVisible = value;
+            _commandBar.RefreshState(); // lit state was skipped while hidden — bring it current on show
+        }
     }
 
     /// <summary>Raised after the document text changes.</summary>
