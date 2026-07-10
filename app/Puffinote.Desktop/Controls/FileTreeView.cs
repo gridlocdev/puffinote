@@ -171,11 +171,13 @@ internal sealed class FileTreeView : UserControl
 
     private void Rebuild(string? selectPath)
     {
+        // The notebook root is never a row of its own — the sidebar header already names the open notebook
+        // (and the breadcrumb names a scoped folder), so the tree shows only what's *inside* it, top-level
+        // entries at depth 0. Its children are always visible because SetRoot/SetScope expand the root path.
         var rows = new List<Row>();
         if (_root is not null)
         {
-            rows.Add(new Row(_root, 0));
-            AppendChildren(_root, 1, rows);
+            AppendChildren(_root, 0, rows);
         }
 
         _list.ItemsSource = rows;

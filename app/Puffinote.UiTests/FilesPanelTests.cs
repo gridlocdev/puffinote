@@ -44,7 +44,9 @@ public sealed class FilesPanelTests : IDisposable
         Assert.Equal(["All notes"], panel.ChipLabelsForTest);
         Assert.Null(panel.ScopePathForTest);
         Assert.False(panel.BreadcrumbVisibleForTest);
-        Assert.Contains(_notebook.Name, panel.TreeVisibleNamesForTest); // the whole notebook is shown
+        // The notebook's contents are shown, but the root itself is not a row (the sidebar header names it).
+        Assert.DoesNotContain(_notebook.Name, panel.TreeVisibleNamesForTest);
+        Assert.Contains("Inbox.md", panel.TreeVisibleNamesForTest);
     }
 
     [AvaloniaFact]
@@ -75,12 +77,14 @@ public sealed class FilesPanelTests : IDisposable
 
         Assert.Equal(Path("Projects/Neural Nets"), panel.ScopePathForTest);
         Assert.True(panel.BreadcrumbVisibleForTest);
-        Assert.Equal(["Neural Nets", "Attention.md"], panel.TreeVisibleNamesForTest);
+        // The scoped folder is named by the breadcrumb, not shown as a row — only its contents appear.
+        Assert.Equal(["Attention.md"], panel.TreeVisibleNamesForTest);
 
         panel.ScopeToForTest(null); // "All notes" returns to the whole notebook
         Assert.Null(panel.ScopePathForTest);
         Assert.False(panel.BreadcrumbVisibleForTest);
-        Assert.Contains(_notebook.Name, panel.TreeVisibleNamesForTest);
+        Assert.DoesNotContain(_notebook.Name, panel.TreeVisibleNamesForTest);
+        Assert.Contains("Inbox.md", panel.TreeVisibleNamesForTest);
     }
 
     [AvaloniaFact]

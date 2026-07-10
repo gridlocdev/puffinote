@@ -38,22 +38,21 @@ public sealed class FileTreeViewTests : IDisposable
     }
 
     [AvaloniaFact]
-    public void Root_is_expanded_and_folders_sort_before_files()
+    public void The_root_is_hidden_and_its_children_show_at_the_top_level_folder_first()
     {
         var (tree, _) = Open();
 
-        // Root shown and expanded; its children are folder-first (sub) then files alphabetically.
-        Assert.Equal([_notebook.Name, "sub", "apple.md", "banana.md"], tree.VisibleNamesForTest);
-        Assert.Equal(_notebook.Name, tree.SelectedNameForTest);
+        // The notebook root is not a row of its own (the sidebar header names it); the tree shows only what's
+        // inside it — folder-first (sub) then files alphabetically — and focus lands on the first entry.
+        Assert.Equal(["sub", "apple.md", "banana.md"], tree.VisibleNamesForTest);
+        Assert.Equal("sub", tree.SelectedNameForTest);
     }
 
     [AvaloniaFact]
     public void Right_expands_then_descends_and_Left_collapses_then_ascends()
     {
         var (tree, window) = Open();
-
-        window.KeyPressQwerty(PhysicalKey.ArrowDown, RawInputModifiers.None); // → sub
-        Assert.Equal("sub", tree.SelectedNameForTest);
+        Assert.Equal("sub", tree.SelectedNameForTest); // first top-level entry, selected on focus
 
         window.KeyPressQwerty(PhysicalKey.ArrowRight, RawInputModifiers.None); // expand sub in place
         Assert.Contains("child.md", tree.VisibleNamesForTest);
@@ -69,8 +68,8 @@ public sealed class FileTreeViewTests : IDisposable
         Assert.DoesNotContain("child.md", tree.VisibleNamesForTest);
         Assert.Equal("sub", tree.SelectedNameForTest);
 
-        window.KeyPressQwerty(PhysicalKey.ArrowLeft, RawInputModifiers.None); // collapsed folder → ascend to root
-        Assert.Equal(_notebook.Name, tree.SelectedNameForTest);
+        window.KeyPressQwerty(PhysicalKey.ArrowLeft, RawInputModifiers.None); // top-level collapsed folder → nothing above to ascend to
+        Assert.Equal("sub", tree.SelectedNameForTest);
     }
 
     [AvaloniaFact]
@@ -80,7 +79,7 @@ public sealed class FileTreeViewTests : IDisposable
         string? activated = null;
         tree.FileActivated += node => activated = node.Name;
 
-        window.KeyPressQwerty(PhysicalKey.ArrowDown, RawInputModifiers.None); // sub
+        Assert.Equal("sub", tree.SelectedNameForTest);                       // first entry
         window.KeyPressQwerty(PhysicalKey.Enter, RawInputModifiers.None);     // folder → expands
         Assert.Contains("child.md", tree.VisibleNamesForTest);
         Assert.Null(activated);
@@ -95,7 +94,7 @@ public sealed class FileTreeViewTests : IDisposable
     {
         var (tree, window) = Open();
 
-        window.KeyTextInput("b"); // from the root, jump to the next name matching "b" → banana.md
+        window.KeyTextInput("b"); // from the first entry, jump to the next name matching "b" → banana.md
         Assert.Equal("banana.md", tree.SelectedNameForTest);
     }
 
@@ -108,8 +107,7 @@ public sealed class FileTreeViewTests : IDisposable
         tree.RenameRequested += node => renamed = node.Name;
         tree.DeleteRequested += node => deleted = node.Name;
 
-        window.KeyPressQwerty(PhysicalKey.ArrowDown, RawInputModifiers.None); // sub
-        window.KeyPressQwerty(PhysicalKey.ArrowDown, RawInputModifiers.None); // apple.md
+        window.KeyPressQwerty(PhysicalKey.ArrowDown, RawInputModifiers.None); // sub → apple.md
         Assert.Equal("apple.md", tree.SelectedNameForTest);
 
         window.KeyPressQwerty(PhysicalKey.F2, RawInputModifiers.None);
@@ -120,17 +118,13 @@ public sealed class FileTreeViewTests : IDisposable
     }
 
     [AvaloniaFact]
-    public void The_notebook_root_cannot_be_renamed_or_deleted()
+    public void The_notebook_root_is_not_shown_as_a_row_so_it_can_never_be_targeted()
     {
-        var (tree, window) = Open(); // FocusTree selects the root
-        var fired = false;
-        tree.RenameRequested += _ => fired = true;
-        tree.DeleteRequested += _ => fired = true;
+        var (tree, _) = Open();
 
-        Assert.Equal(_notebook.Name, tree.SelectedNameForTest);
-        window.KeyPressQwerty(PhysicalKey.F2, RawInputModifiers.None);
-        window.KeyPressQwerty(PhysicalKey.Delete, RawInputModifiers.None);
-
-        Assert.False(fired);
+        // With the root hidden entirely, it isn't a visible row and can't be selected — so it can never be
+        // the target of a rename/delete. Focus lands on a child instead of the notebook root.
+        Assert.DoesNotContain(_notebook.Name, tree.VisibleNamesForTest);
+        Assert.NotEqual(_notebook.Name, tree.SelectedNameForTest);
     }
 }
