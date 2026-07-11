@@ -18,13 +18,22 @@ public sealed class LucideIcon : Control
     public static readonly StyledProperty<double> SizeProperty =
         AvaloniaProperty.Register<LucideIcon, double>(nameof(Size), 16);
 
+    /// <summary>
+    /// Draw the glyph solid (filled with <see cref="Foreground"/>) as well as stroked, rather than as an
+    /// outline. Only meaningful for glyphs whose outline is a closed path — <c>star</c> is the one this
+    /// exists for: an outline star means "pin this", a solid one means "pinned", so the state survives a
+    /// reader who cannot see the accent colour (WCAG 2.2 §1.4.1).
+    /// </summary>
+    public static readonly StyledProperty<bool> IsFilledProperty =
+        AvaloniaProperty.Register<LucideIcon, bool>(nameof(IsFilled));
+
     /// <summary>Inherited so the icon picks up the foreground of whatever themed control hosts it.</summary>
     public static readonly StyledProperty<IBrush?> ForegroundProperty =
         TextElement.ForegroundProperty.AddOwner<LucideIcon>();
 
     static LucideIcon()
     {
-        AffectsRender<LucideIcon>(IconKeyProperty, SizeProperty, ForegroundProperty);
+        AffectsRender<LucideIcon>(IconKeyProperty, SizeProperty, ForegroundProperty, IsFilledProperty);
         AffectsMeasure<LucideIcon>(SizeProperty);
     }
 
@@ -48,6 +57,12 @@ public sealed class LucideIcon : Control
         set => SetValue(SizeProperty, value);
     }
 
+    public bool IsFilled
+    {
+        get => GetValue(IsFilledProperty);
+        set => SetValue(IsFilledProperty, value);
+    }
+
     public IBrush? Foreground
     {
         get => GetValue(ForegroundProperty);
@@ -65,7 +80,8 @@ public sealed class LucideIcon : Control
         }
 
         double scale = Size / LucideIcons.ViewBox;
-        var pen = new Pen(Foreground ?? Brushes.Black, 2)
+        var brush = Foreground ?? Brushes.Black;
+        var pen = new Pen(brush, 2)
         {
             LineCap = PenLineCap.Round,
             LineJoin = PenLineJoin.Round,
@@ -73,7 +89,7 @@ public sealed class LucideIcon : Control
 
         using (context.PushTransform(Matrix.CreateScale(scale, scale)))
         {
-            context.DrawGeometry(null, pen, geometry);
+            context.DrawGeometry(IsFilled ? brush : null, pen, geometry);
         }
     }
 }
