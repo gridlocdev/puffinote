@@ -197,7 +197,8 @@ On edit, re-tokenize from the first affected line and stop once the carried bloc
 
 | Construct | Syntax | Block/Inline | Live rendering | Concealment |
 |---|---|---|---|---|
-| Heading | `#`…`######` | Block | Larger weighted text | Hide `#`+space when caret off line |
+| Heading (ATX) | `#`…`######` | Block | Type scale (§8.3.1) | Hide `#`+space when caret off line |
+| Heading (setext) | text over `===` / `---` | Block | Same as `#` / `##` | Underline concealed; its row collapses |
 | Bold | `**x**` / `__x__` | Inline | Bold | Hide markers when caret off node |
 | Italic | `*x*` / `_x_` | Inline | Italic | Hide markers when caret off node |
 | Bold+Italic | `***x***` | Inline | Bold italic | Hide markers when caret off node |
@@ -205,7 +206,7 @@ On edit, re-tokenize from the first affected line and stop once the carried bloc
 | Highlight | `==x==` | Inline | Highlighted | Hide markers when caret off node |
 | Inline code | `` `x` `` | Inline | Monospace, subtle bg | Hide backticks when caret off node |
 | Code fence | ` ```lang ` | Block | Monospace block + language label | Source when caret inside block |
-| Blockquote | `> x` | Block | Indented, accented | Hide `>` when caret off line |
+| Blockquote | `> x`, `>> x` | Block | Tinted panel; one accent bar per nesting level | Hide `>` when caret off line |
 | Unordered list | `-`/`*`/`+` | Block | Bullet glyph | Raw marker shown when editing it |
 | Ordered list | `1.` | Block | Number | Raw shown when editing |
 | Task list | `- [ ]`/`- [x]` | Block | Interactive checkbox | Toggle edits source `[ ]`/`[x]` |
@@ -221,6 +222,48 @@ On edit, re-tokenize from the first affected line and stop once the carried bloc
 | Embed* | `![[target]]` | Block | Host-resolved (image/table now) | Source when caret inside |
 
 \* Recognized by the tokenizer always; **rendering depends on the host's embed resolver** and is **off by default** in the standalone app (on in the notes app).
+
+**Setext headings were added after the original table** (a UX audit flagged `=====` rendering as literal
+text, and `---` under a paragraph becoming a horizontal rule). This is a **deliberate widening of the
+dialect** — the one construct admitted past §8.3's "no CommonMark edge-case fidelity" line — because a
+Markdown editor that mis-renders a heading fails at its core job, and setext is common enough in the wild
+that authors hit it immediately. It is not a licence to keep adding constructs: the rest of §8.4 stands.
+
+A setext heading carries a **zero-length `HeadingMarker`** holding its level, so it is shaped exactly like an
+ATX heading — there is simply no `#` to point at. Consumers read the level off the line's first token and so
+need not know which spelling produced it. A lone `---` (no paragraph above it) is still a horizontal rule.
+
+### 8.3.1 The heading type scale
+
+Headings ride a scale authored against a 16px body and stored as **ratios of the base font size**, so changing
+the base size rescales every level together. Sizes step ~1.25× down to H4; below that, differentiation shifts
+to **weight and colour**, because shrinking further would push H5/H6 under the body size.
+
+| Level | Size | Row height | Space before | Space after | Weight | Foreground |
+|---|---|---|---|---|---|---|
+| H1 | 30 | 38 | 48 | 12 | Bold | brightest |
+| H2 | 24 | 31 | 38 | 10 | Bold | brightest |
+| H3 | 20 | 27 | 32 | 8 | SemiBold | bright |
+| H4 | 17 | 24 | 27 | 7 | SemiBold | bright |
+| H5 | 15 | 21 | 24 | 6 | Bold | muted |
+| H6 | 13 | 18 | 21 | 5 | Bold | faint |
+| Body | 16 | 26 | 0 | 12 | Normal | default |
+
+Headings **bond downward** — a large space-before, a small space-after — so each groups with the content it
+introduces. Adjacent margins **collapse** (the gap is the larger of the two, not their sum), which is a
+deliberate departure from Avalonia's own box model: summing would put a paragraph's 12px under an H1's 48px
+and open a 60px canyon mid-document. The document's first block takes no space-before.
+
+Two things the scale asks for that this editor **cannot** do, and does not:
+
+- **Uppercasing H6.** The surface's offset↔visual map is character-exact, and `ToUpperInvariant` is not
+  length-preserving (`ß` → `SS`), so uppercasing would corrupt caret and selection arithmetic. H6 is
+  distinguished by size, weight, and colour instead.
+- **Letter-spacing.** `FormattedText` has no letter-spacing, and faking it would desync the width map that
+  hit-testing depends on.
+
+In **high contrast**, headings do *not* desaturate down the scale — dimming H5/H6 is precisely what a
+high-contrast user needs us not to do — so there the hierarchy rests on size and weight alone.
 
 ### 8.4 Out of scope / deferred
 

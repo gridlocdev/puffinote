@@ -78,7 +78,13 @@ Don't hardcode versions in `.csproj` files.
 
 ## Settled behavior you must follow (no guessing)
 
-- **Supported constructs:** exactly the table in **PRD §8.3** (headings, bold/italic/bolditalic,
+- **Vertical rhythm (PRD §8.3.1):** blocks carry their own metrics — row height, margins, inner padding — and
+  the geometry the draw/hit-test paths read is a **pixel** prefix sum (`LayoutModel.BlockTops`), not a row
+  count. (Rows survive only as the unit for Up/Down caret movement.) Margins **collapse** — the gap is the
+  larger of the two neighbours', not their sum — and a collapsed blank separator is transparent to the rhythm,
+  contributing neither height nor gap. A code block and a blockquote are one object spelled as one block per
+  source line, so only a run's outer edges carry inner padding and their panels are drawn once per run.
+- **Supported constructs:** exactly the table in **PRD §8.3** (headings — ATX **and setext**, bold/italic/bolditalic,
   strikethrough, highlight, inline + fenced code, blockquote, lists incl. task lists, links, autolinks,
   images, HR, GFM tables, hard breaks, escapes, front matter, and recognized-but-off-by-default
   wiki-links/embeds). Adding constructs is a separate, later task.
