@@ -1,3 +1,5 @@
+using Typage.Engine.Markdown;
+
 namespace Typage.Engine.Editing;
 
 /// <summary>The kind of list a line's marker belongs to (or none).</summary>
@@ -155,6 +157,16 @@ public readonly record struct LinePrefix(
 
         return new LinePrefix(indent, quote, kind, bullet, number, delim, digitCount, hasTask, taskChecked, markerStart, prefixEnd, indentText);
     }
+
+    /// <summary>
+    /// Whether <paramref name="line"/> is ordinary prose that <b>lazily continues</b> the block above it rather
+    /// than opening one of its own — the second source line of a hard-wrapped list item, which the surface flows
+    /// into that item. False for a blank line and for anything that starts a block: a list marker, a blockquote,
+    /// a heading, a rule, a code fence, or front matter. Defers to the tokenizer's own paragraph-line test, so an
+    /// assist that reasons about multi-line items can't drift from what the tokenizer recognizes.
+    /// </summary>
+    public static bool IsLazyContinuation(string line) =>
+        LineTokenizer.IsSetextTextLine(line, isFrontMatterOpen: false);
 
     /// <summary>The prefix to begin the next sibling item/line with (after a newline) — PRD §7.2.</summary>
     public string ContinuationPrefix()

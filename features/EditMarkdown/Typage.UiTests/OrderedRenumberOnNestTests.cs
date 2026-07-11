@@ -57,7 +57,10 @@ public class OrderedRenumberOnNestTests
     {
         var e = At("1. a\n2. b\n3. c", 1, col: 3); // caret in "b"; outermost -> exits the item
         e.TabForTest(true);
-        Assert.Equal("1. a\nb\n1. c", e.Text); // b becomes plain; c starts a fresh list at 1
+        // "b" loses its marker and becomes prose, which the surface flows into item a — so the list is now
+        // "a b" and "c", and c renumbers from 3 to 2. It doesn't restart at 1: prose inside a list continues
+        // the item above it rather than ending the list.
+        Assert.Equal("1. a\nb\n2. c", e.Text);
     }
 
     [AvaloniaFact]

@@ -700,12 +700,23 @@ public partial class MarkdownEditor
             return (false, false); // a deeper nested line / continuation — skip it
         }
 
-        if (p.Indent < self.Indent || p.Quote != self.Quote || p.List != ListKind.Ordered)
+        if (p.Indent < self.Indent || p.Quote != self.Quote)
         {
-            return (true, false); // a shallower level, or a non-ordered same-level sibling, ends the run
+            return (true, false); // a shallower level, or a different quote context, ends the run
         }
 
-        return (false, true); // a same-level ordered sibling
+        if (p.List == ListKind.Ordered)
+        {
+            return (false, true); // a same-level ordered sibling
+        }
+
+        // The line carries no ordered marker. If it is ordinary prose it is a *lazy continuation* of the item
+        // above it — the layout flows it into that item (LayoutModel.AcceptsContinuation), so an item spelled
+        // across two source lines is one item, and the count must run straight through it rather than restart.
+        // Anything that opens a block of its own — a bullet, a heading, a rule, a fence, a quote — does end the
+        // list. Both sides ask the engine the same question, so the ordinal scan and the renderer can't drift
+        // apart on what a multi-line item is.
+        return (!LinePrefix.IsLazyContinuation(text), false);
     }
 
     /// <summary>

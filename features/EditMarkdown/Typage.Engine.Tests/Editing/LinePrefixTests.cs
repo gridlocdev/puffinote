@@ -160,4 +160,24 @@ public class LinePrefixTests
         var lines = new[] { "1. a", "2. b", "3. c" };
         Assert.Null(OrderedListRenumber.Compute(lines, 0));
     }
+
+    [Theory]
+    [InlineData("wrapped onto a second line")]
+    [InlineData("1 is not a list marker without its dot")]
+    [InlineData("[ ] a box needs a list marker to be live")]
+    public void LazyContinuation_IsOrdinaryProse(string line) =>
+        Assert.True(LinePrefix.IsLazyContinuation(line));
+
+    [Theory]
+    [InlineData("")]                 // a blank line continues nothing
+    [InlineData("   ")]
+    [InlineData("- bullet")]
+    [InlineData("2. item")]
+    [InlineData("> quote")]
+    [InlineData("## heading")]
+    [InlineData("---")]              // a rule / setext underline / front-matter fence
+    [InlineData("```")]
+    [InlineData("    indented code")]
+    public void ABlockOpener_IsNotALazyContinuation(string line) =>
+        Assert.False(LinePrefix.IsLazyContinuation(line));
 }

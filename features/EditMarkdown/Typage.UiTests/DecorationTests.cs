@@ -87,6 +87,36 @@ public class DecorationTests
     }
 
     [AvaloniaFact]
+    public void AMultiLineItem_KeepsTheNumberingRunning()
+    {
+        // "wrapped…" is a lazy continuation: the layout flows it into item 1, so those two source lines are
+        // one item. The items below it therefore go on counting — they don't restart a fresh list.
+        var editor = CaretOffLine0("1. a\nwrapped onto a second source line\n1. b\n1. c\nz");
+        Assert.Equal("1. ", OrderedText(editor, 0));
+        Assert.Equal("2. ", OrderedText(editor, 2));
+        Assert.Equal("3. ", OrderedText(editor, 3));
+    }
+
+    [AvaloniaFact]
+    public void AParagraphAfterABlankLine_StillStartsAFreshList()
+    {
+        // The counterpart: this paragraph continues nothing (the blank closed the list above it), so the item
+        // below it opens a new list at 1.
+        var editor = CaretOffLine0("1. a\n2. b\n\nA new paragraph.\n1. c\nz");
+        Assert.Equal("1. ", OrderedText(editor, 4));
+    }
+
+    [AvaloniaFact]
+    public void ABlockBetweenItems_EndsTheList()
+    {
+        // Only *prose* continues an item. A line that opens a block of its own ends the list, so what follows
+        // is a new one — even with no blank line between.
+        Assert.Equal("1. ", OrderedText(CaretOffLine0("1. a\n## Next\n1. b\nz"), 2));
+        Assert.Equal("1. ", OrderedText(CaretOffLine0("1. a\n---\n1. b\nz"), 2));
+        Assert.Equal("1. ", OrderedText(CaretOffLine0("1. a\n- bullet\n1. b\nz"), 2));
+    }
+
+    [AvaloniaFact]
     public void OrderedNumber_ShowsLiteralDigits_InRawSourceMode()
     {
         var editor = CaretOffLine0("5. item\nx");

@@ -87,12 +87,14 @@ public class PlainLineReorderTests
     }
 
     [AvaloniaFact]
-    public void MovingAPlainLineIntoANumberedList_RenumbersTheSource()
+    public void MovingAPlainLineIntoANumberedList_KeepsTheNumberingRunning()
     {
-        // The plain line is moved down into the list, splitting it; the second part restarts at 1 in source.
+        // The plain line lands inside the list, where it reads as a second source line of item a (the surface
+        // flows a lazy continuation into the item above it). One item spelled across two lines is still one
+        // item, so b stays 2 — it doesn't open a fresh list.
         var e = At("plain\n1. a\n2. b", 0);
         e.MoveLinesForTest(1);
-        Assert.Equal("1. a\nplain\n1. b", e.Text); // a alone (1), then a fresh list b (1)
+        Assert.Equal("1. a\nplain\n2. b", e.Text);
     }
 
     [AvaloniaFact]
