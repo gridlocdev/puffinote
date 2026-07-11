@@ -41,7 +41,13 @@ public class ViewModeTests
     [AvaloniaFact]
     public void SetViewMode_UpdatesEditorAndSetting()
     {
+        // State the starting mode rather than trusting the persisted default: a sibling test opens a window in
+        // RawText, and the shell persists a view change to the config file the whole run shares
+        // (TestConfigIsolation gives the run one throwaway dir, not one per test). What this test is about is
+        // the *change* — that setting a mode reaches both the editor and the settings — so it says where it
+        // starts from instead of depending on which test ran before it.
         var settings = new SettingsService();
+        settings.Settings.View = MarkdownEditor.ViewMode.Rich;
         var window = new MainWindow(settings);
         Assert.Equal(MarkdownEditor.ViewMode.Rich, window.EditorView.Editor.View);
 
