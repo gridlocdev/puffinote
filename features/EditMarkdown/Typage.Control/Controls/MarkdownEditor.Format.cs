@@ -54,7 +54,15 @@ public partial class MarkdownEditor
 
     private int CaretLine => Buffer.Document.GetPosition(Buffer.Selection.Caret).Line;
 
-    private LinePrefix CaretPrefix() => LinePrefix.Parse(Buffer.Document.GetLineText(CaretLine));
+    /// <summary>
+    /// The block-level prefix in force at the caret: the marker of the block the caret is drawn inside, read
+    /// from that block's first line rather than the caret's own source line. A hard-wrapped item's continuation
+    /// lines carry no marker of their own, but the reader sees the caret inside the item — so the item's tool
+    /// stays lit as the caret moves through it, instead of the toolbar going dark past the first wrapped line.
+    /// Blocks the caret starts (and every line in raw-text mode) resolve to themselves, so this is a no-op there.
+    /// </summary>
+    private LinePrefix CaretPrefix() =>
+        LinePrefix.Parse(Buffer.Document.GetLineText(BlockFirstLine(CaretLine)));
 
     /// <summary>True when the caret lies within a content token on its line whose type is one of <paramref name="types"/>.</summary>
     private bool CaretInInline(params TokenType[] types)

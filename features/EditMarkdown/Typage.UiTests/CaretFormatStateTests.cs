@@ -60,6 +60,29 @@ public class CaretFormatStateTests
     }
 
     [AvaloniaFact]
+    public void List_tools_stay_lit_with_the_caret_on_a_wrapped_items_continuation_line()
+    {
+        // The continuation line carries no marker, but it flows into the item above — the reader sees the
+        // caret inside that item, so its tool must stay lit rather than the toolbar going dark past line one.
+        Assert.True(At("- apple\nwrapped", 12).IsBulletListActive);
+        Assert.True(At("1. apple\nwrapped", 13).IsNumberedListActive);
+        Assert.True(At("- [ ] apple\nwrapped", 16).IsTaskActive);
+
+        // …and the checkbox item still doesn't light the bullet tool from its continuation line either.
+        Assert.False(At("- [ ] apple\nwrapped", 16).IsBulletListActive);
+    }
+
+    [AvaloniaFact]
+    public void A_wrapped_plain_paragraph_lights_nothing()
+    {
+        // Only a marker carries over. A paragraph's continuation has no list to report.
+        var e = At("apple\nwrapped", 10);
+        Assert.False(e.IsBulletListActive);
+        Assert.False(e.IsNumberedListActive);
+        Assert.False(e.IsTaskActive);
+    }
+
+    [AvaloniaFact]
     public void A_checkbox_lights_only_the_checkbox_tool_not_the_bullet_tool_as_well()
     {
         // A task item is spelled with a bullet ("- [ ] ") but is its own kind: it must not also light the
