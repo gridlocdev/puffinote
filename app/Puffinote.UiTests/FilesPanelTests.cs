@@ -88,6 +88,22 @@ public sealed class FilesPanelTests : IDisposable
     }
 
     [AvaloniaFact]
+    public void The_breadcrumb_keeps_the_destination_and_drops_the_notebook_name()
+    {
+        var panel = Open();
+        panel.ScopeToForTest(Path("Projects/Neural Nets"));
+
+        var trail = panel.BreadcrumbTextForTest;
+
+        // The folder you scoped to is the whole point of the trail — it must survive.
+        Assert.Contains("Neural Nets", trail, StringComparison.Ordinal);
+        Assert.Contains("Projects", trail, StringComparison.Ordinal); // ...and the route to it
+        // ...but not the notebook's own name, which the sidebar header already shows and which — being a folder
+        // name, often a long one — used to crowd the destination right off the end of the line.
+        Assert.DoesNotContain(_notebook.Name, trail, StringComparison.Ordinal);
+    }
+
+    [AvaloniaFact]
     public void Unpinning_the_scoped_folder_falls_back_to_All_notes()
     {
         var panel = Open();

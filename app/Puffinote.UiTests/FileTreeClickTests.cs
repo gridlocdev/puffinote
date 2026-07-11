@@ -1,4 +1,5 @@
 using Avalonia;
+using Avalonia.Automation;
 using Avalonia.Controls;
 using Avalonia.Headless;
 using Avalonia.Headless.XUnit;
@@ -47,11 +48,16 @@ public sealed class FileTreeClickTests : IDisposable
         Dispatcher.UIThread.RunJobs();
     }
 
-    /// <summary>The row whose label is <paramref name="name"/>.</summary>
+    /// <summary>
+    /// The row for the entry called <paramref name="name"/>, found by its <em>accessible</em> name rather than by
+    /// hunting for a TextBlock holding the whole file name — since a file row now shows its stem and puts the
+    /// extension in a pill beside it, no single TextBlock spells "apple.md" any more. The automation name does,
+    /// which is also what a screen reader announces, so it is the row's identity in the sense that matters.
+    /// </summary>
     private static ListBoxItem Row(Window window, string name) =>
         window.GetVisualDescendants()
             .OfType<ListBoxItem>()
-            .Single(i => i.GetVisualDescendants().OfType<TextBlock>().Any(t => t.Text == name));
+            .Single(i => i.GetVisualDescendants().OfType<Control>().Any(c => AutomationProperties.GetName(c) == name));
 
     /// <summary>Click the row whose label is <paramref name="name"/>, in window coordinates.</summary>
     private static void Click(Window window, string name, RawInputModifiers modifiers = RawInputModifiers.None)

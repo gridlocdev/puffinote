@@ -7,6 +7,7 @@ using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.Layout;
 using Avalonia.Media;
+using Avalonia.Media.Immutable;
 using Avalonia.Styling;
 using Avalonia.VisualTree;
 using Puffinote.Components.Controls.Icons;
@@ -51,6 +52,18 @@ internal sealed class FileTreeView : UserControl
 
     private static readonly TimeSpan TypeaheadWindow = TimeSpan.FromSeconds(1);
 
+    /// <summary>Width of one level of nesting — and so the spacing of the indent guides.</summary>
+    private const double IndentStep = 14;
+
+    /// <summary>The accent bar down the leading edge of the selected row (reserved on every row).</summary>
+    private const double SelectionBarWidth = 2;
+
+    /// <summary>Comfortably above WCAG 2.2 §2.5.8's 24px floor for a pointer target.</summary>
+    private const double RowHeight = 26;
+
+    /// <summary>Names the indent-guide borders so <see cref="RefreshGuides"/> can find them in a realized row.</summary>
+    private const string GuideName = "PART_TreeGuide";
+
     private readonly ListBox _list;
     private NotebookNode? _root;
     private readonly HashSet<string> _expanded = new(StringComparer.OrdinalIgnoreCase);
@@ -84,8 +97,12 @@ internal sealed class FileTreeView : UserControl
             Focusable = false, // keyboard focus lives on the UserControl (below); the list is pointer-driven only
             ItemTemplate = new FuncDataTemplate<Row>((row, _) => BuildRow(row), supportsRecycling: true),
         };
-        StyleSelectionWithTheAccent(_list);
-        _list.SelectionChanged += (_, _) => SelectionChanged?.Invoke(SelectedNode);
+        StyleRows(_list);
+        _list.SelectionChanged += (_, _) =>
+        {
+            RefreshGuides(); // the traced branch follows the selection
+            SelectionChanged?.Invoke(SelectedNode);
+        };
         _list.ContextMenu = BuildContextMenu();
         // A right-click selects the row under the pointer first, so the context menu (Pin, Rename, …) always
         // targets what was clicked rather than whatever happened to be selected before. The same handler decides
@@ -179,8 +196,34 @@ internal sealed class FileTreeView : UserControl
         Rebuild(selectPath: displayRoot.Path);
     }
 
-    /// <summary>The paths currently pinned to the sidebar, so the context menu can offer Pin vs. Unpin.</summary>
-    public void SetPinnedPaths(IReadOnlySet<string> pinned) => _pinned = pinned;
+    /// <summary>
+    /// The paths currently pinned to the sidebar, so the context menu can offer Pin vs. Unpin — and so each
+    /// folder row's star knows whether to draw solid or hollow. A changed set repaints the rows; an unchanged one
+    /// is a no-op, because this is re-asserted on every chip render, including ones that changed nothing.
+    /// </summary>
+    public void SetPinnedPaths(IReadOnlySet<string> pinned)
+    {
+        if (_pinned.SetEquals(pinned))
+        {
+            return;
+        }
+
+        _pinned = pinned;
+        Rebuild(selectPath: SelectedNode?.Path);
+    }
+
+    /// <summary>Shut every folder, leaving the scope's top level (the sidebar's "Collapse all").</summary>
+    public void CollapseAll()
+    {
+        if (_root is null)
+        {
+            return;
+        }
+
+        _expanded.Clear();
+        _expanded.Add(_root.Path); // the scoped level itself stays open, or the tree would render empty
+        Rebuild(selectPath: SelectedNode?.Path);
+    }
 
     /// <summary>Re-read the tree from disk, preserving expansion and (when it still exists) the selection.</summary>
     public void Refresh() => Rebuild(selectPath: SelectedNode?.Path);
@@ -261,24 +304,61 @@ internal sealed class FileTreeView : UserControl
     /// state, "this is the current thing", was being said in two colours at once: the selected file showed blue
     /// in the tree and orange in its tab. That reads as an accident, not a system.</para>
     ///
-    /// <para>The fix isn't a token change — it's that the token was never applied here at all.</para>
+    /// <para>The selected row also carries an accent <b>bar</b> down its leading edge, not just the wash —
+    /// a second, non-colour channel for "you are here" (WCAG 2.2 §1.4.1), spelled the same way as the sidebar's
+    /// active nav underline. The bar's width is reserved (transparent) on every row so selecting one doesn't
+    /// shove its name two pixels sideways.</para>
     /// </summary>
-    private static void StyleSelectionWithTheAccent(ListBox list)
+    private static void StyleRows(ListBox list)
     {
         var palette = Tokens.Dark;
 
-        static Style ItemBackground(Func<Selector?, Selector> selector, IBrush background) =>
-            new(x => selector(x).Template().OfType<ContentPresenter>().Name("PART_ContentPresenter"))
+        static Style Item(Func<Selector?, Selector> selector, params Setter[] setters)
+        {
+            var style = new Style(x => selector(x).Template().OfType<ContentPresenter>().Name("PART_ContentPresenter"));
+            foreach (var setter in setters)
             {
-                Setters = { new Setter(ContentPresenter.BackgroundProperty, background) },
-            };
+                style.Setters.Add(setter);
+            }
+
+            return style;
+        }
+
+        // Resting: rounded, with the selected row's accent bar reserved but invisible.
+        list.Styles.Add(Item(
+            x => x.OfType<ListBoxItem>(),
+            new Setter(ContentPresenter.CornerRadiusProperty, new CornerRadius(6)),
+            new Setter(ContentPresenter.BorderThicknessProperty, new Thickness(SelectionBarWidth, 0, 0, 0)),
+            new Setter(ContentPresenter.BorderBrushProperty, Brushes.Transparent),
+            new Setter(ContentPresenter.PaddingProperty, new Thickness(0))));
+
+        list.Styles.Add(Item(
+            x => x.OfType<ListBoxItem>().Class(":pointerover"),
+            new Setter(ContentPresenter.BackgroundProperty, palette.SurfaceHover)));
 
         // Selected (including when the list doesn't have focus — Avalonia drops :focus but keeps :selected).
-        list.Styles.Add(ItemBackground(x => x.OfType<ListBoxItem>().Class(":selected"), palette.AccentSubtle));
-        list.Styles.Add(ItemBackground(
-            x => x.OfType<ListBoxItem>().Class(":selected").Class(":pointerover"), palette.AccentSubtle));
-        list.Styles.Add(ItemBackground(
-            x => x.OfType<ListBoxItem>().Class(":pointerover"), palette.SurfaceBorder));
+        foreach (var selected in new Func<Selector?, Selector>[]
+                 {
+                     x => x.OfType<ListBoxItem>().Class(":selected"),
+                     x => x.OfType<ListBoxItem>().Class(":selected").Class(":pointerover"),
+                 })
+        {
+            list.Styles.Add(Item(
+                selected,
+                new Setter(ContentPresenter.BackgroundProperty, palette.AccentSubtle),
+                new Setter(ContentPresenter.BorderBrushProperty, palette.Accent)));
+        }
+
+        // The container itself carries the row's outer spacing; the ListBoxItem's own default padding would
+        // otherwise inset the content *inside* the rounded, accent-barred presenter.
+        list.Styles.Add(new Style(x => x.OfType<ListBoxItem>())
+        {
+            Setters =
+            {
+                new Setter(Layoutable.MarginProperty, new Thickness(4, 1)),
+                new Setter(ListBoxItem.PaddingProperty, new Thickness(0)),
+            },
+        });
     }
 
     private Control BuildRow(Row? row)
@@ -307,45 +387,254 @@ internal sealed class FileTreeView : UserControl
             }
             : new Control { Width = 12 };
 
-        Control glyph = row.Node.IsDirectory
-            ? new LucideIcon
-            {
-                IconKey = expanded ? "folder-open" : "folder",
-                Size = 15,
-                Foreground = palette.MutedText,
-                VerticalAlignment = VerticalAlignment.Center,
-            }
-            : new Control { Width = 15 };
+        // The glyph says what the row *is*: one folder colour for every directory, and for a file the glyph and
+        // colour of its type (see FileGlyph). A blank spacer used to sit here for files.
+        var kind = row.Node.IsDirectory ? default : FileGlyph.ForFile(row.Node.Name);
+        var glyph = new LucideIcon
+        {
+            IconKey = row.Node.IsDirectory ? FileGlyph.FolderIcon(expanded) : kind.IconKey,
+            Size = 15,
+            Foreground = row.Node.IsDirectory ? FileGlyph.Folder : kind.Color,
+            VerticalAlignment = VerticalAlignment.Center,
+            Margin = new Thickness(5, 0, 7, 0),
+        };
+
+        // A file shows its stem; its extension moves into the pill on the right, where the eye can scan a whole
+        // column of types at once instead of hunting for a suffix at the ragged end of each name.
+        var (stem, extension) = row.Node.IsDirectory
+            ? (row.Node.Name, string.Empty)
+            : FileGlyph.Split(row.Node.Name);
 
         var name = new TextBlock
         {
-            Text = row.Node.Name,
+            Text = stem,
             VerticalAlignment = VerticalAlignment.Center,
-            FontWeight = row.Node.IsDirectory ? FontWeight.Medium : FontWeight.Normal,
+            TextTrimming = TextTrimming.CharacterEllipsis,
+            FontWeight = row.Node.IsDirectory ? FontWeight.SemiBold : FontWeight.Normal,
         };
         if (!row.Node.IsDirectory)
         {
-            name.Foreground = palette.MutedText; // files read one step back from folders (which use the default text brush)
+            // Files read one step back from folders, which keep the inherited default text brush. Assigning
+            // `null` here to mean "use the default" would instead set a local null brush — and paint nothing.
+            name.Foreground = palette.MutedText;
         }
 
-        var stack = new StackPanel
+        var content = new DockPanel
         {
-            Orientation = Orientation.Horizontal,
-            Spacing = 5,
-            MinHeight = 24, // a comfortable pointer target (WCAG 2.2 §2.5.8) — rows were as short as their text
-            Margin = new Thickness(row.Depth * 14, 0, 0, 0),
-            Children = { disclosure, glyph, name },
+            LastChildFill = true,
+            MinHeight = RowHeight,
+
+            // Transparent, not null: a panel with no background is not hit-testable in Avalonia, so the pointer
+            // would sail straight through this row and the PointerEntered/Exited below would never fire — leaving
+            // the pin star invisible forever on an unpinned folder. Transparent still paints nothing, so the
+            // ListBoxItem's own hover/selection wash (drawn behind it) shows through unchanged.
+            Background = Brushes.Transparent,
         };
+        content.Children.Add(Dock(BuildGuides(row, palette), Avalonia.Controls.Dock.Left));
+        content.Children.Add(Dock(disclosure, Avalonia.Controls.Dock.Left));
+        content.Children.Add(Dock(glyph, Avalonia.Controls.Dock.Left));
+
+        // Docked right, before the name, so the name is what gives way (ellipsizes) when the sidebar narrows —
+        // never the type or the pin, which are fixed-width and carry the row's whole meaning at a glance.
+        if (row.Node.IsDirectory)
+        {
+            content.Children.Add(Dock(BuildPinStar(row, palette), Avalonia.Controls.Dock.Right));
+        }
+        else if (extension.Length > 0)
+        {
+            content.Children.Add(Dock(BuildTypePill(extension, palette), Avalonia.Controls.Dock.Right));
+        }
+
+        content.Children.Add(name);
 
         // Say the disclosure state out loud, not only in the chevron: a screen reader gets "collapsed"/"expanded"
-        // rather than an unannotated row.
-        AutomationProperties.SetName(stack, row.Node.Name);
+        // rather than an unannotated row. The name is announced whole (with its extension) even though the row
+        // splits it in two visually — "Roadmap, md" is not what a file is called.
+        AutomationProperties.SetName(content, row.Node.Name);
         if (expandable)
         {
-            AutomationProperties.SetHelpText(stack, expanded ? "expanded" : "collapsed");
+            AutomationProperties.SetHelpText(content, expanded ? "expanded" : "collapsed");
         }
 
-        return stack;
+        // The pin star is revealed by hovering the row (it is always visible once the folder *is* pinned).
+        if (row.Node.IsDirectory)
+        {
+            var star = content.Children.OfType<Button>().First();
+            content.PointerEntered += (_, _) => star.Opacity = 1;
+            content.PointerExited += (_, _) => star.Opacity = _pinned.Contains(row.Node.Path) ? 1 : 0;
+        }
+
+        return content;
+    }
+
+    /// <summary>
+    /// The vertical indent guides to the left of a nested row — one per level of ancestry, each tracing the
+    /// branch of the folder that encloses it. Indentation alone tells you a row is nested but not <em>under
+    /// what</em>: past two levels the eye has to travel back up a column of whitespace to find the parent. The
+    /// guide draws that column in.
+    ///
+    /// <para>The guide of the branch the selection sits inside is drawn in the accent, so the path from the
+    /// notebook down to the current file is traced rather than merely indented. That state moves with the
+    /// selection, so it is repainted (not rebuilt) by <see cref="RefreshGuides"/>.</para>
+    /// </summary>
+    private Control BuildGuides(Row row, ThemePalette palette)
+    {
+        var guides = new StackPanel { Orientation = Orientation.Horizontal };
+        for (var level = 0; level < row.Depth; level++)
+        {
+            var ancestor = AncestorPath(row, level);
+            guides.Children.Add(new Border
+            {
+                Name = GuideName,
+                Tag = ancestor,
+                Width = IndentStep,
+                BorderThickness = new Thickness(1, 0, 0, 0),
+                BorderBrush = GuideBrush(ancestor, palette),
+            });
+        }
+
+        return guides;
+    }
+
+    /// <summary>The accent when the selection lives inside <paramref name="ancestor"/>'s branch; a hairline otherwise.</summary>
+    private IBrush GuideBrush(string? ancestor, ThemePalette palette) =>
+        ancestor is not null && SelectedNode is { } selected && PathScope.IsUnderOrEqual(selected.Path, ancestor)
+            ? TracedGuide(palette)
+            // Deliberately not SurfaceBorder: a guide is decoration, and that token is a 3:1 *boundary*. Repeated
+            // down every level of a deep tree it out-shouts the file names it exists to organise.
+            : palette.SurfaceHover;
+
+    /// <summary>
+    /// The traced branch — the accent, but at about a third of its strength.
+    ///
+    /// <para>A deep selection lights a guide at <em>every</em> level above it, so at full accent a four-deep file
+    /// grew four saturated bars down the tree's left edge and the trace became the loudest thing on a panel whose
+    /// entire job is to list names. Dimmed, it reads as what it is — a tint you follow back to the root — rather
+    /// than as a stack of rules competing with the content.</para>
+    /// </summary>
+    private static IBrush TracedGuide(ThemePalette palette) =>
+        palette.Accent is ISolidColorBrush solid
+            ? new ImmutableSolidColorBrush(solid.Color, 0.32)
+            : palette.Accent;
+
+    /// <summary>
+    /// The folder enclosing <paramref name="row"/> at nesting <paramref name="level"/> (0 = a top-level folder of
+    /// the current scope), or null if the row is not that deep.
+    /// </summary>
+    private string? AncestorPath(Row row, int level)
+    {
+        if (_root is null)
+        {
+            return null;
+        }
+
+        var relative = System.IO.Path.GetRelativePath(_root.Path, row.Node.Path);
+        var segments = relative.Split(
+            [System.IO.Path.DirectorySeparatorChar, System.IO.Path.AltDirectorySeparatorChar],
+            StringSplitOptions.RemoveEmptyEntries);
+
+        // The row itself is the last segment, so an *ancestor* level must fall strictly before it.
+        return level >= segments.Length - 1
+            ? null
+            : System.IO.Path.Combine([_root.Path, .. segments[..(level + 1)]]);
+    }
+
+    /// <summary>
+    /// Re-trace the guides when the selection moves. Only the realized rows are touched (a screenful), and rows
+    /// that scroll into view afterwards paint themselves correctly from <see cref="BuildRow"/>.
+    /// </summary>
+    private void RefreshGuides()
+    {
+        var palette = Tokens.Dark;
+
+        // Ask the list for the rows it has actually realized rather than probing every index: this runs on every
+        // arrow-key press, and a held Down key through a 10,000-note notebook would otherwise do 10,000
+        // container lookups per keystroke to repaint the one screenful that exists.
+        foreach (var container in _list.GetRealizedContainers())
+        {
+            foreach (var guide in container.GetVisualDescendants().OfType<Border>().Where(b => b.Name == GuideName))
+            {
+                guide.BorderBrush = GuideBrush(guide.Tag as string, palette);
+            }
+        }
+    }
+
+    /// <summary>The file's type, spelled out — the channel that survives a reader who cannot tell the glyph colours apart.</summary>
+    private static Control BuildTypePill(string extension, ThemePalette palette) => new Border
+    {
+        Child = new TextBlock
+        {
+            Text = extension.ToUpperInvariant(),
+            FontSize = 9,
+            LetterSpacing = 0.5,
+            FontWeight = FontWeight.Medium,
+            Foreground = palette.MutedText,
+        },
+        Background = palette.SurfaceInset,
+        BorderBrush = palette.SurfaceBorder,
+        BorderThickness = new Thickness(1),
+        CornerRadius = new CornerRadius(4),
+        Padding = new Thickness(5, 1, 5, 2),
+        Margin = new Thickness(6, 0, 2, 0),
+        VerticalAlignment = VerticalAlignment.Center,
+    };
+
+    /// <summary>
+    /// Pin a folder to the sidebar's chips straight from its row. Pinning was previously reachable only through
+    /// the context menu — discoverable if you already knew, invisible if you didn't.
+    ///
+    /// <para>A pinned folder's star is <b>solid</b>, an unpinned one's is an outline, so the state is not carried
+    /// by the accent colour alone (WCAG 2.2 §1.4.1). It is kept out of the tab order: the tree owns its key map,
+    /// and the context menu is the keyboard route to the same two commands.</para>
+    /// </summary>
+    private Button BuildPinStar(Row row, ThemePalette palette)
+    {
+        bool pinned = _pinned.Contains(row.Node.Path);
+        var star = new Button
+        {
+            Content = new LucideIcon
+            {
+                IconKey = "star",
+                Size = 13,
+                IsFilled = pinned,
+                Foreground = pinned ? palette.Accent : palette.MutedText,
+            },
+            Width = 24, // WCAG 2.2 §2.5.8's floor; the row is 26px, so the full target fits
+            Height = 24,
+            Padding = new Thickness(0),
+            Margin = new Thickness(4, 0, 2, 0),
+            Background = Brushes.Transparent,
+            BorderThickness = new Thickness(0),
+            CornerRadius = new CornerRadius(5),
+            HorizontalContentAlignment = HorizontalAlignment.Center,
+            VerticalContentAlignment = VerticalAlignment.Center,
+            VerticalAlignment = VerticalAlignment.Center,
+            IsTabStop = false,
+            Opacity = pinned ? 1 : 0, // revealed on row hover; see BuildRow
+            Cursor = new Cursor(StandardCursorType.Hand),
+        };
+
+        star.Click += (_, _) =>
+        {
+            if (pinned)
+            {
+                UnpinRequested?.Invoke(row.Node);
+            }
+            else
+            {
+                PinRequested?.Invoke(row.Node);
+            }
+        };
+
+        ToolTip.SetTip(star, pinned ? "Unpin from sidebar" : "Pin to sidebar");
+        AutomationProperties.SetName(star, pinned ? $"Unpin {row.Node.Name}" : $"Pin {row.Node.Name}");
+        return star;
+    }
+
+    private static T Dock<T>(T control, Dock dock) where T : Control
+    {
+        DockPanel.SetDock(control, dock);
+        return control;
     }
 
     // ---- Keyboard -------------------------------------------------------------------------------
@@ -564,6 +853,13 @@ internal sealed class FileTreeView : UserControl
         }
 
         if (!properties.IsLeftButtonPressed || row is not { DataContext: Row clicked })
+        {
+            return;
+        }
+
+        // The pin star is a button living inside the row. Its own Click does the work, and the row must not
+        // *also* open the file / toggle the folder underneath it.
+        if ((e.Source as Visual)?.FindAncestorOfType<Button>() is not null)
         {
             return;
         }

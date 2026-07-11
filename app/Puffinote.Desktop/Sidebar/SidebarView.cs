@@ -3,6 +3,7 @@ using Avalonia.Automation;
 using Avalonia.Controls;
 using Avalonia.Layout;
 using Avalonia.Media;
+using Puffinote.Components.Controls.Icons;
 using Puffinote.Components.Theming;
 using Puffinote.Desktop.Shell;
 
@@ -31,7 +32,18 @@ internal sealed class SidebarView : UserControl
         FontWeight = FontWeight.SemiBold,
         LetterSpacing = 0.3,
         TextTrimming = TextTrimming.CharacterEllipsis,
+        VerticalAlignment = Avalonia.Layout.VerticalAlignment.Center,
         Margin = new Thickness(12, 8),
+    };
+
+    /// <summary>The header's icon buttons — hidden until a notebook is open, since neither means anything without one.</summary>
+    private readonly StackPanel _actions = new()
+    {
+        Orientation = Orientation.Horizontal,
+        Spacing = 2,
+        Margin = new Thickness(0, 0, 6, 0),
+        VerticalAlignment = Avalonia.Layout.VerticalAlignment.Center,
+        IsVisible = false,
     };
     private readonly StackPanel _switcher = new()
     {
@@ -62,13 +74,19 @@ internal sealed class SidebarView : UserControl
         _header.Foreground = palette.MutedText;
 
         BuildSwitcher();
+        BuildActions(palette);
         _body.Child = _active.View;
+
+        // The notebook name takes the row; the actions sit at its right edge, where a title bar's controls go.
+        var headerRow = new DockPanel { LastChildFill = true };
+        headerRow.Children.Add(Dock(_actions, Avalonia.Controls.Dock.Right));
+        headerRow.Children.Add(_header);
 
         Content = new DockPanel
         {
             Children =
             {
-                Dock(_header, Avalonia.Controls.Dock.Top),
+                Dock(headerRow, Avalonia.Controls.Dock.Top),
                 Dock(_switcher, Avalonia.Controls.Dock.Top),
                 _body,
             },
@@ -118,6 +136,7 @@ internal sealed class SidebarView : UserControl
     {
         _header.Text = root is { } r ? r.Name : "No notebook open";
         ToolTip.SetTip(_header, root?.Path); // the full path is one hover away, without shouting it in the header
+        _actions.IsVisible = root is not null;
         _files.SetRoot(root);
     }
 
@@ -158,6 +177,43 @@ internal sealed class SidebarView : UserControl
         _body.Child = panel.View;
         RefreshSwitcher();
         PanelActivated?.Invoke(panel.Id);
+    }
+
+    /// <summary>
+    /// The two things you reach for while looking at a file tree and could previously only get to through a menu
+    /// or a chord: make a note, and shut every folder you have opened rummaging around. They are icon buttons —
+    /// tooltipped and named for a screen reader — so they cost the header no width it would rather give the
+    /// notebook's name.
+    ///
+    /// <para>They carry no <c>Tag</c>: the panel switcher identifies its own buttons by a string tag, and these
+    /// share a parent with it.</para>
+    /// </summary>
+    private void BuildActions(ThemePalette palette)
+    {
+        _actions.Children.Add(ActionButton(
+            "file-plus", "New note", palette, () => NewNoteRequested?.Invoke(_files.SelectedNode)));
+        _actions.Children.Add(ActionButton(
+            "chevrons-up", "Collapse all folders", palette, () => _files.CollapseAll()));
+    }
+
+    private static Button ActionButton(string icon, string label, ThemePalette palette, Action run)
+    {
+        var button = new Button
+        {
+            Content = new LucideIcon { IconKey = icon, Size = 15, Foreground = palette.MutedText },
+            Width = 28,
+            Height = 28, // a real pointer target (WCAG 2.2 §2.5.8)
+            Padding = new Thickness(0),
+            Background = Brushes.Transparent,
+            BorderThickness = new Thickness(0),
+            CornerRadius = new CornerRadius(6),
+            HorizontalContentAlignment = Avalonia.Layout.HorizontalAlignment.Center,
+            VerticalContentAlignment = Avalonia.Layout.VerticalAlignment.Center,
+        };
+        button.Click += (_, _) => run();
+        ToolTip.SetTip(button, label);
+        AutomationProperties.SetName(button, label);
+        return button;
     }
 
     private void BuildSwitcher()
