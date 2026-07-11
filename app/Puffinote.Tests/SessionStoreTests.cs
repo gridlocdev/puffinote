@@ -47,6 +47,49 @@ public sealed class SessionStoreTests : IDisposable
     }
 
     [Fact]
+    public void Save_then_load_round_trips_open_tabs_in_order_and_the_active_tab()
+    {
+        SessionStore.Save(_root.FullName, new NotebookSession
+        {
+            OpenTabs = [At("budget.ods"), At(System.IO.Path.Combine("sub", "notes.md"))],
+            ActiveTab = At(System.IO.Path.Combine("sub", "notes.md")),
+        });
+
+        var loaded = SessionStore.Load(_root.FullName);
+        Assert.Equal([At("budget.ods"), At(System.IO.Path.Combine("sub", "notes.md"))], loaded.OpenTabs);
+        Assert.Equal(At(System.IO.Path.Combine("sub", "notes.md")), loaded.ActiveTab);
+    }
+
+    [Fact]
+    public void Open_tab_paths_are_stored_relative_so_a_moved_notebook_still_resolves_them()
+    {
+        SessionStore.Save(_root.FullName, new NotebookSession
+        {
+            OpenTabs = [At("budget.ods")],
+            ActiveTab = At("budget.ods"),
+        });
+
+        var json = File.ReadAllText(System.IO.Path.Combine(_root.FullName, NotebookNode.StateDirectoryName, "session.json"));
+        Assert.Contains("budget.ods", json);
+        Assert.DoesNotContain(_root.FullName, json); // no absolute path leaks into the file
+    }
+
+    [Fact]
+    public void A_session_written_before_open_tabs_existed_still_loads()
+    {
+        // A v1 file with no "OpenTabs"/"ActiveTab" fields must load (as no tabs), not be discarded as unreadable.
+        var stateDir = Directory.CreateDirectory(System.IO.Path.Combine(_root.FullName, NotebookNode.StateDirectoryName));
+        File.WriteAllText(
+            System.IO.Path.Combine(stateDir.FullName, "session.json"),
+            """{ "Version": 1, "Recent": ["note.md"], "SidebarCollapsed": false, "SidebarWidth": 260 }""");
+
+        var loaded = SessionStore.Load(_root.FullName);
+        Assert.Equal([At("note.md")], loaded.Recent);
+        Assert.Empty(loaded.OpenTabs);
+        Assert.Null(loaded.ActiveTab);
+    }
+
+    [Fact]
     public void A_session_written_before_pinned_folders_existed_still_loads()
     {
         // A v1 file with no "Pinned" field must load (as no pins), not be discarded as unreadable.

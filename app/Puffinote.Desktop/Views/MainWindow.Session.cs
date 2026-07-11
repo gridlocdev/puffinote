@@ -84,9 +84,35 @@ public partial class MainWindow
         StartSearchIndex();
         StartWatching();
         UpdatePaneChrome();
+
+        // Reopen the tabs from the last session (PRD §7.3), preserving order + which one was active. Fire-and-forget:
+        // opening a pane is async (it loads the file), and the tabs restore independently of the rest of the shell.
+        RestoringTabs = RestoreOpenTabsAsync(session);
     }
 
-    /// <summary>Write the current recent list + sidebar layout to the notebook's session file (best-effort).</summary>
+    /// <summary>
+    /// Reopen the tabs saved for this notebook in their strip order, then re-focus the one that was active.
+    /// A tab whose file has since been deleted is silently skipped — the same forgiveness the recent list gets.
+    /// </summary>
+    private async Task RestoreOpenTabsAsync(NotebookSession session)
+    {
+        foreach (var path in session.OpenTabs)
+        {
+            if (File.Exists(path))
+            {
+                await _tabHost.OpenAsync(path); // no-ops on an unsupported type; each open activates its own tab
+            }
+        }
+
+        // OpenAsync leaves the last-opened tab active, so restore the saved active tab explicitly (when it survived).
+        if (session.ActiveTab is { } active &&
+            _tabHost.Tabs.FirstOrDefault(t => string.Equals(t.Path, active, StringComparison.OrdinalIgnoreCase)) is { } tab)
+        {
+            _tabHost.Activate(tab);
+        }
+    }
+
+    /// <summary>Write the current recent list, open tabs, and sidebar layout to the notebook's session file (best-effort).</summary>
     private void PersistSession()
     {
         if (_notebook.RootPath is not { } root)
@@ -99,6 +125,8 @@ public partial class MainWindow
         {
             Recent = _recent.Paths,
             Pinned = SidebarForTest.PinnedFolders,
+            OpenTabs = [.. _tabHost.Tabs.Select(t => t.Path)],
+            ActiveTab = _tabHost.ActivePane?.Path,
             SidebarCollapsed = _sidebarLayout.IsCollapsed,
             SidebarWidth = width > 0 ? width : SessionStore.DefaultSidebarWidth,
         });

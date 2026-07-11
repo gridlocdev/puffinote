@@ -38,6 +38,75 @@ public sealed class SessionTests
     }
 
     [AvaloniaFact]
+    public async Task Open_tabs_and_their_order_and_the_active_tab_persist_across_reopening_the_notebook()
+    {
+        var dir = Directory.CreateTempSubdirectory("puffinote-tabs-ui");
+        try
+        {
+            var first = Path.Combine(dir.FullName, "first.md");
+            var second = Path.Combine(dir.FullName, "second.md");
+            File.WriteAllText(first, "# first");
+            File.WriteAllText(second, "# second");
+
+            // Open both notes (first, then second) — second is now the active tab — writing the session file.
+            var window = new MainWindow(new NotebookService());
+            window.Show();
+            window.OpenNotebook(dir.FullName);
+            await window.OpenFileAsync(first);
+            await window.OpenFileAsync(second);
+            Assert.Equal([first, second], window.OpenTabPathsForTest);
+            Assert.Equal(second, window.ActiveTabPathForTest);
+
+            // Now make the *first* tab the active one, so the restore has a non-default tab to re-focus.
+            await window.OpenFileAsync(first);
+            Assert.Equal(first, window.ActiveTabPathForTest);
+
+            // A brand-new window over the same notebook reopens both tabs in order, with first still active.
+            var reopened = new MainWindow(new NotebookService());
+            reopened.Show();
+            reopened.OpenNotebook(dir.FullName);
+            await reopened.RestoreOpenTabsForTest;
+
+            Assert.Equal([first, second], reopened.OpenTabPathsForTest);
+            Assert.Equal(first, reopened.ActiveTabPathForTest);
+        }
+        finally
+        {
+            dir.Delete(recursive: true);
+        }
+    }
+
+    [AvaloniaFact]
+    public async Task A_saved_tab_whose_file_is_gone_is_skipped_on_reopen()
+    {
+        var dir = Directory.CreateTempSubdirectory("puffinote-tabs-stale");
+        try
+        {
+            var live = Path.Combine(dir.FullName, "live.md");
+            File.WriteAllText(live, "# live");
+
+            // Seed a session listing one existing file and one that no longer exists.
+            SessionStore.Save(dir.FullName, new NotebookSession
+            {
+                OpenTabs = [Path.Combine(dir.FullName, "deleted.md"), live],
+                ActiveTab = live,
+            });
+
+            var window = new MainWindow(new NotebookService());
+            window.Show();
+            window.OpenNotebook(dir.FullName);
+            await window.RestoreOpenTabsForTest;
+
+            Assert.Equal([live], window.OpenTabPathsForTest); // the missing file is silently skipped
+            Assert.Equal(live, window.ActiveTabPathForTest);
+        }
+        finally
+        {
+            dir.Delete(recursive: true);
+        }
+    }
+
+    [AvaloniaFact]
     public void Opening_a_notebook_records_it_as_the_last_notebook_and_a_launch_reopens_it()
     {
         var dir = Directory.CreateTempSubdirectory("puffinote-last-open");

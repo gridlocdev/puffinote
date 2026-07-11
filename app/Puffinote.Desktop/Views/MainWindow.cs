@@ -60,6 +60,9 @@ public partial class MainWindow : Window
     private Dictionary<string, RelayCommand> _relays = [];
     private bool _closingConfirmed;
 
+    // The most recent tab-restore (PRD §7.3), kept only so tests can await the fire-and-forget reopen.
+    private Task RestoringTabs { get; set; } = Task.CompletedTask;
+
     private List<(KeyGesture Gesture, RelayCommand Command)> _reservedBindings = [];
     private bool _conflictWarned;
     private IEditorPane? _lastScannedPane;
@@ -97,7 +100,11 @@ public partial class MainWindow : Window
         var palette = Tokens.Dark;
 
         _tabHost.ConfirmClose = PromptCloseAsync;
-        _tabHost.Changed += (_, _) => UpdatePaneChrome();
+        _tabHost.Changed += (_, _) =>
+        {
+            UpdatePaneChrome();
+            PersistSession(); // remember the open tabs + which is active per notebook (PRD §7.3) as they change
+        };
 
         var root = new DockPanel();
         InstallMenu(root);
@@ -135,6 +142,15 @@ public partial class MainWindow : Window
 
     /// <summary>The active pane's editor control (test seam — assert config inheritance reached the editor).</summary>
     internal Control? ActiveEditorViewForTest => _tabHost.ActivePane?.View;
+
+    /// <summary>Awaits the in-flight session tab-restore so a test can assert the reopened tabs (test seam).</summary>
+    internal Task RestoreOpenTabsForTest => RestoringTabs;
+
+    /// <summary>The open tabs' file paths, in strip (left-to-right) order (test seam).</summary>
+    internal IReadOnlyList<string> OpenTabPathsForTest => [.. _tabHost.Tabs.Select(t => t.Path)];
+
+    /// <summary>The active tab's file path, or null when no tab is open (test seam).</summary>
+    internal string? ActiveTabPathForTest => _tabHost.ActivePane?.Path;
 
     /// <summary>Redirect the shell keymap to a test file (so rebinding tests don't touch the real user config).</summary>
     internal void UseKeymapForTest(ShortcutKeymap keymap)

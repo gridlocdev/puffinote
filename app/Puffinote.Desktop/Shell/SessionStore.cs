@@ -3,9 +3,9 @@ using System.Text.Json;
 namespace Puffinote.Desktop.Shell;
 
 /// <summary>
-/// The per-notebook UI session (PRD §7.1): the recent-files list and the sidebar's collapsed state and
-/// width. Recent paths are <b>absolute</b> here (the shell works in absolute paths); the on-disk form
-/// stores them relative to the notebook root so a moved/renamed notebook still resolves them.
+/// The per-notebook UI session (PRD §7.1): the recent-files list, the open editor tabs, and the sidebar's
+/// collapsed state and width. Paths are <b>absolute</b> here (the shell works in absolute paths); the on-disk
+/// form stores them relative to the notebook root so a moved/renamed notebook still resolves them.
 /// </summary>
 internal sealed record NotebookSession
 {
@@ -13,6 +13,12 @@ internal sealed record NotebookSession
 
     /// <summary>The sidebar's pinned folders (PRD §7.2), in the user's chosen chip order; absolute paths here.</summary>
     public IReadOnlyList<string> Pinned { get; init; } = [];
+
+    /// <summary>The open editor tabs (PRD §7.3), in strip (left-to-right) order; absolute paths here.</summary>
+    public IReadOnlyList<string> OpenTabs { get; init; } = [];
+
+    /// <summary>The path of the tab that was active, so it can be re-focused after the tabs are reopened; null when none.</summary>
+    public string? ActiveTab { get; init; }
 
     public bool SidebarCollapsed { get; init; }
 
@@ -33,10 +39,11 @@ internal static class SessionStore
 
     private const int CurrentVersion = 1;
 
-    // Pinned is nullable so a session written before pinned folders existed (no field) still loads at Version 1
-    // rather than being discarded — an absent list simply means "no pins yet".
+    // Pinned/OpenTabs/ActiveTab are nullable so a session written before those fields existed still loads at
+    // Version 1 rather than being discarded — an absent list simply means "nothing remembered here yet".
     private sealed record SessionDocument(
-        int Version, List<string> Recent, bool SidebarCollapsed, double SidebarWidth, List<string>? Pinned = null);
+        int Version, List<string> Recent, bool SidebarCollapsed, double SidebarWidth, List<string>? Pinned = null,
+        List<string>? OpenTabs = null, string? ActiveTab = null);
 
     private static string SessionPath(string root) =>
         System.IO.Path.Combine(root, NotebookNode.StateDirectoryName, "session.json");
@@ -65,6 +72,8 @@ internal static class SessionStore
             {
                 Recent = ToAbsolute(document.Recent),
                 Pinned = ToAbsolute(document.Pinned),
+                OpenTabs = ToAbsolute(document.OpenTabs),
+                ActiveTab = document.ActiveTab is { } active ? System.IO.Path.GetFullPath(System.IO.Path.Combine(root, active)) : null,
                 SidebarCollapsed = document.SidebarCollapsed,
                 SidebarWidth = document.SidebarWidth > 0 ? document.SidebarWidth : DefaultSidebarWidth,
             };
@@ -89,7 +98,9 @@ internal static class SessionStore
                 [.. session.Recent.Select(p => System.IO.Path.GetRelativePath(root, p))],
                 session.SidebarCollapsed,
                 session.SidebarWidth,
-                [.. session.Pinned.Select(p => System.IO.Path.GetRelativePath(root, p))]);
+                [.. session.Pinned.Select(p => System.IO.Path.GetRelativePath(root, p))],
+                [.. session.OpenTabs.Select(p => System.IO.Path.GetRelativePath(root, p))],
+                session.ActiveTab is { } active ? System.IO.Path.GetRelativePath(root, active) : null);
             File.WriteAllText(SessionPath(root), JsonSerializer.Serialize(document, new JsonSerializerOptions { WriteIndented = true }));
         }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException)
