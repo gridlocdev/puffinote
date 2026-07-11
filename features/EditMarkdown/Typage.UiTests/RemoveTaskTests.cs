@@ -98,6 +98,82 @@ public class RemoveTaskTests
         Assert.Equal("- [x] done", e.Text);
     }
 
+    // ----- the selection survives the press, mirroring ToggleTask -----
+
+    private static MarkdownEditor Sel(string text, int start, int end)
+    {
+        var e = new MarkdownEditor { Text = text };
+        e.Buffer.Selection = new Selection(start, end);
+        return e;
+    }
+
+    private static string Selected(MarkdownEditor e)
+    {
+        var sel = e.Buffer.Selection;
+        return e.Buffer.Document.GetText(sel.Start, sel.Length);
+    }
+
+    [AvaloniaFact]
+    public void WithTheWholeItemSelected_TheRemainingTextStaysSelected()
+    {
+        var e = Sel("- [ ] buy milk", 0, 14);
+        e.RemoveTask();
+        Assert.Equal("buy milk", e.Text);
+        Assert.Equal("buy milk", Selected(e)); // was collapsed to a bare caret
+    }
+
+    [AvaloniaFact]
+    public void WithOnlyTheTextSelected_ThatTextStaysSelected()
+    {
+        var e = Sel("- [ ] buy milk", 6, 14); // just "buy milk", the marker outside the highlight
+        e.RemoveTask();
+        Assert.Equal("buy milk", Selected(e));
+    }
+
+    [AvaloniaFact]
+    public void WithAMidLineSelection_KeepsExactlyThatTextSelected()
+    {
+        var e = Sel("- [ ] buy milk", 10, 14); // "milk"
+        e.RemoveTask();
+        Assert.Equal("milk", Selected(e));
+    }
+
+    [AvaloniaFact]
+    public void AddingThenRemovingACheckbox_ReturnsTheOriginalHighlight()
+    {
+        // The round trip: ⌘L grows the selection to take the new marker in, ⌘⇧L gives back exactly the text
+        // the user first highlighted.
+        var e = Sel("buy milk", 0, 8);
+        e.ToggleTask();
+        Assert.Equal("- [ ] buy milk", Selected(e));
+
+        e.RemoveTask();
+        Assert.Equal("buy milk", e.Text);
+        Assert.Equal("buy milk", Selected(e));
+        Assert.Equal(0, e.Buffer.Selection.Start);
+    }
+
+    [AvaloniaFact]
+    public void ABackwardsSelection_KeepsItsDirection()
+    {
+        var e = Sel("- [ ] buy milk", 14, 0); // anchor at the end, caret at the start
+        e.RemoveTask();
+        var sel = e.Buffer.Selection;
+        Assert.Equal(8, sel.Anchor);
+        Assert.Equal(0, sel.Caret);
+    }
+
+    [AvaloniaFact]
+    public void OnANumberedTask_TheKeptNumberStaysOutsideTheSelection()
+    {
+        // Only the box goes on an ordered item, so a selection of the content is unaffected by the removal
+        // of the marker before it.
+        var e = Sel("1. [ ] step", 7, 11); // "step"
+        e.RemoveTask();
+        Assert.Equal("1. step", e.Text);
+        Assert.Equal("step", Selected(e));
+    }
+
     [AvaloniaFact]
     public void OnAContinuationLine_StripsTheOwningItemsBox()
     {

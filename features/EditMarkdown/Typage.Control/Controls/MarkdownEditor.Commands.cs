@@ -504,13 +504,17 @@ public partial class MarkdownEditor
         var removeStart = doc.GetLineStart(line) + (prefix.List == ListKind.Unordered ? prefix.MarkerStart : prefix.AfterMarker);
         var removeEnd = doc.GetLineStart(line) + prefix.Length;
         var removeLength = removeEnd - removeStart;
-        var caret = Buffer.Selection.Caret;
+        var sel = Buffer.Selection;
         Buffer.ReplaceRange(removeStart, removeLength, string.Empty);
 
-        // Keep the caret with the text: shift it back past the removed span if it sat after, or clamp it to
-        // where the span began if it sat inside.
-        var moved = caret >= removeEnd ? caret - removeLength : Math.Min(caret, removeStart);
-        Buffer.Selection = Selection.At(moved);
+        // Carry the selection across the deletion rather than collapsing it to a bare caret, mirroring the way
+        // ToggleTask carries it across the insertion. Each endpoint keeps its text: one past the removed marker
+        // shifts back by its width, one that sat *inside* it collapses to where it began, and one before it
+        // stays put. A selection that took the marker in therefore comes back as just its text — so ⌘L then
+        // ⌘⇧L returns the very same highlight the user started with.
+        int Place(int p) => p >= removeEnd ? p - removeLength : Math.Min(p, removeStart);
+
+        Buffer.Selection = new Selection(Place(sel.Anchor), Place(sel.Caret)); // direction preserved
         Focus();
     }
 
