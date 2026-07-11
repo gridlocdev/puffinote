@@ -117,22 +117,30 @@ Don't hardcode versions in `.csproj` files.
 ## Everyday commands
 
 Run these from this feature folder (`features/EditMarkdown/`) — the solution (`Typage.slnx`) and every
-project live here. Shared .NET tooling sits at the repo root and is picked up automatically.
+project live here. Shared .NET tooling sits at the repo root and is picked up automatically. (`make
+typage-build` / `typage-test` / `typage-format` do the same from the root; `make help` lists them.)
 
 ```bash
+export PATH="$PATH:/root/.dotnet"                 # devcontainer: dotnet isn't on PATH
 dotnet restore
 dotnet build
-dotnet run    --project Typage.Desktop          # launch the app
-dotnet run    --project Typage.Cli -- <args>     # the typage CLI (see below)
+dotnet format --verify-no-changes                 # formatting is a gate, not a suggestion
+dotnet run    --project Typage.Desktop           # launch the app (fails in the container — no GPU)
+dotnet run    --project Typage.Cli -- <args>      # the typage CLI (see below)
 dotnet test                                       # all tests
 dotnet test Typage.Engine.Tests                  # fast, no UI
 dotnet test Typage.Cli.Tests                     # end-to-end CLI, in-process
-dotnet test Typage.UiTests                       # headless Avalonia (xUnit v3)
+dotnet test Typage.UiTests                       # headless Avalonia (xUnit v3), null drawing — no GPU needed
 ```
 
-**Definition of done for any task:** `dotnet build` is clean (no new warnings — `WarningsAsErrors=nullable`
-is on solution-wide), `dotnet test` is green, and if you touched the tokenizer, the incremental-equals-full
-rebuild tests still pass.
+Never run two `dotnet build`/`dotnet test` invocations at once — concurrent MSBuild runs deadlock and hang.
+
+**Definition of done for any task:** the code is formatted (`dotnet format`), `dotnet build` is clean, and
+`dotnet test` is green — and if you touched the tokenizer, the incremental-equals-full rebuild tests still
+pass. "Clean" means **zero** warnings: `TreatWarningsAsErrors=true` repo-wide fails the build on any warning,
+analyzer and code-style ones included (only `IDE0060`, unused parameter, is exempt). Touching
+`Typage.Control` or `shared/` means Puffinote is affected too — build `app/Puffinote.slnx`, or just
+`make check`.
 
 ## Debugging with the `typage` CLI
 
@@ -154,9 +162,16 @@ surface consumes, so what it prints is what the editor styles.
 ## Where things go
 
 - **Engine logic** → `Typage.Engine/` (`Document/`, `Editing/`, `Markdown/`, `Html/`).
-- **Editing surface + presentation seams** → `Typage.Control/` (`Controls/`, `Views/`, `Rendering/`).
-- **Shell** → `Typage.Desktop/` (window, menu, dialogs, `Services/`).
+- **Editing surface + presentation seams + every editing command** → `Typage.Control/` (`Controls/`,
+  `Views/`, `Rendering/`). Puffinote embeds *this*, so a command added to the shell instead would be
+  invisible there — see the note in "What this project is."
+- **Shell** → `Typage.Desktop/` (window, menu, dialogs, `Services/`) — shell commands only.
 - **CLI** → `Typage.Cli/` (`Commands/` + `Infrastructure/`).
+- **Anything Cellestra or Puffinote would also want** — theming, icons/glyphs, overlays, shared shell
+  chrome → **`shared/Puffinote.Components/`** (or `Puffinote.Components.Core/` for non-UI code the CLI can
+  use). Both are in `Typage.slnx`, so you can edit them from here — but they're in Cellestra's and
+  Puffinote's solutions too, so a change there is a change to all three: run `make check`, not just
+  `make typage-test`.
 - **Tests** → `Typage.Engine.Tests/`, `Typage.Cli.Tests/`, `Typage.UiTests/`.
 - Don't invent new top-level projects; extend the existing structure. If a new home seems necessary,
   note it and ask.

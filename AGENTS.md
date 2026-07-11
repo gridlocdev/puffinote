@@ -18,8 +18,11 @@ Each editor builds, tests, and ships on its own; the shell embeds them without r
 app/                          Puffinote — the composite shell (Desktop + CLI) that embeds both editors
 features/EditMarkdown/        Typage — the Markdown editor (engine, control, desktop, CLI, tests)
 features/EditSpreadsheets/    Cellestra — the spreadsheet editor (core, editor, charts, desktop, CLI, tests)
-shared/                       Cross-cutting libraries (Puffinote.Components, …) used by the shell/editors
-docs/                         PRD / ARCHITECTURE / proposals (repo-wide and per-area)
+shared/                       Cross-cutting libraries used by the shell and both editors:
+                                Puffinote.Components (Avalonia: theming, icons, overlays, shell chrome)
+                                Puffinote.Components.Core (non-UI: CLI helpers — safe for CLI projects)
+docs/                         PRD / ARCHITECTURE (per-area) + proposals/ (repo-wide)
+Makefile                      Build/test/format entry points for every area — prefer these
 Directory.Build.props         Shared MSBuild settings (framework, nullable, analyzers, OS-specific bin/obj)
 Directory.Packages.props      Central NuGet version pins — the single source of truth for versions
 ```
@@ -31,6 +34,8 @@ There is no single root solution. Each area has its own:
 | The shell / CLI (`app/`) | [`app/AGENTS.md`](app/AGENTS.md) | `app/Puffinote.slnx` |
 | Markdown editor (`features/EditMarkdown/`) | [`features/EditMarkdown/AGENTS.md`](features/EditMarkdown/AGENTS.md) | `features/EditMarkdown/Typage.slnx` |
 | Spreadsheet editor (`features/EditSpreadsheets/`) | [`features/EditSpreadsheets/AGENTS.md`](features/EditSpreadsheets/AGENTS.md) | `features/EditSpreadsheets/Cellestra.slnx` |
+
+`shared/` has no guide of its own because it isn't an area you work in — it's a dependency of all three. Both `Puffinote.Components*` projects are compiled into **all three solutions**, so a change there is a change to every area: build and test all three (`make check`) before you call it done.
 
 When this file and an area guide or a linked doc disagree, the deeper doc wins for design detail; this file wins for repo-wide process.
 
@@ -45,15 +50,24 @@ Versions are pinned centrally in `Directory.Packages.props` (central package man
 
 ## Build & test
 
+The `Makefile` is the front door — it knows every area's solution path, so you don't have to. `make help` lists everything.
+
 ```bash
-dotnet build <area>.slnx                                        # e.g. app/Puffinote.slnx
-dotnet test  <area>.slnx                                        # whole suite for that area
-dotnet test  <area>.slnx --filter "FullyQualifiedName~SomeTest" # one test / a subset — prefer this while iterating
+make build                                # every area   (also: make test, make format)
+make typage-build                         # one area     (prefix: puffinote- | typage- | cellestra-)
+make test-filter AREA=typage FILTER=SomeTest   # one test / a subset — prefer this while iterating
+make check                                # format-verify + build + test, all areas
 ```
 
-**Definition of done:** the relevant solution builds clean and its tests are green. Warnings **are** errors here (`TreatWarningsAsErrors=true`), so a warning fails the build — "builds" already means "no warnings," this is not advisory.
+Underneath it's plain `dotnet build|test|format <area>.slnx` (e.g. `features/EditMarkdown/Typage.slnx`) if you need to hand-roll a command.
 
-**Format before committing.** Run `dotnet format <area>.slnx` on the area you changed, then confirm `dotnet format <area>.slnx --verify-no-changes` exits zero — a non-zero exit means unformatted code, which is a failure to fix before you commit.
+**In the devcontainer, `dotnet` isn't on `PATH`:** `export PATH="$PATH:/root/.dotnet"` first (and `libicu` must be installed).
+
+**Definition of done:** `make check` passes for every area you touched — i.e. formatting verified, solution builds clean, tests green. Warnings **are** errors here (`TreatWarningsAsErrors=true`), so a warning fails the build — "builds" already means "no warnings," this is not advisory. Formatting is a gate too: `make format-check` runs `dotnet format --verify-no-changes`, and a non-zero exit is a failure to fix, not a suggestion.
+
+**Never run two `dotnet build`/`dotnet test` invocations at once** — concurrent runs deadlock on the MSBuild-node and build-output locks and hang indefinitely. (This is why `make check` is serial.) If it happens: kill the `dotnet`/`testhost`/`MSBuild` processes, `dotnet build-server shutdown`, retry.
+
+**CI:** only `.github/workflows/typage-ci.yml` exists, and its push/PR triggers are commented out (`workflow_dispatch` only) — so nothing is gated for you on push. `make check` locally *is* the gate.
 
 **Working with the analyzer/style rules.** The `.editorconfig` at the repo root is the single source of truth for style and diagnostic severities; `dotnet format` auto-fixes the large majority of violations, so run it first before fixing anything by hand. When something still fails the build:
 
@@ -64,7 +78,7 @@ dotnet test  <area>.slnx --filter "FullyQualifiedName~SomeTest" # one test / a s
 
 Build artifacts live under OS-specific `bin/<os>/` and `obj/<os>/` paths (so Linux devcontainer builds don't collide with native host builds) and are git-ignored — never commit them.
 
-**Running.** The devcontainer is Linux and headless (no GPU), so GUI `dotnet run` may fail environmentally — verify GUI behavior with headless tests, not by launching the app. The CLI does run headless; to exercise it:
+**Running.** The devcontainer is Linux and headless (no GPU), so launching a GUI (`make *-run` / `dotnet run --project *.Desktop`) fails *environmentally* — that's the container, not a regression in your change, and it is not something to debug. **Verify GUI behavior with headless UI tests, or through the CLI.** The CLI does run here:
 
 ```bash
 dotnet run --project app/Puffinote.Cli -- info            # summarize the notebook in the current directory
@@ -77,7 +91,7 @@ dotnet run --project app/Puffinote.Cli -- md --help       # route into Typage's 
 1. **One-way layering.** Puffinote → editors + `shared/`; **nothing references Puffinote.** Editors don't depend on each other. If the shell needs a hook to embed an editor, add it to the *editor* or to `shared/`, never as a reach-in from Puffinote.
 2. **Compose, don't fork.** Embed the existing editor surfaces unchanged rather than copying them.
 3. **Guard the supply chain.** Trusted base is the .NET BCL + Avalonia (+ its native deps). No new NuGet package without a stated reason in the PR/commit; **never** add JavaScript/npm. First-party Avalonia-team controls (MIT) are pre-approved.
-4. **macOS-first for 1.0.** The devcontainer is Linux and headless (no GPU) — GUI `dotnet run` may fail environmentally there; verify behavior with headless tests, not by launching the app.
+4. **macOS-first for 1.0.** Ship quality on macOS first; other platforms must still build. (For why you can't launch a GUI to check your work, see [Build & test](#build--test).)
 5. **Nothing left to interpretation.** If a behavior isn't specified, check the area's PRD/ARCHITECTURE (`docs/`); if it truly isn't there, **stop and ask**, then record the answer in the relevant doc.
 
 ## Agent workflow
@@ -86,6 +100,7 @@ Delegate by read vs. write, mapped onto this repo's structure:
 
 - **Exploring or researching across the areas** (`app/`, `EditMarkdown/`, `EditSpreadsheets/`) → fan out: a subagent per area gathers findings that you synthesize centrally. Reads don't collide, so parallelism is a clean win here.
 - **Implementing a change** — especially one that spans the shell and an editor, or touches the one-way layering contract (golden rule #1) → keep it single-threaded. This is the write-heavy case where parallel agents make conflicting implicit decisions that are costly to reconcile, and the layering has to stay coherent across the edit.
+- **Whatever the shape: only one agent builds or tests at a time.** Fanned-out subagents must read, not `dotnet build`/`dotnet test` — concurrent MSBuild runs deadlock (see [Build & test](#build--test)). Verify centrally, after the fan-in.
 
 ## Git workflow
 

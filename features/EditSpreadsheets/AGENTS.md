@@ -1,10 +1,20 @@
-# CLAUDE.md
+# AGENTS.md
 
-Guidance for an AI coding agent (and any human) working in this repository. Read this first, then the linked docs. Keep this file open while you work.
+Guidance for an AI coding agent (and any human) working in the **Cellestra** feature
+(`features/EditSpreadsheets/`). Read the repo-wide [`AGENTS.md`](../../AGENTS.md) first (build/test/format
+gates, git workflow, the one-way layering rule), then this, then the linked docs. Keep this file open while
+you work. This mirrors the conventions of the sibling **Typage** feature
+([`features/EditMarkdown/AGENTS.md`](../EditMarkdown/AGENTS.md)) — same repo, same tooling, same golden-rule
+discipline.
 
 ## What this project is
 
-**Cellestra** is a from-scratch, native **macOS** spreadsheet editor whose home format is **OpenDocument Spreadsheet (`.ods`)**. It is pre-v1 as a *product*, but the code is **substantially built**: the pure brain (`Cellestra.Core`), the Avalonia desktop app (`Cellestra.Desktop`), and the `cellestra` CLI all exist behind a green test suite (300+ tests). **Most tasks now extend or fix existing code — read what's there before adding.** The "suggested build order" below is the layering that already happened, kept as a map of where things live, not a TODO.
+**Cellestra** is a from-scratch, native **macOS** spreadsheet editor whose home format is **OpenDocument Spreadsheet (`.ods`)**. It is pre-v1 as a *product*, but the code is **substantially built**: the pure brain (`Cellestra.Core`), the embeddable editor surface (`Cellestra.Editor`), the thin Avalonia shell (`Cellestra.Desktop`), the chart library (`Cellestra.Charts`), and the `cellestra` CLI all exist behind a green test suite (300+ tests). **Most tasks now extend or fix existing code — read what's there before adding.** The "suggested build order" below is the layering that already happened, kept as a map of where things live, not a TODO.
+
+It is also one of two editors that **Puffinote** (`app/`) composes into a notebook shell. Puffinote embeds
+`Cellestra.Editor` **unchanged** — so anything that acts on the open workbook belongs in that project, not
+in `Cellestra.Desktop`, or the standalone app and Puffinote will drift into two different spreadsheets.
+Nothing here may reference Puffinote; removing Puffinote must leave Cellestra fully working.
 
 Start by reading these, in order:
 
@@ -60,21 +70,24 @@ These are common places to improvise — don't. The spec is fixed:
 Run these from this feature folder (`features/EditSpreadsheets/`) — that's where the
 solution (`Cellestra.slnx`) and every project live. Shared .NET tooling
 (`Directory.Build.props`, `Directory.Packages.props`, `global.json`, `nuget.config`)
-sits at the repo root and is picked up automatically.
+sits at the repo root and is picked up automatically. (`make cellestra-build` / `cellestra-test` /
+`cellestra-format` do the same from the root; `make help` lists them.)
 
 ```bash
+export PATH="$PATH:/root/.dotnet"                # devcontainer: dotnet isn't on PATH
 dotnet restore
 dotnet build
-dotnet run    --project Cellestra.Desktop      # launch the app
+dotnet format --verify-no-changes                # formatting is a gate, not a suggestion
+dotnet run    --project Cellestra.Desktop      # launch the app (fails in the container — no GPU)
 dotnet run    --project Cellestra.Cli -- <args>  # the cellestra CLI (see below)
 dotnet test                                          # all tests
 dotnet test Cellestra.Core.Tests               # fast, no UI
 dotnet test Cellestra.Cli.Tests                # end-to-end CLI, in-process
-dotnet test Cellestra.UiTests                  # headless Avalonia (xUnit v3)
+dotnet test Cellestra.UiTests                  # headless Avalonia (xUnit v3) — see the drawing-backend gotcha below
 ./build/package-mac.sh                                # notarized .app bundle
 ```
 
-**Definition of done for any task:** `dotnet build` is clean (no new warnings), `dotnet test` is green, and if you touched serialization, the `.ods` round-trip *and* unknown-content-preservation tests pass.
+**Definition of done for any task:** the code is formatted (`dotnet format`), `dotnet build` is clean, `dotnet test` is green, and if you touched serialization, the `.ods` round-trip *and* unknown-content-preservation tests pass. "Clean" means **zero** warnings — `TreatWarningsAsErrors=true` is set repo-wide, so any warning fails the build, analyzer and code-style ones included (only `IDE0060`, unused parameter, is exempt). Touching `Cellestra.Editor` or `shared/` means Puffinote is affected too — build `app/Puffinote.slnx`, or just `make check` from the root.
 
 ## Debugging with the `cellestra` CLI
 
@@ -104,8 +117,11 @@ CLI conventions that matter while debugging: **reads go to stdout**; `--format t
 Authoritative tree: **[ARCHITECTURE.md §12](docs/ARCHITECTURE.md#12-folder-structure)**. Quick orientation:
 
 - **Spreadsheet logic** → `Cellestra.Core/`.
-- **UI** → `Cellestra.Desktop/` (Commands, Menu, Controls incl. `CommandBar`, `Icons`, and `SpreadsheetGrid`, Views, ViewModels, Services).
+- **The editor surface — and everything that acts on the open workbook** → `Cellestra.Editor/`: the one command catalog (`Commands/AppCommands`), the `CommandBar`, the `SpreadsheetGrid`, the radial menu, `ChartView`, and the `IEditorHost` seam. **Adding a command or a grid behavior? It goes here.** This is the project Puffinote embeds, so anything you put in the shell instead exists only in the standalone app.
+- **Shell** → `Cellestra.Desktop/` (assembly entry point, `App.axaml`, `Info.plist`, window `Views/`, `Services/`) — a thin host around `Cellestra.Editor`, contributing shell-level concerns only.
+- **Charts** → `Cellestra.Charts/` (custom model + ODF `chart:chart` serializer; no third-party charting library).
 - **CLI** → `Cellestra.Cli/` (`Infrastructure/` + `Commands/`; references only Core + `System.CommandLine`, no Avalonia).
+- **Anything Typage or Puffinote would also want** — theming, icons/glyphs, overlays, shared shell chrome → **`shared/Puffinote.Components/`** (or `Puffinote.Components.Core/` for non-UI code the CLI can use). Both are in `Cellestra.slnx`, so you can edit them from here — but they're in Typage's and Puffinote's solutions too, so a change there is a change to all three: run `make check`.
 - **Tests** → `Cellestra.Core.Tests/`, `Cellestra.UiTests/`, `Cellestra.Cli.Tests/`, `Cellestra.Benchmarks/`.
 - Don't invent new top-level folders; extend the existing structure. If a new home seems necessary, note it and ask.
 
@@ -113,7 +129,7 @@ Authoritative tree: **[ARCHITECTURE.md §12](docs/ARCHITECTURE.md#12-folder-stru
 
 Hard-won facts from building the app and CLI — they'll save you a failed build or a wrong assumption:
 
-- **Nullable warnings are build errors** (`WarningsAsErrors=nullable` in `Directory.Build.props`); `ImplicitUsings`, nullable refs, and `LangVersion=latest` are on solution-wide. "Clean build" means **zero** warnings.
+- **Every warning is a build error** — `TreatWarningsAsErrors=true` in `Directory.Build.props`, not just nullable: analyzer (`CAxxxx`) and code-style (`IDExxxx`) diagnostics fail the build too, since `EnableNETAnalyzers` + `EnforceCodeStyleInBuild` are on. `IDE0060` (unused parameter) is the one exemption (`WarningsNotAsErrors`) — surface it, don't blind-delete the parameter. `ImplicitUsings`, nullable refs, and `LangVersion=latest` are on solution-wide. **Run `dotnet format` first** — it auto-fixes most of these; fix the rest in the code rather than silencing the rule. "Clean build" means **zero** warnings.
 - **Model types live in `Cellestra.Core.Model`** — the `Workbook/` *folder* uses that namespace on purpose (a `Cellestra.Core.Workbook` namespace would clash with the `Workbook` type). `using Cellestra.Core.Model;` gets you `Workbook`, `Worksheet`, `Cell`, `CellAddress`, `CellRange`, `SheetDimensions`.
 - **Adding a NuGet package = two edits:** a `<PackageVersion>` in `Directory.Packages.props` plus a version-less `<PackageReference>` in the `.csproj` (central package management), and a stated reason (Golden Rule #6). New code is added to the solution via `Cellestra.slnx`.
 - **The grid is one control split across `SpreadsheetGrid.*.cs` partials** (`.Chrome`, `.Marquee`, `.Fill`, `.Autofit`, `.PointMode`, `.RefHighlight`, `.Autocomplete`). It draws on an inner `Surface : Control` child because `Panel.Render` is sealed; `Surface` is `IsHitTestVisible=false`, so pointer events route to the owning Panel. Don't hand-write `InitializeComponent` — it's source-generated from the `.axaml`, and named XAML controls (`Grid`, `FormulaInput`, …) are generated fields.

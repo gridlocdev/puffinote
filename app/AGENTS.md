@@ -1,8 +1,10 @@
 # AGENTS.md
 
-Guidance for an AI coding agent (and any human) working in the **Puffinote** app (`app/`). Read this
-first, then the docs. This mirrors the discipline of the sibling features
-(`features/EditMarkdown/AGENTS.md`, `features/EditSpreadsheets/CLAUDE.md`) — same repo, same tooling.
+Guidance for an AI coding agent (and any human) working in the **Puffinote** app (`app/`). Read the
+repo-wide [`AGENTS.md`](../AGENTS.md) first (build/test/format gates, git workflow), then this, then
+the docs. This mirrors the discipline of the sibling features
+([`features/EditMarkdown/AGENTS.md`](../features/EditMarkdown/AGENTS.md),
+[`features/EditSpreadsheets/AGENTS.md`](../features/EditSpreadsheets/AGENTS.md)) — same repo, same tooling.
 
 ## What this is
 
@@ -28,20 +30,26 @@ disagree, the doc wins for design detail; this file wins for process.
 
 .NET 10 · Avalonia 12.0.4 (compiled bindings) · xUnit v3 (+ `Avalonia.Headless.XUnit`) · MIT. Versions
 are pinned in the repo-root `Directory.Packages.props`; `Directory.Build.props` gives `net10.0`, nullable,
-`WarningsAsErrors=nullable`. **Clean build means zero warnings.**
+and **`TreatWarningsAsErrors=true`** — *every* warning fails the build, analyzer and style ones included
+(the lone exception is `IDE0060`, unused parameter). **Clean build means zero warnings.**
 
-## Everyday commands (from `app/`)
+## Everyday commands (from the repo root)
 
 ```bash
 export PATH="$PATH:/root/.dotnet"      # devcontainer: dotnet isn't on PATH; libicu-dev must be installed
-dotnet build Puffinote.slnx
-dotnet test  Puffinote.slnx
+make puffinote-build                   # = dotnet build app/Puffinote.slnx
+make puffinote-test
+make check                             # format-verify + build + test ALL three areas — the gate below
 ```
 
-**Definition of done:** `dotnet build` clean (0 new warnings), `dotnet test` green, **and both sub-app
-solutions still build & test green independently**. Put shell logic in pure/testable helpers
-(`Puffinote.Tests`) and keep the UI a thin call — the headless devcontainer has no GPU (use null drawing;
-`dotnet run` on the GUI fails here environmentally, not a regression — verify with tests).
+**Definition of done:** `make check` — Puffinote formatted, clean (0 warnings), green, **and both sub-app
+solutions still build & test green independently**. That last clause is the point of `make check` over
+`make puffinote-*`: this shell compiles the editors, so it's the place a break in them surfaces.
+Never run two builds/tests concurrently (MSBuild deadlock — see the root guide).
+
+Put shell logic in pure/testable helpers (`Puffinote.Tests`) and keep the UI a thin call: `Puffinote.UiTests`
+runs on Avalonia's null drawing (no GPU here), and launching the GUI fails environmentally in the
+container — that's not a regression, so verify with tests, not by running the app.
 
 ## Where things go
 
