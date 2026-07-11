@@ -20,6 +20,7 @@ namespace Typage.Control.Controls;
 internal sealed class MarkdownCommandBar : UserControl
 {
     private readonly Dictionary<string, AppCommand> _byId;
+    private readonly Dictionary<string, string> _sectionOf;
     private readonly List<CommandTool> _tools = [];
 
     public MarkdownCommandBar(IReadOnlyList<AppCommand> commands)
@@ -28,19 +29,32 @@ internal sealed class MarkdownCommandBar : UserControl
 
         // Each group's whole toolset — the inline primary icons are the first three; the rest fall into the
         // group's dropdown. Headings and Insert stay pure dropdowns: a labelled picker names what you're
-        // choosing, which an icon row can't do for six near-identical headings or two one-shot inserts.
-        // The union across groups is every formatting command the bar surfaces.
+        // choosing, which an icon row can't do for six near-identical headings or a handful of one-shot
+        // inserts. The union across groups is every formatting command the bar surfaces.
         string[] text = ["format.bold", "format.italic", "format.strike", "format.highlight", "format.code"];
         string[] headings = ["format.h1", "format.h2", "format.h3", "format.h4", "format.h5", "format.h6", "format.paragraph"];
-        string[] lists = ["format.bulletList", "format.numberedList", "format.task", "format.removeTask", "format.quote"];
-        string[] insert = ["insert.codeBlock", "insert.hr"];
-        SurfacedIdsForTest = new HashSet<string>([.. text, .. headings, .. lists, .. insert]);
+        string[] lists = ["format.bulletList", "format.numberedList", "format.task", "format.removeTask"];
+
+        // Blockquote sits with the inserts, not the lists. It shares nothing with a list but the fact that it
+        // prefixes lines: it doesn't nest, doesn't renumber, and has no item to add — it wraps a passage.
+        string[] insert = ["format.link", "insert.image", "insert.codeBlock", "insert.hr", "format.quote"];
+
+        _sectionOf = new Dictionary<string, string>(StringComparer.Ordinal);
+        foreach (var (group, ids) in new[] { ("Text", text), ("Headings", headings), ("Lists", lists), ("Insert", insert) })
+        {
+            foreach (var id in ids)
+            {
+                _sectionOf[id] = group;
+            }
+        }
+
+        SurfacedIdsForTest = new HashSet<string>(_sectionOf.Keys);
 
         var sections = new List<AdaptiveCommandBar.Section>
         {
-            Section("Text", 0, IconGroup(text[..3], text[3..]), text),
+            Section("Text", 0, IconGroup("Text", text[..3], text[3..]), text),
             Section("Headings", 1, Picker("Heading", headings), headings),
-            Section("Lists", 2, IconGroup(lists[..3], lists[3..]), lists),
+            Section("Lists", 2, IconGroup("Lists", lists[..3], lists[3..]), lists),
             Section("Insert", 3, Picker("Insert", insert), insert),
         };
 
@@ -52,12 +66,15 @@ internal sealed class MarkdownCommandBar : UserControl
     /// <summary>Every command id the bar surfaces (inline or in a dropdown), across all groups (test seam).</summary>
     internal IReadOnlySet<string> SurfacedIdsForTest { get; }
 
+    /// <summary>The group a surfaced command belongs to ("Text" / "Headings" / "Lists" / "Insert"), or null (test seam).</summary>
+    internal string? SectionOfForTest(string id) => _sectionOf.GetValueOrDefault(id);
+
     /// <summary>Re-evaluate each inline tool's lit (toggle-active) state — the host calls this as the caret moves.</summary>
     public void RefreshState()
     {
         if (!IsVisible)
         {
-            return; // the standalone app hides this bar and ships its own — don't scan tokens for nobody
+            return; // a host may have toggled the bar off — don't scan tokens for nobody
         }
 
         foreach (var tool in _tools)
@@ -72,7 +89,7 @@ internal sealed class MarkdownCommandBar : UserControl
         new(name, inline, FoldedSection(name, Resolve(foldedIds)), rank);
 
     /// <summary>An inline group of primary icon tools, plus a chevron dropdown for its overflow commands.</summary>
-    private Avalonia.Controls.Control IconGroup(string[] primaryIds, string[] drawerIds)
+    private Avalonia.Controls.Control IconGroup(string name, string[] primaryIds, string[] drawerIds)
     {
         var row = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center };
         foreach (var command in Resolve(primaryIds))
@@ -85,7 +102,7 @@ internal sealed class MarkdownCommandBar : UserControl
         var drawer = Resolve(drawerIds);
         if (drawer.Length > 0)
         {
-            row.Children.Add(Chevron(DrawerFlyout(drawer), "More text tools"));
+            row.Children.Add(Chevron(DrawerFlyout(drawer), $"More {name.ToLowerInvariant()} tools"));
         }
 
         return Divider(row);

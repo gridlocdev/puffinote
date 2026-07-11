@@ -4,6 +4,7 @@ using Avalonia.Layout;
 using Avalonia.VisualTree;
 using Puffinote.Components.Commands;
 using Puffinote.Components.Controls;
+using Puffinote.Components.Controls.Icons;
 using Puffinote.Components.Theming;
 
 namespace Typage.Desktop.Views;
@@ -15,7 +16,13 @@ namespace Typage.Desktop.Views;
 /// </summary>
 public sealed class CommandPalette : Panel
 {
-    private readonly PaletteListView _palette = new() { Placeholder = "Type a command…" };
+    // Resolve each command's icon key to its glyph, so a row here reads the same as the same command's row in
+    // the toolbar's dropdowns rather than being a bare line of text.
+    private readonly PaletteListView _palette =
+        new(key => string.IsNullOrEmpty(key) ? null : new LucideIcon { IconKey = key, Size = 15 })
+        {
+            Placeholder = "Type a command…",
+        };
 
     public CommandPalette()
     {
@@ -60,7 +67,7 @@ public sealed class CommandPalette : Panel
     {
         _palette.SetItems([.. commands
             .Where(c => c.IsEnabled)
-            .Select(c => new PaletteEntry(c.Title, c.Execute, c.Description, c.ShortcutText))]);
+            .Select(c => new PaletteEntry(c.Title, c.Execute, c.Description, c.ShortcutText, c.Icon))]);
         IsVisible = true;
         _palette.SearchBox.Focus();
     }

@@ -69,28 +69,25 @@ public partial class MainWindow
             _chromeBg.Color = Color.FromRgb(0x0A, 0x0A, 0x0A);
             _chromeBorder.Color = Color.FromRgb(0x66, 0x66, 0x66);
             _mutedText.Color = Color.FromRgb(0xDD, 0xDD, 0xDD);
-            _chromeInset.Color = Colors.Black;
         }
         else if (isLight)
         {
             _chromeBg.Color = Color.FromRgb(0xF3, 0xF3, 0xF3);
             _chromeBorder.Color = Color.FromRgb(0xD7, 0xD7, 0xD7);
             _mutedText.Color = Color.FromRgb(0x6A, 0x6E, 0x76);
-            _chromeInset.Color = Colors.White;
         }
         else
         {
             _chromeBg.Color = Color.FromRgb(0x25, 0x25, 0x26);
             _chromeBorder.Color = Color.FromRgb(0x33, 0x33, 0x36);
             _mutedText.Color = Color.FromRgb(0x9A, 0x9E, 0xA6);
-            _chromeInset.Color = Color.FromRgb(0x1E, 0x1E, 0x1E);
         }
     }
 
     private void ToggleToolbar()
     {
-        var show = !(_toolbar?.IsVisible ?? true);
-        _toolbar?.IsVisible = show;
+        var show = !EditorView.ShowCommandBar;
+        EditorView.ShowCommandBar = show;
 
         _toggleToolbarItem?.IsChecked = show;
 
@@ -106,10 +103,13 @@ public partial class MainWindow
         _ => "View Raw Text",
     };
 
-    /// <summary>Switch the editing surface to <paramref name="mode"/>; the new mode becomes the persisted default (PRD §7.4).</summary>
-    private void SetViewMode(MarkdownEditor.ViewMode mode)
+    /// <summary>
+    /// The surface switched view mode (from the catalog command, the toolbar, or the palette). The shell's
+    /// job is what follows: make the new mode the persisted default and re-check the View ▸ radio (PRD §7.4).
+    /// </summary>
+    private void OnViewModeChanged()
     {
-        EditorView.Editor.View = mode;
+        var mode = EditorView.ViewMode;
         _settings.Settings.View = mode;
         _settings.Save();
         foreach (var (m, item) in _viewModeItems)
@@ -123,7 +123,7 @@ public partial class MainWindow
     {
         _focusMode = !_focusMode;
         // In focus mode the toolbar is hidden; otherwise restore the user's toolbar preference.
-        _toolbar?.IsVisible = !_focusMode && _settings.Settings.ShowToolbar;
+        EditorView.ShowCommandBar = !_focusMode && _settings.Settings.ShowToolbar;
 
         _statusBar?.IsVisible = !_focusMode;
 

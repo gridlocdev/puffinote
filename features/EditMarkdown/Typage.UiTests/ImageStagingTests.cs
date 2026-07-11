@@ -1,4 +1,4 @@
-using Typage.Desktop.Services;
+using Typage.Control;
 using Xunit;
 
 namespace Typage.UiTests;

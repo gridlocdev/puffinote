@@ -57,13 +57,17 @@ public partial class MainWindow
             KeyBindings.Add(new KeyBinding
             {
                 Gesture = new KeyGesture(Key.H, KeyModifiers.Control), // Windows/Linux convention for Replace
-                Command = new RelayCommand(() => _findBar?.Show(replace: true), () => !AnyOverlayOpen),
+                Command = new RelayCommand(() => EditorView.ShowFind(replace: true), () => !AnyOverlayOpen),
             });
         }
     }
 
-    /// <summary>True while a palette or an internal modal is open over the content.</summary>
-    private bool AnyOverlayOpen => _overlayHost.IsOpen || _palette.IsVisible;
+    /// <summary>
+    /// True while a palette or an internal modal is open over the content. The editor surface hosts modals of
+    /// its own now (the link prompt, the reference sheet), so those count too — otherwise a chord typed into
+    /// the link dialog's text field would still fire the command behind it.
+    /// </summary>
+    private bool AnyOverlayOpen => _overlayHost.IsOpen || _palette.IsVisible || EditorView.IsOverlayOpen;
 
     /// <summary>
     /// The ICommand backing a command's shortcut / menu item. Gated on <see cref="AnyOverlayOpen"/> so a
@@ -118,18 +122,20 @@ public partial class MainWindow
         format.Items.Add(new Separator());
         format.Items.Add(InWindowSubmenu("_Heading",
             "format.h1", "format.h2", "format.h3", "format.h4", "format.h5", "format.h6", null, "format.paragraph"));
-        format.Items.Add(InWindowItem("format.quote"));
         format.Items.Add(InWindowItem("format.bulletList"));
         format.Items.Add(InWindowItem("format.numberedList"));
         format.Items.Add(InWindowItem("format.task"));
+        format.Items.Add(InWindowItem("format.removeTask"));
 
+        // Blockquote lives here, with the inserts — it isn't a list. It wraps a passage; it has no items to
+        // add, doesn't nest, and doesn't renumber.
         var insert = new MenuItem { Header = "_Insert" };
         insert.Items.Add(InWindowItem("format.link"));
         insert.Items.Add(InWindowItem("insert.image"));
         insert.Items.Add(new Separator());
         insert.Items.Add(InWindowItem("insert.codeBlock"));
         insert.Items.Add(InWindowItem("insert.hr"));
-        insert.Items.Add(InWindowItem("format.task"));
+        insert.Items.Add(InWindowItem("format.quote"));
 
         var view = new MenuItem { Header = "_View" };
         view.Items.Add(InWindowItem("view.commandPalette"));
@@ -147,7 +153,7 @@ public partial class MainWindow
                 GroupName = "viewmode",
                 IsChecked = _settings.Settings.View == m,
             };
-            item.Click += (_, _) => SetViewMode(choice);
+            item.Click += (_, _) => EditorView.ViewMode = choice; // the surface owns the switch; we persist it
             _viewModeItems.Add((m, new CheckItem(item)));
             view.Items.Add(item);
         }
@@ -273,15 +279,16 @@ public partial class MainWindow
         }
 
         format.Menu!.Items.Add(headings);
-        foreach (var id in new[] { "format.quote", "format.bulletList", "format.numberedList", "format.task" })
+        foreach (var id in new[] { "format.bulletList", "format.numberedList", "format.task", "format.removeTask" })
         {
             format.Menu!.Items.Add(NativeItem(id));
         }
 
         menu.Items.Add(format);
 
+        // Blockquote is an insert, not a list — see the in-window menu.
         var insert = NativeSubmenu("Insert");
-        foreach (var id in new[] { "format.link", "insert.image", null, "insert.codeBlock", "insert.hr", "format.task" })
+        foreach (var id in new[] { "format.link", "insert.image", null, "insert.codeBlock", "insert.hr", "format.quote" })
         {
             insert.Menu!.Items.Add(id is null ? new NativeMenuItemSeparator() : NativeItem(id));
         }
@@ -301,7 +308,7 @@ public partial class MainWindow
             {
                 ToggleType = MenuItemToggleType.Radio,
                 IsChecked = _settings.Settings.View == m,
-                Command = new RelayCommand(() => SetViewMode(choice)),
+                Command = new RelayCommand(() => EditorView.ViewMode = choice), // the surface owns the switch
             };
             _viewModeItems.Add((m, new CheckItem(item)));
             view.Menu.Items.Add(item);
@@ -373,68 +380,32 @@ public partial class MainWindow
     private void OpenPalette() => _palette.Open(BuildCommands());
 
     /// <summary>
-    /// The one command catalog (mirroring Cellestra's golden rule #4): the palette reads it, and the
-    /// menu/toolbar invoke the same underlying actions. Built per open so CanExecute reflects the
-    /// current state.
+    /// The one command catalog (mirroring Cellestra's golden rule #4): the palette reads it, and the menu and
+    /// key bindings invoke the same underlying actions.
+    /// <para>
+    /// It is a <em>merge</em>, not a list of its own: this shell contributes only the commands that need a
+    /// shell (files, the palette, preferences, the window's own chrome), and everything that acts on the open
+    /// document comes from <see cref="MarkdownEditorView.EditingCommands"/> — the very catalog Puffinote
+    /// composes. The ~30 editing commands used to be re-declared here, which is exactly how the two apps came
+    /// to disagree about what ⌘K does and which commands exist at all.
+    /// </para>
     /// </summary>
-    private List<AppCommand> BuildCommands()
-    {
-        var ed = EditorView.Editor;
-        return
-        [
-            new("file.new", "New", "Start a new, empty document.", Shortcut.Cmd(Key.N), () => _ = NewDocumentAsync()),
-            new("file.open", "Open…", "Open a Markdown file from disk.", Shortcut.Cmd(Key.O), () => _ = OpenAsync()),
-            new("file.save", "Save", "Save changes to the current file.", Shortcut.Cmd(Key.S), () => _ = SaveAsync()),
-            new("file.saveAs", "Save As…", "Save a copy under a new name.", Shortcut.Cmd(Key.S, KeyModifiers.Shift), () => _ = SaveAsAsync()),
-            new("file.revert", "Revert to Saved", "Discard changes since the last save.", null,
-                () => _ = RevertAsync(), () => _currentPath is not null && EditorView.IsDirty),
-            new("file.exportHtml", "Export HTML…", "Render the document to a self-contained HTML file.", null, () => _ = ExportHtmlAsync()),
+    private List<AppCommand> BuildCommands() => [.. ShellCommands(), .. EditorView.EditingCommands];
 
-            new("edit.undo", "Undo", "Step backward through your changes.", Shortcut.Cmd(Key.Z), () => EditorView.Undo(), () => EditorView.CanUndo),
-            new("edit.redo", "Redo", "Re-apply a change you undid.", Shortcut.Cmd(Key.Z, KeyModifiers.Shift), () => EditorView.Redo(), () => EditorView.CanRedo),
-            new("edit.cut", "Cut", "Move the selection to the clipboard.", Shortcut.Cmd(Key.X), () => _ = ed.CutAsync()),
-            new("edit.copy", "Copy", "Copy the selection to the clipboard.", Shortcut.Cmd(Key.C), () => _ = ed.CopyAsync()),
-            new("edit.paste", "Paste", "Paste from the clipboard.", Shortcut.Cmd(Key.V), () => _ = ed.PasteAsync()),
-            new("edit.selectAll", "Select All", "Select the whole document.", Shortcut.Cmd(Key.A), ed.SelectAll),
-            new("edit.find", "Find…", "Find text in the document.", Shortcut.Cmd(Key.F), () => _findBar?.Show(replace: false)),
-            new("edit.replace", "Find & Replace…", "Find text and replace it (plain or regex).", Shortcut.Cmd(Key.F, KeyModifiers.Alt), () => _findBar?.Show(replace: true)),
-            new("edit.moveLineUp", "Move Line Up", "Move the current line or block up.", Shortcut.Bare(Key.Up, KeyModifiers.Alt | KeyModifiers.Shift), ed.MoveLineUp),
-            new("edit.moveLineDown", "Move Line Down", "Move the current line or block down.", Shortcut.Bare(Key.Down, KeyModifiers.Alt | KeyModifiers.Shift), ed.MoveLineDown),
-            new("edit.duplicateLine", "Duplicate Line", "Duplicate the current line or selection.", Shortcut.Cmd(Key.D), ed.DuplicateLine),
-            new("edit.deleteLine", "Delete Line", "Delete the current line or selection.", Shortcut.Cmd(Key.K, KeyModifiers.Shift), ed.DeleteLine),
-            new("edit.selectWord", "Select Word", "Select the word under the caret.", null, ed.SelectCurrentWord),
-            new("edit.selectParagraph", "Select Paragraph", "Select the paragraph under the caret.", null, ed.SelectCurrentParagraph),
+    private List<AppCommand> ShellCommands() =>
+    [
+        new("file.new", "New", "Start a new, empty document.", Shortcut.Cmd(Key.N), () => _ = NewDocumentAsync(), icon: "file-plus"),
+        new("file.open", "Open…", "Open a Markdown file from disk.", Shortcut.Cmd(Key.O), () => _ = OpenAsync(), icon: "folder-open"),
+        new("file.save", "Save", "Save changes to the current file.", Shortcut.Cmd(Key.S), () => _ = SaveAsync(), icon: "save"),
+        new("file.saveAs", "Save As…", "Save a copy under a new name.", Shortcut.Cmd(Key.S, KeyModifiers.Shift), () => _ = SaveAsAsync(), icon: "file-up"),
+        new("file.revert", "Revert to Saved", "Discard changes since the last save.", null,
+            () => _ = RevertAsync(), () => _currentPath is not null && EditorView.IsDirty, icon: "refresh-cw"),
 
-            new("format.bold", "Bold", "Make the selection bold.", Shortcut.Cmd(Key.B), ed.ToggleBold),
-            new("format.italic", "Italic", "Make the selection italic.", Shortcut.Cmd(Key.I), ed.ToggleItalic),
-            new("format.code", "Inline Code", "Format the selection as inline code.", Shortcut.Cmd(Key.E), ed.ToggleInlineCode),
-            new("format.strike", "Strikethrough", "Strike through the selection.", Shortcut.Cmd(Key.X, KeyModifiers.Shift), ed.ToggleStrikethrough),
-            new("format.highlight", "Highlight", "Highlight the selection (==text==).", Shortcut.Cmd(Key.H, KeyModifiers.Shift), ed.ToggleHighlight),
-            new("format.link", "Insert Link…", "Insert a link with display text and a location.", Shortcut.Cmd(Key.K), () => _ = ShowLinkDialogAsync()),
-            new("format.task", "Checkbox", "Add a task checkbox to this line, or toggle it.", Shortcut.Cmd(Key.L), ed.ToggleTask),
-            new("format.quote", "Blockquote", "Toggle a blockquote on the line(s).", null, ed.ToggleBlockquote),
-            new("format.bulletList", "Bulleted List", "Toggle a bulleted list on the line(s).", Shortcut.Cmd(Key.OemPeriod), ed.ToggleBulletList),
-            new("format.numberedList", "Numbered List", "Toggle a numbered list on the line(s).", Shortcut.Cmd(Key.OemQuestion), ed.ToggleNumberedList),
-            new("format.h1", "Heading 1", "Make this line a level-1 heading.", Shortcut.Cmd(Key.D1), () => ed.ApplyHeading(1)),
-            new("format.h2", "Heading 2", "Make this line a level-2 heading.", Shortcut.Cmd(Key.D2), () => ed.ApplyHeading(2)),
-            new("format.h3", "Heading 3", "Make this line a level-3 heading.", Shortcut.Cmd(Key.D3), () => ed.ApplyHeading(3)),
-            new("format.h4", "Heading 4", "Make this line a level-4 heading.", Shortcut.Cmd(Key.D4), () => ed.ApplyHeading(4)),
-            new("format.h5", "Heading 5", "Make this line a level-5 heading.", Shortcut.Cmd(Key.D5), () => ed.ApplyHeading(5)),
-            new("format.h6", "Heading 6", "Make this line a level-6 heading.", Shortcut.Cmd(Key.D6), () => ed.ApplyHeading(6)),
-            new("format.paragraph", "Paragraph", "Remove the heading from this line.", Shortcut.Cmd(Key.D0), ed.SetParagraph),
-
-            new("insert.image", "Image…", "Pick an image file to insert.", null, () => _ = InsertImageAsync()),
-            new("insert.codeBlock", "Code Block", "Insert a fenced code block.", Shortcut.Cmd(Key.E, KeyModifiers.Shift), ed.InsertCodeBlock),
-            new("insert.hr", "Horizontal Rule", "Insert a horizontal rule.", null, ed.InsertHorizontalRule),
-
-            new("view.commandPalette", "Command Palette…", "Search and run any command.", Shortcut.Cmd(Key.P, KeyModifiers.Shift), OpenPalette),
-            new("view.toggleToolbar", "Toggle Toolbar", "Show or hide the formatting toolbar.", null, ToggleToolbar),
-            new("view.viewRich", "View Rich View", "Live preview: formatted, with Markdown markers hidden.", null, () => SetViewMode(MarkdownEditor.ViewMode.Rich)),
-            new("view.viewFormatted", "View Formatted View", "Formatted, with the raw Markdown markers revealed.", null, () => SetViewMode(MarkdownEditor.ViewMode.Formatted)),
-            new("view.viewRaw", "View Raw Text", "Plain-text source: no rich formatting or decorations.", null, () => SetViewMode(MarkdownEditor.ViewMode.RawText)),
-            new("view.toggleFocus", "Toggle Focus Mode", "Distraction-free: hide the toolbar and status bar.", Shortcut.Bare(Key.F11), ToggleFocusMode),
-            new("app.preferences", "Preferences…", "Theme, tab width, and toolbar settings.", Shortcut.Cmd(Key.OemComma), ShowSettings),
-            new("help.reference", "Markdown Reference", "Open the offline syntax & shortcut reference.", null, ShowHelp),
-        ];
-    }
+        // ⌘K, matching Puffinote — where it is a reserved global key. It used to be ⌘⇧P here while ⌘K
+        // inserted a link; the link prompt is now ⌘⌥K in both apps (see MarkdownEditingCommands).
+        new("view.commandPalette", "Command Palette…", "Search and run any command.", Shortcut.Cmd(Key.K), OpenPalette, icon: "command"),
+        new("view.toggleToolbar", "Toggle Toolbar", "Show or hide the formatting toolbar.", null, ToggleToolbar, icon: "type"),
+        new("view.toggleFocus", "Toggle Focus Mode", "Distraction-free: hide the toolbar and status bar.", Shortcut.Bare(Key.F11), ToggleFocusMode, icon: "maximize"),
+        new("app.preferences", "Preferences…", "Theme, tab width, and toolbar settings.", Shortcut.Cmd(Key.OemComma), ShowSettings, icon: "settings-2"),
+    ];
 }

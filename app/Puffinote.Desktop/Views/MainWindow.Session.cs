@@ -174,6 +174,7 @@ public partial class MainWindow
     private void UpdatePaneChrome()
     {
         RefreshCommandStates();
+        ApplyShellShortcuts(); // the editor's own gestures come from the active pane's catalog — rebind them
         RefreshOutline();
         ScanForShortcutConflicts();
 

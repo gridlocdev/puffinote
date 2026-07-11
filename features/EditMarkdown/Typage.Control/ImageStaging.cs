@@ -1,15 +1,20 @@
 using Typage.Engine.Document;
 using Typage.Engine.Markdown;
 
-namespace Typage.Desktop.Services;
+namespace Typage.Control;
 
 /// <summary>
 /// Staging for images inserted into an <b>unsaved</b> document. A new document has no folder to anchor a
 /// relative image path against, so a picked image is copied into a per-user scratch directory and the
-/// document references that absolute path. When the document is finally saved, <see cref="MainWindow"/>
-/// offers to move the staged files into the document's permanent home (an <c>images/</c> folder beside it)
-/// and rewrites the Markdown paths to point there relatively — avoiding orphaned uploads while keeping the
-/// in-progress draft openable. A saved document skips all of this and references images by relative path.
+/// document references that absolute path. When the document is finally saved, the host shell offers to move
+/// the staged files into the document's permanent home (an <c>images/</c> folder beside it) and rewrites the
+/// Markdown paths to point there relatively — avoiding orphaned uploads while keeping the in-progress draft
+/// openable. A saved document skips all of this and references images by relative path.
+/// <para>
+/// It lives beside <see cref="MarkdownDocumentSession"/> in the editor library rather than in a shell, because
+/// the insert itself is the editor's (<see cref="Views.MarkdownEditorView.InsertImageAsync"/>): every host
+/// picks images the same way. Only the save-time <c>Reconcile</c> prompt belongs to a shell that owns saving.
+/// </para>
 /// </summary>
 /// <remarks>
 /// The scratch root lives under the platform's local-application-data folder (resolved via

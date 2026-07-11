@@ -7,6 +7,7 @@ using Avalonia.Platform.Storage;
 using Avalonia.Threading;
 using Puffinote.Components.Commands;
 using Puffinote.Components.Controls;
+using Puffinote.Components.Controls.Icons;
 using Puffinote.Components.Overlays;
 using Puffinote.Components.Theming;
 using Puffinote.Desktop.Commands;
@@ -99,10 +100,10 @@ public partial class MainWindow
     }
 
     /// <summary>
-    /// (Re)apply the shell's key bindings from the current catalog: non-reserved commands become ordinary
-    /// (bubbling) key bindings — the focused editor gets first refusal — while reserved ones are collected
-    /// for the tunnel router so they always win (PRD §7.6). Called at startup and after a rebinding, so a new
-    /// key takes effect live.
+    /// (Re)apply the key bindings from the current catalogs: non-reserved commands become ordinary (bubbling)
+    /// key bindings — the focused editor gets first refusal — while reserved ones are collected for the tunnel
+    /// router so they always win (PRD §7.6). Called at startup, after a rebinding, and on every pane change, so
+    /// a new key (or a new active editor) takes effect live.
     /// </summary>
     private void ApplyShellShortcuts()
     {
@@ -118,7 +119,51 @@ public partial class MainWindow
         _reservedBindings = [.. _shellCommands
             .Where(c => ShellCommandCatalog.IsReserved(c.Id) && c.Gesture is not null)
             .Select(c => (c.Gesture!, _relays[c.Id]))];
+
+        BindActivePaneShortcuts();
     }
+
+    /// <summary>
+    /// Bind the active editor's own catalog, so its published shortcuts actually fire. The shell used to bind
+    /// only <em>its</em> commands, which left every editor gesture that the control doesn't hard-handle in
+    /// <c>OnKeyDown</c> — ⌘. bullets, ⌘/ numbers, ⌘⇧H highlight, ⌘D duplicate line — a dead key here, even
+    /// though its tooltip and palette row advertised it. This is what makes the in-app editor's keymap
+    /// identical to the standalone app's, which binds its catalog the same way.
+    /// <para>
+    /// Two things are deliberately skipped. The text-editing chords (<see cref="Shortcut.YieldsToTextInput"/>:
+    /// ⌘A/C/V/X/Z/Y) belong to whatever has focus — an editor, a dialog's text box — not to the window. And a
+    /// gesture already claimed by a reserved shell key is left alone: reserved keys are tunnel-routed and win
+    /// regardless, so binding it here would only add a second, unreachable handler.
+    /// </para>
+    /// </summary>
+    private void BindActivePaneShortcuts()
+    {
+        foreach (var command in _tabHost.ActivePane?.Commands ?? [])
+        {
+            if (command.Shortcut is not { YieldsToTextInput: false } shortcut)
+            {
+                continue;
+            }
+
+            var gesture = shortcut.ToGesture();
+            if (_reservedBindings.Any(b => b.Gesture.Equals(gesture)))
+            {
+                continue;
+            }
+
+            KeyBindings.Add(new KeyBinding
+            {
+                Gesture = gesture,
+
+                // Stand down while an overlay owns the screen — the shell's palette/dialogs, or one of the
+                // editor's own (the link prompt) — so a chord typed into a text field can't fire behind it.
+                Command = new RelayCommand(command.Execute, () => command.IsEnabled && !AnyOverlayOpen),
+            });
+        }
+    }
+
+    /// <summary>True while the shell's overlay host, or the active editor's own, is showing something.</summary>
+    private bool AnyOverlayOpen => _overlayHost.IsOpen || _tabHost.ActivePane?.IsModalOpen == true;
 
     /// <summary>(Re)build the menu bar from the current catalog so rebound gestures show their new keys.</summary>
     private void RefreshMenus()
@@ -182,7 +227,12 @@ public partial class MainWindow
         var editor = _tabHost.ActivePane?.Commands ?? [];
         var entries = CommandMerge.ToEntries(_shellCommands, editor);
 
-        var palette = new PaletteListView { Placeholder = "Type a command…" };
+        // Resolve each command's icon key to its glyph, so a palette row reads like the same command's row in
+        // the editor's toolbar rather than as a bare line of text.
+        var palette = new PaletteListView(key => string.IsNullOrEmpty(key) ? null : new LucideIcon { IconKey = key, Size = 15 })
+        {
+            Placeholder = "Type a command…",
+        };
         palette.SetItems(entries);
         palette.Chosen += entry =>
         {

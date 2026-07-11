@@ -1,19 +1,21 @@
 using Avalonia.Headless.XUnit;
-using Avalonia.Media;
 using Typage.Control.Views;
-using Typage.Desktop.Views;
 using Typage.Engine.Document;
 using Xunit;
 
 namespace Typage.UiTests;
 
+/// <summary>
+/// Find/replace ships <em>with the editor surface</em>, not with a shell — so these drive a bare
+/// <see cref="MarkdownEditorView"/> with no window around it. That's the point: any host embedding the
+/// control gets find for free, and Puffinote (which had none at all) now does.
+/// </summary>
 public class FindBarTests
 {
     private static FindBar Open(MarkdownEditorView view, bool replace = false)
     {
-        var bar = new FindBar(view, Brushes.Transparent, Brushes.Transparent);
-        bar.Show(replace);
-        return bar;
+        view.ShowFind(replace);
+        return view.FindBar;
     }
 
     [AvaloniaFact]

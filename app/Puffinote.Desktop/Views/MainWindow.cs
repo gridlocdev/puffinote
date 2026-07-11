@@ -170,6 +170,12 @@ public partial class MainWindow : Window
     /// <summary>Run a shell command by id, as the menu/palette would (test seam).</summary>
     internal void InvokeShellForTest(string id) => _shellById[id].Execute();
 
+    /// <summary>The shell's own catalog (test seam — e.g. to check the editor claims no reserved gesture).</summary>
+    internal IReadOnlyList<Puffinote.Components.Commands.AppCommand> ShellCommandsForTest => _shellCommands;
+
+    /// <summary>Open a file into a tab, as clicking it in the tree would (test seam).</summary>
+    internal Task OpenFileForTest(string path) => OpenFileAsync(path);
+
     private Control BuildBody(ThemePalette palette)
     {
         _sidebar = new Border

@@ -54,10 +54,14 @@ internal sealed class MarkdownPane : IEditorPane
 
     public bool IsDirty => _view.IsDirty;
 
-    // Typage's editing/formatting catalog, now published by the embeddable control itself (Typage.Control),
-    // so the merged Command Palette shows the note's commands next to Puffinote's — the same way SheetPane
-    // surfaces Cellestra's catalog. Shell commands (file, find, dialogs) stay Puffinote's.
+    // Typage's whole catalog, published by the embeddable control itself (Typage.Control): formatting, find,
+    // the link/image inserts, view modes, export, the reference sheet. The merged Command Palette shows them
+    // next to Puffinote's, and the shell binds their gestures — so the note editor here behaves exactly like
+    // the standalone app. Only genuinely shell-level commands (notebook, tabs, sidebar) are Puffinote's.
     public IReadOnlyList<AppCommand> Commands => _view.EditingCommands;
+
+    /// <summary>The editor puts its link prompt and reference sheet in its own overlay, inside the pane.</summary>
+    public bool IsModalOpen => _view.IsOverlayOpen;
 
     /// <summary>Heading outline (PRD §7.2.3): the same headings <c>typage outline</c> lists, reusing the engine.</summary>
     public IReadOnlyList<OutlineItem> GetOutline()
@@ -96,6 +100,10 @@ internal sealed class MarkdownPane : IEditorPane
         // Note-sized files: read on the UI thread (the session's atomic I/O is fast) and set the editor's
         // saved baseline. LoadText marks the text clean, so a freshly opened doc isn't dirty.
         _view.LoadText(_session.Load(path));
+
+        // The editor needs the path itself: an inserted image is written relative to the note's folder, and
+        // an HTML export is named after it. A note always has one, so nothing here is ever staged.
+        _view.DocumentPath = _session.CurrentPath;
         DirtyChanged?.Invoke(this, EventArgs.Empty);
         return Task.CompletedTask;
     }
@@ -108,7 +116,11 @@ internal sealed class MarkdownPane : IEditorPane
         return Task.CompletedTask;
     }
 
-    public void Rebind(string newPath) => _session.Rebind(newPath);
+    public void Rebind(string newPath)
+    {
+        _session.Rebind(newPath);
+        _view.DocumentPath = _session.CurrentPath; // the note moved; relative image paths must follow it
+    }
 
     public void Dispose()
     {

@@ -36,6 +36,22 @@ public class MarkdownCommandBarTests
         Assert.Contains("format.h4", bar.SurfacedIdsForTest);
         Assert.Contains("format.h6", bar.SurfacedIdsForTest);
         Assert.Contains("format.removeTask", bar.SurfacedIdsForTest);
+
+        // …and the ones the embeddable bar never had at all, because they used to live in the standalone
+        // shell — which is why Puffinote had no way to insert a link or an image.
+        Assert.Contains("format.link", bar.SurfacedIdsForTest);
+        Assert.Contains("insert.image", bar.SurfacedIdsForTest);
+    }
+
+    [AvaloniaFact]
+    public void Blockquote_is_an_insert_not_a_list()
+    {
+        // It shares nothing with a list but the fact that it prefixes lines: no items, no nesting, no
+        // renumbering. It sat under Lists, between "Numbered List" and "Remove Checkbox".
+        var bar = new MarkdownCommandBar(new MarkdownEditorView().EditingCommands);
+        Assert.Equal("Insert", bar.SectionOfForTest("format.quote"));
+        Assert.Equal("Lists", bar.SectionOfForTest("format.bulletList"));
+        Assert.Equal("Insert", bar.SectionOfForTest("format.link"));
     }
 
     [AvaloniaFact] // LucideIcons.Get resolves an avares:// resource, so it needs the Avalonia app (no window needed).

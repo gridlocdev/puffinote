@@ -19,11 +19,16 @@ The code is laid out as a **pure brain with two faces and a control**:
    navigation, undo/redo, the incremental Markdown tokenizer + checkpoint cache, and the HTML
    renderer. **Zero UI dependencies.** Headless-testable. This is where most logic and tests live.
 2. **`Typage.Control`** — an Avalonia control library: the custom live-preview editing surface
-   (`MarkdownEditor`/`MarkdownEditorView`) built on `Avalonia.Media.TextFormatting`, plus the two
-   presentation seams (`MarkdownTheme`, `IEmbedResolver`). Embeddable, unchanged, into the future
-   notes app.
+   (`MarkdownEditor`/`MarkdownEditorView`) built on `Avalonia.Media.TextFormatting`, the two
+   presentation seams (`MarkdownTheme`, `IEmbedResolver`), and — crucially — **everything that acts on
+   the open document**: the one command catalog (`MarkdownEditingCommands`), the icon-driven command bar
+   (`MarkdownCommandBar`), the find/replace bar, and the link / image / reference dialogs, over the
+   surface's own overlay layer. Embeddable, unchanged, into Puffinote.
+   *If you are adding an editing command, it goes here — never in a shell.* That is what keeps the
+   standalone app and Puffinote presenting the same editor instead of two that drift.
 3. **`Typage.Desktop`** — the standalone Avalonia shell (assembly `Typage`): single window, menu,
-   toolbar, status bar, file dialogs, settings. A thin host around the control.
+   status bar, open/save dialogs, recent files, settings. A thin host around the control — it contributes
+   only shell commands and merges in `MarkdownEditorView.EditingCommands`.
 4. **`typage` CLI** (`Typage.Cli`) — a second consumer of the engine for scripts/CI: render to
    HTML, dump tokens, stats, outline. No Avalonia, no network.
 
@@ -160,9 +165,9 @@ extend it, keep the layering and update the docs.
   suite, the HTML renderer, the `typage` CLI, and the shared `DocumentStats`. The surface drives the
   engine **incrementally** (re-tokenizes from `DocumentBuffer.LastChangedLine` via `MarkdownModel.Update`)
   and is **line-virtualized** (`ILogicalScrollable`: only the lines in the viewport are drawn). The
-  shell adds Cellestra-style patterns: a single **command catalog** + **Command Palette** (⌘⇧P,
-  fuzzy-filtered), **Find/Replace** (plain + regex via the engine's `DocumentSearch`, with in-editor
-  match highlighting), recent-files menu, **light/dark/high-contrast themes** (View ▸ Theme,
+  control + shell add Cellestra-style patterns: a single **command catalog** (in the control) + **Command
+  Palette** (⌘K, fuzzy-filtered), **Find/Replace** (plain + regex via the engine's `DocumentSearch`, with
+  in-editor match highlighting), recent-files menu, **light/dark/high-contrast themes** (View ▸ Theme,
   OS-following), a **Preferences dialog** (theme, tab width, toolbar), and modal error dialogs. The menu
   is **platform-native** (PRD §7.5): a macOS `NativeMenu` (system bar, ⌘ key-equivalents) on macOS and
   the in-window menu elsewhere, both built from the one catalog; shortcuts are defined abstractly

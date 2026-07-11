@@ -1,6 +1,5 @@
 using Avalonia.Controls;
 using Avalonia.Layout;
-using Avalonia.Media;
 using Puffinote.Components.Overlays;
 using Typage.Control.Controls;
 using Typage.Desktop.Services;
@@ -82,23 +81,6 @@ public partial class MainWindow
     }
 
     /// <summary>
-    /// The ⌘K link dialog: a "Display text" field (prefilled from the selection / word under the caret) and a
-    /// "Location" field, with Cancel / Add. On Add the link is inserted over the current target; spaces in the
-    /// location are encoded as <c>%20</c> so the URL survives as one Markdown destination.
-    /// </summary>
-    private async Task ShowLinkDialogAsync()
-    {
-        var ed = EditorView.Editor;
-        var entered = await _overlayHost.ShowModalAsync(new LinkDialog(ed.SuggestedLinkText()));
-        if (entered is not { } values)
-        {
-            return;
-        }
-
-        ed.InsertLinkWithText(values.Text, values.Url);
-    }
-
-    /// <summary>
     /// A yes/no prompt shown as an internal modal in the shared overlay host (no separate OS window).
     /// Confirm is not the default button, and Esc / backdrop deny — so a stray Enter can't trigger a
     /// destructive action. Returns true only when the user confirms.
@@ -175,9 +157,9 @@ public partial class MainWindow
         s.EditorPaddingVertical = (int)(paddingY.Value ?? 14);
         EditorView.Editor.VerticalPadding = s.EditorPaddingVertical;
         s.ShowToolbar = showToolbar.IsChecked == true;
-        if (_toolbar is not null && !_focusMode)
+        if (!_focusMode)
         {
-            _toolbar.IsVisible = s.ShowToolbar;
+            EditorView.ShowCommandBar = s.ShowToolbar;
         }
 
         _toggleToolbarItem?.IsChecked = s.ShowToolbar;
@@ -188,7 +170,8 @@ public partial class MainWindow
         s.CompletedTaskSort = (MarkdownEditor.CompletedTaskSortMode)System.Math.Clamp(completedTasks.SelectedIndex, 0, 2);
         EditorView.Editor.CompletedTaskSorting = s.CompletedTaskSort;
 
-        SetViewMode((MarkdownEditor.ViewMode)System.Math.Clamp(viewMode.SelectedIndex, 0, 2)); // applies + syncs menu + saves
+        // Applies the mode; the surface's ViewModeChanged then syncs the View ▸ radio and persists it.
+        EditorView.ViewMode = (MarkdownEditor.ViewMode)System.Math.Clamp(viewMode.SelectedIndex, 0, 2);
 
         _settings.Save();
     }
@@ -204,33 +187,4 @@ public partial class MainWindow
         grid.Children.Add(text);
         grid.Children.Add(control);
     }
-
-    private void ShowHelp()
-    {
-        var help = new Window
-        {
-            Title = "Markdown Reference",
-            Width = 420,
-            Height = 480,
-            Content = new ScrollViewer
-            {
-                Padding = new Avalonia.Thickness(16),
-                Content = new TextBlock { Text = HelpText, TextWrapping = TextWrapping.Wrap, FontFamily = new FontFamily("monospace") },
-            },
-        };
-        help.Show(this);
-    }
-
-    private const string HelpText =
-        "Markdown quick reference\n\n" +
-        "# H1 … ###### H6   headings\n" +
-        "**bold**  *italic*  ~~strike~~  ==highlight==\n" +
-        "`inline code`   ```fenced code```\n" +
-        "- bullet   1. number   - [ ] task / - [x] done\n" +
-        "> blockquote\n" +
-        "[text](url)   ![alt](image)   <https://url>\n" +
-        "| table | header |  with a |---|---| delimiter row\n" +
-        "---   horizontal rule\n\n" +
-        "Shortcuts: Ctrl+B bold · Ctrl+I italic · Ctrl+E code · Ctrl+1/2/3 heading\n" +
-        "Ctrl+S save · Ctrl+O open · Ctrl+N new · Ctrl+Z/Y undo/redo";
 }

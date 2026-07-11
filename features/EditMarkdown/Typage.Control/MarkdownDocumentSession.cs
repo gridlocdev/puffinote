@@ -65,9 +65,13 @@ public sealed class MarkdownDocumentSession
 
     public Task SaveAsync(string text) => Task.Run(() => Save(text));
 
-    // Atomic on the same volume: write a sibling temp file then rename over the target (PRD §7.1). Mirrors
-    // Typage.Desktop's proven AtomicWrite so the behaviour is identical wherever the session is hosted.
-    private static void AtomicWrite(string path, byte[] content)
+    /// <summary>
+    /// Write <paramref name="content"/> to <paramref name="path"/> atomically: a sibling temp file, then a
+    /// rename over the target (atomic on the same volume, PRD §7.1) — so a crash mid-write can't truncate an
+    /// existing file. Public because every durable write in the family goes through this one implementation,
+    /// including ones that aren't a document save (the shell's HTML export).
+    /// </summary>
+    public static void AtomicWrite(string path, byte[] content)
     {
         var full = Path.GetFullPath(path);
         var dir = Path.GetDirectoryName(full) ?? ".";

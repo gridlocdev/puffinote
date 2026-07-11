@@ -18,11 +18,12 @@ public partial class MainWindow
     /// <summary>
     /// Reserved global shortcuts win over the focused editor (PRD §7.6): on the tunnelling route — before
     /// the editor's own key handling — a reserved gesture runs its shell command and stops the event. While
-    /// an overlay is open, keys belong to the overlay, so the router stands down.
+    /// an overlay is open, keys belong to the overlay, so the router stands down — including an overlay the
+    /// <em>editor</em> owns (Typage's link prompt), or ⌘K would open the palette on top of it.
     /// </summary>
     private void OnReservedKeyDown(object? sender, KeyEventArgs e)
     {
-        if (_overlayHost.IsOpen)
+        if (AnyOverlayOpen)
         {
             return;
         }

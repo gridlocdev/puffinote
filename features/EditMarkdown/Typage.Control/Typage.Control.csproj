@@ -4,9 +4,16 @@
     The embeddable Markdown editing surface: the custom live-preview control built on
     Avalonia.Media.TextFormatting, its MarkdownTheme (token type -> visual treatment) and
     IEmbedResolver seams, and the MarkdownEditorView that wraps it. Packaged as an Avalonia
-    control library so both the standalone Typage.Desktop app and a host application (e.g. the
-    future notes-app shell consuming this repo) can embed the surface unchanged. App-shell
-    concerns (window, native menu, file dialogs, settings) stay in Typage.Desktop.
+    control library so both the standalone Typage.Desktop app and a host application (the Puffinote
+    shell) can embed the surface unchanged.
+
+    The surface is *whole*: it ships its own command catalog, the icon-driven command bar, the
+    find/replace bar, and the dialogs that act on the open document (link, image, reference) over its
+    own overlay layer. A host therefore gets Typage's entire editing experience by embedding one
+    control, and the two shells cannot drift apart, because there is only one of everything.
+
+    What stays in a shell is what needs a shell: the window, the native menu, which file is open
+    (MarkdownDocumentSession), recent files, and settings.
 
     Dependency direction is strictly shell -> control -> engine; no upward references.
   -->

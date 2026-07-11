@@ -4,15 +4,20 @@ using Avalonia.Controls.Primitives;
 using Avalonia.Input;
 using Avalonia.Layout;
 using Avalonia.Media;
-using Typage.Control.Views;
+using Puffinote.Components.Controls.CommandBar;
 using Typage.Engine.Document;
 
-namespace Typage.Desktop.Views;
+namespace Typage.Control.Views;
 
 /// <summary>
 /// The Find / Replace bar (PRD §7.2 — plain and regex find, replace, replace-all). Docks at the top
 /// of the editor, hidden until opened (⌘F find, ⌘⌥F / Ctrl+H replace). Matches are computed by the
 /// engine's <see cref="DocumentSearch"/> and highlighted in the editor; navigation selects each hit.
+/// <para>
+/// It ships <em>with</em> the editor surface, not with a shell: find-in-document is the editor's own
+/// capability, so every host (the standalone app, the Puffinote shell) gets the same bar for free rather
+/// than reimplementing it. <see cref="MarkdownEditorView"/> owns the one instance and opens it.
+/// </para>
 /// </summary>
 public sealed class FindBar : Border
 {
@@ -26,12 +31,17 @@ public sealed class FindBar : Border
     private int _current = -1;
     private bool _suppressReindex; // true while the bar itself is editing the document
 
-    public FindBar(MarkdownEditorView view, IBrush background, IBrush border)
+    /// <param name="view">The editor this bar searches.</param>
+    /// <param name="background">Chrome fill. A host that re-tints its chrome on a theme change passes the
+    /// live brush it mutates; omitting it falls back to the shared command-bar chrome, so the control is
+    /// self-sufficient in a host that has no chrome of its own.</param>
+    /// <param name="border">Chrome hairline, same contract as <paramref name="background"/>.</param>
+    public FindBar(MarkdownEditorView view, IBrush? background = null, IBrush? border = null)
     {
         _view = view;
         IsVisible = false;
-        Background = background; // shared chrome brush — adapts on theme change
-        BorderBrush = border;
+        Background = background ?? Brushes.Transparent;
+        BorderBrush = border ?? CommandBarChrome.DividerBrush;
         BorderThickness = new Avalonia.Thickness(0, 0, 0, 1);
         Padding = new Avalonia.Thickness(8, 6);
 

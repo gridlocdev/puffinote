@@ -9,7 +9,8 @@ namespace Typage.UiTests;
 /// <summary>
 /// The window registers one key binding per command using the platform gesture (Control on this Linux
 /// test host, ⌘ on macOS), and the standard text-editing chords are left to the focused editor / field
-/// rather than re-bound at the window (PRD §7.5).
+/// rather than re-bound at the window (PRD §7.5). The catalog it binds is the shell's own plus the editor's,
+/// so every gesture here is one Puffinote binds too.
 /// </summary>
 public class MenuShortcutTests
 {
@@ -25,7 +26,7 @@ public class MenuShortcutTests
         Assert.True(HasBinding(window, Key.S, KeyModifiers.Control));                       // Save
         Assert.True(HasBinding(window, Key.S, KeyModifiers.Control | KeyModifiers.Shift));  // Save As
         Assert.True(HasBinding(window, Key.F, KeyModifiers.Control));                       // Find
-        Assert.True(HasBinding(window, Key.P, KeyModifiers.Control | KeyModifiers.Shift));  // Command Palette
+        Assert.True(HasBinding(window, Key.F, KeyModifiers.Control | KeyModifiers.Alt));    // Find & Replace
         Assert.True(HasBinding(window, Key.F11, KeyModifiers.None));                        // Focus mode
         Assert.True(HasBinding(window, Key.D, KeyModifiers.Control));                        // Duplicate Line
         Assert.True(HasBinding(window, Key.K, KeyModifiers.Control | KeyModifiers.Shift));   // Delete Line
@@ -34,6 +35,18 @@ public class MenuShortcutTests
         Assert.True(HasBinding(window, Key.H, KeyModifiers.Control | KeyModifiers.Shift));   // Highlight
         Assert.True(HasBinding(window, Key.OemPeriod, KeyModifiers.Control));                // Bulleted List
         Assert.True(HasBinding(window, Key.OemQuestion, KeyModifiers.Control));              // Numbered List
+    }
+
+    [AvaloniaFact]
+    public void CommandPalette_TakesCmdK_AndInsertLink_MovesOffIt()
+    {
+        // ⌘K is the palette in Puffinote, where it's a reserved global key. The standalone app now agrees —
+        // it used to bind ⌘K to Insert Link and put the palette on ⌘⇧P, so the same chord did two different
+        // things depending on which app the editor was in.
+        var window = new MainWindow(new SettingsService());
+        Assert.True(HasBinding(window, Key.K, KeyModifiers.Control));                        // Command Palette
+        Assert.True(HasBinding(window, Key.K, KeyModifiers.Control | KeyModifiers.Alt));     // Insert Link
+        Assert.False(HasBinding(window, Key.P, KeyModifiers.Control | KeyModifiers.Shift));  // the old palette key
     }
 
     [AvaloniaFact]

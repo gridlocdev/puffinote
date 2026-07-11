@@ -14,9 +14,10 @@ namespace Typage.Desktop.Views;
 
 /// <summary>
 /// The standalone shell's single window (PRD §5 — one window, one document, one process). A thin
-/// host around the embeddable <see cref="MarkdownEditorView"/>: it owns the menu, file dialogs,
-/// recent files, the dirty-state guard, the status bar, and HTML export. All editing logic lives
-/// in the control and engine; this layer is replaceable by the future notes-app shell.
+/// host around the embeddable <see cref="MarkdownEditorView"/>: it owns the menu, the open/save file
+/// dialogs, recent files, the dirty-state guard, the status bar, and settings. All editing logic — and the
+/// formatting toolbar, find bar, and link/image/reference dialogs with it — lives in the control and engine,
+/// so this shell and the Puffinote shell present the same editor rather than two that drift.
 /// </summary>
 public partial class MainWindow : Window
 {
@@ -33,8 +34,6 @@ public partial class MainWindow : Window
     // OS dialog windows — the shared host the editors share.
     private readonly OverlayHost _overlayHost = new() { Background = new SolidColorBrush(Color.FromArgb(0x40, 0, 0, 0)) };
     private Dictionary<string, AppCommand> _commandsById = [];
-    private readonly FindBar? _findBar;
-    private readonly Border? _toolbar;
     private readonly Border? _statusBar;
     private CheckItem? _toggleToolbarItem;
     private CheckItem? _toggleFocusItem;
@@ -82,21 +81,14 @@ public partial class MainWindow : Window
         }
     }
 
-    // Chrome brushes are mutated live on a theme change; the borders/text share these instances.
+    // Chrome brushes are mutated live on a theme change; the status bar's border/text share these instances.
     private readonly SolidColorBrush _chromeBg = new(Color.FromRgb(0x25, 0x25, 0x26));
     private readonly SolidColorBrush _chromeBorder = new(Color.FromRgb(0x33, 0x33, 0x36));
     private readonly SolidColorBrush _mutedText = new(Color.FromRgb(0x9A, 0x9E, 0xA6));
-    private readonly SolidColorBrush _chromeInset = new(Color.FromRgb(0x1E, 0x1E, 0x1E));
-    private readonly SolidColorBrush _drawerHover = new(Color.FromArgb(0x22, 0x88, 0x88, 0x88));
 
     private static readonly FilePickerFileType MarkdownType = new("Markdown")
     {
         Patterns = ["*.md", "*.markdown", "*.mdown", "*.txt"],
-    };
-
-    private static readonly FilePickerFileType ImageType = new("Images")
-    {
-        Patterns = ImageStaging.ImagePatterns,
     };
 
     public MainWindow(SettingsService settings)
@@ -108,12 +100,11 @@ public partial class MainWindow : Window
 
         var root = new DockPanel();
         InstallMenu(root); // macOS native menu bar, or the in-window menu elsewhere; plus key bindings
-        _toolbar = BuildToolbar();
-        _toolbar.IsVisible = _settings.Settings.ShowToolbar; // restore the persisted toolbar visibility
-        root.Children.Add(_toolbar);
-        _findBar = new FindBar(EditorView, _chromeBg, _chromeBorder);
-        DockPanel.SetDock(_findBar, Dock.Top);
-        root.Children.Add(_findBar);
+
+        // The formatting toolbar and the find bar are the editor's own, docked inside it — this shell just
+        // says whether the toolbar shows. It used to ship a second, hand-rolled bar of Unicode glyphs beside
+        // the control's; there is now one icon-driven bar, and Puffinote renders the very same one.
+        EditorView.ShowCommandBar = _settings.Settings.ShowToolbar;
         _statusBar = BuildStatusBar();
         root.Children.Add(_statusBar);
         root.Children.Add(EditorView);
@@ -132,6 +123,10 @@ public partial class MainWindow : Window
             ScheduleDocumentStatus();
         };
         EditorView.SelectionChanged += (_, _) => UpdateCaretStatus();
+
+        // The view-mode commands now live in the editor's catalog, so the switch happens inside the control.
+        // The shell still owns what a shell owns: persisting the choice and syncing the View ▸ radio group.
+        EditorView.ViewModeChanged += (_, _) => OnViewModeChanged();
         Closing += OnClosing;
         Closed += (_, _) =>
         {
@@ -154,7 +149,7 @@ public partial class MainWindow : Window
 
         ApplyTheme(_settings.Settings.Theme);
         EditorView.Editor.IndentWidth = _settings.Settings.TabWidth;
-        EditorView.Editor.View = _settings.Settings.View; // restore the view-mode default
+        EditorView.ViewMode = _settings.Settings.View; // restore the view-mode default
         EditorView.Editor.CompletedTaskSorting = _settings.Settings.CompletedTaskSort; // restore task-sort default
         EditorView.Editor.HorizontalPadding = _settings.Settings.EditorPadding; // restore editor padding
         EditorView.Editor.MaxContentWidth = _settings.Settings.EditorMaxContentWidth; // and the reading-column cap
@@ -173,9 +168,9 @@ public partial class MainWindow : Window
     // Test hooks for the view toggles (the chrome controls are private).
     internal bool StatusBarVisibleForTest => _statusBar?.IsVisible ?? false;
 
-    internal bool ToolbarVisibleForTest => _toolbar?.IsVisible ?? false;
+    internal bool ToolbarVisibleForTest => EditorView.ShowCommandBar;
 
     internal void ToggleFocusModeForTest() => ToggleFocusMode();
 
-    internal void SetViewModeForTest(MarkdownEditor.ViewMode mode) => SetViewMode(mode);
+    internal void SetViewModeForTest(MarkdownEditor.ViewMode mode) => EditorView.ViewMode = mode;
 }

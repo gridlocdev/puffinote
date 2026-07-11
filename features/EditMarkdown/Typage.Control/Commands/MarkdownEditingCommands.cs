@@ -1,20 +1,34 @@
 using Avalonia.Input;
 using Puffinote.Components.Commands;
+using Typage.Control.Controls;
 using Typage.Control.Views;
 
 namespace Typage.Control.Commands;
 
 /// <summary>
-/// The Markdown editor's own command catalog: the editing/formatting operations the embeddable
-/// <see cref="MarkdownEditorView"/> offers, published as shared <see cref="AppCommand"/>s — mirroring how
-/// <c>Cellestra.Editor</c> exposes its catalog through the view. A host app composes these into its Command
-/// Palette, menu, and toolbar. The <em>shell</em>-level commands (file open/save, find bar, link/image
-/// dialogs, view mode, preferences) deliberately stay with the host, since they need the window, dialogs,
-/// and settings the control doesn't own.
+/// The Markdown editor's one command catalog: every editing, formatting, find, view and insert operation the
+/// embeddable <see cref="MarkdownEditorView"/> offers, published as shared <see cref="AppCommand"/>s —
+/// mirroring how <c>Cellestra.Editor</c> exposes its catalog through the view. Every host composes these into
+/// its Command Palette, menu, toolbar <em>and key bindings</em>, so the standalone app and the Puffinote shell
+/// present the same commands under the same shortcuts, by construction rather than by two lists agreeing.
+/// <para>
+/// What stays with a host is only what needs a host: opening and saving <em>files</em>, recent documents,
+/// preferences, the window itself. Anything that acts on the open document — including the dialogs that do,
+/// like the link prompt — is here, because it is the editor's, not the shell's.
+/// </para>
+/// <para>
+/// <b>⌘K is not ours.</b> It opens the host's command palette (Puffinote reserves it globally, and the
+/// standalone app matches). The link prompt therefore takes <b>⌘⌥K</b>, which is also what Cellestra's
+/// <c>insert.hyperlink</c> uses — one family, one meaning per chord.
+/// </para>
 /// </summary>
 public static class MarkdownEditingCommands
 {
-    /// <summary>Build the editor catalog bound to <paramref name="view"/> (fresh instances each call).</summary>
+    /// <summary>
+    /// Build the editor catalog bound to <paramref name="view"/>. Call it once per view and cache the result
+    /// (<see cref="MarkdownEditorView.EditingCommands"/> does), so a bar, a palette and a key binding all
+    /// share one command instance.
+    /// </summary>
     public static IReadOnlyList<AppCommand> Build(MarkdownEditorView view)
     {
         var ed = view.Editor;
@@ -36,6 +50,10 @@ public static class MarkdownEditingCommands
             new("edit.deleteLine", "Delete Line", "Delete the current line or selection.", Shortcut.Cmd(Key.K, KeyModifiers.Shift), ed.DeleteLine),
             new("edit.selectWord", "Select Word", "Select the word under the caret.", null, ed.SelectCurrentWord),
             new("edit.selectParagraph", "Select Paragraph", "Select the paragraph under the caret.", null, ed.SelectCurrentParagraph),
+            new("edit.find", "Find…", "Find text in the document.", Shortcut.Cmd(Key.F),
+                () => view.ShowFind(replace: false), icon: "search"),
+            new("edit.replace", "Find & Replace…", "Find text and replace it (plain or regex).", Shortcut.Cmd(Key.F, KeyModifiers.Alt),
+                () => view.ShowFind(replace: true), icon: "replace"),
 
             new("format.bold", "Bold", "Make the selection bold.", Shortcut.Cmd(Key.B), ed.ToggleBold, isActive: () => ed.IsBoldActive, icon: "bold"),
             new("format.italic", "Italic", "Make the selection italic.", Shortcut.Cmd(Key.I), ed.ToggleItalic, isActive: () => ed.IsItalicActive, icon: "italic"),
@@ -64,10 +82,31 @@ public static class MarkdownEditingCommands
             new("format.h6", "Heading 6", "Make this line a level-6 heading.", Shortcut.Cmd(Key.D6), () => ed.ApplyHeading(6), isActive: () => ed.CaretHeadingLevel == 6, icon: "heading-6"),
             new("format.paragraph", "Paragraph", "Remove the heading from this line.", Shortcut.Cmd(Key.D0), ed.SetParagraph, icon: "remove-formatting"),
 
+            // ⌘⌥K, not ⌘K: the palette owns ⌘K in both shells (see the type remarks).
+            new("format.link", "Insert Link…", "Insert a link with display text and a location.", Shortcut.Cmd(Key.K, KeyModifiers.Alt),
+                () => _ = view.ShowLinkDialogAsync(), icon: "link"),
+            new("insert.image", "Image…", "Pick an image file to insert.", null, () => _ = view.InsertImageAsync(), icon: "image"),
+
             // "square-code" is the inline-code chevrons boxed in — the box is what says *block* rather than
             // inline; "minus" is the rule itself.
             new("insert.codeBlock", "Code Block", "Insert a fenced code block.", Shortcut.Cmd(Key.E, KeyModifiers.Shift), ed.InsertCodeBlock, icon: "square-code"),
             new("insert.hr", "Horizontal Rule", "Insert a horizontal rule.", null, ed.InsertHorizontalRule, icon: "minus"),
+
+            // The view modes are a radio set, so each lights when it's the one in force.
+            new("view.viewRich", "View Rich View", "Live preview: formatted, with Markdown markers hidden.", null,
+                () => view.ViewMode = MarkdownEditor.ViewMode.Rich,
+                isActive: () => view.ViewMode == MarkdownEditor.ViewMode.Rich, icon: "eye"),
+            new("view.viewFormatted", "View Formatted View", "Formatted, with the raw Markdown markers revealed.", null,
+                () => view.ViewMode = MarkdownEditor.ViewMode.Formatted,
+                isActive: () => view.ViewMode == MarkdownEditor.ViewMode.Formatted, icon: "pilcrow"),
+            new("view.viewRaw", "View Raw Text", "Plain-text source: no rich formatting or decorations.", null,
+                () => view.ViewMode = MarkdownEditor.ViewMode.RawText,
+                isActive: () => view.ViewMode == MarkdownEditor.ViewMode.RawText, icon: "file-text"),
+
+            new("file.exportHtml", "Export HTML…", "Render the document to a self-contained HTML file.", null,
+                () => _ = view.ExportHtmlAsync(), icon: "file-down"),
+            new("help.reference", "Markdown Reference", "Open the offline syntax & shortcut reference.", null,
+                view.ShowReference, icon: "book-open"),
         ];
     }
 }

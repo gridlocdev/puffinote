@@ -4,13 +4,14 @@ using Avalonia.Input;
 using Avalonia.Layout;
 using Puffinote.Components.Overlays;
 
-namespace Typage.Desktop.Views;
+namespace Typage.Control.Views;
 
 /// <summary>
-/// The ⌘K link prompt rendered as an internal modal: a "Display text" field (prefilled from the
+/// The ⌘⌥K link prompt rendered as an internal modal: a "Display text" field (prefilled from the
 /// selection / word under the caret) and a "Location" field, with Cancel / Add. Its
 /// <see cref="ModalDialog{T}.Result"/> is the entered values on Add/Enter, or null on Cancel/Esc.
 /// Spaces in the location are encoded as <c>%20</c> so the URL survives as one Markdown destination.
+/// Shown in <see cref="MarkdownEditorView"/>'s own overlay layer, so inserting a link works in any host.
 /// </summary>
 public sealed class LinkDialog : ModalDialog<LinkDialog.Values?>
 {

@@ -52,10 +52,19 @@ internal interface IEditorPane : IDisposable
     void Rebind(string newPath);
 
     /// <summary>
-    /// This editor's command catalog, for the merged Command Palette (PRD §7.4). Cellestra exposes its
-    /// full catalog; Typage exposes a minimal set until its catalog is extracted into the control.
+    /// This editor's command catalog, for the merged Command Palette (PRD §7.4) and for the window's key
+    /// bindings — the shell binds every gesture in here that the editor doesn't hard-handle itself, which is
+    /// what makes an embedded editor's keymap identical to its standalone app's. Both editors publish their
+    /// full catalog from their own control, so the shell never restates one.
     /// </summary>
     IReadOnlyList<AppCommand> Commands { get; }
+
+    /// <summary>
+    /// True while the editor is showing a modal of its own (Typage's link prompt or reference sheet). The
+    /// shell stands its shortcuts down while one is up, so a chord typed into the dialog's text field can't
+    /// fire the command behind it. Default false: an editor with no modals of its own need not say so.
+    /// </summary>
+    bool IsModalOpen => false;
 
     /// <summary>
     /// The document's outline for the sidebar's Outline panel (PRD §7.2.3): Markdown headings for a note,

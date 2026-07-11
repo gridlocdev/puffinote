@@ -1,11 +1,9 @@
-using System.Text;
 using Avalonia.Controls;
 using Avalonia.Platform.Storage;
 using Avalonia.Threading;
 using Puffinote.Components.Commands;
-using Typage.Desktop.Services;
+using Typage.Control;
 using Typage.Engine.Document;
-using Typage.Engine.Html;
 
 namespace Typage.Desktop.Views;
 
@@ -18,7 +16,7 @@ public partial class MainWindow
             var (text, format) = TextFileCodec.Decode(File.ReadAllBytes(path));
             _format = format; // remember the encoding/BOM so a save round-trips it
             EditorView.LoadText(text);
-            _currentPath = path;
+            SetCurrentPath(path);
             _lastKnownDiskText = text; // the on-disk baseline for external-change detection
             _settings.Settings.PushRecent(path);
             _settings.Save();
@@ -99,11 +97,22 @@ public partial class MainWindow
         }
 
         EditorView.LoadText(string.Empty);
-        _currentPath = null;
+        SetCurrentPath(null);
         _lastKnownDiskText = null;
         _format = TextFileFormat.Utf8NoBom; // new documents default to UTF-8 (no BOM)
         UpdateChrome();
         WatchCurrentFile(); // nothing to watch now
+    }
+
+    /// <summary>
+    /// Point the shell — and the surface — at the file now being edited. The editor needs the path of its own
+    /// accord: it anchors a relative image path against the document's folder, and names an HTML export after
+    /// it. An unsaved document (null) is what puts an inserted image through <see cref="ImageStaging"/>.
+    /// </summary>
+    private void SetCurrentPath(string? path)
+    {
+        _currentPath = path;
+        EditorView.DocumentPath = path;
     }
 
     private async Task OpenAsync()
@@ -128,46 +137,10 @@ public partial class MainWindow
         }
     }
 
-    // ----- image insertion + staging (PRD §8.3 images) -----
-
-    /// <summary>
-    /// Pick an image file and insert a reference to it. A <b>saved</b> document references the picked image
-    /// by a relative path (it has a folder to anchor against). An <b>unsaved</b> document has no such anchor,
-    /// so the image is copied into a scratch directory and referenced by that absolute staged path; the next
-    /// save offers to move it into the document's permanent home (see <see cref="ReconcileStagedImagesAsync"/>).
-    /// </summary>
-    private async Task InsertImageAsync()
-    {
-        var files = await StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
-        {
-            Title = "Insert Image",
-            AllowMultiple = false,
-            FileTypeFilter = [ImageType, FilePickerFileTypes.All],
-        });
-
-        if (files.Count == 0 || files[0].TryGetLocalPath() is not { } source)
-        {
-            return;
-        }
-
-        await Dispatcher.UIThread.InvokeAsync(() =>
-        {
-            var ed = EditorView.Editor;
-            var alt = Path.GetFileNameWithoutExtension(source);
-            try
-            {
-                var path = _currentPath is { } docPath
-                    ? ImageStaging.RelativeUrl(docPath, source)              // saved → relative path in place
-                    : ImageStaging.Stage(source, System.Guid.NewGuid().ToString("N")); // unsaved → stage a copy
-                ed.InsertImageReference(ImageStaging.EncodeUrl(path), alt); // encode so spaces don't break the link
-            }
-            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
-            {
-                ShowError("Couldn't insert the image.",
-                    $"{ex.Message}\n\nThe image could not be staged for the unsaved document.");
-            }
-        });
-    }
+    // ----- image staging (PRD §8.3 images) -----
+    // Inserting an image is the editor's (MarkdownEditorView.InsertImageAsync) — every host does it the same
+    // way. What remains here is the half that genuinely needs a shell: at save time, offering to move the
+    // images staged for a then-unsaved document into their permanent home.
 
     /// <summary>
     /// When the document being saved to <paramref name="targetPath"/> still references staged (scratch)
@@ -237,7 +210,7 @@ public partial class MainWindow
 
             if (WriteToPath(path))
             {
-                _currentPath = path;
+                SetCurrentPath(path);
                 _settings.Settings.PushRecent(path);
                 _settings.Save();
                 RefreshRecentMenu();
@@ -254,7 +227,8 @@ public partial class MainWindow
     {
         try
         {
-            AtomicWrite(path, TextFileCodec.Encode(EditorView.Text, _format));
+            // The editor library owns the one atomic (temp-then-rename) write; don't keep a second copy here.
+            MarkdownDocumentSession.AtomicWrite(path, TextFileCodec.Encode(EditorView.Text, _format));
             _lastKnownDiskText = EditorView.Text; // so the watcher recognises this as our own save
             EditorView.MarkSaved();
             _recovery.Clear(); // the save is durable now; drop the crash-recovery snapshot
@@ -279,57 +253,6 @@ public partial class MainWindow
         if (await ConfirmAsync("Revert to the last saved version? Unsaved changes will be lost."))
         {
             OpenPath(_currentPath);
-        }
-    }
-
-    private async Task ExportHtmlAsync()
-    {
-        var file = await StorageProvider.SaveFilePickerAsync(new FilePickerSaveOptions
-        {
-            Title = "Export HTML",
-            DefaultExtension = "html",
-            SuggestedFileName = (Path.GetFileNameWithoutExtension(_currentPath) ?? "Untitled") + ".html",
-            FileTypeChoices = [new FilePickerFileType("HTML") { Patterns = ["*.html", "*.htm"] }],
-        });
-
-        if (file?.TryGetLocalPath() is { } path)
-        {
-            // Read the editor text and report errors on the UI thread (the picker await may resume off it).
-            await Dispatcher.UIThread.InvokeAsync(() =>
-            {
-                var title = Path.GetFileNameWithoutExtension(path);
-                var html = HtmlRenderer.RenderDocument(Engine.Document.TextDocument.FromString(EditorView.Text), title);
-                try
-                {
-                    AtomicWrite(path, new UTF8Encoding(false).GetBytes(html)); // HTML export is always UTF-8
-                }
-                catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
-                {
-                    ShowError("Couldn't export HTML.",
-                        $"{ex.Message}\n\nCheck that the destination folder is writable.");
-                }
-            });
-        }
-    }
-
-    private static void AtomicWrite(string path, byte[] content)
-    {
-        var full = Path.GetFullPath(path);
-        var dir = Path.GetDirectoryName(full) ?? ".";
-        var temp = Path.Combine(dir, $".{Path.GetFileName(full)}.{Guid.NewGuid():N}.tmp");
-        try
-        {
-            File.WriteAllBytes(temp, content);
-            File.Move(temp, full, overwrite: true); // atomic on the same volume (PRD §7.1)
-        }
-        catch
-        {
-            if (File.Exists(temp))
-            {
-                File.Delete(temp);
-            }
-
-            throw;
         }
     }
 }
