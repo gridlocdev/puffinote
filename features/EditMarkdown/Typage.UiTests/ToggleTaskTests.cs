@@ -129,4 +129,43 @@ public class ToggleTaskTests
 
         Assert.Equal("- [ ] b\n- [x] a\n  - [x] child", e.Text);
     }
+
+    // ----- the caret on a hard-wrapped item's continuation line -----
+    // The marker-less line flows into the item above, so the reader sees one item and ⌘L must act on it —
+    // not start a rival checkbox item mid-way through, which tore the item in two.
+
+    [AvaloniaFact]
+    public void OnABulletsContinuationLine_CheckboxesTheOwningItem()
+    {
+        var e = At("- apple\nwrapped", line: 1, col: 4);
+        e.ToggleTask();
+        Assert.Equal("- [ ] apple\nwrapped", e.Text); // was "- apple\n- [ ] wrapped"
+        Assert.Equal(16, e.Buffer.Selection.Caret);   // caret rides its own text, past the inserted "[ ] "
+    }
+
+    [AvaloniaFact]
+    public void OnATasksContinuationLine_FlipsTheOwningItemsBox()
+    {
+        var e = At("- [ ] apple\nwrapped", line: 1, col: 4);
+        e.ToggleTask();
+        Assert.Equal("- [x] apple\nwrapped", e.Text);
+    }
+
+    [AvaloniaFact]
+    public void OnANumberedItemsContinuationLine_CheckboxesTheOwningItem()
+    {
+        var e = At("1. apple\nwrapped", line: 1, col: 4);
+        e.ToggleTask();
+        Assert.Equal("1. [ ] apple\nwrapped", e.Text);
+    }
+
+    [AvaloniaFact]
+    public void OnAWrappedPlainParagraph_CheckboxesTheParagraphOnce()
+    {
+        // Consecutive unmarked lines are one paragraph on screen, so it takes one checkbox on its first line.
+        var e = new MarkdownEditor { Text = "a\nb\nc" };
+        e.Buffer.Selection = new Selection(0, 5);
+        e.ToggleTask();
+        Assert.Equal("- [ ] a\nb\nc", e.Text);
+    }
 }

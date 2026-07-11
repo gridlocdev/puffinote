@@ -35,6 +35,64 @@ public class EditingAssistsTests
         Assert.Equal("- apple\n", editor.Text);
     }
 
+    // ----- Enter on a hard-wrapped item's continuation line -----
+    // A plain (marker-less) line under a list item lazily flows into that item, so the reader sees one
+    // flowing item. Enter with the caret on that continuation line must continue the *owning* item, exactly
+    // as it would from the item's own line — not break the flowed item into a list item plus a stray
+    // paragraph. Each case pairs the wrapped item with its one-line equivalent to pin that equivalence.
+
+    [AvaloniaFact]
+    public void Enter_OnAWrappedBulletsContinuationLine_ContinuesTheBullet()
+    {
+        var editor = At("- apple\nwrapped", 15);
+        editor.EnterForTest();
+        Assert.Equal("- apple\nwrapped\n- ", editor.Text); // as "- apple wrapped" would give "- apple wrapped\n- "
+    }
+
+    [AvaloniaFact]
+    public void Enter_OnAWrappedNumbersContinuationLine_ContinuesTheNumbering()
+    {
+        var editor = At("1. apple\nwrapped", 16);
+        editor.EnterForTest();
+        Assert.Equal("1. apple\nwrapped\n2. ", editor.Text);
+    }
+
+    [AvaloniaFact]
+    public void Enter_OnAWrappedTasksContinuationLine_ContinuesWithAnUncheckedBox()
+    {
+        var editor = At("- [x] apple\nwrapped", 19);
+        editor.EnterForTest();
+        Assert.Equal("- [x] apple\nwrapped\n- [ ] ", editor.Text); // a continued task item starts unchecked
+    }
+
+    [AvaloniaFact]
+    public void Enter_MidwayThroughAContinuationLine_SplitsIntoANewItem()
+    {
+        // Caret between "wrap" and " ped" — the same split the one-line item would produce, carrying the
+        // remainder into a fresh bullet rather than into an unmarked paragraph.
+        var editor = At("- apple\nwrap ped", 12);
+        editor.EnterForTest();
+        Assert.Equal("- apple\nwrap\n-  ped", editor.Text);
+    }
+
+    [AvaloniaFact]
+    public void Enter_OnTheSecondContinuationLine_StillContinuesTheOwningItem()
+    {
+        var editor = At("- apple\nwrap one\nwrap two", 25);
+        editor.EnterForTest();
+        Assert.Equal("- apple\nwrap one\nwrap two\n- ", editor.Text);
+    }
+
+    [AvaloniaFact]
+    public void Enter_OnAWrappedPlainParagraph_StillBreaksTheParagraph()
+    {
+        // A plain paragraph takes a continuation too, but it has no marker to continue — Enter must stay a
+        // paragraph break, not acquire a bullet from nowhere.
+        var editor = At("apple\nwrapped", 13);
+        editor.EnterForTest();
+        Assert.Equal("apple\nwrapped\n\n", editor.Text);
+    }
+
     [AvaloniaFact]
     public void Enter_LeftOfACheckbox_PushesTheItemDown_WithoutDuplicatingTheMarker()
     {

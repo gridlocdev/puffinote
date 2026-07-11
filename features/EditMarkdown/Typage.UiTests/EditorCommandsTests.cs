@@ -91,11 +91,12 @@ public class EditorCommandsTests
     }
 
     [AvaloniaFact]
-    public void NumberedList_NumbersSelectedLinesSequentially()
+    public void NumberedList_NumbersSelectedParagraphsSequentially()
     {
-        var e = Sel("a\nb\nc", 0, 5);
+        // One marker per *block*. Blank lines separate these into three paragraphs, so each becomes an item.
+        var e = Sel("a\n\nb\n\nc", 0, 7);
         e.ToggleNumberedList();
-        Assert.Equal("1. a\n2. b\n3. c", e.Text);
+        Assert.Equal("1. a\n\n2. b\n\n3. c", e.Text);
     }
 
     [AvaloniaFact]
@@ -104,6 +105,67 @@ public class EditorCommandsTests
         var e = At("1. item", caret: 0);
         e.ToggleBulletList();
         Assert.Equal("- item", e.Text);
+    }
+
+    // ----- list commands with the caret on a hard-wrapped item's continuation line -----
+    // A marker-less line under a list item flows into it, so the reader sees one item. A list command with
+    // the caret parked there must retarget the owning item — marking the continuation line instead would
+    // splice a rival marker into the middle of the item and tear it in two. Each case is paired with the
+    // one-line equivalent it must agree with. (Caret 12 sits inside "wrapped" in every wrapped fixture.)
+
+    [AvaloniaFact]
+    public void BulletList_OnAContinuationLine_TogglesTheOwningItem_NotTheWrappedLine()
+    {
+        var e = At("- apple\nwrapped", caret: 12);
+        e.ToggleBulletList();
+        Assert.Equal("apple\nwrapped", e.Text); // was "- apple\n- wrapped" — the item split in two
+    }
+
+    [AvaloniaFact]
+    public void NumberedList_OnAContinuationLine_NumbersTheOwningItem()
+    {
+        var e = At("- apple\nwrapped", caret: 12);
+        e.ToggleNumberedList();
+        Assert.Equal("1. apple\nwrapped", e.Text);
+    }
+
+    [AvaloniaFact]
+    public void BulletList_OverAnItemAndItsContinuation_LeavesTheContinuationUnmarked()
+    {
+        // The whole wrapped item selected: only the item line carries a marker, so only it toggles.
+        var e = Sel("- apple\nwrapped", 0, 15);
+        e.ToggleBulletList();
+        Assert.Equal("apple\nwrapped", e.Text);
+    }
+
+    // ----- a selection spanning a hard-wrapped block's lines -----
+    // Consecutive unmarked lines flow into one paragraph on screen, so selecting across them selects one
+    // thing. The marker goes on that block's first line only; marking each source line would shatter the
+    // paragraph the reader sees into several items.
+
+    [AvaloniaFact]
+    public void BulletList_OverAWrappedParagraph_MakesOneItem_NotOnePerLine()
+    {
+        var e = Sel("a\nb\nc", 0, 5);
+        e.ToggleBulletList();
+        Assert.Equal("- a\nb\nc", e.Text); // was "- a\n- b\n- c" — one paragraph shattered into three items
+    }
+
+    [AvaloniaFact]
+    public void NumberedList_OverAWrappedParagraph_MakesOneItem()
+    {
+        var e = Sel("a\nb\nc", 0, 5);
+        e.ToggleNumberedList();
+        Assert.Equal("1. a\nb\nc", e.Text);
+    }
+
+    [AvaloniaFact]
+    public void NumberedList_OverAListWhoseItemIsWrapped_NumbersTheItemsAndSkipsTheContinuation()
+    {
+        // The wrapped item's continuation is passed over, and numbering counts items rather than lines.
+        var e = Sel("- one\nwrap\n- two", 0, 16);
+        e.ToggleNumberedList();
+        Assert.Equal("1. one\nwrap\n2. two", e.Text);
     }
 
     // ----- line edit actions -----

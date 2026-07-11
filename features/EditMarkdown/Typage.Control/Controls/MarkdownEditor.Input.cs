@@ -265,6 +265,18 @@ public partial class MarkdownEditor
 
         var result = LinePrefix.ComputeEnter(lineText, caretCol);
 
+        // A hard-wrapped list item: the caret is on an unmarked line that lazily flows into the item above, so
+        // the reader sees a single flowing item. ComputeEnter only sees this one (marker-less) line and calls it
+        // plain, which would tear the item apart into a list item plus a stray paragraph. Continue the *owning*
+        // item instead — the same bullet / number / checkbox its own line would produce — so Enter behaves the
+        // same whether the author hard-wrapped the item or left it on one line.
+        var owner = result.Kind == EnterKind.Plain ? ContinuedListItemLine(line) : -1;
+        if (owner >= 0)
+        {
+            var item = LinePrefix.Parse(doc.GetLineText(owner));
+            result = new EnterResult(EnterKind.Continue, "\n" + item.ContinuationPrefix(), 0, 0);
+        }
+
         switch (result.Kind)
         {
             case EnterKind.Exit:

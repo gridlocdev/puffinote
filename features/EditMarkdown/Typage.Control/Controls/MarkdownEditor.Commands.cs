@@ -448,7 +448,7 @@ public partial class MarkdownEditor
     public void ToggleTask()
     {
         var doc = Buffer.Document;
-        var line = doc.GetPosition(Buffer.Selection.Caret).Line;
+        var line = ListTargetLine();
         var prefix = LinePrefix.Parse(doc.GetLineText(line));
 
         if (prefix.HasTask)
@@ -479,7 +479,7 @@ public partial class MarkdownEditor
     public void RemoveTask()
     {
         var doc = Buffer.Document;
-        var line = doc.GetPosition(Buffer.Selection.Caret).Line;
+        var line = ListTargetLine();
         var prefix = LinePrefix.Parse(doc.GetLineText(line));
         if (!prefix.HasTask)
         {
@@ -568,52 +568,57 @@ public partial class MarkdownEditor
     }
 
     /// <summary>Toggle an unordered-list (<c>- </c>) marker on the caret line / selected lines.</summary>
-    public void ToggleBulletList()
-    {
-        var (startLine, endLine) = SelectedLineRange();
-        var allOn = AllNonBlank(startLine, endLine, p => p.List == ListKind.Unordered && !p.HasTask);
-        EditLineRange(startLine, endLine, (line, text) =>
-        {
-            var p = LinePrefix.Parse(text);
-            if (allOn)
-            {
-                return p.HasList ? text[..p.MarkerStart] + text[p.Length..] : text;
-            }
-
-            if (IsBlankLine(line))
-            {
-                return text;
-            }
-
-            var body = StripListMarker(text, p);
-            var bp = LinePrefix.Parse(body);
-            return body[..bp.Indent] + "- " + body[bp.Indent..];
-        });
-    }
+    public void ToggleBulletList() =>
+        ToggleListMarker(static p => p.List == ListKind.Unordered && !p.HasTask, static _ => "- ");
 
     /// <summary>Toggle an ordered-list (<c>1. </c>) marker on the caret line / selected lines (renumbering the run).</summary>
-    public void ToggleNumberedList()
+    public void ToggleNumberedList() =>
+        ToggleListMarker(static p => p.List == ListKind.Ordered, static n => $"{n}. ");
+
+    /// <summary>
+    /// The shared body of the list-marker toggles. <paramref name="isOn"/> tests whether an item already
+    /// carries this list kind — when every targeted item does, the press strips the markers instead of adding
+    /// them — and <paramref name="marker"/> supplies the marker for the <c>n</c>th (1-based) item turned on,
+    /// so a numbered list sequences while a bulleted one repeats.
+    /// <para>
+    /// The marker goes on each selected <b>block</b>, not each selected source line: blank lines and
+    /// <see cref="IsBlockContinuationLine">continuation lines</see> pass through untouched and get no vote on
+    /// <c>allOn</c>. A hard-wrapped paragraph or item is one thing on screen, so it takes one marker on its
+    /// first line — marking its continuations too would splice rival markers into the middle of it and tear it
+    /// into several. Blocks are separated by blank lines, so genuinely distinct paragraphs still each get one.
+    /// </para>
+    /// </summary>
+    private void ToggleListMarker(Func<LinePrefix, bool> isOn, Func<int, string> marker)
     {
-        var (startLine, endLine) = SelectedLineRange();
-        var allOn = AllNonBlank(startLine, endLine, p => p.List == ListKind.Ordered);
+        var doc = Buffer.Document;
+        var (startLine, endLine) = ListTargetLineRange();
+
+        var allOn = true;
+        for (var l = startLine; l <= endLine && allOn; l++)
+        {
+            if (!IsBlankLine(l) && !IsBlockContinuationLine(l) && !isOn(LinePrefix.Parse(doc.GetLineText(l))))
+            {
+                allOn = false;
+            }
+        }
+
         var n = 0;
         EditLineRange(startLine, endLine, (line, text) =>
         {
+            if (IsBlankLine(line) || IsBlockContinuationLine(line))
+            {
+                return text;
+            }
+
             var p = LinePrefix.Parse(text);
             if (allOn)
             {
                 return p.HasList ? text[..p.MarkerStart] + text[p.Length..] : text;
             }
 
-            if (IsBlankLine(line))
-            {
-                return text;
-            }
-
-            n++;
             var body = StripListMarker(text, p);
             var bp = LinePrefix.Parse(body);
-            return body[..bp.Indent] + $"{n}. " + body[bp.Indent..];
+            return body[..bp.Indent] + marker(++n) + body[bp.Indent..];
         });
     }
 

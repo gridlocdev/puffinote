@@ -97,4 +97,14 @@ public class RemoveTaskTests
         e.Undo();
         Assert.Equal("- [x] done", e.Text);
     }
+
+    [AvaloniaFact]
+    public void OnAContinuationLine_StripsTheOwningItemsBox()
+    {
+        // The caret sits on the wrapped item's second line, which flows into the item above: ⌘⇧L must unwind
+        // that item back to plain text, leaving the continuation to flow on into the resulting paragraph.
+        var e = At("- [ ] apple\nwrapped", line: 1, col: 4);
+        e.RemoveTask();
+        Assert.Equal("apple\nwrapped", e.Text);
+    }
 }

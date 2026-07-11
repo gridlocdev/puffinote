@@ -237,6 +237,62 @@ public partial class MarkdownEditor
         => startKind != ItemKind.None && ListItemKindOf(line) == startKind;
 
     /// <summary>
+    /// The first source line of the flowed block <paramref name="line"/> is drawn in — the line that carries
+    /// the block's marker, and the only one of its lines the reader sees as a row start. Equals
+    /// <paramref name="line"/> when it begins its own block.
+    /// <para>
+    /// Answered from the layout's own block grouping rather than by re-deriving the flow rule, so the editing
+    /// assists and the rendered rows agree by construction: whatever the reader sees as one flowing paragraph
+    /// or item, the assists treat as one unit too. That also makes raw-text mode fall out for free — it groups
+    /// every line on its own row, so nothing continues anything there and the assists act on literal lines.
+    /// </para>
+    /// </summary>
+    private int BlockFirstLine(int line)
+    {
+        // Resolve the block first: BlockOf rebuilds a stale layout, which swaps in a fresh BlockStartLine.
+        // Indexing the property in the same expression would read the pre-rebuild array (and mis-index it).
+        var block = BlockOf(line);
+        return _layout.BlockStartLine[block];
+    }
+
+    /// <summary>
+    /// Whether <paramref name="line"/> is a <b>continuation line</b>: one the reader never sees as a row of its
+    /// own, because it flows into a block that began above it (a hard-wrapped paragraph or list item). Such a
+    /// line is not an independent target — a block-level command must act on the block, not on it.
+    /// </summary>
+    private bool IsBlockContinuationLine(int line) => BlockFirstLine(line) < line;
+
+    /// <summary>
+    /// The list/task item that the unmarked line <paramref name="line"/> lazily continues — or <c>-1</c> when it
+    /// continues no <em>item</em> (it stands alone, or merely wraps a plain paragraph, which has no marker for
+    /// Enter to carry down).
+    /// </summary>
+    private int ContinuedListItemLine(int line)
+    {
+        var start = BlockFirstLine(line);
+        return start < line && LinePrefix.Parse(Buffer.Document.GetLineText(start)).HasList ? start : -1;
+    }
+
+    /// <summary>
+    /// The line a caret-scoped list command (⌘L / ⌘⇧L) acts on: the caret's line resolved to the start of the
+    /// block it is drawn in — so a checkbox lands on the paragraph/item the reader sees the caret inside, rather
+    /// than starting a rival item mid-way through it.
+    /// </summary>
+    private int ListTargetLine() =>
+        BlockFirstLine(Buffer.Document.GetPosition(Buffer.Selection.Caret).Line);
+
+    /// <summary>
+    /// The line range a selection-scoped list command acts on: <see cref="SelectedLineRange"/> with its start
+    /// resolved back to its block's first line, so the range covers whole blocks. Only the start needs it — the
+    /// marker line of a block the range ends inside already sits above.
+    /// </summary>
+    private (int Start, int End) ListTargetLineRange()
+    {
+        var (start, end) = SelectedLineRange();
+        return (BlockFirstLine(start), end);
+    }
+
+    /// <summary>
     /// The <b>visual indentation</b> of <paramref name="line"/> in columns — its nesting depth. Tabs are
     /// measured on <see cref="IndentWidth"/>-column tab stops (matching the tokenizer's
     /// <c>LeadingWhitespace</c> and how the surface draws a leading tab), so that a child indented with one
