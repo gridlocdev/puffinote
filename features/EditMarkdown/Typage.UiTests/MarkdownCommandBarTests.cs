@@ -55,11 +55,27 @@ public class MarkdownCommandBarTests
     }
 
     [AvaloniaFact]
-    public void TheInsertCommands_HaveIcons()
+    public void Every_surfaced_command_has_an_icon()
     {
+        // A command with no icon still renders — as a blank 15px gutter beside its label — so the bar goes
+        // quietly ragged rather than failing. Everything the bar shows must carry a glyph.
+        var view = new MarkdownEditorView();
+        var bar = new MarkdownCommandBar(view.EditingCommands);
+        foreach (var command in view.EditingCommands.Where(c => bar.SurfacedIdsForTest.Contains(c.Id)))
+        {
+            Assert.False(string.IsNullOrEmpty(command.Icon), $"{command.Id} is surfaced on the bar with no icon");
+        }
+    }
+
+    [AvaloniaFact]
+    public void EachHeadingLevel_HasItsOwnNumberedGlyph()
+    {
+        // Not one shared "type" over three blanks: the level is the whole point of the picker.
         var byId = new MarkdownEditorView().EditingCommands.ToDictionary(c => c.Id);
-        Assert.Equal("square-code", byId["insert.codeBlock"].Icon);
-        Assert.Equal("minus", byId["insert.hr"].Icon);
+        for (var level = 1; level <= 6; level++)
+        {
+            Assert.Equal($"heading-{level}", byId[$"format.h{level}"].Icon);
+        }
     }
 
     [AvaloniaFact]

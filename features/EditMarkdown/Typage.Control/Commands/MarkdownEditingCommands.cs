@@ -53,12 +53,15 @@ public static class MarkdownEditingCommands
                 ed.ToggleBulletList, isActive: () => ed.IsBulletListActive, icon: "list"),
             new("format.numberedList", "Numbered List", "Toggle a numbered list on the line(s).", Shortcut.Cmd(Key.OemQuestion),
                 ed.ToggleNumberedList, isActive: () => ed.IsNumberedListActive, icon: "list-ordered"),
-            new("format.h1", "Heading 1", "Make this line a level-1 heading.", Shortcut.Cmd(Key.D1), () => ed.ApplyHeading(1), isActive: () => ed.CaretHeadingLevel == 1, icon: "type"),
-            new("format.h2", "Heading 2", "Make this line a level-2 heading.", Shortcut.Cmd(Key.D2), () => ed.ApplyHeading(2), isActive: () => ed.CaretHeadingLevel == 2, icon: "type"),
-            new("format.h3", "Heading 3", "Make this line a level-3 heading.", Shortcut.Cmd(Key.D3), () => ed.ApplyHeading(3), isActive: () => ed.CaretHeadingLevel == 3, icon: "type"),
-            new("format.h4", "Heading 4", "Make this line a level-4 heading.", Shortcut.Cmd(Key.D4), () => ed.ApplyHeading(4), isActive: () => ed.CaretHeadingLevel == 4),
-            new("format.h5", "Heading 5", "Make this line a level-5 heading.", Shortcut.Cmd(Key.D5), () => ed.ApplyHeading(5), isActive: () => ed.CaretHeadingLevel == 5),
-            new("format.h6", "Heading 6", "Make this line a level-6 heading.", Shortcut.Cmd(Key.D6), () => ed.ApplyHeading(6), isActive: () => ed.CaretHeadingLevel == 6),
+            // Each level gets its own numbered glyph. They used to share one "type" (and H4–H6 had none at
+            // all), so the picker read as three identical icons over three blanks — the one thing the list is
+            // there to tell apart, the level, was the one thing the icons didn't say.
+            new("format.h1", "Heading 1", "Make this line a level-1 heading.", Shortcut.Cmd(Key.D1), () => ed.ApplyHeading(1), isActive: () => ed.CaretHeadingLevel == 1, icon: "heading-1"),
+            new("format.h2", "Heading 2", "Make this line a level-2 heading.", Shortcut.Cmd(Key.D2), () => ed.ApplyHeading(2), isActive: () => ed.CaretHeadingLevel == 2, icon: "heading-2"),
+            new("format.h3", "Heading 3", "Make this line a level-3 heading.", Shortcut.Cmd(Key.D3), () => ed.ApplyHeading(3), isActive: () => ed.CaretHeadingLevel == 3, icon: "heading-3"),
+            new("format.h4", "Heading 4", "Make this line a level-4 heading.", Shortcut.Cmd(Key.D4), () => ed.ApplyHeading(4), isActive: () => ed.CaretHeadingLevel == 4, icon: "heading-4"),
+            new("format.h5", "Heading 5", "Make this line a level-5 heading.", Shortcut.Cmd(Key.D5), () => ed.ApplyHeading(5), isActive: () => ed.CaretHeadingLevel == 5, icon: "heading-5"),
+            new("format.h6", "Heading 6", "Make this line a level-6 heading.", Shortcut.Cmd(Key.D6), () => ed.ApplyHeading(6), isActive: () => ed.CaretHeadingLevel == 6, icon: "heading-6"),
             new("format.paragraph", "Paragraph", "Remove the heading from this line.", Shortcut.Cmd(Key.D0), ed.SetParagraph, icon: "remove-formatting"),
 
             // "square-code" is the inline-code chevrons boxed in — the box is what says *block* rather than
