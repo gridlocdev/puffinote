@@ -101,10 +101,14 @@ public sealed class VisualLine
             {
                 gutter += s.DecorationWidth;
             }
-            else if (s.To > s.From)
+            else if (!s.Concealed && s.To > s.From)
             {
-                break; // first real content span ends the leading run of decorations
+                break; // first *visible* content span ends the leading run of decorations
             }
+
+            // A concealed marker (e.g. the "- " of a task item, hidden ahead of its checkbox decoration)
+            // is zero-width and must not end the gutter scan, or the following decoration's width is lost
+            // and continuation rows hang at the far left instead of under the item's text.
         }
 
         var runs = new List<VisualRun>(segments.Count);

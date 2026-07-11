@@ -8,7 +8,9 @@ namespace Typage.UiTests;
 /// <summary>
 /// Paragraph join (item 2): consecutive plain-paragraph source lines flow into one block — the
 /// interior newline renders as a space and the text wraps as a single paragraph, like a normal
-/// document editor. Blank lines, headings, lists, quotes, code, and hard breaks all break the flow.
+/// document editor. A plain continuation line also flows into a list item (bulleted / numbered / task)
+/// above it, so a hard-wrapped item reads as one flowing item (CommonMark lazy continuation). Blank
+/// lines, headings, blockquotes, code, indented lines, another marked item, and hard breaks break the flow.
 /// </summary>
 public class ParagraphJoinTests
 {
@@ -56,6 +58,64 @@ public class ParagraphJoinTests
     public void ListItemsDoNotJoin()
     {
         var e = Editor("- one\n- two");
+        Assert.NotEqual(e.BlockOfLineForTest(0), e.BlockOfLineForTest(1));
+    }
+
+    [AvaloniaFact]
+    public void BulletItem_AbsorbsAPlainContinuationLine()
+    {
+        // A hard-wrapped bullet: the unmarked second line lazily continues the item, flowing into one row.
+        var e = Editor("- item one\ncontinuation");
+        Assert.Equal(e.BlockOfLineForTest(0), e.BlockOfLineForTest(1));
+        Assert.Equal(1, e.TotalRowsForTest());
+        Assert.Equal("- item one".Length + 1 + "continuation".Length, e.BlockLengthForTest(0));
+    }
+
+    [AvaloniaFact]
+    public void NumberedItem_AbsorbsAPlainContinuationLine()
+    {
+        var e = Editor("1. item one\ncontinuation");
+        Assert.Equal(e.BlockOfLineForTest(0), e.BlockOfLineForTest(1));
+        Assert.Equal(1, e.TotalRowsForTest());
+    }
+
+    [AvaloniaFact]
+    public void TaskItem_AbsorbsAPlainContinuationLine()
+    {
+        var e = Editor("- [ ] task one\ncontinuation");
+        Assert.Equal(e.BlockOfLineForTest(0), e.BlockOfLineForTest(1));
+        Assert.Equal(1, e.TotalRowsForTest());
+    }
+
+    [AvaloniaFact]
+    public void ListItem_AbsorbsSeveralContinuationLines()
+    {
+        var e = Editor("- item\ncont one\ncont two");
+        Assert.Equal(e.BlockOfLineForTest(0), e.BlockOfLineForTest(1));
+        Assert.Equal(e.BlockOfLineForTest(0), e.BlockOfLineForTest(2));
+        Assert.Equal(1, e.TotalRowsForTest());
+    }
+
+    [AvaloniaFact]
+    public void AnotherMarkedItem_DoesNotJoinTheItemAbove()
+    {
+        // Only an *unmarked* line continues an item; a line that carries its own marker is a new item.
+        var e = Editor("- one\n1. two");
+        Assert.NotEqual(e.BlockOfLineForTest(0), e.BlockOfLineForTest(1));
+    }
+
+    [AvaloniaFact]
+    public void IndentedLineUnderAnItem_StaysSeparate()
+    {
+        // Leading indentation is deliberate, so an indented line under an item is laid out on its own row.
+        var e = Editor("- item\n  indented");
+        Assert.NotEqual(e.BlockOfLineForTest(0), e.BlockOfLineForTest(1));
+    }
+
+    [AvaloniaFact]
+    public void BlockquoteDoesNotAbsorbAPlainContinuationLine()
+    {
+        var e = Editor("> quote\nplain");
         Assert.NotEqual(e.BlockOfLineForTest(0), e.BlockOfLineForTest(1));
     }
 

@@ -139,4 +139,27 @@ public class VisualLineTests
         Assert.Equal(0, rows[0].Row);
         Assert.Equal(1, rows[1].Row);
     }
+
+    [Fact]
+    public void TaskItem_WrapsWithAHangingIndentUnderTheCheckboxGutter()
+    {
+        // A task item shaped as the layout builder emits it: a concealed "- " marker, then a checkbox
+        // decoration owning a gutter, then the content. Regression guard for the wrap gutter — the concealed
+        // marker sits ahead of the decoration and must NOT end the leading-decoration scan, or the checkbox
+        // width is lost and wrapped rows hang at the far left (x=0) instead of under the item's text.
+        const double box = 3;
+        var v = VisualLine.Build(
+            "- [ ] aaa bbb ccc",
+            [
+                new VisualLine.Segment(0, 2, Mark, true),                                          // "- " concealed
+                new VisualLine.Segment(2, 6, Plain, false, DecorationKind.CheckboxUnchecked, box), // "[ ] " checkbox
+                new VisualLine.Segment(6, 17, Plain, false),                                       // "aaa bbb ccc"
+            ],
+            Unit,
+            wrapWidth: 11);
+
+        Assert.Equal(2, v.RowCount);
+        Assert.Equal(1, v.RowOf(14));       // "ccc" (col 14) wraps to the second row
+        Assert.Equal(box, v.ColumnToX(14)); // and hangs under the checkbox gutter, not at x=0
+    }
 }

@@ -6,9 +6,11 @@ using Xunit;
 namespace Typage.UiTests;
 
 /// <summary>
-/// ⌘⇧L (<see cref="MarkdownEditor.RemoveTask"/>): strip a task checkbox from the caret's line, turning
-/// <c>- [ ] text</c> back into <c>- text</c> — the inverse of the create half of <see cref="MarkdownEditor.ToggleTask"/>.
-/// The list marker and indentation stay; only the <c>[ ]</c>/<c>[x]</c> box goes.
+/// ⌘⇧L (<see cref="MarkdownEditor.RemoveTask"/>): strip a task checkbox from the caret's line, returning it
+/// to plain text — <c>- [ ] text</c> becomes <c>text</c>. It is the inverse of the create half of
+/// <see cref="MarkdownEditor.ToggleTask"/> (which inserts a whole <c>- [ ] </c> item), so the unordered bullet
+/// comes off with the box. An ordered <c>1. </c> marker is author-written and stays; indentation and blockquote
+/// prefixes are always preserved.
 /// </summary>
 public class RemoveTaskTests
 {
@@ -20,27 +22,35 @@ public class RemoveTaskTests
     }
 
     [AvaloniaFact]
-    public void OnAnUncheckedTask_RemovesTheBoxAndKeepsTheBullet()
+    public void OnAnUncheckedTask_RemovesTheBoxAndBullet_BackToPlainText()
     {
         var e = At("- [ ] buy milk", col: 8);
         e.RemoveTask();
-        Assert.Equal("- buy milk", e.Text);
+        Assert.Equal("buy milk", e.Text);
     }
 
     [AvaloniaFact]
-    public void OnACheckedTask_RemovesTheBoxAndKeepsTheBullet()
+    public void OnACheckedTask_RemovesTheBoxAndBullet_BackToPlainText()
     {
         var e = At("- [x] done", col: 8);
         e.RemoveTask();
-        Assert.Equal("- done", e.Text);
+        Assert.Equal("done", e.Text);
     }
 
     [AvaloniaFact]
-    public void PreservesIndentationOnANestedTask()
+    public void PreservesIndentationOnANestedTask_DroppingOnlyTheBulletAndBox()
     {
         var e = At("  - [ ] child", line: 0, col: 10);
         e.RemoveTask();
-        Assert.Equal("  - child", e.Text);
+        Assert.Equal("  child", e.Text);
+    }
+
+    [AvaloniaFact]
+    public void PreservesABlockquotePrefix()
+    {
+        var e = At("> - [ ] quoted task", col: 12);
+        e.RemoveTask();
+        Assert.Equal("> quoted task", e.Text);
     }
 
     [AvaloniaFact]
@@ -62,20 +72,21 @@ public class RemoveTaskTests
     [AvaloniaFact]
     public void KeepsTheCaretWithTheText()
     {
-        var e = At("- [ ] task", col: 8); // caret inside "task", four chars past the box
+        var e = At("- [ ] task", col: 8); // caret on the 's' of "task", six chars past the "- [ ] " prefix
         e.RemoveTask();
-        Assert.Equal("- task", e.Text);
-        // "- [ ] task"[8] is 't' of "task"; after removing the 4-char "[ ] " the caret sits on the same 't'.
-        Assert.Equal(4, e.Buffer.Selection.Caret);
+        Assert.Equal("task", e.Text);
+        // After removing the 6-char "- [ ] " prefix the caret sits on the same 's'.
+        Assert.Equal(2, e.Buffer.Selection.Caret);
     }
 
     [AvaloniaFact]
-    public void RoundTripsWithToggleTaskFromABullet()
+    public void RoundTripsToPlainTextWithToggleTask()
     {
-        var e = At("- buy milk", col: 4);
-        e.ToggleTask(); // - [ ] buy milk
-        e.RemoveTask(); // back to the bullet
-        Assert.Equal("- buy milk", e.Text);
+        var e = At("plain line", col: 4);
+        e.ToggleTask(); // - [ ] plain line
+        Assert.Equal("- [ ] plain line", e.Text);
+        e.RemoveTask(); // all the way back to plain text
+        Assert.Equal("plain line", e.Text);
     }
 
     [AvaloniaFact]

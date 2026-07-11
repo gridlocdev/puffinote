@@ -107,7 +107,10 @@ internal sealed class LayoutModel
         for (var l = 0; l < n; l++)
         {
             // Raw-text view shows the literal source: every line stands on its own row (no paragraph flow).
-            var joins = !_host.RawTextMode && l > 0 && IsFlowLine(l) && IsFlowLine(l - 1) && !EndsWithHardBreak(l - 1);
+            // A plain continuation line flows into the block above whenever that block takes a lazy
+            // continuation — a plain paragraph OR a list/task item (CommonMark lazy continuation), so an
+            // author's hard-wrapped bullet/number/checkbox item reads as one flowing item, not two rows.
+            var joins = !_host.RawTextMode && l > 0 && IsFlowLine(l) && AcceptsContinuation(l - 1) && !EndsWithHardBreak(l - 1);
             if (!joins)
             {
                 starts.Add(l);
@@ -254,6 +257,38 @@ internal sealed class LayoutModel
         }
 
         return true;
+    }
+
+    /// <summary>
+    /// Whether a plain continuation line below <paramref name="line"/> may lazily flow into its block. True for
+    /// a plain paragraph line (<see cref="IsFlowLine"/>) and for a list item — bulleted, numbered, or a task
+    /// checkbox — whose text a following unmarked line continues (CommonMark lazy continuation). Headings,
+    /// horizontal rules, blockquotes, code, front matter, table rows, blank lines, and indented lines take no
+    /// continuation, so a line under them stays its own block.
+    /// </summary>
+    private bool AcceptsContinuation(int line)
+    {
+        if (IsFlowLine(line))
+        {
+            return true; // a plain paragraph line
+        }
+
+        // Otherwise only a list/task item takes a continuation. Mirror IsFlowLine's guards: a blank, indented,
+        // or non-Normal (code/front-matter) line never does.
+        var doc = _host.Document;
+        var text = doc.GetLineText(line);
+        if (text.Length == 0 || text[0] == ' ' || text[0] == '\t')
+        {
+            return false;
+        }
+
+        if (_host.Model.EnteringState(line).Kind != BlockKind.Normal)
+        {
+            return false;
+        }
+
+        var toks = _host.Model.LineTokens(line);
+        return toks.Count > 0 && toks[0].Type is TokenType.ListMarker or TokenType.TaskMarker;
     }
 
     /// <summary>Whether <paramref name="line"/> ends in a hard line break (so the next line shouldn't flow into it).</summary>

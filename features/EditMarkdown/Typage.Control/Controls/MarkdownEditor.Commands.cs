@@ -469,9 +469,12 @@ public partial class MarkdownEditor
     }
 
     /// <summary>
-    /// Remove the task checkbox from the caret's line (⌘⇧L), turning <c>- [ ] text</c> back into <c>- text</c>
-    /// — the list marker and indentation stay, only the <c>[ ]</c>/<c>[x]</c> box (and its trailing space) go.
-    /// The inverse of the create half of <see cref="ToggleTask"/>. A no-op on a line without a checkbox.
+    /// Remove the task checkbox from the caret's line (⌘⇧L), returning it to plain text: turns
+    /// <c>- [ ] text</c> back into <c>text</c>. Because ⌘L creates a checkbox on a plain line by inserting a
+    /// whole <c>- [ ] </c> item, the inverse strips the unordered bullet along with the box so the line lands
+    /// back where it started. An ordered marker (<c>1. </c>) is author-written — ⌘L never adds one — so its
+    /// number stays and only the box goes (<c>1. [ ] step</c> → <c>1. step</c>). Indentation and any blockquote
+    /// prefix are always preserved. A no-op on a line without a checkbox.
     /// </summary>
     public void RemoveTask()
     {
@@ -483,14 +486,18 @@ public partial class MarkdownEditor
             return;
         }
 
-        var boxStart = doc.GetLineStart(line) + prefix.AfterMarker;
-        var boxLength = prefix.Length - prefix.AfterMarker; // "[ ] " / "[x] "
+        // Strip the "[ ] "/"[x] " box, and — for an unordered bullet — the "- " marker too, so a checkbox
+        // added to a plain line unwinds all the way back to plain text. The indent + quote before the marker
+        // stay put.
+        var removeStart = doc.GetLineStart(line) + (prefix.List == ListKind.Unordered ? prefix.MarkerStart : prefix.AfterMarker);
+        var removeEnd = doc.GetLineStart(line) + prefix.Length;
+        var removeLength = removeEnd - removeStart;
         var caret = Buffer.Selection.Caret;
-        Buffer.ReplaceRange(boxStart, boxLength, string.Empty);
+        Buffer.ReplaceRange(removeStart, removeLength, string.Empty);
 
-        // Keep the caret with the text: shift it back past a removed box that sat before it, or clamp it to
-        // where the box was if it sat inside it.
-        var moved = caret >= boxStart + boxLength ? caret - boxLength : Math.Min(caret, boxStart);
+        // Keep the caret with the text: shift it back past the removed span if it sat after, or clamp it to
+        // where the span began if it sat inside.
+        var moved = caret >= removeEnd ? caret - removeLength : Math.Min(caret, removeStart);
         Buffer.Selection = Selection.At(moved);
         Focus();
     }
