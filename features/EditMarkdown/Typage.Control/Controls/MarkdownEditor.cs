@@ -665,16 +665,16 @@ public partial class MarkdownEditor : Avalonia.Controls.Control, ILogicalScrolla
     /// <summary>Whether <paramref name="line"/> is panelled as code (fenced/indented); for tests.</summary>
     internal bool IsCodeLineForTest(int line) => IsCodeLine(line);
 
-    // Task-checkbox geometry, shared between the gutter width and the drawn glyph so they stay in sync.
-    private const double CheckboxLeftPad = 1;   // small inset before the box
-    private double CheckboxBoxSize => EditorTheme.BaseFontSize * 0.95;
-    private double CheckboxGap => EditorTheme.BaseFontSize * 0.45; // space between the box and the following text
+    // Task-checkbox geometry. It lives in the theme, alongside the bullet's and the quote bar's, so a re-themed
+    // surface can resize the box; the gutter width and the drawn lamp read the same numbers and stay in sync.
+    private double CheckboxLeftPad => EditorTheme.CheckboxLeftPad;
+    private double CheckboxBoxSize => EditorTheme.CheckboxSize;
 
     /// <summary>
     /// The checkbox gutter width — the box plus a fixed gap before the text. Deliberately independent of the
-    /// source "[ ]"/"[x]" punctuation, so a checked and an unchecked item indent their text by the same amount.
+    /// source "[x]" punctuation, so every state indents its item's text by the same amount.
     /// </summary>
-    private double CheckboxGutter => CheckboxLeftPad + CheckboxBoxSize + CheckboxGap;
+    private double CheckboxGutter => EditorTheme.CheckboxGutter;
 
     /// <summary>The laid-out visual line (its paragraph block) for <paramref name="line"/>; for concealment + offset-map tests.</summary>
     internal VisualLine BuildVisualLineForTest(int line) => BlockVisual(BlockOf(line));

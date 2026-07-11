@@ -28,7 +28,23 @@ public partial class MarkdownEditor
             }
         }
 
-        // Let a right-click through so the context menu can open; only the left button moves the caret.
+        // A secondary click on a task's checkbox opens its status picker: the primary click is spent on the one
+        // action worth a click (complete it), so the four states in between hang off the click that means
+        // "what else could this be?" — dropped at the box itself.
+        if (e.GetCurrentPoint(this).Properties.IsRightButtonPressed)
+        {
+            var at = e.GetPosition(this);
+            var lamp = TaskLampAt(Buffer.Document.GetPosition(OffsetAtPoint(at)).Line, at);
+            if (lamp >= 0)
+            {
+                Focus();
+                ShowTaskStatusPicker(lamp);
+                e.Handled = true;
+                return;
+            }
+        }
+
+        // Let any other right-click through so the context menu can open; only the left button moves the caret.
         if (!e.GetCurrentPoint(this).Properties.IsLeftButtonPressed)
         {
             base.OnPointerPressed(e);
@@ -148,10 +164,24 @@ public partial class MarkdownEditor
     }
 
     /// <summary>
-    /// Toggle a task checkbox hit by a click on <paramref name="line"/>: first the drawn checkbox glyph
+    /// Toggle a task checkbox hit by a click on <paramref name="line"/>: first the drawn checkbox lamp
     /// (when the marker is concealed), then the raw <c>[ ]</c> at <paramref name="offset"/> (caret line).
+    ///
+    /// <para>A plain click <b>completes</b> — it is the one task action worth a single click, and the one people
+    /// reach for a hundred times a day. The other four states are chosen deliberately, from the picker a
+    /// secondary click opens (<see cref="OpenTaskStatusPicker"/>).</para>
     /// </summary>
     private bool TryToggleTaskClick(int line, Point point, int offset)
+    {
+        var hit = TaskLampAt(line, point);
+        return hit >= 0 ? ToggleTaskOnLine(hit) : TryToggleTaskAt(line, offset);
+    }
+
+    /// <summary>
+    /// The line whose drawn checkbox lamp <paramref name="point"/> lands on (−1 if none) — the hit-test both the
+    /// click-to-complete and the status picker read, so the two can never disagree about where the box is.
+    /// </summary>
+    private int TaskLampAt(int line, Point point)
     {
         // A task line carries a list marker, so it's always a singleton block (block start == line start).
         var block = BlockOf(line);
@@ -160,22 +190,21 @@ public partial class MarkdownEditor
         var blockStart = BlockStartOffset(block);
         foreach (var run in visual.Runs)
         {
-            if (run.Decoration is DecorationKind.CheckboxChecked or DecorationKind.CheckboxUnchecked
-                && contentX >= run.X && contentX <= run.X + run.Width)
+            if (run.Decoration == DecorationKind.Checkbox && contentX >= run.X && contentX <= run.X + run.Width)
             {
                 // The box hangs on the task marker's columns on a bulleted item but on the *list* marker's on a
-                // numbered one (where it leads the number), so toggle by the line the run sits on — a line has
-                // at most one live checkbox — rather than by the run's own columns.
-                return ToggleTaskOnLine(Buffer.Document.GetPosition(blockStart + run.Col).Line);
+                // numbered one (where it leads the number), so answer with the line the run sits on — a line has
+                // at most one live checkbox — rather than with the run's own columns.
+                return Buffer.Document.GetPosition(blockStart + run.Col).Line;
             }
         }
 
-        return TryToggleTaskAt(line, offset);
+        return -1;
     }
 
     /// <summary>
-    /// If <paramref name="offset"/> lands on a task-list checkbox on <paramref name="line"/>, flip it
-    /// between <c>[ ]</c> and <c>[x]</c> (leaving the caret where it was) and return true (PRD §7.2).
+    /// If <paramref name="offset"/> lands on a task-list checkbox on <paramref name="line"/>, toggle it
+    /// (leaving the caret where it was) and return true (PRD §7.2).
     /// </summary>
     private bool TryToggleTaskAt(int line, int offset)
     {
@@ -186,40 +215,64 @@ public partial class MarkdownEditor
                 continue;
             }
 
-            return ToggleBoxAt(line, t.Start + 1); // the character between the brackets
+            return ToggleTaskOnLine(line);
         }
 
         return false;
     }
 
-    /// <summary>Flip the first task checkbox on <paramref name="line"/> (used by ⌘L), if it has one.</summary>
-    private bool ToggleTaskOnLine(int line)
+    /// <summary>Toggle the first task checkbox on <paramref name="line"/> (used by ⌘L), if it has one: done —
+    /// or, if it is already done, back to not started (<see cref="TaskStates.Toggled"/>).</summary>
+    private bool ToggleTaskOnLine(int line) =>
+        TaskStateOf(line) is { } state && SetTaskStateOnLine(line, TaskStates.Toggled(state));
+
+    /// <summary>The state of <paramref name="line"/>'s task box, or null when the line carries no task.</summary>
+    private TaskState? TaskStateOf(int line)
     {
         foreach (var t in _model.LineTokens(line))
         {
             if (t.Type == TokenType.TaskMarker)
             {
-                return ToggleBoxAt(line, t.Start + 1);
+                return TaskStates.FromMark(t.Meta is { Length: > 0 } mark ? mark[0] : ' ');
             }
         }
 
-        return false;
+        return null;
     }
 
-    /// <summary>Flip the <c>[ ]</c>/<c>[x]</c> box character at <paramref name="box"/>, leaving the caret put.</summary>
-    private bool ToggleBoxAt(int line, int box)
+    /// <summary>
+    /// Write <paramref name="state"/> into <paramref name="line"/>'s task box — the <b>one</b> place a task's
+    /// state is written, whether the change came from a click, ⌘L, or the picker. It rewrites the single
+    /// character between the brackets and leaves the caret put; the rest of the line is untouched, so the
+    /// document's bytes change exactly where the reader said they should (golden rule 5).
+    /// </summary>
+    private bool SetTaskStateOnLine(int line, TaskState state)
     {
+        var box = -1;
+        foreach (var t in _model.LineTokens(line))
+        {
+            if (t.Type == TokenType.TaskMarker)
+            {
+                box = t.Start + 1; // the character between the brackets
+                break;
+            }
+        }
+
         if (box < 0 || box >= Buffer.Document.Length)
         {
             return false;
         }
 
-        var replacement = Buffer.Document[box] == ' ' ? "x" : " ";
+        if (Buffer.Document[box] == TaskStates.MarkOf(state))
+        {
+            return true; // already there — don't push an empty edit onto the undo stack
+        }
+
         var caret = Buffer.Selection;
-        Buffer.ReplaceRange(box, 1, replacement);
+        Buffer.ReplaceRange(box, 1, TaskStates.MarkText(state));
         if (!TrySortCompletedTaskGroup(line, caret))
         {
-            Buffer.Selection = caret; // toggling a checkbox shouldn't move the caret
+            Buffer.Selection = caret; // changing a checkbox shouldn't move the caret
         }
 
         return true;

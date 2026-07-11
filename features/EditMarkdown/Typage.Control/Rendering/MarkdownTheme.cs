@@ -90,9 +90,20 @@ public class MarkdownTheme
         TableHeaderBorder = new SolidColorBrush(Color.FromRgb(0xAF, 0xB8, 0xC1)),
         TableRowBorder = new SolidColorBrush(Color.FromRgb(0xE6, 0xEA, 0xEF)),
         TableHeaderForeground = new SolidColorBrush(Color.FromRgb(0x0D, 0x11, 0x17)),
-        CheckboxForeground = new SolidColorBrush(Color.FromRgb(0x09, 0x69, 0xDA)),
         CodeBlockBackground = new SolidColorBrush(Color.FromRgb(0xF6, 0xF8, 0xFA)),
         CodeBlockBorder = new SolidColorBrush(Color.FromRgb(0xE1, 0xE4, 0xE8)),
+
+        // The same six meanings, re-mixed for a white page: each hue keeps its identity but drops in lightness
+        // and gains chroma, because a colour that reads as vivid on a dark surface reads as washed out on a
+        // light one. The relationships (the two complementary pairs, the achromatic zero) are what carry over —
+        // not the literal values.
+        TaskNotStarted = new SolidColorBrush(Color.FromRgb(0x6B, 0x73, 0x83)),
+        TaskInProgress = new SolidColorBrush(Color.FromRgb(0x16, 0x68, 0xD6)),
+        TaskBlocked = new SolidColorBrush(Color.FromRgb(0xB2, 0x62, 0x05)),
+        TaskDeferred = new SolidColorBrush(Color.FromRgb(0x6D, 0x3F, 0xD1)),
+        TaskDone = new SolidColorBrush(Color.FromRgb(0x12, 0x85, 0x5A)),
+        TaskCancelled = new SolidColorBrush(Color.FromRgb(0xC3, 0x35, 0x2E)),
+        TaskResolvedForeground = new SolidColorBrush(Color.FromRgb(0x6E, 0x77, 0x81)),
     };
 
     /// <summary>
@@ -128,9 +139,20 @@ public class MarkdownTheme
         TableHeaderBorder = new SolidColorBrush(Colors.White),
         TableRowBorder = new SolidColorBrush(Color.FromRgb(0x66, 0x66, 0x66)),
         TableHeaderForeground = new SolidColorBrush(Colors.White),
-        CheckboxForeground = new SolidColorBrush(Color.FromRgb(0x58, 0xC0, 0xFF)),
         CodeBlockBackground = new SolidColorBrush(Color.FromRgb(0x10, 0x10, 0x10)),
         CodeBlockBorder = new SolidColorBrush(Colors.White),
+
+        // Task hues at full strength on black. Not-started goes *white*, not grey: dimming the resting state is
+        // exactly what a high-contrast reader needs us not to do, so here the zero point is spelled by the empty
+        // ring and the absence of hue, never by a faded one. Resolved text likewise stays white — the strike
+        // through it says "closed" on its own.
+        TaskNotStarted = new SolidColorBrush(Colors.White),
+        TaskInProgress = new SolidColorBrush(Color.FromRgb(0x58, 0xC0, 0xFF)),
+        TaskBlocked = new SolidColorBrush(Color.FromRgb(0xFF, 0xB0, 0x2E)),
+        TaskDeferred = new SolidColorBrush(Color.FromRgb(0xC9, 0x9D, 0xFF)),
+        TaskDone = new SolidColorBrush(Color.FromRgb(0x4C, 0xE0, 0x8C)),
+        TaskCancelled = new SolidColorBrush(Color.FromRgb(0xFF, 0x6B, 0x60)),
+        TaskResolvedForeground = new SolidColorBrush(Colors.White),
     };
 
     public double BaseFontSize { get; init; } = 16;
@@ -236,8 +258,39 @@ public class MarkdownTheme
     /// <summary>The border around a fenced-code panel.</summary>
     public IBrush CodeBlockBorder { get; init; } = new SolidColorBrush(Color.FromRgb(0x34, 0x38, 0x3D));
 
-    /// <summary>The box (and check) of a drawn task checkbox.</summary>
-    public IBrush CheckboxForeground { get; init; } = new SolidColorBrush(Color.FromRgb(0x57, 0x9D, 0xF6));
+    // ----- task states (PRD §8.3.2): six hues, assigned by meaning rather than decoration -----
+    //
+    // Two complementary pairs anchor the wheel. Done (green) and Cancelled (red) sit opposite as the two
+    // *resolved* ends — finished vs. abandoned — so the one pair a reader must never confuse is the pair the eye
+    // separates most easily. In progress (azure) and Blocked (amber) are the second complement: the two
+    // *in-flight* states, one flowing, one stuck. Deferred is a cool violet — dormant, set aside, but not dead —
+    // and adjacent to neither pair, so it can't be mistaken for either. Not started is left achromatic slate: the
+    // zero point, a lamp with no hue and no glow, from which the five lit states are visibly a change.
+    //
+    // Hue alone never carries a state: every lamp also draws a distinct symbol (TaskGlyphs), so the vocabulary
+    // survives colour-blindness and monochrome printing (PRD §9.6).
+
+    /// <summary><c>[ ]</c> — achromatic slate: the un-lit lamp.</summary>
+    public IBrush TaskNotStarted { get; init; } = new SolidColorBrush(Color.FromRgb(0x8B, 0x94, 0xA7));
+
+    /// <summary><c>[/]</c> — azure: in flight, flowing.</summary>
+    public IBrush TaskInProgress { get; init; } = new SolidColorBrush(Color.FromRgb(0x3E, 0x9B, 0xFF));
+
+    /// <summary><c>[?]</c> — amber: in flight, stuck. Azure's complement, because "moving" and "waiting" are the
+    /// pair a reader most needs to tell apart at a glance across a list.</summary>
+    public IBrush TaskBlocked { get; init; } = new SolidColorBrush(Color.FromRgb(0xF4, 0x9A, 0x38));
+
+    /// <summary><c>[&gt;]</c> — violet: dormant, set aside.</summary>
+    public IBrush TaskDeferred { get; init; } = new SolidColorBrush(Color.FromRgb(0xA1, 0x84, 0xF7));
+
+    /// <summary><c>[x]</c> — green: resolved, positive.</summary>
+    public IBrush TaskDone { get; init; } = new SolidColorBrush(Color.FromRgb(0x33, 0xC7, 0x7D));
+
+    /// <summary><c>[-]</c> — red: resolved, terminated. Green's complement.</summary>
+    public IBrush TaskCancelled { get; init; } = new SolidColorBrush(Color.FromRgb(0xE1, 0x56, 0x4F));
+
+    /// <summary>The text of a resolved item (done or cancelled) — dimmed, because it is no longer work to do.</summary>
+    public IBrush TaskResolvedForeground { get; init; } = new SolidColorBrush(Color.FromRgb(0x9A, 0xA3, 0xB5));
 
     /// <summary>The panel behind a fenced-code block — <i>darker</i> than the editor background, so the block recedes.</summary>
     public IBrush CodeBlockBackground { get; init; } = new SolidColorBrush(Color.FromRgb(0x18, 0x1A, 0x1D));
@@ -276,6 +329,77 @@ public class MarkdownTheme
     /// which is a couple of pixels wider than the dot itself and left it crowded against its own text.
     /// </summary>
     public double BulletGutter => BulletLeftPad + BulletSize + BulletGap;
+
+    // ----- the task checkbox: geometry, colour, and the treatment of a resolved item's text -----
+
+    /// <summary>The diameter of the drawn task lamp — a shade under the cap height of the text beside it, so the
+    /// box sits <i>in</i> the line rather than standing over it.</summary>
+    public double CheckboxSize => BaseFontSize * 0.95;
+
+    /// <summary>The inset before the lamp — the space between the item's indent and the ring.</summary>
+    public double CheckboxLeftPad => BaseFontSize * 0.0625;
+
+    /// <summary>The space between the lamp and the item's text.</summary>
+    public double CheckboxGap => BaseFontSize * 0.45;
+
+    /// <summary>The width a concealed task marker reserves — inset + lamp + gap — and the hanging indent an
+    /// item's wrapped rows sit at. Fixed across the six states, so changing an item's state never shifts its
+    /// text sideways.</summary>
+    public double CheckboxGutter => CheckboxLeftPad + CheckboxSize + CheckboxGap;
+
+    /// <summary>The ring and symbol colour of a task lamp in <paramref name="state"/>.</summary>
+    public IBrush TaskColor(TaskState state) => state switch
+    {
+        TaskState.InProgress => TaskInProgress,
+        TaskState.Blocked => TaskBlocked,
+        TaskState.Deferred => TaskDeferred,
+        TaskState.Done => TaskDone,
+        TaskState.Cancelled => TaskCancelled,
+        _ => TaskNotStarted,
+    };
+
+    /// <summary>The wash inside a task lamp: its own colour at a low alpha, so the lamp reads as lit without
+    /// competing with the text. Not-started has none — an un-lit lamp is a bare ring (see the palette note).</summary>
+    public IBrush? TaskFill(TaskState state) =>
+        state == TaskState.NotStarted ? null : TaskFills.GetValueOrDefault(state);
+
+    /// <summary>
+    /// The struck-through, dimmed treatment of a <b>resolved</b> item's text — done or cancelled. The rule is
+    /// drawn in the item's own state colour (a green strike for done, a red one for cancelled), so the line
+    /// still says <i>which</i> way the item closed even where the lamp has scrolled out of the eye's focus.
+    /// </summary>
+    public RunStyle OnResolvedTask(RunStyle style, TaskState state) =>
+        style with { Foreground = TaskResolvedForeground, Decorations = TaskStrikes.GetValueOrDefault(state) };
+
+    /// <summary>The alpha of a lamp's wash. Low enough that six lit lamps down a page read as a list, not a rash.</summary>
+    private const byte TaskFillAlpha = 0x26;
+
+    /// <summary>The alpha of a strike-through rule, so it marks the text without shouting over it.</summary>
+    private const byte TaskStrikeAlpha = 0xB0;
+
+    // The washes and strike rules are derived from the six palette brushes, so a re-themed palette carries its
+    // own tints with it. Built once per theme (themes are immutable) and shared, so the draw path allocates
+    // nothing per lamp and the FormattedText cache keys on a stable decoration object.
+    private Dictionary<TaskState, IBrush> TaskFills => field ??= Derive(
+        static color => (IBrush)new SolidColorBrush(Color.FromArgb(TaskFillAlpha, color.R, color.G, color.B)));
+
+    private Dictionary<TaskState, TextDecorationCollection> TaskStrikes => field ??= Derive(
+        static color => Strike(new SolidColorBrush(Color.FromArgb(TaskStrikeAlpha, color.R, color.G, color.B))));
+
+    /// <summary>Build a per-state table from each state's palette colour (a non-solid brush simply has no entry).</summary>
+    private Dictionary<TaskState, T> Derive<T>(Func<Color, T> make)
+    {
+        var table = new Dictionary<TaskState, T>();
+        foreach (var state in TaskStates.Order)
+        {
+            if (TaskColor(state) is ISolidColorBrush solid)
+            {
+                table[state] = make(solid.Color);
+            }
+        }
+
+        return table;
+    }
 
     /// <summary>Thickness of the drawn horizontal rule.</summary>
     public double RuleThickness { get; init; } = 1;

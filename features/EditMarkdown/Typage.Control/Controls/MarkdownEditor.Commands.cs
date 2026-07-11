@@ -441,40 +441,26 @@ public partial class MarkdownEditor
 
     /// <summary>
     /// Add a task checkbox to the caret's line, or toggle an existing one (⌘L / Ctrl+L). If the line
-    /// already carries a <c>[ ]</c>/<c>[x]</c>, flip its state (caret stays put); if it is a plain list
-    /// item, insert <c>[ ] </c> after its marker; otherwise turn the line into an unordered task item
-    /// (<c>- [ ] </c>, preserving any indentation) — one shortcut both creates and toggles checkboxes.
+    /// already carries a box, toggle it — <b>done</b>, or back to not-started if it was already done (the other
+    /// four states are set from the picker, ⌥⌘L); if it is a plain list item, insert <c>[ ] </c> after its
+    /// marker; otherwise turn the line into an unordered task item (<c>- [ ] </c>, preserving any indentation) —
+    /// one shortcut both creates and toggles checkboxes.
+    ///
+    /// <para>A new box always starts <i>not started</i>: ⌘L on a plain line means "this is a task", not "this is
+    /// a task and it's done".</para>
     /// </summary>
     public void ToggleTask()
     {
-        var doc = Buffer.Document;
         var line = ListTargetLine();
-        var prefix = LinePrefix.Parse(doc.GetLineText(line));
-
-        if (prefix.HasTask)
+        if (LinePrefix.Parse(Buffer.Document.GetLineText(line)).HasTask)
         {
             ToggleTaskOnLine(line);
         }
         else
         {
-            // Insert "[ ] " after an existing list marker, or a whole "- [ ] " item after the indentation.
-            var lineStart = doc.GetLineStart(line);
-            var insertAt = lineStart + (prefix.HasList ? prefix.Length : prefix.Indent);
-            var inserted = prefix.HasList ? "[ ] " : "- [ ] ";
-            var sel = Buffer.Selection;
-
-            // Carry the selection across the insertion rather than collapsing it to a bare caret: the user's
-            // highlight must survive the press. Each endpoint rides its own text — anything at or past the
-            // insertion point shifts by the marker's width — so exactly the same characters stay selected.
-            // The exception: a selection that reached the line's first non-space character grows to take the
-            // new marker in, since the marker lands right where the highlight began and is now part of the
-            // item the user has selected. (A marker-less line inserts at that first non-space character; on a
-            // list line the box goes after the bullet, so a selection from the bullet already encloses it.)
-            var takesMarker = !sel.IsEmpty && sel.Start == lineStart + prefix.Indent;
-            int Place(int p) => p > insertAt || (p == insertAt && !takesMarker) ? p + inserted.Length : p;
-
-            Buffer.ReplaceRange(insertAt, 0, inserted);
-            Buffer.Selection = new Selection(Place(sel.Anchor), Place(sel.Caret)); // direction preserved
+            // The selection is carried across the insertion rather than collapsed to a bare caret — see
+            // InsertTaskMarker, which both this and the picker's "add a box, then set it" path go through.
+            InsertTaskMarker(line, TaskState.NotStarted);
         }
 
         Focus();

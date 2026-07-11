@@ -468,24 +468,13 @@ public partial class MarkdownEditor
                     break;
                 }
 
-            case DecorationKind.CheckboxUnchecked:
-            case DecorationKind.CheckboxChecked:
+            case DecorationKind.Checkbox:
                 {
+                    // The box is a lamp: a circular ring in the state's colour, washed with it, with the state's
+                    // own symbol inside. The run carries which of the six it is (its box character).
                     var size = CheckboxBoxSize;
-                    var box = new Rect(run.X + CheckboxLeftPad, cy - size / 2, size, size);
-                    var ticked = run.Decoration == DecorationKind.CheckboxChecked;
-                    context.DrawRectangle(ticked ? EditorTheme.CheckboxForeground : null, new Pen(EditorTheme.CheckboxForeground, 1.4), box, 3, 3);
-                    if (ticked)
-                    {
-                        // A check mark in the editor background colour so it reads on the filled box.
-                        var pen = new Pen(EditorTheme.Background, 1.6);
-                        var a = new Point(box.X + size * 0.24, cy);
-                        var b = new Point(box.X + size * 0.43, cy + size * 0.22);
-                        var c = new Point(box.X + size * 0.78, cy - size * 0.24);
-                        context.DrawLine(pen, a, b);
-                        context.DrawLine(pen, b, c);
-                    }
-
+                    var box = new Rect(run.X + CheckboxLeftPad, cy - (size / 2), size, size);
+                    TaskGlyphs.Draw(context, EditorTheme, box, TaskStates.FromMark(run.Text.Length > 0 ? run.Text[0] : ' '));
                     break;
                 }
 

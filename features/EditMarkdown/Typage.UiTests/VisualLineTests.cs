@@ -152,7 +152,7 @@ public class VisualLineTests
             "- [ ] aaa bbb ccc",
             [
                 new VisualLine.Segment(0, 2, Mark, true),                                          // "- " concealed
-                new VisualLine.Segment(2, 6, Plain, false, DecorationKind.CheckboxUnchecked, box), // "[ ] " checkbox
+                new VisualLine.Segment(2, 6, Plain, false, DecorationKind.Checkbox, box),          // "[ ] " checkbox
                 new VisualLine.Segment(6, 17, Plain, false),                                       // "aaa bbb ccc"
             ],
             Unit,

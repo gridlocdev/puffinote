@@ -39,10 +39,10 @@ public class NestedCheckboxTests
     public void NestedTask_RendersACheckbox_IndentedPastTheParent()
     {
         var e = new MarkdownEditor { Text = "- [ ] top\n  - [ ] sub" };
-        Assert.Equal([DecorationKind.CheckboxUnchecked], DecorationsOn(e, 0));
+        Assert.Equal([DecorationKind.Checkbox], DecorationsOn(e, 0));
 
         // The nested item shows a checkbox too, behind a spacer that carries its one level of nesting.
-        Assert.Equal([DecorationKind.ListIndent, DecorationKind.CheckboxUnchecked], DecorationsOn(e, 1));
+        Assert.Equal([DecorationKind.ListIndent, DecorationKind.Checkbox], DecorationsOn(e, 1));
         Assert.True(TextX(e, 1, "sub") > TextX(e, 0, "top"), "the nested task's text should hang further right");
     }
 

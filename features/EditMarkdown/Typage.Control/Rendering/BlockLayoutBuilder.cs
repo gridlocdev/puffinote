@@ -107,6 +107,11 @@ internal sealed class BlockLayoutBuilder
         var pos = 0;
         var lastHeading = 0;
         var lastQuote = false;
+
+        // A block that *is* a resolved task item (done or cancelled) reads as closed: its text is struck through
+        // and dimmed. Taken from the block's first line, so the wrapped/lazily-continued rows of a done item are
+        // struck too — the item closed, not just its first line.
+        TaskState? resolved = null;
         for (var line = startLine; line <= endLine; line++)
         {
             var lineStart = doc.GetLineStart(line);
@@ -118,6 +123,11 @@ internal sealed class BlockLayoutBuilder
             lastQuote = inQuote;
             var (orderedText, taskText) = ItemMarkers(line, lineStart, lineText);
             var hasTask = taskText.Length > 0;
+            if (line == startLine && hasTask && TaskStates.FromMarker(taskText) is var state && TaskStates.IsResolved(state))
+            {
+                resolved = state;
+            }
+
             // The inline nodes whose content draws a background chip (inline code, highlight) — their concealed
             // markers hold that chip's side padding open instead of vanishing to zero width.
             var chipPads = ChipPads(line);
@@ -157,7 +167,7 @@ internal sealed class BlockLayoutBuilder
                         gapStyle = AsLink(gapStyle);
                     }
 
-                    segments.Add(new VisualLine.Segment(pos, s, gapStyle, false));
+                    segments.Add(new VisualLine.Segment(pos, s, Closed(gapStyle, resolved), false));
                 }
 
                 // The decoration helpers index into the *line* text, so keep line-relative offsets for them;
@@ -172,7 +182,10 @@ internal sealed class BlockLayoutBuilder
                     // A concealed line-prefix marker may render as a synthetic decoration (bullet, checkbox,
                     // quote bar, rule) that keeps the content's hanging indent; otherwise it just vanishes.
                     var (deco, width) = DecorationFor(t, lineText, sLine, enLine, hasTask, chipPads);
-                    var decoText = string.Empty;
+
+                    // A checkbox carries the state it is in (the box character) as its text; every other
+                    // decoration but the ordered number below draws from its kind alone.
+                    var decoText = deco == DecorationKind.Checkbox ? BoxMark(taskText) : string.Empty;
 
                     // An ordered-list marker hides its literal digits and shows a number computed from the
                     // list's structure (items 4 & 5). Raw-source mode shows the literal source digits. A task
@@ -192,7 +205,8 @@ internal sealed class BlockLayoutBuilder
                         }
                         else
                         {
-                            (deco, width) = Checkbox(taskText); // a numbered task's list marker leads with the box
+                            (deco, width) = Checkbox(); // a numbered task's list marker leads with the box
+                            decoText = BoxMark(taskText);
                         }
                     }
 
@@ -210,7 +224,7 @@ internal sealed class BlockLayoutBuilder
                     // Emphasis/strike/highlight content can wrap a construct of another kind (e.g.
                     // ***~~bold~~***): split the content so the inner ~~ markers conceal and the word
                     // carries both the outer emphasis and the inner decoration. Plain content is one segment.
-                    AddContentSegments(segments, s, en, text, style, t.Type);
+                    AddContentSegments(segments, s, en, text, Closed(style, resolved), t.Type);
                 }
 
                 pos = en;
@@ -219,11 +233,16 @@ internal sealed class BlockLayoutBuilder
 
         if (pos < contentLen)
         {
-            segments.Add(new VisualLine.Segment(pos, contentLen, DefaultStyle(lastHeading, lastQuote), false));
+            segments.Add(new VisualLine.Segment(pos, contentLen, Closed(DefaultStyle(lastHeading, lastQuote), resolved), false));
         }
 
         return VisualLine.Build(text, segments, _measurer.MeasureWidth, _wrapWidth);
     }
+
+    /// <summary>The treatment of one content run on a <b>resolved</b> task item — struck through and dimmed — or
+    /// <paramref name="style"/> unchanged when the block isn't one.</summary>
+    private RunStyle Closed(RunStyle style, TaskState? resolved) =>
+        resolved is { } state ? _theme.OnResolvedTask(style, state) : style;
 
     /// <summary>
     /// The two leading-marker facts a list line's decorations need, read in one pass before the token loop: the
@@ -561,7 +580,7 @@ internal sealed class BlockLayoutBuilder
                     : (DecorationKind.Bullet, _theme.BulletGutter);
 
             case TokenType.TaskMarker:
-                return Checkbox(text);
+                return Checkbox();
 
             case TokenType.BlockquoteMarker:
                 // One step per '>' (the marker carries its depth in Meta), not the measured width of the source
@@ -578,14 +597,16 @@ internal sealed class BlockLayoutBuilder
         }
     }
 
-    /// <summary>The checkbox decoration for a task marker spelled <paramref name="text"/> (<c>"[ ] "</c>/<c>"[x] "</c>).
-    /// A fixed gutter (box + gap) regardless of ticked state, so the text after the checkbox sits at the same
-    /// place whether it's checked or not, with a clear space before it.</summary>
-    private (DecorationKind Kind, double Width) Checkbox(string text)
-    {
-        var ticked = text.Length > 1 && text[1] is 'x' or 'X';
-        return (ticked ? DecorationKind.CheckboxChecked : DecorationKind.CheckboxUnchecked, _checkboxGutter);
-    }
+    /// <summary>The checkbox decoration for a task marker spelled <paramref name="text"/> (<c>"[x] "</c>, box
+    /// first). One kind for all six states — the state rides along as the decoration's text (the box character),
+    /// which the draw path resolves to a colour and a symbol. The gutter is the same width whatever the state, so
+    /// changing an item's state never shifts its text sideways.</summary>
+    private (DecorationKind Kind, double Width) Checkbox() => (DecorationKind.Checkbox, _checkboxGutter);
+
+    /// <summary>The box character a task marker's source <paramref name="text"/> (<c>"[x] "</c>) holds — what a
+    /// <see cref="DecorationKind.Checkbox"/> run carries as its text.</summary>
+    private static string BoxMark(string text) =>
+        TaskStates.MarkText(TaskStates.FromMarker(text));
 
     /// <summary>
     /// Whether <paramref name="t"/>'s marker punctuation is hidden (PRD §7.4, revised to full WYSIWYG).

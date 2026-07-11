@@ -2,6 +2,7 @@ using Avalonia.Headless.XUnit;
 using Typage.Control.Controls;
 using Typage.Control.Rendering;
 using Typage.Engine.Document;
+using Typage.Engine.Markdown;
 using Xunit;
 
 namespace Typage.UiTests;
@@ -150,8 +151,12 @@ public class DecorationTests
     {
         // The "- " of a bulleted task is the bullet the checkbox sits on — part of how the checkbox is
         // spelled, not a second marker — so the box is drawn alone. (Contrast the numbered case below.)
-        Assert.Equal([DecorationKind.CheckboxUnchecked], DecorationsOn(CaretOffLine0("- [ ] todo\nx"), 0));
-        Assert.Equal([DecorationKind.CheckboxChecked], DecorationsOn(CaretOffLine0("- [x] done\nx"), 0));
+        Assert.Equal([DecorationKind.Checkbox], DecorationsOn(CaretOffLine0("- [ ] todo\nx"), 0));
+        Assert.Equal([DecorationKind.Checkbox], DecorationsOn(CaretOffLine0("- [x] done\nx"), 0));
+
+        // One decoration kind, six states: the box carries which one it is in (PRD §8.3.2).
+        Assert.Equal(TaskState.NotStarted, BoxState(CaretOffLine0("- [ ] todo\nx"), 0));
+        Assert.Equal(TaskState.Done, BoxState(CaretOffLine0("- [x] done\nx"), 0));
     }
 
     [AvaloniaFact]
@@ -169,10 +174,10 @@ public class DecorationTests
     {
         // The box leads and the number follows — "☐ 1. step" — even though the source spells it "1. [ ] step".
         var editor = CaretOffLine0("1. [x] step\nx");
-        Assert.Equal([DecorationKind.CheckboxChecked, DecorationKind.OrderedNumber], DecorationsOn(editor, 0));
+        Assert.Equal([DecorationKind.Checkbox, DecorationKind.OrderedNumber], DecorationsOn(editor, 0));
 
         var runs = editor.BuildVisualLineForTest(0).Runs;
-        var box = runs.First(r => r.Decoration == DecorationKind.CheckboxChecked);
+        var box = runs.First(r => r.Decoration == DecorationKind.Checkbox);
         var number = runs.First(r => r.Decoration == DecorationKind.OrderedNumber);
         Assert.Equal(0, box.X); // the box starts the line
         Assert.Equal(box.X + box.Width, number.X, precision: 6); // the number sits immediately after it
@@ -189,7 +194,7 @@ public class DecorationTests
         foreach (var src in new[] { "1. [ ] buy milk [ ] eggs\nx", "- [ ] buy milk [ ] eggs\nx" })
         {
             var editor = CaretOffLine0(src);
-            Assert.Single(DecorationsOn(editor, 0), d => d is DecorationKind.CheckboxUnchecked);
+            Assert.Single(DecorationsOn(editor, 0), d => d is DecorationKind.Checkbox);
             Assert.Contains(editor.BuildVisualLineForTest(0).Runs, r => r.Kind == VisualRunKind.Text && r.Text.Contains("[ ] eggs"));
         }
     }
@@ -227,7 +232,7 @@ public class DecorationTests
     {
         // "- [ ] 1. x": the box is the item's leading content, so it's live; the "1." is just text beside it.
         var editor = CaretOffLine0("- [ ] 1. x\nx");
-        Assert.Equal([DecorationKind.CheckboxUnchecked], DecorationsOn(editor, 0));
+        Assert.Equal([DecorationKind.Checkbox], DecorationsOn(editor, 0));
         Assert.Contains(editor.BuildVisualLineForTest(0).Runs, r => r.Kind == VisualRunKind.Text && r.Text.Contains("1. x"));
     }
 
@@ -245,10 +250,14 @@ public class DecorationTests
             .Where(r => r.Kind == VisualRunKind.Decoration)
             .Select(r => r.Decoration)];
 
-    private static double CheckboxWidth(MarkdownEditor e) =>
-        e.BuildVisualLineForTest(0).Runs
-            .First(r => r.Decoration is DecorationKind.CheckboxChecked or DecorationKind.CheckboxUnchecked)
-            .Width;
+    /// <summary>The checkbox decoration run on <paramref name="line"/> — a line has at most one live box.</summary>
+    private static VisualRun Box(MarkdownEditor e, int line) =>
+        e.BuildVisualLineForTest(line).Runs.First(r => r.Decoration == DecorationKind.Checkbox);
+
+    /// <summary>Which of the six states that box is in: the run carries it as its text (the box character).</summary>
+    private static TaskState BoxState(MarkdownEditor e, int line) => TaskStates.FromMark(Box(e, line).Text[0]);
+
+    private static double CheckboxWidth(MarkdownEditor e) => Box(e, 0).Width;
 
     [AvaloniaFact]
     public void CheckboxGutter_IsEqualForCheckedAndUnchecked_AndLeavesAGapBeforeTheText()
@@ -266,8 +275,7 @@ public class DecorationTests
         // Target the checkbox specifically — it now sits after the bullet, so "the first decoration" is the
         // bullet, and this also pins that the glyph stays clickable wherever the layout puts it.
         var editor = CaretOffLine0("- [ ] todo\nx");
-        var box = editor.BuildVisualLineForTest(0).Runs
-            .First(r => r.Decoration is DecorationKind.CheckboxChecked or DecorationKind.CheckboxUnchecked);
+        var box = Box(editor, 0);
         Assert.True(editor.ToggleTaskClickForTest(0, box.X + box.Width / 2));
         Assert.StartsWith("- [x] todo", editor.Text);
     }
@@ -286,8 +294,7 @@ public class DecorationTests
     public void ClickingTheCheckboxOfANumberedTask_TogglesIt()
     {
         var editor = CaretOffLine0("1. [ ] step\nx");
-        var box = editor.BuildVisualLineForTest(0).Runs
-            .First(r => r.Decoration is DecorationKind.CheckboxChecked or DecorationKind.CheckboxUnchecked);
+        var box = Box(editor, 0);
         Assert.True(editor.ToggleTaskClickForTest(0, box.X + box.Width / 2));
         Assert.StartsWith("1. [x] step", editor.Text);
     }

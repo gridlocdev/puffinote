@@ -30,8 +30,11 @@ public enum DecorationKind
 {
     None,
     Bullet,
-    CheckboxUnchecked,
-    CheckboxChecked,
+
+    /// <summary>A task checkbox. <i>Which</i> of the six states it is riding is carried in the run's
+    /// <see cref="VisualRun.Text"/> — the one box character (<c>' '</c>, <c>'x'</c>, <c>'/'</c>, …) — so the
+    /// vocabulary can grow without a new decoration kind per state, and drawing/hit-testing match on one kind.</summary>
+    Checkbox,
     QuoteBar,
     HorizontalRule,
 
@@ -86,8 +89,9 @@ public sealed class VisualLine
     /// One pre-classified span of a line: source columns <c>[From, To)</c> in <paramref name="Style"/>,
     /// flagged <see cref="Concealed"/> when it's a marker the surface decided to hide. A
     /// <see cref="Decoration"/> other than <see cref="DecorationKind.None"/> makes this a synthetic
-    /// leading adornment (no glyphs) of the given pixel <see cref="DecorationWidth"/>; for an
-    /// <see cref="DecorationKind.OrderedNumber"/> the drawn text is <see cref="DecorationText"/>.
+    /// leading adornment (no glyphs) of the given pixel <see cref="DecorationWidth"/>. <see cref="DecorationText"/>
+    /// is what the adornment needs to know beyond its kind: the drawn digits of an
+    /// <see cref="DecorationKind.OrderedNumber"/>, the box character of a <see cref="DecorationKind.Checkbox"/>.
     /// </summary>
     public readonly record struct Segment(
         int From, int To, RunStyle Style, bool Concealed,

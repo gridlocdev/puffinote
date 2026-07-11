@@ -40,7 +40,9 @@ internal sealed class MarkdownCommandBar : UserControl
         // inserts. The union across groups is every formatting command the bar surfaces.
         string[] text = ["format.bold", "format.italic", "format.strike", "format.highlight", "format.code"];
         string[] headings = ["format.h1", "format.h2", "format.h3", "format.h4", "format.h5", "format.h6", "format.paragraph"];
-        string[] lists = ["format.bulletList", "format.numberedList", "format.task", "format.removeTask"];
+        // The three list *kinds* are the primary icons; the box's status picker and its removal fall into the
+        // dropdown — you reach for "make this a task" far more often than for "this one is blocked".
+        string[] lists = ["format.bulletList", "format.numberedList", "format.task", "format.taskStatus", "format.removeTask"];
 
         // Blockquote sits with the inserts, not the lists. It shares nothing with a list but the fact that it
         // prefixes lines: it doesn't nest, doesn't renumber, and has no item to add — it wraps a passage.

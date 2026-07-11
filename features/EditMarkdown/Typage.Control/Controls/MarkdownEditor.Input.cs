@@ -176,6 +176,9 @@ public partial class MarkdownEditor
             case Key.L when ctrl && shift:
                 RemoveTask();
                 break; // ⌘⇧L removes a checkbox (matched before ⌘L, which adds/toggles one)
+            case Key.L when ctrl && alt:
+                OpenTaskStatusPicker();
+                break; // ⌥⌘L opens the status picker (the four states a plain toggle can't reach)
             case Key.L when ctrl:
                 ToggleTask();
                 break;
