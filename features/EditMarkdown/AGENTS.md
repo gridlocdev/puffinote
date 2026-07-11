@@ -93,6 +93,13 @@ Don't hardcode versions in `.csproj` files.
   strikethrough, highlight, inline + fenced code, blockquote, lists incl. task lists, links, autolinks,
   images, HR, GFM tables, hard breaks, escapes, front matter, and recognized-but-off-by-default
   wiki-links/embeds). Adding constructs is a separate, later task.
+- **Task states (PRD §8.3.2):** a task box holds **one of six** characters — `[ ]` not started, `[/]` in progress,
+  `[?]` blocked, `[>]` deferred, `[x]` done, `[-]` cancelled — and anything else (`[a]`) is not a box at all. The
+  vocabulary lives in the engine (`Markdown/TaskState.cs`), which is where the tokenizer, `LinePrefix`, and the
+  HTML export all read it from; the **colour and the drawn symbol are the control's** (`MarkdownTheme`,
+  `Rendering/TaskGlyphs.cs`), per golden rule 2. Colours are assigned by meaning (two complementary pairs, an
+  achromatic zero), and hue is never the only channel — each state draws its own symbol too (§9.6). A click
+  **completes**; the other four states come from the picker (⌥⌘L or a secondary click on the box).
 - **Reveal scopes (PRD §7.4):** inline marks reveal when the caret/selection intersects that node;
   line-prefix marks reveal when the caret is on the line; block constructs reveal when the caret/selection
   intersects the block range; selection forces reveal. *(Implemented: markers are truly **hidden** via a
@@ -174,8 +181,9 @@ extend it, keep the layering and update the docs.
   (`Commands/Shortcut.cs`) so they bind/render as ⌘ on macOS and Ctrl elsewhere (`ShortcutFormatter`).
 - **Also built (later additions):** §7.2 **editing assists** (list/blockquote continuation + exit,
   ordered-list renumber, auto-indent, auto-pairing/wrap-selection, Tab/Shift+Tab indent/outdent — pure
-  helpers in `Engine/Editing/LinePrefix.cs` + `OrderedListRenumber.cs`), **interactive task checkboxes**
-  (click a `[ ]`/`[x]` to toggle), **mouse drag-select + double-click word select + a sticky goal
+  helpers in `Engine/Editing/LinePrefix.cs` + `OrderedListRenumber.cs`), **interactive task checkboxes with
+  six states** (PRD §8.3.2 — a circular lamp per state; click completes, ⌥⌘L / secondary-click opens the status
+  picker), **mouse drag-select + double-click word select + a sticky goal
   column**, a per-document **raw-source view** toggle (+ Settings default), **focus / distraction-free
   mode** (F11), a **FormattedText draw cache** (alongside the width cache), a front-matter **"Properties"
   panel** (backdrop + label; true *fold* still rides with §7.4), **external-change detection**

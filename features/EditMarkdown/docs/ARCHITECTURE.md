@@ -102,7 +102,8 @@ An **incremental, line-based tokenizer with block state and a checkpoint cache**
   `FrontMatter`). Only constructs that truly span lines carry state; everything else is recognized per
   line.
 - **`LineTokenizer`** — tokenizes one line given its entering `BlockState`, returns the next line's
-  state. Handles front matter, fenced code, ATX headings, blockquotes, lists (incl. task lists),
+  state. Handles front matter, fenced code, ATX headings, blockquotes, lists (incl. task lists — a task
+  marker carries the `TaskState` its box spells in `Meta`, PRD §8.3.2),
   horizontal rules, and dispatches inline content to:
 - **`InlineTokenizer`** — a tolerant left-to-right scanner for emphasis/strong, strikethrough, highlight,
   inline code, links (recursing into link text), images, autolinks (bracketed and bare), wiki-links,
@@ -139,7 +140,14 @@ every edit's incremental update must produce token-for-token the same result as 
   implements `ILogicalScrollable` and draws only the lines inside the viewport, translated by the scroll
   offset, with the horizontal extent growing as wide lines come into view (no whole-document scan).
 - **`MarkdownTheme`** (`Rendering/`) — the presentation seam mapping `TokenType` → typeface/size/colors.
-  The engine stays styling-free; re-theming never touches it.
+  The engine stays styling-free; re-theming never touches it. It also holds the **task palette** — a colour per
+  `TaskState`, its wash, and the struck-through treatment of a resolved item (PRD §8.3.2) — because *which* six
+  states exist is dialect (engine) while what they *look like* is presentation.
+- **`TaskGlyphs`** (`Rendering/`) — the drawn task checkbox: a circular lamp, ringed and tinted in its state's
+  colour, with the state's own symbol inside. One draw path serves both the surface's concealed-`[x]` decoration
+  and the status picker's rows (`Views/TaskStatusPicker`), so the box you click and the box you pick from cannot
+  become two different pictures. The six symbols mirror the ones `HtmlRenderer` writes as inline SVG — two
+  surfaces, one vocabulary, no shared UI dependency.
 - **`IEmbedResolver`** — the seam that turns an engine-detected embed *reference* into an Avalonia
   control. Detection is engine-side; resolution is control-side. The standalone app injects
   `NullEmbedResolver` (embeds show as source); the notes app will inject a real one.
@@ -194,12 +202,12 @@ features/EditMarkdown/
   Typage.Engine/
     Document/   TextDocument, Grapheme, Selection, LinePosition, DocumentStats, DocumentSearch, TextFileCodec
     Editing/    TextEdit, EditHistory, DocumentBuffer
-    Markdown/   TokenType, Token, BlockState, LineTokenizer, InlineTokenizer, MarkdownModel
+    Markdown/   TokenType, Token, BlockState, TaskState, LineTokenizer, InlineTokenizer, MarkdownModel
     Html/       HtmlRenderer
   Typage.Control/
     Controls/   MarkdownEditor
-    Rendering/  MarkdownTheme
-    Views/      MarkdownEditorView
+    Rendering/  MarkdownTheme, TaskGlyphs
+    Views/      MarkdownEditorView, TaskStatusPicker
     IEmbedResolver.cs
   Typage.Desktop/
     App.cs  Program.cs  RelayCommand.cs

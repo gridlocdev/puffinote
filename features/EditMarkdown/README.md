@@ -24,7 +24,7 @@ Full reasoning is in **[docs/PRD.md](docs/PRD.md)**.
 ## What it does (v1 goals)
 
 - Open, edit, and save one `.md` file at a time, like a Markdown-native word processor.
-- **Live inline rendering:** headings, bold/italic, code, lists, task lists, quotes, links, images,
+- **Live inline rendering:** headings, bold/italic, code, lists, six-state task lists, quotes, links, images,
   tables, and front matter render in place; markers recede when the caret moves away.
 - A **minimal, auditable dependency tree** (.NET BCL + Avalonia + OS services only).
 - The editing surface ships as a **clean, embeddable Avalonia control** with a stable API, separable

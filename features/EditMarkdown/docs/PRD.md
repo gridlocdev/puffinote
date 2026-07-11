@@ -209,7 +209,7 @@ On edit, re-tokenize from the first affected line and stop once the carried bloc
 | Blockquote | `> x`, `>> x` | Block | Tinted panel; one accent bar per nesting level | Hide `>` when caret off line |
 | Unordered list | `-`/`*`/`+` | Block | Bullet glyph | Raw marker shown when editing it |
 | Ordered list | `1.` | Block | Number | Raw shown when editing |
-| Task list | `- [ ]`/`- [x]` | Block | Interactive checkbox | Toggle edits source `[ ]`/`[x]` |
+| Task list | `- [ ]`/`- [x]`/`- [/]`/`- [?]`/`- [>]`/`- [-]` | Block | Interactive checkbox — six states (§8.3.2) | Click completes; picker sets any state; edits the one box char |
 | Link | `[text](url)` | Inline | Styled, clickable | Hide `[]()`+URL when caret off node |
 | Autolink | `<https://…>` / bare URL | Inline | Styled, clickable | Hide brackets when caret off node |
 | Image | `![alt](url)` | Block/inline | Rendered image | Source when caret inside |
@@ -264,6 +264,59 @@ Two things the scale asks for that this editor **cannot** do, and does not:
 
 In **high contrast**, headings do *not* desaturate down the scale — dimming H5/H6 is precisely what a
 high-contrast user needs us not to do — so there the hierarchy rests on size and weight alone.
+
+### 8.3.2 Task states
+
+A task is not a bit. `[ ]`/`[x]` can say *done* or *not done*, but a task that is under way, waiting on someone
+else, put off, or abandoned is none of those — and authors have long spelled the difference by hand
+(`[/]`, `[?]`, `[>]`, `[-]`), which a bit-shaped editor then renders as a broken checkbox. Typage reads that
+vocabulary: **one character between the brackets, six states.**
+
+| State | Source | Symbol | Hue | Means |
+|---|---|---|---|---|
+| Not started | `[ ]` | *(empty ring)* | slate (achromatic) | defined, no work yet |
+| In progress | `[/]` | half-lit disc | azure | work is under way |
+| Blocked | `[?]` | exclamation | amber | waiting on a dependency |
+| Deferred | `[>]` | double chevron | violet | moved to later |
+| Done | `[x]` | check | green | the task is complete |
+| Cancelled | `[-]` | cross | red | will not be completed |
+
+This is a **deliberate widening of the dialect** (§8.4 otherwise stands): the six states are the same
+`- [c] text` construct, not a new one — the tokenizer's box character simply admits six values instead of
+three, an unrecognized one (`[a]`) is still literal text, and `[X]` still reads as done. `[ ]`/`[x]` files are
+unaffected; a file written elsewhere with `[/]` now renders as its author meant it.
+
+**The colours are assigned by meaning, not decoration.** Two complementary pairs anchor the wheel: **done
+(green) / cancelled (red)** are the two *resolved* ends — finished vs. abandoned — so the one pair a reader
+must never confuse is the pair the eye separates most easily; **in progress (azure) / blocked (amber)** are
+the second complement, the two *in-flight* states, one flowing, one stuck. **Deferred** takes a cool violet —
+dormant, set aside, but not dead — adjacent to neither pair, so it can't be read as either. **Not started**
+stays achromatic slate: the zero point, an un-lit lamp with no hue and no wash, from which the five lit states
+are visibly a *change*. Each palette (light, dark, high contrast) re-mixes the six for its own surface — the
+*relationships* carry over, not the literal values — and in high contrast not-started goes white rather than
+grey, because dimming the resting state is what a high-contrast reader needs us not to do.
+
+**Hue is never the only channel.** Every state also draws its own symbol, so the six survive colour-blindness
+and a monochrome print (§9.6). A **resolved** item (done *or* cancelled) additionally reads as closed: its text
+is dimmed and struck through in its own state's colour — a green strike for done, a red one for cancelled.
+
+**Interaction.** The box is a circular lamp, and the six states are not equal in the hand:
+
+- **A click on the box completes it** (and a click on a done box clears it). ⌘L does the same, and creates a
+  box on a line that has none. Completion is the action worth a single click, the one people reach for a
+  hundred times a day; it must not become a menu.
+- **The other four are chosen, not toggled**: a secondary click on the box — or ⌥⌘L — drops a **status picker**
+  at the box itself, listing the six with their lamps, their meaning, and the source they write (so the picker
+  teaches the syntax it produces). Rows run active → resolved, the order a reader tallies a board in.
+- A state change rewrites **the one character between the brackets** and nothing else, and leaves the caret
+  where it was (§7.1: the document is the source of truth; editing never rewrites untouched bytes).
+- A new item from Enter always starts `[ ]`: the next line is work to do, whatever the line above turned out
+  to be.
+- The completed-task sort (§7.2) moves **resolved** items — done *and* cancelled. What it separates is work
+  still to do from work that isn't, and an abandoned task is no more outstanding than a finished one.
+
+The **HTML export** draws the same six lamps (inline SVG + a state class per item), not an `<input
+type=checkbox>`, which could only say done or not.
 
 ### 8.4 Out of scope / deferred
 
