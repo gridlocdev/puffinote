@@ -60,6 +60,21 @@ public class CaretFormatStateTests
     }
 
     [AvaloniaFact]
+    public void A_checkbox_lights_only_the_checkbox_tool_not_the_bullet_tool_as_well()
+    {
+        // A task item is spelled with a bullet ("- [ ] ") but is its own kind: it must not also light the
+        // bulleted-list tool, or two tools claim the one marker and the lit bullet wouldn't undo it.
+        var task = At("- [ ] task", 8);
+        Assert.True(task.IsTaskActive);
+        Assert.False(task.IsBulletListActive);
+
+        // A plain bullet still lights the bullet tool (and not the checkbox).
+        var bullet = At("- item", 3);
+        Assert.True(bullet.IsBulletListActive);
+        Assert.False(bullet.IsTaskActive);
+    }
+
+    [AvaloniaFact]
     public void A_toggle_command_reports_its_active_state_from_the_caret()
     {
         var view = new MarkdownEditorView { Text = "**bold**" };

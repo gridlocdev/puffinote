@@ -26,8 +26,13 @@ public partial class MarkdownEditor
     /// <summary>Whether the caret's line carries a task checkbox.</summary>
     public bool IsTaskActive => CaretPrefix().HasTask;
 
-    /// <summary>Whether the caret's line is a bulleted-list item.</summary>
-    public bool IsBulletListActive => CaretPrefix().List == ListKind.Unordered;
+    /// <summary>
+    /// Whether the caret's line is a bulleted-list item. A task item is its own kind, not a bullet — even
+    /// though it is spelled with one (<c>- [ ] </c>) — so a checkbox lights only the checkbox tool, not the
+    /// bullet tool as well. This mirrors <see cref="ToggleBulletList"/>'s own test for what it toggles off,
+    /// so the lit tool and the tool that would undo it stay the same tool.
+    /// </summary>
+    public bool IsBulletListActive => CaretPrefix() is { List: ListKind.Unordered, HasTask: false };
 
     /// <summary>Whether the caret's line is a numbered-list item.</summary>
     public bool IsNumberedListActive => CaretPrefix().List == ListKind.Ordered;
