@@ -1,5 +1,6 @@
 using Avalonia;
 using Avalonia.Controls;
+using Avalonia.Input;
 using Avalonia.Layout;
 using Avalonia.Media;
 using Avalonia.Threading;
@@ -19,6 +20,13 @@ namespace Typage.Control.Controls;
 /// </summary>
 internal sealed class MarkdownCommandBar : UserControl
 {
+    /// <summary>
+    /// The command palette's chord, rendered for this platform (⌘K / Ctrl+K). It is the family's one reserved
+    /// global key rather than a command of ours, so it isn't in the editor's catalog to look up — both shells
+    /// bind it, and <see cref="Commands.MarkdownEditingCommands"/> is written around leaving it to them.
+    /// </summary>
+    private static readonly string PaletteShortcut = ShortcutFormatter.Format(Shortcut.Cmd(Key.K));
+
     private readonly Dictionary<string, AppCommand> _byId;
     private readonly Dictionary<string, string> _sectionOf;
     private readonly List<CommandTool> _tools = [];
@@ -58,8 +66,11 @@ internal sealed class MarkdownCommandBar : UserControl
             Section("Insert", 3, Picker("Insert", insert), insert),
         };
 
+        // Worded exactly as the spreadsheet's pill, down to the chord beside it — it is the same affordance in
+        // the same corner of the same bar, so it should read the same. The chord is the palette's: ⌘K opens
+        // the host's merged palette, which is a superset of the flyout this pill drops (see PaletteShortcut).
         var search = new AdaptiveCommandBar.SearchPill(
-            "Search commands…", string.Empty, "Search and run any formatting command", Flyout: BuildSearchFlyout(commands));
+            "Find a tool…", PaletteShortcut, "Search and run any command", Flyout: BuildSearchFlyout(commands));
         Content = new AdaptiveCommandBar(sections, search);
     }
 
