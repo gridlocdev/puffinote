@@ -159,6 +159,79 @@ public class ToggleTaskTests
         Assert.Equal("1. [ ] apple\nwrapped", e.Text);
     }
 
+    // ----- the selection survives the press (and takes in the new marker when it started at the text) -----
+
+    private static MarkdownEditor Sel(string text, int start, int end)
+    {
+        var e = new MarkdownEditor { Text = text };
+        e.Buffer.Selection = new Selection(start, end);
+        return e;
+    }
+
+    [AvaloniaFact]
+    public void WithTextSelected_KeepsItSelected_AndTakesInTheNewCheckbox()
+    {
+        // The selection reached the line's first non-space character, so the marker inserted there joins it.
+        var e = Sel("buy milk", 0, 8);
+        e.ToggleTask();
+        Assert.Equal("- [ ] buy milk", e.Text);
+        Assert.Equal("- [ ] buy milk", Selected(e)); // was collapsed to a bare caret
+    }
+
+    [AvaloniaFact]
+    public void WithAMidLineSelection_KeepsExactlyThatTextSelected_WithoutTheCheckbox()
+    {
+        // The highlight didn't start at the text's beginning, so it just rides across the insertion.
+        var e = Sel("buy milk", 4, 8);
+        e.ToggleTask();
+        Assert.Equal("- [ ] buy milk", e.Text);
+        Assert.Equal("milk", Selected(e));
+    }
+
+    [AvaloniaFact]
+    public void OnAListItem_ASelectionOfTheContentDoesNotSwallowTheCheckbox()
+    {
+        // "item" doesn't reach the line's first non-space character (the bullet), so the box stays outside it.
+        var e = Sel("- item", 2, 6);
+        e.ToggleTask();
+        Assert.Equal("- [ ] item", e.Text);
+        Assert.Equal("item", Selected(e));
+    }
+
+    [AvaloniaFact]
+    public void OnAListItem_ASelectionFromTheBulletEnclosesTheCheckbox()
+    {
+        var e = Sel("- item", 0, 6);
+        e.ToggleTask();
+        Assert.Equal("- [ ] item", e.Text);
+        Assert.Equal("- [ ] item", Selected(e));
+    }
+
+    [AvaloniaFact]
+    public void AnIndentedSelection_TakesInTheCheckboxButNotTheIndent()
+    {
+        var e = Sel("  buy milk", 2, 10);
+        e.ToggleTask();
+        Assert.Equal("  - [ ] buy milk", e.Text);
+        Assert.Equal("- [ ] buy milk", Selected(e));
+    }
+
+    [AvaloniaFact]
+    public void ABackwardsSelection_KeepsItsDirection()
+    {
+        var e = Sel("buy milk", 8, 0); // anchor at the end, caret at the start
+        e.ToggleTask();
+        var sel = e.Buffer.Selection;
+        Assert.Equal(14, sel.Anchor);
+        Assert.Equal(0, sel.Caret);
+    }
+
+    private static string Selected(MarkdownEditor e)
+    {
+        var sel = e.Buffer.Selection;
+        return e.Buffer.Document.GetText(sel.Start, sel.Length);
+    }
+
     [AvaloniaFact]
     public void OnAWrappedPlainParagraph_CheckboxesTheParagraphOnce()
     {

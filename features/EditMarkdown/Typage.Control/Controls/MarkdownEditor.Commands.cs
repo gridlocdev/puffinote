@@ -458,11 +458,23 @@ public partial class MarkdownEditor
         else
         {
             // Insert "[ ] " after an existing list marker, or a whole "- [ ] " item after the indentation.
-            var insertAt = doc.GetLineStart(line) + (prefix.HasList ? prefix.Length : prefix.Indent);
+            var lineStart = doc.GetLineStart(line);
+            var insertAt = lineStart + (prefix.HasList ? prefix.Length : prefix.Indent);
             var inserted = prefix.HasList ? "[ ] " : "- [ ] ";
-            var caret = Buffer.Selection.Caret;
+            var sel = Buffer.Selection;
+
+            // Carry the selection across the insertion rather than collapsing it to a bare caret: the user's
+            // highlight must survive the press. Each endpoint rides its own text — anything at or past the
+            // insertion point shifts by the marker's width — so exactly the same characters stay selected.
+            // The exception: a selection that reached the line's first non-space character grows to take the
+            // new marker in, since the marker lands right where the highlight began and is now part of the
+            // item the user has selected. (A marker-less line inserts at that first non-space character; on a
+            // list line the box goes after the bullet, so a selection from the bullet already encloses it.)
+            var takesMarker = !sel.IsEmpty && sel.Start == lineStart + prefix.Indent;
+            int Place(int p) => p > insertAt || (p == insertAt && !takesMarker) ? p + inserted.Length : p;
+
             Buffer.ReplaceRange(insertAt, 0, inserted);
-            Buffer.Selection = Selection.At(caret >= insertAt ? caret + inserted.Length : caret);
+            Buffer.Selection = new Selection(Place(sel.Anchor), Place(sel.Caret)); // direction preserved
         }
 
         Focus();
