@@ -34,6 +34,14 @@ namespace Puffinote.Desktop.Controls;
 ///   <item><b>Elsewhere</b>: <c>Enter</c> opens a file / toggles a folder and <c>Delete</c>/<c>Backspace</c>
 ///   deletes, as on Windows/Linux explorers.</item>
 /// </list>
+/// The mouse map is a notes sidebar's, not a file manager's:
+/// <list type="bullet">
+///   <item>A <b>single click</b> opens a file / toggles a folder. The reason to click a note is almost always to
+///   read it, so charging two clicks for it taxes every navigation in the app.</item>
+///   <item><b>Shift+click</b> selects without opening — how you target a file to rename, pin, or delete it
+///   without disturbing what you're reading.</item>
+///   <item>A <b>right click</b> selects the row under the pointer, so the context menu targets what was clicked.</item>
+/// </list>
 /// The <see cref="NotebookNode"/> model is unchanged; mutation actions (new/rename/delete) drive this through
 /// <see cref="Refresh"/> / <see cref="SelectPath"/>.
 /// </summary>
@@ -51,6 +59,10 @@ internal sealed class FileTreeView : UserControl
     private MenuItem _unpinItem = null!;
     private string _typeahead = string.Empty;
     private DateTime _lastKeystroke = DateTime.MinValue;
+
+    /// <summary>Whether the click currently in flight should activate its row, decided at press time from the
+    /// button and modifiers (a plain left click activates; Shift+click only selects).</summary>
+    private bool _activateOnTap;
 
     /// <summary>
     /// Whether the bare-key map follows macOS editor conventions (Return renames, Space/⌘↓ opens, ⌘↑ ascends,
@@ -70,11 +82,12 @@ internal sealed class FileTreeView : UserControl
         };
         StyleSelectionWithTheAccent(_list);
         _list.SelectionChanged += (_, _) => SelectionChanged?.Invoke(SelectedNode);
-        _list.DoubleTapped += (_, _) => ActivateSelected();
         _list.ContextMenu = BuildContextMenu();
         // A right-click selects the row under the pointer first, so the context menu (Pin, Rename, …) always
-        // targets what was clicked rather than whatever happened to be selected before.
+        // targets what was clicked rather than whatever happened to be selected before. The same handler decides
+        // whether the click that follows should also *activate* the row (see OnListPointerPressed).
         _list.AddHandler(PointerPressedEvent, OnListPointerPressed, RoutingStrategies.Tunnel);
+        _list.Tapped += OnListTapped;
 
         // The UserControl owns keyboard focus + the whole key map, so navigation is deterministic and
         // doesn't depend on which item container happens to hold focus.
@@ -88,7 +101,7 @@ internal sealed class FileTreeView : UserControl
     /// <summary>Raised when the selected entry changes (null when the selection is cleared).</summary>
     public event Action<NotebookNode?>? SelectionChanged;
 
-    /// <summary>Raised when a <em>file</em> entry is activated (double-click / Enter), to open it in a pane.</summary>
+    /// <summary>Raised when a <em>file</em> entry is activated (a single click, or Enter), to open it in a pane.</summary>
     public event Action<NotebookNode>? FileActivated;
 
     /// <summary>Raised to rename <paramref>node</paramref> (F2 / context menu). Never the notebook root.</summary>
@@ -509,17 +522,49 @@ internal sealed class FileTreeView : UserControl
         return menu;
     }
 
+    /// <summary>
+    /// Decide, at press time, what the click that follows will do.
+    ///
+    /// <para>A <b>right</b> click just selects the row under the pointer, so the context menu always targets what
+    /// was clicked. A plain <b>left</b> click selects <i>and</i> activates — opening a file, toggling a folder —
+    /// because in a notes sidebar the overwhelmingly common reason to click a note is to read it, and making that
+    /// cost two clicks taxes every single navigation. Holding <b>Shift</b> selects without activating, which is
+    /// the escape hatch: it's how you highlight a file to rename, pin, or delete it without opening it first.</para>
+    ///
+    /// <para>The modifier is captured here rather than in the tap handler because Avalonia's tap events don't
+    /// carry the keyboard state.</para>
+    /// </summary>
     private void OnListPointerPressed(object? sender, PointerPressedEventArgs e)
     {
-        if (!e.GetCurrentPoint(_list).Properties.IsRightButtonPressed)
+        var properties = e.GetCurrentPoint(_list).Properties;
+        var row = (e.Source as Visual)?.FindAncestorOfType<ListBoxItem>();
+
+        if (properties.IsRightButtonPressed)
+        {
+            _activateOnTap = false;
+            if (row is { DataContext: Row hit })
+            {
+                _list.SelectedItem = hit;
+            }
+
+            return;
+        }
+
+        _activateOnTap = properties.IsLeftButtonPressed
+                         && row is not null
+                         && !e.KeyModifiers.HasFlag(KeyModifiers.Shift);
+    }
+
+    /// <summary>Complete a plain left click by activating the row it landed on (see <see cref="OnListPointerPressed"/>).</summary>
+    private void OnListTapped(object? sender, TappedEventArgs e)
+    {
+        if (!_activateOnTap)
         {
             return;
         }
 
-        if ((e.Source as Visual)?.FindAncestorOfType<ListBoxItem>() is { DataContext: Row row })
-        {
-            _list.SelectedItem = row;
-        }
+        _activateOnTap = false;
+        ActivateSelected();
     }
 
     private void MoveSelection(int delta)
