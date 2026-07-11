@@ -17,6 +17,8 @@ public class ShortcutFormatterTests
     [InlineData(Key.F, KeyModifiers.Alt, "⌥⌘F", "Ctrl+Alt+F")]
     [InlineData(Key.D1, KeyModifiers.None, "⌘1", "Ctrl+1")]
     [InlineData(Key.OemComma, KeyModifiers.None, "⌘,", "Ctrl+,")]
+    [InlineData(Key.OemPeriod, KeyModifiers.None, "⌘.", "Ctrl+.")]      // Bulleted List
+    [InlineData(Key.OemQuestion, KeyModifiers.None, "⌘/", "Ctrl+/")]    // Numbered List
     public void Cmd_RendersGlyphsOnMac_AndTextElsewhere(Key key, KeyModifiers extra, string mac, string other)
     {
         var shortcut = Shortcut.Cmd(key, extra);

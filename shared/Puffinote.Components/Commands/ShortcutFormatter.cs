@@ -81,6 +81,7 @@ public static class ShortcutFormatter
         >= Key.D0 and <= Key.D9 => ((char)('0' + (key - Key.D0))).ToString(),
         >= Key.A and <= Key.Z => key.ToString(),
         Key.OemComma => ",",
+        Key.OemPeriod => ".",
         Key.OemQuestion => "/",
         Key.OemPlus => "=",
         Key.OemMinus => "−",
