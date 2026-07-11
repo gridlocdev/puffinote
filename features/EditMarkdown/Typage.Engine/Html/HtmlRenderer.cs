@@ -54,6 +54,13 @@ public static class HtmlRenderer
             return line + 1;
         }
 
+        // A setext underline is markup for the heading above it, which has already been rendered. It carries no
+        // content of its own, so it emits nothing — otherwise it would close as an empty paragraph.
+        if (first is { Type: TokenType.SetextUnderline })
+        {
+            return line + 1;
+        }
+
         if (first is { Type: TokenType.FrontMatterFence })
         {
             return RenderFrontMatter(doc, model, line, sb);
@@ -148,12 +155,32 @@ public static class HtmlRenderer
     }
 
     private static int RenderBlockquote(TextDocument doc, MarkdownModel model, int line, StringBuilder sb)
+        => RenderQuoteLevel(doc, model, line, depth: 1, sb);
+
+    /// <summary>
+    /// Render one blockquote nesting level, mirroring <see cref="RenderListLevel"/>: a line at this depth is a
+    /// paragraph of this quote, a deeper-quoted run opens a nested <c>&lt;blockquote&gt;</c> inside it, and a
+    /// shallower line returns to the caller. Returns the line after the quote.
+    /// </summary>
+    private static int RenderQuoteLevel(TextDocument doc, MarkdownModel model, int line, int depth, StringBuilder sb)
     {
         var n = doc.LineCount;
         var i = line;
         sb.Append("<blockquote>\n");
-        while (i < n && FirstToken(model, i) is { Type: TokenType.BlockquoteMarker })
+        while (i < n)
         {
+            var d = QuoteDepth(model, i);
+            if (d < depth)
+            {
+                break; // the quote ended, or stepped back out to an enclosing level
+            }
+
+            if (d > depth)
+            {
+                i = RenderQuoteLevel(doc, model, i, depth + 1, sb);
+                continue;
+            }
+
             sb.Append("<p>");
             RenderInline(doc, model.LineTokens(i), sb);
             sb.Append("</p>\n");
@@ -163,6 +190,10 @@ public static class HtmlRenderer
         sb.Append("</blockquote>\n");
         return i;
     }
+
+    /// <summary>The blockquote nesting depth of <paramref name="line"/> (the number of <c>&gt;</c>), or 0 if it isn't a quote.</summary>
+    private static int QuoteDepth(MarkdownModel model, int line) =>
+        FirstToken(model, line) is { Type: TokenType.BlockquoteMarker } t && int.TryParse(t.Meta, out var d) ? d : 0;
 
     private static int RenderList(TextDocument doc, MarkdownModel model, int line, StringBuilder sb)
         => RenderListLevel(doc, model, line, ListIndent(doc, model, line), sb);
@@ -516,7 +547,7 @@ public static class HtmlRenderer
 
         return first.Value.Type is not (TokenType.HeadingMarker or TokenType.BlockquoteMarker
             or TokenType.ListMarker or TokenType.HorizontalRule or TokenType.CodeFence
-            or TokenType.FrontMatterFence or TokenType.TableDelimiter)
+            or TokenType.FrontMatterFence or TokenType.TableDelimiter or TokenType.SetextUnderline)
             && !IsTableStart(doc, model, line);
     }
 

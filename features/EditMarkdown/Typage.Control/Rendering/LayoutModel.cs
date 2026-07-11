@@ -318,6 +318,19 @@ internal sealed class LayoutModel
         return toks.Count > 0 && toks[0].Type == TokenType.HeadingMarker && int.TryParse(toks[0].Meta, out var l) ? l : 0;
     }
 
+    /// <summary>The blockquote nesting depth of <paramref name="block"/> (1 for <c>&gt;</c>, 2 for <c>&gt;&gt;</c>, …),
+    /// or 0 when it isn't a quote.</summary>
+    public int QuoteDepthOf(int block)
+    {
+        if (_host.RawTextMode || block < 0 || block >= BlockStartLine.Length - 1)
+        {
+            return 0;
+        }
+
+        var toks = _host.Model.LineTokens(BlockStartLine[block]);
+        return toks.Count > 0 && toks[0].Type == TokenType.BlockquoteMarker && int.TryParse(toks[0].Meta, out var d) ? d : 0;
+    }
+
     /// <summary>
     /// Classify <paramref name="block"/> from the leading token of its first line — the same signal
     /// <see cref="IsFlowLine"/> groups on, so the classification and the grouping can never disagree.
@@ -355,6 +368,10 @@ internal sealed class LayoutModel
                 return MarkdownBlockKind.ListItem;
             case TokenType.HorizontalRule:
                 return MarkdownBlockKind.Rule;
+            case TokenType.SetextUnderline:
+                // Collapsed to zero rows, so its metrics never place anything — but it must not read as a
+                // Paragraph either, or it would contribute a paragraph's margin around a heading it belongs to.
+                return MarkdownBlockKind.Heading;
             case TokenType.CodeFence or TokenType.CodeText:
                 return MarkdownBlockKind.Code;
             case TokenType.FrontMatterFence or TokenType.FrontMatterText:
@@ -439,7 +456,8 @@ internal sealed class LayoutModel
 
         if (toks[0].Type is TokenType.HeadingMarker or TokenType.BlockquoteMarker or TokenType.ListMarker
             or TokenType.TaskMarker or TokenType.HorizontalRule or TokenType.CodeFence or TokenType.CodeText
-            or TokenType.FrontMatterFence or TokenType.FrontMatterText or TokenType.TableDelimiter)
+            or TokenType.FrontMatterFence or TokenType.FrontMatterText or TokenType.TableDelimiter
+            or TokenType.SetextUnderline)
         {
             return false;
         }

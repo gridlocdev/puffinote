@@ -72,9 +72,15 @@ public partial class MarkdownEditor : Avalonia.Controls.Control, ILogicalScrolla
         {
             // Incremental re-tokenization: reuse the unchanged prefix and re-run only from the first
             // changed line down (PRD §8.2). Equivalent to a full rebuild — see IncrementalTokenizerTests.
-            _model = _model.Update(Buffer.Document, Buffer.LastChangedLine, out _);
+            //
+            // The layout must be invalidated from the line the *model* actually re-tokenized from, not from the
+            // line the user typed on. Some constructs reach backwards — a table body row is classified by the
+            // header above it, and a setext underline turns the line above it into a heading — so Update backs
+            // its start line up past them. Marking the layout dirty from the typed line instead would let it
+            // reuse a cached block whose tokens had just changed underneath it.
+            _model = _model.Update(Buffer.Document, Buffer.LastChangedLine, out var dirtyFromLine);
             _goalX = double.NaN; // an edit moves the caret; the next Up/Down recomputes the goal column
-            _layout.MarkDirty(Buffer.LastChangedLine); // reuse blocks above the first changed line
+            _layout.MarkDirty(dirtyFromLine);
             RaiseScrollInvalidated(EventArgs.Empty); // line count / extent may have changed
             InvalidateVisual();
             TextChanged?.Invoke(this, EventArgs.Empty);

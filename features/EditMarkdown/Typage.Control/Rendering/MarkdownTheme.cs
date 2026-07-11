@@ -243,6 +243,10 @@ public class MarkdownTheme
     /// <summary>Width of the blockquote's left accent bar.</summary>
     public double QuoteBarWidth { get; init; } = 3;
 
+    /// <summary>The space between one nesting level's quote bar and the next — what makes <c>&gt;&gt;</c> read as
+    /// two stacked bars rather than one thick one.</summary>
+    public double QuoteBarGap { get; init; } = 8;
+
     private readonly FontFamily _body = FontFamily.Default;
     private readonly FontFamily _mono = new("Cascadia Code,Consolas,Menlo,monospace");
 
@@ -266,7 +270,8 @@ public class MarkdownTheme
             TokenType.LinkUrl or TokenType.ImageUrl or TokenType.Embed => Marker(),
             TokenType.BlockquoteMarker or TokenType.ListMarker or TokenType.TaskMarker
                 or TokenType.HorizontalRule or TokenType.CodeFence or TokenType.FrontMatterFence
-                or TokenType.TableDelimiter or TokenType.Marker or TokenType.Escape => Marker(),
+                or TokenType.TableDelimiter or TokenType.Marker or TokenType.Escape
+                or TokenType.SetextUnderline => Marker(),
             TokenType.FrontMatterText => new RunStyle(Mono(), CodeFontSize, MarkerForeground, null, false),
             _ => new RunStyle(Body(), BaseFontSize, Foreground, null, false),
         };

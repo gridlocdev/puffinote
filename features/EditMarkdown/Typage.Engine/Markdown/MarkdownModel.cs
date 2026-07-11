@@ -1,3 +1,4 @@
+using System.Globalization;
 using Typage.Engine.Document;
 
 namespace Typage.Engine.Markdown;
@@ -73,6 +74,26 @@ public sealed class MarkdownModel
             firstChangedLine--;
         }
 
+        // A setext heading reaches *backwards*: typing (or deleting) the "===" under a paragraph is what makes
+        // — or unmakes — the line above it a heading. The carried BlockState can't see that, so back up one
+        // line whenever the line above is ordinary paragraph text, and let it be re-classified with the
+        // lookahead. Without this, deleting an underline would leave the heading above it stranded.
+        if (firstChangedLine > 0 && LineTokenizer.IsSetextTextLine(newDocument.GetLineText(firstChangedLine - 1), isFrontMatterOpen: false))
+        {
+            firstChangedLine--;
+        }
+
+        // Never resume *inside* a setext pair. A bare "===" is, on its own, an ordinary paragraph line — so the
+        // back-up above can land on an underline whose heading text sits above it. Starting there would tokenize
+        // the underline as a paragraph, because the lookahead that binds it to its text line only runs from the
+        // text line. Step back onto the pair's first line instead.
+        while (firstChangedLine > 0
+               && LineTokenizer.IsSetextUnderline(newDocument.GetLineText(firstChangedLine), out _)
+               && LineTokenizer.IsSetextTextLine(newDocument.GetLineText(firstChangedLine - 1), isFrontMatterOpen: false))
+        {
+            firstChangedLine--;
+        }
+
         // The entering state at firstChangedLine is unchanged: every line above it is identical.
         var startState = firstChangedLine < _entering.Length ? _entering[firstChangedLine] : BlockState.Normal;
 
@@ -116,12 +137,59 @@ public sealed class MarkdownModel
                 continue; // table is self-contained; state stays Normal
             }
 
+            // A setext heading — paragraph text with a "===" (H1) or "---" (H2) underline beneath it. Like a
+            // table, it can't be decided a line at a time: the underline is what makes the line above a
+            // heading, so it needs the same one-line lookahead. Checking it here, *before* the line below is
+            // classified, is also what stops a setext "---" from being taken for a horizontal rule (the
+            // tokenizer would otherwise reach its HR rule first, which is exactly what it used to do).
+            if (state.Kind == BlockKind.Normal
+                && i + 1 < toLine
+                && LineTokenizer.IsSetextTextLine(doc.GetLineText(i), allowFrontMatter && i == 0)
+                && LineTokenizer.IsSetextUnderline(doc.GetLineText(i + 1), out var setextLevel))
+            {
+                i = TokenizeSetextHeading(doc, i, setextLevel, entering, tokens);
+                state = BlockState.Normal;
+                continue;
+            }
+
             var line = doc.GetLineText(i);
             var lineToks = new List<Token>();
             state = LineTokenizer.Tokenize(line, doc.GetLineStart(i), i, state, lineToks, allowFrontMatter);
             tokens[i] = lineToks;
             i++;
         }
+    }
+
+    /// <summary>
+    /// Tokenize a setext heading: the text line at <paramref name="line"/> and its underline below. Returns the
+    /// line index after the pair.
+    ///
+    /// <para>The text line carries a <b>zero-length</b> <see cref="TokenType.HeadingMarker"/> holding the level,
+    /// so it is shaped exactly like an ATX heading — there is simply no <c>#</c> to point at. Every consumer
+    /// already reads the level off the line's first token, so none of them needs to know the difference.</para>
+    /// </summary>
+    private static int TokenizeSetextHeading(
+        TextDocument doc, int line, int level, BlockState[] entering, List<Token>[] tokens)
+    {
+        var start = doc.GetLineStart(line);
+        var text = doc.GetLineText(line);
+        var headingTokens = new List<Token>
+        {
+            new(start, 0, TokenType.HeadingMarker, TokenRole.Marker, level.ToString(CultureInfo.InvariantCulture)),
+        };
+        LineTokenizer.TokenizeInline(text, start, headingTokens);
+        entering[line] = BlockState.Normal;
+        tokens[line] = headingTokens;
+
+        var underline = line + 1;
+        var underlineStart = doc.GetLineStart(underline);
+        entering[underline] = BlockState.Normal;
+        tokens[underline] =
+        [
+            new Token(underlineStart, LineTokenizer.ContentLength(doc.GetLineText(underline)), TokenType.SetextUnderline, TokenRole.Marker),
+        ];
+
+        return underline + 1;
     }
 
     /// <summary>Tokenize a contiguous GFM pipe-table block; returns the line index after it.</summary>

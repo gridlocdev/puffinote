@@ -1,3 +1,5 @@
+using System.Globalization;
+
 namespace Typage.Engine.Markdown;
 
 /// <summary>
@@ -136,16 +138,26 @@ internal static class LineTokenizer
             return BlockState.Normal;
         }
 
-        // Blockquote: consume one or more '>' prefixes, then inline-tokenize the remainder.
+        // Blockquote: consume one or more '>' prefixes, then inline-tokenize the remainder. The marker spans the
+        // whole prefix but carries its *depth* — the number of '>' — in Meta, so the surface can express nesting
+        // (a bar per level) instead of drawing one bar however deeply the quote is nested.
         if (indentCols <= 3 && afterMarkerIsQuote(line, indent, len))
         {
             var p = indent;
+            var depth = 0;
             while (p < len && (line[p] == '>' || line[p] == ' ' || line[p] == '\t'))
             {
+                if (line[p] == '>')
+                {
+                    depth++;
+                }
+
                 p++;
             }
 
-            output.Add(new Token(lineStart + indent, p - indent, TokenType.BlockquoteMarker, TokenRole.Marker));
+            output.Add(new Token(
+                lineStart + indent, p - indent, TokenType.BlockquoteMarker, TokenRole.Marker,
+                depth.ToString(CultureInfo.InvariantCulture)));
             InlineTokenizer.Tokenize(line, lineStart, p, len, output, detectHardBreak: true);
             return BlockState.Normal;
         }
@@ -171,6 +183,86 @@ internal static class LineTokenizer
         InlineTokenizer.Tokenize(line, lineStart, 0, len, output, detectHardBreak: true);
         return BlockState.NormalAfter(indent == len);
     }
+
+    // ----- setext headings (driven from MarkdownModel, which owns the one-line lookahead) -----
+
+    /// <summary>The content length of <paramref name="line"/>, excluding a trailing CR (so CRLF files agree with LF ones).</summary>
+    public static int ContentLength(string line) =>
+        line.Length > 0 && line[^1] == '\r' ? line.Length - 1 : line.Length;
+
+    /// <summary>
+    /// Whether <paramref name="line"/> is a setext underline: a run of <c>=</c> (level 1) or <c>-</c> (level 2)
+    /// and nothing else, indented at most 3 columns, with optional trailing whitespace.
+    /// </summary>
+    public static bool IsSetextUnderline(string line, out int level)
+    {
+        level = 0;
+        var len = ContentLength(line);
+        var indent = LeadingWhitespace(line, len, out var indentCols);
+        if (indentCols > 3 || indent >= len)
+        {
+            return false;
+        }
+
+        var c = line[indent];
+        if (c is not ('=' or '-'))
+        {
+            return false;
+        }
+
+        var p = indent;
+        while (p < len && line[p] == c)
+        {
+            p++;
+        }
+
+        // Only trailing whitespace may follow the run — "--- x" is not an underline.
+        while (p < len && (line[p] == ' ' || line[p] == '\t'))
+        {
+            p++;
+        }
+
+        if (p != len)
+        {
+            return false;
+        }
+
+        level = c == '=' ? 1 : 2;
+        return true;
+    }
+
+    /// <summary>
+    /// Whether <paramref name="line"/> can be the <i>text</i> of a setext heading: an ordinary paragraph line.
+    /// Anything that already opens a block of its own — an ATX heading, a rule, a quote, a list item, a fence,
+    /// front matter, or an indented-code-depth line — is not paragraph text and takes no underline.
+    /// </summary>
+    /// <param name="isFrontMatterOpen">True when this is line 0 of a document whose front matter opens here;
+    /// that <c>---</c> is a fence, not the text of a heading.</param>
+    public static bool IsSetextTextLine(string line, bool isFrontMatterOpen)
+    {
+        if (isFrontMatterOpen)
+        {
+            return false;
+        }
+
+        var len = ContentLength(line);
+        var indent = LeadingWhitespace(line, len, out var indentCols);
+        if (indent == len || indentCols > 3)
+        {
+            return false; // blank, or indented far enough to be code
+        }
+
+        return !IsHorizontalRule(line, indent, len)
+               && !TryHeading(line, indent, len, out _, out _)
+               && !afterMarkerIsQuote(line, indent, len)
+               && !TryListMarker(line, indent, len, out _)
+               && !TryFenceOpen(line, indent, len, out _, out _, out _)
+               && !IsFrontMatterFence(line, len);
+    }
+
+    /// <summary>Inline-tokenize a whole line's content (the setext path — the heading's text has no line prefix).</summary>
+    public static void TokenizeInline(string line, int lineStart, List<Token> output) =>
+        InlineTokenizer.Tokenize(line, lineStart, 0, ContentLength(line), output);
 
     // ----- recognizers -----
 

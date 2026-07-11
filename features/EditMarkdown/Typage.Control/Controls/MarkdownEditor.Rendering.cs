@@ -162,17 +162,33 @@ public partial class MarkdownEditor
             }
 
             var top = BlockTop(start);
-            var rect = new Rect(-8, top, ContentRight() + 16, BlockTop(end) + BlockHeight(end) - top);
+            var width = ContentRight() + 16;
             if (kind == MarkdownBlockKind.Code)
             {
+                var rect = new Rect(-8, top, width, BlockTop(end) + BlockHeight(end) - top);
                 var r = EditorTheme.CodeBlockCornerRadius;
                 context.DrawRectangle(EditorTheme.CodeBlockBackground, new Pen(EditorTheme.CodeBlockBorder, 0.5), rect, r, r);
             }
             else
             {
+                // A quote is drawn per block, not as one rectangle, because nesting depth can change from line to
+                // line ("> a" then ">> b"). The blocks of a run abut exactly, so the per-block tints still join
+                // into one continuous panel — but each line gets its own stack of bars, one per '>' it carries,
+                // which is what makes a nested quote look nested instead of collapsing to a single bar.
+                //
                 // Square corners: a rounded corner on a single-sided border reads as broken, not as a quote.
-                context.FillRectangle(EditorTheme.QuoteBackground, rect);
-                context.FillRectangle(EditorTheme.QuoteBar, rect.WithWidth(EditorTheme.QuoteBarWidth));
+                for (var q = start; q <= end; q++)
+                {
+                    var rect = new Rect(-8, BlockTop(q), width, BlockHeight(q));
+                    context.FillRectangle(EditorTheme.QuoteBackground, rect);
+
+                    var depth = _layout.QuoteDepthOf(q);
+                    for (var level = 0; level < depth; level++)
+                    {
+                        var x = level * (EditorTheme.QuoteBarWidth + EditorTheme.QuoteBarGap);
+                        context.FillRectangle(EditorTheme.QuoteBar, new Rect(x, rect.Y, EditorTheme.QuoteBarWidth, rect.Height));
+                    }
+                }
             }
 
             b = end + 1;

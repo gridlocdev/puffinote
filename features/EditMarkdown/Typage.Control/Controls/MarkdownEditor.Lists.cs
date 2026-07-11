@@ -343,9 +343,30 @@ public partial class MarkdownEditor
         }
 
         var doc = Buffer.Document;
-        return line > 0 && line < doc.LineCount
+        if (line < 0 || line >= doc.LineCount)
+        {
+            return false;
+        }
+
+        // A setext underline ("===" / "---") is pure markup. Concealing it would leave a blank row where the
+        // underline was, which in a WYSIWYG view is just as wrong as showing the "===" itself — so its row
+        // collapses away entirely, exactly like a soft paragraph separator. The heading it marks is the line
+        // above, which draws as a heading; raw-source view shows the underline again.
+        if (IsSetextUnderlineLine(line))
+        {
+            return true;
+        }
+
+        return line > 0
             && IsEmptyLine(line) && !IsBlankLine(line - 1)
             && _model.EnteringState(line).Kind == BlockKind.Normal;
+    }
+
+    /// <summary>Whether <paramref name="line"/> is the underline of a setext heading (and so draws nothing).</summary>
+    private bool IsSetextUnderlineLine(int line)
+    {
+        var toks = _model.LineTokens(line);
+        return toks.Count > 0 && toks[0].Type == TokenType.SetextUnderline;
     }
 
     /// <summary>Whether any line in <c>[from, to]</c> carries an ordered-list marker.</summary>
