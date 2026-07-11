@@ -1,4 +1,5 @@
 using Typage.Engine.Editing;
+using Typage.Engine.Markdown;
 using Xunit;
 
 namespace Typage.Engine.Tests.Editing;
@@ -39,7 +40,39 @@ public class LinePrefixTests
         var p = LinePrefix.Parse("- [x] done");
         Assert.True(p.HasTask);
         Assert.True(p.TaskChecked);
+        Assert.Equal(TaskState.Done, p.Task);
         Assert.Equal(6, p.Length); // "- [x] "
+        Assert.Equal(3, p.TaskMarkColumn); // the 'x' — the one character a state change rewrites
+    }
+
+    [Fact]
+    public void Parse_ReadsAllSixTaskStates()
+    {
+        // The assists parse the same vocabulary the tokenizer does, so a picker, a click, and an Enter
+        // continuation can't disagree about what a box says (PRD §8.3.2).
+        Assert.Equal(TaskState.NotStarted, LinePrefix.Parse("- [ ] a").Task);
+        Assert.Equal(TaskState.InProgress, LinePrefix.Parse("- [/] a").Task);
+        Assert.Equal(TaskState.Blocked, LinePrefix.Parse("- [?] a").Task);
+        Assert.Equal(TaskState.Deferred, LinePrefix.Parse("- [>] a").Task);
+        Assert.Equal(TaskState.Done, LinePrefix.Parse("- [x] a").Task);
+        Assert.Equal(TaskState.Cancelled, LinePrefix.Parse("- [-] a").Task);
+        Assert.False(LinePrefix.Parse("- [a] a").HasTask); // outside the vocabulary: not a box at all
+    }
+
+    [Fact]
+    public void Resolved_IsDoneOrCancelled_NotMerelyChecked()
+    {
+        // "Off the active board" is the pair done|cancelled — finished and abandoned are opposite ends of the
+        // same thing, and neither is work still to do. Only *done* counts as checked.
+        Assert.True(LinePrefix.Parse("- [x] a").TaskResolved);
+        Assert.True(LinePrefix.Parse("- [-] a").TaskResolved);
+        Assert.False(LinePrefix.Parse("- [/] a").TaskResolved);
+        Assert.False(LinePrefix.Parse("- [?] a").TaskResolved);
+        Assert.False(LinePrefix.Parse("- [>] a").TaskResolved);
+        Assert.False(LinePrefix.Parse("- [ ] a").TaskResolved);
+
+        Assert.True(LinePrefix.Parse("- [x] a").TaskChecked);
+        Assert.False(LinePrefix.Parse("- [-] a").TaskChecked);
     }
 
     [Fact]
@@ -58,6 +91,11 @@ public class LinePrefixTests
         Assert.Equal("3. ", LinePrefix.Parse("2. a").ContinuationPrefix());
         Assert.Equal("- [ ] ", LinePrefix.Parse("- [x] a").ContinuationPrefix());
         Assert.Equal("  > ", LinePrefix.Parse("  > a").ContinuationPrefix());
+
+        // Enter on *any* state opens a fresh, not-started item: the new line is work to do, whatever the line
+        // above it turned out to be.
+        Assert.Equal("- [ ] ", LinePrefix.Parse("- [/] a").ContinuationPrefix());
+        Assert.Equal("- [ ] ", LinePrefix.Parse("- [-] a").ContinuationPrefix());
     }
 
     [Fact]

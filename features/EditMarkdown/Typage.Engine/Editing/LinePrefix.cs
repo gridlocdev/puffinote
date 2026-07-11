@@ -47,7 +47,7 @@ public readonly record struct LinePrefix(
     char Delim,
     int DigitCount,
     bool HasTask,
-    bool TaskChecked,
+    TaskState Task,
     int MarkerStart,
     int Length,
     string IndentText = "")
@@ -58,9 +58,16 @@ public readonly record struct LinePrefix(
     /// <summary>True when the line carries a blockquote prefix.</summary>
     public bool HasQuote => Quote.Length > 0;
 
+    /// <summary>True when the line's box is ticked — <see cref="TaskState.Done"/> and nothing else.</summary>
+    public bool TaskChecked => HasTask && Task == TaskState.Done;
+
+    /// <summary>True when the line's task is off the active board — done <i>or</i> cancelled
+    /// (<see cref="TaskStates.IsResolved"/>).</summary>
+    public bool TaskResolved => HasTask && TaskStates.IsResolved(Task);
+
     /// <summary>
     /// The column just past the list marker (<c>"- "</c> / <c>"1. "</c>) — where a task checkbox sits, so
-    /// <c>[AfterMarker, Length)</c> spans the <c>"[ ] "</c>/<c>"[x] "</c> when <see cref="HasTask"/>. Equals
+    /// <c>[AfterMarker, Length)</c> spans the <c>"[x] "</c> when <see cref="HasTask"/>. Equals
     /// <see cref="MarkerStart"/> when there is no list marker.
     /// </summary>
     public int AfterMarker => List switch
@@ -69,6 +76,10 @@ public readonly record struct LinePrefix(
         ListKind.Ordered => MarkerStart + DigitCount + 2, // digits + delimiter + space
         _ => MarkerStart,
     };
+
+    /// <summary>The column of the character <i>between the brackets</i> — the one char a state change rewrites.
+    /// Only meaningful when <see cref="HasTask"/>.</summary>
+    public int TaskMarkColumn => AfterMarker + 1;
 
     /// <summary>Parse the leading structure of <paramref name="line"/> (a single line, trailing CR tolerated).</summary>
     public static LinePrefix Parse(string line)
@@ -140,22 +151,22 @@ public readonly record struct LinePrefix(
         }
 
         var hasTask = false;
-        var taskChecked = false;
+        var task = TaskState.NotStarted;
         var prefixEnd = kind == ListKind.None ? markerStart : afterMarker;
 
         if (kind != ListKind.None && afterMarker + 2 < len && line[afterMarker] == '['
-            && line[afterMarker + 2] == ']' && line[afterMarker + 1] is ' ' or 'x' or 'X')
+            && line[afterMarker + 2] == ']' && TaskStates.IsMark(line[afterMarker + 1]))
         {
             var after = afterMarker + 3;
             if (after >= len || line[after] == ' ')
             {
                 hasTask = true;
-                taskChecked = line[afterMarker + 1] is 'x' or 'X';
+                task = TaskStates.FromMark(line[afterMarker + 1]);
                 prefixEnd = after < len ? after + 1 : after;
             }
         }
 
-        return new LinePrefix(indent, quote, kind, bullet, number, delim, digitCount, hasTask, taskChecked, markerStart, prefixEnd, indentText);
+        return new LinePrefix(indent, quote, kind, bullet, number, delim, digitCount, hasTask, task, markerStart, prefixEnd, indentText);
     }
 
     /// <summary>

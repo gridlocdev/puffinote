@@ -48,6 +48,40 @@ public class MarkdownModelTests
     }
 
     [Fact]
+    public void TaskList_ReadsAllSixStates_AndCarriesTheStateInTheMarkersMeta()
+    {
+        // The dialect's task vocabulary (PRD §8.3.2): one character between the brackets, six meanings. The
+        // marker carries the state it spells, so a consumer reads it off the token instead of re-parsing the box.
+        var (_, model) = Tokenize("- [ ] a\n- [/] b\n- [?] c\n- [>] d\n- [x] e\n- [-] f");
+        var states = Enumerable.Range(0, 6)
+            .Select(line => model.LineTokens(line).Single(t => t.Type == TokenType.TaskMarker))
+            .Select(t => TaskStates.FromMark(t.Meta![0]))
+            .ToArray();
+
+        Assert.Equal(
+            [TaskState.NotStarted, TaskState.InProgress, TaskState.Blocked, TaskState.Deferred, TaskState.Done, TaskState.Cancelled],
+            states);
+    }
+
+    [Fact]
+    public void TaskList_UppercaseX_IsDone_AndNormalizesInMeta()
+    {
+        var (_, model) = Tokenize("- [X] done");
+        var marker = model.LineTokens(0).Single(t => t.Type == TokenType.TaskMarker);
+        Assert.Equal("x", marker.Meta); // the source keeps its "[X]"; the *state* is canonical
+        Assert.Equal(TaskState.Done, TaskStates.FromMark(marker.Meta![0]));
+    }
+
+    [Fact]
+    public void AnUnknownBoxCharacter_IsNotATaskMarker()
+    {
+        // Tolerant tokenizing: "[a]" is not in the vocabulary, so the brackets stay literal text rather than
+        // becoming a box in some seventh, undefined state.
+        Assert.False(HasType("- [a] not a task", TokenType.TaskMarker));
+        Assert.False(HasType("- [] not a task", TokenType.TaskMarker));
+    }
+
+    [Fact]
     public void HorizontalRule()
     {
         Assert.True(HasType("---", TokenType.HorizontalRule));

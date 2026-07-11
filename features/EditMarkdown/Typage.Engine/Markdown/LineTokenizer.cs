@@ -167,9 +167,13 @@ internal static class LineTokenizer
         {
             output.Add(new Token(lineStart + indent, markerEnd - indent, TokenType.ListMarker, TokenRole.Marker));
             var contentStart = markerEnd;
-            if (TryTaskMarker(line, contentStart, len, out var taskEnd))
+            if (TryTaskMarker(line, contentStart, len, out var taskEnd, out var state))
             {
-                output.Add(new Token(lineStart + contentStart, taskEnd - contentStart, TokenType.TaskMarker, TokenRole.Marker));
+                // The marker carries the *state* it spells in Meta (like a blockquote's depth), so a consumer
+                // reads the six-state vocabulary off the token instead of re-parsing the box character.
+                output.Add(new Token(
+                    lineStart + contentStart, taskEnd - contentStart, TokenType.TaskMarker, TokenRole.Marker,
+                    TaskStates.MarkText(state)));
                 contentStart = taskEnd;
             }
 
@@ -472,16 +476,19 @@ internal static class LineTokenizer
         return false;
     }
 
-    private static bool TryTaskMarker(string line, int start, int len, out int taskEnd)
+    private static bool TryTaskMarker(string line, int start, int len, out int taskEnd, out TaskState state)
     {
         taskEnd = start;
-        // [ ] or [x] or [X] followed by a space (or EOL).
-        if (start + 2 < len && line[start] == '[' && line[start + 2] == ']'
-            && (line[start + 1] is ' ' or 'x' or 'X'))
+        state = TaskState.NotStarted;
+
+        // A box holds one character of the task-state vocabulary — "[ ]", "[/]", "[?]", "[>]", "[x]", "[-]" —
+        // followed by a space (or EOL). Any other character is not a box: the brackets stay literal text.
+        if (start + 2 < len && line[start] == '[' && line[start + 2] == ']' && TaskStates.IsMark(line[start + 1]))
         {
             var after = start + 3;
             if (after >= len || line[after] == ' ')
             {
+                state = TaskStates.FromMark(line[start + 1]);
                 taskEnd = after < len ? after + 1 : after;
                 return true;
             }
