@@ -38,8 +38,8 @@ namespace Puffinote.Desktop.Controls;
 /// <list type="bullet">
 ///   <item>A <b>single click</b> opens a file / toggles a folder. The reason to click a note is almost always to
 ///   read it, so charging two clicks for it taxes every navigation in the app.</item>
-///   <item><b>Shift+click</b> selects without opening — how you target a file to rename, pin, or delete it
-///   without disturbing what you're reading.</item>
+///   <item><b>⌘+click</b> (macOS) / <b>Ctrl+click</b> (elsewhere) selects without opening — how you target a file
+///   to rename, pin, or delete it without disturbing what you're reading.</item>
 ///   <item>A <b>right click</b> selects the row under the pointer, so the context menu targets what was clicked.</item>
 /// </list>
 /// The <see cref="NotebookNode"/> model is unchanged; mutation actions (new/rename/delete) drive this through
@@ -61,8 +61,12 @@ internal sealed class FileTreeView : UserControl
     private DateTime _lastKeystroke = DateTime.MinValue;
 
     /// <summary>Whether the click currently in flight should activate its row, decided at press time from the
-    /// button and modifiers (a plain left click activates; Shift+click only selects).</summary>
+    /// button and modifiers (a plain left click activates; ⌘/Ctrl+click only selects).</summary>
     private bool _activateOnTap;
+
+    /// <summary>The row a select-only (⌘/Ctrl) click landed on, forced back into the selection once the ListBox
+    /// has finished with the event — see <see cref="OnListTapped"/>.</summary>
+    private Row? _selectOnlyRow;
 
     /// <summary>
     /// Whether the bare-key map follows macOS editor conventions (Return renames, Space/⌘↓ opens, ⌘↑ ascends,
@@ -87,6 +91,10 @@ internal sealed class FileTreeView : UserControl
         // targets what was clicked rather than whatever happened to be selected before. The same handler decides
         // whether the click that follows should also *activate* the row (see OnListPointerPressed).
         _list.AddHandler(PointerPressedEvent, OnListPointerPressed, RoutingStrategies.Tunnel);
+        // The select-only re-assert rides PointerReleased rather than Tapped because Tapped does *not* fire for
+        // the second click of a double-click (that raises DoubleTapped) — so a quick ⌘/Ctrl double-click on one
+        // row would otherwise leave the selection cleared by Avalonia's toggle handling. Released always fires.
+        _list.AddHandler(PointerReleasedEvent, OnListPointerReleased, RoutingStrategies.Bubble, handledEventsToo: true);
         _list.Tapped += OnListTapped;
 
         // The UserControl owns keyboard focus + the whole key map, so navigation is deterministic and
@@ -528,8 +536,9 @@ internal sealed class FileTreeView : UserControl
     /// <para>A <b>right</b> click just selects the row under the pointer, so the context menu always targets what
     /// was clicked. A plain <b>left</b> click selects <i>and</i> activates — opening a file, toggling a folder —
     /// because in a notes sidebar the overwhelmingly common reason to click a note is to read it, and making that
-    /// cost two clicks taxes every single navigation. Holding <b>Shift</b> selects without activating, which is
-    /// the escape hatch: it's how you highlight a file to rename, pin, or delete it without opening it first.</para>
+    /// cost two clicks taxes every single navigation. Holding the platform's command modifier
+    /// (<b>⌘</b> on macOS, <b>Ctrl</b> elsewhere — see <see cref="UseMacKeymap"/>) selects without activating: the
+    /// escape hatch for targeting a file to rename, pin, or delete without opening it first.</para>
     ///
     /// <para>The modifier is captured here rather than in the tap handler because Avalonia's tap events don't
     /// carry the keyboard state.</para>
@@ -538,10 +547,14 @@ internal sealed class FileTreeView : UserControl
     {
         var properties = e.GetCurrentPoint(_list).Properties;
         var row = (e.Source as Visual)?.FindAncestorOfType<ListBoxItem>();
+        _activateOnTap = false;
+        _selectOnlyRow = null;
 
+        // On macOS Ctrl+click *is* a right click, so the platform's select-only modifier has to be ⌘ there —
+        // and this branch runs first either way, so a Ctrl+click on a Mac opens the context menu as the OS
+        // intends rather than being read as a select-only click.
         if (properties.IsRightButtonPressed)
         {
-            _activateOnTap = false;
             if (row is { DataContext: Row hit })
             {
                 _list.SelectedItem = hit;
@@ -550,9 +563,38 @@ internal sealed class FileTreeView : UserControl
             return;
         }
 
-        _activateOnTap = properties.IsLeftButtonPressed
-                         && row is not null
-                         && !e.KeyModifiers.HasFlag(KeyModifiers.Shift);
+        if (!properties.IsLeftButtonPressed || row is not { DataContext: Row clicked })
+        {
+            return;
+        }
+
+        var selectOnly = e.KeyModifiers.HasFlag(UseMacKeymap ? KeyModifiers.Meta : KeyModifiers.Control);
+        if (selectOnly)
+        {
+            _selectOnlyRow = clicked;
+        }
+        else
+        {
+            _activateOnTap = true;
+        }
+    }
+
+    /// <summary>
+    /// Finish a select-only (⌘/Ctrl) click by <i>re-asserting</i> the selection.
+    ///
+    /// <para>Avalonia reads Ctrl as a <b>toggle</b> modifier, so Ctrl-clicking the already-selected row clears the
+    /// selection — the exact opposite of what a select-only click is for. Rather than fight the ListBox's own
+    /// selection logic mid-flight, let it run and put the selection back afterwards.</para>
+    /// </summary>
+    private void OnListPointerReleased(object? sender, PointerReleasedEventArgs e)
+    {
+        if (_selectOnlyRow is not { } row)
+        {
+            return;
+        }
+
+        _selectOnlyRow = null;
+        _list.SelectedItem = row;
     }
 
     /// <summary>Complete a plain left click by activating the row it landed on (see <see cref="OnListPointerPressed"/>).</summary>

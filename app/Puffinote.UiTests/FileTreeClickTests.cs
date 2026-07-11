@@ -13,12 +13,15 @@ namespace Puffinote.UiTests;
 
 /// <summary>
 /// The sidebar's mouse map. A single click opens — the reason to click a note is almost always to read it, so
-/// charging two clicks for it taxes every navigation — and Shift+click selects without opening, which is how
+/// charging two clicks for it taxes every navigation — and ⌘/Ctrl+click selects without opening, which is how
 /// you target a file to rename, pin, or delete without disturbing what you're reading.
 /// </summary>
 public sealed class FileTreeClickTests : IDisposable
 {
     private readonly DirectoryInfo _notebook = Directory.CreateTempSubdirectory("puffinote-click");
+
+    /// <summary>The select-only modifier under the non-Mac keymap these tests run with: Ctrl (⌘ on macOS).</summary>
+    private const RawInputModifiers SelectOnly = RawInputModifiers.Control;
 
     public void Dispose() => _notebook.Delete(recursive: true);
 
@@ -29,7 +32,7 @@ public sealed class FileTreeClickTests : IDisposable
         File.WriteAllText(Path.Combine(_notebook.FullName, "sub", "child.md"), "");
         File.WriteAllText(Path.Combine(_notebook.FullName, "apple.md"), "");
 
-        var tree = new FileTreeView();
+        var tree = new FileTreeView { UseMacKeymap = false }; // pin the keymap so SelectOnly is Ctrl on any host
         var window = new Window { Width = 300, Height = 400, Content = tree };
         window.Show();
         tree.SetRoot(new NotebookNode(_notebook.FullName, isDirectory: true));
@@ -112,26 +115,40 @@ public sealed class FileTreeClickTests : IDisposable
     }
 
     [AvaloniaFact]
-    public void Shift_click_selects_without_opening()
+    public void Command_click_selects_without_opening()
     {
         var (tree, window) = Open();
         string? activated = null;
         tree.FileActivated += node => activated = node.Name;
 
-        Click(window, "apple.md", RawInputModifiers.Shift);
+        Click(window, "apple.md", SelectOnly);
 
         Assert.Equal("apple.md", tree.SelectedNameForTest); // selected...
         Assert.Null(activated);                            // ...but not opened
     }
 
     [AvaloniaFact]
-    public void Shift_click_on_a_folder_selects_it_without_toggling()
+    public void Command_click_on_a_folder_selects_it_without_toggling()
     {
         var (tree, window) = Open();
 
-        Click(window, "sub", RawInputModifiers.Shift);
+        Click(window, "sub", SelectOnly);
 
         Assert.Equal("sub", tree.SelectedNameForTest);
         Assert.DoesNotContain("child.md", tree.VisibleNamesForTest); // still collapsed
+    }
+
+    [AvaloniaFact]
+    public void Command_click_on_the_already_selected_row_keeps_it_selected()
+    {
+        // Avalonia reads Ctrl as a *toggle* modifier, so without re-asserting the selection this would clear it —
+        // the exact opposite of what a select-only click is for.
+        var (tree, window) = Open();
+
+        Click(window, "apple.md", SelectOnly);
+        Assert.Equal("apple.md", tree.SelectedNameForTest);
+
+        Click(window, "apple.md", SelectOnly); // again, on the row that is already selected
+        Assert.Equal("apple.md", tree.SelectedNameForTest);
     }
 }
