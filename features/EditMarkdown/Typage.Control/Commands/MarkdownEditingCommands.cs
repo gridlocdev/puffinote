@@ -61,8 +61,10 @@ public static class MarkdownEditingCommands
             new("format.h6", "Heading 6", "Make this line a level-6 heading.", Shortcut.Cmd(Key.D6), () => ed.ApplyHeading(6), isActive: () => ed.CaretHeadingLevel == 6),
             new("format.paragraph", "Paragraph", "Remove the heading from this line.", Shortcut.Cmd(Key.D0), ed.SetParagraph, icon: "remove-formatting"),
 
-            new("insert.codeBlock", "Code Block", "Insert a fenced code block.", Shortcut.Cmd(Key.E, KeyModifiers.Shift), ed.InsertCodeBlock),
-            new("insert.hr", "Horizontal Rule", "Insert a horizontal rule.", null, ed.InsertHorizontalRule),
+            // "square-code" is the inline-code chevrons boxed in — the box is what says *block* rather than
+            // inline; "minus" is the rule itself.
+            new("insert.codeBlock", "Code Block", "Insert a fenced code block.", Shortcut.Cmd(Key.E, KeyModifiers.Shift), ed.InsertCodeBlock, icon: "square-code"),
+            new("insert.hr", "Horizontal Rule", "Insert a horizontal rule.", null, ed.InsertHorizontalRule, icon: "minus"),
         ];
     }
 }

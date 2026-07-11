@@ -27,7 +27,8 @@ internal sealed class MarkdownCommandBar : UserControl
         _byId = commands.ToDictionary(c => c.Id);
 
         // Each group's whole toolset — the inline primary icons are the first three; the rest fall into the
-        // group's dropdown. Headings and Insert are pure dropdowns (their commands share an icon or have none).
+        // group's dropdown. Headings and Insert stay pure dropdowns: a labelled picker names what you're
+        // choosing, which an icon row can't do for six near-identical headings or two one-shot inserts.
         // The union across groups is every formatting command the bar surfaces.
         string[] text = ["format.bold", "format.italic", "format.strike", "format.highlight", "format.code"];
         string[] headings = ["format.h1", "format.h2", "format.h3", "format.h4", "format.h5", "format.h6", "format.paragraph"];

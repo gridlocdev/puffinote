@@ -3,6 +3,7 @@ using Avalonia.Headless.XUnit;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
 using Puffinote.Components.Controls.CommandBar;
+using Puffinote.Components.Controls.Icons;
 using Typage.Control.Controls;
 using Typage.Control.Views;
 using Xunit;
@@ -35,6 +36,30 @@ public class MarkdownCommandBarTests
         Assert.Contains("format.h4", bar.SurfacedIdsForTest);
         Assert.Contains("format.h6", bar.SurfacedIdsForTest);
         Assert.Contains("format.removeTask", bar.SurfacedIdsForTest);
+    }
+
+    [AvaloniaFact] // LucideIcons.Get resolves an avares:// resource, so it needs the Avalonia app (no window needed).
+    public void Every_command_icon_resolves_to_a_vendored_glyph()
+    {
+        // An unvendored (or misspelled) key doesn't throw — it draws nothing, leaving a blank slot in the
+        // dropdown. That silence is what let Code Block and Horizontal Rule ship icon-less, so pin it.
+        foreach (var command in new MarkdownEditorView().EditingCommands)
+        {
+            if (command.Icon is null)
+            {
+                continue;
+            }
+
+            Assert.True(LucideIcons.Get(command.Icon) is not null, $"{command.Id} references missing icon '{command.Icon}'");
+        }
+    }
+
+    [AvaloniaFact]
+    public void TheInsertCommands_HaveIcons()
+    {
+        var byId = new MarkdownEditorView().EditingCommands.ToDictionary(c => c.Id);
+        Assert.Equal("square-code", byId["insert.codeBlock"].Icon);
+        Assert.Equal("minus", byId["insert.hr"].Icon);
     }
 
     [AvaloniaFact]
