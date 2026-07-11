@@ -1,3 +1,4 @@
+using System.Text.RegularExpressions;
 using Typage.Engine.Document;
 using Typage.Engine.Html;
 using Xunit;
@@ -80,9 +81,32 @@ public class HtmlRendererTests
     [Fact]
     public void TaskList_RendersCheckboxes()
     {
+        // The export draws the same lamp the editor does — a state class per item, and the state's own symbol —
+        // rather than an <input type=checkbox>, which can only say done or not (PRD §8.3.2).
         var html = Body("- [ ] todo\n- [x] done");
-        Assert.Contains("<input type=\"checkbox\" disabled>", html);
-        Assert.Contains("<input type=\"checkbox\" disabled checked>", html);
+        Assert.Contains("<li class=\"task t-not\">", html);
+        Assert.Contains("<li class=\"task t-done\">", html);
+        Assert.Contains("aria-label=\"Not started\"", html);
+        Assert.Contains("aria-label=\"Done\"", html);
+        Assert.Contains("<span class=\"ttext\">todo</span>", html);
+    }
+
+    [Fact]
+    public void TaskList_RendersEveryState()
+    {
+        var html = Body("- [ ] a\n- [/] b\n- [?] c\n- [>] d\n- [x] e\n- [-] f");
+        foreach (var (cls, label) in new[]
+        {
+            ("t-not", "Not started"), ("t-prog", "In progress"), ("t-block", "Blocked"),
+            ("t-defer", "Deferred"), ("t-done", "Done"), ("t-cancel", "Cancelled"),
+        })
+        {
+            Assert.Contains($"<li class=\"task {cls}\">", html);
+            Assert.Contains($"aria-label=\"{label}\"", html);
+        }
+
+        // The five lit states draw a symbol; the un-lit one is an empty ring, so it draws none.
+        Assert.Equal(5, Regex.Matches(html, "<svg").Count);
     }
 
     [Fact]

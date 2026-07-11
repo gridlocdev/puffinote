@@ -257,10 +257,12 @@ public static class HtmlRenderer
             var hasTask = tokens.Count > 1 && tokens[1].Type == TokenType.TaskMarker;
             if (hasTask)
             {
-                var marker = doc.GetText(tokens[1].Start, tokens[1].Length);
-                var done = marker.Contains('x') || marker.Contains('X');
-                sb.Append("<li class=\"task\"><input type=\"checkbox\" disabled");
-                sb.Append(done ? " checked>" : ">");
+                // Six states, not a bit — so the export draws the same coloured lamp the editor does rather than
+                // an <input type=checkbox>, which can only say done or not (PRD §8.3.2). The item's text is
+                // wrapped so a resolved item can be struck through without the rule crossing its lamp.
+                var state = TaskStates.FromMark(tokens[1].Meta is { Length: > 0 } m ? m[0] : ' ');
+                sb.Append("<li class=\"task ").Append(TaskClass(state)).Append("\"><span class=\"tbox\" role=\"img\" aria-label=\"");
+                sb.Append(TaskStates.Label(state)).Append("\">").Append(TaskGlyph(state)).Append("</span><span class=\"ttext\">");
             }
             else
             {
@@ -268,6 +270,11 @@ public static class HtmlRenderer
             }
 
             RenderInline(doc, tokens, sb);
+            if (hasTask)
+            {
+                sb.Append("</span>");
+            }
+
             i++;
 
             // A deeper-indented run immediately below is a nested list inside this item.
@@ -623,6 +630,42 @@ public static class HtmlRenderer
         return Escape(s).Replace("\"", "&quot;", StringComparison.Ordinal);
     }
 
+    /// <summary>The CSS class that carries a task item's state colour (see <see cref="DefaultCss"/>).</summary>
+    private static string TaskClass(TaskState state) => state switch
+    {
+        TaskState.InProgress => "t-prog",
+        TaskState.Blocked => "t-block",
+        TaskState.Deferred => "t-defer",
+        TaskState.Done => "t-done",
+        TaskState.Cancelled => "t-cancel",
+        _ => "t-not",
+    };
+
+    /// <summary>
+    /// The symbol drawn inside a task item's circular lamp, as inline SVG in <c>currentColor</c> (the lamp's ring
+    /// and tint come from the CSS). Not-started draws nothing — an un-lit lamp is an empty ring.
+    ///
+    /// <para>These are the export's copy of the shapes the editing surface draws (<c>Typage.Control</c>'s
+    /// <c>TaskGlyphs</c>): each surface owns its own presentation — the engine has no UI dependency and the
+    /// control has no HTML — so the two are written from the same six-symbol vocabulary, not shared code. Keep
+    /// them in step.</para>
+    /// </summary>
+    private static string TaskGlyph(TaskState state)
+    {
+        var path = state switch
+        {
+            // A disc filled to its meridian: work is half-done, and the shape says so at a glance.
+            TaskState.InProgress => """<path d="M12 3a9 9 0 0 1 0 18Z" fill="currentColor"/>""",
+            TaskState.Blocked => """<path d="M12 5.5v8" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/><circle cx="12" cy="18" r="1.5" fill="currentColor"/>""",
+            TaskState.Deferred => """<path d="M6 6l5 6-5 6M12 6l5 6-5 6" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"/>""",
+            TaskState.Done => """<path d="M5.5 12.5 10 17l8.5-10" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>""",
+            TaskState.Cancelled => """<path d="M7 7l10 10M17 7 7 17" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/>""",
+            _ => string.Empty,
+        };
+
+        return path.Length == 0 ? string.Empty : $"""<svg viewBox="0 0 24 24" fill="none" aria-hidden="true">{path}</svg>""";
+    }
+
     private const string DefaultCss = """
         :root { color-scheme: light dark; }
         body { max-width: 44rem; margin: 2rem auto; padding: 0 1rem;
@@ -637,7 +680,29 @@ public static class HtmlRenderer
         table { border-collapse: collapse; }
         th, td { border: 1px solid rgba(127,127,127,0.4); padding: 0.4em 0.7em; }
         .properties { color: #888; font-size: 0.85em; }
-        li.task { list-style: none; margin-left: -1.2em; }
         img { max-width: 100%; }
+
+        /* Task states (PRD §8.3.2). Two complementary pairs anchor the six hues: done/cancelled are the
+           resolved ends (finished vs. abandoned), in-progress/blocked the in-flight ones (flowing vs. stuck);
+           deferred is a cool violet (dormant, not dead) and not-started stays achromatic — the zero point. */
+        :root { --t-not:#6B7383; --t-prog:#1668D6; --t-block:#B26205;
+                --t-defer:#6D3FD1; --t-done:#12855A; --t-cancel:#C3352E; --t-off:#6E7781; }
+        @media (prefers-color-scheme: dark) {
+          :root { --t-not:#8B94A7; --t-prog:#3E9BFF; --t-block:#F49A38;
+                  --t-defer:#A184F7; --t-done:#33C77D; --t-cancel:#E1564F; --t-off:#9AA3B5; }
+        }
+        li.task { list-style: none; margin-left: -1.35em; }
+        li.task > .tbox { display: inline-flex; align-items: center; justify-content: center;
+                          width: 1.15em; height: 1.15em; margin-right: 0.45em; vertical-align: -0.22em;
+                          border: 1.5px solid currentColor; border-radius: 50%;
+                          background: rgba(127,127,127,0.10); color: var(--t-not); }
+        li.task > .tbox svg { width: 0.72em; height: 0.72em; display: block; }
+        li.t-not > .tbox { background: none; opacity: 0.75; }  /* an un-lit lamp: no hue, no glow */
+        li.t-prog > .tbox { color: var(--t-prog); }
+        li.t-block > .tbox { color: var(--t-block); }
+        li.t-defer > .tbox { color: var(--t-defer); }
+        li.t-done > .tbox { color: var(--t-done); }
+        li.t-cancel > .tbox { color: var(--t-cancel); }
+        li.t-done > .ttext, li.t-cancel > .ttext { color: var(--t-off); text-decoration: line-through; }
         """;
 }
