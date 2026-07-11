@@ -107,7 +107,6 @@ internal sealed class BlockLayoutBuilder
             var lineText = doc.GetText(lineStart, doc.GetLineEnd(line) - lineStart).TrimEnd('\r');
             var headingLevel = HeadingLevel(line);
             lastHeading = headingLevel;
-            var hasTask = _model.LineTokens(line).Any(t => t.Type == TokenType.TaskMarker);
             // The text of an inline link [text](url) is tokenized as ordinary content (the engine recurses
             // into it), so to render it like an HTML hyperlink we colour + underline any content that falls
             // inside the link-text span — the gap between the opening "[" and the "](" of each link node.
@@ -145,12 +144,13 @@ internal sealed class BlockLayoutBuilder
                 {
                     // A concealed line-prefix marker may render as a synthetic decoration (bullet, checkbox,
                     // quote bar, rule) that keeps the content's hanging indent; otherwise it just vanishes.
-                    var (deco, width) = DecorationFor(t, lineText, sLine, enLine, hasTask, style);
+                    var (deco, width) = DecorationFor(t, lineText, sLine, enLine, style);
                     var decoText = string.Empty;
 
                     // An ordered-list marker hides its literal digits and shows a number computed from the
-                    // list's structure (items 4 & 5). Raw-source mode shows the literal source digits.
-                    if (t.Type == TokenType.ListMarker && !hasTask
+                    // list's structure (items 4 & 5). Raw-source mode shows the literal source digits. A task
+                    // marker after it doesn't suppress the number — a numbered task shows both ("1. ☐ step").
+                    if (t.Type == TokenType.ListMarker
                         && _orderedMarkerText(line, lineText, sLine, enLine) is { } ordinalText)
                     {
                         decoText = ordinalText;
@@ -420,17 +420,16 @@ internal sealed class BlockLayoutBuilder
     }
 
     /// <summary>The synthetic decoration (and its gutter width) that replaces concealed marker <paramref name="t"/>, if any.</summary>
-    private (DecorationKind Kind, double Width) DecorationFor(Token t, string lineText, int s, int en, bool hasTask, RunStyle style)
+    private (DecorationKind Kind, double Width) DecorationFor(Token t, string lineText, int s, int en, RunStyle style)
     {
         var text = lineText[s..en];
         switch (t.Type)
         {
             case TokenType.ListMarker:
-                if (hasTask)
-                {
-                    return (DecorationKind.None, 0); // the checkbox represents the whole item
-                }
-
+                // A task item keeps its list marker: the checkbox says whether the item is done, the bullet /
+                // number says it is an item of this list. Suppressing the marker here dropped the bullet, and
+                // (with the ordered branch in Build gated the same way) made a numbered task lose its number
+                // entirely — "1. [ ] step" rendered as a bare checkbox, orphaned from its list.
                 var bullet = text.TrimStart(' ');
                 return bullet.Length > 0 && bullet[0] is '-' or '*' or '+'
                     ? (DecorationKind.Bullet, _measurer.MeasureWidth(text, style))

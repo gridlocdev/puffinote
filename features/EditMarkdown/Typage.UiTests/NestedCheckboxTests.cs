@@ -19,11 +19,10 @@ public class NestedCheckboxTests
         return e;
     }
 
-    private static DecorationKind? DecorationOn(MarkdownEditor e, int line) =>
-        e.BuildVisualLineForTest(line).Runs
+    private static DecorationKind[] DecorationsOn(MarkdownEditor e, int line) =>
+        [.. e.BuildVisualLineForTest(line).Runs
             .Where(r => r.Kind == VisualRunKind.Decoration)
-            .Select(r => (DecorationKind?)r.Decoration)
-            .FirstOrDefault();
+            .Select(r => r.Decoration)];
 
     private static double TextX(MarkdownEditor e, int line, string contains) =>
         e.BuildVisualLineForTest(line).Runs.First(r => r.Kind == VisualRunKind.Text && r.Text.Contains(contains)).X;
@@ -34,8 +33,8 @@ public class NestedCheckboxTests
     public void NestedTask_RendersACheckbox_IndentedPastTheParent()
     {
         var e = new MarkdownEditor { Text = "- [ ] top\n  - [ ] sub" };
-        Assert.Equal(DecorationKind.CheckboxUnchecked, DecorationOn(e, 0));
-        Assert.Equal(DecorationKind.CheckboxUnchecked, DecorationOn(e, 1)); // the nested item also shows a checkbox
+        Assert.Equal([DecorationKind.Bullet, DecorationKind.CheckboxUnchecked], DecorationsOn(e, 0));
+        Assert.Equal([DecorationKind.Bullet, DecorationKind.CheckboxUnchecked], DecorationsOn(e, 1)); // nested too
         Assert.True(TextX(e, 1, "sub") > TextX(e, 0, "top"), "the nested task's text should hang further right");
     }
 
@@ -46,8 +45,8 @@ public class NestedCheckboxTests
         // relative to their own gutter — i.e. nesting is the leading indentation, same mechanism for both.
         var task = new MarkdownEditor { Text = "  - [ ] x" };
         var bullet = new MarkdownEditor { Text = "  - x" };
-        Assert.Equal(DecorationKind.CheckboxUnchecked, DecorationOn(task, 0));
-        Assert.Equal(DecorationKind.Bullet, DecorationOn(bullet, 0));
+        Assert.Equal([DecorationKind.Bullet, DecorationKind.CheckboxUnchecked], DecorationsOn(task, 0));
+        Assert.Equal([DecorationKind.Bullet], DecorationsOn(bullet, 0));
     }
 
     // ----- subtree reorder -----

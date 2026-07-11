@@ -97,11 +97,37 @@ public class DecorationTests
     }
 
     [AvaloniaFact]
-    public void TaskMarker_RendersACheckbox_AndNoBullet()
+    public void TaskMarker_RendersItsListMarker_AndACheckbox()
     {
-        Assert.Equal(DecorationKind.CheckboxUnchecked, DecorationOn(CaretOffLine0("- [ ] todo\nx"), 0));
-        Assert.Equal(DecorationKind.CheckboxChecked, DecorationOn(CaretOffLine0("- [x] done\nx"), 0));
+        // A task item keeps its list marker: the bullet/number says it belongs to this list, the checkbox says
+        // whether it's done. Both are drawn, marker first.
+        Assert.Equal([DecorationKind.Bullet, DecorationKind.CheckboxUnchecked], DecorationsOn(CaretOffLine0("- [ ] todo\nx"), 0));
+        Assert.Equal([DecorationKind.Bullet, DecorationKind.CheckboxChecked], DecorationsOn(CaretOffLine0("- [x] done\nx"), 0));
     }
+
+    [AvaloniaFact]
+    public void NumberedTask_KeepsItsNumber_AlongsideTheCheckbox()
+    {
+        // Regression: the ordered number used to vanish entirely on a numbered task, leaving a bare checkbox
+        // orphaned from its list — "1. [ ] step" rendered as if it were "- [ ] step".
+        var editor = CaretOffLine0("1. [ ] step\nx");
+        Assert.Equal([DecorationKind.OrderedNumber, DecorationKind.CheckboxUnchecked], DecorationsOn(editor, 0));
+        Assert.Equal("1. ", OrderedText(editor, 0));
+    }
+
+    [AvaloniaFact]
+    public void NumberedTasks_StillNumberSequentially()
+    {
+        var editor = CaretOffLine0("1. [ ] one\n1. [x] two\n1. [ ] three\n\nx");
+        Assert.Equal("1. ", OrderedText(editor, 0));
+        Assert.Equal("2. ", OrderedText(editor, 1));
+        Assert.Equal("3. ", OrderedText(editor, 2));
+    }
+
+    private static DecorationKind[] DecorationsOn(MarkdownEditor editor, int line) =>
+        [.. editor.BuildVisualLineForTest(line).Runs
+            .Where(r => r.Kind == VisualRunKind.Decoration)
+            .Select(r => r.Decoration)];
 
     private static double CheckboxWidth(MarkdownEditor e) =>
         e.BuildVisualLineForTest(0).Runs
@@ -121,10 +147,33 @@ public class DecorationTests
     [AvaloniaFact]
     public void ClickingTheCheckboxGlyph_TogglesTheTask()
     {
+        // Target the checkbox specifically — it now sits after the bullet, so "the first decoration" is the
+        // bullet, and this also pins that the glyph stays clickable wherever the layout puts it.
         var editor = CaretOffLine0("- [ ] todo\nx");
-        var box = editor.BuildVisualLineForTest(0).Runs.First(r => r.Kind == VisualRunKind.Decoration);
+        var box = editor.BuildVisualLineForTest(0).Runs
+            .First(r => r.Decoration is DecorationKind.CheckboxChecked or DecorationKind.CheckboxUnchecked);
         Assert.True(editor.ToggleTaskClickForTest(0, box.X + box.Width / 2));
         Assert.StartsWith("- [x] todo", editor.Text);
+    }
+
+    [AvaloniaFact]
+    public void ClickingTheBulletOfATask_DoesNotToggleIt()
+    {
+        // The bullet is not the checkbox: clicking it places the caret rather than flipping the box.
+        var editor = CaretOffLine0("- [ ] todo\nx");
+        var bullet = editor.BuildVisualLineForTest(0).Runs.First(r => r.Decoration == DecorationKind.Bullet);
+        Assert.False(editor.ToggleTaskClickForTest(0, bullet.X + bullet.Width / 2));
+        Assert.StartsWith("- [ ] todo", editor.Text);
+    }
+
+    [AvaloniaFact]
+    public void ClickingTheCheckboxOfANumberedTask_TogglesIt()
+    {
+        var editor = CaretOffLine0("1. [ ] step\nx");
+        var box = editor.BuildVisualLineForTest(0).Runs
+            .First(r => r.Decoration is DecorationKind.CheckboxChecked or DecorationKind.CheckboxUnchecked);
+        Assert.True(editor.ToggleTaskClickForTest(0, box.X + box.Width / 2));
+        Assert.StartsWith("1. [x] step", editor.Text);
     }
 
     [AvaloniaFact]
