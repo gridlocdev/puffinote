@@ -22,20 +22,25 @@ public sealed class PuffinoteTheme : IAppTheme
         IBrush accentBrush = new ImmutableSolidColorBrush(accent);
         IBrush accentSubtle = new ImmutableSolidColorBrush(Color.FromArgb(0x33, accent.R, accent.G, accent.B));
 
+        // MutedText carries real information — inactive tab titles, file names in the tree, the sidebar header —
+        // so it has to clear WCAG 1.4.3's 4.5:1 for body text, not merely look secondary. The old #888888 sat at
+        // ~4.7:1 on the #252526 chrome: passing on paper, but with no margin, and it fell *below* threshold
+        // anywhere the surface lightened. #9BA1A6 lifts it to ~6.5:1 while still reading a clear step back from
+        // the primary text. SurfaceBorder likewise has to clear 3:1 as a UI boundary (1.4.11), not just be visible.
         Dark = new ThemePalette(
             Accent: accentBrush,
             AccentSubtle: accentSubtle,
             Surface: new ImmutableSolidColorBrush(Color.FromRgb(0x2A, 0x2C, 0x31)),
-            SurfaceBorder: new ImmutableSolidColorBrush(Color.FromRgb(0x3A, 0x3A, 0x3E)),
-            MutedText: new ImmutableSolidColorBrush(Color.FromRgb(0x88, 0x88, 0x88)),
+            SurfaceBorder: new ImmutableSolidColorBrush(Color.FromRgb(0x4C, 0x4F, 0x55)),
+            MutedText: new ImmutableSolidColorBrush(Color.FromRgb(0x9B, 0xA1, 0xA6)),
             Scrim: ScrimBrush);
 
         Light = new ThemePalette(
             Accent: accentBrush,
             AccentSubtle: accentSubtle,
             Surface: new ImmutableSolidColorBrush(Colors.White),
-            SurfaceBorder: new ImmutableSolidColorBrush(Color.FromRgb(0xD0, 0xD0, 0xD4)),
-            MutedText: new ImmutableSolidColorBrush(Color.FromRgb(0x6A, 0x6A, 0x6A)),
+            SurfaceBorder: new ImmutableSolidColorBrush(Color.FromRgb(0xBF, 0xC3, 0xC9)),
+            MutedText: new ImmutableSolidColorBrush(Color.FromRgb(0x5C, 0x63, 0x6B)),
             Scrim: ScrimBrush);
     }
 

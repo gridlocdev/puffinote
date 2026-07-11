@@ -1,4 +1,5 @@
 using Avalonia;
+using Avalonia.Automation;
 using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Layout;
@@ -53,14 +54,19 @@ internal sealed class FilesPanel : ISidebarPanel
 
         var palette = Tokens.Dark;
 
+        // "Pinned folders" said what the chips *are* but not what they *do*, and since a pinned folder also
+        // appears in the tree below, the same name showed up twice with no explained difference — is this a
+        // filter, a shortcut, a duplicate? They are scope filters: clicking one re-roots the tree at that folder,
+        // and "All notes" resets it. Naming them for their effect is the whole fix.
         var pinnedLabel = new TextBlock
         {
-            Text = "PINNED FOLDERS",
-            FontSize = 10,
-            FontWeight = FontWeight.Bold,
+            Text = "Show only",
+            FontSize = 11,
+            FontWeight = FontWeight.SemiBold,
             Foreground = palette.MutedText,
             Margin = new Thickness(2, 0, 0, 7),
         };
+        ToolTip.SetTip(pinnedLabel, "Pinned folders. Click one to narrow the tree below to it.");
         _chips.Margin = new Thickness(0);
         var header = new StackPanel
         {
@@ -245,13 +251,17 @@ internal sealed class FilesPanel : ISidebarPanel
             Child = text,
             Tag = path,
             CornerRadius = new CornerRadius(11),
-            BorderThickness = new Thickness(1),
+            BorderThickness = new Thickness(active ? 2 : 1), // the active filter is thicker, not only brighter
             Padding = new Thickness(11, 5),
+            MinHeight = 26,
             Margin = new Thickness(0, 0, 6, 6),
             Background = active ? palette.AccentSubtle : Brushes.Transparent,
             BorderBrush = active ? palette.Accent : palette.SurfaceBorder,
             Cursor = new Cursor(StandardCursorType.Hand),
         };
+        ToolTip.SetTip(chip, path is null ? "Show the whole notebook" : $"Show only {label}");
+        AutomationProperties.SetName(chip, label);
+        AutomationProperties.SetHelpText(chip, active ? "selected" : null);
 
         if (path is null)
         {

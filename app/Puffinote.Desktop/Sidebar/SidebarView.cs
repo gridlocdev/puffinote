@@ -1,4 +1,5 @@
 using Avalonia;
+using Avalonia.Automation;
 using Avalonia.Controls;
 using Avalonia.Layout;
 using Avalonia.Media;
@@ -20,11 +21,16 @@ internal sealed class SidebarView : UserControl
     private readonly RecentPanel _recent = new();
     private readonly List<ISidebarPanel> _panels;
 
+    // Normal case, not caps. All-caps costs legibility — it flattens the word-shapes a reader scans by — and a
+    // folder name is content, not a label. Letter-spacing and weight carry the "this is a header" job instead.
+    // Long names ellipsize rather than overflowing the sidebar, with the full path on hover.
     private readonly TextBlock _header = new()
     {
-        Text = "NO NOTEBOOK OPEN",
-        FontSize = 11,
+        Text = "No notebook open",
+        FontSize = 12,
         FontWeight = FontWeight.SemiBold,
+        LetterSpacing = 0.3,
+        TextTrimming = TextTrimming.CharacterEllipsis,
         Margin = new Thickness(12, 8),
     };
     private readonly StackPanel _switcher = new()
@@ -110,7 +116,8 @@ internal sealed class SidebarView : UserControl
     /// <summary>Rebuild for a newly opened notebook: header text + the file tree (or clear when null).</summary>
     public void SetRoot(NotebookNode? root)
     {
-        _header.Text = root is { } r ? r.Name.ToUpperInvariant() : "NO NOTEBOOK OPEN";
+        _header.Text = root is { } r ? r.Name : "No notebook open";
+        ToolTip.SetTip(_header, root?.Path); // the full path is one hover away, without shouting it in the header
         _files.SetRoot(root);
     }
 
@@ -162,8 +169,12 @@ internal sealed class SidebarView : UserControl
                 Content = panel.Title,
                 Tag = panel.Id,
                 Background = Brushes.Transparent,
-                BorderThickness = new Thickness(0),
-                Padding = new Thickness(8, 4),
+                // Room for the active item's underline. Reserved on every item, active or not, so switching
+                // panels doesn't shift the row by two pixels.
+                BorderThickness = new Thickness(0, 0, 0, 2),
+                BorderBrush = Brushes.Transparent,
+                Padding = new Thickness(10, 5),
+                MinHeight = 28, // a real pointer target (WCAG 2.2 §2.5.8); these were as small as their text
                 FontSize = 12,
             };
             button.Click += (_, _) => Activate(panel.Id);
@@ -173,6 +184,14 @@ internal sealed class SidebarView : UserControl
         RefreshSwitcher();
     }
 
+    /// <summary>
+    /// Light the active nav item — with an underline, not just a colour.
+    ///
+    /// <para>Colour was previously the <i>only</i> thing distinguishing the active panel from the other three,
+    /// which leaves a user with a colour-vision deficiency no signal at all (WCAG 2.2 §1.4.1, Use of Color). The
+    /// active document tab already carries a non-colour indicator; this mirrors it, so the two "you are here"
+    /// signals in the shell are spelled the same way.</para>
+    /// </summary>
     private void RefreshSwitcher()
     {
         var palette = Tokens.Dark;
@@ -181,6 +200,8 @@ internal sealed class SidebarView : UserControl
             bool active = (string?)button.Tag == _active.Id;
             button.Foreground = active ? palette.Accent : palette.MutedText;
             button.FontWeight = active ? FontWeight.SemiBold : FontWeight.Normal;
+            button.BorderBrush = active ? palette.Accent : Brushes.Transparent;
+            AutomationProperties.SetHelpText(button, active ? "selected" : null);
         }
     }
 

@@ -14,8 +14,15 @@ public sealed class NotebookNode
     {
         Path = path;
         IsDirectory = isDirectory;
-        // A drive root (e.g. "/") has no file name; fall back to the full path so it still shows.
-        var name = System.IO.Path.GetFileName(path);
+
+        // Trim trailing separators first. Path.GetFileName("/Users/ada/notes/") returns the *empty string*, not
+        // "notes" — so a path that merely ended in a slash fell through to the fallback below and took the whole
+        // absolute path as its display name. That is why the sidebar header read "/USERS/ADA/NOTES" instead of
+        // "notes": not a styling choice, a bug.
+        var trimmed = path.TrimEnd(System.IO.Path.DirectorySeparatorChar, System.IO.Path.AltDirectorySeparatorChar);
+
+        // A true root (e.g. "/" or "C:\") has no file name even after trimming; fall back to the path so it still shows.
+        var name = System.IO.Path.GetFileName(trimmed);
         Name = string.IsNullOrEmpty(name) ? path : name;
     }
 

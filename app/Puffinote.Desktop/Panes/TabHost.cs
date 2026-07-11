@@ -1,4 +1,5 @@
 using Avalonia;
+using Avalonia.Automation;
 using Avalonia.Controls;
 using Avalonia.Layout;
 using Avalonia.Media;
@@ -355,25 +356,45 @@ internal sealed class TabHost : UserControl
             Content = tab.Pane.Title + (tab.Pane.IsDirty ? " •" : string.Empty),
             Background = Brushes.Transparent,
             BorderThickness = new Avalonia.Thickness(0),
-            Padding = new Avalonia.Thickness(8, 4),
+            Padding = new Avalonia.Thickness(10, 5),
+            MinHeight = 28,
             Foreground = active ? palette.Accent : palette.MutedText,
         };
         label.Click += (_, _) => Activate(tab);
+        ToolTip.SetTip(label, tab.Pane.Title);
 
+        // The close button was a bare "✕" glyph with 4px of horizontal padding and *no* vertical padding — its
+        // hit box was barely larger than the ink of the character. It is also the one control on the strip where
+        // a misclick is destructive (it can trigger a save prompt, or discard), so it gets a real target: 22×22,
+        // which clears the WCAG 2.2 §2.5.8 minimum with room to spare, plus a tooltip saying what it does.
         var close = new Button
         {
             Content = "✕",
             Background = Brushes.Transparent,
             BorderThickness = new Avalonia.Thickness(0),
-            Padding = new Avalonia.Thickness(4, 0),
+            Padding = new Avalonia.Thickness(0),
+            Width = 22,
+            Height = 22,
+            CornerRadius = new CornerRadius(4),
+            HorizontalContentAlignment = HorizontalAlignment.Center,
+            VerticalContentAlignment = VerticalAlignment.Center,
+            VerticalAlignment = VerticalAlignment.Center,
+            Margin = new Avalonia.Thickness(0, 0, 4, 0),
+            FontSize = 11,
             Foreground = palette.MutedText,
         };
         close.Click += (_, _) => _ = CloseAsync(tab);
+        ToolTip.SetTip(close, $"Close {tab.Pane.Title}");
+        AutomationProperties.SetName(close, $"Close {tab.Pane.Title}");
 
         return new Border
         {
             Background = active ? palette.AccentSubtle : Brushes.Transparent,
             CornerRadius = new CornerRadius(4),
+            // The active tab is already marked by colour *and* a background tint *and* the dirty dot; the
+            // underline makes it a fourth, non-colour channel, and matches how the sidebar's nav marks itself.
+            BorderThickness = new Avalonia.Thickness(0, 0, 0, 2),
+            BorderBrush = active ? palette.Accent : Brushes.Transparent,
             Child = new StackPanel
             {
                 Orientation = Orientation.Horizontal,

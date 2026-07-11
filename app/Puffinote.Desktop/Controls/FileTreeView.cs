@@ -1,11 +1,13 @@
 using Avalonia;
 using Avalonia.Automation;
 using Avalonia.Controls;
+using Avalonia.Controls.Presenters;
 using Avalonia.Controls.Templates;
 using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.Layout;
 using Avalonia.Media;
+using Avalonia.Styling;
 using Avalonia.VisualTree;
 using Puffinote.Components.Controls.Icons;
 using Puffinote.Components.Theming;
@@ -66,6 +68,7 @@ internal sealed class FileTreeView : UserControl
             Focusable = false, // keyboard focus lives on the UserControl (below); the list is pointer-driven only
             ItemTemplate = new FuncDataTemplate<Row>((row, _) => BuildRow(row), supportsRecycling: true),
         };
+        StyleSelectionWithTheAccent(_list);
         _list.SelectionChanged += (_, _) => SelectionChanged?.Invoke(SelectedNode);
         _list.DoubleTapped += (_, _) => ActivateSelected();
         _list.ContextMenu = BuildContextMenu();
@@ -228,6 +231,35 @@ internal sealed class FileTreeView : UserControl
         }
     }
 
+    /// <summary>
+    /// Paint row selection with the app's accent.
+    ///
+    /// <para>This list never styled its own <see cref="ListBoxItem"/>s, so its selected row fell through to
+    /// FluentTheme's default system accent — <b>blue</b> — while every hand-built surface in the shell (the
+    /// active tab, the nav item, the pinned chips) reads the orange accent from <see cref="Tokens"/>. The same
+    /// state, "this is the current thing", was being said in two colours at once: the selected file showed blue
+    /// in the tree and orange in its tab. That reads as an accident, not a system.</para>
+    ///
+    /// <para>The fix isn't a token change — it's that the token was never applied here at all.</para>
+    /// </summary>
+    private static void StyleSelectionWithTheAccent(ListBox list)
+    {
+        var palette = Tokens.Dark;
+
+        static Style ItemBackground(Func<Selector?, Selector> selector, IBrush background) =>
+            new(x => selector(x).Template().OfType<ContentPresenter>().Name("PART_ContentPresenter"))
+            {
+                Setters = { new Setter(ContentPresenter.BackgroundProperty, background) },
+            };
+
+        // Selected (including when the list doesn't have focus — Avalonia drops :focus but keeps :selected).
+        list.Styles.Add(ItemBackground(x => x.OfType<ListBoxItem>().Class(":selected"), palette.AccentSubtle));
+        list.Styles.Add(ItemBackground(
+            x => x.OfType<ListBoxItem>().Class(":selected").Class(":pointerover"), palette.AccentSubtle));
+        list.Styles.Add(ItemBackground(
+            x => x.OfType<ListBoxItem>().Class(":pointerover"), palette.SurfaceBorder));
+    }
+
     private Control BuildRow(Row? row)
     {
         if (row is null)
@@ -236,14 +268,28 @@ internal sealed class FileTreeView : UserControl
         }
 
         var palette = Tokens.Dark;
+        var expanded = _expanded.Contains(row.Node.Path);
 
-        // A folder gets a Lucide glyph that reflects its disclosure state — folder-open when expanded, folder
-        // when collapsed — instead of a literal folder emoji or a bare chevron. Files reserve the same-width
-        // slot (drawn empty) so names stay aligned under their sibling folders.
+        // A disclosure chevron, ahead of the folder glyph. The folder/folder-open icon swap alone was too weak
+        // a signal to answer the question a tree has to answer at a glance: is this folder collapsed, or is it
+        // empty? An *expandable* folder gets a chevron that turns; an empty one gets none, and so reads as
+        // having nothing to open rather than as something the user failed to click. Files reserve the same slot
+        // (drawn empty) so every name stays aligned under its siblings.
+        var expandable = row.Node.IsDirectory && row.Node.EnumerateChildren().Count > 0;
+        Control disclosure = expandable
+            ? new LucideIcon
+            {
+                IconKey = expanded ? "chevron-down" : "chevron-right",
+                Size = 12,
+                Foreground = palette.MutedText,
+                VerticalAlignment = VerticalAlignment.Center,
+            }
+            : new Control { Width = 12 };
+
         Control glyph = row.Node.IsDirectory
             ? new LucideIcon
             {
-                IconKey = _expanded.Contains(row.Node.Path) ? "folder-open" : "folder",
+                IconKey = expanded ? "folder-open" : "folder",
                 Size = 15,
                 Foreground = palette.MutedText,
                 VerticalAlignment = VerticalAlignment.Center,
@@ -264,11 +310,20 @@ internal sealed class FileTreeView : UserControl
         var stack = new StackPanel
         {
             Orientation = Orientation.Horizontal,
-            Spacing = 7,
+            Spacing = 5,
+            MinHeight = 24, // a comfortable pointer target (WCAG 2.2 §2.5.8) — rows were as short as their text
             Margin = new Thickness(row.Depth * 14, 0, 0, 0),
-            Children = { glyph, name },
+            Children = { disclosure, glyph, name },
         };
+
+        // Say the disclosure state out loud, not only in the chevron: a screen reader gets "collapsed"/"expanded"
+        // rather than an unannotated row.
         AutomationProperties.SetName(stack, row.Node.Name);
+        if (expandable)
+        {
+            AutomationProperties.SetHelpText(stack, expanded ? "expanded" : "collapsed");
+        }
+
         return stack;
     }
 
