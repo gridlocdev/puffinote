@@ -11,6 +11,8 @@ namespace Typage.Control.Rendering;
 /// on the list's document structure). Passed to <see cref="BlockLayoutBuilder.Build"/> per call so the
 /// builder holds no long-lived control references.
 /// </summary>
+/// <param name="ListLevel">A list item's nesting level (0 for top-level) — like the ordinal, it depends on the
+/// list's document structure, so the control owns it.</param>
 /// <param name="OrderedMarkerText">Given <c>(line, lineText, sLine, enLine)</c>, the "N. " text to show for
 /// an ordered-list marker at that line-relative span, or <c>null</c> when it is not an ordered marker.</param>
 internal readonly record struct BlockLayoutContext(
@@ -22,6 +24,7 @@ internal readonly record struct BlockLayoutContext(
     bool MarkersRevealed,
     double WrapWidth,
     double CheckboxGutter,
+    Func<int, int> ListLevel,
     Func<int, string, int, int, string?> OrderedMarkerText);
 
 /// <summary>
@@ -48,6 +51,7 @@ internal sealed class BlockLayoutBuilder
     private bool _markersRevealed;
     private double _wrapWidth;
     private double _checkboxGutter;
+    private Func<int, int> _listLevel = null!;
     private Func<int, string, int, int, string?> _orderedMarkerText = null!;
 
     public BlockLayoutBuilder(TextMeasurer measurer) => _measurer = measurer;
@@ -69,6 +73,7 @@ internal sealed class BlockLayoutBuilder
         _markersRevealed = ctx.MarkersRevealed;
         _wrapWidth = ctx.WrapWidth;
         _checkboxGutter = ctx.CheckboxGutter;
+        _listLevel = ctx.ListLevel;
         _orderedMarkerText = ctx.OrderedMarkerText;
 
         var doc = _doc;
@@ -105,6 +110,7 @@ internal sealed class BlockLayoutBuilder
         for (var line = startLine; line <= endLine; line++)
         {
             var lineStart = doc.GetLineStart(line);
+            var lineOffset = lineStart - blockStart; // this line's first column, in block-relative terms
             var lineText = doc.GetText(lineStart, doc.GetLineEnd(line) - lineStart).TrimEnd('\r');
             var headingLevel = HeadingLevel(line);
             lastHeading = headingLevel;
@@ -112,6 +118,9 @@ internal sealed class BlockLayoutBuilder
             lastQuote = inQuote;
             var (orderedText, taskText) = ItemMarkers(line, lineStart, lineText);
             var hasTask = taskText.Length > 0;
+            // The inline nodes whose content draws a background chip (inline code, highlight) — their concealed
+            // markers hold that chip's side padding open instead of vanishing to zero width.
+            var chipPads = ChipPads(line);
             // The text of an inline link [text](url) is tokenized as ordinary content (the engine recurses
             // into it), so to render it like an HTML hyperlink we colour + underline any content that falls
             // inside the link-text span — the gap between the opening "[" and the "](" of each link node.
@@ -124,6 +133,19 @@ internal sealed class BlockLayoutBuilder
                 if (en <= s)
                 {
                     continue;
+                }
+
+                // A nested item's leading indentation is markup, not content. It lays out as a fixed step per
+                // nesting *level* (MarkdownTheme.IndentStep) instead of as the measured width of the spaces
+                // the author happened to type — which is what made the same depth of nesting indent a bullet
+                // (2 spaces), a number (3) and a task (2 or 6) by three different amounts. Raw-source and
+                // markers-revealed views show the literal whitespace, like every other piece of markup.
+                if (!_markersRevealed && t.Type == TokenType.ListMarker && s > pos && pos == lineOffset)
+                {
+                    segments.Add(new VisualLine.Segment(
+                        pos, s, DefaultStyle(headingLevel, inQuote), true,
+                        DecorationKind.ListIndent, _listLevel(line) * _theme.IndentStep));
+                    pos = s;
                 }
 
                 if (s > pos)
@@ -149,7 +171,7 @@ internal sealed class BlockLayoutBuilder
                 {
                     // A concealed line-prefix marker may render as a synthetic decoration (bullet, checkbox,
                     // quote bar, rule) that keeps the content's hanging indent; otherwise it just vanishes.
-                    var (deco, width) = DecorationFor(t, lineText, sLine, enLine, hasTask, style);
+                    var (deco, width) = DecorationFor(t, lineText, sLine, enLine, hasTask, chipPads);
                     var decoText = string.Empty;
 
                     // An ordered-list marker hides its literal digits and shows a number computed from the
@@ -479,12 +501,47 @@ internal sealed class BlockLayoutBuilder
         return baseStyle with { Typeface = new Typeface(tf.FontFamily, fontStyle, weight) };
     }
 
+    /// <summary>No inline node on this line draws a chip — the common case, shared so a line without one allocates nothing.</summary>
+    private static readonly Dictionary<int, double> NoChipPads = [];
+
+    /// <summary>
+    /// The inline nodes on <paramref name="line"/> whose <i>content</i> draws a background chip, mapped to the
+    /// horizontal padding that chip needs (<see cref="RunStyle.BackgroundPad"/>) — inline code and highlight. A
+    /// node's markers are concealed, so this is how a marker learns what its construct's chip needs from it.
+    /// </summary>
+    private Dictionary<int, double> ChipPads(int line)
+    {
+        Dictionary<int, double>? pads = null;
+        foreach (var t in _model.LineTokens(line))
+        {
+            if (t.Role != TokenRole.Content || t.Node == 0)
+            {
+                continue;
+            }
+
+            var pad = _theme.Resolve(t.Type).BackgroundPad;
+            if (pad > 0)
+            {
+                (pads ??= [])[t.Node] = pad;
+            }
+        }
+
+        return pads ?? NoChipPads;
+    }
+
     /// <summary>The synthetic decoration (and its gutter width) that replaces concealed marker <paramref name="t"/>, if any.</summary>
-    private (DecorationKind Kind, double Width) DecorationFor(Token t, string lineText, int s, int en, bool hasTask, RunStyle style)
+    private (DecorationKind Kind, double Width) DecorationFor(
+        Token t, string lineText, int s, int en, bool hasTask, Dictionary<int, double> chipPads)
     {
         var text = lineText[s..en];
         switch (t.Type)
         {
+            // The concealed backticks of `code` (or the "==" of a highlight). They draw nothing, but unlike every
+            // other hidden marker they don't collapse to zero width: they hold the chip's side padding open, so
+            // the chip is drawn into space of its own rather than over the tail of the word before it.
+            case TokenType.Marker when t.Node != 0 && chipPads.TryGetValue(t.Node, out var pad):
+                return (DecorationKind.ChipPad, pad);
+
             case TokenType.ListMarker:
                 var bullet = text.TrimStart(' ');
                 if (bullet.Length is 0 || bullet[0] is not ('-' or '*' or '+'))
@@ -501,13 +558,17 @@ internal sealed class BlockLayoutBuilder
                 // markers for the one item. (This is the asymmetry with a number, above.)
                 return hasTask
                     ? (DecorationKind.None, 0)
-                    : (DecorationKind.Bullet, _measurer.MeasureWidth(text, style));
+                    : (DecorationKind.Bullet, _theme.BulletGutter);
 
             case TokenType.TaskMarker:
                 return Checkbox(text);
 
             case TokenType.BlockquoteMarker:
-                return (DecorationKind.QuoteBar, _measurer.MeasureWidth(text, style));
+                // One step per '>' (the marker carries its depth in Meta), not the measured width of the source
+                // prefix: that barely grows with nesting, so a ">>" quote's text failed to clear the second bar
+                // drawn to its left. The bars are drawn on the same step, so the two stay in register.
+                var depth = int.TryParse(t.Meta, out var d) ? d : 1;
+                return (DecorationKind.QuoteBar, _theme.QuoteGutter(depth));
 
             case TokenType.HorizontalRule:
                 return (DecorationKind.HorizontalRule, 0); // an overlay rule; no advance (the line is otherwise empty)

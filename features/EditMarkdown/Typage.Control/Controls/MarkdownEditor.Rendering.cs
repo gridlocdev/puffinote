@@ -182,10 +182,12 @@ public partial class MarkdownEditor
                     var rect = new Rect(-8, BlockTop(q), width, BlockHeight(q));
                     context.FillRectangle(EditorTheme.QuoteBackground, rect);
 
+                    // One bar per level, on the same step the quote's text gutter hangs from
+                    // (MarkdownTheme.QuoteGutter), so the text always clears every bar drawn to its left.
                     var depth = _layout.QuoteDepthOf(q);
                     for (var level = 0; level < depth; level++)
                     {
-                        var x = level * (EditorTheme.QuoteBarWidth + EditorTheme.QuoteBarGap);
+                        var x = level * EditorTheme.QuoteBarStep;
                         context.FillRectangle(EditorTheme.QuoteBar, new Rect(x, rect.Y, EditorTheme.QuoteBarWidth, rect.Height));
                     }
                 }
@@ -313,19 +315,40 @@ public partial class MarkdownEditor
         var ft = _measurer.GetFormattedText(run.Text, run.Style, run.Style.Foreground);
         var y = lineTop + (lineH - ft.Height) / 2;
 
-        // An inline-code chip: sized to the code run's own font, not the row, and bled a few pixels past the
-        // text so it reads as a chip around the code rather than a highlight behind it.
         if (run.Style.Background is not null)
         {
-            const double bleed = 3;
-            var chipH = run.Style.FontSize * 1.5;
-            var chip = new Rect(run.X - bleed, lineTop + (lineH - chipH) / 2, ft.Width + (bleed * 2), chipH);
-            context.FillRectangle(run.Style.Background, chip, 4);
+            context.FillRectangle(run.Style.Background, ChipRect(run, lineTop, lineH), 4);
         }
 
         context.DrawText(ft, new Point(run.X, y));
         DrawRunDecorations(context, run, ft, y);
     }
+
+    /// <summary>
+    /// The chip/band drawn behind a run that carries a <see cref="RunStyle.Background"/> — an inline-code pill, a
+    /// highlight. It reads as a chip <i>around</i> the code rather than a colour behind it, which takes two things
+    /// the obvious rectangle gets wrong.
+    ///
+    /// <para>It spans the run's <b>laid-out</b> advance, not its <c>FormattedText.Width</c>: that omits trailing
+    /// whitespace (<see cref="TextMeasurer.MeasureWidth"/> exists to add it back), so a piece of code ending in a
+    /// space measured as nothing — which is what broke a wrapped <c>`inline code`</c> into two chips with a hole
+    /// where the space was.</para>
+    ///
+    /// <para>And it bleeds by the style's own <see cref="RunStyle.BackgroundPad"/> — exactly the padding the layout
+    /// reserved beside the run, as a spacer where the markers concealed — so the bleed lands in space of its own
+    /// instead of painting over the tail of the word before it. Height is capped to the row, so a code span on a
+    /// heading line can't outgrow the heading's row.</para>
+    /// </summary>
+    private Rect ChipRect(VisualRun run, double lineTop, double lineH)
+    {
+        var bleed = run.Style.BackgroundPad;
+        var chipH = Math.Min(lineH - 2, run.Style.FontSize * EditorTheme.ChipHeightRatio);
+        return new Rect(run.X - bleed, lineTop + ((lineH - chipH) / 2), run.Width + (bleed * 2), chipH);
+    }
+
+    /// <summary>The chip rectangle drawn behind <paramref name="run"/>; for tests (the draw path itself has no
+    /// pixels to assert on in the headless suite).</summary>
+    internal Rect ChipRectForTest(VisualRun run, double lineTop, double lineH) => ChipRect(run, lineTop, lineH);
 
     /// <summary>
     /// Draw the run's underline/strikethrough as real lines in the drawing context. Avalonia's
@@ -341,9 +364,11 @@ public partial class MarkdownEditor
             return;
         }
 
+        // Spans the run's laid-out width, not FormattedText's — which omits trailing whitespace, so an
+        // underline under a link's "click here" broke into pieces with gaps under the spaces.
         var baseline = textTop + ft.Baseline;
         var x0 = run.X;
-        var x1 = run.X + ft.Width;
+        var x1 = run.X + run.Width;
         foreach (var d in decorations)
         {
             var stroke = d.Stroke ?? run.Style.Foreground;
@@ -435,8 +460,11 @@ public partial class MarkdownEditor
         {
             case DecorationKind.Bullet:
                 {
-                    var r = Math.Max(2, EditorTheme.BaseFontSize * 0.14);
-                    context.DrawEllipse(EditorTheme.BulletForeground, null, new Point(run.X + run.Width / 2, cy), r, r);
+                    // Placed from the gutter's left inset, not centred in the gutter: the space before the dot and
+                    // the space after it are set separately (the gap to the item's text is the wider of the two),
+                    // so centring would split the difference and undo it.
+                    var r = EditorTheme.BulletSize / 2;
+                    context.DrawEllipse(EditorTheme.BulletForeground, null, new Point(run.X + EditorTheme.BulletLeftPad + r, cy), r, r);
                     break;
                 }
 

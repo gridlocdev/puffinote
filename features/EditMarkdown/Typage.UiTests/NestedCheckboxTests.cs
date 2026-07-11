@@ -29,24 +29,59 @@ public class NestedCheckboxTests
 
     // ----- rendering -----
 
+    /// <summary>The width of <paramref name="line"/>'s leading list-indent spacer (0 when it isn't nested).</summary>
+    private static double IndentWidth(MarkdownEditor e, int line) =>
+        e.BuildVisualLineForTest(line).Runs
+            .Where(r => r.Decoration == DecorationKind.ListIndent)
+            .Sum(r => r.Width);
+
     [AvaloniaFact]
     public void NestedTask_RendersACheckbox_IndentedPastTheParent()
     {
         var e = new MarkdownEditor { Text = "- [ ] top\n  - [ ] sub" };
         Assert.Equal([DecorationKind.CheckboxUnchecked], DecorationsOn(e, 0));
-        Assert.Equal([DecorationKind.CheckboxUnchecked], DecorationsOn(e, 1)); // the nested item also shows a checkbox
+
+        // The nested item shows a checkbox too, behind a spacer that carries its one level of nesting.
+        Assert.Equal([DecorationKind.ListIndent, DecorationKind.CheckboxUnchecked], DecorationsOn(e, 1));
         Assert.True(TextX(e, 1, "sub") > TextX(e, 0, "top"), "the nested task's text should hang further right");
     }
 
     [AvaloniaFact]
-    public void NestedTask_IndentsLikeANestedBullet()
+    public void EveryListType_IndentsByTheSameStepPerNestingLevel()
     {
-        // A nested task and a nested bullet at the same indent put their content at the same column offset
-        // relative to their own gutter — i.e. nesting is the leading indentation, same mechanism for both.
-        var task = new MarkdownEditor { Text = "  - [ ] x" };
-        var bullet = new MarkdownEditor { Text = "  - x" };
-        Assert.Equal([DecorationKind.CheckboxUnchecked], DecorationsOn(task, 0));
-        Assert.Equal([DecorationKind.Bullet], DecorationsOn(bullet, 0));
+        // Markdown spells one level of nesting as two leading spaces on a bullet, three on a number, and two on
+        // a task — so rendering that literal whitespace indented the same nesting depth by a different amount for
+        // each kind, bullets least of all. The step is the *level*, not the spaces.
+        var step = MarkdownTheme.Default.IndentStep;
+        var bullet = new MarkdownEditor { Text = "- top\n  - sub" };
+        var number = new MarkdownEditor { Text = "1. top\n   1. sub" };
+        var task = new MarkdownEditor { Text = "- [ ] top\n  - [ ] sub" };
+
+        Assert.Equal(0, IndentWidth(bullet, 0), 3); // a top-level item takes no indent…
+        Assert.Equal(step, IndentWidth(bullet, 1), 3); // …and one level in is one step, for all three kinds
+        Assert.Equal(step, IndentWidth(number, 1), 3);
+        Assert.Equal(step, IndentWidth(task, 1), 3);
+    }
+
+    [AvaloniaFact]
+    public void EachDeeperLevel_AddsAnotherStep()
+    {
+        // Even when the author's indentation doesn't grow evenly (2 spaces, then 6): the level does.
+        var step = MarkdownTheme.Default.IndentStep;
+        var e = new MarkdownEditor { Text = "- one\n  - two\n      - three" };
+
+        Assert.Equal(0, IndentWidth(e, 0), 3);
+        Assert.Equal(step, IndentWidth(e, 1), 3);
+        Assert.Equal(step * 2, IndentWidth(e, 2), 3);
+    }
+
+    [AvaloniaFact]
+    public void ABlankLine_StartsAFreshListAtLevelZero()
+    {
+        // The nesting scan stops at a blank line, exactly as the ordered-number scan does — so a stray indent
+        // under an unrelated list above doesn't drag the new list inwards.
+        var e = new MarkdownEditor { Text = "- one\n  - two\n\n- fresh" };
+        Assert.Equal(0, IndentWidth(e, 3), 3);
     }
 
     // ----- subtree reorder -----

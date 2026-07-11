@@ -1,7 +1,6 @@
 using System.Globalization;
 using Typage.Engine.Document;
 using Typage.Engine.Editing;
-using Typage.Engine.Markdown;
 
 namespace Typage.Control.Controls;
 
@@ -324,50 +323,9 @@ public partial class MarkdownEditor
         return text.Length == 0 || (text.Length == 1 && text[0] == '\r');
     }
 
-    /// <summary>
-    /// Whether <paramref name="line"/> is a <b>soft paragraph separator</b>: an empty line directly below a
-    /// non-blank one, in ordinary (non-code, non-front-matter) flow. Pressing Enter writes such a blank
-    /// (a <c>\n\n</c> paragraph break); it is collapsed to zero visual rows so two paragraphs sit one line
-    /// apart (regular spacing) instead of leaving an empty line, and the caret glides over it as one step.
-    /// A second consecutive blank is <i>not</i> collapsed — that's a deliberately empty line — and a blank
-    /// inside a code block stays part of the code. The line must be <see cref="IsEmptyLine">truly empty</see>:
-    /// a whitespace-only line (an auto-indented new line) is a real row and keeps its caret, so collapsing it
-    /// would strand the caret at the end of the line above (the "Enter doesn't move to the next line" bug).
-    /// </summary>
-    private bool IsCollapsedBlankLine(int line)
-    {
-        // Raw-text view shows every blank line as a real, editable row (no soft collapsing).
-        if (RawTextMode)
-        {
-            return false;
-        }
-
-        var doc = Buffer.Document;
-        if (line < 0 || line >= doc.LineCount)
-        {
-            return false;
-        }
-
-        // A setext underline ("===" / "---") is pure markup. Concealing it would leave a blank row where the
-        // underline was, which in a WYSIWYG view is just as wrong as showing the "===" itself — so its row
-        // collapses away entirely, exactly like a soft paragraph separator. The heading it marks is the line
-        // above, which draws as a heading; raw-source view shows the underline again.
-        if (IsSetextUnderlineLine(line))
-        {
-            return true;
-        }
-
-        return line > 0
-            && IsEmptyLine(line) && !IsBlankLine(line - 1)
-            && _model.EnteringState(line).Kind == BlockKind.Normal;
-    }
-
-    /// <summary>Whether <paramref name="line"/> is the underline of a setext heading (and so draws nothing).</summary>
-    private bool IsSetextUnderlineLine(int line)
-    {
-        var toks = _model.LineTokens(line);
-        return toks.Count > 0 && toks[0].Type == TokenType.SetextUnderline;
-    }
+    /// <summary>Whether <paramref name="line"/> is a soft paragraph separator, collapsed to zero visual rows.
+    /// The layout owns the rule (it turns on which lines are code); see <see cref="LayoutModel.IsCollapsedBlankLine"/>.</summary>
+    private bool IsCollapsedBlankLine(int line) => _layout.IsCollapsedBlankLine(line);
 
     /// <summary>Whether any line in <c>[from, to]</c> carries an ordered-list marker.</summary>
     private static bool RunHasOrderedItem(TextDocument doc, int from, int to)

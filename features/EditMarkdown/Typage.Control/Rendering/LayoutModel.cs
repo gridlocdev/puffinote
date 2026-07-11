@@ -19,7 +19,7 @@ internal interface ILayoutHost
     bool RawTextMode { get; }
     bool MarkersRevealed { get; }
     double CheckboxGutter { get; }
-    bool IsCollapsedBlankLine(int line);
+    int ListLevel(int line);
     string? OrderedMarkerText(int line, string lineText, int sLine, int enLine);
 }
 
@@ -225,7 +225,7 @@ internal sealed class LayoutModel
                 // A soft paragraph separator (a single collapsed blank line) takes no rows, so two paragraphs
                 // render one line apart instead of with an empty line between them.
                 var line = newStartLine[b];
-                var collapsed = newStartLine[b + 1] - line == 1 && _host.IsCollapsedBlankLine(line);
+                var collapsed = newStartLine[b + 1] - line == 1 && IsCollapsedBlankLine(line);
                 rowCounts[b] = collapsed ? 0 : BlockVisual(b).RowCount;
             }
 
@@ -344,12 +344,15 @@ internal sealed class LayoutModel
         }
 
         var line = BlockStartLine[block];
-        if (_host.Model.EnteringState(line).Kind != BlockKind.Normal)
+        if (_host.Model.EnteringState(line).Kind == BlockKind.FrontMatter)
         {
-            // Inside a fenced/indented code body or the front matter — the state, not the token, is what says so.
-            return _host.Model.EnteringState(line).Kind == BlockKind.FrontMatter
-                ? MarkdownBlockKind.FrontMatter
-                : MarkdownBlockKind.Code;
+            // Inside the front matter — the state, not the token, is what says so (its body lines carry none).
+            return MarkdownBlockKind.FrontMatter;
+        }
+
+        if (IsCodeLine(line))
+        {
+            return MarkdownBlockKind.Code;
         }
 
         var toks = _host.Model.LineTokens(line);
@@ -391,6 +394,100 @@ internal sealed class LayoutModel
 
         return MarkdownBlockKind.Paragraph;
     }
+
+    /// <summary>
+    /// Whether <paramref name="line"/> is a row of a code block — fenced or indented — and so is panelled as code.
+    ///
+    /// <para>The entering block state alone cannot answer this, and reading it as if it could is what put a heading
+    /// inside the code panel above it: an indented code block ends <b>lazily</b>, at the first dedented line, so that
+    /// line is still <i>entered</i> with the IndentedCode state even though the tokenizer then classifies it as an
+    /// ordinary heading/paragraph. The tokens settle it — a code row carries the fence marker or code text — with a
+    /// forward scan for the one case tokens can't answer: a blank line, which keeps an indented block open only when
+    /// indented code actually resumes below it. A blank that merely trails the block (the empty line your caret sits
+    /// on while typing below one) is not part of it.</para>
+    /// </summary>
+    public bool IsCodeLine(int line)
+    {
+        var tokens = _host.Model.LineTokens(line);
+        if (tokens.Count > 0)
+        {
+            return tokens[0].Type is TokenType.CodeFence or TokenType.CodeText;
+        }
+
+        var entering = _host.Model.EnteringState(line).Kind;
+        if (entering == BlockKind.FencedCode)
+        {
+            return true; // a blank row inside a fenced block is code until the fence closes
+        }
+
+        if (entering == BlockKind.IndentedCode)
+        {
+            for (var l = line + 1; l < _host.Document.LineCount; l++)
+            {
+                var toks = _host.Model.LineTokens(l);
+                if (toks.Count == 0)
+                {
+                    continue; // another interior blank — keep scanning forward
+                }
+
+                return toks[0].Type == TokenType.CodeText; // indented code resumes → this blank is interior
+            }
+        }
+
+        return false;
+    }
+
+    /// <summary>Whether <paramref name="line"/> sits inside a code block or the front matter — the two states whose
+    /// rows never join a paragraph. Not simply "its entering state isn't Normal": see <see cref="IsCodeLine"/> for
+    /// why the line that <i>ends</i> an indented code block still enters with the code state.</summary>
+    private bool InCodeOrFrontMatter(int line) =>
+        IsCodeLine(line) || _host.Model.EnteringState(line).Kind == BlockKind.FrontMatter;
+
+    /// <summary>
+    /// Whether <paramref name="line"/> is a <b>soft paragraph separator</b>: an empty line directly below a
+    /// non-blank one, in ordinary (non-code, non-front-matter) flow. Pressing Enter writes such a blank (a
+    /// <c>\n\n</c> paragraph break); it is collapsed to zero visual rows so two paragraphs sit one line apart
+    /// (regular spacing) instead of leaving an empty line, and the caret glides over it as one step. A second
+    /// consecutive blank is <i>not</i> collapsed — that's a deliberately empty line — and a blank inside a code
+    /// block stays part of the code (<see cref="IsCodeLine"/>, which is what tells an <i>interior</i> blank from
+    /// the one that merely trails the block). The line must be <b>truly empty</b>: a whitespace-only line (an
+    /// auto-indented new line) is a real row and keeps its caret, so collapsing it would strand the caret at the
+    /// end of the line above (the "Enter doesn't move to the next line" bug).
+    /// </summary>
+    public bool IsCollapsedBlankLine(int line)
+    {
+        // Raw-text view shows every blank line as a real, editable row (no soft collapsing).
+        var doc = _host.Document;
+        if (_host.RawTextMode || line < 0 || line >= doc.LineCount)
+        {
+            return false;
+        }
+
+        // A setext underline ("===" / "---") is pure markup. Concealing it would leave a blank row where the
+        // underline was, which in a WYSIWYG view is just as wrong as showing the "===" itself — so its row
+        // collapses away entirely, exactly like a soft paragraph separator. The heading it marks is the line
+        // above, which draws as a heading; raw-source view shows the underline again.
+        var toks = _host.Model.LineTokens(line);
+        if (toks.Count > 0)
+        {
+            return toks[0].Type == TokenType.SetextUnderline;
+        }
+
+        return line > 0
+            && IsEmpty(line) && !IsBlank(line - 1)
+            && !InCodeOrFrontMatter(line);
+    }
+
+    /// <summary>Whether <paramref name="line"/> has no characters at all (a trailing CR aside) — stricter than
+    /// <see cref="IsBlank"/>: a whitespace-only line is a real editable row, not an empty separator.</summary>
+    private bool IsEmpty(int line)
+    {
+        var text = _host.Document.GetLineText(line);
+        return text.Length == 0 || (text.Length == 1 && text[0] == '\r');
+    }
+
+    /// <summary>Whether <paramref name="line"/> is blank (empty or whitespace-only).</summary>
+    private bool IsBlank(int line) => _host.Document.GetLineText(line).Trim().Length == 0;
 
     /// <summary>Drop cached block visuals at indices &gt;= <paramref name="from"/> (those blocks are being rebuilt).</summary>
     private void EvictBlockVisualsFrom(int from)
@@ -443,7 +540,7 @@ internal sealed class LayoutModel
             return false;
         }
 
-        if (_host.Model.EnteringState(line).Kind != BlockKind.Normal)
+        if (InCodeOrFrontMatter(line))
         {
             return false; // inside fenced/indented code or front matter
         }
@@ -498,7 +595,7 @@ internal sealed class LayoutModel
             return false;
         }
 
-        if (_host.Model.EnteringState(line).Kind != BlockKind.Normal)
+        if (InCodeOrFrontMatter(line))
         {
             return false;
         }
@@ -561,7 +658,7 @@ internal sealed class LayoutModel
         var visual = _builder.Build(block, new BlockLayoutContext(
             _host.Document, _host.Model, _host.Theme, BlockStartLine,
             _host.RawTextMode, _host.MarkersRevealed, _host.WrapWidth, _host.CheckboxGutter,
-            _host.OrderedMarkerText));
+            _host.ListLevel, _host.OrderedMarkerText));
         _blockVisualCache[block] = visual;
         return visual;
     }

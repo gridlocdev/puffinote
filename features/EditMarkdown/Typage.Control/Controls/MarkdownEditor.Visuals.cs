@@ -1,4 +1,5 @@
 using Avalonia.Media;
+using Typage.Engine.Editing;
 using Typage.Engine.Markdown;
 
 namespace Typage.Control.Controls;
@@ -14,43 +15,49 @@ public partial class MarkdownEditor
             ? OrderedOrdinal(line) + OrderedDelimiter(lineText, sLine, enLine) + " "
             : null;
 
-    /// <summary>Whether <paramref name="line"/> is part of a code block — fenced or indented (for the background panel).</summary>
-    private bool IsCodeLine(int line)
+    /// <summary>
+    /// The nesting level of the list item on <paramref name="line"/> — 0 for a top-level item, one more for each
+    /// ancestor item it sits under. Read from the list's <b>structure</b>, the way the ordinal is: an item nested
+    /// with two spaces, with three, or with a tab is one level in either way, so every list type indents by the
+    /// same step per level rather than by whatever its source spelling measures. A blank line starts a fresh list
+    /// (back to level 0), matching <see cref="OrderedOrdinal"/>'s scan; a lazy continuation line belongs to the
+    /// item above it and is stepped over, and anything that opens a block of its own ends the list.
+    /// </summary>
+    private int ListLevel(int line)
     {
-        var tokens = _model.LineTokens(line);
-        if (tokens.Count > 0)
+        var doc = Buffer.Document;
+        var indent = LineIndent(line);
+        var level = 0;
+        for (var k = line - 1; k >= 0 && indent > 0; k--)
         {
-            // A code row begins with the fence marker or carries code text; the dedent line that ends an
-            // indented block tokenizes normally and is correctly excluded here.
-            return tokens[0].Type is TokenType.CodeFence or TokenType.CodeText;
-        }
-
-        // A blank row inside a fenced block is code until the fence closes. Inside an *indented* block a
-        // blank stays code only when it's interior — a later line resumes the indented code. A blank that
-        // merely trails the block (nothing more indented follows) is not part of it, so it isn't panelled
-        // — this is the empty line your caret sits on while typing below an indented block.
-        var entering = _model.EnteringState(line).Kind;
-        if (entering == BlockKind.FencedCode)
-        {
-            return true;
-        }
-
-        if (entering == BlockKind.IndentedCode)
-        {
-            for (var l = line + 1; l < Buffer.Document.LineCount; l++)
+            var text = doc.GetLineText(k);
+            if (text.Trim().Length == 0)
             {
-                var toks = _model.LineTokens(l);
-                if (toks.Count == 0)
-                {
-                    continue; // another interior blank — keep scanning forward
-                }
+                break; // a blank line starts a fresh list
+            }
 
-                return toks[0].Type == TokenType.CodeText; // indented code resumes → this blank is interior
+            if (LineIndent(k) >= indent)
+            {
+                continue; // a sibling or something nested deeper — not an ancestor of this item
+            }
+
+            if (ListItemKindOf(k) != ItemKind.None)
+            {
+                level++;               // a shallower item: this item's parent...
+                indent = LineIndent(k); // ...and now look for *its* parent
+            }
+            else if (!LinePrefix.IsLazyContinuation(text))
+            {
+                break; // a heading, quote, rule, fence… — the list doesn't reach above this
             }
         }
 
-        return false;
+        return level;
     }
+
+    /// <summary>Whether <paramref name="line"/> is part of a code block — fenced or indented (for the background
+    /// panel). The layout owns the answer, so the panel, the block kind, and the paragraph grouping agree.</summary>
+    private bool IsCodeLine(int line) => _layout.IsCodeLine(line);
 
     /// <summary>The right edge of the text column in content space (for full-width adornments) — i.e. the width
     /// of the capped, centred reading column, since content space starts at its left edge.</summary>

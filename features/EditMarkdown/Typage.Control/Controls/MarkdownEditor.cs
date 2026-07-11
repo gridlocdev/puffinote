@@ -552,7 +552,7 @@ public partial class MarkdownEditor : Avalonia.Controls.Control, ILogicalScrolla
     bool ILayoutHost.RawTextMode => RawTextMode;
     bool ILayoutHost.MarkersRevealed => MarkersRevealed;
     double ILayoutHost.CheckboxGutter => CheckboxGutter;
-    bool ILayoutHost.IsCollapsedBlankLine(int line) => IsCollapsedBlankLine(line);
+    int ILayoutHost.ListLevel(int line) => ListLevel(line);
     string? ILayoutHost.OrderedMarkerText(int line, string lineText, int sLine, int enLine)
         => OrderedMarkerText(line, lineText, sLine, enLine);
 

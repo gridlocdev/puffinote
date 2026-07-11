@@ -189,6 +189,47 @@ public class VerticalRhythmTests
     }
 
     [AvaloniaFact]
+    public void WhatFollowsAnIndentedCodeBlock_IsNotSweptIntoIt()
+    {
+        // An indented code block ends *lazily*, at the first dedented line — so the heading below one is still
+        // entered with the IndentedCode block state, and classifying blocks by that state alone put the heading
+        // (and the prose under it) inside the code panel, stretched to the code row's height.
+        var layout = Layout(new FakeRhythmHost("text\n\n    indented code\n\n## Heading\n\nmore"));
+        layout.EnsureLayout();
+
+        var code = layout.BlockOf(2);
+        var heading = layout.BlockOf(4);
+        var prose = layout.BlockOf(6);
+
+        Assert.Equal(MarkdownBlockKind.Code, layout.BlockKinds[code]);
+        Assert.Equal(MarkdownBlockKind.Heading, layout.BlockKinds[heading]);
+        Assert.Equal(MarkdownBlockKind.Paragraph, layout.BlockKinds[prose]);
+
+        // The code run therefore closes on the code line itself: it carries the panel's bottom padding, and the
+        // heading sits clear of the panel with its own row height and its own space above.
+        Assert.True(layout.BlockMetricsOf[code].PadBottom > 0);
+        Assert.True(layout.BlockTop(heading) > layout.BlockTop(code) + layout.BlockHeight(code));
+        Assert.Equal(T.MetricsFor(MarkdownBlockKind.Heading, 2).RowHeight, layout.RowHeight(heading), 3);
+    }
+
+    [AvaloniaFact]
+    public void TheBlankBelowAnIndentedCodeBlock_CollapsesLikeAnyParagraphSeparator()
+    {
+        // It reads as code to the block state (the block hasn't formally ended), but it is an ordinary paragraph
+        // separator — so it collapses to zero rows instead of wedging an empty row under the panel.
+        var layout = Layout(new FakeRhythmHost("text\n\n    indented code\n\n## Heading"));
+        layout.EnsureLayout();
+
+        Assert.Equal(0, layout.RowCounts[layout.BlockOf(3)]);
+
+        // A blank *between* two indented lines is interior to the block and keeps its row inside the panel.
+        var interior = Layout(new FakeRhythmHost("text\n\n    one\n\n    two"));
+        interior.EnsureLayout();
+        Assert.Equal(1, interior.RowCounts[interior.BlockOf(3)]);
+        Assert.Equal(MarkdownBlockKind.Code, interior.BlockKinds[interior.BlockOf(3)]);
+    }
+
+    [AvaloniaFact]
     public void TwoBlockquotesSeparatedByABlank_StayTwoQuotes()
     {
         // The blank between them collapses to zero height, which would make them *look* adjacent to the
@@ -250,11 +291,7 @@ public class VerticalRhythmTests
         public bool MarkersRevealed => false;
         public double CheckboxGutter => 20;
 
-        public bool IsCollapsedBlankLine(int line)
-            => line > 0 && line < Document.LineCount
-               && Document.GetLineText(line).Trim().Length == 0
-               && Document.GetLineText(line - 1).Trim().Length != 0
-               && Model.EnteringState(line).Kind == BlockKind.Normal;
+        public int ListLevel(int line) => 0;
 
         public string? OrderedMarkerText(int line, string lineText, int sLine, int enLine) => null;
     }

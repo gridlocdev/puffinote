@@ -282,7 +282,8 @@ public partial class MarkdownEditor
         }
 
         var col = r.Col;
-        while (col > 0 && r.Visual.IsColumnHidden(col - 1))
+        var floor = IndentFloor(r.BlockStart, caretLine);
+        while (col > floor && r.Visual.IsColumnHidden(col - 1))
         {
             col--;
         }
@@ -308,6 +309,29 @@ public partial class MarkdownEditor
     }
 
     /// <summary>
+    /// The block-relative column where <paramref name="line"/>'s own indentation ends — the floor at which the
+    /// marker-stepping walks stop.
+    ///
+    /// <para>A nested item's indentation lays out as a fixed-width spacer, so the offset map counts it as hidden
+    /// exactly like a marker (<see cref="VisualLine.IsColumnHidden"/>). But it isn't one: it is real whitespace
+    /// the item <i>keeps</i> when its marker is removed. Without this floor a backspace at a nested item's
+    /// content start swallowed the indentation along with the bullet, yanking the item out to the margin instead
+    /// of un-listing it where it sits.</para>
+    /// </summary>
+    private int IndentFloor(int blockStart, int line)
+    {
+        var doc = Buffer.Document;
+        var text = doc.GetLineText(line);
+        var i = 0;
+        while (i < text.Length && (text[i] == ' ' || text[i] == '\t'))
+        {
+            i++;
+        }
+
+        return doc.GetLineStart(line) - blockStart + i;
+    }
+
+    /// <summary>
     /// Forward Delete in WYSIWYG mode: delete the next <b>visible</b> grapheme, stepping over concealed
     /// marker punctuation ahead of the caret. Returns false when only hidden markers (or end-of-line)
     /// follow, letting the buffer's plain delete handle the line join.
@@ -329,7 +353,8 @@ public partial class MarkdownEditor
 
         var r = ResolveCaret(sel.Caret);
         var col = r.Col;
-        while (col < r.Visual.RawLength && r.Visual.IsColumnHidden(col))
+        var floor = IndentFloor(r.BlockStart, caretLine);
+        while (col < r.Visual.RawLength && col >= floor && r.Visual.IsColumnHidden(col))
         {
             col++;
         }

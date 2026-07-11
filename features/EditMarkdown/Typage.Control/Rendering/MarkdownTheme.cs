@@ -3,10 +3,18 @@ using Typage.Engine.Markdown;
 
 namespace Typage.Control.Rendering;
 
-/// <summary>The resolved visual treatment for one token: typeface, size, colors, and whether it is concealable syntax.</summary>
+/// <summary>
+/// The resolved visual treatment for one token: typeface, size, colors, and whether it is concealable syntax.
+///
+/// <para><paramref name="BackgroundPad"/> is the horizontal padding a <paramref name="Background"/> chip extends
+/// past its text on each side — an inline-code chip needs room to breathe around the code. The layout
+/// <i>reserves</i> it where the construct's markers concealed (a zero-glyph spacer run), and the draw path bleeds
+/// the chip by exactly that much, so the two agree: without the reservation the chip is drawn into its
+/// neighbours' space and paints over the tail of the word before it.</para>
+/// </summary>
 public readonly record struct RunStyle(
     Typeface Typeface, double FontSize, IBrush Foreground, IBrush? Background,
-    bool IsMarker, TextDecorationCollection? Decorations = null);
+    bool IsMarker, TextDecorationCollection? Decorations = null, double BackgroundPad = 0);
 
 /// <summary>
 /// What a laid-out block <i>is</i>, for vertical rhythm. The engine emits tokens, not blocks, so the layout
@@ -234,6 +242,41 @@ public class MarkdownTheme
     /// <summary>The panel behind a fenced-code block — <i>darker</i> than the editor background, so the block recedes.</summary>
     public IBrush CodeBlockBackground { get; init; } = new SolidColorBrush(Color.FromRgb(0x18, 0x1A, 0x1D));
 
+    // ----- inline-code / highlight chips -----
+
+    /// <summary>
+    /// The padding inside an inline-code chip, on each side of the code. Sized so the chip reads as a chip: a
+    /// backtick's worth of space is not enough, and with none reserved in the layout the chip is drawn over the
+    /// tail of the word before it. <see cref="ChipHeightRatio"/> is the vertical counterpart.
+    /// </summary>
+    public double InlineCodePadding { get; init; } = 5;
+
+    /// <summary>The padding inside a <c>==highlight==</c> band. Tighter than a code chip — a highlight is a mark
+    /// on prose, so it should hug the words it marks rather than stand off them.</summary>
+    public double HighlightPadding { get; init; } = 2;
+
+    /// <summary>The height of a chip/band as a multiple of its run's font size (capped to the row it sits in, so a
+    /// code span on a heading line can't outgrow the heading's row).</summary>
+    public double ChipHeightRatio { get; init; } = 1.6;
+
+    // ----- list bullet: the gutter width and the drawn glyph read the same numbers, so they stay in sync -----
+
+    /// <summary>The diameter of the drawn bullet.</summary>
+    public double BulletSize => Math.Max(4, BaseFontSize * 0.28);
+
+    /// <summary>The inset before the bullet — the space between the item's indent and the dot.</summary>
+    public double BulletLeftPad => BaseFontSize * 0.25;
+
+    /// <summary>The space between the bullet and the item's text.</summary>
+    public double BulletGap => BaseFontSize * 0.5;
+
+    /// <summary>
+    /// The width a concealed bullet marker reserves — inset + dot + gap, and the hanging indent an item's wrapped
+    /// rows sit at. Deliberately independent of the source <c>"- "</c>/<c>"* "</c> punctuation's measured width,
+    /// which is a couple of pixels wider than the dot itself and left it crowded against its own text.
+    /// </summary>
+    public double BulletGutter => BulletLeftPad + BulletSize + BulletGap;
+
     /// <summary>Thickness of the drawn horizontal rule.</summary>
     public double RuleThickness { get; init; } = 1;
 
@@ -243,9 +286,37 @@ public class MarkdownTheme
     /// <summary>Width of the blockquote's left accent bar.</summary>
     public double QuoteBarWidth { get; init; } = 3;
 
-    /// <summary>The space between one nesting level's quote bar and the next — what makes <c>&gt;&gt;</c> read as
-    /// two stacked bars rather than one thick one.</summary>
-    public double QuoteBarGap { get; init; } = 8;
+    /// <summary>The space between a quote's bar and the text that hangs off it.</summary>
+    public double QuoteBarGap { get; init; } = 14;
+
+    /// <summary>The step from one nesting level's quote bar to the next — the document's one
+    /// <see cref="IndentStep"/>, so a nested quote and a nested list item indent alike.</summary>
+    public double QuoteBarStep => IndentStep;
+
+    /// <summary>
+    /// The gutter a blockquote's text hangs at: its own bar — one <see cref="IndentStep"/> in per level of
+    /// <paramref name="depth"/> — plus the gap after it.
+    ///
+    /// <para>Derived from the nesting depth rather than measured from the source <c>"&gt;&gt; "</c>, which is the
+    /// same handful of pixels however deep the quote is. That made nesting barely register as indentation, and
+    /// left a <c>&gt;&gt;</c> quote's prose sitting on top of its own second bar. The bars are drawn on the same
+    /// step, so text and bars can't drift apart.</para>
+    /// </summary>
+    public double QuoteGutter(int depth) =>
+        ((Math.Max(1, depth) - 1) * QuoteBarStep) + QuoteBarWidth + QuoteBarGap;
+
+    /// <summary>
+    /// The horizontal step <b>one level of nesting</b> indents by — shared by lists and blockquotes, so a document
+    /// has a single indent rhythm however its structures are mixed.
+    ///
+    /// <para>It is the <i>level</i> that steps, not the source whitespace. Markdown spells one level of nesting as
+    /// two leading spaces on a bullet, three on a number, two or six on a task, and one more <c>&gt;</c> on a
+    /// quote — so rendering that literal markup indented the same nesting depth by a different amount for each
+    /// construct, bullets least of all. The level itself comes from the document's structure
+    /// (<c>MarkdownEditor.ListLevel</c>, and the depth a blockquote marker carries); this is what a level is
+    /// worth in pixels.</para>
+    /// </summary>
+    public double IndentStep => BaseFontSize * 1.5;
 
     private readonly FontFamily _body = FontFamily.Default;
     private readonly FontFamily _mono = new("Cascadia Code,Consolas,Menlo,monospace");
@@ -261,10 +332,10 @@ public class MarkdownTheme
             TokenType.Emphasis => new RunStyle(Italic(), BaseFontSize, Foreground, null, false),
             TokenType.StrongEmphasis => new RunStyle(BoldItalic(), BaseFontSize, Foreground, null, false),
             TokenType.Strikethrough => new RunStyle(Body(), BaseFontSize, Foreground, null, false, Strike(Foreground)),
-            TokenType.Highlight => new RunStyle(Body(), BaseFontSize, Foreground, HighlightBackground, false),
-            // Inline code gets a tight "chip" background; code-block text does not — the continuous
-            // block panel behind the whole fence/indent provides its background instead (no per-line box).
-            TokenType.InlineCode => new RunStyle(Mono(), CodeFontSize, CodeForeground, CodeBackground, false),
+            TokenType.Highlight => new RunStyle(Body(), BaseFontSize, Foreground, HighlightBackground, false, null, HighlightPadding),
+            // Inline code gets a "chip" background, padded on both sides; code-block text does not — the
+            // continuous block panel behind the whole fence/indent is its background instead (no per-line box).
+            TokenType.InlineCode => new RunStyle(Mono(), CodeFontSize, CodeForeground, CodeBackground, false, null, InlineCodePadding),
             TokenType.CodeText => new RunStyle(Mono(), CodeFontSize, CodeBlockForeground, null, false),
             TokenType.LinkText or TokenType.Autolink or TokenType.WikiLink => new RunStyle(Body(), BaseFontSize, LinkForeground, null, false, LinkUnderline),
             TokenType.LinkUrl or TokenType.ImageUrl or TokenType.Embed => Marker(),

@@ -74,13 +74,7 @@ public class LayoutModelTests
         public bool MarkersRevealed { get; init; }
         public double CheckboxGutter => 20;
 
-        // Mirrors the control's rule: a single fully-blank line between two non-blank paragraphs (in normal
-        // block state, non-raw view) collapses to zero rows.
-        public bool IsCollapsedBlankLine(int line)
-            => !RawTextMode && line > 0 && line < Document.LineCount
-               && Document.GetLineText(line).Trim().Length == 0
-               && Document.GetLineText(line - 1).Trim().Length != 0
-               && Model.EnteringState(line).Kind == BlockKind.Normal;
+        public int ListLevel(int line) => 0;
 
         public string? OrderedMarkerText(int line, string lineText, int sLine, int enLine) => null;
     }

@@ -36,6 +36,25 @@ public class DecorationTests
         Assert.Contains(v.Runs, r => r.Kind == VisualRunKind.Text && r.Text == "item");
     }
 
+    [AvaloniaFact]
+    public void TheBulletGutter_PadsTheDotOnBothSides()
+    {
+        // The gutter used to be the measured width of the source "- " — a couple of pixels wider than the dot
+        // itself — which left the bullet crowded against both the margin and its own text.
+        var theme = MarkdownTheme.Default;
+        var editor = CaretOffLine0("- item\nx");
+        var v = editor.BuildVisualLineForTest(0);
+        var bullet = v.Runs.First(r => r.Decoration == DecorationKind.Bullet);
+
+        Assert.Equal(theme.BulletGutter, bullet.Width, 3);
+        Assert.Equal(theme.BulletGutter, v.ColumnToX(2), 3); // "item" starts past the whole gutter
+
+        // Space on each side of the dot, the gap to the text being the wider of the two.
+        Assert.True(theme.BulletLeftPad > 0);
+        Assert.True(theme.BulletGap > theme.BulletLeftPad);
+        Assert.True(theme.BulletGutter > theme.BulletSize * 2, "the dot should be padded, not filling its gutter");
+    }
+
     private static string? OrderedText(MarkdownEditor editor, int line) =>
         editor.BuildVisualLineForTest(line).Runs
             .Where(r => r.Decoration == DecorationKind.OrderedNumber)
@@ -279,6 +298,34 @@ public class DecorationTests
         var editor = CaretOffLine0("> quote\nx");
         Assert.Equal(DecorationKind.QuoteBar, DecorationOn(editor, 0));
         Assert.True(editor.BuildVisualLineForTest(0).ColumnToX(2) > 0);
+    }
+
+    [AvaloniaFact]
+    public void ANestedBlockquote_IndentsAStepPerLevel_AndClearsEveryBar()
+    {
+        // The gutter used to be the measured width of "> " / ">> " — a couple of pixels either way — so nesting
+        // barely showed, and a ">>" quote's text sat on top of the second bar drawn to its left.
+        var theme = MarkdownTheme.Default;
+        var editor = CaretOffLine0("> one\n>> two\n>>> three\nx");
+
+        double Gutter(int line) => editor.BuildVisualLineForTest(line).Runs
+            .First(r => r.Decoration == DecorationKind.QuoteBar).Width;
+
+        Assert.Equal(theme.QuoteGutter(1), Gutter(0), 3);
+        Assert.Equal(theme.QuoteGutter(2), Gutter(1), 3);
+        Assert.Equal(theme.QuoteGutter(3), Gutter(2), 3);
+
+        // Each level steps by exactly one bar-plus-gap, the same step the bars themselves are drawn on…
+        Assert.Equal(theme.QuoteBarStep, Gutter(1) - Gutter(0), 3);
+        Assert.Equal(theme.QuoteBarStep, Gutter(2) - Gutter(1), 3);
+
+        // …so the text always starts past the rightmost bar of its own depth.
+        for (var depth = 1; depth <= 3; depth++)
+        {
+            var lastBarRight = ((depth - 1) * theme.QuoteBarStep) + theme.QuoteBarWidth;
+            Assert.True(Gutter(depth - 1) > lastBarRight,
+                $"a depth-{depth} quote's text ({Gutter(depth - 1)}) overlaps its innermost bar (ends at {lastBarRight})");
+        }
     }
 
     [AvaloniaFact]

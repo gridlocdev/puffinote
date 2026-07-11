@@ -37,6 +37,14 @@ public enum DecorationKind
 
     /// <summary>A computed ordered-list ordinal (e.g. "3. ") drawn in place of the literal source digits.</summary>
     OrderedNumber,
+
+    /// <summary>The side padding of a background chip (an inline-code span's concealed backticks, a highlight's
+    /// <c>==</c>): a spacer that draws nothing and reserves the room the chip is bled into.</summary>
+    ChipPad,
+
+    /// <summary>A nested list item's leading indentation: a spacer that draws nothing and advances one fixed step
+    /// per nesting level, in place of the measured width of the item's source spaces.</summary>
+    ListIndent,
 }
 
 /// <summary>
@@ -97,6 +105,11 @@ public sealed class VisualLine
         var gutter = 0d;
         foreach (var s in segments)
         {
+            if (s.Decoration == DecorationKind.ChipPad)
+            {
+                break; // a chip's inner padding is part of the content, not a line-prefix gutter
+            }
+
             if (s.Decoration != DecorationKind.None)
             {
                 gutter += s.DecorationWidth;
