@@ -111,8 +111,23 @@ public class DecorationTests
         // The asymmetry with a bullet: a number says *which* item of the list this is, which the checkbox
         // can't express, so it survives. It used to vanish, leaving a bare checkbox orphaned from its list.
         var editor = CaretOffLine0("1. [ ] step\nx");
-        Assert.Equal([DecorationKind.OrderedNumber, DecorationKind.CheckboxUnchecked], DecorationsOn(editor, 0));
+        Assert.Contains(DecorationKind.OrderedNumber, DecorationsOn(editor, 0));
         Assert.Equal("1. ", OrderedText(editor, 0));
+    }
+
+    [AvaloniaFact]
+    public void NumberedTask_DrawsTheCheckboxToTheLeftOfTheNumber()
+    {
+        // The box leads and the number follows — "☐ 1. step" — even though the source spells it "1. [ ] step".
+        var editor = CaretOffLine0("1. [x] step\nx");
+        Assert.Equal([DecorationKind.CheckboxChecked, DecorationKind.OrderedNumber], DecorationsOn(editor, 0));
+
+        var runs = editor.BuildVisualLineForTest(0).Runs;
+        var box = runs.First(r => r.Decoration == DecorationKind.CheckboxChecked);
+        var number = runs.First(r => r.Decoration == DecorationKind.OrderedNumber);
+        Assert.Equal(0, box.X); // the box starts the line
+        Assert.Equal(box.X + box.Width, number.X, precision: 6); // the number sits immediately after it
+        Assert.True(editor.BuildVisualLineForTest(0).ColumnToX(7) >= number.X + number.Width); // "step" hangs past both
     }
 
     // ----- GFM task-list strictness: a checkbox is only ever the *first* thing in a list item's content -----

@@ -110,7 +110,8 @@ internal sealed class BlockLayoutBuilder
             lastHeading = headingLevel;
             var inQuote = InQuote(line);
             lastQuote = inQuote;
-            var hasTask = _model.LineTokens(line).Any(t => t.Type == TokenType.TaskMarker);
+            var (orderedText, taskText) = ItemMarkers(line, lineStart, lineText);
+            var hasTask = taskText.Length > 0;
             // The text of an inline link [text](url) is tokenized as ordinary content (the engine recurses
             // into it), so to render it like an HTML hyperlink we colour + underline any content that falls
             // inside the link-text span — the gap between the opening "[" and the "](" of each link node.
@@ -153,13 +154,24 @@ internal sealed class BlockLayoutBuilder
 
                     // An ordered-list marker hides its literal digits and shows a number computed from the
                     // list's structure (items 4 & 5). Raw-source mode shows the literal source digits. A task
-                    // marker after it doesn't suppress the number — a numbered task shows both ("1. ☐ step").
-                    if (t.Type == TokenType.ListMarker
-                        && _orderedMarkerText(line, lineText, sLine, enLine) is { } ordinalText)
+                    // marker after it doesn't suppress the number — a numbered task shows both — but the box
+                    // is drawn *first*, "☐ 1. step", the way a reader tallies the list. So the two decorations
+                    // trade the marker slots they hang on: the list marker's span draws the checkbox and the
+                    // task marker's draws the number. Both spans conceal either way, so the source keeps its
+                    // "1. [ ] " order and only the drawing order changes.
+                    if (orderedText is not null && t.Type is TokenType.ListMarker or TokenType.TaskMarker)
                     {
-                        decoText = ordinalText;
-                        deco = DecorationKind.OrderedNumber;
-                        width = _measurer.MeasureWidth(decoText, style);
+                        var numberSlot = hasTask ? TokenType.TaskMarker : TokenType.ListMarker;
+                        if (t.Type == numberSlot)
+                        {
+                            decoText = orderedText;
+                            deco = DecorationKind.OrderedNumber;
+                            width = _measurer.MeasureWidth(decoText, style);
+                        }
+                        else
+                        {
+                            (deco, width) = Checkbox(taskText); // a numbered task's list marker leads with the box
+                        }
                     }
 
                     segments.Add(new VisualLine.Segment(s, en, style, true, deco, deco == DecorationKind.None ? 0 : width, decoText));
@@ -189,6 +201,36 @@ internal sealed class BlockLayoutBuilder
         }
 
         return VisualLine.Build(text, segments, _measurer.MeasureWidth, _wrapWidth);
+    }
+
+    /// <summary>
+    /// The two leading-marker facts a list line's decorations need, read in one pass before the token loop: the
+    /// ordinal text (<c>"N. "</c>) to draw when <paramref name="line"/> is a <i>numbered</i> item (null when it
+    /// isn't one), and the task marker's source text (<c>"[ ] "</c>/<c>"[x] "</c>, empty when the line isn't a
+    /// task). Each marker has to know about the other, because on a numbered task they swap the slots their
+    /// decorations hang on so the checkbox can lead the number.
+    /// </summary>
+    private (string? Ordered, string Task) ItemMarkers(int line, int lineStart, string lineText)
+    {
+        string? ordered = null;
+        var sawList = false;
+        var task = string.Empty;
+        foreach (var t in _model.LineTokens(line))
+        {
+            var s = Math.Clamp(t.Start - lineStart, 0, lineText.Length);
+            var en = Math.Clamp(t.End - lineStart, 0, lineText.Length);
+            if (t.Type == TokenType.ListMarker && !sawList)
+            {
+                sawList = true;
+                ordered = _orderedMarkerText(line, lineText, s, en);
+            }
+            else if (t.Type == TokenType.TaskMarker && task.Length == 0)
+            {
+                task = lineText[s..en];
+            }
+        }
+
+        return (ordered, task);
     }
 
     private int HeadingLevel(int line)
@@ -447,9 +489,10 @@ internal sealed class BlockLayoutBuilder
                 var bullet = text.TrimStart(' ');
                 if (bullet.Length is 0 || bullet[0] is not ('-' or '*' or '+'))
                 {
-                    // An ordered marker: no bullet glyph. Its number is drawn by the OrderedNumber branch in
-                    // Build, which runs whether or not a checkbox follows — a number says *which* item of the
-                    // list this is, something the checkbox can't express, so "1. [ ] step" shows both.
+                    // An ordered marker: no bullet glyph. Build's slot logic hands this span the number — or,
+                    // when the item is also a task, the checkbox that leads it. Either way a number survives
+                    // alongside a checkbox, because it says *which* item of the list this is, something the
+                    // box can't express: "1. [ ] step" draws both.
                     return (DecorationKind.None, 0);
                 }
 
@@ -461,10 +504,7 @@ internal sealed class BlockLayoutBuilder
                     : (DecorationKind.Bullet, _measurer.MeasureWidth(text, style));
 
             case TokenType.TaskMarker:
-                // A fixed gutter (box + gap) regardless of "[ ]" vs "[x]", so the text after the checkbox sits
-                // at the same place whether it's checked or not, with a clear space before it.
-                var ticked = text.Length > 1 && text[1] is 'x' or 'X';
-                return (ticked ? DecorationKind.CheckboxChecked : DecorationKind.CheckboxUnchecked, _checkboxGutter);
+                return Checkbox(text);
 
             case TokenType.BlockquoteMarker:
                 return (DecorationKind.QuoteBar, _measurer.MeasureWidth(text, style));
@@ -475,6 +515,15 @@ internal sealed class BlockLayoutBuilder
             default:
                 return (DecorationKind.None, 0);
         }
+    }
+
+    /// <summary>The checkbox decoration for a task marker spelled <paramref name="text"/> (<c>"[ ] "</c>/<c>"[x] "</c>).
+    /// A fixed gutter (box + gap) regardless of ticked state, so the text after the checkbox sits at the same
+    /// place whether it's checked or not, with a clear space before it.</summary>
+    private (DecorationKind Kind, double Width) Checkbox(string text)
+    {
+        var ticked = text.Length > 1 && text[1] is 'x' or 'X';
+        return (ticked ? DecorationKind.CheckboxChecked : DecorationKind.CheckboxUnchecked, _checkboxGutter);
     }
 
     /// <summary>

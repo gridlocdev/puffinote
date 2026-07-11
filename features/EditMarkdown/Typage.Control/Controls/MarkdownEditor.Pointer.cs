@@ -163,7 +163,10 @@ public partial class MarkdownEditor
             if (run.Decoration is DecorationKind.CheckboxChecked or DecorationKind.CheckboxUnchecked
                 && contentX >= run.X && contentX <= run.X + run.Width)
             {
-                return TryToggleTaskAt(line, blockStart + run.Col); // run.Col is the task marker's column
+                // The box hangs on the task marker's columns on a bulleted item but on the *list* marker's on a
+                // numbered one (where it leads the number), so toggle by the line the run sits on — a line has
+                // at most one live checkbox — rather than by the run's own columns.
+                return ToggleTaskOnLine(Buffer.Document.GetPosition(blockStart + run.Col).Line);
             }
         }
 
