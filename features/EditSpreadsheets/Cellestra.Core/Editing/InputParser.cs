@@ -76,11 +76,11 @@ public static class InputParser
         serial = 0;
         format = NumberFormat.General;
         string trimmed = text.Trim();
-        const DateTimeStyles Styles = DateTimeStyles.NoCurrentDateDefault | DateTimeStyles.AllowWhiteSpaces;
+        const DateTimeStyles styles = DateTimeStyles.NoCurrentDateDefault | DateTimeStyles.AllowWhiteSpaces;
 
         if (IsIsoDate(trimmed) &&
             DateTime.TryParseExact(trimmed, ["yyyy-M-d", "yyyy-MM-dd"],
-                CultureInfo.InvariantCulture, Styles, out var isoDate))
+                CultureInfo.InvariantCulture, styles, out var isoDate))
         {
             serial = DateConversion.ToSerial(isoDate.Date);
             format = new NumberFormat("YYYY-MM-DD");
@@ -88,7 +88,7 @@ public static class InputParser
         }
 
         if (trimmed.IndexOf('/') >= 0 &&
-            DateTime.TryParse(trimmed, TwoDigitYearCulture(culture), Styles, out var date) &&
+            DateTime.TryParse(trimmed, TwoDigitYearCulture(culture), styles, out var date) &&
             date.TimeOfDay == TimeSpan.Zero)
         {
             serial = DateConversion.ToSerial(date.Date);

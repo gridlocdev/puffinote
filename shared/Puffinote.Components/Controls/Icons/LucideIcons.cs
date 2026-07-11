@@ -19,7 +19,7 @@ public static class LucideIcons
     /// <summary>The Lucide design grid; every glyph is authored in this coordinate space.</summary>
     public const double ViewBox = 24.0;
 
-    private static readonly ConcurrentDictionary<string, Geometry?> _cache = new(StringComparer.Ordinal);
+    private static readonly ConcurrentDictionary<string, Geometry?> Cache = new(StringComparer.Ordinal);
 
     /// <summary>
     /// The combined geometry for <paramref name="key"/> (the SVG file name without extension), or
@@ -32,7 +32,7 @@ public static class LucideIcons
             return null;
         }
 
-        return _cache.GetOrAdd(key, Load);
+        return Cache.GetOrAdd(key, Load);
     }
 
     private static Geometry? Load(string key)

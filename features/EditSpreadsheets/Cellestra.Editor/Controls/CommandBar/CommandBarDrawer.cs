@@ -572,12 +572,12 @@ public static class CommandBarDrawer
         bool hover = false;
         void Paint() => row.Background = on ? CommandBarChrome.ActiveBackground : hover ? CommandBarChrome.HoverBackground : Brushes.Transparent;
 
-        CellStyle transform(CellStyle s) => s.WithNumberFormat(option.Format);
+        CellStyle Transform(CellStyle s) => s.WithNumberFormat(option.Format);
         row.PointerEntered += (_, _) =>
         {
             hover = true;
             Paint();
-            env.PreviewCellStyle(transform);
+            env.PreviewCellStyle(Transform);
         };
         row.PointerExited += (_, _) =>
         {
@@ -587,7 +587,7 @@ public static class CommandBarDrawer
         };
         row.Click += (_, _) =>
         {
-            env.ApplyCellStyle(transform, "Number format");
+            env.ApplyCellStyle(Transform, "Number format");
             env.Narrate($"{option.Label} · {env.Selection.ActiveAddress}");
             // Currency/date can be wider than the column — grow it so the result shows, not #####.
             if (option.Kind != NumberFormatKind.General)

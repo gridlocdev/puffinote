@@ -86,15 +86,15 @@ public class FunctionsTests
     [Fact]
     public void Count_and_counta()
     {
-        static void setup(Worksheet s)
+        static void Setup(Worksheet s)
         {
             s.SetValue(0, 0, CellValue.Number(1));
             s.SetValue(1, 0, CellValue.Text("x"));
             s.SetValue(2, 0, CellValue.Number(3));
         }
 
-        Assert.Equal(2, FormulaHarness.Number("COUNT(A1:A3)", setup));
-        Assert.Equal(3, FormulaHarness.Number("COUNTA(A1:A3)", setup));
+        Assert.Equal(2, FormulaHarness.Number("COUNT(A1:A3)", Setup));
+        Assert.Equal(3, FormulaHarness.Number("COUNTA(A1:A3)", Setup));
     }
 
     [Fact]
@@ -119,13 +119,13 @@ public class FunctionsTests
     [Fact]
     public void Sumif_with_separate_sum_range()
     {
-        static void setup(Worksheet s)
+        static void Setup(Worksheet s)
         {
             Column(0, 1, 2, 3, 4, 5)(s);
             Column(1, 10, 20, 30, 40, 50)(s);
         }
 
-        Assert.Equal(120, FormulaHarness.Number("SUMIF(A1:A5,\">2\",B1:B5)", setup));
+        Assert.Equal(120, FormulaHarness.Number("SUMIF(A1:A5,\">2\",B1:B5)", Setup));
     }
 
     [Fact]
@@ -133,13 +133,13 @@ public class FunctionsTests
     {
         // sum_range B1:B3 is smaller than the criteria range A1:A5; Excel/Calc anchor it at B1 and
         // reshape it to A1:A5's shape, so the matched rows 3,4,5 read B3,B4,B5 = 30+40+50 = 120.
-        static void setup(Worksheet s)
+        static void Setup(Worksheet s)
         {
             Column(0, 1, 2, 3, 4, 5)(s);
             Column(1, 10, 20, 30, 40, 50)(s);
         }
 
-        Assert.Equal(120, FormulaHarness.Number("SUMIF(A1:A5,\">2\",B1:B3)", setup));
+        Assert.Equal(120, FormulaHarness.Number("SUMIF(A1:A5,\">2\",B1:B3)", Setup));
     }
 
     [Fact]
@@ -147,13 +147,13 @@ public class FunctionsTests
     {
         // A single-cell sum_range B1 is anchored and reshaped to A1:A5; matched rows 3,4,5 read
         // B3,B4,B5 = 30+40+50 = 120 (it must not be clamped to B1 nor yield #REF!).
-        static void setup(Worksheet s)
+        static void Setup(Worksheet s)
         {
             Column(0, 1, 2, 3, 4, 5)(s);
             Column(1, 10, 20, 30, 40, 50)(s);
         }
 
-        Assert.Equal(120, FormulaHarness.Number("SUMIF(A1:A5,\">2\",B1)", setup));
+        Assert.Equal(120, FormulaHarness.Number("SUMIF(A1:A5,\">2\",B1)", Setup));
     }
 
     [Fact]
@@ -161,7 +161,7 @@ public class FunctionsTests
     {
         // sum_range C2:C6 is offset from the criteria range; anchored at C2, matched rows 3,4,5
         // (offsets 2,3,4) read C4,C5,C6 = 300+400+500 = 1200.
-        static void setup(Worksheet s)
+        static void Setup(Worksheet s)
         {
             Column(0, 1, 2, 3, 4, 5)(s);
             for (int i = 0; i < 5; i++)
@@ -170,7 +170,7 @@ public class FunctionsTests
             }
         }
 
-        Assert.Equal(1200, FormulaHarness.Number("SUMIF(A1:A5,\">2\",C2:C6)", setup));
+        Assert.Equal(1200, FormulaHarness.Number("SUMIF(A1:A5,\">2\",C2:C6)", Setup));
     }
 
     // ---- Logical ----------------------------------------------------------
@@ -252,7 +252,7 @@ public class FunctionsTests
     [Fact]
     public void Vlookup_exact()
     {
-        static void setup(Worksheet s)
+        static void Setup(Worksheet s)
         {
             s.SetValue(0, 0, CellValue.Number(1));
             s.SetValue(0, 1, CellValue.Text("one"));
@@ -262,8 +262,8 @@ public class FunctionsTests
             s.SetValue(2, 1, CellValue.Text("three"));
         }
 
-        Assert.Equal("two", FormulaHarness.Text("VLOOKUP(2,A1:B3,2,FALSE)", setup));
-        Assert.Equal("three", FormulaHarness.Text("INDEX(A1:B3,3,2)", setup));
+        Assert.Equal("two", FormulaHarness.Text("VLOOKUP(2,A1:B3,2,FALSE)", Setup));
+        Assert.Equal("three", FormulaHarness.Text("INDEX(A1:B3,3,2)", Setup));
         Assert.Equal("two", FormulaHarness.Text("HLOOKUP(\"two\",A1:B3,1)", s =>
         {
             // For HLOOKUP search the first row.
