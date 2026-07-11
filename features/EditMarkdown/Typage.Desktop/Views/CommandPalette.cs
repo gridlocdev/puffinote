@@ -19,7 +19,7 @@ public sealed class CommandPalette : Panel
     // Resolve each command's icon key to its glyph, so a row here reads the same as the same command's row in
     // the toolbar's dropdowns rather than being a bare line of text.
     private readonly PaletteListView _palette =
-        new(key => string.IsNullOrEmpty(key) ? null : new LucideIcon { IconKey = key, Size = 15 })
+        new(LucideIcon.PaletteGlyph)
         {
             Placeholder = "Type a command…",
         };

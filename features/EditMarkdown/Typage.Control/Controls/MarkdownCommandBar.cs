@@ -3,7 +3,6 @@ using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Layout;
 using Avalonia.Media;
-using Avalonia.Threading;
 using Puffinote.Components.Commands;
 using Puffinote.Components.Controls;
 using Puffinote.Components.Controls.CommandBar;
@@ -251,28 +250,10 @@ internal sealed class MarkdownCommandBar : UserControl
         Child = child,
     };
 
-    /// <summary>The search pill's self-contained palette: a fuzzy list of every editor command, run on pick.</summary>
-    private static Flyout BuildSearchFlyout(IReadOnlyList<AppCommand> commands)
-    {
-        var palette = new PaletteListView(key => string.IsNullOrEmpty(key) ? null : new LucideIcon { IconKey = key, Size = 15 })
-        {
-            Placeholder = "Search commands…",
-        };
-        palette.SetItems([.. commands.Select(c => new PaletteEntry(c.Title, c.Execute, c.Description, c.ShortcutText, c.Icon))]);
-
-        var flyout = new Flyout
-        {
-            Content = new Border { Width = 380, Padding = new Thickness(10), Child = palette },
-            Placement = PlacementMode.BottomEdgeAlignedRight,
-            ShowMode = FlyoutShowMode.Standard,
-        };
-        palette.Chosen += entry =>
-        {
-            flyout.Hide();
-            entry.Run();
-        };
-        palette.Cancelled += (_, _) => flyout.Hide();
-        flyout.Opened += (_, _) => Dispatcher.UIThread.Post(() => palette.SearchBox.Focus());
-        return flyout;
-    }
+    /// <summary>The search pill's self-contained palette: a fuzzy list of every editor command, dropped from the pill.</summary>
+    private static Flyout BuildSearchFlyout(IReadOnlyList<AppCommand> commands) =>
+        PaletteFlyout.Anchored(
+            () => [.. commands.Select(c => new PaletteEntry(c.Title, c.Execute, c.Description, c.ShortcutText, c.Icon))],
+            "Search commands…",
+            LucideIcon.PaletteGlyph);
 }

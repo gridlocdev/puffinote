@@ -229,7 +229,7 @@ public partial class MainWindow
 
         // Resolve each command's icon key to its glyph, so a palette row reads like the same command's row in
         // the editor's toolbar rather than as a bare line of text.
-        var palette = new PaletteListView(key => string.IsNullOrEmpty(key) ? null : new LucideIcon { IconKey = key, Size = 15 })
+        var palette = new PaletteListView(LucideIcon.PaletteGlyph)
         {
             Placeholder = "Type a command…",
         };

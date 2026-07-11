@@ -446,15 +446,21 @@ public partial class SpreadsheetEditorView : UserControl, IAppEnvironment
     /// <summary>One palette entry: an icon + command name + description + shortcut that runs an action.</summary>
     private sealed record PaletteItem(string Label, string? Icon, string Description, string Shortcut, Action Run, string Category = "");
 
-    private void ShowPalette(string placeholder, IReadOnlyList<PaletteItem> items)
+    private void ShowPalette(string placeholder, IReadOnlyList<PaletteItem> items) =>
+        ShowPalette(placeholder, [.. items.Select(i => new PaletteEntry(i.Label, i.Run, i.Description, i.Shortcut, i.Icon, i.Category))]);
+
+    /// <summary>
+    /// Open <paramref name="entries"/> in the centred overlay card. This is the keyboard palette's home: a
+    /// shortcut is fired from a neutral, centred gaze, so the results meet the eye in the middle of the window.
+    /// The search pill's click drops its list from the pill instead — see <see cref="PaletteFlyout"/>.
+    /// </summary>
+    private void ShowPalette(string placeholder, IReadOnlyList<PaletteEntry> entries)
     {
-        var palette = new PaletteListView(key => string.IsNullOrEmpty(key)
-            ? null
-            : new LucideIcon { IconKey = key, Size = 16, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 11, 0) })
+        var palette = new PaletteListView(LucideIcon.PaletteGlyph)
         {
             Placeholder = placeholder,
         };
-        palette.SetItems([.. items.Select(i => new PaletteEntry(i.Label, i.Run, i.Description, i.Shortcut, i.Icon, i.Category))]);
+        palette.SetItems(entries);
         palette.Cancelled += (_, _) => OverlayHost.Close();
         palette.Chosen += entry =>
         {

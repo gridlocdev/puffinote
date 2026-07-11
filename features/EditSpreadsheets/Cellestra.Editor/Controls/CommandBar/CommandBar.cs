@@ -41,8 +41,16 @@ public sealed class CommandBar : UserControl
             sections.Add(new AdaptiveCommandBar.Section(group.Name, BuildGroup(group), BuildOverflowGroup(group), rank));
         }
 
+        // The pill drops its palette from itself rather than opening the centred overlay: a click starts with the
+        // eye already in the top-right corner, on the pointer, so that is where the results should appear. The
+        // chord beside it still opens the centred palette (see IAppEnvironment.ShowCommandPalette) — a keystroke
+        // comes from a neutral, centred gaze, and the two distances are the point.
         string shortcut = _env.Commands.ById("view.commandPalette")?.MacShortcut() ?? string.Empty;
-        var search = new AdaptiveCommandBar.SearchPill("Find a tool…", shortcut, "Search and run any command", OnClick: _env.ShowCommandPalette);
+        var search = new AdaptiveCommandBar.SearchPill(
+            "Find a tool…",
+            shortcut,
+            "Search and run any command",
+            Flyout: PaletteFlyout.Anchored(() => PaletteCatalog.Entries(_env.Commands), PaletteCatalog.Placeholder, LucideIcon.PaletteGlyph));
 
         _bar = new AdaptiveCommandBar(sections, search);
         _bar.CollapsedChanged += (_, _) => CollapsedChanged?.Invoke(this, EventArgs.Empty);

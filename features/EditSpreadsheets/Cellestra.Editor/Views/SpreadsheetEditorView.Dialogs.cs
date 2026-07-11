@@ -12,33 +12,11 @@ namespace Cellestra.Editor;
 
 public partial class SpreadsheetEditorView
 {
-    public void ShowCommandPalette()
-    {
-        var items = Commands.All
-            .Where(c => c.IsEnabled)
-            .Select(c => new PaletteItem(c.Title, c.Icon, c.Description, c.MacShortcut(), () => c.Execute(), CommandCategory(c.Id)))
-            .ToList();
-        ShowPalette("Type a command — bold, currency, sort…", items);
-    }
-
-    /// <summary>Friendly category name for a command, derived from its id prefix, used as the palette's section header.</summary>
-    private static string CommandCategory(string id)
-    {
-        string prefix = id.Contains('.', StringComparison.Ordinal) ? id[..id.IndexOf('.', StringComparison.Ordinal)] : id;
-        return prefix switch
-        {
-            "file" => "File",
-            "edit" => "Edit",
-            "format" => "Format",
-            "insert" => "Insert",
-            "sheet" => "Insert",
-            "data" => "Data",
-            "formula" => "Formulas",
-            "view" => "View",
-            "help" => "Help",
-            _ => "Other",
-        };
-    }
+    /// <summary>
+    /// The keyboard palette (⌘K): the same commands the search pill drops, but opened centred over the window —
+    /// a shortcut is fired from a neutral gaze, so the list meets the eye in the middle rather than off in a corner.
+    /// </summary>
+    public void ShowCommandPalette() => ShowPalette(PaletteCatalog.Placeholder, PaletteCatalog.Entries(Commands));
 
     /// <summary>Build a right-click menu from catalog command ids (null = separator); each row shows its icon, label, and shortcut.</summary>
     private MenuFlyout BuildCommandFlyout(params string?[] ids)
