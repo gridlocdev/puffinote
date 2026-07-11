@@ -1,6 +1,6 @@
 # Proposal 0002 — God-file refactor: taming the oversized files
 
-- **Status:** Tier 1 (the big four) **done**; Tier 2 `app` `MainWindow` **done**; rest of Tier 2 + Tier 3 planned. See §6.
+- **Status:** Tier 1 (the big four) **done**; **all of Tier 2 done**; Tier 3 planned. See §6.
 - **Author:** (you) · drafted with Claude
 - **Affects:** `features/EditSpreadsheets` (Cellestra), `features/EditMarkdown` (Typage), `app/` (Puffinote shell)
 
@@ -106,12 +106,15 @@ Convert to `partial`; root keeps fields, ctor, nested `CheckItem`, test seams:
   - Partial-split the residual UI into `.Menu` / `.Shortcuts` / `.Mutations` / `.Session` (a `.Shortcuts`
     partial beyond the three planned keeps the shortcuts-editor/conflict concern out of `.Menu`). Root
     1,094 → **186** lines.
-- **`RadialSettingsDialog.cs` — 1,026 · A + one B.** Extract the command-picker sub-dialog (~230 + its
-  `PickerItem`) to a `CommandPickerOverlay`; partials `.Drag.cs`, `.Confirm.cs`; keep `…ForTest` in root.
-- **`ChartControl.cs` — 741 · Mode A.** Per-chart-family partials: `.Cartesian` (~250), `.Pie`, `.Scatter`,
-  `.Radar`, `.Legend`; shared math/format in root. (Draw methods already `private static`.)
-- **`CommandBarDrawer.cs` — 723 · Mode B.** `partial static` by section: `.Size`, `.Colour`, `.Align`,
-  `.Format` (owns `FormatOption`); shared plumbing in root.
+- **`RadialSettingsDialog.cs` — 1,026 · A + one B · ✅ done.** Root **1,026 → 288**. The planned
+  `CommandPickerOverlay` extraction proved unsafe — six `…ForTest` seams reach into the picker's internals
+  (`_commandPicker`, `_pickerList`) and `CommitPicker()` mutates the parent's shared `_bindings`/selection —
+  so the picker (plus its `PickerItem` record) became a **`.Picker.cs` partial** instead, with the reasoning
+  in the file's XML doc. Split: `.Drag.cs`, `.Confirm.cs`, `.Picker.cs`; `…ForTest` seams stay in root.
+- **`ChartControl.cs` — 741 · Mode A · ✅ done.** Root **741 → 233**. Per-chart-family partials:
+  `.Cartesian` (265), `.Pie`, `.Scatter`, `.Radar`, `.Legend`; shared math/format + `Render` dispatch in root.
+- **`CommandBarDrawer.cs` — 724 · Mode B · ✅ done.** Root **724 → 218**. `partial static` by section:
+  `.Size`, `.Colour`, `.Align`, `.Format` (owns `FormatOption`); shared plumbing in root.
 
 ### Tier 3 — engine + smaller shell (cleanest, lower urgency)
 | File | Lines | Action | Mode |
@@ -135,8 +138,10 @@ Convert to `partial`; root keeps fields, ctor, nested `CheckItem`, test seams:
    adds real test coverage; treat as more than a move.~~ **✅ Done** — four `refactor(shell)` commits on
    `main` (`RecentFilesList` `9cb0872`, `SidebarLayout` `ee96423`, `ShellCommandCatalog` `29140bb`, the
    partial-split `d5448a6`); Puffinote solution builds clean and its tests are green.
-3. **Tier 2 remainder** *(next)* — `RadialSettingsDialog`, `ChartControl`, `CommandBarDrawer` — then Tier 3
-   opportunistically. **Defer `TextDocument`** unless it causes friction.
+3. ~~**Tier 2 remainder** — `RadialSettingsDialog`, `ChartControl`, `CommandBarDrawer`.~~ **✅ Done** — three
+   `refactor(cellestra)` commits on `main` (`RadialSettingsDialog` `7f07fbd`, `ChartControl` `2fff796`,
+   `CommandBarDrawer` `80713ae`); Cellestra solution builds clean (0 warnings), 827 tests green,
+   `dotnet format --verify-no-changes` exits zero. **Tier 3 next, opportunistically; defer `TextDocument`.**
 
 **Effort:** Tier 1–2 ≈ 10 files, each a 0.5–1.5h mechanical-plus-verify unit (`app` `MainWindow` larger,
 ~half a day). Tier 3 is optional polish.
