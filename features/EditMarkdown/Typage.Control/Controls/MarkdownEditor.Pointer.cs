@@ -156,7 +156,7 @@ public partial class MarkdownEditor
         // A task line carries a list marker, so it's always a singleton block (block start == line start).
         var block = BlockOf(line);
         var visual = BlockVisual(block);
-        var contentX = point.X - PaddingLeft + _offset.X;
+        var contentX = point.X - ContentLeft() + _offset.X;
         var blockStart = BlockStartOffset(block);
         foreach (var run in visual.Runs)
         {
@@ -227,7 +227,7 @@ public partial class MarkdownEditor
     {
         EnsureLayout();
         var contentY = point.Y - PaddingTop + _offset.Y;
-        var contentX = point.X - PaddingLeft + _offset.X;
+        var contentX = point.X - ContentLeft() + _offset.X;
 
         // Blocks have variable heights, so find the block by pixel and only then divide by *that* block's row
         // height. Dividing the whole document by one line height (as a uniform-row layout could) would drift

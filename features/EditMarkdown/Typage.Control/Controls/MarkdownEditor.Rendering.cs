@@ -29,7 +29,7 @@ public partial class MarkdownEditor
         var last = Math.Min(_rowCounts.Length, BlockAtY(contentTop + viewportH) + 1);
 
         // Content is drawn in document space, inset by the padding and shifted by the scroll offset.
-        using (context.PushTransform(Matrix.CreateTranslation(PaddingLeft - _offset.X, PaddingTop - _offset.Y)))
+        using (context.PushTransform(Matrix.CreateTranslation(ContentLeft() - _offset.X, PaddingTop - _offset.Y)))
         {
             if (!RawTextMode)
             {
@@ -233,7 +233,7 @@ public partial class MarkdownEditor
             }
 
             // Store the hit rect in control space (undo the PaddingLeft/Top − scroll-offset render transform).
-            _codeCopyButtons.Add((new Rect(x + PaddingLeft - _offset.X, y + PaddingTop - _offset.Y, w, h), line, endLine));
+            _codeCopyButtons.Add((new Rect(x + ContentLeft() - _offset.X, y + PaddingTop - _offset.Y, w, h), line, endLine));
         }
     }
 

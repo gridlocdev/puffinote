@@ -157,6 +157,7 @@ public partial class MainWindow : Window
         EditorView.Editor.View = _settings.Settings.View; // restore the view-mode default
         EditorView.Editor.CompletedTaskSorting = _settings.Settings.CompletedTaskSort; // restore task-sort default
         EditorView.Editor.HorizontalPadding = _settings.Settings.EditorPadding; // restore editor padding
+        EditorView.Editor.MaxContentWidth = _settings.Settings.EditorMaxContentWidth; // and the reading-column cap
         EditorView.Editor.VerticalPadding = _settings.Settings.EditorPaddingVertical;
 
         SetupAutosave();

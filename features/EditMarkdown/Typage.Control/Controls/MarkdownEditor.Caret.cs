@@ -25,7 +25,7 @@ public partial class MarkdownEditor
         // Caret position in scroll-content space (which includes the padding), on its wrapped row. The row's
         // height is the caret block's own — a heading's rows are taller than a paragraph's.
         var rowH = RowHeight(r.Block);
-        var px = x + PaddingLeft;
+        var px = x + ContentLeft();
         var py = RowTop(r.Block) + r.Visual.RowOf(r.Col) * rowH + PaddingTop;
         const double margin = 8;
 

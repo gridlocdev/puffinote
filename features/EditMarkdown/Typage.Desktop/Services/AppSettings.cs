@@ -30,6 +30,13 @@ public sealed class AppSettings
     /// <summary>The top/bottom text inset (padding) of the editor, in pixels, applied to both ends (PRD §7.5).</summary>
     public int EditorPaddingVertical { get; set; } = 14;
 
+    /// <summary>
+    /// The widest the reading column may grow, in pixels; <c>0</c> means full width. Prose much beyond ~45–90
+    /// characters a line is harder to read, so the column is capped and centred by default — but full width is
+    /// a legitimate preference for a Markdown author, so it stays a choice.
+    /// </summary>
+    public int EditorMaxContentWidth { get; set; } = 760;
+
     public bool ShowToolbar { get; set; } = true;
 
     /// <summary>

@@ -171,6 +171,7 @@ public partial class MainWindow
         EditorView.Editor.IndentWidth = s.TabWidth;
         s.EditorPadding = (int)(padding.Value ?? 20);
         EditorView.Editor.HorizontalPadding = s.EditorPadding;
+        EditorView.Editor.MaxContentWidth = s.EditorMaxContentWidth;
         s.EditorPaddingVertical = (int)(paddingY.Value ?? 14);
         EditorView.Editor.VerticalPadding = s.EditorPaddingVertical;
         s.ShowToolbar = showToolbar.IsChecked == true;

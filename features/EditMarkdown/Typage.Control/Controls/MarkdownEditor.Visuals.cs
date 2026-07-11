@@ -52,12 +52,9 @@ public partial class MarkdownEditor
         return false;
     }
 
-    /// <summary>The right edge of the text column in content space (for full-width adornments).</summary>
-    private double ContentRight()
-    {
-        var w = _viewport.Width > 0 ? _viewport.Width : Bounds.Width;
-        return Math.Max(120, w - PaddingLeft * 2);
-    }
+    /// <summary>The right edge of the text column in content space (for full-width adornments) — i.e. the width
+    /// of the capped, centred reading column, since content space starts at its left edge.</summary>
+    private double ContentRight() => ContentWidth();
 
     /// <summary>Whether <paramref name="line"/> is a horizontal rule (its sole token is the rule marker).</summary>
     private bool IsHorizontalRuleLine(int line)

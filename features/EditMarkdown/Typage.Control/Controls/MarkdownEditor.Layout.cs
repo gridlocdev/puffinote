@@ -54,7 +54,7 @@ public partial class MarkdownEditor
         }
 
         var w = _viewport.Width > 0 ? _viewport.Width : Bounds.Width;
-        return w > 0 ? Math.Max(40, w - PaddingLeft * 2) : 0;
+        return w > 0 ? Math.Max(40, ContentWidth()) : 0;
     }
 
     // ----- rendering -----

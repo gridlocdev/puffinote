@@ -265,6 +265,54 @@ public partial class MarkdownEditor : Avalonia.Controls.Control, ILogicalScrolla
     private double PaddingLeft => HorizontalPadding ?? EditorTheme.PaddingLeft;
 
     /// <summary>
+    /// The widest the reading column may grow, in device pixels; <c>0</c> means unlimited (full width).
+    ///
+    /// <para>Prose set much beyond ~45–90 characters a line is measurably harder to read: the eye loses the
+    /// line it is returning to. On a wide window the text would otherwise run edge to edge, and it only gets
+    /// worse on a larger display. Capping the column and centring it fixes the measure without taking the choice
+    /// away — some Markdown authors genuinely want the full width, so this is a knob, not a decree (Settings ▸
+    /// reading width, and 0 restores the old behaviour).</para>
+    /// </summary>
+    public double MaxContentWidth
+    {
+        get; set
+        {
+            if (field == value)
+            {
+                return;
+            }
+
+            field = value;
+            _layout.InvalidateAll(); // the wrap width changed — every block re-measures
+            _extentWidth = 0;
+            RaiseScrollInvalidated(EventArgs.Empty);
+            InvalidateMeasure();
+            InvalidateVisual();
+        }
+    } = 760;
+
+    /// <summary>The width of the text column: the viewport less its padding, capped by <see cref="MaxContentWidth"/>.</summary>
+    private double ContentWidth()
+    {
+        var w = _viewport.Width > 0 ? _viewport.Width : Bounds.Width;
+        var available = Math.Max(120, w - (PaddingLeft * 2));
+        return MaxContentWidth > 0 ? Math.Min(available, MaxContentWidth) : available;
+    }
+
+    /// <summary>
+    /// The left edge of the text column in control space. When the column is capped and the viewport is wider
+    /// than the cap, the surplus is split evenly so the column sits centred rather than hugging the left edge.
+    /// Every X mapping — the render transform, hit-testing, and caret scroll-into-view — goes through this, so
+    /// they cannot drift apart.
+    /// </summary>
+    private double ContentLeft()
+    {
+        var w = _viewport.Width > 0 ? _viewport.Width : Bounds.Width;
+        var slack = w - (PaddingLeft * 2) - ContentWidth();
+        return PaddingLeft + (slack > 0 ? slack / 2 : 0);
+    }
+
+    /// <summary>
     /// The top/bottom text inset from the editor edge, in device pixels, applied symmetrically to both ends
     /// (Settings ▸ padding). When null the theme's own <see cref="MarkdownTheme.PaddingTop"/> is used. Unlike
     /// the horizontal inset this doesn't affect wrapping, only the scroll extent and where content is drawn.
@@ -633,6 +681,17 @@ public partial class MarkdownEditor : Avalonia.Controls.Control, ILogicalScrolla
 
     /// <summary>Document offset the visual line resolves <paramref name="x"/> to on <paramref name="line"/>'s block (hit-test); for tests.</summary>
     internal int OffsetAtForTest(int line, double x) => OffsetAt(BlockOf(line), 0, x);
+
+    /// <summary>Resolve a control-space point to a document offset, exactly as a click does; for tests.</summary>
+    internal int OffsetAtPointForTest(Point point) => OffsetAtPoint(point);
+
+    /// <summary>The control-space X the caret is drawn at; for tests (that hit-testing tracks the column).</summary>
+    internal double CaretXForTest()
+    {
+        EnsureLayout();
+        var r = ResolveCaret(Buffer.Selection.Caret);
+        return r.Visual.ColumnToX(r.Col) + ContentLeft() - _offset.X;
+    }
 
     /// <summary>The number of wrapped visual rows <paramref name="line"/>'s block occupies at the current width; for tests.</summary>
     internal int RowCountForTest(int line) => LineVisual(line).RowCount;
