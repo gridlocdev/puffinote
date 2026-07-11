@@ -101,12 +101,15 @@ internal sealed class BlockLayoutBuilder
         var segments = new List<VisualLine.Segment>();
         var pos = 0;
         var lastHeading = 0;
+        var lastQuote = false;
         for (var line = startLine; line <= endLine; line++)
         {
             var lineStart = doc.GetLineStart(line);
             var lineText = doc.GetText(lineStart, doc.GetLineEnd(line) - lineStart).TrimEnd('\r');
             var headingLevel = HeadingLevel(line);
             lastHeading = headingLevel;
+            var inQuote = InQuote(line);
+            lastQuote = inQuote;
             var hasTask = _model.LineTokens(line).Any(t => t.Type == TokenType.TaskMarker);
             // The text of an inline link [text](url) is tokenized as ordinary content (the engine recurses
             // into it), so to render it like an HTML hyperlink we colour + underline any content that falls
@@ -125,7 +128,7 @@ internal sealed class BlockLayoutBuilder
                 if (s > pos)
                 {
                     // The gap (including a joined newline) is plain text — unless it falls inside a link's text.
-                    var gapStyle = DefaultStyle(headingLevel);
+                    var gapStyle = DefaultStyle(headingLevel, inQuote);
                     if (InLinkText(linkSpans, pos + blockStart, s + blockStart))
                     {
                         gapStyle = AsLink(gapStyle);
@@ -138,7 +141,7 @@ internal sealed class BlockLayoutBuilder
                 // the segment itself is placed at block-relative columns.
                 var sLine = Math.Clamp(t.Start - lineStart, 0, lineText.Length);
                 var enLine = Math.Clamp(t.End - lineStart, 0, lineText.Length);
-                var style = StyleFor(t.Type, headingLevel);
+                var style = StyleFor(t.Type, headingLevel, inQuote);
                 var concealed = MarkerConcealed(t);
 
                 if (concealed)
@@ -182,7 +185,7 @@ internal sealed class BlockLayoutBuilder
 
         if (pos < contentLen)
         {
-            segments.Add(new VisualLine.Segment(pos, contentLen, DefaultStyle(lastHeading), false));
+            segments.Add(new VisualLine.Segment(pos, contentLen, DefaultStyle(lastHeading, lastQuote), false));
         }
 
         return VisualLine.Build(text, segments, _measurer.MeasureWidth, _wrapWidth);
@@ -199,20 +202,34 @@ internal sealed class BlockLayoutBuilder
         return 0;
     }
 
-    private RunStyle DefaultStyle(int headingLevel)
+    /// <summary>Whether <paramref name="line"/> is inside a blockquote (so its prose reads as secondary).</summary>
+    private bool InQuote(int line)
     {
-        var style = _theme.Resolve(TokenType.Text);
-        return headingLevel > 0 ? style with { FontSize = _theme.HeadingSize(headingLevel), Typeface = HeadingTypeface(style) } : style;
+        var tokens = _model.LineTokens(line);
+        return tokens.Count > 0 && tokens[0].Type == TokenType.BlockquoteMarker;
     }
 
-    private RunStyle StyleFor(TokenType type, int headingLevel)
+    private RunStyle DefaultStyle(int headingLevel, bool inQuote = false) =>
+        StyleFor(TokenType.Text, headingLevel, inQuote);
+
+    /// <summary>
+    /// The style for a <paramref name="type"/> run on a line at <paramref name="headingLevel"/>. On a heading
+    /// line every run — the concealed <c>#</c> included — takes the heading's size, weight, and (for prose) its
+    /// colour, so the whole line sits on one baseline. Inside a blockquote, prose steps down to the quote's
+    /// dimmer foreground; code, links, and markers keep the colour that identifies them.
+    /// </summary>
+    private RunStyle StyleFor(TokenType type, int headingLevel, bool inQuote = false)
     {
         var style = _theme.Resolve(type, headingLevel);
-        // On a heading line, scale everything — including the leading '#' marker — to the heading
-        // size so the markers sit at the same size as the heading text on that line.
         if (headingLevel > 0)
         {
-            style = style with { FontSize = _theme.HeadingSize(headingLevel) };
+            return _theme.OnHeading(style, headingLevel, type);
+        }
+
+        if (inQuote && type is TokenType.Text or TokenType.Strong or TokenType.Emphasis
+            or TokenType.StrongEmphasis or TokenType.Strikethrough)
+        {
+            style = style with { Foreground = _theme.QuoteForeground };
         }
 
         return style;
@@ -477,9 +494,6 @@ internal sealed class BlockLayoutBuilder
         // — heading/quote/list/task/HR prefixes and all inline emphasis/code/link/escape markers — hides.
         return t.Type is not (TokenType.CodeFence or TokenType.FrontMatterFence or TokenType.TableDelimiter);
     }
-
-    private static Typeface HeadingTypeface(RunStyle baseStyle) =>
-        new(baseStyle.Typeface.FontFamily, FontStyle.Normal, FontWeight.Bold);
 
     /// <summary>Restyle a run as an inline-link hyperlink: link colour + underline, keeping its typeface/size.</summary>
     private RunStyle AsLink(RunStyle style) =>

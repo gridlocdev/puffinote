@@ -21,15 +21,12 @@ public partial class MarkdownEditor
         // row is actually drawn — so the caret never disappears into a skipped zero-row block.
         var caretBlock = ResolveCaret(caret.Caret).Block;
 
-        // Draw only the paragraph blocks whose wrapped rows intersect the viewport (virtualization over
-        // variable block heights). The viewport height is 0 until the control is arranged in a scroll viewer.
-        var lineH = EditorTheme.LineHeight;
+        // Draw only the blocks that intersect the viewport (virtualization over variable block heights).
+        // The viewport height is 0 until the control is arranged in a scroll viewer.
         var viewportH = _viewport.Height > 0 ? _viewport.Height : Bounds.Height;
         var contentTop = _offset.Y - PaddingTop;
-        var firstRow = Math.Max(0, (int)(contentTop / lineH));
-        var lastRow = (int)((contentTop + viewportH) / lineH) + 1;
-        var first = BlockAtRow(firstRow);
-        var last = Math.Min(_rowCounts.Length, BlockAtRow(lastRow) + 1);
+        var first = BlockAtY(contentTop);
+        var last = Math.Min(_rowCounts.Length, BlockAtY(contentTop + viewportH) + 1);
 
         // Content is drawn in document space, inset by the padding and shifted by the scroll offset.
         using (context.PushTransform(Matrix.CreateTranslation(PaddingLeft - _offset.X, PaddingTop - _offset.Y)))
@@ -37,6 +34,7 @@ public partial class MarkdownEditor
             if (!RawTextMode)
             {
                 DrawPropertiesPanel(context, first, last); // front-matter "Properties" backdrop, under the text
+                DrawBlockPanels(context, first, last);     // code-block and blockquote panels, under the text
             }
 
             var maxWidth = _extentWidth;
@@ -50,10 +48,10 @@ public partial class MarkdownEditor
                 maxWidth = Math.Max(maxWidth, RenderBlock(context, doc, block, caret, caretBlock));
             }
 
-            DrawReorderIndicator(context, lineH);
+            DrawReorderIndicator(context);
             if (!RawTextMode)
             {
-                DrawCodeCopyButtons(context, first, last, lineH); // no code-block chrome in the plain-source view
+                DrawCodeCopyButtons(context, first, last); // no code-block chrome in the plain-source view
             }
 
             // Only relevant when wrapping is off: grow the horizontal extent as wide lines come into view.
@@ -87,16 +85,14 @@ public partial class MarkdownEditor
             return;
         }
 
-        var lineH = EditorTheme.LineHeight;
-        var viewportW = _viewport.Width > 0 ? _viewport.Width : Bounds.Width;
-        var panelRight = Math.Max(220, viewportW - PaddingLeft * 2);
-        var startTop = RowTop(startBlock);
-        var endBottom = RowTop(endBlock) + _rowCounts[endBlock] * lineH;
-        context.FillRectangle(EditorTheme.PropertiesBackground, new Rect(-8, startTop + 2, panelRight + 8, endBottom - startTop - 4), 6);
+        var panelRight = ContentRight();
+        var startTop = BlockTop(startBlock);
+        var endBottom = BlockTop(endBlock) + BlockHeight(endBlock);
+        context.FillRectangle(EditorTheme.PropertiesBackground, new Rect(-8, startTop, panelRight + 8, endBottom - startTop), 6);
 
         // "Properties" label on the opening-fence row (its source is only "---", so no text overlap).
         var label = _measurer.GetFormattedText("Properties", EditorTheme.Resolve(TokenType.FrontMatterFence), _dimMarker);
-        var labelY = startTop + (lineH - label.Height) / 2;
+        var labelY = RowTop(startBlock) + (RowHeight(startBlock) - label.Height) / 2;
         context.DrawText(label, new Point(panelRight - label.Width - 6, labelY));
     }
 
@@ -105,7 +101,7 @@ public partial class MarkdownEditor
     /// (Alt+Shift+Up/Down), so it's visually clear what's moving. Drawn in document space inside the
     /// content transform; a no-op unless a reorder session is active.
     /// </summary>
-    private void DrawReorderIndicator(DrawingContext context, double lineH)
+    private void DrawReorderIndicator(DrawingContext context)
     {
         if (!_reorderActive)
         {
@@ -119,9 +115,9 @@ public partial class MarkdownEditor
             return;
         }
 
-        var top = RowTop(BlockOf(_reorderStartLine));
+        var top = BlockTop(BlockOf(_reorderStartLine));
         var bottomBlock = BlockOf(_reorderEndLine);
-        var bottom = RowTop(bottomBlock) + _rowCounts[bottomBlock] * lineH;
+        var bottom = BlockTop(bottomBlock) + BlockHeight(bottomBlock);
         var pen = new Pen(_dimMarker, 1) { DashStyle = new DashStyle([2, 2], 0) };
         var left = -6.0;
         var right = ContentRight();
@@ -130,11 +126,65 @@ public partial class MarkdownEditor
     }
 
     /// <summary>
+    /// Draw the background panels for code blocks and blockquotes: one rectangle per <i>run</i>, not per block.
+    ///
+    /// <para>A fenced-code block and a blockquote are each spelled as one source line per block, but they read as
+    /// a single object — so the panel is drawn once across the whole run, with the run's rounded corners and its
+    /// left accent bar spanning every row. Drawing it per block would round every line's corners and leave the
+    /// bar broken across the run's inner padding and across any wrapped continuation row.</para>
+    ///
+    /// <para>A run is expanded past the visible range in both directions before drawing: scrolling into the
+    /// middle of a long code block must still paint the panel, even though the block that opens it was culled.</para>
+    /// </summary>
+    private void DrawBlockPanels(DrawingContext context, int firstBlock, int lastBlock)
+    {
+        var count = _rowCounts.Length;
+        var b = firstBlock;
+        while (b < lastBlock)
+        {
+            var kind = KindOfBlock(b);
+            if (kind is not (MarkdownBlockKind.Code or MarkdownBlockKind.Blockquote))
+            {
+                b++;
+                continue;
+            }
+
+            var start = b;
+            while (start > 0 && KindOfBlock(start - 1) == kind)
+            {
+                start--;
+            }
+
+            var end = b;
+            while (end + 1 < count && KindOfBlock(end + 1) == kind)
+            {
+                end++;
+            }
+
+            var top = BlockTop(start);
+            var rect = new Rect(-8, top, ContentRight() + 16, BlockTop(end) + BlockHeight(end) - top);
+            if (kind == MarkdownBlockKind.Code)
+            {
+                var r = EditorTheme.CodeBlockCornerRadius;
+                context.DrawRectangle(EditorTheme.CodeBlockBackground, new Pen(EditorTheme.CodeBlockBorder, 0.5), rect, r, r);
+            }
+            else
+            {
+                // Square corners: a rounded corner on a single-sided border reads as broken, not as a quote.
+                context.FillRectangle(EditorTheme.QuoteBackground, rect);
+                context.FillRectangle(EditorTheme.QuoteBar, rect.WithWidth(EditorTheme.QuoteBarWidth));
+            }
+
+            b = end + 1;
+        }
+    }
+
+    /// <summary>
     /// A "copy" button at the top-right of each code block (fenced or indented) visible in the viewport, plus
     /// a transient "Copied!" label after a click. Drawn in document space; the hit rect is stored in control
     /// space (the inverse of the render transform) so <see cref="OnPointerPressed"/> can test pointer clicks.
     /// </summary>
-    private void DrawCodeCopyButtons(DrawingContext context, int firstBlock, int lastBlock, double lineH)
+    private void DrawCodeCopyButtons(DrawingContext context, int firstBlock, int lastBlock)
     {
         _codeCopyButtons.Clear();
         var doc = Buffer.Document;
@@ -153,9 +203,9 @@ public partial class MarkdownEditor
             }
 
             const double w = 24;
-            var h = lineH - 8;
-            var x = ContentRight() - w - 6;
-            var y = RowTop(b) + 4;
+            const double h = 18;
+            var x = ContentRight() - w - 8;
+            var y = RowTop(b) + (RowHeight(b) - h) / 2;
             var rect = new Rect(x, y, w, h);
             context.FillRectangle(EditorTheme.CodeBlockBackground, rect, 4);
             DrawCopyGlyph(context, rect);
@@ -186,61 +236,55 @@ public partial class MarkdownEditor
 
     private double RenderBlock(DrawingContext context, TextDocument doc, int block, Selection sel, int caretBlock)
     {
-        var lineH = EditorTheme.LineHeight;
-        var blockTop = RowTop(block);
+        var lineH = RowHeight(block);
+        var rowsTop = RowTop(block);
         var startLine = _blockStartLine[block];
         var blockStart = doc.GetLineStart(startLine);
         var visual = BlockVisual(block);
-
-        // A code block (always a singleton block) gets a subtle background panel spanning all its rows.
-        // Raw-text view is unstyled, so it draws no panel.
-        if (!RawTextMode && IsCodeLine(startLine))
-        {
-            context.FillRectangle(EditorTheme.CodeBlockBackground, new Rect(-8, blockTop, ContentRight() + 16, visual.RowCount * lineH));
-        }
 
         // A horizontal rule has no real text to place a visible caret on, so when the caret is on it
         // (WYSIWYG view, no range selection) highlight the whole rule row in the selection colour to show
         // the rule line itself is the focused / selected line.
         if (IsFocused && ShouldHighlightRuleLine(startLine))
         {
-            context.FillRectangle(EditorTheme.SelectionBackground, new Rect(-8, blockTop, ContentRight() + 16, visual.RowCount * lineH));
+            context.FillRectangle(EditorTheme.SelectionBackground, new Rect(-8, BlockTop(block), ContentRight() + 16, BlockHeight(block)));
         }
 
         // Search-match highlights (under the text), then the selection on top.
         if (_searchMatches.Count > 0)
         {
-            DrawSearchMatches(context, blockStart, blockTop, visual);
+            DrawSearchMatches(context, blockStart, rowsTop, lineH, visual);
         }
 
         if (sel.Length > 0)
         {
-            DrawSelection(context, blockStart, blockTop, sel, visual);
+            DrawSelection(context, blockStart, rowsTop, lineH, sel, visual);
         }
 
         // Draw every visual run on its wrapped row: concealed marker runs vanish (zero width, not drawn);
         // text and decorations advance the cursor exactly as the offset↔visual map measured them.
         foreach (var run in visual.Runs)
         {
-            var rowTop = blockTop + run.Row * lineH;
+            var rowTop = rowsTop + run.Row * lineH;
             switch (run.Kind)
             {
                 case VisualRunKind.Text:
-                    DrawTextRun(context, run, rowTop);
+                    DrawTextRun(context, run, rowTop, lineH);
                     break;
                 case VisualRunKind.Decoration:
-                    DrawDecoration(context, run, rowTop);
+                    DrawDecoration(context, run, rowTop, lineH);
                     break;
             }
         }
 
-        // Caret — placed through the map (correct amid hidden markers) on its wrapped row.
+        // Caret — placed through the map (correct amid hidden markers) on its wrapped row. It takes the row's
+        // own height, so it grows on a heading line rather than staying body-sized.
         if (caretBlock == block && IsFocused)
         {
             var col = Math.Clamp(sel.Caret - blockStart, 0, visual.RawLength);
             var caretX = visual.ColumnToX(col);
-            var h = EditorTheme.BaseFontSize * 1.3;
-            var y = blockTop + visual.RowOf(col) * lineH + (lineH - h) / 2;
+            var h = lineH * 0.8;
+            var y = rowsTop + visual.RowOf(col) * lineH + (lineH - h) / 2;
             context.FillRectangle(EditorTheme.Caret, new Rect(caretX, y, 1.5, h));
         }
 
@@ -248,14 +292,19 @@ public partial class MarkdownEditor
     }
 
     /// <summary>Draw one visible run (content, or a revealed marker — markers carry their own brush in the style).</summary>
-    private void DrawTextRun(DrawingContext context, VisualRun run, double lineTop)
+    private void DrawTextRun(DrawingContext context, VisualRun run, double lineTop, double lineH)
     {
         var ft = _measurer.GetFormattedText(run.Text, run.Style, run.Style.Foreground);
-        var y = lineTop + (EditorTheme.LineHeight - ft.Height) / 2;
+        var y = lineTop + (lineH - ft.Height) / 2;
 
+        // An inline-code chip: sized to the code run's own font, not the row, and bled a few pixels past the
+        // text so it reads as a chip around the code rather than a highlight behind it.
         if (run.Style.Background is not null)
         {
-            context.FillRectangle(run.Style.Background, new Rect(run.X, lineTop + 2, ft.Width, EditorTheme.LineHeight - 4), 3);
+            const double bleed = 3;
+            var chipH = run.Style.FontSize * 1.5;
+            var chip = new Rect(run.X - bleed, lineTop + (lineH - chipH) / 2, ft.Width + (bleed * 2), chipH);
+            context.FillRectangle(run.Style.Background, chip, 4);
         }
 
         context.DrawText(ft, new Point(run.X, y));
@@ -290,9 +339,8 @@ public partial class MarkdownEditor
         }
     }
 
-    private void DrawSearchMatches(DrawingContext context, int blockStart, double blockTop, VisualLine visual)
+    private void DrawSearchMatches(DrawingContext context, int blockStart, double blockTop, double lineH, VisualLine visual)
     {
-        var lineH = EditorTheme.LineHeight;
         var blockEnd = blockStart + visual.RawLength;
         // Matches are sorted, non-overlapping → both Start and End ascend. Binary-search the first
         // match that could touch this block, then walk forward, so a block only touches its own matches
@@ -340,9 +388,8 @@ public partial class MarkdownEditor
         return lo;
     }
 
-    private void DrawSelection(DrawingContext context, int blockStart, double blockTop, Selection sel, VisualLine visual)
+    private void DrawSelection(DrawingContext context, int blockStart, double blockTop, double lineH, Selection sel, VisualLine visual)
     {
-        var lineH = EditorTheme.LineHeight;
         var contentLen = visual.RawLength;
         var blockEnd = blockStart + contentLen;
         if (sel.Start > blockEnd || sel.End < blockStart)
@@ -365,9 +412,8 @@ public partial class MarkdownEditor
 
     // ----- input -----
 
-    private void DrawDecoration(DrawingContext context, VisualRun run, double lineTop)
+    private void DrawDecoration(DrawingContext context, VisualRun run, double lineTop, double lineH)
     {
-        var lineH = EditorTheme.LineHeight;
         var cy = lineTop + lineH / 2;
         switch (run.Decoration)
         {
@@ -403,13 +449,15 @@ public partial class MarkdownEditor
                 {
                     // The computed ordinal (e.g. "3. "), drawn in the bullet colour where the digits would be.
                     var ft = _measurer.GetFormattedText(run.Text, run.Style, EditorTheme.BulletForeground);
-                    var ny = lineTop + (EditorTheme.LineHeight - ft.Height) / 2;
+                    var ny = lineTop + (lineH - ft.Height) / 2;
                     context.DrawText(ft, new Point(run.X, ny));
                     break;
                 }
 
             case DecorationKind.QuoteBar:
-                context.FillRectangle(EditorTheme.QuoteBar, new Rect(run.X + 2, lineTop + 2, 2.5, lineH - 4));
+                // Nothing to draw: the bar is painted once for the whole quote by DrawBlockPanels, so it stays
+                // continuous across the quote's inner padding and across wrapped continuation rows. The
+                // decoration survives only for its width — it is what holds the quote's text off the bar.
                 break;
 
             case DecorationKind.HorizontalRule:

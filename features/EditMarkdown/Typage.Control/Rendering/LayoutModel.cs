@@ -54,8 +54,69 @@ internal sealed class LayoutModel
     public int[] RowCounts { get; private set; } = [];
     public int[] RowPrefix { get; private set; } = new int[1];
 
+    /// <summary>Each block's kind, which decides its metrics (row height, margins, padding).</summary>
+    public MarkdownBlockKind[] BlockKinds { get; private set; } = [];
+
+    /// <summary>Each block's resolved metrics.</summary>
+    public BlockMetrics[] BlockMetricsOf { get; private set; } = [];
+
+    /// <summary>
+    /// The Y coordinate of each block's <i>box</i> top (padding included), plus a final entry holding the
+    /// document's total content height. Blocks have variable heights — a heading's rows are taller than a
+    /// paragraph's, and the margins between them collapse — so unlike <see cref="RowPrefix"/> this is a
+    /// prefix sum in <b>pixels</b>, and it is what drawing, hit-testing, and the scroll extent all read.
+    /// </summary>
+    public double[] BlockTops { get; private set; } = new double[1];
+
+    /// <summary>Each block's total height: <c>PadTop + rows × RowHeight + PadBottom</c> (0 for a collapsed blank).</summary>
+    public double[] BlockHeights { get; private set; } = [];
+
     /// <summary>The total visual-row count across the document at the current width.</summary>
     public int TotalRows => RowPrefix.Length > 0 ? RowPrefix[^1] : 0;
+
+    /// <summary>The document's total height in pixels at the current width.</summary>
+    public double ContentHeight => BlockTops.Length > 0 ? BlockTops[^1] : 0;
+
+    /// <summary>The height of one wrapped row inside <paramref name="block"/>.</summary>
+    public double RowHeight(int block) => Metrics(block).RowHeight;
+
+    /// <summary>The top of <paramref name="block"/>'s box — its background/panel starts here, above any padding.</summary>
+    public double BlockTop(int block) => BlockTops[Math.Clamp(block, 0, BlockTops.Length - 1)];
+
+    /// <summary>The height of <paramref name="block"/>'s box, padding included.</summary>
+    public double BlockHeight(int block) =>
+        BlockHeights.Length == 0 ? 0 : BlockHeights[Math.Clamp(block, 0, BlockHeights.Length - 1)];
+
+    private BlockMetrics Metrics(int block) => BlockMetricsOf.Length == 0
+        ? _host.Theme.MetricsFor(MarkdownBlockKind.Paragraph)
+        : BlockMetricsOf[Math.Clamp(block, 0, BlockMetricsOf.Length - 1)];
+
+    /// <summary>The block containing content-space Y coordinate <paramref name="y"/> (binary search over
+    /// <see cref="BlockTops"/>) — the pixel-space counterpart of <see cref="BlockAtRow"/>.</summary>
+    public int BlockAtY(double y)
+    {
+        var n = BlockHeights.Length;
+        if (n == 0)
+        {
+            return 0;
+        }
+
+        int lo = 0, hi = n - 1;
+        while (lo < hi)
+        {
+            var mid = (lo + hi + 1) >> 1;
+            if (BlockTops[mid] <= y)
+            {
+                lo = mid;
+            }
+            else
+            {
+                hi = mid - 1;
+            }
+        }
+
+        return lo;
+    }
 
     /// <summary>Mark the layout stale from <paramref name="fromLine"/> down (an incremental edit); blocks above
     /// it are reused on the next <see cref="EnsureLayout"/>.</summary>
@@ -78,8 +139,9 @@ internal sealed class LayoutModel
 
     public int BlockEndOffset(int block) => _host.Document.GetLineEnd(BlockStartLine[block + 1] - 1);
 
-    /// <summary>The Y coordinate (content space) at which <paramref name="block"/>'s first row begins.</summary>
-    public double RowTop(int block) => RowPrefix[Math.Clamp(block, 0, RowPrefix.Length - 1)] * _host.Theme.LineHeight;
+    /// <summary>The Y coordinate (content space) at which <paramref name="block"/>'s first <i>text row</i> begins —
+    /// its box top plus its top padding.</summary>
+    public double RowTop(int block) => BlockTop(block) + Metrics(block).PadTop;
 
     /// <summary>
     /// Rebuild the paragraph-block grouping and per-block row-count cache (with prefix sums) when the text,
@@ -172,9 +234,145 @@ internal sealed class LayoutModel
 
         RowCounts = rowCounts;
         RowPrefix = rowPrefix;
+        BuildVerticalRhythm(blockCount, rowCounts);
         _layoutWidth = width;
         _layoutDirty = false;
         _firstDirtyLine = int.MaxValue;
+    }
+
+    /// <summary>
+    /// Resolve every block's kind and metrics, then accumulate the pixel prefix sums that place them.
+    ///
+    /// <para>Two rules make the result read as a document rather than a stack of lines. Margins <b>collapse</b>
+    /// (<see cref="MarkdownTheme.GapBetween"/>): the gap between two blocks is the larger of the upper one's
+    /// SpaceAfter and the lower one's SpaceBefore, not their sum. And a <b>collapsed blank</b> separator — the
+    /// single blank source line between two paragraphs — is transparent: it takes no height <i>and</i> no gap of
+    /// its own, so the two paragraphs it separates collapse against each other directly. Were it opaque, a
+    /// paragraph's 12px SpaceAfter would be paid twice (once into the blank, once out of it) and every paragraph
+    /// break would be double-spaced.</para>
+    /// </summary>
+    private void BuildVerticalRhythm(int blockCount, int[] rowCounts)
+    {
+        var theme = _host.Theme;
+        var kinds = new MarkdownBlockKind[blockCount];
+        for (var b = 0; b < blockCount; b++)
+        {
+            kinds[b] = KindOf(b);
+        }
+
+        var metrics = new BlockMetrics[blockCount];
+        var heights = new double[blockCount];
+        for (var b = 0; b < blockCount; b++)
+        {
+            // A run is a maximal stretch of same-kind blocks — the source lines of one fenced-code panel,
+            // blockquote, or table. Only its outer edges carry the inner padding, so the run reads as one object.
+            var firstOfRun = b == 0 || kinds[b - 1] != kinds[b];
+            var lastOfRun = b == blockCount - 1 || kinds[b + 1] != kinds[b];
+            var m = theme.MetricsFor(kinds[b], HeadingLevelOf(b), firstOfRun, lastOfRun);
+            metrics[b] = m;
+            heights[b] = rowCounts[b] == 0 ? 0 : m.PadTop + (rowCounts[b] * m.RowHeight) + m.PadBottom;
+        }
+
+        var tops = new double[blockCount + 1];
+        var prev = -1; // the last block that actually occupies space; -1 until we've seen one
+        for (var b = 0; b < blockCount; b++)
+        {
+            if (b > 0)
+            {
+                // A zero-height block (a collapsed blank) contributes neither height nor gap: skip it entirely
+                // and collapse across it. The document's first block takes no SpaceBefore — a 48px void above an
+                // opening H1 would just look like broken padding.
+                //
+                // The run-closing rule only applies to *touching* blocks. Two blockquotes with a blank line
+                // between them are two quotes, not one: the blank collapses to zero height, which would otherwise
+                // make them look adjacent here and weld them into a single bar.
+                //
+                // A hard break (a trailing "\" or two spaces) closes the gap entirely. It splits the paragraph
+                // into two blocks — the next line must start a new row — but it is a *line* break, not a
+                // paragraph break, so paying the paragraph's SpaceAfter across it would render it identically to
+                // a blank-line separator and erase the only difference between the two.
+                var gap = prev < 0 || (prev == b - 1 && EndsWithHardBreak(BlockStartLine[b] - 1)) ? 0
+                    : prev == b - 1 ? MarkdownTheme.GapBetween(metrics[prev], kinds[prev], metrics[b], kinds[b])
+                    : Math.Max(metrics[prev].SpaceAfter, metrics[b].SpaceBefore);
+                tops[b] = tops[b - 1] + heights[b - 1] + (heights[b] == 0 ? 0 : gap);
+            }
+
+            if (heights[b] > 0)
+            {
+                prev = b;
+            }
+        }
+
+        tops[blockCount] = blockCount == 0 ? 0 : tops[blockCount - 1] + heights[blockCount - 1];
+
+        BlockKinds = kinds;
+        BlockMetricsOf = metrics;
+        BlockHeights = heights;
+        BlockTops = tops;
+    }
+
+    /// <summary>The heading level of <paramref name="block"/> (1–6), or 0 when it isn't a heading.</summary>
+    private int HeadingLevelOf(int block)
+    {
+        var toks = _host.Model.LineTokens(BlockStartLine[block]);
+        return toks.Count > 0 && toks[0].Type == TokenType.HeadingMarker && int.TryParse(toks[0].Meta, out var l) ? l : 0;
+    }
+
+    /// <summary>
+    /// Classify <paramref name="block"/> from the leading token of its first line — the same signal
+    /// <see cref="IsFlowLine"/> groups on, so the classification and the grouping can never disagree.
+    /// In raw-source view everything is plain source, so every block is a paragraph and the rhythm goes flat.
+    /// </summary>
+    private MarkdownBlockKind KindOf(int block)
+    {
+        if (_host.RawTextMode)
+        {
+            return MarkdownBlockKind.Paragraph;
+        }
+
+        var line = BlockStartLine[block];
+        if (_host.Model.EnteringState(line).Kind != BlockKind.Normal)
+        {
+            // Inside a fenced/indented code body or the front matter — the state, not the token, is what says so.
+            return _host.Model.EnteringState(line).Kind == BlockKind.FrontMatter
+                ? MarkdownBlockKind.FrontMatter
+                : MarkdownBlockKind.Code;
+        }
+
+        var toks = _host.Model.LineTokens(line);
+        if (toks.Count == 0)
+        {
+            return MarkdownBlockKind.Paragraph;
+        }
+
+        switch (toks[0].Type)
+        {
+            case TokenType.HeadingMarker:
+                return MarkdownBlockKind.Heading;
+            case TokenType.BlockquoteMarker:
+                return MarkdownBlockKind.Blockquote;
+            case TokenType.ListMarker or TokenType.TaskMarker:
+                return MarkdownBlockKind.ListItem;
+            case TokenType.HorizontalRule:
+                return MarkdownBlockKind.Rule;
+            case TokenType.CodeFence or TokenType.CodeText:
+                return MarkdownBlockKind.Code;
+            case TokenType.FrontMatterFence or TokenType.FrontMatterText:
+                return MarkdownBlockKind.FrontMatter;
+            case TokenType.TableDelimiter:
+                return MarkdownBlockKind.Table;
+        }
+
+        // A pipe-table header/body row carries single-'|' Marker tokens (only the table tokenizer emits those).
+        foreach (var t in toks)
+        {
+            if (t.Type == TokenType.Marker && t.Length == 1 && _host.Document[t.Start] == '|')
+            {
+                return MarkdownBlockKind.Table;
+            }
+        }
+
+        return MarkdownBlockKind.Paragraph;
     }
 
     /// <summary>Drop cached block visuals at indices &gt;= <paramref name="from"/> (those blocks are being rebuilt).</summary>

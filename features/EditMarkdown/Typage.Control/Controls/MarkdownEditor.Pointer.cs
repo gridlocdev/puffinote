@@ -228,9 +228,13 @@ public partial class MarkdownEditor
         EnsureLayout();
         var contentY = point.Y - PaddingTop + _offset.Y;
         var contentX = point.X - PaddingLeft + _offset.X;
-        var globalRow = Math.Max(0, (int)(contentY / EditorTheme.LineHeight));
-        var block = BlockAtRow(globalRow);
-        var localRow = Math.Clamp(globalRow - _rowPrefix[block], 0, Math.Max(0, _rowCounts[block] - 1));
+
+        // Blocks have variable heights, so find the block by pixel and only then divide by *that* block's row
+        // height. Dividing the whole document by one line height (as a uniform-row layout could) would drift
+        // out of alignment the moment a heading or a code block changed the row pitch above the click.
+        var block = BlockAtY(contentY);
+        var localRow = (int)((contentY - RowTop(block)) / RowHeight(block));
+        localRow = Math.Clamp(localRow, 0, Math.Max(0, _rowCounts[block] - 1));
         return OffsetAt(block, localRow, contentX);
     }
 

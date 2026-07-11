@@ -14,7 +14,7 @@ public partial class MarkdownEditor
         EnsureLayout();
         var h = double.IsFinite(availableSize.Height)
             ? availableSize.Height
-            : Math.Max(EditorTheme.LineHeight, TotalRows * EditorTheme.LineHeight);
+            : Math.Max(EditorTheme.LineHeight, ContentHeight);
         return new Size(w, h);
     }
 

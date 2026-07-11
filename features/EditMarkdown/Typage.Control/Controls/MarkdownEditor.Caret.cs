@@ -22,9 +22,11 @@ public partial class MarkdownEditor
             _extentWidth = Math.Max(_extentWidth, x + 12); // ensure we can scroll to a caret on a wide line
         }
 
-        // Caret position in scroll-content space (which includes the padding), on its wrapped row.
+        // Caret position in scroll-content space (which includes the padding), on its wrapped row. The row's
+        // height is the caret block's own — a heading's rows are taller than a paragraph's.
+        var rowH = RowHeight(r.Block);
         var px = x + PaddingLeft;
-        var py = RowTop(r.Block) + r.Visual.RowOf(r.Col) * EditorTheme.LineHeight + PaddingTop;
+        var py = RowTop(r.Block) + r.Visual.RowOf(r.Col) * rowH + PaddingTop;
         const double margin = 8;
 
         var newY = _offset.Y;
@@ -32,9 +34,9 @@ public partial class MarkdownEditor
         {
             newY = py;
         }
-        else if (py + EditorTheme.LineHeight > _offset.Y + _viewport.Height)
+        else if (py + rowH > _offset.Y + _viewport.Height)
         {
-            newY = py + EditorTheme.LineHeight - _viewport.Height;
+            newY = py + rowH - _viewport.Height;
         }
 
         var newX = _offset.X;

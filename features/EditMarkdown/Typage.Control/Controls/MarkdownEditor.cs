@@ -417,7 +417,7 @@ public partial class MarkdownEditor : Avalonia.Controls.Control, ILogicalScrolla
         get
         {
             EnsureLayout();
-            var height = Math.Max(EditorTheme.LineHeight, TotalRows * EditorTheme.LineHeight) + PaddingTop * 2;
+            var height = Math.Max(EditorTheme.LineHeight, ContentHeight) + PaddingTop * 2;
             // When wrapping, the content never exceeds the viewport width, so there is no horizontal scroll.
             var width = WordWrap ? _viewport.Width : Math.Max(PaddingLeft * 2 + _extentWidth, _viewport.Width);
             return new Size(width, height);
@@ -480,6 +480,15 @@ public partial class MarkdownEditor : Avalonia.Controls.Control, ILogicalScrolla
     private int[] _rowCounts => _layout.RowCounts;
     private int[] _rowPrefix => _layout.RowPrefix;
     private int[] _blockStartLine => _layout.BlockStartLine;
+
+    // The vertical rhythm: blocks have variable heights and collapsing margins, so the geometry the draw and
+    // hit-test paths read is in pixels, not rows (rows remain the unit for Up/Down caret movement only).
+    private double ContentHeight => _layout.ContentHeight;
+    private int BlockAtY(double y) => _layout.BlockAtY(y);
+    private double RowHeight(int block) => _layout.RowHeight(block);
+    private double BlockTop(int block) => _layout.BlockTop(block);
+    private double BlockHeight(int block) => _layout.BlockHeight(block);
+    private MarkdownBlockKind KindOfBlock(int block) => _layout.BlockKinds[Math.Clamp(block, 0, _layout.BlockKinds.Length - 1)];
 
     // ILayoutHost — the live state LayoutModel reads to group and measure blocks.
     TextDocument ILayoutHost.Document => Buffer.Document;
