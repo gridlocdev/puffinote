@@ -86,7 +86,7 @@ public sealed class SortFilterDialog : ModalDialog<SortFilterPlan?>
             },
         };
 
-        SeedFromActiveState(hasHeader);
+        SeedFromActiveState();
         _ready = true;
         UpdateCount();
     }
@@ -98,7 +98,7 @@ public sealed class SortFilterDialog : ModalDialog<SortFilterPlan?>
     /// own state, or the sheet AutoFilter only when it covers exactly this range — via
     /// <see cref="DataScope"/>), so a dialog opened on one table never shows another region's filters.
     /// </summary>
-    private void SeedFromActiveState(bool hasHeader)
+    private void SeedFromActiveState()
     {
         if (DataScope.EffectiveSort(_sheet, _range) is { Levels.Count: > 0 } sort)
         {

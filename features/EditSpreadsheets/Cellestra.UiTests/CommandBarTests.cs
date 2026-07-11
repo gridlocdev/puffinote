@@ -134,7 +134,7 @@ public class CommandBarTests
         // Host the bar in a window we can resize, so the strip gets a real arranged width to fit against.
         var host = new Window { Content = bar, Width = 1400, Height = 120 };
         host.Show();
-        Pump(host);
+        Pump();
 
         int total = CommandBarModel.For(CommandContext.Cell).Count;
 
@@ -145,7 +145,7 @@ public class CommandBarTests
 
         // Narrow: the rightmost groups fold away behind the double-chevron button — no group is lost.
         host.Width = 340;
-        Pump(host);
+        Pump();
 
         Assert.True(bar.IsOverflowing);
         Assert.True(bar.InlineGroupCount < total);
@@ -153,7 +153,7 @@ public class CommandBarTests
 
         // Widen again and the groups come back inline, drawer closes.
         host.Width = 1400;
-        Pump(host);
+        Pump();
 
         Assert.False(bar.IsOverflowing);
         Assert.Equal(total, bar.InlineGroupCount);
@@ -166,7 +166,7 @@ public class CommandBarTests
         var bar = new CommandBar(window.Editor);
         var host = new Window { Content = bar, Width = 340, Height = 120 };
         host.Show();
-        Pump(host);
+        Pump();
 
         Assert.True(bar.IsOverflowing);
 
@@ -192,7 +192,7 @@ public class CommandBarTests
         // Narrow enough that several groups fold, so their relative order is observable.
         var host = new Window { Content = bar, Width = 300, Height = 120 };
         host.Show();
-        Pump(host);
+        Pump();
 
         var headers = bar.OverflowDrawerPanels
             .Select(p => p.GetLogicalDescendants().OfType<TextBlock>().First().Text!)
@@ -209,7 +209,7 @@ public class CommandBarTests
 
     // The reflow runs off the strip's SizeChanged and reparents groups, which queues another layout
     // pass; flush the dispatcher (twice, for the cascade) so the split settles before asserting.
-    private static void Pump(Window window)
+    private static void Pump()
     {
         Dispatcher.UIThread.RunJobs();
         Dispatcher.UIThread.RunJobs();

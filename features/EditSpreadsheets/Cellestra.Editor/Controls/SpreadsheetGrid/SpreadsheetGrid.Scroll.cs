@@ -378,7 +378,7 @@ public sealed partial class SpreadsheetGrid
             return column; // only left/general text spills rightward
         }
 
-        double textWidth = MeasureCellWidth(sheet, cell);
+        double textWidth = MeasureCellWidth(cell);
         double available = EffectiveColumnWidth(sheet, column) - 2 * CellPadX;
         if (textWidth <= available)
         {

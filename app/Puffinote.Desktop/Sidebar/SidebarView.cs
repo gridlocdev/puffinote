@@ -55,7 +55,7 @@ internal sealed class SidebarView : UserControl
         var palette = Tokens.Dark;
         _header.Foreground = palette.MutedText;
 
-        BuildSwitcher(palette);
+        BuildSwitcher();
         _body.Child = _active.View;
 
         Content = new DockPanel
@@ -153,7 +153,7 @@ internal sealed class SidebarView : UserControl
         PanelActivated?.Invoke(panel.Id);
     }
 
-    private void BuildSwitcher(ThemePalette palette)
+    private void BuildSwitcher()
     {
         foreach (var panel in _panels)
         {

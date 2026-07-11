@@ -176,7 +176,7 @@ public sealed class ChartControl : Control
             }
         }
 
-        DrawAxisTitles(context, chart, plot, area, horizontal);
+        DrawAxisTitles(context, chart, plot, area);
     }
 
     private static void DrawBars(DrawingContext context, ResolvedChart chart, List<ResolvedSeries> barSeries, Rect area, int categoryCount, double min, double max, bool stacked, bool percent, bool horizontal, double bandSize)
@@ -339,7 +339,7 @@ public sealed class ChartControl : Control
         }
     }
 
-    private void DrawAxisTitles(DrawingContext context, ResolvedChart chart, Rect plot, Rect area, bool horizontal)
+    private void DrawAxisTitles(DrawingContext context, ResolvedChart chart, Rect plot, Rect area)
     {
         if (!string.IsNullOrWhiteSpace(chart.XAxisTitle))
         {
@@ -499,7 +499,7 @@ public sealed class ChartControl : Control
             }
         }
 
-        DrawAxisTitles(context, chart, plot, area, horizontal: false);
+        DrawAxisTitles(context, chart, plot, area);
     }
 
     // ---- Radar ------------------------------------------------------------

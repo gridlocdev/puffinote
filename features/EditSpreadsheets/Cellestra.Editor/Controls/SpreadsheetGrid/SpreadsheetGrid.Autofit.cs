@@ -49,7 +49,7 @@ public sealed partial class SpreadsheetGrid
         {
             if (col == column && !cell.Value.IsEmpty)
             {
-                widest = Math.Max(widest, MeasureCellWidth(sheet, cell));
+                widest = Math.Max(widest, MeasureCellWidth(cell));
             }
         }
 
@@ -80,7 +80,7 @@ public sealed partial class SpreadsheetGrid
             }
 
             int bucket = column - left;
-            double w = MeasureCellWidth(sheet, cell);
+            double w = MeasureCellWidth(cell);
             if (w > widest[bucket])
             {
                 widest[bucket] = w;
@@ -106,7 +106,7 @@ public sealed partial class SpreadsheetGrid
     }
 
     /// <summary>The width of one cell's formatted content, measured in model space (no zoom).</summary>
-    private double MeasureCellWidth(Cellestra.Core.Model.Worksheet sheet, Cellestra.Core.Model.Cell cell)
+    private double MeasureCellWidth(Cellestra.Core.Model.Cell cell)
     {
         var style = _session!.Workbook.Styles.Get(cell.StyleId);
         string text = NumberFormatter.Format(cell.Value, style.NumberFormat, Culture);

@@ -41,7 +41,7 @@ public sealed partial class SpreadsheetGrid
     private readonly Dictionary<int, double> _rowWrappedPixels = [];
 
     /// <summary>The largest font size (points) used by any cell in <paramref name="row"/>, or 0 if none.</summary>
-    private double TallestFontPoints(Worksheet sheet, int row) =>
+    private double TallestFontPoints(int row) =>
         _rowFontPoints.TryGetValue(row, out double pts) ? pts : 0;
 
     /// <summary>The tallest wrapped-cell height (model-space px) in <paramref name="row"/>, or 0 if none wrap.</summary>
@@ -164,7 +164,7 @@ public sealed partial class SpreadsheetGrid
         // wrapped cell (task 6), so larger fonts or wrapped text never clip/overlap the next row. The
         // default 20px row is the floor.
         return RowHeightCalculator.Effective(
-            sheet.GetRowHeight(row), TallestFontPoints(sheet, row), CellPadY, WrappedRowPixels(row));
+            sheet.GetRowHeight(row), TallestFontPoints(row), CellPadY, WrappedRowPixels(row));
     }
 
     /// <summary>Hover feedback: the copy cursor over the fill handle, a resize cursor over a header border, else the arrow.</summary>
