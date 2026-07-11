@@ -33,8 +33,8 @@ public class NestedCheckboxTests
     public void NestedTask_RendersACheckbox_IndentedPastTheParent()
     {
         var e = new MarkdownEditor { Text = "- [ ] top\n  - [ ] sub" };
-        Assert.Equal([DecorationKind.Bullet, DecorationKind.CheckboxUnchecked], DecorationsOn(e, 0));
-        Assert.Equal([DecorationKind.Bullet, DecorationKind.CheckboxUnchecked], DecorationsOn(e, 1)); // nested too
+        Assert.Equal([DecorationKind.CheckboxUnchecked], DecorationsOn(e, 0));
+        Assert.Equal([DecorationKind.CheckboxUnchecked], DecorationsOn(e, 1)); // the nested item also shows a checkbox
         Assert.True(TextX(e, 1, "sub") > TextX(e, 0, "top"), "the nested task's text should hang further right");
     }
 
@@ -45,7 +45,7 @@ public class NestedCheckboxTests
         // relative to their own gutter — i.e. nesting is the leading indentation, same mechanism for both.
         var task = new MarkdownEditor { Text = "  - [ ] x" };
         var bullet = new MarkdownEditor { Text = "  - x" };
-        Assert.Equal([DecorationKind.Bullet, DecorationKind.CheckboxUnchecked], DecorationsOn(task, 0));
+        Assert.Equal([DecorationKind.CheckboxUnchecked], DecorationsOn(task, 0));
         Assert.Equal([DecorationKind.Bullet], DecorationsOn(bullet, 0));
     }
 

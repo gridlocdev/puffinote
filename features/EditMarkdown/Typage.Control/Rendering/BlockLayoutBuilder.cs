@@ -107,6 +107,7 @@ internal sealed class BlockLayoutBuilder
             var lineText = doc.GetText(lineStart, doc.GetLineEnd(line) - lineStart).TrimEnd('\r');
             var headingLevel = HeadingLevel(line);
             lastHeading = headingLevel;
+            var hasTask = _model.LineTokens(line).Any(t => t.Type == TokenType.TaskMarker);
             // The text of an inline link [text](url) is tokenized as ordinary content (the engine recurses
             // into it), so to render it like an HTML hyperlink we colour + underline any content that falls
             // inside the link-text span — the gap between the opening "[" and the "](" of each link node.
@@ -144,7 +145,7 @@ internal sealed class BlockLayoutBuilder
                 {
                     // A concealed line-prefix marker may render as a synthetic decoration (bullet, checkbox,
                     // quote bar, rule) that keeps the content's hanging indent; otherwise it just vanishes.
-                    var (deco, width) = DecorationFor(t, lineText, sLine, enLine, style);
+                    var (deco, width) = DecorationFor(t, lineText, sLine, enLine, hasTask, style);
                     var decoText = string.Empty;
 
                     // An ordered-list marker hides its literal digits and shows a number computed from the
@@ -420,20 +421,27 @@ internal sealed class BlockLayoutBuilder
     }
 
     /// <summary>The synthetic decoration (and its gutter width) that replaces concealed marker <paramref name="t"/>, if any.</summary>
-    private (DecorationKind Kind, double Width) DecorationFor(Token t, string lineText, int s, int en, RunStyle style)
+    private (DecorationKind Kind, double Width) DecorationFor(Token t, string lineText, int s, int en, bool hasTask, RunStyle style)
     {
         var text = lineText[s..en];
         switch (t.Type)
         {
             case TokenType.ListMarker:
-                // A task item keeps its list marker: the checkbox says whether the item is done, the bullet /
-                // number says it is an item of this list. Suppressing the marker here dropped the bullet, and
-                // (with the ordered branch in Build gated the same way) made a numbered task lose its number
-                // entirely — "1. [ ] step" rendered as a bare checkbox, orphaned from its list.
                 var bullet = text.TrimStart(' ');
-                return bullet.Length > 0 && bullet[0] is '-' or '*' or '+'
-                    ? (DecorationKind.Bullet, _measurer.MeasureWidth(text, style))
-                    : (DecorationKind.None, 0);
+                if (bullet.Length is 0 || bullet[0] is not ('-' or '*' or '+'))
+                {
+                    // An ordered marker: no bullet glyph. Its number is drawn by the OrderedNumber branch in
+                    // Build, which runs whether or not a checkbox follows — a number says *which* item of the
+                    // list this is, something the checkbox can't express, so "1. [ ] step" shows both.
+                    return (DecorationKind.None, 0);
+                }
+
+                // A bulleted task item draws the box alone. The "- " is the bullet the checkbox sits on — it's
+                // part of how the checkbox is spelled, not a second marker — so drawing both would show two
+                // markers for the one item. (This is the asymmetry with a number, above.)
+                return hasTask
+                    ? (DecorationKind.None, 0)
+                    : (DecorationKind.Bullet, _measurer.MeasureWidth(text, style));
 
             case TokenType.TaskMarker:
                 // A fixed gutter (box + gap) regardless of "[ ]" vs "[x]", so the text after the checkbox sits

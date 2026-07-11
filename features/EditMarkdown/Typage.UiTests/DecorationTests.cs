@@ -97,22 +97,74 @@ public class DecorationTests
     }
 
     [AvaloniaFact]
-    public void TaskMarker_RendersItsListMarker_AndACheckbox()
+    public void BulletedTask_RendersACheckbox_AndNoBullet()
     {
-        // A task item keeps its list marker: the bullet/number says it belongs to this list, the checkbox says
-        // whether it's done. Both are drawn, marker first.
-        Assert.Equal([DecorationKind.Bullet, DecorationKind.CheckboxUnchecked], DecorationsOn(CaretOffLine0("- [ ] todo\nx"), 0));
-        Assert.Equal([DecorationKind.Bullet, DecorationKind.CheckboxChecked], DecorationsOn(CaretOffLine0("- [x] done\nx"), 0));
+        // The "- " of a bulleted task is the bullet the checkbox sits on — part of how the checkbox is
+        // spelled, not a second marker — so the box is drawn alone. (Contrast the numbered case below.)
+        Assert.Equal([DecorationKind.CheckboxUnchecked], DecorationsOn(CaretOffLine0("- [ ] todo\nx"), 0));
+        Assert.Equal([DecorationKind.CheckboxChecked], DecorationsOn(CaretOffLine0("- [x] done\nx"), 0));
     }
 
     [AvaloniaFact]
     public void NumberedTask_KeepsItsNumber_AlongsideTheCheckbox()
     {
-        // Regression: the ordered number used to vanish entirely on a numbered task, leaving a bare checkbox
-        // orphaned from its list — "1. [ ] step" rendered as if it were "- [ ] step".
+        // The asymmetry with a bullet: a number says *which* item of the list this is, which the checkbox
+        // can't express, so it survives. It used to vanish, leaving a bare checkbox orphaned from its list.
         var editor = CaretOffLine0("1. [ ] step\nx");
         Assert.Equal([DecorationKind.OrderedNumber, DecorationKind.CheckboxUnchecked], DecorationsOn(editor, 0));
         Assert.Equal("1. ", OrderedText(editor, 0));
+    }
+
+    // ----- GFM task-list strictness: a checkbox is only ever the *first* thing in a list item's content -----
+
+    [AvaloniaFact]
+    public void ASecondCheckboxOnTheSameLine_IsLiteralText()
+    {
+        // Only the leading marker is a live box; a later one is prose. There is no way to get two live boxes
+        // on one list line — that needs two items.
+        foreach (var src in new[] { "1. [ ] buy milk [ ] eggs\nx", "- [ ] buy milk [ ] eggs\nx" })
+        {
+            var editor = CaretOffLine0(src);
+            Assert.Single(DecorationsOn(editor, 0), d => d is DecorationKind.CheckboxUnchecked);
+            Assert.Contains(editor.BuildVisualLineForTest(0).Runs, r => r.Kind == VisualRunKind.Text && r.Text.Contains("[ ] eggs"));
+        }
+    }
+
+    [AvaloniaFact]
+    public void ACheckboxInPlainProse_IsLiteralText()
+    {
+        Assert.Empty(DecorationsOn(CaretOffLine0("plain [ ] prose\nx"), 0));
+    }
+
+    [AvaloniaFact]
+    public void ACheckboxNotDirectlyAfterTheListMarker_IsLiteralText()
+    {
+        // "1. - [ ] x" is a number followed by prose that merely looks like a checkbox: the box doesn't sit in
+        // the item's leading position, so it stays literal and only the number is drawn.
+        var editor = CaretOffLine0("1. - [ ] x\nx");
+        Assert.Equal([DecorationKind.OrderedNumber], DecorationsOn(editor, 0));
+
+        // Likewise "- - [ ] x": the outer bullet is drawn, the inner "- [ ] x" is text.
+        var nested = CaretOffLine0("- - [ ] x\nx");
+        Assert.Equal([DecorationKind.Bullet], DecorationsOn(nested, 0));
+    }
+
+    [AvaloniaFact]
+    public void AMissingSpaceAroundTheBox_MeansItIsNotACheckbox()
+    {
+        // GFM needs a space after the list marker and after the closing bracket.
+        Assert.Empty(DecorationsOn(CaretOffLine0("1.[ ] task\nx"), 0));                        // no space after "1."
+        Assert.Equal([DecorationKind.OrderedNumber], DecorationsOn(CaretOffLine0("1. [ ]task\nx"), 0)); // none after "]"
+        Assert.Equal([DecorationKind.Bullet], DecorationsOn(CaretOffLine0("- [ ]task\nx"), 0));
+    }
+
+    [AvaloniaFact]
+    public void ANumberAfterACheckbox_RendersTheBoxToTheLeftOfIt()
+    {
+        // "- [ ] 1. x": the box is the item's leading content, so it's live; the "1." is just text beside it.
+        var editor = CaretOffLine0("- [ ] 1. x\nx");
+        Assert.Equal([DecorationKind.CheckboxUnchecked], DecorationsOn(editor, 0));
+        Assert.Contains(editor.BuildVisualLineForTest(0).Runs, r => r.Kind == VisualRunKind.Text && r.Text.Contains("1. x"));
     }
 
     [AvaloniaFact]
@@ -157,13 +209,13 @@ public class DecorationTests
     }
 
     [AvaloniaFact]
-    public void ClickingTheBulletOfATask_DoesNotToggleIt()
+    public void ClickingTheNumberOfANumberedTask_DoesNotToggleIt()
     {
-        // The bullet is not the checkbox: clicking it places the caret rather than flipping the box.
-        var editor = CaretOffLine0("- [ ] todo\nx");
-        var bullet = editor.BuildVisualLineForTest(0).Runs.First(r => r.Decoration == DecorationKind.Bullet);
-        Assert.False(editor.ToggleTaskClickForTest(0, bullet.X + bullet.Width / 2));
-        Assert.StartsWith("- [ ] todo", editor.Text);
+        // The number is not the checkbox: clicking it places the caret rather than flipping the box.
+        var editor = CaretOffLine0("1. [ ] step\nx");
+        var number = editor.BuildVisualLineForTest(0).Runs.First(r => r.Decoration == DecorationKind.OrderedNumber);
+        Assert.False(editor.ToggleTaskClickForTest(0, number.X + number.Width / 2));
+        Assert.StartsWith("1. [ ] step", editor.Text);
     }
 
     [AvaloniaFact]
