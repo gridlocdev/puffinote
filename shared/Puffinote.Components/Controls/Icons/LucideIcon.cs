@@ -28,6 +28,14 @@ public sealed class LucideIcon : Control
         AffectsMeasure<LucideIcon>(SizeProperty);
     }
 
+    /// <summary>
+    /// The icon factory every command palette hands to its <see cref="PaletteListView"/>: a command's icon key
+    /// as a row-sized glyph, or none for a key-less command. Shared so a row reads the same on every palette
+    /// surface — the four of them had drifted apart back when each host wrote this expression itself.
+    /// </summary>
+    public static Control? PaletteGlyph(string? key) =>
+        string.IsNullOrEmpty(key) ? null : new LucideIcon { IconKey = key, Size = PaletteListView.IconSize };
+
     public string? IconKey
     {
         get => GetValue(IconKeyProperty);

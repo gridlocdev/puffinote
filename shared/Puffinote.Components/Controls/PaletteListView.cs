@@ -36,13 +36,19 @@ public sealed class PaletteListView : StackPanel
 {
     private sealed record Row(string Title, string Description, string Shortcut, string? IconKey, PaletteEntry? Entry, bool IsHeader);
 
+    /// <summary>The size a row expects its glyph to be built at, for hosts' icon factories.</summary>
+    public const double IconSize = 16;
+
+    /// <summary>The gap between a row's glyph and its title.</summary>
+    private const double IconGutter = 11;
+
     private readonly ListBox _list;
     private readonly Func<string?, Control?>? _iconFactory;
     private IReadOnlyList<PaletteEntry> _entries = [];
 
     /// <param name="iconFactory">
-    /// Builds the icon control for a row's <see cref="PaletteEntry.IconKey"/> (return null for none).
-    /// Omit for an icon-less palette.
+    /// Builds the icon control for a row's <see cref="PaletteEntry.IconKey"/> (return null for none), sized but
+    /// otherwise unpositioned — the row centres it and gives it its gutter. Omit for an icon-less palette.
     /// </param>
     public PaletteListView(Func<string?, Control?>? iconFactory = null)
     {
@@ -225,6 +231,11 @@ public sealed class PaletteListView : StackPanel
 
         if (_iconFactory?.Invoke(row.IconKey) is { } icon)
         {
+            // Place the glyph here rather than trusting each host's factory to: docked left with no alignment it
+            // would stretch to the height of the title+description block instead of centring against it, and with
+            // no gutter it would sit flush against the title. Factories return the glyph; the row places it.
+            icon.VerticalAlignment = VerticalAlignment.Center;
+            icon.Margin = new Thickness(0, 0, IconGutter, 0);
             DockPanel.SetDock(icon, Dock.Left);
             dock.Children.Add(icon);
         }
