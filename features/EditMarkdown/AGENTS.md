@@ -93,13 +93,15 @@ Don't hardcode versions in `.csproj` files.
   strikethrough, highlight, inline + fenced code, blockquote, lists incl. task lists, links, autolinks,
   images, HR, GFM tables, hard breaks, escapes, front matter, and recognized-but-off-by-default
   wiki-links/embeds). Adding constructs is a separate, later task.
-- **Task states (PRD §8.3.2):** a task box holds **one of six** characters — `[ ]` not started, `[/]` in progress,
-  `[?]` blocked, `[>]` deferred, `[x]` done, `[-]` cancelled — and anything else (`[a]`) is not a box at all. The
-  vocabulary lives in the engine (`Markdown/TaskState.cs`), which is where the tokenizer, `LinePrefix`, and the
-  HTML export all read it from; the **colour and the drawn symbol are the control's** (`MarkdownTheme`,
-  `Rendering/TaskGlyphs.cs`), per golden rule 2. Colours are assigned by meaning (two complementary pairs, an
-  achromatic zero), and hue is never the only channel — each state draws its own symbol too (§9.6). A click
-  **completes**; the other four states come from the picker (⌥⌘L or a secondary click on the box).
+- **Task states (PRD §8.3.2):** a task box holds **one of three** characters — `[ ]` not started, `[/]` in
+  progress, `[x]` done — and anything else (`[a]`, and also `[?]`/`[>]`/`[-]`) is not a box at all: it stays
+  literal text. The vocabulary lives in the engine (`Markdown/TaskState.cs`), which is where the tokenizer,
+  `LinePrefix`, and the HTML export all read it from; the **colour and the drawn shape are the control's**
+  (`MarkdownTheme`, `Rendering/TaskGlyphs.cs`), per golden rule 2. The box is a rounded square and the design is
+  **single-hue**: one accent, shared by the in-progress dash and the done fill; shape, not colour, is what tells
+  the three apart (§9.6). A click **completes** (it does not stop at in-progress); in progress comes from the
+  picker (⌥⌘L or a secondary click on the box). Don't grow this vocabulary without reading §8.3.2 — the three
+  are a deliberate stopping point, not an unfinished six.
 - **Reveal scopes (PRD §7.4):** inline marks reveal when the caret/selection intersects that node;
   line-prefix marks reveal when the caret is on the line; block constructs reveal when the caret/selection
   intersects the block range; selection forces reveal. *(Implemented: markers are truly **hidden** via a
@@ -189,7 +191,7 @@ is worse than none, because it's what the next agent plans against.
 | Incremental tokenizer + checkpoint cache (block machine, inline, GFM tables, tolerant input) | **Built** — guarded by an *incremental-equals-full-rebuild* suite. Touch it and those tests must stay green |
 | HTML renderer · `typage` CLI · `DocumentStats` | **Built** |
 | Live preview / concealment (§7.4) · word wrap + paragraph flow (§7.3) | **Built** — full WYSIWYG; see the invariants below |
-| Editing assists (§7.2) · six-state task boxes (§8.3.2) · the caret-nav suite · raw-source toggle · focus mode | **Built** |
+| Editing assists (§7.2) · three-state task boxes (§8.3.2) · the caret-nav suite · raw-source toggle · focus mode | **Built** |
 | One command catalog (`Typage.Control/Commands`) + palette (⌘K) · find/replace · platform-native menu (§7.5) · themes · preferences · recent files | **Built** — hosts merge the catalog in; they don't define commands |
 | File safety: atomic save, watcher + three-way conflict, autosave/recovery (§9.4), dependency-allowlist gate (§5/§9.3) | **Built** |
 | Image **insert** + staging for unsaved docs (`ImageStaging`) | **Built** — picking and inserting only; *pasting* an image is not |
@@ -216,7 +218,7 @@ Not status — the design the rest of the surface assumes. Read these before tou
 - **The caret and deletes move in *visible* graphemes.** The caret glides over a hidden marker atomically;
   backspace at the end of a bold word takes a letter, not an invisible `*`; at list-content start it strips
   the whole marker prefix.
-- **Concealed markers become rich decorations** on a hanging indent — bullets, task lamps, the blockquote
+- **Concealed markers become rich decorations** on a hanging indent — bullets, task boxes, the blockquote
   bar, the rule, the fenced-code panel. **Ordered-list numbers are computed from list structure** (each
   nesting level restarts and resumes; a blank or non-list line starts a fresh list), not read from the digits
   in the source.

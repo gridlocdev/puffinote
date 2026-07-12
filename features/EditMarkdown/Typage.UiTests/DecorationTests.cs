@@ -154,7 +154,7 @@ public class DecorationTests
         Assert.Equal([DecorationKind.Checkbox], DecorationsOn(CaretOffLine0("- [ ] todo\nx"), 0));
         Assert.Equal([DecorationKind.Checkbox], DecorationsOn(CaretOffLine0("- [x] done\nx"), 0));
 
-        // One decoration kind, six states: the box carries which one it is in (PRD §8.3.2).
+        // One decoration kind, three states: the box carries which one it is in (PRD §8.3.2).
         Assert.Equal(TaskState.NotStarted, BoxState(CaretOffLine0("- [ ] todo\nx"), 0));
         Assert.Equal(TaskState.Done, BoxState(CaretOffLine0("- [x] done\nx"), 0));
     }
@@ -254,7 +254,7 @@ public class DecorationTests
     private static VisualRun Box(MarkdownEditor e, int line) =>
         e.BuildVisualLineForTest(line).Runs.First(r => r.Decoration == DecorationKind.Checkbox);
 
-    /// <summary>Which of the six states that box is in: the run carries it as its text (the box character).</summary>
+    /// <summary>Which of the three states that box is in: the run carries it as its text (the box character).</summary>
     private static TaskState BoxState(MarkdownEditor e, int line) => TaskStates.FromMark(Box(e, line).Text[0]);
 
     private static double CheckboxWidth(MarkdownEditor e) => Box(e, 0).Width;

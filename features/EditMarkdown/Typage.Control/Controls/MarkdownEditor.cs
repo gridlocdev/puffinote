@@ -666,7 +666,7 @@ public partial class MarkdownEditor : Avalonia.Controls.Control, ILogicalScrolla
     internal bool IsCodeLineForTest(int line) => IsCodeLine(line);
 
     // Task-checkbox geometry. It lives in the theme, alongside the bullet's and the quote bar's, so a re-themed
-    // surface can resize the box; the gutter width and the drawn lamp read the same numbers and stay in sync.
+    // surface can resize the box; the gutter width and the drawn box read the same numbers and stay in sync.
     private double CheckboxLeftPad => EditorTheme.CheckboxLeftPad;
     private double CheckboxBoxSize => EditorTheme.CheckboxSize;
 

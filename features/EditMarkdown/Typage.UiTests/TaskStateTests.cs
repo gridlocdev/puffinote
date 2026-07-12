@@ -2,6 +2,7 @@ using Avalonia.Controls;
 using Avalonia.Headless;
 using Avalonia.Headless.XUnit;
 using Avalonia.Interactivity;
+using Avalonia.Media;
 using Typage.Control.Controls;
 using Typage.Control.Rendering;
 using Typage.Control.Views;
@@ -12,19 +13,36 @@ using Xunit;
 namespace Typage.UiTests;
 
 /// <summary>
-/// The six-state task checkbox (PRD §8.3.2): the states the surface reads and writes, what a click means, what
-/// the picker offers, and how the six are told apart on screen — by symbol first, colour second.
+/// The three-state task checkbox (PRD §8.3.2): the states the surface reads and writes, what a click means, what
+/// the picker offers, and how the three are told apart on screen — by shape first, colour second.
 /// </summary>
 public class TaskStateTests
 {
     [AvaloniaFact]
     public void EveryState_DrawsItsOwnBox_CarryingTheStateItIsIn()
     {
-        var editor = new MarkdownEditor { Text = "- [ ] a\n- [/] b\n- [?] c\n- [>] d\n- [x] e\n- [-] f" };
+        var editor = new MarkdownEditor { Text = "- [ ] a\n- [/] b\n- [x] c" };
 
         Assert.Equal(
-            [TaskState.NotStarted, TaskState.InProgress, TaskState.Blocked, TaskState.Deferred, TaskState.Done, TaskState.Cancelled],
-            Enumerable.Range(0, 6).Select(line => BoxState(editor, line)).ToArray());
+            [TaskState.NotStarted, TaskState.InProgress, TaskState.Done],
+            Enumerable.Range(0, 3).Select(line => BoxState(editor, line)).ToArray());
+    }
+
+    [AvaloniaFact]
+    public void TheRetiredCharacters_AreNotBoxes()
+    {
+        // The dialect no longer admits [?], [>] or [-]. A file that still spells them keeps them as literal text
+        // — no box is drawn, and nothing rewrites the author's bytes (golden rule 5).
+        var editor = new MarkdownEditor { Text = "- [?] a\n- [>] b\n- [-] c" };
+
+        for (var line = 0; line < 3; line++)
+        {
+            Assert.DoesNotContain(
+                editor.BuildVisualLineForTest(line).Runs,
+                r => r.Decoration == DecorationKind.Checkbox);
+        }
+
+        Assert.Equal("- [?] a\n- [>] b\n- [-] c", editor.Text);
     }
 
     [AvaloniaFact]
@@ -43,9 +61,10 @@ public class TaskStateTests
     [AvaloniaFact]
     public void ClickingTheBox_CompletesIt_FromWhateverStateItWasIn()
     {
-        // The primary click is spent on the action worth a click. From any unfinished state — including blocked
-        // or deferred — a click means "done"; from done it means "not started". The rest is the picker's job.
-        foreach (var mark in new[] { " ", "/", "?", ">", "-" })
+        // The primary click is spent on the action worth a click. From either unfinished state a click means
+        // "done"; from done it means "not started". It does not stop at in-progress on the way — a click that
+        // sometimes completes and sometimes doesn't is a click you have to look at. In progress is the picker's job.
+        foreach (var mark in new[] { " ", "/" })
         {
             var editor = new MarkdownEditor { Text = $"- [{mark}] task" };
             var box = Box(editor, 0);
@@ -66,9 +85,9 @@ public class TaskStateTests
         // state change is a one-character replace, and the caret doesn't move.
         var editor = new MarkdownEditor { Text = "- [ ] write the spec" };
         editor.Buffer.Selection = Selection.At(10); // inside the item's text
-        editor.SetTaskState(TaskState.Blocked);
+        editor.SetTaskState(TaskState.InProgress);
 
-        Assert.Equal("- [?] write the spec", editor.Text);
+        Assert.Equal("- [/] write the spec", editor.Text);
         Assert.Equal(Selection.At(10), editor.Buffer.Selection);
     }
 
@@ -86,8 +105,8 @@ public class TaskStateTests
     public void SetTaskState_IsOneUndoStep_AndReversible()
     {
         var editor = new MarkdownEditor { Text = "- [ ] task" };
-        editor.SetTaskState(TaskState.Deferred);
-        Assert.Equal("- [>] task", editor.Text);
+        editor.SetTaskState(TaskState.Done);
+        Assert.Equal("- [x] task", editor.Text);
 
         editor.Undo();
         Assert.Equal("- [ ] task", editor.Text);
@@ -108,71 +127,72 @@ public class TaskStateTests
     {
         // A blank line separates the paragraph from the item — a plain line directly under a task is the item's
         // own hard-wrapped continuation, and a status command there targets the task, as it should.
-        var editor = new MarkdownEditor { Text = "- [?] blocked\n\nplain" };
+        var editor = new MarkdownEditor { Text = "- [/] doing\n\nplain" };
         editor.Buffer.Selection = Selection.At(8);
-        Assert.Equal(TaskState.Blocked, editor.CaretTaskState);
+        Assert.Equal(TaskState.InProgress, editor.CaretTaskState);
 
-        editor.Buffer.Selection = Selection.At(17); // on the plain paragraph
+        editor.Buffer.Selection = Selection.At(15); // on the plain paragraph
         Assert.Null(editor.CaretTaskState);
     }
 
     [AvaloniaFact]
-    public void AResolvedItem_ReadsAsClosed_AndAnActiveOneDoesNot()
+    public void ADoneItem_ReadsAsClosed_AndAnUnfinishedOneDoesNot()
     {
-        // Done and cancelled are struck through and dimmed — off the active board. The four active states are
-        // ordinary text: a blocked task is still work to do, and must not read as finished.
+        // Done is struck through and dimmed — off the active board. The two unfinished states are ordinary text:
+        // a task under way is still work to do, and must not read as finished.
         Assert.True(IsStruck(new MarkdownEditor { Text = "- [x] done\nx" }));
-        Assert.True(IsStruck(new MarkdownEditor { Text = "- [-] cancelled\nx" }));
 
         Assert.False(IsStruck(new MarkdownEditor { Text = "- [ ] todo\nx" }));
         Assert.False(IsStruck(new MarkdownEditor { Text = "- [/] doing\nx" }));
-        Assert.False(IsStruck(new MarkdownEditor { Text = "- [?] blocked\nx" }));
-        Assert.False(IsStruck(new MarkdownEditor { Text = "- [>] later\nx" }));
     }
 
     [AvaloniaFact]
-    public void CancellingATask_SinksItWithTheDoneOnes()
+    public void OnlyCompletingATask_SinksIt()
     {
-        // The completed-task sort separates work still to do from work that isn't. An abandoned task is no more
-        // outstanding than a finished one, so cancelling sinks an item exactly as completing it does.
-        var editor = new MarkdownEditor
+        // The completed-task sort separates work still to do from work that isn't. Starting a task doesn't
+        // finish it, so an item that goes in-progress stays where it is; completing one sinks it.
+        var doing = new MarkdownEditor
         {
-            Text = "- [ ] cut this\n- [?] blocked\n- [ ] todo",
+            Text = "- [ ] cut this\n- [ ] todo",
             CompletedTaskSorting = MarkdownEditor.CompletedTaskSortMode.Bottom,
         };
 
-        editor.Buffer.Selection = Selection.At(0);
-        editor.SetTaskState(TaskState.Cancelled);
+        doing.Buffer.Selection = Selection.At(0);
+        doing.SetTaskState(TaskState.InProgress);
+        Assert.Equal("- [/] cut this\n- [ ] todo", doing.Text); // still outstanding: it holds its place
 
-        Assert.Equal("- [?] blocked\n- [ ] todo\n- [-] cut this", editor.Text);
+        doing.SetTaskState(TaskState.Done);
+        Assert.Equal("- [ ] todo\n- [x] cut this", doing.Text);
     }
 
     [AvaloniaFact]
-    public void EveryState_HasItsOwnColour_AndItsOwnSymbol()
+    public void TheTwoLitStates_ShareOneAccent_AndTheRestingBoxSpendsNone()
     {
-        // Colour is a *second* channel, never the only one: each state draws a distinct symbol too, so the six
-        // survive colour-blindness and a monochrome print (PRD §9.6).
+        // Single-hue (PRD §8.3.2): the dash and the check are drawn in the same accent, so "under way" and "done"
+        // read as two points on one path rather than two unrelated alarms. Shape, not colour, is what tells the
+        // three apart — which is what keeps them legible in monochrome and to a colour-blind reader (§9.6).
         foreach (var theme in new[] { MarkdownTheme.Dark, MarkdownTheme.Light, MarkdownTheme.HighContrast })
         {
-            var colors = TaskStates.Order.Select(theme.TaskColor).Distinct().Count();
-            Assert.Equal(6, colors);
+            Assert.NotEqual(theme.TaskAccent, theme.TaskBorder);
+
+            // The check is read against the accent it sits on, not against the page: they must not be the same.
+            Assert.NotEqual(theme.TaskCheck, theme.TaskAccent);
         }
 
-        // The un-lit lamp is the only one with no wash — the zero point reads as a bare ring.
-        Assert.Null(MarkdownTheme.Dark.TaskFill(TaskState.NotStarted));
-        Assert.All(
-            TaskStates.Order.Where(s => s != TaskState.NotStarted),
-            state => Assert.NotNull(MarkdownTheme.Dark.TaskFill(state)));
+        // In high contrast the accent is a *light* blue, so the check flips to black — a white check on it would
+        // be the one unreadable thing on the page.
+        Assert.Equal(Colors.Black, ((ISolidColorBrush)MarkdownTheme.HighContrast.TaskCheck).Color);
+        Assert.Equal(Colors.White, ((ISolidColorBrush)MarkdownTheme.Dark.TaskCheck).Color);
     }
 
     [AvaloniaFact]
-    public void ThePicker_OffersTheSixStates_ActiveBeforeResolved()
+    public void ThePicker_OffersTheThreeStates_InTheOrderTheWorkMoves()
     {
-        var picker = new TaskStatusPicker(MarkdownTheme.Dark, TaskState.Blocked);
+        var picker = new TaskStatusPicker(MarkdownTheme.Dark, TaskState.InProgress);
         var offered = picker.Children.Select(c => (TaskState)((Button)c).Tag!).ToArray();
 
         Assert.Equal(TaskStates.Order, offered);
-        Assert.Equal(TaskState.Cancelled, offered[^1]); // the resolved states come last
+        Assert.Equal([TaskState.NotStarted, TaskState.InProgress, TaskState.Done], offered);
     }
 
     [AvaloniaFact]
@@ -182,20 +202,20 @@ public class TaskStateTests
         TaskState? chosen = null;
         picker.Chosen += state => chosen = state;
 
-        var deferred = picker.Children.OfType<Button>().First(b => (TaskState)b.Tag! == TaskState.Deferred);
-        deferred.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+        var inProgress = picker.Children.OfType<Button>().First(b => (TaskState)b.Tag! == TaskState.InProgress);
+        inProgress.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
 
-        Assert.Equal(TaskState.Deferred, chosen);
+        Assert.Equal(TaskState.InProgress, chosen);
     }
 
     [AvaloniaFact]
     public void ADocumentOfEveryState_Renders()
     {
-        // The lamps are custom-drawn (geometry, a pushed transform, a stroked and a filled path), so the one
-        // thing a headless host *can* prove about the draw path is that it runs: a malformed glyph path or a
-        // mis-scoped transform throws here rather than on someone's screen. (Pixels can't be checked — this CI
-        // has no GPU and the test host uses headless drawing; see TestAppBuilder.)
-        var view = new MarkdownEditorView { Text = "- [ ] a\n- [/] b\n- [?] c\n- [>] d\n- [x] e\n- [-] f" };
+        // The boxes are custom-drawn (a rounded rect, a pushed transform, a stroked path), so the one thing a
+        // headless host *can* prove about the draw path is that it runs: a malformed glyph path or a mis-scoped
+        // transform throws here rather than on someone's screen. (Pixels can't be checked — this CI has no GPU
+        // and the test host uses headless drawing; see TestAppBuilder.)
+        var view = new MarkdownEditorView { Text = "- [ ] a\n- [/] b\n- [x] c" };
         var window = new Window { Width = 400, Height = 300, Content = view };
         window.Show();
 
@@ -214,7 +234,7 @@ public class TaskStateTests
     private static TaskState BoxState(MarkdownEditor editor, int line) =>
         TaskStates.FromMark(Box(editor, line).Text[0]);
 
-    /// <summary>Whether the item's text is struck through — how a resolved task reads as closed.</summary>
+    /// <summary>Whether the item's text is struck through — how a done task reads as closed.</summary>
     private static bool IsStruck(MarkdownEditor editor) =>
         editor.BuildVisualLineForTest(0).Runs
             .Any(r => r.Kind == VisualRunKind.Text && r.Style.Decorations is { Count: > 0 });

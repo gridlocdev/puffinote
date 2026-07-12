@@ -108,10 +108,10 @@ internal sealed class BlockLayoutBuilder
         var lastHeading = 0;
         var lastQuote = false;
 
-        // A block that *is* a resolved task item (done or cancelled) reads as closed: its text is struck through
-        // and dimmed. Taken from the block's first line, so the wrapped/lazily-continued rows of a done item are
-        // struck too — the item closed, not just its first line.
-        TaskState? resolved = null;
+        // A block that *is* a done task item reads as closed: its text is struck through and dimmed. Taken from the
+        // block's first line, so the wrapped/lazily-continued rows of a done item are struck too — the item
+        // closed, not just its first line.
+        var done = false;
         for (var line = startLine; line <= endLine; line++)
         {
             var lineStart = doc.GetLineStart(line);
@@ -123,9 +123,9 @@ internal sealed class BlockLayoutBuilder
             lastQuote = inQuote;
             var (orderedText, taskText) = ItemMarkers(line, lineStart, lineText);
             var hasTask = taskText.Length > 0;
-            if (line == startLine && hasTask && TaskStates.FromMarker(taskText) is var state && TaskStates.IsResolved(state))
+            if (line == startLine && hasTask && TaskStates.FromMarker(taskText) == TaskState.Done)
             {
-                resolved = state;
+                done = true;
             }
 
             // The inline nodes whose content draws a background chip (inline code, highlight) — their concealed
@@ -167,7 +167,7 @@ internal sealed class BlockLayoutBuilder
                         gapStyle = AsLink(gapStyle);
                     }
 
-                    segments.Add(new VisualLine.Segment(pos, s, Closed(gapStyle, resolved), false));
+                    segments.Add(new VisualLine.Segment(pos, s, Closed(gapStyle, done), false));
                 }
 
                 // The decoration helpers index into the *line* text, so keep line-relative offsets for them;
@@ -224,7 +224,7 @@ internal sealed class BlockLayoutBuilder
                     // Emphasis/strike/highlight content can wrap a construct of another kind (e.g.
                     // ***~~bold~~***): split the content so the inner ~~ markers conceal and the word
                     // carries both the outer emphasis and the inner decoration. Plain content is one segment.
-                    AddContentSegments(segments, s, en, text, Closed(style, resolved), t.Type);
+                    AddContentSegments(segments, s, en, text, Closed(style, done), t.Type);
                 }
 
                 pos = en;
@@ -233,16 +233,16 @@ internal sealed class BlockLayoutBuilder
 
         if (pos < contentLen)
         {
-            segments.Add(new VisualLine.Segment(pos, contentLen, Closed(DefaultStyle(lastHeading, lastQuote), resolved), false));
+            segments.Add(new VisualLine.Segment(pos, contentLen, Closed(DefaultStyle(lastHeading, lastQuote), done), false));
         }
 
         return VisualLine.Build(text, segments, _measurer.MeasureWidth, _wrapWidth);
     }
 
-    /// <summary>The treatment of one content run on a <b>resolved</b> task item — struck through and dimmed — or
+    /// <summary>The treatment of one content run on a <b>done</b> task item — struck through and dimmed — or
     /// <paramref name="style"/> unchanged when the block isn't one.</summary>
-    private RunStyle Closed(RunStyle style, TaskState? resolved) =>
-        resolved is { } state ? _theme.OnResolvedTask(style, state) : style;
+    private RunStyle Closed(RunStyle style, bool done) =>
+        done ? _theme.OnDoneTask(style) : style;
 
     /// <summary>
     /// The two leading-marker facts a list line's decorations need, read in one pass before the token loop: the
@@ -598,7 +598,7 @@ internal sealed class BlockLayoutBuilder
     }
 
     /// <summary>The checkbox decoration for a task marker spelled <paramref name="text"/> (<c>"[x] "</c>, box
-    /// first). One kind for all six states — the state rides along as the decoration's text (the box character),
+    /// first). One kind for all three states — the state rides along as the decoration's text (the box character),
     /// which the draw path resolves to a colour and a symbol. The gutter is the same width whatever the state, so
     /// changing an item's state never shifts its text sideways.</summary>
     private (DecorationKind Kind, double Width) Checkbox() => (DecorationKind.Checkbox, _checkboxGutter);

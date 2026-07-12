@@ -93,17 +93,13 @@ public class MarkdownTheme
         CodeBlockBackground = new SolidColorBrush(Color.FromRgb(0xF6, 0xF8, 0xFA)),
         CodeBlockBorder = new SolidColorBrush(Color.FromRgb(0xE1, 0xE4, 0xE8)),
 
-        // The same six meanings, re-mixed for a white page: each hue keeps its identity but drops in lightness
-        // and gains chroma, because a colour that reads as vivid on a dark surface reads as washed out on a
-        // light one. The relationships (the two complementary pairs, the achromatic zero) are what carry over —
-        // not the literal values.
-        TaskNotStarted = new SolidColorBrush(Color.FromRgb(0x6B, 0x73, 0x83)),
-        TaskInProgress = new SolidColorBrush(Color.FromRgb(0x16, 0x68, 0xD6)),
-        TaskBlocked = new SolidColorBrush(Color.FromRgb(0xB2, 0x62, 0x05)),
-        TaskDeferred = new SolidColorBrush(Color.FromRgb(0x6D, 0x3F, 0xD1)),
-        TaskDone = new SolidColorBrush(Color.FromRgb(0x12, 0x85, 0x5A)),
-        TaskCancelled = new SolidColorBrush(Color.FromRgb(0xC3, 0x35, 0x2E)),
-        TaskResolvedForeground = new SolidColorBrush(Color.FromRgb(0x6E, 0x77, 0x81)),
+        // The same one accent, re-mixed for a white page: the blue drops in lightness and gains chroma, because a
+        // hue that reads as vivid on a dark surface reads as washed out on a light one. The check stays white —
+        // it is read against the accent, not against the page.
+        TaskBorder = new SolidColorBrush(Color.FromRgb(0xB1, 0xB8, 0xC2)),
+        TaskAccent = new SolidColorBrush(Color.FromRgb(0x21, 0x6B, 0xE0)),
+        TaskCheck = new SolidColorBrush(Colors.White),
+        TaskDoneForeground = new SolidColorBrush(Color.FromRgb(0x6E, 0x77, 0x81)),
     };
 
     /// <summary>
@@ -142,17 +138,15 @@ public class MarkdownTheme
         CodeBlockBackground = new SolidColorBrush(Color.FromRgb(0x10, 0x10, 0x10)),
         CodeBlockBorder = new SolidColorBrush(Colors.White),
 
-        // Task hues at full strength on black. Not-started goes *white*, not grey: dimming the resting state is
-        // exactly what a high-contrast reader needs us not to do, so here the zero point is spelled by the empty
-        // ring and the absence of hue, never by a faded one. Resolved text likewise stays white — the strike
-        // through it says "closed" on its own.
-        TaskNotStarted = new SolidColorBrush(Colors.White),
-        TaskInProgress = new SolidColorBrush(Color.FromRgb(0x58, 0xC0, 0xFF)),
-        TaskBlocked = new SolidColorBrush(Color.FromRgb(0xFF, 0xB0, 0x2E)),
-        TaskDeferred = new SolidColorBrush(Color.FromRgb(0xC9, 0x9D, 0xFF)),
-        TaskDone = new SolidColorBrush(Color.FromRgb(0x4C, 0xE0, 0x8C)),
-        TaskCancelled = new SolidColorBrush(Color.FromRgb(0xFF, 0x6B, 0x60)),
-        TaskResolvedForeground = new SolidColorBrush(Colors.White),
+        // The accent at full strength on black, and the resting box in plain *white*, not grey: dimming the state a
+        // reader is trying to see is exactly what high contrast must not do, so an empty box is spelled by the
+        // absence of the accent, never by a faded outline. Done text likewise stays white — the strike through it
+        // says "closed" on its own. The check flips to black, because here the accent is a *light* blue: a white
+        // check on it would be the one unreadable thing on the page.
+        TaskBorder = new SolidColorBrush(Colors.White),
+        TaskAccent = new SolidColorBrush(Color.FromRgb(0x58, 0xC0, 0xFF)),
+        TaskCheck = new SolidColorBrush(Colors.Black),
+        TaskDoneForeground = new SolidColorBrush(Colors.White),
     };
 
     public double BaseFontSize { get; init; } = 16;
@@ -258,39 +252,32 @@ public class MarkdownTheme
     /// <summary>The border around a fenced-code panel.</summary>
     public IBrush CodeBlockBorder { get; init; } = new SolidColorBrush(Color.FromRgb(0x34, 0x38, 0x3D));
 
-    // ----- task states (PRD §8.3.2): six hues, assigned by meaning rather than decoration -----
+    // ----- the task checkbox (PRD §8.3.2): one accent, single-hue -----
     //
-    // Two complementary pairs anchor the wheel. Done (green) and Cancelled (red) sit opposite as the two
-    // *resolved* ends — finished vs. abandoned — so the one pair a reader must never confuse is the pair the eye
-    // separates most easily. In progress (azure) and Blocked (amber) are the second complement: the two
-    // *in-flight* states, one flowing, one stuck. Deferred is a cool violet — dormant, set aside, but not dead —
-    // and adjacent to neither pair, so it can't be mistaken for either. Not started is left achromatic slate: the
-    // zero point, a lamp with no hue and no glow, from which the five lit states are visibly a change.
+    // Three states need three *shapes*, not three hues. The box is drawn once — a rounded square — and the state
+    // is spelled by what is in it: nothing, a dash, a check. Only one colour is ever spent: the accent, shared by
+    // the dash and the done box's fill. A resting box is a bare outline in the quiet border colour, so a column of
+    // tasks reads as one calm gutter with the finished and the moving items picked out of it, rather than as five
+    // competing hues.
     //
-    // Hue alone never carries a state: every lamp also draws a distinct symbol (TaskGlyphs), so the vocabulary
-    // survives colour-blindness and monochrome printing (PRD §9.6).
+    // Colour is never the only channel: the dash and the check tell the states apart on their own, so they survive
+    // colour-blindness and a monochrome print (PRD §9.6). That was true of six hues too — it is simply cheaper to
+    // hold with one.
 
-    /// <summary><c>[ ]</c> — achromatic slate: the un-lit lamp.</summary>
-    public IBrush TaskNotStarted { get; init; } = new SolidColorBrush(Color.FromRgb(0x8B, 0x94, 0xA7));
+    /// <summary>The outline of a box that isn't done — <c>[ ]</c> and <c>[/]</c> alike. Quiet: a task not yet
+    /// finished is the resting state of a list, and the gutter shouldn't shout it.</summary>
+    public IBrush TaskBorder { get; init; } = new SolidColorBrush(Color.FromRgb(0x5A, 0x62, 0x72));
 
-    /// <summary><c>[/]</c> — azure: in flight, flowing.</summary>
-    public IBrush TaskInProgress { get; init; } = new SolidColorBrush(Color.FromRgb(0x3E, 0x9B, 0xFF));
+    /// <summary>The one hue the checkbox spends: the <c>[/]</c> dash, and the fill of a <c>[x]</c> box. Sharing it
+    /// is what makes "under way" and "done" read as two points on one path rather than two unrelated signals.</summary>
+    public IBrush TaskAccent { get; init; } = new SolidColorBrush(Color.FromRgb(0x3B, 0x82, 0xF6));
 
-    /// <summary><c>[?]</c> — amber: in flight, stuck. Azure's complement, because "moving" and "waiting" are the
-    /// pair a reader most needs to tell apart at a glance across a list.</summary>
-    public IBrush TaskBlocked { get; init; } = new SolidColorBrush(Color.FromRgb(0xF4, 0x9A, 0x38));
+    /// <summary>The check drawn <i>on</i> the filled done box — so it must contrast with
+    /// <see cref="TaskAccent"/>, not with the page.</summary>
+    public IBrush TaskCheck { get; init; } = new SolidColorBrush(Colors.White);
 
-    /// <summary><c>[&gt;]</c> — violet: dormant, set aside.</summary>
-    public IBrush TaskDeferred { get; init; } = new SolidColorBrush(Color.FromRgb(0xA1, 0x84, 0xF7));
-
-    /// <summary><c>[x]</c> — green: resolved, positive.</summary>
-    public IBrush TaskDone { get; init; } = new SolidColorBrush(Color.FromRgb(0x33, 0xC7, 0x7D));
-
-    /// <summary><c>[-]</c> — red: resolved, terminated. Green's complement.</summary>
-    public IBrush TaskCancelled { get; init; } = new SolidColorBrush(Color.FromRgb(0xE1, 0x56, 0x4F));
-
-    /// <summary>The text of a resolved item (done or cancelled) — dimmed, because it is no longer work to do.</summary>
-    public IBrush TaskResolvedForeground { get; init; } = new SolidColorBrush(Color.FromRgb(0x9A, 0xA3, 0xB5));
+    /// <summary>The text of a done item — dimmed, because it is no longer work to do.</summary>
+    public IBrush TaskDoneForeground { get; init; } = new SolidColorBrush(Color.FromRgb(0x9A, 0xA3, 0xB5));
 
     /// <summary>The panel behind a fenced-code block — <i>darker</i> than the editor background, so the block recedes.</summary>
     public IBrush CodeBlockBackground { get; init; } = new SolidColorBrush(Color.FromRgb(0x18, 0x1A, 0x1D));
@@ -330,76 +317,46 @@ public class MarkdownTheme
     /// </summary>
     public double BulletGutter => BulletLeftPad + BulletSize + BulletGap;
 
-    // ----- the task checkbox: geometry, colour, and the treatment of a resolved item's text -----
+    // ----- the task checkbox: geometry, colour, and the treatment of a done item's text -----
 
-    /// <summary>The diameter of the drawn task lamp — a shade under the cap height of the text beside it, so the
-    /// box sits <i>in</i> the line rather than standing over it.</summary>
+    /// <summary>The side of the drawn task box — a shade under the cap height of the text beside it, so the box
+    /// sits <i>in</i> the line rather than standing over it.</summary>
     public double CheckboxSize => BaseFontSize * 0.95;
 
-    /// <summary>The inset before the lamp — the space between the item's indent and the ring.</summary>
+    /// <summary>The corner radius of the box, as a fraction of its side: rounded enough to read as a soft square,
+    /// not so much that it becomes a circle. A square is the checkbox's own shape — it says "tick me".</summary>
+    public double CheckboxCornerRatio { get; init; } = 0.28;
+
+    /// <summary>The thickness of the box's outline, as a fraction of its side (with a floor, so the line stays
+    /// crisp at small font sizes rather than thinning to a hair).</summary>
+    public double CheckboxBorderRatio { get; init; } = 0.085;
+
+    /// <summary>The inset before the box — the space between the item's indent and the outline.</summary>
     public double CheckboxLeftPad => BaseFontSize * 0.0625;
 
-    /// <summary>The space between the lamp and the item's text.</summary>
+    /// <summary>The space between the box and the item's text.</summary>
     public double CheckboxGap => BaseFontSize * 0.45;
 
-    /// <summary>The width a concealed task marker reserves — inset + lamp + gap — and the hanging indent an
-    /// item's wrapped rows sit at. Fixed across the six states, so changing an item's state never shifts its
-    /// text sideways.</summary>
+    /// <summary>The width a concealed task marker reserves — inset + box + gap — and the hanging indent an item's
+    /// wrapped rows sit at. Fixed across the three states, so changing an item's state never shifts its text
+    /// sideways.</summary>
     public double CheckboxGutter => CheckboxLeftPad + CheckboxSize + CheckboxGap;
 
-    /// <summary>The ring and symbol colour of a task lamp in <paramref name="state"/>.</summary>
-    public IBrush TaskColor(TaskState state) => state switch
-    {
-        TaskState.InProgress => TaskInProgress,
-        TaskState.Blocked => TaskBlocked,
-        TaskState.Deferred => TaskDeferred,
-        TaskState.Done => TaskDone,
-        TaskState.Cancelled => TaskCancelled,
-        _ => TaskNotStarted,
-    };
-
-    /// <summary>The wash inside a task lamp: its own colour at a low alpha, so the lamp reads as lit without
-    /// competing with the text. Not-started has none — an un-lit lamp is a bare ring (see the palette note).</summary>
-    public IBrush? TaskFill(TaskState state) =>
-        state == TaskState.NotStarted ? null : TaskFills.GetValueOrDefault(state);
-
     /// <summary>
-    /// The struck-through, dimmed treatment of a <b>resolved</b> item's text — done or cancelled. The rule is
-    /// drawn in the item's own state colour (a green strike for done, a red one for cancelled), so the line
-    /// still says <i>which</i> way the item closed even where the lamp has scrolled out of the eye's focus.
+    /// The dimmed, struck-through treatment of a <b>done</b> item's text — it is no longer work to do. The rule is
+    /// drawn in the same dimmed colour as the text, so it marks the line without becoming a second signal.
     /// </summary>
-    public RunStyle OnResolvedTask(RunStyle style, TaskState state) =>
-        style with { Foreground = TaskResolvedForeground, Decorations = TaskStrikes.GetValueOrDefault(state) };
+    public RunStyle OnDoneTask(RunStyle style) =>
+        style with { Foreground = TaskDoneForeground, Decorations = DoneStrike };
 
-    /// <summary>The alpha of a lamp's wash. Low enough that six lit lamps down a page read as a list, not a rash.</summary>
-    private const byte TaskFillAlpha = 0x26;
-
-    /// <summary>The alpha of a strike-through rule, so it marks the text without shouting over it.</summary>
+    /// <summary>The alpha of the strike-through rule, so it marks the text without shouting over it.</summary>
     private const byte TaskStrikeAlpha = 0xB0;
 
-    // The washes and strike rules are derived from the six palette brushes, so a re-themed palette carries its
-    // own tints with it. Built once per theme (themes are immutable) and shared, so the draw path allocates
-    // nothing per lamp and the FormattedText cache keys on a stable decoration object.
-    private Dictionary<TaskState, IBrush> TaskFills => field ??= Derive(
-        static color => (IBrush)new SolidColorBrush(Color.FromArgb(TaskFillAlpha, color.R, color.G, color.B)));
-
-    private Dictionary<TaskState, TextDecorationCollection> TaskStrikes => field ??= Derive(
-        static color => Strike(new SolidColorBrush(Color.FromArgb(TaskStrikeAlpha, color.R, color.G, color.B))));
-
-    /// <summary>Build a per-state table from each state's palette colour (a non-solid brush simply has no entry).</summary>
-    private Dictionary<TaskState, T> Derive<T>(Func<Color, T> make)
-    {
-        var table = new Dictionary<TaskState, T>();
-        foreach (var state in TaskStates.Order)
-        {
-            if (TaskColor(state) is ISolidColorBrush solid)
-            {
-                table[state] = make(solid.Color);
-            }
-        }
-
-        return table;
-    }
+    // Built once per theme (themes are immutable) and shared, so the draw path allocates nothing per box and the
+    // FormattedText cache keys on a stable decoration object.
+    private TextDecorationCollection? DoneStrike => field ??= TaskDoneForeground is ISolidColorBrush solid
+        ? Strike(new SolidColorBrush(Color.FromArgb(TaskStrikeAlpha, solid.Color.R, solid.Color.G, solid.Color.B)))
+        : Strike(TaskDoneForeground);
 
     /// <summary>Thickness of the drawn horizontal rule.</summary>
     public double RuleThickness { get; init; } = 1;

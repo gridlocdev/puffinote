@@ -81,7 +81,7 @@ public class HtmlRendererTests
     [Fact]
     public void TaskList_RendersCheckboxes()
     {
-        // The export draws the same lamp the editor does — a state class per item, and the state's own symbol —
+        // The export draws the same box the editor does — a state class per item, and the state's own symbol —
         // rather than an <input type=checkbox>, which can only say done or not (PRD §8.3.2).
         var html = Body("- [ ] todo\n- [x] done");
         Assert.Contains("<li class=\"task t-not\">", html);
@@ -94,19 +94,29 @@ public class HtmlRendererTests
     [Fact]
     public void TaskList_RendersEveryState()
     {
-        var html = Body("- [ ] a\n- [/] b\n- [?] c\n- [>] d\n- [x] e\n- [-] f");
+        var html = Body("- [ ] a\n- [/] b\n- [x] c");
         foreach (var (cls, label) in new[]
         {
-            ("t-not", "Not started"), ("t-prog", "In progress"), ("t-block", "Blocked"),
-            ("t-defer", "Deferred"), ("t-done", "Done"), ("t-cancel", "Cancelled"),
+            ("t-not", "Not started"), ("t-prog", "In progress"), ("t-done", "Done"),
         })
         {
             Assert.Contains($"<li class=\"task {cls}\">", html);
             Assert.Contains($"aria-label=\"{label}\"", html);
         }
 
-        // The five lit states draw a symbol; the un-lit one is an empty ring, so it draws none.
-        Assert.Equal(5, Regex.Matches(html, "<svg").Count);
+        // The dash and the check draw a symbol; a resting box is an empty square, so it draws none.
+        Assert.Equal(2, Regex.Matches(html, "<svg").Count);
+    }
+
+    [Fact]
+    public void TheTwoLitStates_ShareOneAccent()
+    {
+        // Single-hue (PRD §8.3.2): the dash and the check are the same colour, and the done box is filled with
+        // it. If a second hue ever creeps back in, this is where it shows up.
+        var page = HtmlRenderer.RenderDocument(TextDocument.FromString("- [/] b\n- [x] c"));
+
+        Assert.Contains("li.t-prog > .tbox { color: var(--t-accent); }", page);
+        Assert.Contains("background: var(--t-accent); border-color: var(--t-accent)", page);
     }
 
     [Fact]

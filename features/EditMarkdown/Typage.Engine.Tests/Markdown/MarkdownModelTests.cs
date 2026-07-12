@@ -48,19 +48,17 @@ public class MarkdownModelTests
     }
 
     [Fact]
-    public void TaskList_ReadsAllSixStates_AndCarriesTheStateInTheMarkersMeta()
+    public void TaskList_ReadsAllThreeStates_AndCarriesTheStateInTheMarkersMeta()
     {
-        // The dialect's task vocabulary (PRD §8.3.2): one character between the brackets, six meanings. The
+        // The dialect's task vocabulary (PRD §8.3.2): one character between the brackets, three meanings. The
         // marker carries the state it spells, so a consumer reads it off the token instead of re-parsing the box.
-        var (_, model) = Tokenize("- [ ] a\n- [/] b\n- [?] c\n- [>] d\n- [x] e\n- [-] f");
-        var states = Enumerable.Range(0, 6)
+        var (_, model) = Tokenize("- [ ] a\n- [/] b\n- [x] c");
+        var states = Enumerable.Range(0, 3)
             .Select(line => model.LineTokens(line).Single(t => t.Type == TokenType.TaskMarker))
             .Select(t => TaskStates.FromMark(t.Meta![0]))
             .ToArray();
 
-        Assert.Equal(
-            [TaskState.NotStarted, TaskState.InProgress, TaskState.Blocked, TaskState.Deferred, TaskState.Done, TaskState.Cancelled],
-            states);
+        Assert.Equal([TaskState.NotStarted, TaskState.InProgress, TaskState.Done], states);
     }
 
     [Fact]
@@ -76,9 +74,15 @@ public class MarkdownModelTests
     public void AnUnknownBoxCharacter_IsNotATaskMarker()
     {
         // Tolerant tokenizing: "[a]" is not in the vocabulary, so the brackets stay literal text rather than
-        // becoming a box in some seventh, undefined state.
+        // becoming a box in some fourth, undefined state.
         Assert.False(HasType("- [a] not a task", TokenType.TaskMarker));
         Assert.False(HasType("- [] not a task", TokenType.TaskMarker));
+
+        // The characters the dialect used to admit are ordinary text again — a file that spells them keeps them,
+        // and reads them back as the literal "[?]" the author typed rather than as a box we no longer draw.
+        Assert.False(HasType("- [?] blocked", TokenType.TaskMarker));
+        Assert.False(HasType("- [>] deferred", TokenType.TaskMarker));
+        Assert.False(HasType("- [-] cancelled", TokenType.TaskMarker));
     }
 
     [Fact]

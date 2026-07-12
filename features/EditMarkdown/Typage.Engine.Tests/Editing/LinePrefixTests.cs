@@ -46,33 +46,24 @@ public class LinePrefixTests
     }
 
     [Fact]
-    public void Parse_ReadsAllSixTaskStates()
+    public void Parse_ReadsAllThreeTaskStates()
     {
         // The assists parse the same vocabulary the tokenizer does, so a picker, a click, and an Enter
         // continuation can't disagree about what a box says (PRD §8.3.2).
         Assert.Equal(TaskState.NotStarted, LinePrefix.Parse("- [ ] a").Task);
         Assert.Equal(TaskState.InProgress, LinePrefix.Parse("- [/] a").Task);
-        Assert.Equal(TaskState.Blocked, LinePrefix.Parse("- [?] a").Task);
-        Assert.Equal(TaskState.Deferred, LinePrefix.Parse("- [>] a").Task);
         Assert.Equal(TaskState.Done, LinePrefix.Parse("- [x] a").Task);
-        Assert.Equal(TaskState.Cancelled, LinePrefix.Parse("- [-] a").Task);
         Assert.False(LinePrefix.Parse("- [a] a").HasTask); // outside the vocabulary: not a box at all
     }
 
     [Fact]
-    public void Resolved_IsDoneOrCancelled_NotMerelyChecked()
+    public void OnlyDone_IsChecked()
     {
-        // "Off the active board" is the pair done|cancelled — finished and abandoned are opposite ends of the
-        // same thing, and neither is work still to do. Only *done* counts as checked.
-        Assert.True(LinePrefix.Parse("- [x] a").TaskResolved);
-        Assert.True(LinePrefix.Parse("- [-] a").TaskResolved);
-        Assert.False(LinePrefix.Parse("- [/] a").TaskResolved);
-        Assert.False(LinePrefix.Parse("- [?] a").TaskResolved);
-        Assert.False(LinePrefix.Parse("- [>] a").TaskResolved);
-        Assert.False(LinePrefix.Parse("- [ ] a").TaskResolved);
-
+        // "Checked" is what the strike-through and the completed-task sort turn on, and only a *done* item is off
+        // the board. An item merely under way is still work to do.
         Assert.True(LinePrefix.Parse("- [x] a").TaskChecked);
-        Assert.False(LinePrefix.Parse("- [-] a").TaskChecked);
+        Assert.False(LinePrefix.Parse("- [/] a").TaskChecked);
+        Assert.False(LinePrefix.Parse("- [ ] a").TaskChecked);
     }
 
     [Fact]
@@ -95,7 +86,10 @@ public class LinePrefixTests
         // Enter on *any* state opens a fresh, not-started item: the new line is work to do, whatever the line
         // above it turned out to be.
         Assert.Equal("- [ ] ", LinePrefix.Parse("- [/] a").ContinuationPrefix());
-        Assert.Equal("- [ ] ", LinePrefix.Parse("- [-] a").ContinuationPrefix());
+
+        // A retired character is not a box, so its line is a plain bullet and continues as one — Enter can't
+        // carry over a state the dialect no longer has.
+        Assert.Equal("- ", LinePrefix.Parse("- [-] a").ContinuationPrefix());
     }
 
     [Fact]

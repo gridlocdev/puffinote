@@ -140,14 +140,16 @@ every edit's incremental update must produce token-for-token the same result as 
   implements `ILogicalScrollable` and draws only the lines inside the viewport, translated by the scroll
   offset, with the horizontal extent growing as wide lines come into view (no whole-document scan).
 - **`MarkdownTheme`** (`Rendering/`) — the presentation seam mapping `TokenType` → typeface/size/colors.
-  The engine stays styling-free; re-theming never touches it. It also holds the **task palette** — a colour per
-  `TaskState`, its wash, and the struck-through treatment of a resolved item (PRD §8.3.2) — because *which* six
-  states exist is dialect (engine) while what they *look like* is presentation.
-- **`TaskGlyphs`** (`Rendering/`) — the drawn task checkbox: a circular lamp, ringed and tinted in its state's
-  colour, with the state's own symbol inside. One draw path serves both the surface's concealed-`[x]` decoration
-  and the status picker's rows (`Views/TaskStatusPicker`), so the box you click and the box you pick from cannot
-  become two different pictures. The six symbols mirror the ones `HtmlRenderer` writes as inline SVG — two
-  surfaces, one vocabulary, no shared UI dependency.
+  The engine stays styling-free; re-theming never touches it. It also holds the **task palette** — the box's
+  border, the one accent the dash and the done fill share, the check that rides the fill, and the struck-through
+  treatment of a done item (PRD §8.3.2) — because *which* three states exist is dialect (engine) while what they
+  *look like* is presentation.
+- **`TaskGlyphs`** (`Rendering/`) — the drawn task checkbox: a rounded square holding nothing, an accent dash, or
+  a check on an accent fill. One draw path serves both the surface's concealed-`[x]` decoration and the status
+  picker's rows (`Views/TaskStatusPicker`), so the box you click and the box you pick from cannot become two
+  different pictures. The symbols are authored in a 24×24 box that *is* the checkbox, so `HtmlRenderer` writes
+  the very same path data and stroke widths as inline SVG — two surfaces, one vocabulary, no shared UI
+  dependency.
 - **`IEmbedResolver`** — the seam that turns an engine-detected embed *reference* into an Avalonia
   control. Detection is engine-side; resolution is control-side. The standalone app injects
   `NullEmbedResolver` (embeds show as source); the notes app will inject a real one.

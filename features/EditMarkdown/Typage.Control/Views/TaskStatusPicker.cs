@@ -10,16 +10,16 @@ using Typage.Engine.Markdown;
 namespace Typage.Control.Views;
 
 /// <summary>
-/// One task lamp, drawn at a fixed size: the picker's row glyph. It draws through the same
-/// <see cref="TaskGlyphs"/> the editing surface draws its checkboxes with, so the box you pick is exactly
-/// the box you get.
+/// One task checkbox, drawn at a fixed size: the picker's row glyph. It draws through the same
+/// <see cref="TaskGlyphs"/> the editing surface draws its boxes with, so the box you pick is exactly the box
+/// you get.
 /// </summary>
-public sealed class TaskLamp : Avalonia.Controls.Control
+public sealed class TaskCheckbox : Avalonia.Controls.Control
 {
     private readonly MarkdownTheme _theme;
     private readonly TaskState _state;
 
-    public TaskLamp(MarkdownTheme theme, TaskState state, double size)
+    public TaskCheckbox(MarkdownTheme theme, TaskState state, double size)
     {
         _theme = theme;
         _state = state;
@@ -32,13 +32,13 @@ public sealed class TaskLamp : Avalonia.Controls.Control
 }
 
 /// <summary>
-/// The status picker: the six task states, each with its lamp, its name, what it means, and how it is spelled
-/// in the source. It drops from the checkbox a secondary click lands on (or from the caret's box, for ⌥⌘L) —
-/// the palette opens where the eye already is, the way Cellestra's search pill drops its own.
+/// The status picker: the three task states, each with its box, its name, what it means, and how it is spelled in
+/// the source. It drops from the checkbox a secondary click lands on (or from the caret's box, for ⌥⌘L) — the
+/// palette opens where the eye already is, the way Cellestra's search pill drops its own.
 ///
-/// <para>Completion stays a plain click on the box; this is for the four states in between, which are chosen,
-/// not toggled. Rows are ordered active → resolved (<see cref="TaskStates.Order"/>) — the order a reader
-/// tallies a board in, not the order the characters were invented.</para>
+/// <para>Completion stays a plain click on the box; this is how <i>in progress</i> is reached, which is a state
+/// you choose rather than toggle into. Rows are ordered the way the work moves
+/// (<see cref="TaskStates.Order"/>).</para>
 /// </summary>
 public sealed class TaskStatusPicker : StackPanel
 {
@@ -47,6 +47,10 @@ public sealed class TaskStatusPicker : StackPanel
 
     /// <summary>Raised when the picker is dismissed with Esc.</summary>
     public event Action? Cancelled;
+
+    /// <summary>The alpha of the current row's wash — present enough to find, quiet enough not to compete with
+    /// the box it is behind.</summary>
+    private const byte CurrentRowAlpha = 0x26;
 
     /// <param name="theme">The editor's palette — the rows are lit by the very brushes the document is.</param>
     /// <param name="current">The state of the task being edited, pre-selected and ticked.</param>
@@ -120,14 +124,15 @@ public sealed class TaskStatusPicker : StackPanel
             Margin = new Thickness(0, 1, 0, 0),
         };
 
-        // The source spelling, so the picker teaches the syntax it writes: choose "Blocked" once and you know
-        // what "[?]" means the next time you read it in a raw file.
+        // The source spelling, so the picker teaches the syntax it writes: choose "In progress" once and you know
+        // what "[/]" means the next time you read it in a raw file. Tinted like its own box — accent where the box
+        // spends the accent, quiet where it doesn't.
         var code = new TextBlock
         {
             Text = TaskStates.Code(state),
             FontFamily = new FontFamily("Cascadia Code,Consolas,Menlo,monospace"),
             FontSize = 11,
-            Foreground = theme.TaskColor(state),
+            Foreground = state == TaskState.NotStarted ? theme.TaskBorder : theme.TaskAccent,
             VerticalAlignment = VerticalAlignment.Center,
             Opacity = current ? 1 : 0.45,
         };
@@ -142,10 +147,10 @@ public sealed class TaskStatusPicker : StackPanel
             ColumnSpacing = 11,
         };
 
-        var lamp = new TaskLamp(theme, state, 20) { VerticalAlignment = VerticalAlignment.Center };
+        var box = new TaskCheckbox(theme, state, 20) { VerticalAlignment = VerticalAlignment.Center };
         Grid.SetColumn(text, 1);
         Grid.SetColumn(code, 2);
-        row.Children.Add(lamp);
+        row.Children.Add(box);
         row.Children.Add(text);
         row.Children.Add(code);
 
@@ -156,7 +161,7 @@ public sealed class TaskStatusPicker : StackPanel
             Padding = new Thickness(8),
             HorizontalAlignment = HorizontalAlignment.Stretch,
             HorizontalContentAlignment = HorizontalAlignment.Stretch,
-            Background = current ? theme.TaskFill(state) ?? Brushes.Transparent : Brushes.Transparent,
+            Background = current ? CurrentRowWash(theme) : Brushes.Transparent,
             BorderThickness = new Thickness(0),
             CornerRadius = new CornerRadius(8),
         };
@@ -170,4 +175,11 @@ public sealed class TaskStatusPicker : StackPanel
         button.Click += (_, _) => Chosen?.Invoke(state);
         return button;
     }
+
+    /// <summary>The wash behind the row the task is already in: the accent at a low alpha — the picker's one hue,
+    /// same as the boxes'.</summary>
+    private static IBrush CurrentRowWash(MarkdownTheme theme) =>
+        theme.TaskAccent is ISolidColorBrush solid
+            ? new SolidColorBrush(Color.FromArgb(CurrentRowAlpha, solid.Color.R, solid.Color.G, solid.Color.B))
+            : Brushes.Transparent;
 }

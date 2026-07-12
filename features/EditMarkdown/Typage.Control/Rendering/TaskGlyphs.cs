@@ -5,99 +5,90 @@ using Typage.Engine.Markdown;
 namespace Typage.Control.Rendering;
 
 /// <summary>
-/// The drawn task checkbox: a circular lamp, ringed and tinted in its state's colour, with a symbol inside
-/// (PRD §8.3.2). One place draws it — the editing surface's concealed <c>[x]</c> decoration and the status
-/// picker's rows both call <see cref="Draw"/> — so the box a reader clicks and the box they pick from can
-/// never be two different pictures.
+/// The drawn task checkbox: a rounded square, and what is in it (PRD §8.3.2). One place draws it — the editing
+/// surface's concealed <c>[x]</c> decoration and the status picker's rows both call <see cref="Draw"/> — so the
+/// box a reader clicks and the box they pick from can never be two different pictures.
 ///
-/// <para>The symbol carries the state on its own, before colour: a check, a cross, a half-lit disc, a
-/// double chevron, an exclamation. Colour is a second, redundant channel, which is what keeps the six
-/// states legible to a colour-blind reader and in a monochrome print (PRD §9.6).</para>
+/// <para>Three states, three pictures, <b>one hue</b>: an empty outline (not started), the same outline with an
+/// accent <i>dash</i> across it (in progress), and the box filled with that same accent carrying a check (done).
+/// The dash and the check share the accent because "under way" and "done" are two points on one path — a second
+/// hue would make them two unrelated alarms. Shape carries the state on its own, before colour, which is what
+/// keeps the three legible to a colour-blind reader and in a monochrome print (PRD §9.6).</para>
 ///
-/// <para>The shapes are authored in a 24×24 box, the same six symbols the HTML export draws as inline SVG
-/// (<c>HtmlRenderer.TaskGlyph</c>) — two surfaces, one vocabulary. Keep them in step.</para>
+/// <para>The symbols are authored in a 24×24 box that <i>is</i> the checkbox — so every number below is also a
+/// fraction of the box's side, and the HTML export can draw the very same two paths at the very same stroke
+/// widths (<c>HtmlRenderer.TaskGlyph</c>). Two surfaces, one vocabulary: keep them in step.</para>
 /// </summary>
 public static class TaskGlyphs
 {
-    /// <summary>The box the path data is authored in — everything below is expressed in these units and scaled.</summary>
+    /// <summary>The box the symbols are authored in — it maps onto the checkbox itself, so 24 units = one side.</summary>
     private const double ViewBox = 24;
 
-    /// <summary>The symbol's size as a fraction of the lamp's diameter: it sits <i>inside</i> the ring, not on it.</summary>
-    private const double GlyphRatio = 0.72;
+    /// <summary>The check, in the design box. Spans a little under half the box — a tick sitting in a square, not
+    /// filling it.</summary>
+    private const string CheckPath = "M6.5 12.6 L10.2 16.3 L17.6 7.9";
 
-    /// <summary>Stroke width of a stroked symbol, in view-box units (scaled with the glyph).</summary>
-    private const double GlyphStroke = 2.5;
+    /// <summary>The dash: a bar across the middle. Half-drawn work, said with half a check.</summary>
+    private const string DashPath = "M6.7 12 L17.3 12";
 
-    /// <summary>The ring's thickness as a fraction of the lamp's diameter.</summary>
-    private const double RingRatio = 0.10;
+    /// <summary>Stroke of the check, in design-box units.</summary>
+    private const double CheckStroke = 2.2;
+
+    /// <summary>Stroke of the dash, in design-box units — heavier than the outline it sits in, so it reads as a
+    /// mark rather than as part of the box.</summary>
+    private const double DashStroke = 2.8;
+
+    /// <summary>The thinnest the outline may get: below this a hairline border fades into the page at small font
+    /// sizes, and the resting box stops reading as a box at all.</summary>
+    private const double MinBorder = 1.25;
+
+    // Immutable and shared, so a document of a thousand tasks parses two paths, not two thousand.
+    private static readonly Geometry Check = Geometry.Parse(CheckPath);
+    private static readonly Geometry Dash = Geometry.Parse(DashPath);
 
     /// <summary>
-    /// Draw the lamp for <paramref name="state"/> filling <paramref name="box"/> (a square).
+    /// Draw the box for <paramref name="state"/> filling <paramref name="box"/> (a square).
     /// </summary>
     public static void Draw(DrawingContext context, MarkdownTheme theme, Rect box, TaskState state)
     {
-        var color = theme.TaskColor(state);
-        var r = box.Width / 2;
-        var centre = box.Center;
+        var side = box.Width;
+        var radius = side * theme.CheckboxCornerRatio;
 
-        // The ring, over a wash of its own colour. Not-started gets no wash: an un-lit lamp — the zero point —
-        // is an empty outline, so the five *lit* states read as changes from a resting state rather than as five
-        // equal options.
-        var pen = new Pen(color, Math.Max(1, box.Width * RingRatio));
-        context.DrawEllipse(theme.TaskFill(state), pen, centre, r, r);
-
-        var (stroke, fill) = Paths(state);
-        if (stroke is null && fill is null)
+        if (state == TaskState.Done)
         {
+            // Done is the one state that fills: the accent square *is* the signal, and the check rides on it. It
+            // takes the whole allotted square (there is no outline to inset for), which is why a done box reads
+            // heavier than the two open ones without being any larger.
+            context.DrawRectangle(theme.TaskAccent, null, new RoundedRect(box, radius));
+            Symbol(context, box, Check, theme.TaskCheck, CheckStroke);
             return;
         }
 
-        // Place the symbol's 24×24 design box centred in the lamp, at GlyphRatio of its size. The pen's width
-        // rides the same transform, so a stroked symbol thickens with the lamp instead of thinning to a hair.
-        var glyph = box.Width * GlyphRatio;
-        var scale = glyph / ViewBox;
-        using var _ = context.PushTransform(
-            Matrix.CreateScale(scale, scale) *
-            Matrix.CreateTranslation(centre.X - (glyph / 2), centre.Y - (glyph / 2)));
+        // The two open states share one outline. Stroking straddles the edge, so the rect is deflated by half the
+        // pen: the border lands *inside* the square the gutter reserved, and the three boxes line up down the page.
+        var border = Math.Max(MinBorder, side * theme.CheckboxBorderRatio);
+        context.DrawRectangle(
+            null,
+            new Pen(theme.TaskBorder, border),
+            new RoundedRect(box.Deflate(border / 2), Math.Max(0, radius - (border / 2))));
 
-        if (fill is not null)
+        if (state == TaskState.InProgress)
         {
-            context.DrawGeometry(color, null, fill);
-        }
-
-        if (stroke is not null)
-        {
-            context.DrawGeometry(null, new Pen(color, GlyphStroke, lineCap: PenLineCap.Round, lineJoin: PenLineJoin.Round), stroke);
+            Symbol(context, box, Dash, theme.TaskAccent, DashStroke);
         }
     }
 
-    /// <summary>The symbol for <paramref name="state"/>, as a stroked path and/or a filled one, in the 24×24 design box.</summary>
-    private static (Geometry? Stroke, Geometry? Fill) Paths(TaskState state) => Cache.TryGetValue(state, out var g) ? g : default;
-
-    /// <summary>
-    /// Built once: the geometries are immutable and shared by every lamp on screen, so a document of a thousand
-    /// tasks parses six paths, not a thousand.
-    /// </summary>
-    private static readonly Dictionary<TaskState, (Geometry? Stroke, Geometry? Fill)> Cache = new()
+    /// <summary>Stroke <paramref name="path"/> over <paramref name="box"/>, mapping the 24×24 design box onto it.
+    /// The pen rides the same transform, so the stroke thickens with the box instead of thinning to a hair.</summary>
+    private static void Symbol(DrawingContext context, Rect box, Geometry path, IBrush brush, double stroke)
     {
-        // Not started: nothing inside the ring.
-        [TaskState.NotStarted] = (null, null),
+        var scale = box.Width / ViewBox;
+        using var _ = context.PushTransform(
+            Matrix.CreateScale(scale, scale) * Matrix.CreateTranslation(box.X, box.Y));
 
-        // In progress: a disc filled to its meridian — half-lit, the way a progress dial reads.
-        [TaskState.InProgress] = (null, Geometry.Parse("M12 3 A9 9 0 0 1 12 21 Z")),
-
-        // Blocked: an exclamation — something needs attention before this can move.
-        [TaskState.Blocked] = (
-            Geometry.Parse("M12 5.5 L12 13.5"),
-            new EllipseGeometry(new Rect(10.5, 16.5, 3, 3))),
-
-        // Deferred: a double chevron — pushed forward, in time rather than out of the list.
-        [TaskState.Deferred] = (Geometry.Parse("M6 6 L11 12 L6 18 M12 6 L17 12 L12 18"), null),
-
-        // Done: the check.
-        [TaskState.Done] = (Geometry.Parse("M5.5 12.5 L10 17 L18.5 7"), null),
-
-        // Cancelled: the cross — struck out, not ticked off.
-        [TaskState.Cancelled] = (Geometry.Parse("M7 7 L17 17 M17 7 L7 17"), null),
-    };
+        context.DrawGeometry(
+            null,
+            new Pen(brush, stroke, lineCap: PenLineCap.Round, lineJoin: PenLineJoin.Round),
+            path);
+    }
 }

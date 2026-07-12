@@ -470,8 +470,8 @@ public partial class MarkdownEditor
 
             case DecorationKind.Checkbox:
                 {
-                    // The box is a lamp: a circular ring in the state's colour, washed with it, with the state's
-                    // own symbol inside. The run carries which of the six it is (its box character).
+                    // A rounded square: empty, dashed, or filled with a check. The run carries which of the three
+                    // it is (its box character).
                     var size = CheckboxBoxSize;
                     var box = new Rect(run.X + CheckboxLeftPad, cy - (size / 2), size, size);
                     TaskGlyphs.Draw(context, EditorTheme, box, TaskStates.FromMark(run.Text.Length > 0 ? run.Text[0] : ' '));

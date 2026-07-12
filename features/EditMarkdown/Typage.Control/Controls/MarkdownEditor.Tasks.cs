@@ -11,7 +11,7 @@ using Typage.Engine.Markdown;
 namespace Typage.Control.Controls;
 
 /// <summary>
-/// Task states (PRD §8.3.2): the surface's half of the six-state checkbox — the commands that set a state and
+/// Task states (PRD §8.3.2): the surface's half of the three-state checkbox — the commands that set a state and
 /// the picker that offers them. The <i>writing</i> of a state is
 /// <see cref="SetTaskStateOnLine"/> (in the pointer partial, next to the click that also calls it): one edit
 /// path, whether the change came from a click, a shortcut, or the picker.
@@ -62,7 +62,7 @@ public partial class MarkdownEditor
     /// </summary>
     private void ShowTaskStatusPicker(int line)
     {
-        if (TaskStateOf(line) is not { } current || TaskLampRect(line) is not { } lamp)
+        if (TaskStateOf(line) is not { } current || TaskBoxRect(line) is not { } boxRect)
         {
             return;
         }
@@ -78,8 +78,8 @@ public partial class MarkdownEditor
             Placement = PlacementMode.AnchorAndGravity,
             PlacementAnchor = PopupAnchor.TopLeft,
             PlacementGravity = PopupGravity.BottomRight,
-            HorizontalOffset = lamp.X,
-            VerticalOffset = lamp.Bottom + 4,
+            HorizontalOffset = boxRect.X,
+            VerticalOffset = boxRect.Bottom + 4,
             ShowMode = FlyoutShowMode.Standard,
         };
 
@@ -106,7 +106,7 @@ public partial class MarkdownEditor
     /// Where <paramref name="line"/>'s drawn checkbox sits, in the control's own coordinates (null when the line
     /// has no box, or its box isn't laid out). The picker anchors to this.
     /// </summary>
-    private Rect? TaskLampRect(int line)
+    private Rect? TaskBoxRect(int line)
     {
         EnsureLayout();
         var block = BlockOf(line);

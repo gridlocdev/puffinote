@@ -34,11 +34,11 @@ public partial class MarkdownEditor
         if (e.GetCurrentPoint(this).Properties.IsRightButtonPressed)
         {
             var at = e.GetPosition(this);
-            var lamp = TaskLampAt(Buffer.Document.GetPosition(OffsetAtPoint(at)).Line, at);
-            if (lamp >= 0)
+            var box = TaskBoxAt(Buffer.Document.GetPosition(OffsetAtPoint(at)).Line, at);
+            if (box >= 0)
             {
                 Focus();
-                ShowTaskStatusPicker(lamp);
+                ShowTaskStatusPicker(box);
                 e.Handled = true;
                 return;
             }
@@ -164,7 +164,7 @@ public partial class MarkdownEditor
     }
 
     /// <summary>
-    /// Toggle a task checkbox hit by a click on <paramref name="line"/>: first the drawn checkbox lamp
+    /// Toggle a task checkbox hit by a click on <paramref name="line"/>: first the drawn checkbox
     /// (when the marker is concealed), then the raw <c>[ ]</c> at <paramref name="offset"/> (caret line).
     ///
     /// <para>A plain click <b>completes</b> — it is the one task action worth a single click, and the one people
@@ -173,15 +173,15 @@ public partial class MarkdownEditor
     /// </summary>
     private bool TryToggleTaskClick(int line, Point point, int offset)
     {
-        var hit = TaskLampAt(line, point);
+        var hit = TaskBoxAt(line, point);
         return hit >= 0 ? ToggleTaskOnLine(hit) : TryToggleTaskAt(line, offset);
     }
 
     /// <summary>
-    /// The line whose drawn checkbox lamp <paramref name="point"/> lands on (−1 if none) — the hit-test both the
+    /// The line whose drawn checkbox <paramref name="point"/> lands on (−1 if none) — the hit-test both the
     /// click-to-complete and the status picker read, so the two can never disagree about where the box is.
     /// </summary>
-    private int TaskLampAt(int line, Point point)
+    private int TaskBoxAt(int line, Point point)
     {
         // A task line carries a list marker, so it's always a singleton block (block start == line start).
         var block = BlockOf(line);

@@ -209,7 +209,7 @@ On edit, re-tokenize from the first affected line and stop once the carried bloc
 | Blockquote | `> x`, `>> x` | Block | Tinted panel; one accent bar per nesting level | Hide `>` when caret off line |
 | Unordered list | `-`/`*`/`+` | Block | Bullet glyph | Raw marker shown when editing it |
 | Ordered list | `1.` | Block | Number | Raw shown when editing |
-| Task list | `- [ ]`/`- [x]`/`- [/]`/`- [?]`/`- [>]`/`- [-]` | Block | Interactive checkbox — six states (§8.3.2) | Click completes; picker sets any state; edits the one box char |
+| Task list | `- [ ]`/`- [/]`/`- [x]` | Block | Interactive checkbox — three states (§8.3.2) | Click completes; picker sets any state; edits the one box char |
 | Link | `[text](url)` | Inline | Styled, clickable | Hide `[]()`+URL when caret off node |
 | Autolink | `<https://…>` / bare URL | Inline | Styled, clickable | Hide brackets when caret off node |
 | Image | `![alt](url)` | Block/inline | Rendered image | Source when caret inside |
@@ -267,56 +267,60 @@ high-contrast user needs us not to do — so there the hierarchy rests on size a
 
 ### 8.3.2 Task states
 
-A task is not a bit. `[ ]`/`[x]` can say *done* or *not done*, but a task that is under way, waiting on someone
-else, put off, or abandoned is none of those — and authors have long spelled the difference by hand
-(`[/]`, `[?]`, `[>]`, `[-]`), which a bit-shaped editor then renders as a broken checkbox. Typage reads that
-vocabulary: **one character between the brackets, six states.**
+`[ ]`/`[x]` can say *done* or *not done*, which leaves no way to say the one thing a reader scanning a list
+actually acts on: that a task is **under way**. Typage admits a third character for it — and stops there:
+**one character between the brackets, three states.**
 
-| State | Source | Symbol | Hue | Means |
-|---|---|---|---|---|
-| Not started | `[ ]` | *(empty ring)* | slate (achromatic) | defined, no work yet |
-| In progress | `[/]` | half-lit disc | azure | work is under way |
-| Blocked | `[?]` | exclamation | amber | waiting on a dependency |
-| Deferred | `[>]` | double chevron | violet | moved to later |
-| Done | `[x]` | check | green | the task is complete |
-| Cancelled | `[-]` | cross | red | will not be completed |
+| State | Source | Symbol | Means |
+|---|---|---|---|
+| Not started | `[ ]` | *(empty box)* | defined, no work yet |
+| In progress | `[/]` | accent dash | work is under way |
+| Done | `[x]` | check, on an accent fill | the task is complete |
 
-This is a **deliberate widening of the dialect** (§8.4 otherwise stands): the six states are the same
-`- [c] text` construct, not a new one — the tokenizer's box character simply admits six values instead of
-three, an unrecognized one (`[a]`) is still literal text, and `[X]` still reads as done. `[ ]`/`[x]` files are
-unaffected; a file written elsewhere with `[/]` now renders as its author meant it.
+This is a **narrow widening of the dialect** (§8.4 otherwise stands): the three states are the same
+`- [c] text` construct, not a new one — the tokenizer's box character admits three values instead of two, an
+unrecognized one (`[a]`, and also `[?]`, `[>]`, `[-]`) is literal text, and `[X]` still reads as done.
+`[ ]`/`[x]` files are unaffected.
 
-**The colours are assigned by meaning, not decoration.** Two complementary pairs anchor the wheel: **done
-(green) / cancelled (red)** are the two *resolved* ends — finished vs. abandoned — so the one pair a reader
-must never confuse is the pair the eye separates most easily; **in progress (azure) / blocked (amber)** are
-the second complement, the two *in-flight* states, one flowing, one stuck. **Deferred** takes a cool violet —
-dormant, set aside, but not dead — adjacent to neither pair, so it can't be read as either. **Not started**
-stays achromatic slate: the zero point, an un-lit lamp with no hue and no wash, from which the five lit states
-are visibly a *change*. Each palette (light, dark, high contrast) re-mixes the six for its own surface — the
-*relationships* carry over, not the literal values — and in high contrast not-started goes white rather than
-grey, because dimming the resting state is what a high-contrast reader needs us not to do.
+We deliberately **do not** model blocked, deferred, or cancelled. Each is a real thing to want, but a status
+vocabulary grows without a natural stopping point, and every state added is one more hue in the gutter, one
+more row in the picker, and one more thing a reader must learn before they can read a list at a glance. Three
+is the set that earns its keep: not begun, begun, finished. A file that spells a richer vocabulary keeps its
+bytes — we simply render `[-]` as the literal text the author typed rather than as a box we no longer draw.
 
-**Hue is never the only channel.** Every state also draws its own symbol, so the six survive colour-blindness
-and a monochrome print (§9.6). A **resolved** item (done *or* cancelled) additionally reads as closed: its text
-is dimmed and struck through in its own state's colour — a green strike for done, a red one for cancelled.
+**One accent, single-hue.** Three states need three *shapes*, not three hues. The box is drawn once — a
+rounded square — and the state is spelled by what is in it: nothing, a dash, a check. Only one colour is ever
+spent: the **accent**, shared by the dash and the done box's fill, because "under way" and "done" are two
+points on one path and a second hue would make them two unrelated alarms. A resting box is a bare outline in a
+quiet border colour, so a column of tasks reads as one calm gutter with the moving and the finished items
+picked out of it. Each palette re-mixes the accent for its own surface; in high contrast the resting outline
+goes **white** rather than grey (dimming the state a reader is trying to see is what high contrast must not
+do), and the check flips to **black**, because there the accent is a *light* blue and a white check on it
+would be the one unreadable thing on the page.
 
-**Interaction.** The box is a circular lamp, and the six states are not equal in the hand:
+**Colour is never the only channel.** The dash and the check tell the three apart on their own, before any
+hue, so they survive colour-blindness and a monochrome print (§9.6). A **done** item additionally reads as
+closed: its text is dimmed and struck through.
+
+**Interaction.**
 
 - **A click on the box completes it** (and a click on a done box clears it). ⌘L does the same, and creates a
   box on a line that has none. Completion is the action worth a single click, the one people reach for a
-  hundred times a day; it must not become a menu.
-- **The other four are chosen, not toggled**: a secondary click on the box — or ⌥⌘L — drops a **status picker**
-  at the box itself, listing the six with their lamps, their meaning, and the source they write (so the picker
-  teaches the syntax it produces). Rows run active → resolved, the order a reader tallies a board in.
+  hundred times a day; it must not become a menu. It does **not** stop at *in progress* on the way — a click
+  that sometimes completes and sometimes doesn't is a click you have to look at.
+- **In progress is chosen, not toggled**: a secondary click on the box — or ⌥⌘L — drops a **status picker** at
+  the box itself, listing the three with their boxes, their meaning, and the source they write (so the picker
+  teaches the syntax it produces). Rows run in the order the work moves.
 - A state change rewrites **the one character between the brackets** and nothing else, and leaves the caret
   where it was (§7.1: the document is the source of truth; editing never rewrites untouched bytes).
 - A new item from Enter always starts `[ ]`: the next line is work to do, whatever the line above turned out
   to be.
-- The completed-task sort (§7.2) moves **resolved** items — done *and* cancelled. What it separates is work
-  still to do from work that isn't, and an abandoned task is no more outstanding than a finished one.
+- The completed-task sort (§7.2) moves **done** items. What it separates is work still to do from work that
+  isn't, so an item merely under way holds its place — it is still outstanding.
 
-The **HTML export** draws the same six lamps (inline SVG + a state class per item), not an `<input
-type=checkbox>`, which could only say done or not.
+The **HTML export** draws the same three boxes (inline SVG + a state class per item), not an `<input
+type=checkbox>`, which could only say done or not. The design box is the checkbox itself, so the export's path
+data and stroke widths are character-for-character the editor's.
 
 ### 8.4 Out of scope / deferred
 

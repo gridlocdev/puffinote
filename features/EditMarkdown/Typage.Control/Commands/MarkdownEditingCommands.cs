@@ -66,7 +66,7 @@ public static class MarkdownEditingCommands
                 ed.ToggleTask, isActive: () => ed.IsTaskActive, icon: "square-check"),
             // The four states between "not started" and "done" — in progress, blocked, deferred, cancelled — are
             // chosen, not toggled, so they get a picker rather than four more shortcuts to remember (PRD §8.3.2).
-            new("format.taskStatus", "Task Status…", "Set this task's status: in progress, blocked, deferred, done, or cancelled.",
+            new("format.taskStatus", "Task Status…", "Set this task's status: not started, in progress, or done.",
                 Shortcut.Cmd(Key.L, KeyModifiers.Alt), ed.OpenTaskStatusPicker, isActive: () => ed.IsTaskActive, icon: "circle-dot"),
             new("format.removeTask", "Remove Checkbox", "Remove the task checkbox from this line.", Shortcut.Cmd(Key.L, KeyModifiers.Shift),
                 ed.RemoveTask, icon: "square-x"),

@@ -58,12 +58,9 @@ public readonly record struct LinePrefix(
     /// <summary>True when the line carries a blockquote prefix.</summary>
     public bool HasQuote => Quote.Length > 0;
 
-    /// <summary>True when the line's box is ticked — <see cref="TaskState.Done"/> and nothing else.</summary>
+    /// <summary>True when the line's box is ticked — <see cref="TaskState.Done"/>, the one state that takes an
+    /// item off the active board (what the strike-through and the completed-task sort are about).</summary>
     public bool TaskChecked => HasTask && Task == TaskState.Done;
-
-    /// <summary>True when the line's task is off the active board — done <i>or</i> cancelled
-    /// (<see cref="TaskStates.IsResolved"/>).</summary>
-    public bool TaskResolved => HasTask && TaskStates.IsResolved(Task);
 
     /// <summary>
     /// The column just past the list marker (<c>"- "</c> / <c>"1. "</c>) — where a task checkbox sits, so

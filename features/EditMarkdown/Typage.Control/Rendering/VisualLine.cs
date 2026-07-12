@@ -31,7 +31,7 @@ public enum DecorationKind
     None,
     Bullet,
 
-    /// <summary>A task checkbox. <i>Which</i> of the six states it is riding is carried in the run's
+    /// <summary>A task checkbox. <i>Which</i> of the three states it is riding is carried in the run's
     /// <see cref="VisualRun.Text"/> — the one box character (<c>' '</c>, <c>'x'</c>, <c>'/'</c>, …) — so the
     /// vocabulary can grow without a new decoration kind per state, and drawing/hit-testing match on one kind.</summary>
     Checkbox,

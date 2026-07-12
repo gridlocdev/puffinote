@@ -170,7 +170,7 @@ internal static class LineTokenizer
             if (TryTaskMarker(line, contentStart, len, out var taskEnd, out var state))
             {
                 // The marker carries the *state* it spells in Meta (like a blockquote's depth), so a consumer
-                // reads the six-state vocabulary off the token instead of re-parsing the box character.
+                // reads the state off the token instead of re-parsing the box character.
                 output.Add(new Token(
                     lineStart + contentStart, taskEnd - contentStart, TokenType.TaskMarker, TokenRole.Marker,
                     TaskStates.MarkText(state)));
@@ -481,8 +481,8 @@ internal static class LineTokenizer
         taskEnd = start;
         state = TaskState.NotStarted;
 
-        // A box holds one character of the task-state vocabulary — "[ ]", "[/]", "[?]", "[>]", "[x]", "[-]" —
-        // followed by a space (or EOL). Any other character is not a box: the brackets stay literal text.
+        // A box holds one character of the task-state vocabulary — "[ ]", "[/]", "[x]" — followed by a space
+        // (or EOL). Any other character is not a box: the brackets stay literal text.
         if (start + 2 < len && line[start] == '[' && line[start + 2] == ']' && TaskStates.IsMark(line[start + 1]))
         {
             var after = start + 3;

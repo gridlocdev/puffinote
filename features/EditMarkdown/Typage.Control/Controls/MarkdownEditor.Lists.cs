@@ -562,15 +562,14 @@ public partial class MarkdownEditor
 
     /// <summary>
     /// Whether the item at <paramref name="startLine"/> (and every task under it, down to
-    /// <paramref name="endLine"/>) is <b>off the active board</b> — done or cancelled. A cancelled item sinks
-    /// with the done ones: what the sort separates is work still to do from work that isn't, and an abandoned
-    /// task is no more outstanding than a finished one (<see cref="TaskStates.IsResolved"/>).
+    /// <paramref name="endLine"/>) is <b>done</b>. What the sort separates is work still to do from work that
+    /// isn't, so an item that is merely under way stays put: it is still outstanding.
     /// </summary>
     private bool IsCompletedTaskSubtree(int startLine, int endLine)
     {
         var doc = Buffer.Document;
         var self = LinePrefix.Parse(doc.GetLineText(startLine));
-        if (!self.TaskResolved)
+        if (!self.TaskChecked)
         {
             return false;
         }
@@ -578,7 +577,7 @@ public partial class MarkdownEditor
         for (var line = startLine + 1; line <= endLine; line++)
         {
             var prefix = LinePrefix.Parse(doc.GetLineText(line));
-            if (prefix.HasTask && !prefix.TaskResolved)
+            if (prefix.HasTask && !prefix.TaskChecked)
             {
                 return false;
             }
