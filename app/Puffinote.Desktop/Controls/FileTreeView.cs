@@ -12,6 +12,7 @@ using Avalonia.Styling;
 using Avalonia.VisualTree;
 using Puffinote.Components.Controls.Icons;
 using Puffinote.Components.Theming;
+using Puffinote.Desktop.Panes;
 using Puffinote.Desktop.Shell;
 
 namespace Puffinote.Desktop.Controls;
@@ -41,7 +42,9 @@ namespace Puffinote.Desktop.Controls;
 ///   read it, so charging two clicks for it taxes every navigation in the app.</item>
 ///   <item><b>⌘+click</b> (macOS) / <b>Ctrl+click</b> (elsewhere) selects without opening — how you target a file
 ///   to rename, pin, or delete it without disturbing what you're reading.</item>
-///   <item>A <b>right click</b> selects the row under the pointer, so the context menu targets what was clicked.</item>
+///   <item>A <b>right click</b> selects the row under the pointer, so the context menu targets what was clicked
+///   — and lands on a <em>folder</em>, a <em>file</em>, or the empty space below the rows, each of which gets its
+///   own menu (see <see cref="BuildContextMenu"/>).</item>
 /// </list>
 /// The <see cref="NotebookNode"/> model is unchanged; mutation actions (new/rename/delete) drive this through
 /// <see cref="Refresh"/> / <see cref="SelectPath"/>.
@@ -68,8 +71,6 @@ internal sealed class FileTreeView : UserControl
     private NotebookNode? _root;
     private readonly HashSet<string> _expanded = new(StringComparer.OrdinalIgnoreCase);
     private IReadOnlySet<string> _pinned = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-    private MenuItem _pinItem = null!;
-    private MenuItem _unpinItem = null!;
     private string _typeahead = string.Empty;
     private DateTime _lastKeystroke = DateTime.MinValue;
 
@@ -150,8 +151,21 @@ internal sealed class FileTreeView : UserControl
     /// <summary>Raised to unpin an already-pinned folder from the sidebar's chips (context menu).</summary>
     public event Action<NotebookNode>? UnpinRequested;
 
+    /// <summary>Raised to show a file or folder in the host OS's file manager (context menu, PRD §7.2).</summary>
+    public event Action<NotebookNode>? RevealRequested;
+
+    /// <summary>Raised to open a file Puffinote has no editor for in its default app (context menu, PRD §7.2).</summary>
+    public event Action<NotebookNode>? OpenExternallyRequested;
+
     /// <summary>The currently selected node, or null when nothing is selected.</summary>
     public NotebookNode? SelectedNode => (_list.SelectedItem as Row)?.Node;
+
+    /// <summary>
+    /// Where a new entry goes: the selection, or — with nothing selected — the folder the tree is currently
+    /// rooted at, so a creation with no selection lands in the scope you are looking at rather than back at the
+    /// notebook root. (The shell then puts it inside a selected folder, or beside a selected file.)
+    /// </summary>
+    private NotebookNode? CreationContext => SelectedNode ?? _root;
 
     /// <summary>The names of the currently visible rows, top to bottom (test seam).</summary>
     internal IReadOnlyList<string> VisibleNamesForTest =>
@@ -159,6 +173,20 @@ internal sealed class FileTreeView : UserControl
 
     /// <summary>The selected row's name, or null (test seam).</summary>
     internal string? SelectedNameForTest => SelectedNode?.Name;
+
+    /// <summary>The headers the context menu would show for the current selection, separators as "—" (test seam).</summary>
+    internal IReadOnlyList<string> ContextMenuHeadersForTest =>
+        [.. MenuFor(SelectedNode).Select(c => c is MenuItem item ? item.Header as string ?? string.Empty : "—")];
+
+    /// <summary>Click a context-menu item of the current selection's menu by its header (test seam).</summary>
+    internal void InvokeContextMenuItemForTest(string header) =>
+        MenuFor(SelectedNode)
+            .OfType<MenuItem>()
+            .First(item => string.Equals(item.Header as string, header, StringComparison.Ordinal))
+            .RaiseEvent(new RoutedEventArgs(MenuItem.ClickEvent));
+
+    /// <summary>Drop the selection, as a right click on the tree's empty space does (test seam).</summary>
+    internal void ClearSelectionForTest() => _list.SelectedItem = null;
 
     /// <summary>Move keyboard focus into the tree (the shell's "focus file tree" command).</summary>
     public void FocusTree()
@@ -662,14 +690,14 @@ internal sealed class FileTreeView : UserControl
         // the shell picks the target folder from the current selection. Handled before the bare-key map below.
         if (e.Key == Key.N && e.KeyModifiers == command)
         {
-            NewNoteRequested?.Invoke(SelectedNode);
+            NewNoteRequested?.Invoke(CreationContext);
             e.Handled = true;
             return;
         }
 
         if (e.Key == Key.N && e.KeyModifiers == (command | KeyModifiers.Shift))
         {
-            NewFolderRequested?.Invoke(SelectedNode);
+            NewFolderRequested?.Invoke(CreationContext);
             e.Handled = true;
             return;
         }
@@ -766,58 +794,104 @@ internal sealed class FileTreeView : UserControl
         }
     }
 
+    /// <summary>
+    /// The context menu, rebuilt at open time for whatever the right click landed on — a folder, a file, or the
+    /// empty space below the last row. One menu listing every command was cheaper to build but made the tree lie:
+    /// it offered "New Note…" on a note (which quietly created a sibling, not a child), "Rename…" and "Delete" on
+    /// empty space (aimed at whatever happened to still be selected), and never offered the two commands a file
+    /// row most obviously needs — open it, and show me where it lives.
+    ///
+    /// <para>So each kind gets the commands that make sense <em>for that kind</em>, and nothing else:</para>
+    /// <list type="bullet">
+    ///   <item><b>Folder</b> — expand/collapse it, create inside it, pin it to the sidebar, reveal it, rename or
+    ///   delete it. A folder is a <em>container</em>, so it is the only row where "New …" appears: what you get is
+    ///   what the header says, an entry inside the folder you clicked.</item>
+    ///   <item><b>File</b> — open it (in a tab, or in the host's default app when Puffinote has no editor for its
+    ///   type — PRD §7.2), reveal it, rename or delete it. A file contains nothing, so it creates nothing.</item>
+    ///   <item><b>Empty space</b> — the current scope's own menu: create at the top level of what the tree is
+    ///   showing, or collapse it all. No rename/delete, because nothing was clicked (the right click that opened
+    ///   it cleared the selection — see <see cref="OnListPointerPressed"/>).</item>
+    /// </list>
+    /// </summary>
     private ContextMenu BuildContextMenu()
     {
-        MenuItem Item(string header, Action run)
-        {
-            var item = new MenuItem { Header = header };
-            item.Click += (_, _) => run();
-            return item;
-        }
-
-        _pinItem = Item("Pin to Sidebar", () =>
-        {
-            if (SelectedNode is { IsDirectory: true } dir)
-            {
-                PinRequested?.Invoke(dir);
-            }
-        });
-        _unpinItem = Item("Unpin from Sidebar", () =>
-        {
-            if (SelectedNode is { IsDirectory: true } dir)
-            {
-                UnpinRequested?.Invoke(dir);
-            }
-        });
-        var pinSeparator = new Separator();
-
-        var menu = new ContextMenu
-        {
-            ItemsSource = new List<Control>
-            {
-                _pinItem,
-                _unpinItem,
-                pinSeparator,
-                Item("New Note…", () => NewNoteRequested?.Invoke(SelectedNode)),
-                Item("New Spreadsheet…", () => NewSpreadsheetRequested?.Invoke(SelectedNode)),
-                Item("New Folder…", () => NewFolderRequested?.Invoke(SelectedNode)),
-                new Separator(),
-                Item("Rename…", RequestRename),
-                Item("Delete", RequestDelete),
-            },
-        };
-
-        // Pin/Unpin only make sense on a folder, and are mutually exclusive by its current pinned state.
+        var menu = new ContextMenu();
         menu.Opening += (_, _) =>
         {
-            bool isFolder = SelectedNode is { IsDirectory: true };
-            bool pinned = isFolder && _pinned.Contains(SelectedNode!.Path);
-            _pinItem.IsVisible = isFolder && !pinned;
-            _unpinItem.IsVisible = isFolder && pinned;
-            pinSeparator.IsVisible = isFolder;
+            // Refilled through Items, not by swapping ItemsSource: a source assigned this late (inside Opening)
+            // is not picked up, and the menu opens empty.
+            menu.Items.Clear();
+            foreach (var item in MenuFor(SelectedNode))
+            {
+                menu.Items.Add(item);
+            }
         };
         return menu;
     }
+
+    private static MenuItem Item(string header, Action run)
+    {
+        var item = new MenuItem { Header = header };
+        item.Click += (_, _) => run();
+        return item;
+    }
+
+    private IReadOnlyList<Control> MenuFor(NotebookNode? target) => target switch
+    {
+        { IsDirectory: true } folder => FolderMenu(folder),
+        { } file => FileMenu(file),
+        _ => ScopeMenu(),
+    };
+
+    private List<Control> FolderMenu(NotebookNode folder)
+    {
+        var items = new List<Control>();
+
+        // An empty folder has nothing to open, so it is offered no toggle — the same rule the row's disclosure
+        // chevron follows (see BuildRow), said in words.
+        if (folder.EnumerateChildren().Count > 0)
+        {
+            bool expanded = _expanded.Contains(folder.Path);
+            items.Add(Item(expanded ? "Collapse" : "Expand", () => Toggle(folder)));
+            items.Add(new Separator());
+        }
+
+        items.Add(Item("New Note…", () => NewNoteRequested?.Invoke(folder)));
+        items.Add(Item("New Spreadsheet…", () => NewSpreadsheetRequested?.Invoke(folder)));
+        items.Add(Item("New Folder…", () => NewFolderRequested?.Invoke(folder)));
+        items.Add(new Separator());
+
+        items.Add(_pinned.Contains(folder.Path)
+            ? Item("Unpin from Sidebar", () => UnpinRequested?.Invoke(folder))
+            : Item("Pin to Sidebar", () => PinRequested?.Invoke(folder)));
+        items.Add(Item(SystemFileManager.RevealLabel, () => RevealRequested?.Invoke(folder)));
+        items.Add(new Separator());
+
+        items.Add(Item("Rename…", RequestRename));
+        items.Add(Item("Delete", RequestDelete));
+        return items;
+    }
+
+    private List<Control> FileMenu(NotebookNode file) =>
+    [
+        EditorPaneFactory.CanOpen(file.Path)
+            ? Item("Open", () => FileActivated?.Invoke(file))
+            : Item("Open in Default App", () => OpenExternallyRequested?.Invoke(file)),
+        Item(SystemFileManager.RevealLabel, () => RevealRequested?.Invoke(file)),
+        new Separator(),
+        Item("Rename…", RequestRename),
+        Item("Delete", RequestDelete),
+    ];
+
+    /// <summary>The menu for the tree's empty space: it acts on the scope, which is the only thing that was clicked.</summary>
+    private List<Control> ScopeMenu() =>
+    [
+        Item("New Note…", () => NewNoteRequested?.Invoke(_root)),
+        Item("New Spreadsheet…", () => NewSpreadsheetRequested?.Invoke(_root)),
+        Item("New Folder…", () => NewFolderRequested?.Invoke(_root)),
+        new Separator(),
+        Item("Collapse All", CollapseAll),
+    ];
 
     /// <summary>
     /// Decide, at press time, what the click that follows will do.
@@ -844,11 +918,10 @@ internal sealed class FileTreeView : UserControl
         // intends rather than being read as a select-only click.
         if (properties.IsRightButtonPressed)
         {
-            if (row is { DataContext: Row hit })
-            {
-                _list.SelectedItem = hit;
-            }
-
+            // A right click *is* the target: on a row it selects that row, and on the empty space below the rows
+            // it clears the selection — so the menu that follows is the scope's (New …), not a Rename/Delete
+            // aimed at whichever row the user last happened to touch (see BuildContextMenu).
+            _list.SelectedItem = row is { DataContext: Row hit } ? hit : null;
             return;
         }
 

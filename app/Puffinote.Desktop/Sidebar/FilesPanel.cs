@@ -56,6 +56,8 @@ internal sealed class FilesPanel : ISidebarPanel
         _tree.NewFolderRequested += node => NewFolderRequested?.Invoke(node);
         _tree.PinRequested += node => Pin(node.Path);
         _tree.UnpinRequested += node => Unpin(node.Path);
+        _tree.RevealRequested += node => RevealRequested?.Invoke(node);
+        _tree.OpenExternallyRequested += node => OpenExternallyRequested?.Invoke(node);
 
         var palette = Tokens.Dark;
 
@@ -142,6 +144,10 @@ internal sealed class FilesPanel : ISidebarPanel
     public event Action<NotebookNode?>? NewNoteRequested;
     public event Action<NotebookNode?>? NewSpreadsheetRequested;
     public event Action<NotebookNode?>? NewFolderRequested;
+
+    /// <summary>Hand-offs to the host OS (tree context menu), fulfilled by the shell.</summary>
+    public event Action<NotebookNode>? RevealRequested;
+    public event Action<NotebookNode>? OpenExternallyRequested;
 
     /// <summary>Raised whenever the pinned-folder set or order changes, so the shell persists it to the session.</summary>
     public event Action? PinnedChanged;

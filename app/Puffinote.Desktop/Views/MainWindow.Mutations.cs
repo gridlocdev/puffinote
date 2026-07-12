@@ -1,5 +1,7 @@
+using System.ComponentModel;
 using Avalonia.Controls;
 using Avalonia.Layout;
+using Avalonia.Platform.Storage;
 using Avalonia.Threading;
 using Cellestra.Desktop.Services;
 using Puffinote.Components.Overlays;
@@ -192,6 +194,47 @@ public partial class MainWindow
             SidebarForTest.RefreshTree();
             return Task.CompletedTask;
         });
+    }
+
+    // ---- OS hand-offs (PRD §7.2) ------------------------------------------------------------------
+    // The file tree's two commands that leave Puffinote: show an entry in the host's file manager, and open a
+    // file whose type has no editor here (an image, a PDF) in whatever app the host opens it with.
+
+    /// <summary>Show <paramref name="node"/> in the host's file manager — selected, on the platforms that can.</summary>
+    private async Task RevealAsync(NotebookNode node)
+    {
+        try
+        {
+            if (SystemFileManager.TryReveal(node.Path))
+            {
+                return;
+            }
+
+            // No reveal command on this platform (Linux): open the enclosing folder — the folder itself when the
+            // node *is* one — which is as close as a portable launcher gets.
+            var folder = node.IsDirectory ? node.Path : System.IO.Path.GetDirectoryName(node.Path);
+            if (folder is not null)
+            {
+                await Launcher.LaunchDirectoryInfoAsync(new DirectoryInfo(folder));
+            }
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException or Win32Exception)
+        {
+            await _overlayHost.ShowModalAsync(new MessageDialog($"Couldn't show “{node.Name}”", e.Message));
+        }
+    }
+
+    /// <summary>Open <paramref name="node"/> in the host's default app for its type (PRD §7.2: unsupported files).</summary>
+    private async Task OpenExternallyAsync(NotebookNode node)
+    {
+        try
+        {
+            await Launcher.LaunchFileInfoAsync(new FileInfo(node.Path));
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException or Win32Exception)
+        {
+            await _overlayHost.ShowModalAsync(new MessageDialog($"Couldn't open “{node.Name}”", e.Message));
+        }
     }
 
     /// <summary>Remap recent entries after a rename (a file, or a folder they live under).</summary>

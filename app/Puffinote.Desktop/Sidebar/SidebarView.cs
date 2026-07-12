@@ -68,6 +68,8 @@ internal sealed class SidebarView : UserControl
         _files.NewNoteRequested += node => NewNoteRequested?.Invoke(node);
         _files.NewSpreadsheetRequested += node => NewSpreadsheetRequested?.Invoke(node);
         _files.NewFolderRequested += node => NewFolderRequested?.Invoke(node);
+        _files.RevealRequested += node => RevealRequested?.Invoke(node);
+        _files.OpenExternallyRequested += node => OpenExternallyRequested?.Invoke(node);
         _files.PinnedChanged += () => PinnedChanged?.Invoke();
 
         var palette = Tokens.Dark;
@@ -111,6 +113,10 @@ internal sealed class SidebarView : UserControl
     public event Action<NotebookNode?>? NewNoteRequested;
     public event Action<NotebookNode?>? NewSpreadsheetRequested;
     public event Action<NotebookNode?>? NewFolderRequested;
+
+    /// <summary>Hand-offs to the host OS (tree context menu), fulfilled by the shell.</summary>
+    public event Action<NotebookNode>? RevealRequested;
+    public event Action<NotebookNode>? OpenExternallyRequested;
 
     /// <summary>The file tree's selected node, or null.</summary>
     public NotebookNode? SelectedTreeNode => _files.SelectedNode;

@@ -1,7 +1,10 @@
+using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Headless;
 using Avalonia.Headless.XUnit;
 using Avalonia.Input;
+using Avalonia.Threading;
+using Avalonia.VisualTree;
 using Puffinote.Desktop.Controls;
 using Puffinote.Desktop.Shell;
 using Xunit;
@@ -30,7 +33,7 @@ public sealed class FileTreeViewTests : IDisposable
         Touch("banana.md");
 
         var tree = new FileTreeView();
-        var window = new Window { Content = tree };
+        var window = new Window { Width = 300, Height = 400, Content = tree }; // sized, so the rows have hit-testable bounds
         window.Show();
         tree.SetRoot(new NotebookNode(_notebook.FullName, isDirectory: true));
         tree.FocusTree();
@@ -203,5 +206,152 @@ public sealed class FileTreeViewTests : IDisposable
         // the target of a rename/delete. Focus lands on a child instead of the notebook root.
         Assert.DoesNotContain(_notebook.Name, tree.VisibleNamesForTest);
         Assert.NotEqual(_notebook.Name, tree.SelectedNameForTest);
+    }
+
+    // ---- Context menus (folder vs. file vs. the empty space) -------------------------------------
+
+    [AvaloniaFact]
+    public void A_folders_menu_creates_inside_it_pins_it_and_toggles_it()
+    {
+        var (tree, _) = Open();
+        Assert.Equal("sub", tree.SelectedNameForTest); // the folder, selected on focus
+
+        Assert.Equal(
+            [
+                "Expand", "—",                                     // "sub" holds child.md, so it can be opened
+                "New Note…", "New Spreadsheet…", "New Folder…", "—", // a folder is the only row that creates
+                "Pin to Sidebar", SystemFileManager.RevealLabel, "—",
+                "Rename…", "Delete",
+            ],
+            tree.ContextMenuHeadersForTest);
+
+        // The creation commands target the folder itself (the shell puts the new entry inside it).
+        NotebookNode? noteContext = null;
+        tree.NewNoteRequested += node => noteContext = node;
+        tree.InvokeContextMenuItemForTest("New Note…");
+        Assert.Equal("sub", noteContext?.Name);
+
+        // Expand/Collapse names what the row will do next, and does it.
+        tree.InvokeContextMenuItemForTest("Expand");
+        Assert.Contains("child.md", tree.VisibleNamesForTest);
+        Assert.Contains("Collapse", tree.ContextMenuHeadersForTest);
+        Assert.DoesNotContain("Expand", tree.ContextMenuHeadersForTest);
+    }
+
+    [AvaloniaFact]
+    public void An_empty_folder_is_offered_no_expand_and_a_pinned_one_is_offered_unpin()
+    {
+        var (tree, _) = Open();
+        Directory.CreateDirectory(Path.Combine(_notebook.FullName, "empty"));
+        tree.Refresh();
+        tree.SetPinnedPaths(new HashSet<string>(StringComparer.OrdinalIgnoreCase) { Path.Combine(_notebook.FullName, "empty") });
+        tree.SelectPath(Path.Combine(_notebook.FullName, "empty"));
+        Assert.Equal("empty", tree.SelectedNameForTest);
+
+        var headers = tree.ContextMenuHeadersForTest;
+        Assert.DoesNotContain("Expand", headers);           // nothing inside it to open — as the row's missing chevron says
+        Assert.DoesNotContain("Collapse", headers);
+        Assert.Contains("Unpin from Sidebar", headers);     // already pinned → the command is the opposite one
+        Assert.DoesNotContain("Pin to Sidebar", headers);
+    }
+
+    [AvaloniaFact]
+    public void A_files_menu_opens_it_and_never_offers_to_create_anything()
+    {
+        var (tree, window) = Open();
+        window.KeyPressQwerty(PhysicalKey.ArrowDown, RawInputModifiers.None); // sub → apple.md
+        Assert.Equal("apple.md", tree.SelectedNameForTest);
+
+        Assert.Equal(
+            ["Open", SystemFileManager.RevealLabel, "—", "Rename…", "Delete"],
+            tree.ContextMenuHeadersForTest);
+
+        string? activated = null;
+        tree.FileActivated += node => activated = node.Name;
+        tree.InvokeContextMenuItemForTest("Open");
+        Assert.Equal("apple.md", activated);
+    }
+
+    [AvaloniaFact]
+    public void A_file_no_editor_here_can_open_is_handed_to_the_default_app_instead()
+    {
+        var (tree, _) = Open();
+        Touch("diagram.png"); // no Puffinote pane opens a .png (PRD §7.2)
+        tree.Refresh();
+        tree.SelectPath(Path.Combine(_notebook.FullName, "diagram.png"));
+
+        NotebookNode? external = null;
+        tree.OpenExternallyRequested += node => external = node;
+
+        Assert.Contains("Open in Default App", tree.ContextMenuHeadersForTest);
+        Assert.DoesNotContain("Open", tree.ContextMenuHeadersForTest); // it would open a tab that can't render it
+
+        tree.InvokeContextMenuItemForTest("Open in Default App");
+        Assert.Equal("diagram.png", external?.Name);
+    }
+
+    [AvaloniaFact]
+    public void A_right_click_targets_the_row_under_the_pointer_and_opens_that_rows_own_menu()
+    {
+        // The tests above read the menu through a seam. This one right-clicks for real, because the items are
+        // built when the menu opens: if that hook stopped firing, every seam test would still pass while the
+        // shipped menu came up empty. It also pins the two halves together — the click selects the row, and the
+        // menu is built for the row the click selected.
+        var (tree, window) = Open();
+        var list = tree.GetVisualDescendants().OfType<ListBox>().First();
+        var menu = list.ContextMenu!;
+
+        RightClick(window, RowCenter(list, window, index: 1)); // apple.md — the row below the "sub" folder
+        Assert.Equal("apple.md", tree.SelectedNameForTest);
+        Assert.True(menu.IsOpen);
+        Assert.Equal(
+            ["Open", SystemFileManager.RevealLabel, "Rename…", "Delete"],
+            menu.Items.OfType<MenuItem>().Select(item => item.Header as string));
+        menu.Close();
+
+        // Below the last row: nothing was clicked, so the selection is dropped and the scope's menu comes up —
+        // no Rename/Delete aimed at a row the user isn't pointing at.
+        var belowTheRows = RowCenter(list, window, index: 2) + new Vector(0, 100);
+        RightClick(window, belowTheRows);
+        Assert.Null(tree.SelectedNameForTest);
+        Assert.Equal(
+            ["New Note…", "New Spreadsheet…", "New Folder…", "Collapse All"],
+            menu.Items.OfType<MenuItem>().Select(item => item.Header as string));
+        menu.Close();
+    }
+
+    /// <summary>The middle of tree row <paramref name="index"/>, in window coordinates — read off the laid-out row.</summary>
+    private static Point RowCenter(ListBox list, Window window, int index)
+    {
+        Dispatcher.UIThread.RunJobs(); // the rows are only realized once a layout pass has run
+        var row = list.ContainerFromIndex(index)!;
+        return row.TranslatePoint(row.Bounds.Center - row.Bounds.Position, window)!.Value;
+    }
+
+    private static void RightClick(Window window, Point point)
+    {
+        window.MouseDown(point, MouseButton.Right);
+        window.MouseUp(point, MouseButton.Right);
+    }
+
+    [AvaloniaFact]
+    public void The_empty_space_below_the_rows_gets_the_scopes_own_menu()
+    {
+        var (tree, _) = Open();
+        tree.ClearSelectionForTest(); // what a right click on the empty space does
+
+        Assert.Equal(
+            ["New Note…", "New Spreadsheet…", "New Folder…", "—", "Collapse All"],
+            tree.ContextMenuHeadersForTest);
+
+        // Nothing was clicked, so nothing can be renamed or deleted by accident.
+        Assert.DoesNotContain("Rename…", tree.ContextMenuHeadersForTest);
+        Assert.DoesNotContain("Delete", tree.ContextMenuHeadersForTest);
+
+        // A creation there lands at the top level of what the tree is showing.
+        NotebookNode? context = null;
+        tree.NewFolderRequested += node => context = node;
+        tree.InvokeContextMenuItemForTest("New Folder…");
+        Assert.Equal(_notebook.FullName, context?.Path);
     }
 }
