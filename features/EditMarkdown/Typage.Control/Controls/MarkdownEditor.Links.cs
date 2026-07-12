@@ -1,6 +1,7 @@
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Input;
+using Avalonia.Media;
 using Typage.Engine.Document;
 using Typage.Engine.Markdown;
 
@@ -26,6 +27,8 @@ public partial class MarkdownEditor
 
     private MarkdownLink? _hoverLink;   // the link under the pointer, whose URL the tooltip is showing
     private MarkdownLink? _contextLink; // the link the right-click that opened the context menu landed on
+    private MarkdownLink? _hintLink;    // the link whose "⌘ + click to open" hint is drawn under it
+    private Point? _hoverPoint;         // where the pointer last was, so a modifier press alone can raise the hint
 
     /// <summary>Raised when the reader asks to edit an existing link (context menu ▸ Edit Link…) — the host owns
     /// the dialog, so the surface only says that the caret's link should be edited.</summary>
@@ -228,11 +231,12 @@ public partial class MarkdownEditor
     /// <summary>
     /// Track the link under the pointer: its URL goes in a tooltip (a reader can't see a destination that the
     /// live-preview view has concealed, and asking for it shouldn't mean editing the line), and while the
-    /// follow modifier is held the cursor becomes a hand — the same "this click will open it" promise a
-    /// browser makes, so the modifier is discoverable instead of secret.
+    /// follow modifier is held the cursor becomes a hand and the link gets its hint — the same "this click will
+    /// open it" promise a browser makes, so the modifier is discoverable instead of secret.
     /// </summary>
     private void UpdateLinkHover(Point point, KeyModifiers modifiers)
     {
+        _hoverPoint = point;
         var link = LinkAtPoint(point);
         if (link != _hoverLink)
         {
@@ -249,10 +253,27 @@ public partial class MarkdownEditor
             }
         }
 
-        Cursor = _hoverLink is { } l && IsCommandModifier(modifiers) && TryGetLaunchUri(l.Url, out _) ? HandCursor : null;
+        // Only a link that will actually open gets the promise: a relative path still tooltips its destination,
+        // but nothing may say a click on it opens a browser, because it won't.
+        var followable = _hoverLink is { } l && IsCommandModifier(modifiers) && TryGetLaunchUri(l.Url, out _);
+        Cursor = followable ? HandCursor : null;
+        SetHintLink(followable ? _hoverLink : null);
     }
 
-    /// <summary>Drop the hover state when the pointer leaves the surface (the tooltip goes with it).</summary>
+    /// <summary>Show the follow hint under <paramref name="link"/> (or take it away when null), repainting only
+    /// when that actually changes — the hover runs on every pointer move.</summary>
+    private void SetHintLink(MarkdownLink? link)
+    {
+        if (link == _hintLink)
+        {
+            return;
+        }
+
+        _hintLink = link;
+        InvalidateVisual();
+    }
+
+    /// <summary>Drop the hover state when the pointer leaves the surface (the tooltip and the hint go with it).</summary>
     protected override void OnPointerExited(PointerEventArgs e)
     {
         if (_hoverLink is not null)
@@ -262,8 +283,114 @@ public partial class MarkdownEditor
             ToolTip.SetTip(this, null);
         }
 
+        _hoverPoint = null;
+        SetHintLink(null);
         Cursor = null;
         base.OnPointerExited(e);
+    }
+
+    /// <summary>
+    /// The hint reacts to the <i>modifier</i>, not only to the pointer: a reader who is already resting on a
+    /// link and then presses ⌘ never moves the mouse, so without this the hand cursor and the hint would only
+    /// appear on the next twitch of the pointer. Releasing the key takes both away again.
+    /// </summary>
+    protected override void OnKeyUp(KeyEventArgs e)
+    {
+        if (IsModifierKey(e.Key))
+        {
+            RefreshLinkHover(ModifiersAfter(e, pressed: false));
+        }
+
+        base.OnKeyUp(e);
+    }
+
+    /// <summary>Re-run the hover at the pointer's last position under <paramref name="modifiers"/> — a modifier
+    /// going down or up is as much a change to "what will this click do" as moving the pointer is.</summary>
+    private void RefreshLinkHover(KeyModifiers modifiers)
+    {
+        if (_hoverPoint is { } point)
+        {
+            UpdateLinkHover(point, modifiers);
+        }
+    }
+
+    /// <summary>Whether <paramref name="key"/> is one of the modifier keys the follow gesture is spelled with
+    /// (⌘ arrives as <see cref="Key.LWin"/>/<see cref="Key.RWin"/>).</summary>
+    private static bool IsModifierKey(Key key) => key is Key.LeftCtrl or Key.RightCtrl or Key.LWin or Key.RWin;
+
+    /// <summary>
+    /// The modifiers in force <i>after</i> <paramref name="e"/>. A key event's own <c>KeyModifiers</c> can't be
+    /// trusted for the key being pressed or released — whether the platform has already folded it in varies —
+    /// so the modifier the event is about is set or cleared explicitly.
+    /// </summary>
+    private static KeyModifiers ModifiersAfter(KeyEventArgs e, bool pressed)
+    {
+        var flag = e.Key switch
+        {
+            Key.LeftCtrl or Key.RightCtrl => KeyModifiers.Control,
+            Key.LWin or Key.RWin => KeyModifiers.Meta,
+            _ => KeyModifiers.None,
+        };
+
+        return pressed ? e.KeyModifiers | flag : e.KeyModifiers & ~flag;
+    }
+
+    /// <summary>
+    /// The hint drawn under the hovered link while the follow modifier is held: <b>"⌘ + click to open in your
+    /// default browser"</b> on macOS, <b>"Ctrl + click…"</b> elsewhere — the modifier the reader is actually
+    /// holding on the machine in front of them, spelled out, because a hand cursor promises that the click does
+    /// <i>something</i> without ever saying what.
+    /// </summary>
+    internal static string FollowHintText(bool mac) =>
+        mac ? "⌘ + click to open in your default browser" : "Ctrl + click to open in your default browser";
+
+    /// <summary>
+    /// Draw the follow hint under the link the pointer is on, as muted text on a chip.
+    ///
+    /// <para>It is drawn <i>over</i> the document, in the gap under the link's row, rather than laid out in the
+    /// text: a hint that took a row of its own would reflow the page every time a reader pressed ⌘, which is the
+    /// one thing a hint may not do. It hangs under the link's <b>last</b> row so a wrapped link never covers its
+    /// own continuation, and its chip is opaque, so it stays legible over whatever line it lands on.</para>
+    /// </summary>
+    private void DrawLinkHint(DrawingContext context)
+    {
+        if (_hintLink is not { } link)
+        {
+            return;
+        }
+
+        var block = BlockOf(Buffer.Document.GetPosition(link.Start).Line);
+        var visual = BlockVisual(block);
+        var blockStart = BlockStartOffset(block);
+        var (from, to) = (link.Start - blockStart, link.End - blockStart);
+        if (from < 0 || to > visual.RawLength)
+        {
+            return;
+        }
+
+        var (row, x) = (-1, 0.0);
+        foreach (var (spanRow, x1, _) in visual.Spans(from, to))
+        {
+            if (spanRow > row)
+            {
+                (row, x) = (spanRow, x1); // the link's last row, and where the link starts on it
+            }
+        }
+
+        if (row < 0)
+        {
+            return; // the link concealed to nothing (an image with no alt text)
+        }
+
+        const double padX = 6;
+        const double padY = 2;
+        var text = _measurer.GetFormattedText(FollowHintText(OperatingSystem.IsMacOS()), EditorTheme.LinkHintStyle(), EditorTheme.MarkerForeground);
+        var size = new Size(text.Width + (padX * 2), text.Height + (padY * 2));
+        var left = Math.Clamp(x, 0, Math.Max(0, ContentRight() - size.Width)); // never off the right of the column
+        var top = RowTop(block) + ((row + 1) * RowHeight(block));
+        var chip = new Rect(new Point(left, top), size);
+        context.DrawRectangle(EditorTheme.CodeBlockBackground, new Pen(EditorTheme.CodeBlockBorder, 0.5), chip, 4, 4);
+        context.DrawText(text, new Point(left + padX, top + padY));
     }
 
     /// <summary>The link under the pointer, if any; for tests (the hover tooltip and ⌘-click read it).</summary>
@@ -287,6 +414,10 @@ public partial class MarkdownEditor
 
     /// <summary>The link a right-click landed on, which the context menu's link items act on; for tests.</summary>
     internal MarkdownLink? ContextLinkForTest() => _contextLink;
+
+    /// <summary>The hint currently drawn under a link, or null when none is; for tests (the headless draw path
+    /// has no pixels to assert on).</summary>
+    internal string? LinkHintForTest() => _hintLink is null ? null : FollowHintText(OperatingSystem.IsMacOS());
 
     /// <summary>Drive the hover as a pointer move would; for tests.</summary>
     internal void HoverForTest(Point point, KeyModifiers modifiers = KeyModifiers.None) => UpdateLinkHover(point, modifiers);

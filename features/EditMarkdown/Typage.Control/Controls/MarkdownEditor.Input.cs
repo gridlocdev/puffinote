@@ -29,6 +29,13 @@ public partial class MarkdownEditor
     protected override void OnKeyDown(KeyEventArgs e)
     {
         _modifiers = e.KeyModifiers;
+        if (IsModifierKey(e.Key))
+        {
+            // ⌘/Ctrl pressed while the pointer is resting on a link: raise the hand cursor and the "⌘ + click to
+            // open…" hint now, rather than on the next pointer move.
+            RefreshLinkHover(ModifiersAfter(e, pressed: true));
+        }
+
         var control = e.KeyModifiers.HasFlag(KeyModifiers.Control);
         var meta = e.KeyModifiers.HasFlag(KeyModifiers.Meta);
         var ctrl = control || meta; // the platform "command" modifier for the formatting/clipboard shortcuts

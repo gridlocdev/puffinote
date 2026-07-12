@@ -330,8 +330,14 @@ give the destination back without making them switch to the source:
 
 - **Hover** shows the URL in a tooltip. Reading where a link goes is not an edit, and shouldn't need one.
 - **⌘-click** (Ctrl-click off macOS) follows it in the OS's default browser, and does *not* move the caret.
-  While that modifier is held over a followable link the cursor becomes a **hand**, so the gesture is
-  discoverable rather than secret.
+  While that modifier is held over a followable link the cursor becomes a **hand** and a muted hint appears
+  under the link — "**⌘ + click to open in your default browser**", naming the modifier of the machine it is
+  read on. A hand cursor promises the click does *something* without ever saying what; the hint says what, so
+  the gesture is taught rather than merely hinted at. It is drawn *over* the page rather than laid out in it —
+  a hint that took a row of its own would reflow the document every time a reader pressed ⌘ — and it appears on
+  the key press alone, since a reader already resting on a link doesn't move the mouse to press a modifier.
+  Only a link that will actually open gets it: a relative path still tooltips its destination, but nothing may
+  say a click on it opens a browser, because it won't.
 - **A plain click puts the caret in the link.** The document is text and a link must stay editable by clicking
   into it; that is why following one takes a modifier (the bargain every code editor strikes).
 - **Right-click** on a link offers, above the usual menu: **Open Link**, **Copy Link Address**, **Edit Link…**.

@@ -126,16 +126,77 @@ public class LinkInteractionTests
     }
 
     [AvaloniaFact]
-    public void ARelativeLink_GetsNoHandCursor_ButStillTooltips()
+    public void ARelativeLink_GetsNoHandCursor_NorAHint_ButStillTooltips()
     {
-        // Nothing will be launched, so the cursor mustn't promise it will.
+        // Nothing will be launched, so neither the cursor nor the hint may promise it will.
         var e = Laid("[notes](other.md)");
         var over = PointAtColumn(e, 3);
         var follow = OperatingSystem.IsMacOS() ? KeyModifiers.Meta : KeyModifiers.Control;
 
         e.HoverForTest(over, follow);
         Assert.Null(e.Cursor);
+        Assert.Null(e.LinkHintForTest());
         Assert.Equal("other.md", ToolTip.GetTip(e));
+    }
+
+    // ----- the hint under the link -----
+
+    [AvaloniaFact]
+    public void TheFollowModifier_SpellsOutWhatTheClickWillDo()
+    {
+        // A hand cursor says a click does *something*; the hint says what, and with which key.
+        var e = Laid("[docs](https://example.com/a)");
+        var over = PointAtColumn(e, 2);
+        var follow = OperatingSystem.IsMacOS() ? KeyModifiers.Meta : KeyModifiers.Control;
+
+        e.HoverForTest(over);
+        Assert.Null(e.LinkHintForTest()); // a plain hover isn't about to open anything
+
+        e.HoverForTest(over, follow);
+        Assert.Equal(MarkdownEditor.FollowHintText(OperatingSystem.IsMacOS()), e.LinkHintForTest());
+    }
+
+    [AvaloniaFact]
+    public void TheHint_NamesTheModifierOfTheMachineItIsReadOn()
+    {
+        Assert.Equal("⌘ + click to open in your default browser", MarkdownEditor.FollowHintText(mac: true));
+        Assert.Equal("Ctrl + click to open in your default browser", MarkdownEditor.FollowHintText(mac: false));
+    }
+
+    [AvaloniaFact]
+    public void MovingOffTheLink_TakesTheHintAway()
+    {
+        var e = Laid("[docs](https://example.com/a) and text");
+        var follow = OperatingSystem.IsMacOS() ? KeyModifiers.Meta : KeyModifiers.Control;
+
+        e.HoverForTest(PointAtColumn(e, 2), follow);
+        Assert.NotNull(e.LinkHintForTest());
+
+        e.HoverForTest(PointAtColumn(e, 31), follow); // out in the plain prose after it
+        Assert.Null(e.LinkHintForTest());
+    }
+
+    [AvaloniaFact]
+    public void PressingTheModifierOnARestingPointer_RaisesTheHint_AndReleasingItDropsIt()
+    {
+        // The reader who is already hovering a link and then presses ⌘ never moves the mouse — so the hint can't
+        // wait for a pointer move to appear.
+        var (window, editor) = Clickable("[docs](https://example.com/a)");
+        editor.Focus();
+        editor.HoverForTest(editor.PointAtColumnForTest(2));
+        Assert.Null(editor.LinkHintForTest());
+
+        var (key, modifiers) = OperatingSystem.IsMacOS()
+            ? (PhysicalKey.MetaLeft, RawInputModifiers.Meta)
+            : (PhysicalKey.ControlLeft, RawInputModifiers.Control);
+
+        window.KeyPressQwerty(key, modifiers);
+        Assert.Equal(MarkdownEditor.FollowHintText(OperatingSystem.IsMacOS()), editor.LinkHintForTest());
+        Assert.NotNull(editor.Cursor);
+
+        window.KeyReleaseQwerty(key, modifiers);
+        Assert.Null(editor.LinkHintForTest());
+        Assert.Null(editor.Cursor);
     }
 
     [AvaloniaFact]
