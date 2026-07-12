@@ -7,11 +7,16 @@ using Puffinote.Components.Overlays;
 namespace Typage.Control.Views;
 
 /// <summary>
-/// The ⌘⌥K link prompt rendered as an internal modal: a "Display text" field (prefilled from the
-/// selection / word under the caret) and a "Location" field, with Cancel / Add. Its
+/// The link prompt rendered as an internal modal: a "Display text" field (prefilled from the selection / word
+/// under the caret, or from the link being edited) and a "Location" field, with Cancel / Add. Its
 /// <see cref="ModalDialog{T}.Result"/> is the entered values on Add/Enter, or null on Cancel/Esc.
 /// Spaces in the location are encoded as <c>%20</c> so the URL survives as one Markdown destination.
 /// Shown in <see cref="MarkdownEditorView"/>'s own overlay layer, so inserting a link works in any host.
+/// <para>
+/// It serves both link commands — ⌘⌥K to insert one, and Edit Link… on the link the caret is in. Editing is
+/// the same two fields with the link's own text and destination already in them, so the dialog says what it is
+/// doing ("Edit Link" / "Save") rather than pretending a change is a new insertion.
+/// </para>
 /// </summary>
 public sealed class LinkDialog : ModalDialog<LinkDialog.Values?>
 {
@@ -21,19 +26,29 @@ public sealed class LinkDialog : ModalDialog<LinkDialog.Values?>
     private readonly TextBox _display;
     private readonly TextBox _location;
 
+    /// <summary>The prompt for a new link: only the display text can be suggested (from the target text).</summary>
     public LinkDialog(string suggestedText)
+        : this(suggestedText, url: string.Empty, editing: false)
     {
-        Title = "Insert Link";
+    }
+
+    /// <summary>
+    /// The prompt over an existing link (<paramref name="editing"/>), prefilled with its text and
+    /// <paramref name="url"/>.
+    /// </summary>
+    public LinkDialog(string suggestedText, string url, bool editing)
+    {
+        Title = editing ? "Edit Link" : "Insert Link";
 
         _display = new TextBox { PlaceholderText = "Display text", Text = suggestedText };
-        _location = new TextBox { PlaceholderText = "https://example.com or path/to/file" };
+        _location = new TextBox { PlaceholderText = "https://example.com or path/to/file", Text = url };
         // Land in the field that still needs typing: location when a label is already filled, else display.
         InitialFocus = string.IsNullOrEmpty(suggestedText) ? _display : _location;
 
         _display.KeyDown += OnFieldKeyDown;
         _location.KeyDown += OnFieldKeyDown;
 
-        var add = new Button { Content = "Add", IsDefault = true };
+        var add = new Button { Content = editing ? "Save" : "Add", IsDefault = true };
         add.Click += (_, _) => Accept();
         var cancel = new Button { Content = "Cancel", IsCancel = true };
         cancel.Click += (_, _) => Close(null);

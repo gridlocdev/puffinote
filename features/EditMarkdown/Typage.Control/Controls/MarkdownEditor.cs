@@ -400,8 +400,9 @@ public partial class MarkdownEditor : Avalonia.Controls.Control, ILogicalScrolla
     /// </summary>
     public string SuggestedLinkText() => LinkTarget().Text;
 
-    /// <summary>One inline link/image on a line: its full source span (markers + url) and its visible-text span.</summary>
-    private readonly record struct InlineLinkSpan(int FullStart, int FullEnd, int TextStart, int TextEnd);
+    /// <summary>One inline link/image on a line: its full source span (markers + url), its visible-text span,
+    /// and where it points.</summary>
+    private readonly record struct InlineLinkSpan(int FullStart, int FullEnd, int TextStart, int TextEnd, string Url, bool IsImage);
 
     /// <summary>
     /// Insert an image <c>![alt](url)</c> with an empty URL — the bare-bones path used when no file is

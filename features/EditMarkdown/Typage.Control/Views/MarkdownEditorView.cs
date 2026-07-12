@@ -69,6 +69,11 @@ public class MarkdownEditorView : UserControl
             CommandBar.RefreshState(); // light the tools for the format at the new caret position
             SelectionChanged?.Invoke(this, e);
         };
+
+        // The surface owns the right-click menu but not the dialogs (they need the overlay layer), so its link
+        // items ask for the prompt and it opens here — one dialog for the menu, the toolbar and ⌘⌥K alike.
+        Editor.InsertLinkRequested += (_, _) => _ = ShowLinkDialogAsync();
+        Editor.EditLinkRequested += (_, _) => _ = ShowEditLinkDialogAsync();
     }
 
     /// <summary>The formatting toolbar docked over the editor (shown via <see cref="ShowCommandBar"/>).</summary>
@@ -222,6 +227,33 @@ public class MarkdownEditorView : UserControl
             Editor.InsertLinkWithText(values.Text, values.Url);
         }
     }
+
+    /// <summary>
+    /// The same prompt over the link the caret is <em>already in</em> (Edit Link…, and the link's own
+    /// right-click menu), prefilled with its text and destination; Save rewrites that link. It does nothing
+    /// when the caret isn't in a link — the command is offered only where it applies (<see cref="CanEditLink"/>),
+    /// so it never opens an "edit" dialog over nothing.
+    /// </summary>
+    public async Task ShowEditLinkDialogAsync()
+    {
+        if (Overlays.IsOpen || Editor.LinkAtCaret() is not { } link)
+        {
+            return;
+        }
+
+        if (await Overlays.ShowModalAsync(new LinkDialog(link.Text, link.Url, editing: true)) is { } values)
+        {
+            // Re-read the link: an await can outlive the document it was read from (an external change, a
+            // recovery load), and rewriting a stale span would cut the edit out of the middle of the new text.
+            if (Editor.LinkAtCaret() is { } current)
+            {
+                Editor.ReplaceLink(current, values.Text, values.Url);
+            }
+        }
+    }
+
+    /// <summary>Whether the caret is in a link, so the host can enable/disable its Edit Link… command.</summary>
+    public bool CanEditLink => Editor.IsCaretInLink;
 
     /// <summary>
     /// Pick an image file and insert a reference to it. A <b>saved</b> document (one with a

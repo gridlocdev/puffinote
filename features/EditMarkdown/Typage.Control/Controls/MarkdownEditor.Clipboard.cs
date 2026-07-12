@@ -81,6 +81,12 @@ public partial class MarkdownEditor
         }
     }
 
+    /// <summary>
+    /// The right-click menu. Its <b>link</b> section — open, copy the address, edit — is the section that
+    /// only sometimes applies, so it is built once and hidden unless the click actually landed on a link
+    /// (<see cref="_contextLink"/>, recorded by the press that opened the menu). It sits at the top, where a
+    /// browser puts it: when you right-click a link, the link is what you meant.
+    /// </summary>
     private ContextMenu BuildContextMenu()
     {
         MenuItem Item(string header, Action action)
@@ -90,7 +96,16 @@ public partial class MarkdownEditor
             return item;
         }
 
+        var openLink = Item("Open Link", () => OnContextLink(link => OpenLink(link)));
+        var copyLink = Item("Copy Link Address", () => OnContextLink(CopyLinkUrl));
+        var editLink = Item("Edit Link…", () => OnContextLink(RequestEditLink));
+        var linkSeparator = new Separator();
+
         var menu = new ContextMenu();
+        menu.Items.Add(openLink);
+        menu.Items.Add(copyLink);
+        menu.Items.Add(editLink);
+        menu.Items.Add(linkSeparator);
         menu.Items.Add(Item("Cut", () => _ = CutAsync()));
         menu.Items.Add(Item("Copy", () => _ = CopyAsync()));
         menu.Items.Add(Item("Paste", () => _ = PasteAsync()));
@@ -101,11 +116,31 @@ public partial class MarkdownEditor
         menu.Items.Add(Item("Italic", ToggleItalic));
         menu.Items.Add(Item("Inline Code", ToggleInlineCode));
         menu.Items.Add(Item("Strikethrough", ToggleStrikethrough));
-        menu.Items.Add(Item("Link…", InsertLink));
+        menu.Items.Add(Item("Link…", RequestInsertLink));
         menu.Items.Add(new Separator());
         menu.Items.Add(Item("Undo", () => Buffer.Undo()));
         menu.Items.Add(Item("Redo", () => Buffer.Redo()));
+
+        menu.Opening += (_, _) =>
+        {
+            var link = _contextLink;
+            openLink.IsVisible = copyLink.IsVisible = editLink.IsVisible = linkSeparator.IsVisible = link is not null;
+
+            // A link that isn't a web address (a relative path, say) can still be copied and edited — it just
+            // can't be handed to a browser, so only that one item goes dim.
+            openLink.IsEnabled = link is { } l && TryGetLaunchUri(l.Url, out _);
+        };
+
         return menu;
+    }
+
+    /// <summary>Run <paramref name="action"/> on the link the context menu was opened on, if it was opened on one.</summary>
+    private void OnContextLink(Action<MarkdownLink> action)
+    {
+        if (_contextLink is { } link)
+        {
+            action(link);
+        }
     }
 
     private static async Task SetClipboardSafe(IClipboard clipboard, string text)

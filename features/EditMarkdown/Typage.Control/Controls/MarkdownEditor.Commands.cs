@@ -499,7 +499,8 @@ public partial class MarkdownEditor
             var (textStart, textEnd) = altStart >= 0 ? (altStart, altEnd) : (openEnd, midStart);
             if (fullEnd > fullStart && textStart >= 0 && textEnd >= textStart)
             {
-                spans.Add(new InlineLinkSpan(fullStart, fullEnd, textStart, textEnd));
+                var url = u.Meta ?? Buffer.Document.GetText(u.Start, u.End - u.Start);
+                spans.Add(new InlineLinkSpan(fullStart, fullEnd, textStart, textEnd, url, u.Type == TokenType.ImageUrl));
             }
         }
 

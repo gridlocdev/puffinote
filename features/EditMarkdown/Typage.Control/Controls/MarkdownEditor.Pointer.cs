@@ -11,6 +11,7 @@ public partial class MarkdownEditor
     protected override void OnPointerPressed(PointerPressedEventArgs e)
     {
         ClearReorderIndicator(); // a click ends the reorder session
+        _contextLink = null;     // a fresh press: the right-button branch below re-records any link it lands on
 
         // A click on a code block's copy button copies that block and shows the confirmation — handled
         // before caret placement so it doesn't also move the caret.
@@ -28,12 +29,25 @@ public partial class MarkdownEditor
             }
         }
 
+        // ⌘/Ctrl-click follows a link, and doesn't also move the caret — the modifier is what separates
+        // "open this" from the plain click that puts the caret in the link to edit it.
+        if (e.GetCurrentPoint(this).Properties.IsLeftButtonPressed && IsCommandModifier(e.KeyModifiers)
+            && LinkAtPoint(e.GetPosition(this)) is { } target && OpenLink(target))
+        {
+            e.Handled = true;
+            return;
+        }
+
         // A secondary click on a task's checkbox opens its status picker: the primary click is spent on the one
         // action worth a click (complete it), so the four states in between hang off the click that means
         // "what else could this be?" — dropped at the box itself.
         if (e.GetCurrentPoint(this).Properties.IsRightButtonPressed)
         {
             var at = e.GetPosition(this);
+
+            // Remember the link the menu was opened on, so its Open / Copy / Edit items act on the link the
+            // reader pointed at rather than wherever the caret happens to be.
+            _contextLink = LinkAtPoint(at);
             var box = TaskBoxAt(Buffer.Document.GetPosition(OffsetAtPoint(at)).Line, at);
             if (box >= 0)
             {
@@ -99,6 +113,10 @@ public partial class MarkdownEditor
         {
             MoveCaret(OffsetAtPoint(e.GetPosition(this)), extend: true); // hold the anchor, move the caret
             e.Handled = true;
+        }
+        else
+        {
+            UpdateLinkHover(e.GetPosition(this), e.KeyModifiers); // tooltip the URL under the pointer
         }
 
         base.OnPointerMoved(e);

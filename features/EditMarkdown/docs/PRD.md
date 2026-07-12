@@ -322,6 +322,29 @@ The **HTML export** draws the same three boxes (inline SVG + a state class per i
 type=checkbox>`, which could only say done or not. The design box is the checkbox itself, so the export's path
 data and stroke widths are character-for-character the editor's.
 
+### 8.3.3 Working with links
+
+§8.3 says a link is "styled, clickable"; this is what clickable means. The live-preview view **hides the
+destination** (§7.4) — that is the whole point of it — so every ordinary thing a reader does with a link has to
+give the destination back without making them switch to the source:
+
+- **Hover** shows the URL in a tooltip. Reading where a link goes is not an edit, and shouldn't need one.
+- **⌘-click** (Ctrl-click off macOS) follows it in the OS's default browser, and does *not* move the caret.
+  While that modifier is held over a followable link the cursor becomes a **hand**, so the gesture is
+  discoverable rather than secret.
+- **A plain click puts the caret in the link.** The document is text and a link must stay editable by clicking
+  into it; that is why following one takes a modifier (the bargain every code editor strikes).
+- **Right-click** on a link offers, above the usual menu: **Open Link**, **Copy Link Address**, **Edit Link…**.
+  A link that can't be launched (a relative path) still copies and edits — only *Open* greys out.
+- **Insert Link…** (⌘⌥K) prompts for display text (prefilled from the selection / word under the caret) and a
+  location. **Edit Link…** is the same prompt over the link the caret is already in, prefilled with its text and
+  destination, and is offered only where there *is* a link.
+
+**Only an absolute `http`/`https`/`mailto` address is ever handed to the OS** (§9.3: external links delegate to
+the browser on explicit user intent). A relative path is not followed — Typage edits one file, so there is
+nowhere to follow it *to* — and `file:`, `javascript:` and `data:` destinations are refused outright: a document
+is text someone else may have written, and a click on it must not be able to reach past the browser.
+
 ### 8.4 Out of scope / deferred
 
 Full CommonMark/GFM edge-case fidelity (lazy continuation, complete emphasis precedence, link reference definitions, nested HTML blocks); arbitrary raw HTML rendering; footnotes, definition lists, math, diagram blocks.

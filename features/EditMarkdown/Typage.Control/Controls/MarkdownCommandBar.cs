@@ -46,7 +46,7 @@ internal sealed class MarkdownCommandBar : UserControl
 
         // Blockquote sits with the inserts, not the lists. It shares nothing with a list but the fact that it
         // prefixes lines: it doesn't nest, doesn't renumber, and has no item to add — it wraps a passage.
-        string[] insert = ["format.link", "insert.image", "insert.codeBlock", "insert.hr", "format.quote"];
+        string[] insert = ["format.link", "format.editLink", "insert.image", "insert.codeBlock", "insert.hr", "format.quote"];
 
         _sectionOf = new Dictionary<string, string>(StringComparer.Ordinal);
         foreach (var (group, ids) in new[] { ("Text", text), ("Headings", headings), ("Lists", lists), ("Insert", insert) })

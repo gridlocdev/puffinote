@@ -89,6 +89,13 @@ public static class MarkdownEditingCommands
             // ⌘⌥K, not ⌘K: the palette owns ⌘K in both shells (see the type remarks).
             new("format.link", "Insert Link…", "Insert a link with display text and a location.", Shortcut.Cmd(Key.K, KeyModifiers.Alt),
                 () => _ = view.ShowLinkDialogAsync(), icon: "link"),
+
+            // Editing one is its own command, not a mode of inserting: it applies only where there *is* a link
+            // (so it greys out elsewhere), and it opens with that link's text and destination already in the
+            // fields. It carries no chord of its own — it's reached from the palette, the menu, or the link's
+            // own right-click menu, which is where a reader already goes to change a link.
+            new("format.editLink", "Edit Link…", "Edit the link the caret is in.", null,
+                () => _ = view.ShowEditLinkDialogAsync(), canExecute: () => view.CanEditLink, icon: "pencil"),
             new("insert.image", "Image…", "Pick an image file to insert.", null, () => _ = view.InsertImageAsync(), icon: "image"),
 
             // "square-code" is the inline-code chevrons boxed in — the box is what says *block* rather than

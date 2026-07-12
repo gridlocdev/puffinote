@@ -131,6 +131,7 @@ public partial class MainWindow
         // add, doesn't nest, and doesn't renumber.
         var insert = new MenuItem { Header = "_Insert" };
         insert.Items.Add(InWindowItem("format.link"));
+        insert.Items.Add(InWindowItem("format.editLink"));
         insert.Items.Add(InWindowItem("insert.image"));
         insert.Items.Add(new Separator());
         insert.Items.Add(InWindowItem("insert.codeBlock"));
@@ -288,7 +289,7 @@ public partial class MainWindow
 
         // Blockquote is an insert, not a list — see the in-window menu.
         var insert = NativeSubmenu("Insert");
-        foreach (var id in new[] { "format.link", "insert.image", null, "insert.codeBlock", "insert.hr", "format.quote" })
+        foreach (var id in new[] { "format.link", "format.editLink", "insert.image", null, "insert.codeBlock", "insert.hr", "format.quote" })
         {
             insert.Menu!.Items.Add(id is null ? new NativeMenuItemSeparator() : NativeItem(id));
         }
