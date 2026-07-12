@@ -400,10 +400,12 @@ Dependency direction is strictly **shell → control → engine**; no upward ref
 10. **Phase 9 — Hardening:** performance tuning, accessibility validation, packaging/installers per OS.
 
 > **Implementation status (this repo).** Phases 0–2 are substantially built and unit-tested in
-> `Typage.Engine`; HTML export (Phase 8) and a baseline shell/CLI exist. The surface is an early Phase 3/4
-> approximation: marker dimming with 1:1 offsets, but it does drive the engine **incrementally** (§8.2)
-> and is **line-virtualized** (§9.1). IME and the automation peer are not built yet. See
-> [../README.md](../README.md) and [../AGENTS.md](../AGENTS.md) for the honest built/not-built breakdown.
+> `Typage.Engine`; HTML export (Phase 8) and the shell/CLI exist. Phase 4 (live preview) is **built**: markers
+> are truly hidden behind a bidirectional offset↔visual map — *not* the marker-dimming, 1:1-offset
+> approximation this note used to describe — and the surface drives the engine **incrementally** (§8.2) and
+> virtualizes over variable block heights (§9.1). Still absent: block folding and block objects (phase 5),
+> smart paste (phase 6), IME and the automation peer (phases 3/9), spell check and print/PDF (phase 8).
+> [../AGENTS.md](../AGENTS.md) carries the authoritative built/not-built table; keep the two in step.
 
 ---
 

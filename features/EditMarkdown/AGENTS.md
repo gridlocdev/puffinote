@@ -162,9 +162,9 @@ surface consumes, so what it prints is what the editor styles.
 ## Where things go
 
 - **Engine logic** → `Typage.Engine/` (`Document/`, `Editing/`, `Markdown/`, `Html/`).
-- **Editing surface + presentation seams + every editing command** → `Typage.Control/` (`Controls/`,
-  `Views/`, `Rendering/`). Puffinote embeds *this*, so a command added to the shell instead would be
-  invisible there — see the note in "What this project is."
+- **Editing surface + presentation seams + every editing command** → `Typage.Control/` (`Commands/`,
+  `Controls/`, `Views/`, `Rendering/`). Puffinote embeds *this*, so a command added to the shell instead
+  would be invisible there — see the note in "What this project is."
 - **Shell** → `Typage.Desktop/` (window, menu, dialogs, `Services/`) — shell commands only.
 - **CLI** → `Typage.Cli/` (`Commands/` + `Infrastructure/`).
 - **Anything Cellestra or Puffinote would also want** — theming, icons/glyphs, overlays, shared shell
@@ -178,69 +178,54 @@ surface consumes, so what it prints is what the editor styles.
 
 ## What is and isn't built yet (be honest in the code and docs)
 
-This is pre-v1; the **engine is substantially built and well-tested**, the UI is an early surface. When you
-extend it, keep the layering and update the docs.
+Pre-v1. The **engine is substantially built and well-tested**; the surface is well past its first
+approximation, but the later phases (PRD §11) are genuinely absent. Two rules: **never claim a "not built"
+row is done**, and **update this table in the same commit that changes an answer** — a stale status section
+is worse than none, because it's what the next agent plans against.
 
-- **Built and tested:** the immutable document model + line/offset services, grapheme navigation,
-  undo/redo with coalescing, the incremental tokenizer + checkpoint cache (block state machine, inline
-  constructs, GFM tables, tolerant/malformed handling) with an *incremental-equals-full-rebuild* test
-  suite, the HTML renderer, the `typage` CLI, and the shared `DocumentStats`. The surface drives the
-  engine **incrementally** (re-tokenizes from `DocumentBuffer.LastChangedLine` via `MarkdownModel.Update`)
-  and is **line-virtualized** (`ILogicalScrollable`: only the lines in the viewport are drawn). The
-  control + shell add Cellestra-style patterns: a single **command catalog** (in the control) + **Command
-  Palette** (⌘K, fuzzy-filtered), **Find/Replace** (plain + regex via the engine's `DocumentSearch`, with
-  in-editor match highlighting), recent-files menu, **light/dark/high-contrast themes** (View ▸ Theme,
-  OS-following), a **Preferences dialog** (theme, tab width, toolbar), and modal error dialogs. The menu
-  is **platform-native** (PRD §7.5): a macOS `NativeMenu` (system bar, ⌘ key-equivalents) on macOS and
-  the in-window menu elsewhere, both built from the one catalog; shortcuts are defined abstractly
-  (`Commands/Shortcut.cs`) so they bind/render as ⌘ on macOS and Ctrl elsewhere (`ShortcutFormatter`).
-- **Also built (later additions):** §7.2 **editing assists** (list/blockquote continuation + exit,
-  ordered-list renumber, auto-indent, auto-pairing/wrap-selection, Tab/Shift+Tab indent/outdent — pure
-  helpers in `Engine/Editing/LinePrefix.cs` + `OrderedListRenumber.cs`), **interactive task checkboxes with
-  six states** (PRD §8.3.2 — a circular lamp per state; click completes, ⌥⌘L / secondary-click opens the status
-  picker), **mouse drag-select + double-click word select + a sticky goal
-  column**, a per-document **raw-source view** toggle (+ Settings default), **focus / distraction-free
-  mode** (F11), a **FormattedText draw cache** (alongside the width cache), a front-matter **"Properties"
-  panel** (backdrop + label; true *fold* still rides with §7.4), **external-change detection**
-  (FileSystemWatcher + three-way conflict prompt + self-save suppression, §7.1), **autosave/crash
-  recovery** sidecar snapshots (§9.4), and a **dependency-allowlist CI gate** (`Directory.Build.targets`,
-  §5/§9.3) + a `Typage.Benchmarks` BenchmarkDotNet harness.
-- **Also built — §7.4 live-preview, now full WYSIWYG:** markers are **truly hidden** (not dimmed) and stay
-  hidden **always** in normal mode — the caret and selections **never** reveal raw Markdown (a deliberate
-  divergence from Obsidian toward a normal document editor). The control builds a per-line **`VisualLine`**
-  (`Typage.Control/Rendering`) whose concealed marker runs collapse to **zero width**, giving the
-  **bidirectional offset↔visual map** that drawing, caret, hit-test, and selection all read; the map is
-  caret-independent. The caret **glides over hidden markers atomically** (Left/Right), and backspace/delete
-  act on the **visible grapheme** (backspacing at the end of a bold word removes a letter, not an invisible
-  `*`; at list-content start it strips the whole marker prefix). Concealed markers render as **rich
-  decorations** — list bullets, drawn task checkboxes (click-to-toggle), a blockquote bar, a horizontal
-  rule, and a fenced-code panel — on a hanging indent. **Ordered-list numbers are computed from list
-  structure** (each nesting level restarts and resumes; a blank/non-list line starts a fresh list), not
-  the literal source digits. Raw-source mode reveals everything (including the literal digits).
-- **Also built — §7.3 word wrap + paragraph flow:** long lines **soft-wrap to the viewport width** by default
-  with **no horizontal scrolling** (toggle via `MarkdownEditor.WordWrap`), and **consecutive plain-paragraph
-  source lines join into one flowing paragraph** (the interior newline renders as a space). The layout unit
-  is a **paragraph block** — a contiguous document range, so a block column is `offset − blockStart` and the
-  whole offset map carries over; blank lines, headings, lists, quotes, code, tables, and hard breaks break
-  the flow. `VisualLine` lays a block out into wrapped **rows**; the map is 2-D (`ColumnToX`/`RowOf` for the
-  caret, row-local `XToColumn`/`Spans` for hit-testing and multi-row selection); the surface virtualizes over
-  **variable block heights** (a per-block row-count cache + prefix sums, rebuilt on text/theme/width change —
-  O(n) per edit, fine for note-sized docs); Up/Down move by **visual row**. Indented (4-space) code blocks
-  are recognized (engine), code text has **no per-line background** (one block panel), and **Alt+Shift+Up/Down
-  reorders the item *and its sub-items*** (subtree swap with the adjacent sibling — nested lists/checkboxes).
-  **Tabs count as indentation** everywhere spaces do (column-aware tokenizer thresholds, literal-indent
-  continuation, tab-preserving Tab/Shift+Tab, tabs drawn as `IndentWidth` spaces). A **standard caret-nav
-  suite** is wired (platform-aware word move/delete, smart Home, visual-row Home/End, Page Up/Down, doc-extent
-  jumps, Shift+Enter plain break, Esc collapses a selection, triple-click selects the paragraph).
-- **Early / approximate / not built:** **whole-line block folding** (collapsing a fenced-code/front-matter
-  fence row or rendering a real table grid — they still occupy their row), the front-matter **fold** and a
-  true "Properties" header, **block objects** (inline images / rendered tables / embeds), **IME**, the
-  **automation peer (accessibility)**, **smart paste** (HTML→MD, image paste, paste-as-plain), **spell
-  check**, and the OS **print/PDF** path are the dedicated later phases (PRD §11) and are **not built
-  yet**. Don't claim them done; build them on the layering that's here. (Pixel output can't be exercised
-  by the headless CI here — no GPU — so the draw path is verified structurally, by `FormattedText`
-  measurement under the headless stub font manager, and by the engine's incremental tests, not by pixel
-  tests.)
+| Area | Status |
+|---|---|
+| Document model, line/offset services, grapheme nav, undo/redo + coalescing | **Built**, unit-tested |
+| Incremental tokenizer + checkpoint cache (block machine, inline, GFM tables, tolerant input) | **Built** — guarded by an *incremental-equals-full-rebuild* suite. Touch it and those tests must stay green |
+| HTML renderer · `typage` CLI · `DocumentStats` | **Built** |
+| Live preview / concealment (§7.4) · word wrap + paragraph flow (§7.3) | **Built** — full WYSIWYG; see the invariants below |
+| Editing assists (§7.2) · six-state task boxes (§8.3.2) · the caret-nav suite · raw-source toggle · focus mode | **Built** |
+| One command catalog (`Typage.Control/Commands`) + palette (⌘K) · find/replace · platform-native menu (§7.5) · themes · preferences · recent files | **Built** — hosts merge the catalog in; they don't define commands |
+| File safety: atomic save, watcher + three-way conflict, autosave/recovery (§9.4), dependency-allowlist gate (§5/§9.3) | **Built** |
+| Image **insert** + staging for unsaved docs (`ImageStaging`) | **Built** — picking and inserting only; *pasting* an image is not |
+| Whole-line block **folding** — collapsing a code/front-matter fence row, a real table grid, a true front-matter "Properties" fold | **Not built** — those rows still render as rows |
+| **Block objects** — inline images, rendered tables, embeds | **Not built** |
+| **IME** · **automation peer** (accessibility) | **Not built** (PRD §11, phases 3 and 9) |
+| **Smart paste** — HTML→MD, image paste, paste-as-plain | **Not built** — `PasteAsync` is plain text |
+| **Spell check** · OS **print/PDF** | **Not built** (phase 8) |
+
+**Verification here has no pixels.** The headless CI has no GPU, so the draw path is checked *structurally* —
+`FormattedText` measurement under the headless stub font manager, plus the engine's incremental tests — and
+never by pixel comparison. Don't add a golden-image test; it cannot run here.
+
+### Invariants the surface is built on (don't regress these)
+
+Not status — the design the rest of the surface assumes. Read these before touching `Typage.Control/Rendering`.
+
+- **Markers are hidden, always** (§7.4) — not dimmed, and the caret/selection **never** reveal raw Markdown.
+  That is a deliberate divergence from Obsidian toward a normal document editor. Raw-source mode is the only
+  reveal (it shows the literal ordered-list digits too).
+- **`VisualLine` owns the offset↔visual map.** Concealed marker runs collapse to zero width, giving one
+  bidirectional, **caret-independent** map that drawing, hit-testing, caret motion, and selection all read.
+  It's the seam everything hangs off — extend it; never compute a second mapping alongside it.
+- **The caret and deletes move in *visible* graphemes.** The caret glides over a hidden marker atomically;
+  backspace at the end of a bold word takes a letter, not an invisible `*`; at list-content start it strips
+  the whole marker prefix.
+- **Concealed markers become rich decorations** on a hanging indent — bullets, task lamps, the blockquote
+  bar, the rule, the fenced-code panel. **Ordered-list numbers are computed from list structure** (each
+  nesting level restarts and resumes; a blank or non-list line starts a fresh list), not read from the digits
+  in the source.
+- **The layout unit is a paragraph block, not a line** (§7.3). Consecutive plain-paragraph source lines flow
+  into one paragraph, so a block column is `offset − blockStart` and the map is 2-D. Soft wrap to the
+  viewport, no horizontal scrolling; Up/Down move by **visual row**; the surface virtualizes over **variable
+  block heights** (per-block row-count cache + prefix sums, rebuilt on text/theme/width change).
+- **Tabs count as indentation everywhere spaces do** — column-aware tokenizer thresholds, literal-indent
+  continuation, tab-preserving Tab/Shift+Tab, tabs drawn as `IndentWidth` spaces.
 
 ## Conventions
 
