@@ -2,9 +2,12 @@
 # The :10.0 tag tracks the latest 10.0.x SDK, satisfying the pin.
 FROM mcr.microsoft.com/dotnet/sdk:10.0
 
-# Native libraries the headless UI tests need: they draw with REAL Skia
-# (UseHeadlessDrawing=false + .UseSkia(), see tests/Cellestra.UiTests/TestAppBuilder.cs),
-# so SkiaSharp/Avalonia must resolve fontconfig, freetype and a few X11 stubs.
+# Native libraries Cellestra's headless UI tests need: they draw with REAL Skia by default
+# (UseHeadlessDrawing=false + .UseSkia(), see features/EditSpreadsheets/Cellestra.UiTests/TestAppBuilder.cs),
+# so SkiaSharp/Avalonia must resolve fontconfig, freetype and a few X11 stubs. (Typage's and Puffinote's
+# UI tests use Avalonia's null drawing unconditionally and need none of this.)
+# `make` drives the repo's Makefile — the documented entry point for every build/test/format flow
+# (`make check` is the definition of done); the .NET SDK image doesn't ship it.
 # git/sudo/curl round out the dev experience. openssh-client provides
 # ssh-keygen, which git invokes to make SSH-signed commits via the forwarded
 # agent (gpg.format=ssh); without it `git commit -S` fails on ssh-keygen.
@@ -16,6 +19,7 @@ RUN apt-get update \
         libsm6 \
         libx11-6 \
         fonts-liberation \
+        make \
         git \
         curl \
         sudo \

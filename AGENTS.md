@@ -59,9 +59,7 @@ make test-filter AREA=typage FILTER=SomeTest   # one test / a subset — prefer 
 make check                                # format-verify + build + test, all areas
 ```
 
-Underneath it's plain `dotnet build|test|format <area>.slnx` (e.g. `features/EditMarkdown/Typage.slnx`) if you need to hand-roll a command.
-
-**In the devcontainer, `dotnet` isn't on `PATH`:** `export PATH="$PATH:/root/.dotnet"` first (and `libicu` must be installed).
+Each target is just `dotnet build|test|format <area>.slnx` (e.g. `features/EditMarkdown/Typage.slnx`) — **if `make` isn't on `PATH`, run those directly**; they're equivalent, and some agent sandboxes aren't the devcontainer. Likewise, if `dotnet` isn't on `PATH`, `export PATH="$PATH:/root/.dotnet"` (and `libicu` must be installed).
 
 **Definition of done:** `make check` passes for every area you touched — i.e. formatting verified, solution builds clean, tests green. Warnings **are** errors here (`TreatWarningsAsErrors=true`), so a warning fails the build — "builds" already means "no warnings," this is not advisory. Formatting is a gate too: `make format-check` runs `dotnet format --verify-no-changes`, and a non-zero exit is a failure to fix, not a suggestion.
 

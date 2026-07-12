@@ -1,19 +1,22 @@
 {
-  "name": "Cellestra (.NET 10)",
+  "name": "Puffinote (.NET 10)",
   "build": {
     "dockerfile": "Dockerfile"
   },
   "features": {
     "ghcr.io/devcontainers/features/github-cli:1": {}
   },
-  // Restore the solution once the container is built so IntelliSense and the
-  // first `dotnet build` are fast. The desktop GUI itself can't run headlessly
-  // (Avalonia.Native RenderTimer -6661 without a display link), so this targets
-  // the build, the `cellestra` CLI, and the headless test suites.
-  "postCreateCommand": "dotnet restore features/EditSpreadsheets/Cellestra.slnx",
-  // This container has no display/GPU, so the headless UI tests' real-Skia render path hangs. Default
-  // them to Avalonia's null drawing here (TestAppBuilder reads this var) so `dotnet test` just runs.
-  // CI / a real desktop don't set it and keep real Skia, so render-capture tests get real frames there.
+  // Restore all three solutions once the container is built, so IntelliSense and the first build are
+  // fast in whichever area you open. (`make restore` does the same; it's spelled out here so the
+  // container still provisions if the Makefile moves.) Serial on purpose — concurrent `dotnet`
+  // invocations deadlock on the MSBuild-node locks. The desktop GUIs can't run headlessly anyway
+  // (Avalonia.Native RenderTimer -6661 without a display link), so this targets the build, the CLIs,
+  // and the headless test suites.
+  "postCreateCommand": "dotnet restore app/Puffinote.slnx && dotnet restore features/EditMarkdown/Typage.slnx && dotnet restore features/EditSpreadsheets/Cellestra.slnx",
+  // Cellestra's headless UI tests draw with real Skia, which HANGS where there's no display/GPU — as here.
+  // This var (read by Cellestra.UiTests/TestAppBuilder.cs) switches them to Avalonia's null drawing so
+  // `dotnet test` just runs. CI and a real desktop leave it unset and keep real Skia, so render-capture
+  // tests get real frames there. Typage's and Puffinote's UI tests always use null drawing and ignore this.
   "containerEnv": {
     "CELLESTRA_HEADLESS_NULL_DRAWING": "1"
   },
@@ -26,7 +29,11 @@
         "editorconfig.editorconfig"
       ],
       "settings": {
-        "dotnet.defaultSolution": "features/EditSpreadsheets/Cellestra.slnx"
+        // There is no root solution — each area builds on its own. Puffinote is the default because it's
+        // the widest (it compiles both editors + shared/), but it excludes the standalone Desktop apps and
+        // the test projects: when you work inside a feature, switch with the C# Dev Kit solution picker to
+        // features/EditMarkdown/Typage.slnx or features/EditSpreadsheets/Cellestra.slnx.
+        "dotnet.defaultSolution": "app/Puffinote.slnx"
       }
     }
   },
