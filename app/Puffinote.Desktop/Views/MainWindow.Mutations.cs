@@ -234,7 +234,7 @@ public partial class MainWindow
         try
         {
             await mutation();
-            _ = SearchForTest?.RebuildAsync(); // the notebook changed — refresh the search index in the background
+            StartIndexRebuild(); // the notebook changed — refresh the search index in the background
         }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException)
         {

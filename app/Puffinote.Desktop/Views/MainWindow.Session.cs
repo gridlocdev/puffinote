@@ -142,8 +142,22 @@ public partial class MainWindow
     private void OnNotebookFilesChanged()
     {
         SidebarForTest.RefreshTree();
-        _ = SearchForTest?.RebuildAsync();
+        StartIndexRebuild();
     }
+
+    /// <summary>
+    /// Kick a background index rebuild — the one and only way the shell starts one, from all three triggers
+    /// (opening a notebook, an external change, a mutation of ours).
+    ///
+    /// <para>The shell never awaits it: indexing must not block the UI. The task is kept only so a <em>test</em>
+    /// can wait for it, because the rebuild ends by writing the index into the notebook's <c>.puffinote/</c>
+    /// (off the UI thread, after the rebuild has already published) — and a test that deletes its temp notebook
+    /// the moment its assertions pass is otherwise racing that write for the directory.</para>
+    /// </summary>
+    private void StartIndexRebuild() => IndexRebuildForTest = SearchForTest?.RebuildAsync() ?? Task.CompletedTask;
+
+    /// <summary>The background index rebuild now in flight, to be awaited before a test tears its notebook down.</summary>
+    internal Task IndexRebuildForTest { get; private set; } = Task.CompletedTask;
 
     // ---- Notebook search (PRD §7.2.3) ----------------------------------------------------------------
 
@@ -155,7 +169,7 @@ public partial class MainWindow
         SearchForTest = new Search.NotebookSearchService(_notebook);
         SearchForTest.IndexUpdated += OnSearchIndexUpdated;
         SidebarForTest.ConfigureSearch(SearchForTest.Search);
-        _ = SearchForTest.RebuildAsync();
+        StartIndexRebuild();
     }
 
     private void OnSearchIndexUpdated() =>

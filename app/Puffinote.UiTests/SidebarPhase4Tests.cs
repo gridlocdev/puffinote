@@ -125,12 +125,13 @@ public sealed class SidebarPhase4Tests
     public async Task Deleting_a_file_from_the_tree_confirms_then_removes_it()
     {
         var dir = Directory.CreateTempSubdirectory("puffinote-delete");
+        MainWindow? window = null;
         try
         {
             var note = Path.Combine(dir.FullName, "note.md");
             File.WriteAllText(note, "# note");
 
-            var window = new MainWindow(new NotebookService());
+            window = new MainWindow(new NotebookService());
             window.Show();
             window.OpenNotebook(dir.FullName);
 
@@ -150,6 +151,10 @@ public sealed class SidebarPhase4Tests
         }
         finally
         {
+            // The mutation kicked a background index rebuild, which ends by writing the notebook's .puffinote/
+            // cache. Deleting the notebook without waiting for that write races it — the delete walks a directory
+            // the rebuild is still filling, and fails with "Directory not empty".
+            await (window?.IndexRebuildForTest ?? Task.CompletedTask);
             dir.Delete(recursive: true);
         }
     }
@@ -158,12 +163,13 @@ public sealed class SidebarPhase4Tests
     public async Task Deleting_a_file_thats_open_in_a_tab_closes_the_tab()
     {
         var dir = Directory.CreateTempSubdirectory("puffinote-delete-open");
+        MainWindow? window = null;
         try
         {
             var note = Path.Combine(dir.FullName, "note.md");
             File.WriteAllText(note, "# note");
 
-            var window = new MainWindow(new NotebookService());
+            window = new MainWindow(new NotebookService());
             window.Show();
             window.OpenNotebook(dir.FullName);
             await window.OpenFileAsync(note);
@@ -180,6 +186,7 @@ public sealed class SidebarPhase4Tests
         }
         finally
         {
+            await (window?.IndexRebuildForTest ?? Task.CompletedTask); // let the .puffinote/ write land first
             dir.Delete(recursive: true);
         }
     }
