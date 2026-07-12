@@ -570,13 +570,6 @@ public class MarkdownTheme
     /// </summary>
     public RunStyle RawTextStyle() => new(Mono(), BaseFontSize, Foreground, null, false);
 
-    /// <summary>
-    /// The hint drawn under a hovered link while the follow modifier is held ("⌘ + click to open…"): body text,
-    /// well below the body size and in the marker grey, because it is chrome talking about the document rather
-    /// than any part of it.
-    /// </summary>
-    public RunStyle LinkHintStyle() => new(Body(), BaseFontSize * 0.75, MarkerForeground, null, false);
-
     private RunStyle Marker() => new(Body(), BaseFontSize, MarkerForeground, null, true);
 
     private Typeface Body() => new(_body);

@@ -95,7 +95,7 @@ public class LinkInteractionTests
         var e = Laid("[docs](https://example.com/a)");
         e.HoverForTest(PointAtColumn(e, 2)); // over the visible word "docs"
 
-        Assert.Equal("https://example.com/a", ToolTip.GetTip(e));
+        Assert.Equal(("https://example.com/a", null), e.LinkTipForTest());
         Assert.True(ToolTip.GetIsOpen(e));
     }
 
@@ -107,8 +107,9 @@ public class LinkInteractionTests
         Assert.True(ToolTip.GetIsOpen(e));
 
         e.HoverForTest(PointAtColumn(e, 31)); // out in the plain prose after it
+        Assert.Null(e.LinkTipForTest());
         Assert.False(ToolTip.GetIsOpen(e));
-        Assert.Null(ToolTip.GetTip(e));
+        Assert.Null(ToolTip.GetTip(e)); // cleared, not merely closed — or the hover service would offer it over prose
     }
 
     [AvaloniaFact]
@@ -126,7 +127,7 @@ public class LinkInteractionTests
     }
 
     [AvaloniaFact]
-    public void ARelativeLink_GetsNoHandCursor_NorAHint_ButStillTooltips()
+    public void ARelativeLink_GetsNoHandCursor_NorAHint_ButStillTooltipsItsDestination()
     {
         // Nothing will be launched, so neither the cursor nor the hint may promise it will.
         var e = Laid("[notes](other.md)");
@@ -135,25 +136,25 @@ public class LinkInteractionTests
 
         e.HoverForTest(over, follow);
         Assert.Null(e.Cursor);
-        Assert.Null(e.LinkHintForTest());
-        Assert.Equal("other.md", ToolTip.GetTip(e));
+        Assert.Equal(("other.md", null), e.LinkTipForTest());
     }
 
-    // ----- the hint under the link -----
+    // ----- the hint the tooltip grows while the modifier is held -----
 
     [AvaloniaFact]
-    public void TheFollowModifier_SpellsOutWhatTheClickWillDo()
+    public void TheFollowModifier_AddsAHintLineToTheLinksOwnTooltip()
     {
-        // A hand cursor says a click does *something*; the hint says what, and with which key.
+        // A hand cursor says a click does *something*; the hint says what, and with which key — in the tooltip the
+        // reader is already looking at, not in a second popup beside it.
         var e = Laid("[docs](https://example.com/a)");
         var over = PointAtColumn(e, 2);
         var follow = OperatingSystem.IsMacOS() ? KeyModifiers.Meta : KeyModifiers.Control;
 
         e.HoverForTest(over);
-        Assert.Null(e.LinkHintForTest()); // a plain hover isn't about to open anything
+        Assert.Equal(("https://example.com/a", null), e.LinkTipForTest()); // a plain hover opens nothing, and says so
 
         e.HoverForTest(over, follow);
-        Assert.Equal(MarkdownEditor.FollowHintText(OperatingSystem.IsMacOS()), e.LinkHintForTest());
+        Assert.Equal(("https://example.com/a", MarkdownEditor.FollowHintText(OperatingSystem.IsMacOS())), e.LinkTipForTest());
     }
 
     [AvaloniaFact]
@@ -164,38 +165,41 @@ public class LinkInteractionTests
     }
 
     [AvaloniaFact]
-    public void MovingOffTheLink_TakesTheHintAway()
+    public void MovingOffTheLink_TakesTheHintAwayWithTheTooltip()
     {
         var e = Laid("[docs](https://example.com/a) and text");
         var follow = OperatingSystem.IsMacOS() ? KeyModifiers.Meta : KeyModifiers.Control;
 
         e.HoverForTest(PointAtColumn(e, 2), follow);
-        Assert.NotNull(e.LinkHintForTest());
+        Assert.NotNull(e.LinkTipForTest()!.Value.Hint);
 
         e.HoverForTest(PointAtColumn(e, 31), follow); // out in the plain prose after it
-        Assert.Null(e.LinkHintForTest());
+        Assert.Null(e.LinkTipForTest());
     }
 
     [AvaloniaFact]
-    public void PressingTheModifierOnARestingPointer_RaisesTheHint_AndReleasingItDropsIt()
+    public void PressingTheModifierOnARestingPointer_GrowsTheOpenTooltip_AndReleasingItShrinksItBack()
     {
         // The reader who is already hovering a link and then presses ⌘ never moves the mouse — so the hint can't
-        // wait for a pointer move to appear.
+        // wait for a pointer move to appear. And it lands in the tooltip they are already reading: the popup is
+        // the same object throughout, updated in place rather than replaced or doubled.
         var (window, editor) = Clickable("[docs](https://example.com/a)");
         editor.Focus();
         editor.HoverForTest(editor.PointAtColumnForTest(2));
-        Assert.Null(editor.LinkHintForTest());
+        Assert.Null(editor.LinkTipForTest()!.Value.Hint);
+        var tip = ToolTip.GetTip(editor);
 
         var (key, modifiers) = OperatingSystem.IsMacOS()
             ? (PhysicalKey.MetaLeft, RawInputModifiers.Meta)
             : (PhysicalKey.ControlLeft, RawInputModifiers.Control);
 
         window.KeyPressQwerty(key, modifiers);
-        Assert.Equal(MarkdownEditor.FollowHintText(OperatingSystem.IsMacOS()), editor.LinkHintForTest());
+        Assert.Equal(("https://example.com/a", MarkdownEditor.FollowHintText(OperatingSystem.IsMacOS())), editor.LinkTipForTest());
         Assert.NotNull(editor.Cursor);
+        Assert.Same(tip, ToolTip.GetTip(editor)); // the tooltip grew a line; no second popup was raised
 
         window.KeyReleaseQwerty(key, modifiers);
-        Assert.Null(editor.LinkHintForTest());
+        Assert.Equal(("https://example.com/a", null), editor.LinkTipForTest());
         Assert.Null(editor.Cursor);
     }
 

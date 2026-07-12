@@ -54,8 +54,6 @@ public partial class MarkdownEditor
                 DrawCodeCopyButtons(context, first, last); // no code-block chrome in the plain-source view
             }
 
-            DrawLinkHint(context); // "⌘ + click to open…", over the text, under the link the pointer is on
-
             // Only relevant when wrapping is off: grow the horizontal extent as wide lines come into view.
             if (!WordWrap && maxWidth > _extentWidth)
             {
