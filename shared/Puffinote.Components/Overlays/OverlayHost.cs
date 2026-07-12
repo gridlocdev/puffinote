@@ -69,8 +69,15 @@ public sealed class OverlayHost : Panel
             }
         };
 
-        // Focus the dialog so Esc reaches it even before an inner field claims focus.
-        Dispatcher.UIThread.Post(() => dialog.Focus());
+        // Focus the dialog so Esc reaches it even before an inner field claims focus — but not if the dialog
+        // already claimed one: its InitialFocus is posted first (on attach), and focusing here would undo it.
+        Dispatcher.UIThread.Post(() =>
+        {
+            if (!dialog.IsKeyboardFocusWithin)
+            {
+                dialog.Focus();
+            }
+        });
         return dialog.Result;
     }
 

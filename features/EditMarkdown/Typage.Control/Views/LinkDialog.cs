@@ -40,10 +40,11 @@ public sealed class LinkDialog : ModalDialog<LinkDialog.Values?>
     {
         Title = editing ? "Edit Link" : "Insert Link";
 
-        _display = new TextBox { PlaceholderText = "Display text", Text = suggestedText };
+        _display = new TextBox { PlaceholderText = "Display text", Text = suggestedText, CaretIndex = suggestedText.Length };
         _location = new TextBox { PlaceholderText = "https://example.com or path/to/file", Text = url };
-        // Land in the field that still needs typing: location when a label is already filled, else display.
-        InitialFocus = string.IsNullOrEmpty(suggestedText) ? _display : _location;
+        // Land in the first field, whether inserting or editing, with the caret after any suggested label:
+        // reading the dialog top to bottom and typing does the right thing, and Tab reaches the location.
+        InitialFocus = _display;
 
         _display.KeyDown += OnFieldKeyDown;
         _location.KeyDown += OnFieldKeyDown;
