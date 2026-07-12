@@ -131,6 +131,12 @@ public partial class SpreadsheetEditorView : UserControl, IAppEnvironment
         RegisterKeyBindings();
         BuildSheetTabs();
 
+        // The tabs built above can't know the real theme yet — ActualThemeVariant only resolves once this
+        // view is attached to a visual tree, and reports the default (light) until then. Recolor when it
+        // lands, so the active tab isn't left with a white surface inside a dark shell (and so it follows
+        // a theme switch afterwards). Same pattern as SpreadsheetGrid's ApplyTheme.
+        ActualThemeVariantChanged += (_, _) => ApplyTabTheme();
+
         _commandBar = new CommandBar(this);
         _commandBar.CollapsedChanged += (_, _) => CommandBarCollapsedChanged?.Invoke(this, EventArgs.Empty);
         CommandBarHost.Content = _commandBar;

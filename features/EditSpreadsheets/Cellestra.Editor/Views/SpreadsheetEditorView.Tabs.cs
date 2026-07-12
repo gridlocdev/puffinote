@@ -9,6 +9,36 @@ namespace Cellestra.Editor;
 
 public partial class SpreadsheetEditorView
 {
+    /// <summary>
+    /// The surface for a sheet tab. Inactive tabs are explicitly Transparent rather than null so they
+    /// stay hit-testable and their pointer events reach the strip.
+    /// </summary>
+    private IBrush TabBackground(bool active) => active ? ThemedSurface : Brushes.Transparent;
+
+    /// <summary>
+    /// Repaint the existing tabs for the current theme variant.
+    ///
+    /// <see cref="ThemedSurface"/> reads <c>ActualThemeVariant</c>, which only reports the real variant
+    /// once the view is attached to a visual tree. The constructor's <see cref="BuildSheetTabs"/> runs
+    /// before that and sees the default (light), so in a dark shell the active tab would bake in a white
+    /// surface and keep it until something else rebuilt the strip (clicking a tab, say). Repainting on
+    /// ActualThemeVariantChanged fixes both that first paint and a later theme switch.
+    ///
+    /// This recolors in place instead of calling BuildSheetTabs so an open inline-rename editor — or an
+    /// in-flight drag — survives a theme change.
+    /// </summary>
+    private void ApplyTabTheme()
+    {
+        int sheets = Session.Workbook.Worksheets.Count;
+        for (int i = 0; i < sheets && i < SheetTabs.Children.Count; i++)
+        {
+            if (SheetTabs.Children[i] is Border tab)
+            {
+                tab.Background = TabBackground(ReferenceEquals(Session.Workbook.Worksheets[i], Session.ActiveSheet));
+            }
+        }
+    }
+
     private void BuildSheetTabs()
     {
         SheetTabs.Children.Clear();
@@ -20,7 +50,7 @@ public partial class SpreadsheetEditorView
             var tab = new Border
             {
                 Padding = new Thickness(10, 2),
-                Background = active ? ThemedSurface : Brushes.Transparent,
+                Background = TabBackground(active),
                 Cursor = new Avalonia.Input.Cursor(Avalonia.Input.StandardCursorType.Hand),
                 Child = new TextBlock
                 {
@@ -314,6 +344,12 @@ public partial class SpreadsheetEditorView
             SheetTabs.Children[i].Cursor = cursor;
         }
     }
+
+    // ---- Test seams (headless UI tests; InternalsVisibleTo Cellestra.UiTests) ----
+
+    /// <summary>The background brush on the tab at <paramref name="index"/>, or null if there's no such tab.</summary>
+    internal IBrush? TabBackgroundForTest(int index) =>
+        index >= 0 && index < SheetTabs.Children.Count && SheetTabs.Children[index] is Border tab ? tab.Background : null;
 
     /// <summary>Clear all drag affordances — opacity, cursor, drop marker — and reset the gesture state.</summary>
     private void EndTabDragVisual()

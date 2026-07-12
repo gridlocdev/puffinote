@@ -7,6 +7,7 @@ using Cellestra.Core.Styling;
 using Cellestra.Core.Values;
 using Cellestra.Desktop.Controls.SpreadsheetGrid;
 using Cellestra.Desktop.Views;
+using Cellestra.Editor;
 using Xunit;
 
 namespace Cellestra.UiTests;
@@ -58,6 +59,28 @@ public class ThemeTests
         // An explicitly chosen color is document data: it stays put across themes.
         var red = defaultStyle with { Font = defaultStyle.Font with { Color = ArgbColor.FromRgb(0xC0, 0x00, 0x00) } };
         Assert.Equal(Color.FromRgb(0xC0, 0x00, 0x00), grid.ResolvedTextColor(red, CellValue.Text("x")));
+    }
+
+    [AvaloniaFact]
+    public void Active_sheet_tab_surface_is_themed_on_the_very_first_paint()
+    {
+        // The tab strip is built in the view's constructor, before it's attached to a visual tree — so
+        // ActualThemeVariant still reports the default (light) there. The active tab must not be left
+        // with that first, white surface inside a dark shell: it should repaint once the theme lands.
+        var view = new SpreadsheetEditorView();
+        var window = new Window { Content = view, RequestedThemeVariant = ThemeVariant.Dark };
+        window.Show();
+        Dispatcher.UIThread.RunJobs();
+
+        var dark = ((ISolidColorBrush)view.TabBackgroundForTest(0)!).Color;
+        Assert.True(dark.R < 80, $"active tab should be dark in a dark shell, was {dark}");
+
+        // And it keeps following the theme after a switch.
+        window.RequestedThemeVariant = ThemeVariant.Light;
+        Dispatcher.UIThread.RunJobs();
+
+        var light = ((ISolidColorBrush)view.TabBackgroundForTest(0)!).Color;
+        Assert.True(light.R > 200, $"active tab should be bright in light theme, was {light}");
     }
 
     [AvaloniaFact]
