@@ -8,20 +8,20 @@ public partial class MarkdownEditor
     // The caret's current formatting, surfaced so the toolbar can light up the matching tools (like the
     // spreadsheet's bar). Each is read cheaply off the already-built line tokens / line prefix at the caret.
 
-    /// <summary>Whether the caret sits within bold (<c>**…**</c>) text.</summary>
-    public bool IsBoldActive => CaretInInline(TokenType.Strong, TokenType.StrongEmphasis);
+    /// <summary>Whether the target (selection, or the word under the caret) is bold (<c>**…**</c>).</summary>
+    public bool IsBoldActive => StarEmphasisLevel() >= 2;
 
-    /// <summary>Whether the caret sits within italic (<c>*…*</c>) text.</summary>
-    public bool IsItalicActive => CaretInInline(TokenType.Emphasis, TokenType.StrongEmphasis);
+    /// <summary>Whether the target (selection, or the word under the caret) is italic (<c>*…*</c>).</summary>
+    public bool IsItalicActive => StarEmphasisLevel() is 1 or 3;
 
-    /// <summary>Whether the caret sits within inline code (<c>`…`</c>).</summary>
-    public bool IsInlineCodeActive => CaretInInline(TokenType.InlineCode);
+    /// <summary>Whether the target is inline code (<c>`…`</c>).</summary>
+    public bool IsInlineCodeActive => IsFormatActive(TokenType.InlineCode, '`');
 
-    /// <summary>Whether the caret sits within strikethrough (<c>~~…~~</c>) text.</summary>
-    public bool IsStrikethroughActive => CaretInInline(TokenType.Strikethrough);
+    /// <summary>Whether the target is struck through (<c>~~…~~</c>).</summary>
+    public bool IsStrikethroughActive => IsFormatActive(TokenType.Strikethrough, '~');
 
-    /// <summary>Whether the caret sits within highlighted (<c>==…==</c>) text.</summary>
-    public bool IsHighlightActive => CaretInInline(TokenType.Highlight);
+    /// <summary>Whether the target is highlighted (<c>==…==</c>).</summary>
+    public bool IsHighlightActive => IsFormatActive(TokenType.Highlight, '=');
 
     /// <summary>Whether the caret's line carries a task checkbox.</summary>
     public bool IsTaskActive => CaretPrefix().HasTask;
@@ -64,18 +64,23 @@ public partial class MarkdownEditor
     private LinePrefix CaretPrefix() =>
         LinePrefix.Parse(Buffer.Document.GetLineText(BlockFirstLine(CaretLine)));
 
-    /// <summary>True when the caret lies within a content token on its line whose type is one of <paramref name="types"/>.</summary>
-    private bool CaretInInline(params TokenType[] types)
+    /// <summary>
+    /// Whether the text the toggle would act on already carries <paramref name="contentType"/> — asked of the
+    /// <em>same</em> run-finder the toggle itself uses, so the lit tool and the tool that would turn it off are
+    /// never two different answers (a caret mid-way through a struck sentence lights the strike tool, and
+    /// pressing it removes that strike).
+    /// </summary>
+    private bool IsFormatActive(TokenType contentType, char delim)
     {
-        int caret = Buffer.Selection.Caret;
-        foreach (var token in _model.LineTokens(CaretLine))
-        {
-            if (token.Role == TokenRole.Content && caret >= token.Start && caret <= token.End && Array.IndexOf(types, token.Type) >= 0)
-            {
-                return true;
-            }
-        }
+        var (start, end) = FormatTarget();
+        return FindFormatRun(start, end, contentType, delim, star: false) is not null;
+    }
 
-        return false;
+    /// <summary>The delimiter-run length of the <c>*</c>/<c>_</c> emphasis over the target — 1 italic, 2 bold,
+    /// 3 both — or 0 when it carries none. Bold and italic are layers of one run, so both read it.</summary>
+    private int StarEmphasisLevel()
+    {
+        var (start, end) = FormatTarget();
+        return FindFormatRun(start, end, TokenType.Strong, '*', star: true)?.MarkerLen ?? 0;
     }
 }

@@ -396,7 +396,7 @@ internal sealed class BlockLayoutBuilder
         }
 
         var content = blockText[s..en];
-        var nested = FindNestedConstructs(content);
+        var nested = InlineDelimiters.FindNested(content);
         if (nested.Count == 0)
         {
             segments.Add(new VisualLine.Segment(s, en, baseStyle, false));
@@ -422,79 +422,6 @@ internal sealed class BlockLayoutBuilder
         {
             segments.Add(new VisualLine.Segment(s + p, en, baseStyle, false));
         }
-    }
-
-    /// <summary>
-    /// The top-level paired delimiter constructs inside <paramref name="content"/> — <c>~~</c>, <c>==</c>, and
-    /// <c>*</c>/<c>_</c> emphasis (run 1–3) — using the same tolerance as the engine tokenizer (no leading/
-    /// trailing inner whitespace, a close run at least as long as the open). One level deep, which covers
-    /// emphasis wrapping a strike/highlight and vice versa; deeper nesting is left as literal text.
-    /// </summary>
-    private static List<NestedConstruct> FindNestedConstructs(string content)
-    {
-        var found = new List<NestedConstruct>();
-        var i = 0;
-        while (i < content.Length)
-        {
-            var c = content[i];
-            if (c is '~' or '=' or '*' or '_')
-            {
-                var run = DelimRun(content, i, c);
-                var count = c is '~' or '=' ? 2 : Math.Min(run, 3);
-                var innerStart = i + count;
-                if (run >= count && innerStart < content.Length
-                    && content[innerStart] != c && !char.IsWhiteSpace(content[innerStart]))
-                {
-                    var close = FindClose(content, innerStart, c, count);
-                    if (close > innerStart)
-                    {
-                        found.Add(new NestedConstruct(i, close, count, c));
-                        i = close + count;
-                        continue;
-                    }
-                }
-            }
-
-            i++;
-        }
-
-        return found;
-    }
-
-    /// <summary>Index of the closing delimiter run (≥ <paramref name="count"/> of <paramref name="c"/>, not
-    /// preceded by whitespace) at or after <paramref name="from"/>; -1 if none.</summary>
-    private static int FindClose(string content, int from, char c, int count)
-    {
-        var j = from;
-        while (j < content.Length)
-        {
-            if (content[j] == c && !char.IsWhiteSpace(content[j - 1]))
-            {
-                if (DelimRun(content, j, c) >= count)
-                {
-                    return j;
-                }
-
-                j += DelimRun(content, j, c);
-            }
-            else
-            {
-                j++;
-            }
-        }
-
-        return -1;
-    }
-
-    private static int DelimRun(string s, int i, char c)
-    {
-        var n = 0;
-        while (i + n < s.Length && s[i + n] == c)
-        {
-            n++;
-        }
-
-        return n;
     }
 
     /// <summary>Combine <paramref name="baseStyle"/> with a nested construct's treatment: <c>~~</c> adds the
@@ -629,8 +556,4 @@ internal sealed class BlockLayoutBuilder
     /// <summary>Restyle a run as an inline-link hyperlink: link colour + underline, keeping its typeface/size.</summary>
     private RunStyle AsLink(RunStyle style) =>
         style with { Foreground = _theme.LinkForeground, Decorations = _theme.LinkUnderline };
-
-    /// <summary>One nested inline construct found inside another's content: the delimiter, its run length, and
-    /// the inner span (all relative to the enclosing content string).</summary>
-    private readonly record struct NestedConstruct(int OpenStart, int InnerEnd, int MarkerLen, char Delim);
 }

@@ -1,3 +1,4 @@
+using System.Text;
 using Typage.Engine.Document;
 using Typage.Engine.Editing;
 using Typage.Engine.Markdown;
@@ -20,38 +21,32 @@ public partial class MarkdownEditor
     }
 
     /// <summary>
-    /// Toggle an inline emphasis format (bold/italic/strikethrough/highlight/inline-code) over the
-    /// selection — or, with no selection, the word the caret is inside (so ⌘B on a bare caret in a word
-    /// bolds the whole word). Applying the format a <b>second</b> time to text that is already wrapped in
-    /// exactly that format <b>removes</b> it (unwraps the run it expanded to). If the caret isn't touching a
-    /// word, an empty marker pair is inserted to type into. Either way the affected content is left selected.
+    /// Toggle an inline emphasis format (strikethrough/highlight/inline-code — bold and italic layer through
+    /// <see cref="ToggleStarEmphasis"/>) over the selection, or, with no selection, the word the caret is
+    /// inside (so ⌘⇧X on a bare caret in a word strikes the whole word).
+    ///
+    /// <para>Pressing it again on text that <b>already carries</b> that format <b>removes</b> it: the run the
+    /// target sits in is unwrapped, whether the target is the caret in the middle of a struck sentence, a
+    /// selection that swept the (concealed) markers in with the words, or exactly the content. What the reader
+    /// sees is one struck phrase, so one press turns it off — it never adds a second pair of markers to a
+    /// format that is already on.</para>
+    ///
+    /// <para>Wrapping text that <i>contains</i> a run of the same format (striking a sentence with a struck
+    /// word inside it) strips the inner markers first, since <c>~~a ~~b~~ c~~</c> is not a nested strike but a
+    /// broken one. If the caret isn't touching a word, an empty marker pair is inserted to type into. Either
+    /// way the affected content is left selected.</para>
     /// </summary>
-    /// <param name="left">Opening marker, e.g. <c>**</c>.</param>
-    /// <param name="right">Closing marker, e.g. <c>**</c>.</param>
-    /// <param name="contentType">The engine token type of this format's content (e.g. <see cref="TokenType.Strong"/>),
-    /// used to detect an existing run so a second press toggles it off.</param>
+    /// <param name="left">Opening marker, e.g. <c>~~</c>.</param>
+    /// <param name="right">Closing marker, e.g. <c>~~</c>.</param>
+    /// <param name="contentType">The engine token type of this format's content (e.g.
+    /// <see cref="TokenType.Strikethrough"/>), used to detect an existing run so a second press toggles it off.</param>
     public void ToggleEmphasis(string left, string right, TokenType contentType)
     {
         var sel = Buffer.Selection;
-        int start, end;
-        if (!sel.IsEmpty)
-        {
-            (start, end) = (sel.Start, sel.End);
-        }
-        else if (WordAround(sel.Caret) is { } word)
-        {
-            (start, end) = (word.Start, word.End);
-        }
-        else
-        {
-            Buffer.ReplaceRange(sel.Caret, 0, left + right);
-            Buffer.Selection = Selection.At(sel.Caret + left.Length);
-            Focus();
-            return;
-        }
+        var (start, end) = FormatTarget();
 
-        // Already wrapped in exactly this format? Strip the markers (one undo step) and re-select the content.
-        if (FindEmphasisRun(start, end, contentType) is { } run)
+        // Already in this format? Strip the whole run (one undo step) and re-select its content.
+        if (FindFormatRun(start, end, contentType, left[0], star: false) is { } run)
         {
             var inner = Buffer.Document.GetText(run.InnerStart, run.InnerEnd - run.InnerStart);
             Buffer.ReplaceRange(run.OuterStart, run.OuterEnd - run.OuterStart, inner);
@@ -60,23 +55,119 @@ public partial class MarkdownEditor
             return;
         }
 
-        var content = Buffer.Document.GetText(start, end - start);
+        if (start == end)
+        {
+            Buffer.ReplaceRange(sel.Caret, 0, left + right); // nothing to wrap — leave an empty pair to type into
+            Buffer.Selection = Selection.At(sel.Caret + left.Length);
+            Focus();
+            return;
+        }
+
+        var content = StripInnerRuns(start, end, contentType, star: false, addedRun: 0);
         Buffer.ReplaceRange(start, end - start, left + content + right);
         Buffer.Selection = new Selection(start + left.Length, start + left.Length + content.Length);
         Focus();
     }
 
     /// <summary>
-    /// If <c>[start, end)</c> is exactly the content of an existing inline construct of
-    /// <paramref name="contentType"/> (e.g. the <c>word</c> inside <c>**word**</c>), return the construct's
-    /// outer span (markers included) and its inner content span so the caller can unwrap it; otherwise null.
-    /// Detection is token-based — the markers grouped with the content node (<see cref="Token.Node"/>) must
-    /// flank it — so a second ⌘B on a bolded word toggles bold off without disturbing surrounding emphasis.
+    /// Toggle the bold (<c>**</c>) or italic (<c>*</c>) component of the target's emphasis, treating bold and
+    /// italic as <b>independent layers</b> over the same <c>*</c>/<c>_</c> delimiter (CommonMark nests them as
+    /// a single 1–3 long run). So italic on a bold word gives bold-italic (<c>***w***</c>); italic again drops
+    /// just the italic back to bold (<c>**w**</c>); bold on bold-italic leaves italic (<c>*w*</c>). The run is
+    /// found by <see cref="FindFormatRun"/>, so — as with strikethrough — a caret anywhere inside a bold
+    /// sentence toggles the whole sentence, not just the word under it. With no emphasis present it simply
+    /// wraps; with no word/selection it inserts an empty delimiter pair.
     /// </summary>
-    private (int OuterStart, int OuterEnd, int InnerStart, int InnerEnd)? FindEmphasisRun(int start, int end, TokenType contentType)
+    private void ToggleStarEmphasis(bool bold)
+    {
+        var sel = Buffer.Selection;
+        var (start, end) = FormatTarget();
+
+        // Read the emphasis run already wrapping the target (its delimiter run is 1=italic, 2=bold, 3=both),
+        // flip the requested layer, and rewrite the whole construct with the new run length (0 = unwrap).
+        var existing = FindFormatRun(start, end, TokenType.Strong, '*', star: true);
+        var ch = existing?.Delim ?? '*';
+        var level = existing?.MarkerLen ?? 0;
+        var hasBold = level >= 2;
+        var hasItalic = level is 1 or 3;
+        if (bold)
+        {
+            hasBold = !hasBold;
+        }
+        else
+        {
+            hasItalic = !hasItalic;
+        }
+
+        var newLevel = (hasBold ? 2 : 0) + (hasItalic ? 1 : 0);
+        var delim = new string(ch, newLevel);
+
+        if (existing is { } run)
+        {
+            // The run's own content, not the target: a caret in one word of a bold sentence re-levels the
+            // whole sentence rather than tearing the word out of it.
+            var inner = Buffer.Document.GetText(run.InnerStart, run.InnerEnd - run.InnerStart);
+            Buffer.ReplaceRange(run.OuterStart, run.OuterEnd - run.OuterStart, delim + inner + delim);
+            Buffer.Selection = new Selection(run.OuterStart + delim.Length, run.OuterStart + delim.Length + inner.Length);
+            Focus();
+            return;
+        }
+
+        if (start == end)
+        {
+            Buffer.ReplaceRange(sel.Caret, 0, delim + delim);
+            Buffer.Selection = Selection.At(sel.Caret + delim.Length);
+            Focus();
+            return;
+        }
+
+        // Wrapping over emphasis already inside the target: drop the layer being added from those inner runs
+        // (bolding "a **b** c" gives "**a b c**", not a bold inside a bold), keeping any layer they don't share.
+        var content = StripInnerRuns(start, end, TokenType.Strong, star: true, addedRun: bold ? 2 : 1);
+        Buffer.ReplaceRange(start, end - start, delim + content + delim);
+        Buffer.Selection = new Selection(start + delim.Length, start + delim.Length + content.Length);
+        Focus();
+    }
+
+    /// <summary>An inline formatting construct on one line: its outer span (delimiters included), its content
+    /// span, and the delimiter it is spelled with (<c>*</c> a run of <see cref="MarkerLen"/> 1–3 long).</summary>
+    private readonly record struct FormatRun(int OuterStart, int OuterEnd, int InnerStart, int InnerEnd, char Delim, int MarkerLen);
+
+    /// <summary>
+    /// What a formatting command acts on: the selection, or — with no selection — the word the caret is
+    /// inside. An empty span (start == end) means the caret is touching no word, so there is nothing to wrap.
+    /// </summary>
+    private (int Start, int End) FormatTarget()
+    {
+        var sel = Buffer.Selection;
+        if (!sel.IsEmpty)
+        {
+            return (sel.Start, sel.End);
+        }
+
+        return WordAround(sel.Caret) is { } word ? (word.Start, word.End) : (sel.Caret, sel.Caret);
+    }
+
+    /// <summary>
+    /// The run of <paramref name="contentType"/> format (or, when <paramref name="star"/>, of any
+    /// <c>*</c>/<c>_</c> emphasis) that <b>contains</b> <c>[start, end)</c> — the construct a second press of
+    /// that format should remove — or null when the target isn't in one.
+    ///
+    /// <para>Containment, not an exact match, is the test, because in the live-preview view the markers are
+    /// invisible: the caret sits mid-phrase, a drag over the struck words sweeps the hidden <c>~~</c> in at one
+    /// or both ends, and Select All takes everything. All of those <i>look</i> like "this text is struck", so
+    /// all of them must toggle it off. (Requiring the target to be exactly the content is what used to leave
+    /// every other case falling through to the wrap path, stacking another <c>~~</c> pair on each press.)</para>
+    ///
+    /// <para>Two passes: the engine's own tokens first, then — since emphasis/strike/highlight content is one
+    /// flat token (no inline recursion, PRD §8.4) — a scan one level inside such a token, so the strike in
+    /// <c>**~~done~~**</c> is found too. The nested scan is <see cref="InlineDelimiters"/>, the same one the
+    /// surface splits that content with to draw it, so what renders struck is what un-strikes.</para>
+    /// </summary>
+    private FormatRun? FindFormatRun(int start, int end, TokenType contentType, char delim, bool star)
     {
         var doc = Buffer.Document;
-        if (start < 0 || end > doc.Length || start >= end)
+        if (start < 0 || end > doc.Length || start > end)
         {
             return null;
         }
@@ -90,139 +181,129 @@ public partial class MarkdownEditor
         var toks = _model.LineTokens(line);
         foreach (var t in toks)
         {
-            if (t.Type != contentType || t.Role != TokenRole.Content || t.Start != start || t.End != end)
+            if (t.Role != TokenRole.Content || !IsFormatContent(t.Type, contentType, star))
             {
                 continue;
             }
 
-            var outerStart = t.Start;
-            var outerEnd = t.End;
-            foreach (var m in toks)
+            var (outerStart, outerEnd, open) = OuterSpan(toks, t);
+            if (open is { } o && outerStart < t.Start && outerEnd > t.End && outerStart <= start && outerEnd >= end)
             {
-                if (m.Node == t.Node && m.Role == TokenRole.Marker)
-                {
-                    outerStart = Math.Min(outerStart, m.Start);
-                    outerEnd = Math.Max(outerEnd, m.End);
-                }
-            }
-
-            if (outerStart < t.Start && outerEnd > t.End)
-            {
-                return (outerStart, outerEnd, t.Start, t.End);
+                return new FormatRun(outerStart, outerEnd, t.Start, t.End, doc[o.Start], o.Length);
             }
         }
 
-        return null;
-    }
-
-    /// <summary>
-    /// Toggle the bold (<c>**</c>) or italic (<c>*</c>) component of the target's emphasis, treating bold and
-    /// italic as <b>independent layers</b> over the same <c>*</c>/<c>_</c> delimiter (CommonMark nests them as
-    /// a single 1–3 long run). So italic on a bold word gives bold-italic (<c>***w***</c>); italic again drops
-    /// just the italic back to bold (<c>**w**</c>); bold on bold-italic leaves italic (<c>*w*</c>). With no
-    /// emphasis present it simply wraps; with no word/selection it inserts an empty delimiter pair.
-    /// </summary>
-    private void ToggleStarEmphasis(bool bold)
-    {
-        var sel = Buffer.Selection;
-        int start, end;
-        if (!sel.IsEmpty)
-        {
-            (start, end) = (sel.Start, sel.End);
-        }
-        else if (WordAround(sel.Caret) is { } word)
-        {
-            (start, end) = (word.Start, word.End);
-        }
-        else
-        {
-            var d = bold ? "**" : "*";
-            Buffer.ReplaceRange(sel.Caret, 0, d + d);
-            Buffer.Selection = Selection.At(sel.Caret + d.Length);
-            Focus();
-            return;
-        }
-
-        // Read the emphasis run already wrapping the target (its delimiter run is 1=italic, 2=bold, 3=both),
-        // flip the requested layer, and rewrite the whole construct with the new run length (0 = unwrap).
-        var existing = FindStarEmphasis(start, end);
-        var ch = existing?.Delim ?? '*';
-        var level = existing?.RunLength ?? 0;
-        var hasBold = level >= 2;
-        var hasItalic = level is 1 or 3;
-        if (bold)
-        {
-            hasBold = !hasBold;
-        }
-        else
-        {
-            hasItalic = !hasItalic;
-        }
-
-        var newLevel = (hasBold ? 2 : 0) + (hasItalic ? 1 : 0);
-        var content = Buffer.Document.GetText(start, end - start);
-        var delim = new string(ch, newLevel);
-        var outerStart = existing?.OuterStart ?? start;
-        var outerEnd = existing?.OuterEnd ?? end;
-
-        Buffer.ReplaceRange(outerStart, outerEnd - outerStart, delim + content + delim);
-        Buffer.Selection = new Selection(outerStart + delim.Length, outerStart + delim.Length + content.Length);
-        Focus();
-    }
-
-    /// <summary>
-    /// The <c>*</c>/<c>_</c> emphasis construct (bold, italic, or bold-italic) whose content is exactly
-    /// <c>[start, end)</c>: its outer span, its delimiter run length (1–3), and the delimiter char — or null.
-    /// </summary>
-    private (int OuterStart, int OuterEnd, int RunLength, char Delim)? FindStarEmphasis(int start, int end)
-    {
-        var doc = Buffer.Document;
-        if (start < 0 || end > doc.Length || start >= end)
-        {
-            return null;
-        }
-
-        var line = doc.GetPosition(start).Line;
-        if (doc.GetPosition(end).Line != line)
-        {
-            return null;
-        }
-
-        var toks = _model.LineTokens(line);
         foreach (var t in toks)
         {
-            if (t.Role != TokenRole.Content || t.Start != start || t.End != end ||
-                t.Type is not (TokenType.Strong or TokenType.Emphasis or TokenType.StrongEmphasis))
+            if (t.Role != TokenRole.Content || !IsFlatContainer(t.Type) || t.Start > start || t.End < end)
             {
                 continue;
             }
 
-            var outerStart = t.Start;
-            var outerEnd = t.End;
-            Token? open = null;
-            foreach (var m in toks)
+            foreach (var n in InlineDelimiters.FindNested(doc.GetText(t.Start, t.End - t.Start)))
             {
-                if (m.Node != t.Node || m.Role != TokenRole.Marker)
+                if (!MatchesDelim(n.Delim, delim, star))
                 {
                     continue;
                 }
 
-                outerStart = Math.Min(outerStart, m.Start);
-                outerEnd = Math.Max(outerEnd, m.End);
-                if (open is null || m.Start < open.Value.Start)
+                var (outerStart, outerEnd) = (t.Start + n.OpenStart, t.Start + n.End);
+                if (outerStart <= start && outerEnd >= end)
                 {
-                    open = m;
+                    return new FormatRun(outerStart, outerEnd, t.Start + n.InnerStart, t.Start + n.InnerEnd, n.Delim, n.MarkerLen);
                 }
-            }
-
-            if (open is { } o && outerStart < t.Start && outerEnd > t.End)
-            {
-                return (outerStart, outerEnd, o.Length, doc[o.Start]);
             }
         }
 
         return null;
     }
+
+    /// <summary>
+    /// The source of <c>[start, end)</c> with the format being applied removed from every run of it fully
+    /// inside — so wrapping never spells a format inside itself. For a self-closing delimiter
+    /// (<c>~~</c>, <c>==</c>, <c>`</c>) the inner markers go entirely; for <c>*</c>/<c>_</c> only the layer
+    /// being added (<paramref name="addedRun"/>: 2 = bold, 1 = italic) is dropped from the inner run, so
+    /// bolding a line with an italic word in it keeps the italic.
+    /// </summary>
+    private string StripInnerRuns(int start, int end, TokenType contentType, bool star, int addedRun)
+    {
+        var doc = Buffer.Document;
+        var line = doc.GetPosition(start).Line;
+        if (start >= end || doc.GetPosition(end - 1).Line != line)
+        {
+            return doc.GetText(start, end - start); // multi-line selection: take it verbatim
+        }
+
+        var toks = _model.LineTokens(line);
+        var result = new StringBuilder();
+        var p = start;
+        foreach (var t in toks)
+        {
+            if (t.Role != TokenRole.Content || !IsFormatContent(t.Type, contentType, star))
+            {
+                continue;
+            }
+
+            var (outerStart, outerEnd, open) = OuterSpan(toks, t);
+            if (open is not { } o || outerStart < start || outerEnd > end || outerStart < p)
+            {
+                continue;
+            }
+
+            // What the inner run keeps: nothing, or the emphasis layers the outer wrap isn't itself adding.
+            var keep = star ? new string(doc[o.Start], o.Length & ~addedRun) : string.Empty;
+            result.Append(doc.GetText(p, outerStart - p))
+                  .Append(keep)
+                  .Append(doc.GetText(t.Start, t.End - t.Start))
+                  .Append(keep);
+            p = outerEnd;
+        }
+
+        return result.Append(doc.GetText(p, end - p)).ToString();
+    }
+
+    /// <summary>The span of the construct <paramref name="t"/> is the content of — its own span grown over the
+    /// markers grouped with it (<see cref="Token.Node"/>) — plus its opening marker.</summary>
+    private static (int OuterStart, int OuterEnd, Token? Open) OuterSpan(IReadOnlyList<Token> toks, Token t)
+    {
+        var outerStart = t.Start;
+        var outerEnd = t.End;
+        Token? open = null;
+        foreach (var m in toks)
+        {
+            if (m.Node != t.Node || m.Role != TokenRole.Marker)
+            {
+                continue;
+            }
+
+            outerStart = Math.Min(outerStart, m.Start);
+            outerEnd = Math.Max(outerEnd, m.End);
+            if (open is null || m.Start < open.Value.Start)
+            {
+                open = m;
+            }
+        }
+
+        return (outerStart, outerEnd, open);
+    }
+
+    /// <summary>Whether a content token is the one this toggle acts on: any <c>*</c>/<c>_</c> emphasis for
+    /// bold/italic (they are layers of one construct), else exactly the format's own type.</summary>
+    private static bool IsFormatContent(TokenType type, TokenType contentType, bool star) =>
+        star
+            ? type is TokenType.Strong or TokenType.Emphasis or TokenType.StrongEmphasis
+            : type == contentType;
+
+    /// <summary>Whether the delimiter of a nested construct is the one this toggle acts on.</summary>
+    private static bool MatchesDelim(char found, char delim, bool star) =>
+        star ? found is '*' or '_' : found == delim;
+
+    /// <summary>Content the tokenizer emits <b>flat</b> (it doesn't recurse into emphasis), and which may
+    /// therefore hold another construct's markers as plain text — the content <see cref="InlineDelimiters"/>
+    /// is scanned inside.</summary>
+    private static bool IsFlatContainer(TokenType type) =>
+        type is TokenType.Strong or TokenType.Emphasis or TokenType.StrongEmphasis
+            or TokenType.Strikethrough or TokenType.Highlight;
 
     /// <summary>
     /// The span of the word the caret at <paramref name="caret"/> is inside — the maximal run of
