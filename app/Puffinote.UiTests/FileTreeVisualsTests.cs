@@ -179,6 +179,90 @@ public sealed class FileTreeVisualsTests : IDisposable
     }
 
     [AvaloniaFact]
+    public void Switching_to_a_document_inside_a_shut_folder_opens_the_folder_to_show_it()
+    {
+        // A bold row inside a collapsed folder is a mark nobody can see. Switching tabs is exactly when you have
+        // lost your place, so the tree opens the way down to the document — without moving the selection, which
+        // still answers the other question ("what will Rename act on?").
+        var (tree, window) = Open();
+        Assert.DoesNotContain("Attention.md", tree.VisibleNamesForTest); // Projects/Neural Nets start shut
+
+        tree.SelectPath(Path("Inbox.md"));
+        tree.SetActiveDocument(Path("Projects/Neural Nets/Attention.md"));
+        Settle(window);
+
+        Assert.Contains("Attention.md", tree.VisibleNamesForTest);
+        Assert.Equal(FontWeight.SemiBold, Weight(window, "Attention.md", "Attention"));
+        Assert.Equal(Path("Inbox.md"), tree.SelectedNode?.Path); // the reveal did not hijack the selection
+    }
+
+    [AvaloniaFact]
+    public void The_document_you_switch_to_is_scrolled_to_the_middle_of_the_panel()
+    {
+        var (tree, window) = OpenLongNotebook();
+
+        // A note far down the list: the panel scrolls it to the middle, where you can see the notes around it.
+        tree.SetActiveDocument(Path("note-30.md"));
+        Settle(window);
+
+        var scroller = In<ScrollViewer>(window).First();
+        var offset = CentreOffset(window, "note-30.md");
+        Assert.True(Math.Abs(offset) <= RowHeight, $"row sat {offset}px from the middle of the panel");
+        Assert.True(scroller.Offset.Y > 0, "the panel never scrolled");
+
+        // ...and it follows the tab you switch to, back up the list.
+        tree.SetActiveDocument(Path("note-20.md"));
+        Settle(window);
+
+        Assert.True(Math.Abs(CentreOffset(window, "note-20.md")) <= RowHeight);
+    }
+
+    [AvaloniaFact]
+    public void A_document_near_the_top_is_shown_without_scrolling_into_empty_space()
+    {
+        // "Centred where possible" — there is no half-screenful above note-01 to centre it against, so the panel
+        // stays at the top rather than dragging the list down past its own beginning.
+        var (tree, window) = OpenLongNotebook();
+        tree.SetActiveDocument(Path("note-30.md")); // somewhere else first, so this is a real scroll *back*
+        Settle(window);
+
+        tree.SetActiveDocument(Path("note-01.md"));
+        Settle(window);
+
+        var scroller = In<ScrollViewer>(window).First();
+        Assert.Equal(0, scroller.Offset.Y);
+        Assert.Equal(FontWeight.SemiBold, Weight(window, "note-01.md", "note-01")); // and it is on screen, bold
+    }
+
+    /// <summary>How far the row named <paramref name="name"/> sits from the vertical middle of the panel, in px.</summary>
+    private static double CentreOffset(Window window, string name)
+    {
+        var scroller = In<ScrollViewer>(window).First();
+        var row = Row(window, name);
+        var top = row.TranslatePoint(default, scroller)!.Value.Y;
+        return top + (row.Bounds.Height / 2) - (scroller.Viewport.Height / 2);
+    }
+
+    /// <summary>One row's height, as the tree lays it out (content plus the container's vertical margin).</summary>
+    private const double RowHeight = 28;
+
+    /// <summary>A notebook with far more notes than fit the panel, so scrolling is what's under test.</summary>
+    private (FileTreeView Tree, Window Window) OpenLongNotebook()
+    {
+        for (var i = 0; i < 40; i++)
+        {
+            Touch($"note-{i:00}.md");
+        }
+
+        var tree = new FileTreeView();
+        var window = new Window { Width = 320, Height = 300, Content = tree };
+        window.Show();
+        tree.SetRoot(new NotebookNode(_notebook.FullName, isDirectory: true));
+        Settle(window);
+        return (tree, window);
+    }
+
+    [AvaloniaFact]
     public void Selecting_a_row_is_not_the_same_as_opening_it_and_only_one_of_them_is_bold()
     {
         // Two different questions get two different marks: the accent bar says "Rename/Delete will act on this",

@@ -9,6 +9,7 @@ using Avalonia.Layout;
 using Avalonia.Media;
 using Avalonia.Media.Immutable;
 using Avalonia.Styling;
+using Avalonia.Threading;
 using Avalonia.VisualTree;
 using Puffinote.Components.Controls.Icons;
 using Puffinote.Components.Theming;
@@ -248,8 +249,14 @@ internal sealed class FileTreeView : UserControl
     /// are different questions — "what will Rename act on?" vs. "what am I reading?" — so they get different
     /// marks: the accent bar and wash for the selection, weight for the active document.
     ///
+    /// <para>Switching tabs also <em>reveals</em> the document: its folders are opened and the tree scrolls it to
+    /// the middle of the panel. A bold row is no use in a shut folder or 200px below the fold, and switching tabs
+    /// is exactly when you have lost your place — so the sidebar re-answers "where am I?" rather than leaving the
+    /// mark where the last click happened to put it.</para>
+    ///
     /// <para>Re-asserted on every tab-host change, which includes every keystroke in the editor, so an unchanged
-    /// path must stay a no-op rather than repaint the tree.</para>
+    /// path must stay a no-op rather than repaint the tree — and, more to the point, rather than yank the panel
+    /// back to the active note every time you type while reading somewhere else in it.</para>
     /// </summary>
     public void SetActiveDocument(string? path)
     {
@@ -260,7 +267,19 @@ internal sealed class FileTreeView : UserControl
         }
 
         _activePath = full;
+        if (full is not null)
+        {
+            ExpandAncestors(full);
+        }
+
+        // The selection is left exactly where it was: it answers a different question (see above), and a tab
+        // switch is not a claim about what Rename should act on.
         Rebuild(selectPath: SelectedNode?.Path);
+
+        if (full is not null)
+        {
+            Reveal(full);
+        }
     }
 
     /// <summary>Shut every folder, leaving the scope's top level (the sidebar's "Collapse all").</summary>
@@ -287,9 +306,20 @@ internal sealed class FileTreeView : UserControl
             return;
         }
 
-        // Expand every ancestor directory so the target becomes a visible row.
         var full = System.IO.Path.GetFullPath(path);
-        for (var dir = System.IO.Path.GetDirectoryName(full); dir is not null; dir = System.IO.Path.GetDirectoryName(dir))
+        ExpandAncestors(full);
+        Rebuild(selectPath: full);
+    }
+
+    /// <summary>Open every folder between the scope root and <paramref name="fullPath"/>, so it becomes a row.</summary>
+    private void ExpandAncestors(string fullPath)
+    {
+        if (_root is null)
+        {
+            return;
+        }
+
+        for (var dir = System.IO.Path.GetDirectoryName(fullPath); dir is not null; dir = System.IO.Path.GetDirectoryName(dir))
         {
             _expanded.Add(dir);
             if (string.Equals(dir, _root.Path, StringComparison.OrdinalIgnoreCase))
@@ -297,8 +327,58 @@ internal sealed class FileTreeView : UserControl
                 break;
             }
         }
+    }
 
-        Rebuild(selectPath: full);
+    /// <summary>
+    /// Scroll <paramref name="fullPath"/>'s row to the middle of the panel — the position that shows the most of
+    /// its neighbourhood, which is the point of looking at a tree at all. Near the ends of a long list there is
+    /// nothing to centre against, so the offset clamps and the row simply sits in the first/last screenful;
+    /// centring it there would mean scrolling past the end, into empty space.
+    ///
+    /// <para>The centring runs after layout: the list virtualizes, and the rebuild this follows has only just
+    /// changed the items, so the row does not exist as a measurable container until the next pass.</para>
+    /// </summary>
+    private void Reveal(string fullPath)
+    {
+        if (_list.ItemsSource is not List<Row> rows)
+        {
+            return;
+        }
+
+        var index = rows.FindIndex(r => string.Equals(r.Node.Path, fullPath, StringComparison.OrdinalIgnoreCase));
+        if (index < 0)
+        {
+            return; // not a row here — e.g. a chip has the tree scoped to a folder the document doesn't live in
+        }
+
+        _list.ScrollIntoView(index); // realizes the container, so the posted pass below has something to measure
+        Dispatcher.UIThread.Post(() => Centre(index), DispatcherPriority.Loaded);
+    }
+
+    private void Centre(int index)
+    {
+        if (_list.GetVisualDescendants().OfType<ScrollViewer>().FirstOrDefault() is not { } scroller
+            || _list.ContainerFromIndex(index) is not { } row)
+        {
+            return;
+        }
+
+        var viewport = scroller.Viewport.Height;
+        if (viewport <= 0)
+        {
+            return; // the sidebar is collapsed, or the Files panel isn't the one on screen
+        }
+
+        // Measured against the viewport rather than the panel, so this doesn't depend on how the virtualizing
+        // panel positions realized rows: shift by however far the row's middle sits from the viewport's.
+        if (row.TranslatePoint(default, scroller) is not { } origin)
+        {
+            return;
+        }
+
+        var target = scroller.Offset.Y + origin.Y + (row.Bounds.Height / 2) - (viewport / 2);
+        var furthest = Math.Max(0, scroller.Extent.Height - viewport);
+        scroller.Offset = scroller.Offset.WithY(Math.Clamp(target, 0, furthest));
     }
 
     // ---- Rendering & flattening -------------------------------------------------------------------
