@@ -81,9 +81,10 @@ public partial class MainWindow : Window
         }
     }
 
-    // Chrome brushes are mutated live on a theme change; the status bar's border/text share these instances.
+    // Chrome brushes are mutated live on a theme change; the status bar, and the editor's command bar
+    // through the Chrome* resources, share these instances. Colours are the family's (see ApplyChromeColors).
     private readonly SolidColorBrush _chromeBg = new(Color.FromRgb(0x25, 0x25, 0x26));
-    private readonly SolidColorBrush _chromeBorder = new(Color.FromRgb(0x33, 0x33, 0x36));
+    private readonly SolidColorBrush _chromeBorder = new(Color.FromRgb(0x3A, 0x3A, 0x3A));
     private readonly SolidColorBrush _mutedText = new(Color.FromRgb(0x9A, 0x9E, 0xA6));
 
     private static readonly FilePickerFileType MarkdownType = new("Markdown")
@@ -97,6 +98,14 @@ public partial class MainWindow : Window
         Width = 900;
         Height = 680;
         Title = "Typage";
+
+        // The editor's formatting toolbar is the family's shared AdaptiveCommandBar, and it paints its chrome
+        // from the host's ChromeBackground/ChromeBorder resources — Puffinote's App supplies them, and without
+        // them here the bar drew with no background at all (the window's near-black Fluent surface showed
+        // through). Publish the very brush instances the status bar uses, so the shell's two chrome strips are
+        // one palette and ApplyChromeColors re-tints both at once.
+        Resources["ChromeBackground"] = _chromeBg;
+        Resources["ChromeBorder"] = _chromeBorder;
 
         var root = new DockPanel();
         InstallMenu(root); // macOS native menu bar, or the in-window menu elsewhere; plus key bindings

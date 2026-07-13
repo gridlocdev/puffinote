@@ -62,6 +62,12 @@ public partial class MainWindow
         }
     }
 
+    /// <summary>
+    /// Re-tint the shell's chrome brushes — the status bar's, and (through the window's <c>ChromeBackground</c>
+    /// / <c>ChromeBorder</c> resources) the editor's command bar. Light and dark are the family's chrome
+    /// palette, the same values Puffinote and Cellestra give their hosted editors, so the same bar is the same
+    /// colour in whichever shell you meet it. High contrast is this shell's alone: nothing embeds it.
+    /// </summary>
     private void ApplyChromeColors(bool isLight, bool isHighContrast)
     {
         if (isHighContrast)
@@ -72,14 +78,14 @@ public partial class MainWindow
         }
         else if (isLight)
         {
-            _chromeBg.Color = Color.FromRgb(0xF3, 0xF3, 0xF3);
-            _chromeBorder.Color = Color.FromRgb(0xD7, 0xD7, 0xD7);
+            _chromeBg.Color = Color.FromRgb(0xFA, 0xFA, 0xFA);
+            _chromeBorder.Color = Color.FromRgb(0xE0, 0xE0, 0xE0);
             _mutedText.Color = Color.FromRgb(0x6A, 0x6E, 0x76);
         }
         else
         {
             _chromeBg.Color = Color.FromRgb(0x25, 0x25, 0x26);
-            _chromeBorder.Color = Color.FromRgb(0x33, 0x33, 0x36);
+            _chromeBorder.Color = Color.FromRgb(0x3A, 0x3A, 0x3A);
             _mutedText.Color = Color.FromRgb(0x9A, 0x9E, 0xA6);
         }
     }
