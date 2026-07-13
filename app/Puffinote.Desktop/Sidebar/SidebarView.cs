@@ -124,6 +124,9 @@ internal sealed class SidebarView : UserControl
     /// <summary>Re-read the file tree from disk after a mutation.</summary>
     public void RefreshTree() => _files.Refresh();
 
+    /// <summary>Tell the file tree which document is open in the active tab, so it alone is drawn in bold.</summary>
+    public void SetActiveDocument(string? path) => _files.SetActiveDocument(path);
+
     /// <summary>Reveal and select <paramref name="path"/> in the file tree (switching to the Files panel).</summary>
     public void RevealInTree(string path)
     {

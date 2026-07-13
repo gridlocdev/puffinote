@@ -190,6 +190,7 @@ public partial class MainWindow
         RefreshCommandStates();
         ApplyShellShortcuts(); // the editor's own gestures come from the active pane's catalog — rebind them
         RefreshOutline();
+        SidebarForTest.SetActiveDocument(_tabHost.ActivePane?.Path); // the tree bolds the document you're reading
         ScanForShortcutConflicts();
 
         var notebookName = _notebook.Root?.Name;

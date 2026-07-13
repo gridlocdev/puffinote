@@ -71,6 +71,7 @@ internal sealed class FileTreeView : UserControl
     private NotebookNode? _root;
     private readonly HashSet<string> _expanded = new(StringComparer.OrdinalIgnoreCase);
     private IReadOnlySet<string> _pinned = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+    private string? _activePath;
     private string _typeahead = string.Empty;
     private DateTime _lastKeystroke = DateTime.MinValue;
 
@@ -237,6 +238,28 @@ internal sealed class FileTreeView : UserControl
         }
 
         _pinned = pinned;
+        Rebuild(selectPath: SelectedNode?.Path);
+    }
+
+    /// <summary>
+    /// The document currently open in the active tab (null when no tab is open) — the one row the tree draws in
+    /// bold. This is <em>not</em> the tree's selection: you can select a row without opening it (⌘/Ctrl+click), and
+    /// you can open a document without ever touching the tree (Quick Open, Recent, Search, ⌘1, Ctrl+Tab). Those
+    /// are different questions — "what will Rename act on?" vs. "what am I reading?" — so they get different
+    /// marks: the accent bar and wash for the selection, weight for the active document.
+    ///
+    /// <para>Re-asserted on every tab-host change, which includes every keystroke in the editor, so an unchanged
+    /// path must stay a no-op rather than repaint the tree.</para>
+    /// </summary>
+    public void SetActiveDocument(string? path)
+    {
+        var full = path is null ? null : System.IO.Path.GetFullPath(path);
+        if (string.Equals(_activePath, full, StringComparison.OrdinalIgnoreCase))
+        {
+            return;
+        }
+
+        _activePath = full;
         Rebuild(selectPath: SelectedNode?.Path);
     }
 
@@ -433,17 +456,24 @@ internal sealed class FileTreeView : UserControl
             ? (row.Node.Name, string.Empty)
             : FileGlyph.Split(row.Node.Name);
 
+        // Weight marks the one document you are reading, and nothing else. Bolding every folder spent the
+        // tree's loudest signal on its most numerous rows — a deep notebook came out mostly bold, which is the
+        // same as nothing being bold. A folder is already unmistakably a folder (chevron, folder glyph, its own
+        // colour), so it needs no weight to say so; "which note am I in?" is the question a sidebar is actually
+        // asked, and now the answer is the only heavy thing on screen.
+        bool isActive = !row.Node.IsDirectory && string.Equals(row.Node.Path, _activePath, StringComparison.OrdinalIgnoreCase);
         var name = new TextBlock
         {
             Text = stem,
             VerticalAlignment = VerticalAlignment.Center,
             TextTrimming = TextTrimming.CharacterEllipsis,
-            FontWeight = row.Node.IsDirectory ? FontWeight.SemiBold : FontWeight.Normal,
+            FontWeight = isActive ? FontWeight.SemiBold : FontWeight.Normal,
         };
-        if (!row.Node.IsDirectory)
+        if (!row.Node.IsDirectory && !isActive)
         {
-            // Files read one step back from folders, which keep the inherited default text brush. Assigning
-            // `null` here to mean "use the default" would instead set a local null brush — and paint nothing.
+            // Files read one step back from folders, which keep the inherited default text brush. The active
+            // one comes back up to full strength, so weight and colour say "here" together. (Assigning `null`
+            // here to mean "use the default" would instead set a local null brush — and paint nothing.)
             name.Foreground = palette.MutedText;
         }
 

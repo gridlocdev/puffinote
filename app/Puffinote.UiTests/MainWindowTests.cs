@@ -1,11 +1,14 @@
 using Avalonia;
+using Avalonia.Automation;
 using Avalonia.Controls;
 using Avalonia.Headless;
 using Avalonia.Headless.XUnit;
 using Avalonia.Input;
+using Avalonia.Media;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
 using Cellestra.Desktop.Services;
+using Puffinote.Desktop.Controls;
 using Puffinote.Desktop.Shell;
 using Puffinote.Desktop.Views;
 using Typage.Control.Views;
@@ -161,6 +164,57 @@ public sealed class MainWindowTests
         {
             dir.Delete(recursive: true);
         }
+    }
+
+    [AvaloniaFact]
+    public async Task The_sidebar_bolds_whichever_note_the_active_tab_is_showing()
+    {
+        // The tab host never told the tree which document was open — the tree only ever knew its own selection,
+        // which is a different thing (see FileTreeVisualsTests). Switching tabs from the keyboard therefore left
+        // the sidebar pointing at whatever you last clicked. This is the wiring that closes that gap.
+        var dir = Directory.CreateTempSubdirectory("puffinote-active-bold");
+        try
+        {
+            var one = Path.Combine(dir.FullName, "one.md");
+            var two = Path.Combine(dir.FullName, "two.md");
+            File.WriteAllText(one, "# one");
+            File.WriteAllText(two, "# two");
+
+            var window = new MainWindow(new NotebookService());
+            window.Show();
+            window.OpenNotebook(dir.FullName);
+            await window.OpenFileAsync(one);
+            await window.OpenFileAsync(two); // two.md is now the active tab
+
+            Assert.Equal(FontWeight.SemiBold, TreeWeight(window, "two.md", "two"));
+            Assert.Equal(FontWeight.Normal, TreeWeight(window, "one.md", "one"));
+
+            // ⌘/Ctrl+Tab — a route into a document that never touches the tree at all.
+            window.InvokeShellForTest("shell.nextTab");
+
+            Assert.Equal(one, window.ActiveTabPathForTest);
+            Assert.Equal(FontWeight.SemiBold, TreeWeight(window, "one.md", "one"));
+            Assert.Equal(FontWeight.Normal, TreeWeight(window, "two.md", "two"));
+        }
+        finally
+        {
+            dir.Delete(recursive: true);
+        }
+    }
+
+    /// <summary>The font weight the sidebar's file tree is drawing <paramref name="stem"/>'s row name in.</summary>
+    private static FontWeight TreeWeight(MainWindow window, string rowName, string stem)
+    {
+        Dispatcher.UIThread.RunJobs();
+        window.UpdateLayout();
+        Dispatcher.UIThread.RunJobs();
+
+        var tree = window.GetVisualDescendants().OfType<FileTreeView>().Single();
+        var row = tree.GetVisualDescendants()
+            .OfType<ListBoxItem>()
+            .Single(i => i.GetVisualDescendants().OfType<Control>().Any(c => AutomationProperties.GetName(c) == rowName));
+
+        return row.GetVisualDescendants().OfType<TextBlock>().Single(t => t.Text == stem).FontWeight;
     }
 
     /// <summary>True when keyboard focus currently rests on <paramref name="host"/> or a descendant of it.</summary>

@@ -201,6 +201,9 @@ internal sealed class FilesPanel : ISidebarPanel
         }
     }
 
+    /// <summary>Mark <paramref name="path"/> (the active tab's document, or null) as the bold row in the tree.</summary>
+    public void SetActiveDocument(string? path) => _tree.SetActiveDocument(path);
+
     /// <summary>Reveal and select <paramref name="path"/> in the tree, returning to All notes if it's outside the scope.</summary>
     public void SelectPath(string path)
     {

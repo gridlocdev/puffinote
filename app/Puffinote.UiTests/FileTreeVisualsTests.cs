@@ -147,6 +147,53 @@ public sealed class FileTreeVisualsTests : IDisposable
         Assert.NotNull(LucideIcons.Get(chevron.IconKey));
     }
 
+    /// <summary>The weight of the row named <paramref name="name"/>'s own name text.</summary>
+    private static FontWeight Weight(Window window, string name, string stem) =>
+        In<TextBlock>(Row(window, name)).Single(t => t.Text == stem).FontWeight;
+
+    [AvaloniaFact]
+    public void Only_the_document_you_are_reading_is_bold_and_folders_never_are()
+    {
+        // Bold used to mean "is a folder", which put the tree's loudest mark on its most numerous rows and left
+        // the one row you actually care about — the note in front of you — indistinguishable from every other file.
+        var (tree, window) = Open();
+        tree.SetActiveDocument(Path("Inbox.md"));
+        Settle(window);
+
+        Assert.Equal(FontWeight.SemiBold, Weight(window, "Inbox.md", "Inbox"));
+        Assert.Equal(FontWeight.Normal, Weight(window, "Projects", "Projects")); // a folder is a folder, not a shout
+        Assert.Equal(FontWeight.Normal, Weight(window, "cover.png", "cover"));
+
+        // The bold follows the tab you switch to; it never smears across two rows.
+        tree.SetActiveDocument(Path("cover.png"));
+        Settle(window);
+
+        Assert.Equal(FontWeight.SemiBold, Weight(window, "cover.png", "cover"));
+        Assert.Equal(FontWeight.Normal, Weight(window, "Inbox.md", "Inbox"));
+
+        // Close the last tab and nothing is being read, so nothing is bold.
+        tree.SetActiveDocument(null);
+        Settle(window);
+
+        Assert.Equal(FontWeight.Normal, Weight(window, "cover.png", "cover"));
+    }
+
+    [AvaloniaFact]
+    public void Selecting_a_row_is_not_the_same_as_opening_it_and_only_one_of_them_is_bold()
+    {
+        // Two different questions get two different marks: the accent bar says "Rename/Delete will act on this",
+        // weight says "this is what you are reading". ⌘-clicking a note to rename it must not claim to have
+        // opened it — and the note you *are* in must stay bold while you do.
+        var (tree, window) = Open();
+        tree.SetActiveDocument(Path("Inbox.md"));
+        tree.SelectPath(Path("cover.png"));
+        Settle(window);
+
+        Assert.Equal(Path("cover.png"), tree.SelectedNode?.Path);
+        Assert.Equal(FontWeight.Normal, Weight(window, "cover.png", "cover")); // selected, but not open
+        Assert.Equal(FontWeight.SemiBold, Weight(window, "Inbox.md", "Inbox")); // open, though not selected
+    }
+
     [AvaloniaFact]
     public void The_branch_the_selection_sits_in_is_traced_in_the_accent()
     {
