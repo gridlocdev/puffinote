@@ -84,7 +84,7 @@ dotnet test                                          # all tests
 dotnet test Cellestra.Core.Tests               # fast, no UI
 dotnet test Cellestra.Cli.Tests                # end-to-end CLI, in-process
 dotnet test Cellestra.UiTests                  # headless Avalonia (xUnit v3) — see the drawing-backend gotcha below
-./build/package-mac.sh                                # notarized .app bundle
+make -C ../.. cellestra-publish-app                  # notarized .app bundle
 ```
 
 **Definition of done for any task:** the code is formatted (`dotnet format`), `dotnet build` is clean, `dotnet test` is green, and if you touched serialization, the `.ods` round-trip *and* unknown-content-preservation tests pass. "Clean" means **zero** warnings — `TreatWarningsAsErrors=true` is set repo-wide, so any warning fails the build, analyzer and code-style ones included (only `IDE0060`, unused parameter, is exempt). Touching `Cellestra.Editor` or `shared/` means Puffinote is affected too — build `app/Puffinote.slnx`, or just `make check` from the root.

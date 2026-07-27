@@ -89,6 +89,19 @@ dotnet run --project Typage.Desktop           # launch the app
 dotnet run --project Typage.Cli -- html notes.md -o notes.html
 ```
 
+## Shipping
+
+From the repo root:
+
+```bash
+make typage-publish             # CLI + editor, self-contained → artifacts/typage/<rid>/
+make typage-install             # the `typage` CLI onto PATH
+make typage-install-app         # Typage.app → /Applications (macOS only)
+```
+
+`Typage.app` owns the `.md` association (`Typage.Desktop/Info.plist`), so double-clicking a Markdown
+file opens it here — the desktop shell opens the path it is launched with.
+
 ## What's built, and what's not
 
 The **engine is real and well-tested** — the document model, grapheme navigation, undo/redo, the

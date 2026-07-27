@@ -26,3 +26,16 @@ dotnet build   Puffinote.slnx
 dotnet run --project Puffinote.Desktop -- <notebook-folder>   # open a notebook (macOS-first; see AGENTS.md)
 dotnet test    Puffinote.slnx                              # Puffinote.Tests (pure) + Puffinote.UiTests (headless)
 ```
+
+## Shipping
+
+From the repo root:
+
+```bash
+make puffinote-publish          # CLI + shell, self-contained → artifacts/puffinote/<rid>/
+make puffinote-install          # the `puffinote` CLI onto PATH
+make puffinote-install-app      # Puffinote.app → /Applications (macOS only)
+```
+
+The bundle declares itself a handler for *folders*, not for `.md`/`.ods` — Puffinote opens a notebook
+(see `Puffinote.Desktop/Info.plist`), and the file associations stay with the standalone editors.

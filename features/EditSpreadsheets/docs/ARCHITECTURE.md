@@ -330,8 +330,6 @@ features/EditSpreadsheets/          # the spreadsheet-editor feature (the whole 
 │   │
 │   └── Cellestra.Benchmarks/             # BenchmarkDotNet: recalc & I/O targets (PRD §3)
 │
-├── build/ (package-mac.sh)               # macOS .app bundle + notarization
-│
 └── docs/ (PRD.md, ARCHITECTURE.md)
 ```
 
@@ -345,7 +343,7 @@ features/EditSpreadsheets/          # the spreadsheet-editor feature (the whole 
 > Both test projects are **xUnit v3**. Avalonia's headless integration gained v3 support in Avalonia 12, so staying on 12 keeps the test stack consistent.
 
 ## 14. Build & packaging
-`dotnet run` for development. `build/package-mac.sh` produces a notarized macOS `.app` (bundle id `com.cellestra.Cellestra`), registers the `.ods` association via `Info.plist`, and signs/notarizes with Apple tooling so it opens files on double-click without warnings.
+`dotnet run` for development. `make cellestra-publish-app` (the repo-root `build/package-mac.sh`, shared by all three family apps) produces a notarized macOS `.app` (bundle id `com.cellestra.Cellestra`), registers the `.ods` association via `Cellestra.Desktop/Info.plist`, and signs/notarizes with Apple tooling so it opens files on double-click without warnings.
 
 ## 15. Things that will genuinely evolve
 - The function library (grows over time).

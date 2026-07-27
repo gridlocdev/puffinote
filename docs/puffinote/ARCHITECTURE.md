@@ -310,7 +310,6 @@ app/                                     # the composite product
 │
 ├── Puffinote.Cli.Tests/                 # end-to-end CLI, in-process (routing + notebook cmds)
 │
-├── build/ (package-mac.sh)              # macOS .app bundle + notarization
 └── docs/ (PRD.md, ARCHITECTURE.md)      # ← this file
 ```
 

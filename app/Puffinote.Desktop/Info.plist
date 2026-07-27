@@ -1,0 +1,61 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!-- macOS bundle metadata. CFBundleName is what the menu bar shows next to the Apple menu
+     (the bold application menu), so a packaged Puffinote.app reads "Puffinote" rather than the
+     process name. Assembled into Puffinote.app/Contents/Info.plist by build/package-mac.sh.
+
+     Puffinote opens a *notebook* — a folder — not a single document: App.cs takes args[0] only
+     when it is a directory (PRD §5). So the bundle declares public.folder rather than .md/.ods;
+     claiming those extensions would put Puffinote in "Open With" for files it would silently
+     ignore on launch. Rank is Alternate because Finder owns folders — this only adds Puffinote
+     to a folder's Open With menu. The .md/.ods associations belong to the standalone editors
+     (Typage.Desktop/Info.plist, Cellestra.Desktop/Info.plist), which keeps golden rule #1's
+     one-way layering true of the shipped bundles too: removing Puffinote changes nothing
+     about how a .md or .ods file opens. -->
+<plist version="1.0">
+<dict>
+    <key>CFBundleName</key>
+    <string>Puffinote</string>
+    <key>CFBundleDisplayName</key>
+    <string>Puffinote</string>
+    <key>CFBundleIdentifier</key>
+    <string>com.puffinote.Puffinote</string>
+    <key>CFBundleExecutable</key>
+    <string>Puffinote</string>
+    <key>CFBundlePackageType</key>
+    <string>APPL</string>
+    <key>CFBundleInfoDictionaryVersion</key>
+    <string>6.0</string>
+    <key>CFBundleShortVersionString</key>
+    <string>1.0.0</string>
+    <key>CFBundleVersion</key>
+    <string>1</string>
+    <key>CFBundleIconFile</key>
+    <string>Puffinote</string>
+    <key>LSMinimumSystemVersion</key>
+    <string>11.0</string>
+    <key>LSApplicationCategoryType</key>
+    <string>public.app-category.productivity</string>
+    <key>NSHighResolutionCapable</key>
+    <true/>
+    <key>NSPrincipalClass</key>
+    <string>NSApplication</string>
+    <key>NSRequiresAquaSystemAppearance</key>
+    <false/>
+    <key>CFBundleDocumentTypes</key>
+    <array>
+        <dict>
+            <key>CFBundleTypeName</key>
+            <string>Puffinote Notebook</string>
+            <key>CFBundleTypeRole</key>
+            <string>Editor</string>
+            <key>LSHandlerRank</key>
+            <string>Alternate</string>
+            <key>LSItemContentTypes</key>
+            <array>
+                <string>public.folder</string>
+            </array>
+        </dict>
+    </array>
+</dict>
+</plist>

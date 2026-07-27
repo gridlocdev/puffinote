@@ -14,6 +14,8 @@
 #   make test-filter FILTER=SomeTest AREA=typage   run a subset while iterating
 #   make publish          self-contained Release builds of all three apps into artifacts/
 #   make install          put the three CLIs (puffinote, typage, cellestra) on PATH
+#   make publish-app      macOS .app bundles for all three apps (macOS only)
+#   make install-app      ...and copy them into /Applications
 #
 # Warnings are errors here (TreatWarningsAsErrors=true), so "build" means "no warnings".
 
@@ -62,6 +64,11 @@ PUBLISH_CLI_FLAGS     := -c $(CONFIG) -r $(RID) --self-contained true \
                          -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true
 PUBLISH_DESKTOP_FLAGS := -c $(CONFIG) -r $(RID) --self-contained true
 
+# Bundling a desktop app as a macOS .app is one script shared by all three apps — it owns the
+# bundle layout, code-signing, and notarization; the Makefile only passes the knobs through.
+# Each app supplies its own bundle metadata in <App>.Desktop/Info.plist.
+PACKAGE_MAC := build/package-mac.sh
+
 .DEFAULT_GOAL := help
 
 # ==============================================================================
@@ -100,6 +107,12 @@ install: puffinote-install typage-install cellestra-install ## Install every CLI
 
 .PHONY: uninstall
 uninstall: puffinote-uninstall typage-uninstall cellestra-uninstall ## Remove every installed CLI from PREFIX/bin
+
+.PHONY: publish-app
+publish-app: puffinote-publish-app typage-publish-app cellestra-publish-app ## Build every macOS .app bundle (macOS only)
+
+.PHONY: install-app
+install-app: puffinote-install-app typage-install-app cellestra-install-app ## Install every macOS .app into APPS_DIR (macOS only)
 
 # ==============================================================================
 # Puffinote — the composite shell (app/)
@@ -148,11 +161,22 @@ puffinote-publish-cli: ## Publish the `puffinote` CLI (single self-contained fil
 puffinote-publish-desktop: ## Publish the Puffinote desktop shell (self-contained)
 	$(DOTNET) publish $(PUFFINOTE_DESKTOP) $(PUBLISH_DESKTOP_FLAGS) -o $(PUFFINOTE_OUT)/desktop
 
+.PHONY: puffinote-publish-app
+puffinote-publish-app: ## Build Puffinote.app (macOS only)
+	CONFIG=$(CONFIG) RID=$(RID) OUT=$(PUFFINOTE_OUT) $(PACKAGE_MAC) puffinote
+
 .PHONY: puffinote-install
 puffinote-install: puffinote-publish-cli ## Install the `puffinote` CLI into PREFIX/bin (default ~/.local/bin)
 	@mkdir -p $(BINDIR)
 	install -m 0755 $(PUFFINOTE_OUT)/cli/puffinote $(BINDIR)/puffinote
 	@echo "installed $(BINDIR)/puffinote — make sure $(BINDIR) is on your PATH"
+
+.PHONY: puffinote-install-app
+puffinote-install-app: puffinote-publish-app ## Install Puffinote.app into APPS_DIR (default /Applications, macOS only)
+	@mkdir -p "$(APPS_DIR)"
+	rm -rf "$(APPS_DIR)/Puffinote.app"
+	cp -R $(PUFFINOTE_OUT)/Puffinote.app "$(APPS_DIR)/Puffinote.app"
+	@echo "installed $(APPS_DIR)/Puffinote.app"
 
 .PHONY: puffinote-uninstall
 puffinote-uninstall: ## Remove the installed `puffinote` CLI from PREFIX/bin
@@ -205,11 +229,22 @@ typage-publish-cli: ## Publish the `typage` CLI (single self-contained file)
 typage-publish-desktop: ## Publish the Typage desktop editor (self-contained)
 	$(DOTNET) publish $(TYPAGE_DESKTOP) $(PUBLISH_DESKTOP_FLAGS) -o $(TYPAGE_OUT)/desktop
 
+.PHONY: typage-publish-app
+typage-publish-app: ## Build Typage.app (macOS only)
+	CONFIG=$(CONFIG) RID=$(RID) OUT=$(TYPAGE_OUT) $(PACKAGE_MAC) typage
+
 .PHONY: typage-install
 typage-install: typage-publish-cli ## Install the `typage` CLI into PREFIX/bin (default ~/.local/bin)
 	@mkdir -p $(BINDIR)
 	install -m 0755 $(TYPAGE_OUT)/cli/typage $(BINDIR)/typage
 	@echo "installed $(BINDIR)/typage — make sure $(BINDIR) is on your PATH"
+
+.PHONY: typage-install-app
+typage-install-app: typage-publish-app ## Install Typage.app into APPS_DIR (default /Applications, macOS only)
+	@mkdir -p "$(APPS_DIR)"
+	rm -rf "$(APPS_DIR)/Typage.app"
+	cp -R $(TYPAGE_OUT)/Typage.app "$(APPS_DIR)/Typage.app"
+	@echo "installed $(APPS_DIR)/Typage.app"
 
 .PHONY: typage-uninstall
 typage-uninstall: ## Remove the installed `typage` CLI from PREFIX/bin
@@ -262,12 +297,9 @@ cellestra-publish-cli: ## Publish the `cellestra` CLI (single self-contained fil
 cellestra-publish-desktop: ## Publish the Cellestra desktop editor (self-contained)
 	$(DOTNET) publish $(CELLESTRA_DESKTOP) $(PUBLISH_DESKTOP_FLAGS) -o $(CELLESTRA_OUT)/desktop
 
-# Cellestra is the one area with macOS bundle metadata (Info.plist) and a packaging script, so it
-# is the only app that can currently be installed as a .app. build/package-mac.sh owns the bundle
-# layout, signing, and notarization — call it rather than reimplementing any of that here.
 .PHONY: cellestra-publish-app
-cellestra-publish-app: ## Build Cellestra.app via build/package-mac.sh (macOS only)
-	CONFIG=$(CONFIG) RID=$(RID) features/EditSpreadsheets/build/package-mac.sh
+cellestra-publish-app: ## Build Cellestra.app (macOS only)
+	CONFIG=$(CONFIG) RID=$(RID) OUT=$(CELLESTRA_OUT) $(PACKAGE_MAC) cellestra
 
 .PHONY: cellestra-install
 cellestra-install: cellestra-publish-cli ## Install the `cellestra` CLI into PREFIX/bin (default ~/.local/bin)
@@ -277,8 +309,9 @@ cellestra-install: cellestra-publish-cli ## Install the `cellestra` CLI into PRE
 
 .PHONY: cellestra-install-app
 cellestra-install-app: cellestra-publish-app ## Install Cellestra.app into APPS_DIR (default /Applications, macOS only)
+	@mkdir -p "$(APPS_DIR)"
 	rm -rf "$(APPS_DIR)/Cellestra.app"
-	cp -R features/EditSpreadsheets/artifacts/Cellestra.app "$(APPS_DIR)/Cellestra.app"
+	cp -R $(CELLESTRA_OUT)/Cellestra.app "$(APPS_DIR)/Cellestra.app"
 	@echo "installed $(APPS_DIR)/Cellestra.app"
 
 .PHONY: cellestra-uninstall

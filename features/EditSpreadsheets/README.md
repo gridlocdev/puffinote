@@ -130,10 +130,13 @@ dotnet run -c Release --project Cellestra.Benchmarks -- --filter '*Recalc*'
 ## Building a macOS app bundle
 
 ```bash
-./build/package-mac.sh
+make cellestra-publish-app        # from the repo root — artifacts/cellestra/<rid>/Cellestra.app
+make cellestra-install-app        # ...and copy it into /Applications
 ```
 
-This produces a notarized `.app` you can launch without security warnings. (See [ARCHITECTURE.md](docs/ARCHITECTURE.md#13-build--packaging).)
+This produces a notarized `.app` you can launch without security warnings. The packaging script is
+shared by all three family apps (`build/package-mac.sh cellestra` runs it directly); Cellestra's own
+bundle metadata lives in `Cellestra.Desktop/Info.plist`. (See [ARCHITECTURE.md](docs/ARCHITECTURE.md#13-build--packaging).)
 
 ## Project layout (quick map)
 

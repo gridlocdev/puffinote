@@ -22,7 +22,8 @@ shared/                       Cross-cutting libraries used by the shell and both
                                 Puffinote.Components (Avalonia: theming, icons, overlays, shell chrome)
                                 Puffinote.Components.Core (non-UI: CLI helpers — safe for CLI projects)
 docs/                         PRD / ARCHITECTURE (per-area) + proposals/ (repo-wide)
-Makefile                      Build/test/format entry points for every area — prefer these
+build/                        package-mac.sh — the shared macOS .app bundler for all three apps
+Makefile                      Build/test/format/ship entry points for every area — prefer these
 Directory.Build.props         Shared MSBuild settings (framework, nullable, analyzers, OS-specific bin/obj)
 Directory.Packages.props      Central NuGet version pins — the single source of truth for versions
 ```
@@ -60,6 +61,18 @@ make check                                # format-verify + build + test, all ar
 ```
 
 Each target is just `dotnet build|test|format <area>.slnx` (e.g. `features/EditMarkdown/Typage.slnx`) — **if `make` isn't on `PATH`, run those directly**; they're equivalent, and some agent sandboxes aren't the devcontainer. Likewise, if `dotnet` isn't on `PATH`, `export PATH="$PATH:/root/.dotnet"` (and `libicu` must be installed).
+
+**Shipping.** The same front door publishes and installs each app; all of it is macOS-first, and only the
+`.app` targets require a Mac (the container can still publish):
+
+```bash
+make publish                              # CLI + desktop, self-contained Release → artifacts/<app>/<rid>/
+make install                              # the three CLIs onto PATH (PREFIX=~/.local by default)
+make typage-publish-app                   # artifacts/typage/<rid>/Typage.app  (also: make install-app)
+```
+
+Bundle metadata is per app (`<App>.Desktop/Info.plist`); the bundling, signing, and notarization logic is
+shared in `build/package-mac.sh` — extend that script rather than adding a per-area copy.
 
 **Definition of done:** `make check` passes for every area you touched — i.e. formatting verified, solution builds clean, tests green. Warnings **are** errors here (`TreatWarningsAsErrors=true`), so a warning fails the build — "builds" already means "no warnings," this is not advisory. Formatting is a gate too: `make format-check` runs `dotnet format --verify-no-changes`, and a non-zero exit is a failure to fix, not a suggestion.
 
