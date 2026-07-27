@@ -12,6 +12,8 @@
 #   make check            format-verify + build + test all areas (CI gate / definition of done)
 #   make typage-test      one area's suite (also: puffinote-*, cellestra-*)
 #   make test-filter FILTER=SomeTest AREA=typage   run a subset while iterating
+#   make publish          self-contained Release builds of all three apps into artifacts/
+#   make install          put the three CLIs (puffinote, typage, cellestra) on PATH
 #
 # Warnings are errors here (TreatWarningsAsErrors=true), so "build" means "no warnings".
 
@@ -31,6 +33,34 @@ TYPAGE_DESKTOP    := features/EditMarkdown/Typage.Desktop
 CELLESTRA_DESKTOP := features/EditSpreadsheets/Cellestra.Desktop
 
 DOTNET := dotnet
+
+# ---- Packaging: where publish writes, and where install puts things -----------
+# Override any of these on the command line, e.g.
+#   make cellestra-publish RID=osx-x64 CONFIG=Debug
+#   make install PREFIX=/usr/local
+CONFIG    ?= Release
+ARTIFACTS ?= artifacts
+PREFIX    ?= $(HOME)/.local
+BINDIR    ?= $(PREFIX)/bin
+APPS_DIR  ?= /Applications
+
+# Runtime identifier for the host, unless one is passed in. ($(OS) reports "Unix" for both
+# macOS and Linux, so ask uname — same reasoning as BuildOSToken in Directory.Build.props.)
+RID_OS   := $(if $(filter Darwin,$(shell uname -s)),osx,linux)
+RID_ARCH := $(if $(filter arm64 aarch64,$(shell uname -m)),arm64,x64)
+RID      ?= $(RID_OS)-$(RID_ARCH)
+
+PUFFINOTE_OUT := $(ARTIFACTS)/puffinote/$(RID)
+TYPAGE_OUT    := $(ARTIFACTS)/typage/$(RID)
+CELLESTRA_OUT := $(ARTIFACTS)/cellestra/$(RID)
+
+# Both surfaces publish self-contained, so an artifact runs on a machine with no .NET installed.
+# The CLI additionally publishes as a single self-extracting file (native libraries included) so
+# installing it is one copy onto PATH; the desktop apps keep their Avalonia/Skia natives beside
+# the executable, which is what a macOS .app bundle expects (see build/package-mac.sh).
+PUBLISH_CLI_FLAGS     := -c $(CONFIG) -r $(RID) --self-contained true \
+                         -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true
+PUBLISH_DESKTOP_FLAGS := -c $(CONFIG) -r $(RID) --self-contained true
 
 .DEFAULT_GOAL := help
 
@@ -61,6 +91,15 @@ clean: puffinote-clean typage-clean cellestra-clean ## Remove build artifacts fo
 
 .PHONY: check
 check: format-check build test ## Definition of done: formatting verified, all areas build clean and green
+
+.PHONY: publish
+publish: puffinote-publish typage-publish cellestra-publish ## Publish every app (CLI + desktop, self-contained) to artifacts/
+
+.PHONY: install
+install: puffinote-install typage-install cellestra-install ## Install every CLI into PREFIX/bin (default ~/.local/bin)
+
+.PHONY: uninstall
+uninstall: puffinote-uninstall typage-uninstall cellestra-uninstall ## Remove every installed CLI from PREFIX/bin
 
 # ==============================================================================
 # Puffinote — the composite shell (app/)
@@ -98,6 +137,27 @@ puffinote-run: ## Run the Puffinote desktop shell (native host — GUI won't lau
 puffinote-run-cli: ## Run the Puffinote CLI (pass ARGS="info", ARGS='search "todo"', etc.)
 	$(DOTNET) run --project $(PUFFINOTE_CLI) -- $(ARGS)
 
+.PHONY: puffinote-publish
+puffinote-publish: puffinote-publish-cli puffinote-publish-desktop ## Publish the Puffinote CLI + shell to artifacts/puffinote/<rid>/
+
+.PHONY: puffinote-publish-cli
+puffinote-publish-cli: ## Publish the `puffinote` CLI (single self-contained file)
+	$(DOTNET) publish $(PUFFINOTE_CLI) $(PUBLISH_CLI_FLAGS) -o $(PUFFINOTE_OUT)/cli
+
+.PHONY: puffinote-publish-desktop
+puffinote-publish-desktop: ## Publish the Puffinote desktop shell (self-contained)
+	$(DOTNET) publish $(PUFFINOTE_DESKTOP) $(PUBLISH_DESKTOP_FLAGS) -o $(PUFFINOTE_OUT)/desktop
+
+.PHONY: puffinote-install
+puffinote-install: puffinote-publish-cli ## Install the `puffinote` CLI into PREFIX/bin (default ~/.local/bin)
+	@mkdir -p $(BINDIR)
+	install -m 0755 $(PUFFINOTE_OUT)/cli/puffinote $(BINDIR)/puffinote
+	@echo "installed $(BINDIR)/puffinote — make sure $(BINDIR) is on your PATH"
+
+.PHONY: puffinote-uninstall
+puffinote-uninstall: ## Remove the installed `puffinote` CLI from PREFIX/bin
+	rm -f $(BINDIR)/puffinote
+
 # ==============================================================================
 # Typage — the Markdown editor (features/EditMarkdown/)
 # ==============================================================================
@@ -133,6 +193,27 @@ typage-run: ## Run the Typage desktop editor (native host — GUI won't launch i
 .PHONY: typage-run-cli
 typage-run-cli: ## Run the Typage CLI (pass ARGS="--help", etc.)
 	$(DOTNET) run --project $(TYPAGE_CLI) -- $(ARGS)
+
+.PHONY: typage-publish
+typage-publish: typage-publish-cli typage-publish-desktop ## Publish the Typage CLI + editor to artifacts/typage/<rid>/
+
+.PHONY: typage-publish-cli
+typage-publish-cli: ## Publish the `typage` CLI (single self-contained file)
+	$(DOTNET) publish $(TYPAGE_CLI) $(PUBLISH_CLI_FLAGS) -o $(TYPAGE_OUT)/cli
+
+.PHONY: typage-publish-desktop
+typage-publish-desktop: ## Publish the Typage desktop editor (self-contained)
+	$(DOTNET) publish $(TYPAGE_DESKTOP) $(PUBLISH_DESKTOP_FLAGS) -o $(TYPAGE_OUT)/desktop
+
+.PHONY: typage-install
+typage-install: typage-publish-cli ## Install the `typage` CLI into PREFIX/bin (default ~/.local/bin)
+	@mkdir -p $(BINDIR)
+	install -m 0755 $(TYPAGE_OUT)/cli/typage $(BINDIR)/typage
+	@echo "installed $(BINDIR)/typage — make sure $(BINDIR) is on your PATH"
+
+.PHONY: typage-uninstall
+typage-uninstall: ## Remove the installed `typage` CLI from PREFIX/bin
+	rm -f $(BINDIR)/typage
 
 # ==============================================================================
 # Cellestra — the spreadsheet editor (features/EditSpreadsheets/)
@@ -170,6 +251,40 @@ cellestra-run: ## Run the Cellestra desktop editor (native host — GUI won't la
 cellestra-run-cli: ## Run the Cellestra CLI (pass ARGS="--help", etc.)
 	$(DOTNET) run --project $(CELLESTRA_CLI) -- $(ARGS)
 
+.PHONY: cellestra-publish
+cellestra-publish: cellestra-publish-cli cellestra-publish-desktop ## Publish the Cellestra CLI + editor to artifacts/cellestra/<rid>/
+
+.PHONY: cellestra-publish-cli
+cellestra-publish-cli: ## Publish the `cellestra` CLI (single self-contained file)
+	$(DOTNET) publish $(CELLESTRA_CLI) $(PUBLISH_CLI_FLAGS) -o $(CELLESTRA_OUT)/cli
+
+.PHONY: cellestra-publish-desktop
+cellestra-publish-desktop: ## Publish the Cellestra desktop editor (self-contained)
+	$(DOTNET) publish $(CELLESTRA_DESKTOP) $(PUBLISH_DESKTOP_FLAGS) -o $(CELLESTRA_OUT)/desktop
+
+# Cellestra is the one area with macOS bundle metadata (Info.plist) and a packaging script, so it
+# is the only app that can currently be installed as a .app. build/package-mac.sh owns the bundle
+# layout, signing, and notarization — call it rather than reimplementing any of that here.
+.PHONY: cellestra-publish-app
+cellestra-publish-app: ## Build Cellestra.app via build/package-mac.sh (macOS only)
+	CONFIG=$(CONFIG) RID=$(RID) features/EditSpreadsheets/build/package-mac.sh
+
+.PHONY: cellestra-install
+cellestra-install: cellestra-publish-cli ## Install the `cellestra` CLI into PREFIX/bin (default ~/.local/bin)
+	@mkdir -p $(BINDIR)
+	install -m 0755 $(CELLESTRA_OUT)/cli/cellestra $(BINDIR)/cellestra
+	@echo "installed $(BINDIR)/cellestra — make sure $(BINDIR) is on your PATH"
+
+.PHONY: cellestra-install-app
+cellestra-install-app: cellestra-publish-app ## Install Cellestra.app into APPS_DIR (default /Applications, macOS only)
+	rm -rf "$(APPS_DIR)/Cellestra.app"
+	cp -R features/EditSpreadsheets/artifacts/Cellestra.app "$(APPS_DIR)/Cellestra.app"
+	@echo "installed $(APPS_DIR)/Cellestra.app"
+
+.PHONY: cellestra-uninstall
+cellestra-uninstall: ## Remove the installed `cellestra` CLI from PREFIX/bin
+	rm -f $(BINDIR)/cellestra
+
 # ==============================================================================
 # Iterating on a single test / subset (prefer this while developing)
 #   make test-filter AREA=typage FILTER=SomeTest
@@ -191,4 +306,4 @@ test-filter: ## Run a filtered subset: make test-filter AREA=typage FILTER=SomeT
 help: ## Show this help
 	@grep -hE '^[a-zA-Z0-9_-]+:.*?## ' $(MAKEFILE_LIST) \
 		| sort \
-		| awk 'BEGIN {FS = ":.*?## "} {printf "  \033[36m%-24s\033[0m %s\n", $$1, $$2}'
+		| awk 'BEGIN {FS = ":.*?## "} {printf "  \033[36m%-26s\033[0m %s\n", $$1, $$2}'
