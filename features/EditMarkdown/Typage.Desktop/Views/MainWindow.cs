@@ -47,7 +47,7 @@ public partial class MainWindow : Window
     private bool _conflictPromptOpen;
 
     // Crash recovery (PRD §9.4): autosave the dirty buffer to a sidecar snapshot; clear it on a clean save.
-    private readonly RecoveryService _recovery = new();
+    private readonly RecoveryService _recovery;
     private DispatcherTimer? _autosaveTimer;
     private DispatcherTimer? _statsTimer; // debounces the whole-document word/char scan while typing
     private bool _recoveryChecked;
@@ -93,8 +93,20 @@ public partial class MainWindow : Window
     };
 
     public MainWindow(SettingsService settings)
+        : this(settings, new RecoveryService())
+    {
+    }
+
+    /// <summary>
+    /// Test seam: point crash recovery at a scratch directory instead of the user's profile. A snapshot
+    /// left there by any unclean shutdown — the app's own, ever — otherwise greets every headless window
+    /// with the "Recover unsaved changes?" modal, which disables every command and traps Tab. Tests that
+    /// never mention recovery then fail on a developer's machine and pass on fresh CI.
+    /// </summary>
+    internal MainWindow(SettingsService settings, RecoveryService recovery)
     {
         _settings = settings;
+        _recovery = recovery;
         Width = 900;
         Height = 680;
         Title = "Typage";

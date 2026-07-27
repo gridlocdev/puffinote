@@ -5,7 +5,6 @@ using Avalonia.Input;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
 using Puffinote.Components.Overlays;
-using Typage.Desktop.Services;
 using Typage.Desktop.Views;
 using Xunit;
 
@@ -20,7 +19,7 @@ public class ModalFocusTrapTests
     [AvaloniaFact]
     public void Tab_is_trapped_within_a_confirm_modal_and_esc_cancels()
     {
-        var window = new MainWindow(new SettingsService());
+        var window = TestShell.NewWindow();
         window.Show();
 
         var host = window.GetVisualDescendants().OfType<OverlayHost>().First();
@@ -52,7 +51,7 @@ public class ModalFocusTrapTests
     [AvaloniaFact]
     public void Command_shortcuts_are_suppressed_while_a_modal_is_open()
     {
-        var window = new MainWindow(new SettingsService());
+        var window = TestShell.NewWindow();
         window.Show();
 
         // Baseline: at least one command shortcut is runnable.
@@ -75,7 +74,7 @@ public class ModalFocusTrapTests
     [AvaloniaFact]
     public void Tab_is_trapped_within_the_command_palette()
     {
-        var window = new MainWindow(new SettingsService());
+        var window = TestShell.NewWindow();
         window.Show();
 
         var palette = window.GetVisualDescendants().OfType<CommandPalette>().First();

@@ -3,8 +3,6 @@ using Avalonia.Input;
 using Avalonia.Media;
 using Typage.Control.Controls;
 using Typage.Control.Rendering;
-using Typage.Desktop.Services;
-using Typage.Desktop.Views;
 using Xunit;
 
 namespace Typage.UiTests;
@@ -18,9 +16,9 @@ public class StrikethroughTests
     [AvaloniaFact]
     public void Shortcut_IsBoundAtTheWindow()
     {
-        var window = new MainWindow(new SettingsService());
+        var window = TestShell.NewWindow();
         Assert.Contains(window.KeyBindings, b =>
-            b.Gesture is { } g && g.Key == Key.X && g.KeyModifiers == (KeyModifiers.Control | KeyModifiers.Shift));
+            b.Gesture is { } g && g.Key == Key.X && g.KeyModifiers == (TestShell.Command | KeyModifiers.Shift));
     }
 
     [AvaloniaFact]

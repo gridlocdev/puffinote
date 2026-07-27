@@ -31,14 +31,18 @@ public class ImageStagingTests
     [Fact]
     public void StagedReferences_FindsOnlyStagedImageUrls_WithTheirSpans()
     {
+        // Embed the URL the way the shell does — encoded. A raw staged path only survives as a Markdown
+        // destination while the staging root has no spaces in it, which is true of the Linux CI's
+        // ~/.local/share and false of macOS's ~/Library/Application Support.
         var url = Staged("id__pic.png");
-        var text = $"intro\n![a](images/local.png) and ![b]({url}) end";
+        var encoded = ImageStaging.EncodeUrl(url);
+        var text = $"intro\n![a](images/local.png) and ![b]({encoded}) end";
 
         var refs = ImageStaging.StagedReferences(text);
         var r = Assert.Single(refs);
-        Assert.Equal(url, r.Url);
+        Assert.Equal(url, r.Url); // reported as the decoded path
         // The reported span is exactly the URL inside the parentheses.
-        Assert.Equal(url, text.Substring(r.Start, r.Length));
+        Assert.Equal(encoded, text.Substring(r.Start, r.Length));
     }
 
     [Fact]
@@ -91,7 +95,7 @@ public class ImageStagingTests
     {
         var a = Staged("1__a.png");
         var b = Staged("2__b.png");
-        var text = $"![a]({a}) ![b]({b})";
+        var text = $"![a]({ImageStaging.EncodeUrl(a)}) ![b]({ImageStaging.EncodeUrl(b)})"; // as the shell embeds them
         var refs = ImageStaging.StagedReferences(text);
 
         var edits = refs.Select(r => (r.Start, r.Length, "images/" + ImageStaging.OriginalName(r.Url)));
