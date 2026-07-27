@@ -2,7 +2,6 @@ using Avalonia.Headless.XUnit;
 using Typage.Control.Controls;
 using Typage.Control.Views;
 using Typage.Desktop.Services;
-using Typage.Desktop.Views;
 using Typage.Engine.Markdown;
 using Xunit;
 
@@ -103,7 +102,7 @@ public class EditorSmokeTests
     [AvaloniaFact]
     public void MainWindow_Constructs_AndReportsCleanState()
     {
-        var window = new MainWindow(new SettingsService());
+        var window = TestShell.NewWindow();
         window.EditorView.Text = "# Title\n\nSome words here.";
         Assert.False(window.EditorView.IsDirty);
         Assert.True(window.EditorView.Stats.Words >= 4);
@@ -113,10 +112,10 @@ public class EditorSmokeTests
     [AvaloniaFact]
     public void MainWindow_AppliesSettings_WithoutThrowing()
     {
-        var settings = new SettingsService();
+        var settings = TestShell.NewSettings();
         settings.Settings.Theme = AppTheme.Light;
         settings.Settings.TabWidth = 2;
-        var window = new MainWindow(settings);
+        var window = TestShell.NewWindow(settings);
         Assert.Equal(2, window.EditorView.Editor.IndentWidth);
     }
 

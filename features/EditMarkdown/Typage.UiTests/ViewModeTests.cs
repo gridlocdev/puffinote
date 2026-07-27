@@ -1,7 +1,5 @@
 using Avalonia.Headless.XUnit;
 using Typage.Control.Controls;
-using Typage.Desktop.Services;
-using Typage.Desktop.Views;
 using Xunit;
 
 namespace Typage.UiTests;
@@ -32,9 +30,9 @@ public class ViewModeTests
     [AvaloniaFact]
     public void Window_AppliesViewModeDefaultFromSettings()
     {
-        var settings = new SettingsService();
+        var settings = TestShell.NewSettings();
         settings.Settings.View = MarkdownEditor.ViewMode.RawText;
-        var window = new MainWindow(settings);
+        var window = TestShell.NewWindow(settings);
         Assert.Equal(MarkdownEditor.ViewMode.RawText, window.EditorView.Editor.View);
     }
 
@@ -46,9 +44,9 @@ public class ViewModeTests
         // (TestConfigIsolation gives the run one throwaway dir, not one per test). What this test is about is
         // the *change* — that setting a mode reaches both the editor and the settings — so it says where it
         // starts from instead of depending on which test ran before it.
-        var settings = new SettingsService();
+        var settings = TestShell.NewSettings();
         settings.Settings.View = MarkdownEditor.ViewMode.Rich;
-        var window = new MainWindow(settings);
+        var window = TestShell.NewWindow(settings);
         Assert.Equal(MarkdownEditor.ViewMode.Rich, window.EditorView.Editor.View);
 
         window.SetViewModeForTest(MarkdownEditor.ViewMode.RawText);
@@ -59,7 +57,7 @@ public class ViewModeTests
     [AvaloniaFact]
     public void FocusMode_HidesAndRestoresChrome()
     {
-        var window = new MainWindow(new SettingsService());
+        var window = TestShell.NewWindow();
         Assert.True(window.StatusBarVisibleForTest);
         Assert.True(window.ToolbarVisibleForTest);
 

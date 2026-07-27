@@ -5,8 +5,6 @@ using Avalonia.Threading;
 using Avalonia.VisualTree;
 using Puffinote.Components.Overlays;
 using Typage.Control.Views;
-using Typage.Desktop.Services;
-using Typage.Desktop.Views;
 using Xunit;
 
 namespace Typage.UiTests;
@@ -35,7 +33,7 @@ public class LinkDialogFocusTests
 
     private static void AssertDisplayTextIsFocused(LinkDialog dialog, string expectedText)
     {
-        var window = new MainWindow(new SettingsService());
+        var window = TestShell.NewWindow();
         window.Show();
 
         var host = window.GetVisualDescendants().OfType<OverlayHost>().First();

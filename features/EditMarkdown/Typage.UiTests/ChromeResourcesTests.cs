@@ -4,7 +4,6 @@ using Avalonia.Media;
 using Avalonia.Threading;
 using Puffinote.Components.Controls.CommandBar;
 using Typage.Desktop.Services;
-using Typage.Desktop.Views;
 using Xunit;
 
 namespace Typage.UiTests;
@@ -24,7 +23,7 @@ public class ChromeResourcesTests
     [InlineData(AppTheme.HighContrast, 0x0A, 0x0A, 0x0A)]
     public void Command_bar_paints_the_familys_chrome_background(AppTheme theme, int r, int g, int b)
     {
-        var settings = new SettingsService();
+        var settings = TestShell.NewSettings();
         settings.Settings.ShowToolbar = true;
 
         // Pin the appearance. The default is AppTheme.System, which resolves to whatever the host machine
@@ -34,7 +33,7 @@ public class ChromeResourcesTests
         // palettes while it's here.
         settings.Settings.Theme = theme;
 
-        var window = new MainWindow(settings);
+        var window = TestShell.NewWindow(settings);
         window.Show();
         Dispatcher.UIThread.RunJobs();
 
@@ -52,7 +51,7 @@ public class ChromeResourcesTests
     {
         // Same brush instance, not merely the same colour: ApplyChromeColors re-tints it on a theme change,
         // so the two chrome strips can never drift apart (light, dark, or high contrast).
-        var window = new MainWindow(new SettingsService());
+        var window = TestShell.NewWindow();
         window.Show();
         Dispatcher.UIThread.RunJobs();
 

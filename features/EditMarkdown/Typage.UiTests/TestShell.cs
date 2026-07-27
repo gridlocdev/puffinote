@@ -27,10 +27,26 @@ internal static class TestShell
         Shortcut.IsMac ? RawInputModifiers.Meta : RawInputModifiers.Control;
 
     /// <summary>
-    /// A shell window whose crash-recovery store is a scratch path that does not exist, so no recovery
-    /// prompt can open over the test. The directory is only created if something actually autosaves.
+    /// One scratch profile per test run, standing in for the user's app-config directory. Nothing is
+    /// created until something actually writes; the OS clears the temp tree.
+    /// </summary>
+    private static readonly string ProfileRoot =
+        Path.Combine(Path.GetTempPath(), $"typage-uitests-{Guid.NewGuid():N}");
+
+    /// <summary>
+    /// Settings backed by the scratch profile rather than the developer's. Use this wherever a test needs
+    /// to set a preference before opening the window — the shell persists settings as it runs (theme, view
+    /// mode, toolbar), so a real <see cref="SettingsService"/> means the suite rewrites the profile of
+    /// whoever ran it.
+    /// </summary>
+    internal static SettingsService NewSettings() =>
+        new(Path.Combine(ProfileRoot, $"settings-{Guid.NewGuid():N}.json"));
+
+    /// <summary>
+    /// A shell window on the scratch profile: defaulted settings, and a crash-recovery store that starts
+    /// empty, so no "Recover unsaved changes?" prompt can open over the test.
     /// </summary>
     internal static MainWindow NewWindow(SettingsService? settings = null) =>
-        new(settings ?? new SettingsService(),
-            new RecoveryService(Path.Combine(Path.GetTempPath(), $"typage-uitests-{Guid.NewGuid():N}")));
+        new(settings ?? NewSettings(),
+            new RecoveryService(Path.Combine(ProfileRoot, $"recovery-{Guid.NewGuid():N}")));
 }

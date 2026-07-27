@@ -1,5 +1,4 @@
 using Avalonia.Headless.XUnit;
-using Typage.Desktop.Services;
 using Typage.Desktop.Views;
 using Xunit;
 
@@ -26,7 +25,7 @@ public class ExternalChangeTests
         var path = WriteTemp("hello");
         try
         {
-            var window = new MainWindow(new SettingsService());
+            var window = TestShell.NewWindow();
             window.OpenPath(path);
             Assert.Equal(MainWindow.DiskChange.None, window.ClassifyDiskChange("hello"));
         }
@@ -42,7 +41,7 @@ public class ExternalChangeTests
         var path = WriteTemp("hello");
         try
         {
-            var window = new MainWindow(new SettingsService());
+            var window = TestShell.NewWindow();
             window.OpenPath(path);
             Assert.False(window.EditorView.IsDirty);
             Assert.Equal(MainWindow.DiskChange.ReloadClean, window.ClassifyDiskChange("changed on disk"));
@@ -59,7 +58,7 @@ public class ExternalChangeTests
         var path = WriteTemp("hello");
         try
         {
-            var window = new MainWindow(new SettingsService());
+            var window = TestShell.NewWindow();
             window.OpenPath(path);
             window.EditorView.Editor.Buffer.Insert(" local edit"); // make the buffer dirty
             Assert.True(window.EditorView.IsDirty);

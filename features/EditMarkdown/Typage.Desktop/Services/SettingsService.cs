@@ -17,9 +17,15 @@ public sealed class SettingsService
     };
     private readonly string _path;
 
-    public SettingsService()
+    /// <summary>
+    /// Load the settings, from the app-config location by default. Passing a <paramref name="path"/>
+    /// points both load and save somewhere else — the seam tests use to run against a scratch profile
+    /// (as Cellestra's <c>SettingsService</c> already did), so a headless window neither inherits the
+    /// developer's theme and recent files nor writes its own back over them.
+    /// </summary>
+    public SettingsService(string? path = null)
     {
-        _path = SettingsStore.AppConfigPath("Typage", "settings.json");
+        _path = path ?? SettingsStore.AppConfigPath("Typage", "settings.json");
         Settings = SettingsStore.Load(_path, static () => new AppSettings(), Options);
     }
 
