@@ -18,6 +18,14 @@
 #   just publish-app      macOS .app bundles for all three apps (macOS only)
 #   just install-app      ...and copy them into /Applications
 #
+# Every install has an inverse that undoes exactly what it did, and nothing else:
+#   just install ↔ just uninstall            the CLIs in PREFIX/bin
+#   just install-app ↔ just uninstall-app    the .app bundles in APPS_DIR (also withdraws their
+#                                            Launch Services file-type claims)
+# Neither uninstall touches PREFIX/bin itself (it predates us and is on your PATH) or an app's
+# user data in ~/Library/Application Support — removing a tool is not consent to delete documents,
+# settings, or unsaved-work snapshots.
+#
 # Recipe dependencies run in the order written, one at a time — which is required here, because
 # concurrent `dotnet build`/`dotnet test` invocations deadlock on the MSBuild-node locks.
 #
@@ -65,6 +73,11 @@ CELLESTRA_OUT := ARTIFACTS / "cellestra" / RID
 # the executable, which is what a macOS .app bundle expects (see build/package-mac.sh).
 PUBLISH_CLI_FLAGS     := "-c " + CONFIG + " -r " + RID + " --self-contained true -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true"
 PUBLISH_DESKTOP_FLAGS := "-c " + CONFIG + " -r " + RID + " --self-contained true"
+
+# Removing a .app should also withdraw the file-type claims its Info.plist registered (Typage owns
+# .md, Cellestra .ods), so a stale association can't outlive the bundle. Best-effort: the path is
+# macOS-only and uninstall must not fail on a machine without it.
+LSREGISTER := "/System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister"
 
 # Bundling a desktop app as a macOS .app is one script shared by all three apps — it owns the
 # bundle layout, code-signing, and notarization; this file only passes the knobs through.
@@ -130,6 +143,10 @@ publish-app: puffinote-publish-app typage-publish-app cellestra-publish-app
 # Install every macOS .app into APPS_DIR (macOS only)
 [group('all areas')]
 install-app: puffinote-install-app typage-install-app cellestra-install-app
+
+# Remove every macOS .app from APPS_DIR (the inverse of install-app; macOS only)
+[group('all areas')]
+uninstall-app: puffinote-uninstall-app typage-uninstall-app cellestra-uninstall-app
 
 # ==============================================================================
 # Puffinote — the composite shell (app/)
@@ -213,6 +230,14 @@ puffinote-install-app: puffinote-publish-app
 [group('puffinote')]
 puffinote-uninstall:
     rm -f "{{ BINDIR }}/puffinote"
+    @echo "removed {{ BINDIR }}/puffinote"
+
+# Remove Puffinote.app from APPS_DIR (the inverse of puffinote-install-app; macOS only)
+[group('puffinote')]
+puffinote-uninstall-app:
+    @{{ LSREGISTER }} -u "{{ APPS_DIR }}/Puffinote.app" >/dev/null 2>&1 || true
+    rm -rf "{{ APPS_DIR }}/Puffinote.app"
+    @echo "removed {{ APPS_DIR }}/Puffinote.app"
 
 # ==============================================================================
 # Typage — the Markdown editor (features/EditMarkdown/)
@@ -296,6 +321,14 @@ typage-install-app: typage-publish-app
 [group('typage')]
 typage-uninstall:
     rm -f "{{ BINDIR }}/typage"
+    @echo "removed {{ BINDIR }}/typage"
+
+# Remove Typage.app from APPS_DIR (the inverse of typage-install-app; macOS only)
+[group('typage')]
+typage-uninstall-app:
+    @{{ LSREGISTER }} -u "{{ APPS_DIR }}/Typage.app" >/dev/null 2>&1 || true
+    rm -rf "{{ APPS_DIR }}/Typage.app"
+    @echo "removed {{ APPS_DIR }}/Typage.app"
 
 # ==============================================================================
 # Cellestra — the spreadsheet editor (features/EditSpreadsheets/)
@@ -379,6 +412,14 @@ cellestra-install-app: cellestra-publish-app
 [group('cellestra')]
 cellestra-uninstall:
     rm -f "{{ BINDIR }}/cellestra"
+    @echo "removed {{ BINDIR }}/cellestra"
+
+# Remove Cellestra.app from APPS_DIR (the inverse of cellestra-install-app; macOS only)
+[group('cellestra')]
+cellestra-uninstall-app:
+    @{{ LSREGISTER }} -u "{{ APPS_DIR }}/Cellestra.app" >/dev/null 2>&1 || true
+    rm -rf "{{ APPS_DIR }}/Cellestra.app"
+    @echo "removed {{ APPS_DIR }}/Cellestra.app"
 
 # ==============================================================================
 # Iterating on a single test / subset (prefer this while developing)

@@ -74,6 +74,11 @@ just typage-publish-app                   # artifacts/typage/<rid>/Typage.app  (
 Bundle metadata is per app (`<App>.Desktop/Info.plist`); the bundling, signing, and notarization logic is
 shared in `build/package-mac.sh` — extend that script rather than adding a per-area copy.
 
+Both installs have an exact inverse — `just uninstall` for the CLIs, `just uninstall-app` for the bundles
+(which also withdraws their Launch Services file-type claims). Neither removes `PREFIX/bin` itself or an
+app's user data under `~/Library/Application Support`: uninstalling a tool is not consent to delete
+someone's documents, settings, or unsaved-work snapshots.
+
 **Definition of done:** `just check` passes for every area you touched — i.e. formatting verified, solution builds clean, tests green. Warnings **are** errors here (`TreatWarningsAsErrors=true`), so a warning fails the build — "builds" already means "no warnings," this is not advisory. Formatting is a gate too: `just format-check` runs `dotnet format --verify-no-changes`, and a non-zero exit is a failure to fix, not a suggestion.
 
 **Never run two `dotnet build`/`dotnet test` invocations at once** — concurrent runs deadlock on the MSBuild-node and build-output locks and hang indefinitely. (This is why `just check` is serial — recipe dependencies run one at a time, in the order written.) If it happens: kill the `dotnet`/`testhost`/`MSBuild` processes, `dotnet build-server shutdown`, retry.
