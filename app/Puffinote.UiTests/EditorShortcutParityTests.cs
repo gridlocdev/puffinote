@@ -21,8 +21,8 @@ namespace Puffinote.UiTests;
 /// </summary>
 public sealed class EditorShortcutParityTests
 {
-    // On this (non-mac) test host the platform command modifier is Control.
-    private const RawInputModifiers Cmd = RawInputModifiers.Control;
+    // ⌘ on macOS, Ctrl elsewhere — whatever the shell actually binds on this host.
+    private static readonly RawInputModifiers Cmd = TestKeys.RawCommand;
 
     private static async Task<(MainWindow Window, MarkdownEditorView Editor)> OpenNoteAsync(string dir, string text = "note")
     {

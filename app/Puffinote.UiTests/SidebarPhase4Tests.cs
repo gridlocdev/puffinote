@@ -138,7 +138,7 @@ public sealed class SidebarPhase4Tests
             // Select the file in the tree and press Delete → the shell opens a confirm dialog.
             window.SidebarForTest.RevealInTree(note);
             window.SidebarForTest.FocusTree();
-            window.KeyPressQwerty(PhysicalKey.Delete, RawInputModifiers.None);
+            window.KeyPressQwerty(TestKeys.DeleteInTree.Key, TestKeys.DeleteInTree.Modifiers); // ⌘⌫ on macOS
             Assert.True(window.IsOverlayOpenForTest);
             Assert.True(File.Exists(note)); // not gone until confirmed
 
@@ -177,7 +177,7 @@ public sealed class SidebarPhase4Tests
 
             window.SidebarForTest.RevealInTree(note);
             window.SidebarForTest.FocusTree();
-            window.KeyPressQwerty(PhysicalKey.Delete, RawInputModifiers.None);
+            window.KeyPressQwerty(TestKeys.DeleteInTree.Key, TestKeys.DeleteInTree.Modifiers); // ⌘⌫ on macOS
             ClickButton(window, "Delete"); // confirm
             await Task.Yield();
 

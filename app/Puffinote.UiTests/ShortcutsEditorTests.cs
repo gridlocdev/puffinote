@@ -47,7 +47,7 @@ public sealed class ShortcutsEditorTests
         ClickButton(view, "Rebind");
         Assert.True(view.IsCapturing);
 
-        window.KeyPressQwerty(PhysicalKey.J, RawInputModifiers.Control); // the platform command modifier here
+        window.KeyPressQwerty(PhysicalKey.J, TestKeys.RawCommand); // the platform command modifier here
 
         Assert.Equal("shell.save", id);
         Assert.Equal(Shortcut.Cmd(Key.J), captured);
@@ -110,7 +110,7 @@ public sealed class ShortcutsEditorTests
         Assert.True(view.IsCapturing);
         Assert.Equal(0, rebounds);
 
-        window.KeyPressQwerty(PhysicalKey.J, RawInputModifiers.Control); // a real chord → accepted
+        window.KeyPressQwerty(PhysicalKey.J, TestKeys.RawCommand); // a real chord → accepted
         Assert.False(view.IsCapturing);
         Assert.Equal(1, rebounds);
     }
@@ -126,12 +126,12 @@ public sealed class ShortcutsEditorTests
         window.Show();
 
         ClickButton(view, "Rebind"); // rebind Save
-        window.KeyPressQwerty(PhysicalKey.K, RawInputModifiers.Control); // ⌘/Ctrl+K — already Command Palette
+        window.KeyPressQwerty(PhysicalKey.K, TestKeys.RawCommand); // ⌘/Ctrl+K — already Command Palette
 
         Assert.True(view.IsCapturing); // refused → still waiting
         Assert.Equal(0, rebounds);
 
-        window.KeyPressQwerty(PhysicalKey.J, RawInputModifiers.Control); // a free chord → accepted
+        window.KeyPressQwerty(PhysicalKey.J, TestKeys.RawCommand); // a free chord → accepted
         Assert.False(view.IsCapturing);
         Assert.Equal(1, rebounds);
     }

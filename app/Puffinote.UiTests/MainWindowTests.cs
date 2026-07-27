@@ -122,7 +122,7 @@ public sealed class MainWindowTests
             Assert.False(FocusIsWithin(window, window.ActiveEditorViewForTest));
 
             // The default gesture ⌘⌥E (Ctrl+Alt+E off-mac) is wired to Focus Editor and works from the tree.
-            window.KeyPressQwerty(PhysicalKey.E, RawInputModifiers.Control | RawInputModifiers.Alt);
+            window.KeyPressQwerty(PhysicalKey.E, TestKeys.RawCommand | RawInputModifiers.Alt);
             Assert.True(FocusIsWithin(window, window.ActiveEditorViewForTest));
         }
         finally

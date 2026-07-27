@@ -79,6 +79,7 @@ public sealed class FileTreeViewTests : IDisposable
     public void Enter_on_a_file_activates_it_and_on_a_folder_toggles()
     {
         var (tree, window) = Open();
+        tree.UseMacKeymap = false; // the Windows/Linux map, where Enter opens (the macOS one is its own test)
         string? activated = null;
         tree.FileActivated += node => activated = node.Name;
 
@@ -153,6 +154,7 @@ public sealed class FileTreeViewTests : IDisposable
     public void F2_and_Delete_raise_mutation_requests_for_the_selected_node()
     {
         var (tree, window) = Open();
+        tree.UseMacKeymap = false; // bare Delete deletes only off macOS; ⌘⌫ is covered by the macOS test
         string? renamed = null;
         string? deleted = null;
         tree.RenameRequested += node => renamed = node.Name;
@@ -186,12 +188,12 @@ public sealed class FileTreeViewTests : IDisposable
         Assert.Equal("apple.md", tree.SelectedNameForTest);
 
         // ⌘N (Ctrl+N off-mac) → new note, passing the current selection as the placement context.
-        window.KeyPressQwerty(PhysicalKey.N, RawInputModifiers.Control);
+        window.KeyPressQwerty(PhysicalKey.N, TestKeys.RawCommand);
         Assert.Equal(1, noteFired);
         Assert.Equal("apple.md", noteContext?.Name);
 
         // ⌘⇧N → new folder.
-        window.KeyPressQwerty(PhysicalKey.N, RawInputModifiers.Control | RawInputModifiers.Shift);
+        window.KeyPressQwerty(PhysicalKey.N, TestKeys.RawCommand | RawInputModifiers.Shift);
         Assert.Equal("apple.md", folderContext?.Name);
 
         Assert.Equal(1, noteFired); // the folder chord didn't also fire the note request
