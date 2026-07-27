@@ -19,9 +19,12 @@
 #   just install-app      ...and copy them into /Applications
 #
 # Every install has an inverse that undoes exactly what it did, and nothing else:
+#   just publish ↔ just unpublish            what publish wrote under artifacts/, for this RID
 #   just install ↔ just uninstall            the CLIs in PREFIX/bin
 #   just install-app ↔ just uninstall-app    the .app bundles in APPS_DIR (also withdraws their
 #                                            Launch Services file-type claims)
+# `unpublish` is RID-precise, so a cross-published osx-x64 tree survives `just unpublish` on an
+# arm64 host; `just clean` is the blunt one and removes artifacts/ entirely.
 # Neither uninstall touches PREFIX/bin itself (it predates us and is on your PATH) or an app's
 # user data in ~/Library/Application Support — removing a tool is not consent to delete documents,
 # settings, or unsaved-work snapshots.
@@ -116,9 +119,10 @@ format: puffinote-format typage-format cellestra-format
 [group('all areas')]
 format-check: puffinote-format-check typage-format-check cellestra-format-check
 
-# Remove build artifacts for every area
+# Remove build artifacts for every area, including everything publish wrote (all RIDs)
 [group('all areas')]
 clean: puffinote-clean typage-clean cellestra-clean
+    rm -rf "{{ ARTIFACTS }}"
 
 # Definition of done: formatting verified, all areas build clean and green
 [group('all areas')]
@@ -127,6 +131,10 @@ check: format-check build test
 # Publish every app (CLI + desktop, self-contained) to artifacts/
 [group('all areas')]
 publish: puffinote-publish typage-publish cellestra-publish
+
+# Remove every app's published output for this RID (the inverse of publish)
+[group('all areas')]
+unpublish: puffinote-unpublish typage-unpublish cellestra-unpublish
 
 # Install every CLI into PREFIX/bin (default ~/.local/bin)
 [group('all areas')]
@@ -226,6 +234,14 @@ puffinote-install-app: puffinote-publish-app
     cp -R {{ PUFFINOTE_OUT }}/Puffinote.app "{{ APPS_DIR }}/Puffinote.app"
     @echo "installed {{ APPS_DIR }}/Puffinote.app"
 
+# Remove Puffinote's published output for this RID (the inverse of puffinote-publish)
+[group('puffinote')]
+puffinote-unpublish:
+    rm -rf "{{ PUFFINOTE_OUT }}"
+    @rmdir "{{ ARTIFACTS }}/puffinote" 2>/dev/null || true
+    @rmdir "{{ ARTIFACTS }}" 2>/dev/null || true
+    @echo "removed {{ PUFFINOTE_OUT }}"
+
 # Remove the installed `puffinote` CLI from PREFIX/bin
 [group('puffinote')]
 puffinote-uninstall:
@@ -317,6 +333,14 @@ typage-install-app: typage-publish-app
     cp -R {{ TYPAGE_OUT }}/Typage.app "{{ APPS_DIR }}/Typage.app"
     @echo "installed {{ APPS_DIR }}/Typage.app"
 
+# Remove Typage's published output for this RID (the inverse of typage-publish)
+[group('typage')]
+typage-unpublish:
+    rm -rf "{{ TYPAGE_OUT }}"
+    @rmdir "{{ ARTIFACTS }}/typage" 2>/dev/null || true
+    @rmdir "{{ ARTIFACTS }}" 2>/dev/null || true
+    @echo "removed {{ TYPAGE_OUT }}"
+
 # Remove the installed `typage` CLI from PREFIX/bin
 [group('typage')]
 typage-uninstall:
@@ -407,6 +431,14 @@ cellestra-install-app: cellestra-publish-app
     rm -rf "{{ APPS_DIR }}/Cellestra.app"
     cp -R {{ CELLESTRA_OUT }}/Cellestra.app "{{ APPS_DIR }}/Cellestra.app"
     @echo "installed {{ APPS_DIR }}/Cellestra.app"
+
+# Remove Cellestra's published output for this RID (the inverse of cellestra-publish)
+[group('cellestra')]
+cellestra-unpublish:
+    rm -rf "{{ CELLESTRA_OUT }}"
+    @rmdir "{{ ARTIFACTS }}/cellestra" 2>/dev/null || true
+    @rmdir "{{ ARTIFACTS }}" 2>/dev/null || true
+    @echo "removed {{ CELLESTRA_OUT }}"
 
 # Remove the installed `cellestra` CLI from PREFIX/bin
 [group('cellestra')]
