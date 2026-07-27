@@ -48,9 +48,30 @@ public partial class App : Application
     {
         if (ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop)
         {
-            desktop.MainWindow = new MainWindow();
+            var window = new MainWindow();
+            desktop.MainWindow = window;
+
+            // Open a spreadsheet passed on the command line. This is the double-click / "Open With"
+            // path for the .ods association the bundle claims (Info.plist), which until now landed in
+            // an empty workbook — macOS hands the app its document as argv[1]. Fire-and-forget is
+            // deliberate: OpenPathAsync owns its own busy overlay and error dialog, and does the
+            // deserialize + recalc off the UI thread, so the window still paints while a large file loads.
+            if (DocumentToOpen(desktop.Args) is { } path)
+            {
+                _ = window.OpenPathAsync(path);
+            }
         }
 
         base.OnFrameworkInitializationCompleted();
     }
+
+    /// <summary>
+    /// The document to open at launch, or null to start on a blank workbook. Only the first argument
+    /// counts (one window, one document) and only when it names an existing file: a shell can pass
+    /// options or a stale path, and greeting someone with an error dialog before the window has even
+    /// painted is worse than starting empty. Pure and internal so the arg handling is testable
+    /// without standing up a window.
+    /// </summary>
+    internal static string? DocumentToOpen(string[]? args) =>
+        args is [string first, ..] && File.Exists(first) ? first : null;
 }
