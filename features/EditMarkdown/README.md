@@ -94,9 +94,9 @@ dotnet run --project Typage.Cli -- html notes.md -o notes.html
 From the repo root:
 
 ```bash
-just typage-publish             # CLI + editor, self-contained → artifacts/typage/<rid>/
-just typage-install             # the `typage` CLI onto PATH
-just typage-install-app         # Typage.app → /Applications (macOS only)
+just publish-typage             # CLI + editor, self-contained → artifacts/typage/<rid>/
+just install-typage             # the `typage` CLI onto PATH
+just install-typage-app         # Typage.app → /Applications (macOS only)
 ```
 
 `Typage.app` owns the `.md` association (`Typage.Desktop/Info.plist`), so double-clicking a Markdown

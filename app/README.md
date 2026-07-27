@@ -32,9 +32,9 @@ dotnet test    Puffinote.slnx                              # Puffinote.Tests (pu
 From the repo root:
 
 ```bash
-just puffinote-publish          # CLI + shell, self-contained → artifacts/puffinote/<rid>/
-just puffinote-install          # the `puffinote` CLI onto PATH
-just puffinote-install-app      # Puffinote.app → /Applications (macOS only)
+just publish-puffinote          # CLI + shell, self-contained → artifacts/puffinote/<rid>/
+just install-puffinote          # the `puffinote` CLI onto PATH
+just install-puffinote-app      # Puffinote.app → /Applications (macOS only)
 ```
 
 The bundle declares itself a handler for *folders*, not for `.md`/`.ods` — Puffinote opens a notebook

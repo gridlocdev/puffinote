@@ -130,8 +130,8 @@ dotnet run -c Release --project Cellestra.Benchmarks -- --filter '*Recalc*'
 ## Building a macOS app bundle
 
 ```bash
-just cellestra-publish-app        # from the repo root — artifacts/cellestra/<rid>/Cellestra.app
-just cellestra-install-app        # ...and copy it into /Applications
+just publish-cellestra-app        # from the repo root — artifacts/cellestra/<rid>/Cellestra.app
+just install-cellestra-app        # ...and copy it into /Applications
 ```
 
 This produces a notarized `.app` you can launch without security warnings. The packaging script is

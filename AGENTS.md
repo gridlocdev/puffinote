@@ -55,7 +55,7 @@ The `justfile` is the front door — it knows every area's solution path, so you
 
 ```bash
 just build                                # every area   (also: just test, just format)
-just typage-build                         # one area     (prefix: puffinote- | typage- | cellestra-)
+just build-typage                         # one area     (verb-first: <verb>-puffinote | -typage | -cellestra)
 just test-filter SomeTest typage          # one test / a subset — prefer this while iterating
 just check                                # format-verify + build + test, all areas
 ```
@@ -68,7 +68,7 @@ Every recipe is a thin wrapper over `dotnet build|test|format <area>.slnx` (e.g.
 ```bash
 just publish                              # CLI + desktop, self-contained Release → artifacts/<app>/<rid>/
 just install                              # the three CLIs onto PATH (override: just PREFIX=/usr/local install)
-just typage-publish-app                   # artifacts/typage/<rid>/Typage.app  (also: just install-app)
+just publish-typage-app                   # artifacts/typage/<rid>/Typage.app  (also: just install-app)
 ```
 
 Bundle metadata is per app (`<App>.Desktop/Info.plist`); the bundling, signing, and notarization logic is
@@ -96,7 +96,7 @@ someone's documents, settings, or unsaved-work snapshots.
 
 Build artifacts live under OS-specific `bin/<os>/` and `obj/<os>/` paths (so Linux devcontainer builds don't collide with native host builds) and are git-ignored — never commit them.
 
-**Running.** The devcontainer is Linux and headless (no GPU), so launching a GUI (`just *-run` / `dotnet run --project *.Desktop`) fails *environmentally* — that's the container, not a regression in your change, and it is not something to debug. **Verify GUI behavior with headless UI tests, or through the CLI.** The CLI does run here:
+**Running.** The devcontainer is Linux and headless (no GPU), so launching a GUI (`just run-typage` and friends / `dotnet run --project *.Desktop`) fails *environmentally* — that's the container, not a regression in your change, and it is not something to debug. **Verify GUI behavior with headless UI tests, or through the CLI.** The CLI does run here:
 
 ```bash
 dotnet run --project app/Puffinote.Cli -- info            # summarize the notebook in the current directory

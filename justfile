@@ -11,7 +11,7 @@
 #   just test             test all three areas
 #   just format           auto-format all three areas
 #   just check            format-verify + build + test all areas (CI gate / definition of done)
-#   just typage-test      one area's suite (also: puffinote-*, cellestra-*)
+#   just test-typage      one area's suite (recipes read verb-first: test-puffinote, publish-cellestra-app)
 #   just test-filter SomeTest typage    run a subset while iterating
 #   just publish          self-contained Release builds of all three apps into artifacts/
 #   just install          put the three CLIs (puffinote, typage, cellestra) on PATH
@@ -53,7 +53,7 @@ DOTNET := "dotnet"
 
 # ---- Packaging: where publish writes, and where install puts things -----------
 # Override any of these on the command line, e.g.
-#   just RID=osx-x64 CONFIG=Debug cellestra-publish
+#   just RID=osx-x64 CONFIG=Debug publish-cellestra
 #   just PREFIX=/usr/local install
 CONFIG    := "Release"
 ARTIFACTS := "artifacts"
@@ -101,27 +101,27 @@ all: build test
 
 # Restore NuGet packages for every area
 [group('all areas')]
-restore: puffinote-restore typage-restore cellestra-restore
+restore: restore-puffinote restore-typage restore-cellestra
 
 # Build every area (warnings are errors)
 [group('all areas')]
-build: puffinote-build typage-build cellestra-build
+build: build-puffinote build-typage build-cellestra
 
 # Test every area
 [group('all areas')]
-test: puffinote-test typage-test cellestra-test
+test: test-puffinote test-typage test-cellestra
 
 # Auto-format every area
 [group('all areas')]
-format: puffinote-format typage-format cellestra-format
+format: format-puffinote format-typage format-cellestra
 
 # Verify formatting for every area (no changes)
 [group('all areas')]
-format-check: puffinote-format-check typage-format-check cellestra-format-check
+format-check: format-check-puffinote format-check-typage format-check-cellestra
 
 # Remove build artifacts for every area, including everything publish wrote (all RIDs)
 [group('all areas')]
-clean: puffinote-clean typage-clean cellestra-clean
+clean: clean-puffinote clean-typage clean-cellestra
     rm -rf "{{ ARTIFACTS }}"
 
 # Definition of done: formatting verified, all areas build clean and green
@@ -130,31 +130,31 @@ check: format-check build test
 
 # Publish every app (CLI + desktop, self-contained) to artifacts/
 [group('all areas')]
-publish: puffinote-publish typage-publish cellestra-publish
+publish: publish-puffinote publish-typage publish-cellestra
 
 # Remove every app's published output for this RID (the inverse of publish)
 [group('all areas')]
-unpublish: puffinote-unpublish typage-unpublish cellestra-unpublish
+unpublish: unpublish-puffinote unpublish-typage unpublish-cellestra
 
 # Install every CLI into PREFIX/bin (default ~/.local/bin)
 [group('all areas')]
-install: puffinote-install typage-install cellestra-install
+install: install-puffinote install-typage install-cellestra
 
 # Remove every installed CLI from PREFIX/bin
 [group('all areas')]
-uninstall: puffinote-uninstall typage-uninstall cellestra-uninstall
+uninstall: uninstall-puffinote uninstall-typage uninstall-cellestra
 
 # Build every macOS .app bundle (macOS only)
 [group('all areas')]
-publish-app: puffinote-publish-app typage-publish-app cellestra-publish-app
+publish-app: publish-puffinote-app publish-typage-app publish-cellestra-app
 
 # Install every macOS .app into APPS_DIR (macOS only)
 [group('all areas')]
-install-app: puffinote-install-app typage-install-app cellestra-install-app
+install-app: install-puffinote-app install-typage-app install-cellestra-app
 
 # Remove every macOS .app from APPS_DIR (the inverse of install-app; macOS only)
 [group('all areas')]
-uninstall-app: puffinote-uninstall-app typage-uninstall-app cellestra-uninstall-app
+uninstall-app: uninstall-puffinote-app uninstall-typage-app uninstall-cellestra-app
 
 # ==============================================================================
 # Puffinote — the composite shell (app/)
@@ -162,81 +162,81 @@ uninstall-app: puffinote-uninstall-app typage-uninstall-app cellestra-uninstall-
 
 # Restore Puffinote packages
 [group('puffinote')]
-puffinote-restore:
+restore-puffinote:
     {{ DOTNET }} restore {{ PUFFINOTE_SLN }}
 
 # Build the Puffinote shell
 [group('puffinote')]
-puffinote-build:
+build-puffinote:
     {{ DOTNET }} build {{ PUFFINOTE_SLN }}
 
 # Test the Puffinote shell
 [group('puffinote')]
-puffinote-test:
+test-puffinote:
     {{ DOTNET }} test {{ PUFFINOTE_SLN }}
 
 # Auto-format the Puffinote shell
 [group('puffinote')]
-puffinote-format:
+format-puffinote:
     {{ DOTNET }} format {{ PUFFINOTE_SLN }}
 
 # Verify Puffinote formatting (fails if unformatted)
 [group('puffinote')]
-puffinote-format-check:
+format-check-puffinote:
     {{ DOTNET }} format {{ PUFFINOTE_SLN }} --verify-no-changes
 
 # Clean Puffinote build artifacts
 [group('puffinote')]
-puffinote-clean:
+clean-puffinote:
     {{ DOTNET }} clean {{ PUFFINOTE_SLN }}
 
 # Run the Puffinote desktop shell (native host — GUI won't launch in the container)
 [group('puffinote')]
-puffinote-run:
+run-puffinote:
     {{ DOTNET }} run --project {{ PUFFINOTE_DESKTOP }}
 
-# Run the Puffinote CLI: just puffinote-run-cli info | search "todo"
+# Run the Puffinote CLI: just run-puffinote-cli info | search "todo"
 [group('puffinote')]
-puffinote-run-cli *ARGS:
+run-puffinote-cli *ARGS:
     {{ DOTNET }} run --project {{ PUFFINOTE_CLI }} -- {{ ARGS }}
 
 # Publish the Puffinote CLI + shell to artifacts/puffinote/<rid>/
 [group('puffinote')]
-puffinote-publish: puffinote-publish-cli puffinote-publish-desktop
+publish-puffinote: publish-puffinote-cli publish-puffinote-desktop
 
 # Publish the `puffinote` CLI (single self-contained file)
 [group('puffinote')]
-puffinote-publish-cli:
+publish-puffinote-cli:
     {{ DOTNET }} publish {{ PUFFINOTE_CLI }} {{ PUBLISH_CLI_FLAGS }} -o {{ PUFFINOTE_OUT }}/cli
 
 # Publish the Puffinote desktop shell (self-contained)
 [group('puffinote')]
-puffinote-publish-desktop:
+publish-puffinote-desktop:
     {{ DOTNET }} publish {{ PUFFINOTE_DESKTOP }} {{ PUBLISH_DESKTOP_FLAGS }} -o {{ PUFFINOTE_OUT }}/desktop
 
 # Build Puffinote.app (macOS only)
 [group('puffinote')]
-puffinote-publish-app:
+publish-puffinote-app:
     CONFIG={{ CONFIG }} RID={{ RID }} OUT={{ PUFFINOTE_OUT }} {{ PACKAGE_MAC }} puffinote
 
 # Install the `puffinote` CLI into PREFIX/bin (default ~/.local/bin)
 [group('puffinote')]
-puffinote-install: puffinote-publish-cli
+install-puffinote: publish-puffinote-cli
     @mkdir -p "{{ BINDIR }}"
     install -m 0755 {{ PUFFINOTE_OUT }}/cli/puffinote "{{ BINDIR }}/puffinote"
     @echo "installed {{ BINDIR }}/puffinote — make sure {{ BINDIR }} is on your PATH"
 
 # Install Puffinote.app into APPS_DIR (default /Applications, macOS only)
 [group('puffinote')]
-puffinote-install-app: puffinote-publish-app
+install-puffinote-app: publish-puffinote-app
     @mkdir -p "{{ APPS_DIR }}"
     rm -rf "{{ APPS_DIR }}/Puffinote.app"
     cp -R {{ PUFFINOTE_OUT }}/Puffinote.app "{{ APPS_DIR }}/Puffinote.app"
     @echo "installed {{ APPS_DIR }}/Puffinote.app"
 
-# Remove Puffinote's published output for this RID (the inverse of puffinote-publish)
+# Remove Puffinote's published output for this RID (the inverse of publish-puffinote)
 [group('puffinote')]
-puffinote-unpublish:
+unpublish-puffinote:
     rm -rf "{{ PUFFINOTE_OUT }}"
     @rmdir "{{ ARTIFACTS }}/puffinote" 2>/dev/null || true
     @rmdir "{{ ARTIFACTS }}" 2>/dev/null || true
@@ -244,13 +244,13 @@ puffinote-unpublish:
 
 # Remove the installed `puffinote` CLI from PREFIX/bin
 [group('puffinote')]
-puffinote-uninstall:
+uninstall-puffinote:
     rm -f "{{ BINDIR }}/puffinote"
     @echo "removed {{ BINDIR }}/puffinote"
 
-# Remove Puffinote.app from APPS_DIR (the inverse of puffinote-install-app; macOS only)
+# Remove Puffinote.app from APPS_DIR (the inverse of install-puffinote-app; macOS only)
 [group('puffinote')]
-puffinote-uninstall-app:
+uninstall-puffinote-app:
     @{{ LSREGISTER }} -u "{{ APPS_DIR }}/Puffinote.app" >/dev/null 2>&1 || true
     rm -rf "{{ APPS_DIR }}/Puffinote.app"
     @echo "removed {{ APPS_DIR }}/Puffinote.app"
@@ -261,81 +261,81 @@ puffinote-uninstall-app:
 
 # Restore Typage packages
 [group('typage')]
-typage-restore:
+restore-typage:
     {{ DOTNET }} restore {{ TYPAGE_SLN }}
 
 # Build the Typage editor
 [group('typage')]
-typage-build:
+build-typage:
     {{ DOTNET }} build {{ TYPAGE_SLN }}
 
 # Test the Typage editor
 [group('typage')]
-typage-test:
+test-typage:
     {{ DOTNET }} test {{ TYPAGE_SLN }}
 
 # Auto-format the Typage editor
 [group('typage')]
-typage-format:
+format-typage:
     {{ DOTNET }} format {{ TYPAGE_SLN }}
 
 # Verify Typage formatting (fails if unformatted)
 [group('typage')]
-typage-format-check:
+format-check-typage:
     {{ DOTNET }} format {{ TYPAGE_SLN }} --verify-no-changes
 
 # Clean Typage build artifacts
 [group('typage')]
-typage-clean:
+clean-typage:
     {{ DOTNET }} clean {{ TYPAGE_SLN }}
 
 # Run the Typage desktop editor (native host — GUI won't launch in the container)
 [group('typage')]
-typage-run:
+run-typage:
     {{ DOTNET }} run --project {{ TYPAGE_DESKTOP }}
 
-# Run the Typage CLI: just typage-run-cli html notes.md -o notes.html
+# Run the Typage CLI: just run-typage-cli html notes.md -o notes.html
 [group('typage')]
-typage-run-cli *ARGS:
+run-typage-cli *ARGS:
     {{ DOTNET }} run --project {{ TYPAGE_CLI }} -- {{ ARGS }}
 
 # Publish the Typage CLI + editor to artifacts/typage/<rid>/
 [group('typage')]
-typage-publish: typage-publish-cli typage-publish-desktop
+publish-typage: publish-typage-cli publish-typage-desktop
 
 # Publish the `typage` CLI (single self-contained file)
 [group('typage')]
-typage-publish-cli:
+publish-typage-cli:
     {{ DOTNET }} publish {{ TYPAGE_CLI }} {{ PUBLISH_CLI_FLAGS }} -o {{ TYPAGE_OUT }}/cli
 
 # Publish the Typage desktop editor (self-contained)
 [group('typage')]
-typage-publish-desktop:
+publish-typage-desktop:
     {{ DOTNET }} publish {{ TYPAGE_DESKTOP }} {{ PUBLISH_DESKTOP_FLAGS }} -o {{ TYPAGE_OUT }}/desktop
 
 # Build Typage.app (macOS only)
 [group('typage')]
-typage-publish-app:
+publish-typage-app:
     CONFIG={{ CONFIG }} RID={{ RID }} OUT={{ TYPAGE_OUT }} {{ PACKAGE_MAC }} typage
 
 # Install the `typage` CLI into PREFIX/bin (default ~/.local/bin)
 [group('typage')]
-typage-install: typage-publish-cli
+install-typage: publish-typage-cli
     @mkdir -p "{{ BINDIR }}"
     install -m 0755 {{ TYPAGE_OUT }}/cli/typage "{{ BINDIR }}/typage"
     @echo "installed {{ BINDIR }}/typage — make sure {{ BINDIR }} is on your PATH"
 
 # Install Typage.app into APPS_DIR (default /Applications, macOS only)
 [group('typage')]
-typage-install-app: typage-publish-app
+install-typage-app: publish-typage-app
     @mkdir -p "{{ APPS_DIR }}"
     rm -rf "{{ APPS_DIR }}/Typage.app"
     cp -R {{ TYPAGE_OUT }}/Typage.app "{{ APPS_DIR }}/Typage.app"
     @echo "installed {{ APPS_DIR }}/Typage.app"
 
-# Remove Typage's published output for this RID (the inverse of typage-publish)
+# Remove Typage's published output for this RID (the inverse of publish-typage)
 [group('typage')]
-typage-unpublish:
+unpublish-typage:
     rm -rf "{{ TYPAGE_OUT }}"
     @rmdir "{{ ARTIFACTS }}/typage" 2>/dev/null || true
     @rmdir "{{ ARTIFACTS }}" 2>/dev/null || true
@@ -343,13 +343,13 @@ typage-unpublish:
 
 # Remove the installed `typage` CLI from PREFIX/bin
 [group('typage')]
-typage-uninstall:
+uninstall-typage:
     rm -f "{{ BINDIR }}/typage"
     @echo "removed {{ BINDIR }}/typage"
 
-# Remove Typage.app from APPS_DIR (the inverse of typage-install-app; macOS only)
+# Remove Typage.app from APPS_DIR (the inverse of install-typage-app; macOS only)
 [group('typage')]
-typage-uninstall-app:
+uninstall-typage-app:
     @{{ LSREGISTER }} -u "{{ APPS_DIR }}/Typage.app" >/dev/null 2>&1 || true
     rm -rf "{{ APPS_DIR }}/Typage.app"
     @echo "removed {{ APPS_DIR }}/Typage.app"
@@ -360,81 +360,81 @@ typage-uninstall-app:
 
 # Restore Cellestra packages
 [group('cellestra')]
-cellestra-restore:
+restore-cellestra:
     {{ DOTNET }} restore {{ CELLESTRA_SLN }}
 
 # Build the Cellestra editor
 [group('cellestra')]
-cellestra-build:
+build-cellestra:
     {{ DOTNET }} build {{ CELLESTRA_SLN }}
 
 # Test the Cellestra editor
 [group('cellestra')]
-cellestra-test:
+test-cellestra:
     {{ DOTNET }} test {{ CELLESTRA_SLN }}
 
 # Auto-format the Cellestra editor
 [group('cellestra')]
-cellestra-format:
+format-cellestra:
     {{ DOTNET }} format {{ CELLESTRA_SLN }}
 
 # Verify Cellestra formatting (fails if unformatted)
 [group('cellestra')]
-cellestra-format-check:
+format-check-cellestra:
     {{ DOTNET }} format {{ CELLESTRA_SLN }} --verify-no-changes
 
 # Clean Cellestra build artifacts
 [group('cellestra')]
-cellestra-clean:
+clean-cellestra:
     {{ DOTNET }} clean {{ CELLESTRA_SLN }}
 
 # Run the Cellestra desktop editor (native host — GUI won't launch in the container)
 [group('cellestra')]
-cellestra-run:
+run-cellestra:
     {{ DOTNET }} run --project {{ CELLESTRA_DESKTOP }}
 
-# Run the Cellestra CLI: just cellestra-run-cli get book.ods A1
+# Run the Cellestra CLI: just run-cellestra-cli get book.ods A1
 [group('cellestra')]
-cellestra-run-cli *ARGS:
+run-cellestra-cli *ARGS:
     {{ DOTNET }} run --project {{ CELLESTRA_CLI }} -- {{ ARGS }}
 
 # Publish the Cellestra CLI + editor to artifacts/cellestra/<rid>/
 [group('cellestra')]
-cellestra-publish: cellestra-publish-cli cellestra-publish-desktop
+publish-cellestra: publish-cellestra-cli publish-cellestra-desktop
 
 # Publish the `cellestra` CLI (single self-contained file)
 [group('cellestra')]
-cellestra-publish-cli:
+publish-cellestra-cli:
     {{ DOTNET }} publish {{ CELLESTRA_CLI }} {{ PUBLISH_CLI_FLAGS }} -o {{ CELLESTRA_OUT }}/cli
 
 # Publish the Cellestra desktop editor (self-contained)
 [group('cellestra')]
-cellestra-publish-desktop:
+publish-cellestra-desktop:
     {{ DOTNET }} publish {{ CELLESTRA_DESKTOP }} {{ PUBLISH_DESKTOP_FLAGS }} -o {{ CELLESTRA_OUT }}/desktop
 
 # Build Cellestra.app (macOS only)
 [group('cellestra')]
-cellestra-publish-app:
+publish-cellestra-app:
     CONFIG={{ CONFIG }} RID={{ RID }} OUT={{ CELLESTRA_OUT }} {{ PACKAGE_MAC }} cellestra
 
 # Install the `cellestra` CLI into PREFIX/bin (default ~/.local/bin)
 [group('cellestra')]
-cellestra-install: cellestra-publish-cli
+install-cellestra: publish-cellestra-cli
     @mkdir -p "{{ BINDIR }}"
     install -m 0755 {{ CELLESTRA_OUT }}/cli/cellestra "{{ BINDIR }}/cellestra"
     @echo "installed {{ BINDIR }}/cellestra — make sure {{ BINDIR }} is on your PATH"
 
 # Install Cellestra.app into APPS_DIR (default /Applications, macOS only)
 [group('cellestra')]
-cellestra-install-app: cellestra-publish-app
+install-cellestra-app: publish-cellestra-app
     @mkdir -p "{{ APPS_DIR }}"
     rm -rf "{{ APPS_DIR }}/Cellestra.app"
     cp -R {{ CELLESTRA_OUT }}/Cellestra.app "{{ APPS_DIR }}/Cellestra.app"
     @echo "installed {{ APPS_DIR }}/Cellestra.app"
 
-# Remove Cellestra's published output for this RID (the inverse of cellestra-publish)
+# Remove Cellestra's published output for this RID (the inverse of publish-cellestra)
 [group('cellestra')]
-cellestra-unpublish:
+unpublish-cellestra:
     rm -rf "{{ CELLESTRA_OUT }}"
     @rmdir "{{ ARTIFACTS }}/cellestra" 2>/dev/null || true
     @rmdir "{{ ARTIFACTS }}" 2>/dev/null || true
@@ -442,13 +442,13 @@ cellestra-unpublish:
 
 # Remove the installed `cellestra` CLI from PREFIX/bin
 [group('cellestra')]
-cellestra-uninstall:
+uninstall-cellestra:
     rm -f "{{ BINDIR }}/cellestra"
     @echo "removed {{ BINDIR }}/cellestra"
 
-# Remove Cellestra.app from APPS_DIR (the inverse of cellestra-install-app; macOS only)
+# Remove Cellestra.app from APPS_DIR (the inverse of install-cellestra-app; macOS only)
 [group('cellestra')]
-cellestra-uninstall-app:
+uninstall-cellestra-app:
     @{{ LSREGISTER }} -u "{{ APPS_DIR }}/Cellestra.app" >/dev/null 2>&1 || true
     rm -rf "{{ APPS_DIR }}/Cellestra.app"
     @echo "removed {{ APPS_DIR }}/Cellestra.app"

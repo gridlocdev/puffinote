@@ -70,8 +70,8 @@ These are common places to improvise — don't. The spec is fixed:
 Run these from this feature folder (`features/EditSpreadsheets/`) — that's where the
 solution (`Cellestra.slnx`) and every project live. Shared .NET tooling
 (`Directory.Build.props`, `Directory.Packages.props`, `global.json`, `nuget.config`)
-sits at the repo root and is picked up automatically. (`just cellestra-build` / `cellestra-test` /
-`cellestra-format` do the same from the root; bare `just` lists them.)
+sits at the repo root and is picked up automatically. (`just build-cellestra` / `test-cellestra` /
+`format-cellestra` do the same from the root; bare `just` lists them.)
 
 ```bash
 export PATH="$PATH:/root/.dotnet"                # devcontainer: dotnet isn't on PATH
@@ -84,7 +84,7 @@ dotnet test                                          # all tests
 dotnet test Cellestra.Core.Tests               # fast, no UI
 dotnet test Cellestra.Cli.Tests                # end-to-end CLI, in-process
 dotnet test Cellestra.UiTests                  # headless Avalonia (xUnit v3) — see the drawing-backend gotcha below
-just cellestra-publish-app                           # notarized .app bundle
+just publish-cellestra-app                           # notarized .app bundle
 ```
 
 **Definition of done for any task:** the code is formatted (`dotnet format`), `dotnet build` is clean, `dotnet test` is green, and if you touched serialization, the `.ods` round-trip *and* unknown-content-preservation tests pass. "Clean" means **zero** warnings — `TreatWarningsAsErrors=true` is set repo-wide, so any warning fails the build, analyzer and code-style ones included (only `IDE0060`, unused parameter, is exempt). Touching `Cellestra.Editor` or `shared/` means Puffinote is affected too — build `app/Puffinote.slnx`, or run `just check` from the root.

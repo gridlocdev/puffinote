@@ -120,7 +120,7 @@ Don't hardcode versions in `.csproj` files.
 
 Run these from this feature folder (`features/EditMarkdown/`) — the solution (`Typage.slnx`) and every
 project live here. Shared .NET tooling sits at the repo root and is picked up automatically. (`make
-typage-build` / `typage-test` / `typage-format` do the same from the root; bare `just` lists them.)
+build-typage` / `test-typage` / `format-typage` do the same from the root; bare `just` lists them.)
 
 ```bash
 export PATH="$PATH:/root/.dotnet"                 # devcontainer: dotnet isn't on PATH
@@ -173,7 +173,7 @@ surface consumes, so what it prints is what the editor styles.
   chrome → **`shared/Puffinote.Components/`** (or `Puffinote.Components.Core/` for non-UI code the CLI can
   use). Both are in `Typage.slnx`, so you can edit them from here — but they're in Cellestra's and
   Puffinote's solutions too, so a change there is a change to all three: run `just check`, not only
-  `just typage-test`.
+  `just test-typage`.
 - **Tests** → `Typage.Engine.Tests/`, `Typage.Cli.Tests/`, `Typage.UiTests/`.
 - Don't invent new top-level projects; extend the existing structure. If a new home seems necessary,
   note it and ask.
