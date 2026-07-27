@@ -70,8 +70,8 @@ These are common places to improvise — don't. The spec is fixed:
 Run these from this feature folder (`features/EditSpreadsheets/`) — that's where the
 solution (`Cellestra.slnx`) and every project live. Shared .NET tooling
 (`Directory.Build.props`, `Directory.Packages.props`, `global.json`, `nuget.config`)
-sits at the repo root and is picked up automatically. (`make cellestra-build` / `cellestra-test` /
-`cellestra-format` do the same from the root; `make help` lists them.)
+sits at the repo root and is picked up automatically. (`just cellestra-build` / `cellestra-test` /
+`cellestra-format` do the same from the root; bare `just` lists them.)
 
 ```bash
 export PATH="$PATH:/root/.dotnet"                # devcontainer: dotnet isn't on PATH
@@ -84,10 +84,10 @@ dotnet test                                          # all tests
 dotnet test Cellestra.Core.Tests               # fast, no UI
 dotnet test Cellestra.Cli.Tests                # end-to-end CLI, in-process
 dotnet test Cellestra.UiTests                  # headless Avalonia (xUnit v3) — see the drawing-backend gotcha below
-make -C ../.. cellestra-publish-app                  # notarized .app bundle
+just cellestra-publish-app                           # notarized .app bundle
 ```
 
-**Definition of done for any task:** the code is formatted (`dotnet format`), `dotnet build` is clean, `dotnet test` is green, and if you touched serialization, the `.ods` round-trip *and* unknown-content-preservation tests pass. "Clean" means **zero** warnings — `TreatWarningsAsErrors=true` is set repo-wide, so any warning fails the build, analyzer and code-style ones included (only `IDE0060`, unused parameter, is exempt). Touching `Cellestra.Editor` or `shared/` means Puffinote is affected too — build `app/Puffinote.slnx`, or just `make check` from the root.
+**Definition of done for any task:** the code is formatted (`dotnet format`), `dotnet build` is clean, `dotnet test` is green, and if you touched serialization, the `.ods` round-trip *and* unknown-content-preservation tests pass. "Clean" means **zero** warnings — `TreatWarningsAsErrors=true` is set repo-wide, so any warning fails the build, analyzer and code-style ones included (only `IDE0060`, unused parameter, is exempt). Touching `Cellestra.Editor` or `shared/` means Puffinote is affected too — build `app/Puffinote.slnx`, or run `just check` from the root.
 
 ## Debugging with the `cellestra` CLI
 
@@ -121,7 +121,7 @@ Authoritative tree: **[ARCHITECTURE.md §12](docs/ARCHITECTURE.md#12-folder-stru
 - **Shell** → `Cellestra.Desktop/` (assembly entry point, `App.axaml`, `Info.plist`, window `Views/`, `Services/`) — a thin host around `Cellestra.Editor`, contributing shell-level concerns only.
 - **Charts** → `Cellestra.Charts/` (custom model + ODF `chart:chart` serializer; no third-party charting library).
 - **CLI** → `Cellestra.Cli/` (`Infrastructure/` + `Commands/`; references only Core + `System.CommandLine`, no Avalonia).
-- **Anything Typage or Puffinote would also want** — theming, icons/glyphs, overlays, shared shell chrome → **`shared/Puffinote.Components/`** (or `Puffinote.Components.Core/` for non-UI code the CLI can use). Both are in `Cellestra.slnx`, so you can edit them from here — but they're in Typage's and Puffinote's solutions too, so a change there is a change to all three: run `make check`.
+- **Anything Typage or Puffinote would also want** — theming, icons/glyphs, overlays, shared shell chrome → **`shared/Puffinote.Components/`** (or `Puffinote.Components.Core/` for non-UI code the CLI can use). Both are in `Cellestra.slnx`, so you can edit them from here — but they're in Typage's and Puffinote's solutions too, so a change there is a change to all three: run `just check`.
 - **Tests** → `Cellestra.Core.Tests/`, `Cellestra.UiTests/`, `Cellestra.Cli.Tests/`, `Cellestra.Benchmarks/`.
 - Don't invent new top-level folders; extend the existing structure. If a new home seems necessary, note it and ask.
 

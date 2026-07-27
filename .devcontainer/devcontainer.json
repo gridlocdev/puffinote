@@ -7,8 +7,8 @@
     "ghcr.io/devcontainers/features/github-cli:1": {}
   },
   // Restore all three solutions once the container is built, so IntelliSense and the first build are
-  // fast in whichever area you open. (`make restore` does the same; it's spelled out here so the
-  // container still provisions if the Makefile moves.) Serial on purpose — concurrent `dotnet`
+  // fast in whichever area you open. (`just restore` does the same; it's spelled out here so the
+  // container still provisions if the justfile moves.) Serial on purpose — concurrent `dotnet`
   // invocations deadlock on the MSBuild-node locks. The desktop GUIs can't run headlessly anyway
   // (Avalonia.Native RenderTimer -6661 without a display link), so this targets the build, the CLIs,
   // and the headless test suites.

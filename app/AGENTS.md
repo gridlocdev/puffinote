@@ -37,14 +37,14 @@ and **`TreatWarningsAsErrors=true`** — *every* warning fails the build, analyz
 
 ```bash
 export PATH="$PATH:/root/.dotnet"      # devcontainer: dotnet isn't on PATH; libicu-dev must be installed
-make puffinote-build                   # = dotnet build app/Puffinote.slnx
-make puffinote-test
-make check                             # format-verify + build + test ALL three areas — the gate below
+just puffinote-build                   # = dotnet build app/Puffinote.slnx
+just puffinote-test
+just check                             # format-verify + build + test ALL three areas — the gate below
 ```
 
-**Definition of done:** `make check` — Puffinote formatted, clean (0 warnings), green, **and both sub-app
-solutions still build & test green independently**. That last clause is the point of `make check` over
-`make puffinote-*`: this shell compiles the editors, so it's the place a break in them surfaces.
+**Definition of done:** `just check` — Puffinote formatted, clean (0 warnings), green, **and both sub-app
+solutions still build & test green independently**. That last clause is the point of `just check` over
+`just puffinote-*`: this shell compiles the editors, so it's the place a break in them surfaces.
 Never run two builds/tests concurrently (MSBuild deadlock — see the root guide).
 
 Put shell logic in pure/testable helpers (`Puffinote.Tests`) and keep the UI a thin call: `Puffinote.UiTests`

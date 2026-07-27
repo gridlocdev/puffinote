@@ -23,7 +23,7 @@ shared/                       Cross-cutting libraries used by the shell and both
                                 Puffinote.Components.Core (non-UI: CLI helpers — safe for CLI projects)
 docs/                         PRD / ARCHITECTURE (per-area) + proposals/ (repo-wide)
 build/                        package-mac.sh — the shared macOS .app bundler for all three apps
-Makefile                      Build/test/format/ship entry points for every area — prefer these
+justfile                      Build/test/format/ship entry points for every area — prefer these
 Directory.Build.props         Shared MSBuild settings (framework, nullable, analyzers, OS-specific bin/obj)
 Directory.Packages.props      Central NuGet version pins — the single source of truth for versions
 ```
@@ -36,7 +36,7 @@ There is no single root solution. Each area has its own:
 | Markdown editor (`features/EditMarkdown/`) | [`features/EditMarkdown/AGENTS.md`](features/EditMarkdown/AGENTS.md) | `features/EditMarkdown/Typage.slnx` |
 | Spreadsheet editor (`features/EditSpreadsheets/`) | [`features/EditSpreadsheets/AGENTS.md`](features/EditSpreadsheets/AGENTS.md) | `features/EditSpreadsheets/Cellestra.slnx` |
 
-`shared/` has no guide of its own because it isn't an area you work in — it's a dependency of all three. Both `Puffinote.Components*` projects are compiled into **all three solutions**, so a change there is a change to every area: build and test all three (`make check`) before you call it done.
+`shared/` has no guide of its own because it isn't an area you work in — it's a dependency of all three. Both `Puffinote.Components*` projects are compiled into **all three solutions**, so a change there is a change to every area: build and test all three (`just check`) before you call it done.
 
 When this file and an area guide or a linked doc disagree, the deeper doc wins for design detail; this file wins for repo-wide process.
 
@@ -51,34 +51,34 @@ Versions are pinned centrally in `Directory.Packages.props` (central package man
 
 ## Build & test
 
-The `Makefile` is the front door — it knows every area's solution path, so you don't have to. `make help` lists everything.
+The `justfile` is the front door — it knows every area's solution path, so you don't have to. Bare `just` lists every recipe, grouped by area, and `just` searches upward for it, so recipes work from any directory in the repo (no `-C` dance).
 
 ```bash
-make build                                # every area   (also: make test, make format)
-make typage-build                         # one area     (prefix: puffinote- | typage- | cellestra-)
-make test-filter AREA=typage FILTER=SomeTest   # one test / a subset — prefer this while iterating
-make check                                # format-verify + build + test, all areas
+just build                                # every area   (also: just test, just format)
+just typage-build                         # one area     (prefix: puffinote- | typage- | cellestra-)
+just test-filter SomeTest typage          # one test / a subset — prefer this while iterating
+just check                                # format-verify + build + test, all areas
 ```
 
-Each target is just `dotnet build|test|format <area>.slnx` (e.g. `features/EditMarkdown/Typage.slnx`) — **if `make` isn't on `PATH`, run those directly**; they're equivalent, and some agent sandboxes aren't the devcontainer. Likewise, if `dotnet` isn't on `PATH`, `export PATH="$PATH:/root/.dotnet"` (and `libicu` must be installed).
+Every recipe is a thin wrapper over `dotnet build|test|format <area>.slnx` (e.g. `features/EditMarkdown/Typage.slnx`) — **if `just` isn't on `PATH`, run those directly**; they're equivalent, and some agent sandboxes aren't the devcontainer. (`just --dry-run <recipe>` prints the exact commands a recipe would run.) Likewise, if `dotnet` isn't on `PATH`, `export PATH="$PATH:/root/.dotnet"` (and `libicu` must be installed).
 
 **Shipping.** The same front door publishes and installs each app; all of it is macOS-first, and only the
 `.app` targets require a Mac (the container can still publish):
 
 ```bash
-make publish                              # CLI + desktop, self-contained Release → artifacts/<app>/<rid>/
-make install                              # the three CLIs onto PATH (PREFIX=~/.local by default)
-make typage-publish-app                   # artifacts/typage/<rid>/Typage.app  (also: make install-app)
+just publish                              # CLI + desktop, self-contained Release → artifacts/<app>/<rid>/
+just install                              # the three CLIs onto PATH (override: just PREFIX=/usr/local install)
+just typage-publish-app                   # artifacts/typage/<rid>/Typage.app  (also: just install-app)
 ```
 
 Bundle metadata is per app (`<App>.Desktop/Info.plist`); the bundling, signing, and notarization logic is
 shared in `build/package-mac.sh` — extend that script rather than adding a per-area copy.
 
-**Definition of done:** `make check` passes for every area you touched — i.e. formatting verified, solution builds clean, tests green. Warnings **are** errors here (`TreatWarningsAsErrors=true`), so a warning fails the build — "builds" already means "no warnings," this is not advisory. Formatting is a gate too: `make format-check` runs `dotnet format --verify-no-changes`, and a non-zero exit is a failure to fix, not a suggestion.
+**Definition of done:** `just check` passes for every area you touched — i.e. formatting verified, solution builds clean, tests green. Warnings **are** errors here (`TreatWarningsAsErrors=true`), so a warning fails the build — "builds" already means "no warnings," this is not advisory. Formatting is a gate too: `just format-check` runs `dotnet format --verify-no-changes`, and a non-zero exit is a failure to fix, not a suggestion.
 
-**Never run two `dotnet build`/`dotnet test` invocations at once** — concurrent runs deadlock on the MSBuild-node and build-output locks and hang indefinitely. (This is why `make check` is serial.) If it happens: kill the `dotnet`/`testhost`/`MSBuild` processes, `dotnet build-server shutdown`, retry.
+**Never run two `dotnet build`/`dotnet test` invocations at once** — concurrent runs deadlock on the MSBuild-node and build-output locks and hang indefinitely. (This is why `just check` is serial — recipe dependencies run one at a time, in the order written.) If it happens: kill the `dotnet`/`testhost`/`MSBuild` processes, `dotnet build-server shutdown`, retry.
 
-**CI:** only `.github/workflows/typage-ci.yml` exists, and its push/PR triggers are commented out (`workflow_dispatch` only) — so nothing is gated for you on push. `make check` locally *is* the gate.
+**CI:** only `.github/workflows/typage-ci.yml` exists, and its push/PR triggers are commented out (`workflow_dispatch` only) — so nothing is gated for you on push. `just check` locally *is* the gate.
 
 **Working with the analyzer/style rules.** The `.editorconfig` at the repo root is the single source of truth for style and diagnostic severities; `dotnet format` auto-fixes the large majority of violations, so run it first before fixing anything by hand. When something still fails the build:
 
@@ -89,7 +89,7 @@ shared in `build/package-mac.sh` — extend that script rather than adding a per
 
 Build artifacts live under OS-specific `bin/<os>/` and `obj/<os>/` paths (so Linux devcontainer builds don't collide with native host builds) and are git-ignored — never commit them.
 
-**Running.** The devcontainer is Linux and headless (no GPU), so launching a GUI (`make *-run` / `dotnet run --project *.Desktop`) fails *environmentally* — that's the container, not a regression in your change, and it is not something to debug. **Verify GUI behavior with headless UI tests, or through the CLI.** The CLI does run here:
+**Running.** The devcontainer is Linux and headless (no GPU), so launching a GUI (`just *-run` / `dotnet run --project *.Desktop`) fails *environmentally* — that's the container, not a regression in your change, and it is not something to debug. **Verify GUI behavior with headless UI tests, or through the CLI.** The CLI does run here:
 
 ```bash
 dotnet run --project app/Puffinote.Cli -- info            # summarize the notebook in the current directory

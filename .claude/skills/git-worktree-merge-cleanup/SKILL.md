@@ -240,7 +240,7 @@ Per `AGENTS.md`, done means **format-check + build + test** for every area touch
 **Warnings are errors** (`TreatWarningsAsErrors=true`), so "builds" means zero
 warnings. A hand-resolved conflict makes this mandatory, not optional.
 
-`make` is frequently **not on PATH** in this container. The make targets are just
+`just` may not be on `PATH` in every sandbox. The recipes are thin wrappers over
 `dotnet <verb> <area>.slnx`, so run them directly:
 
 | Area touched | Solution |

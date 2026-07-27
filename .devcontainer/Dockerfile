@@ -6,8 +6,9 @@ FROM mcr.microsoft.com/dotnet/sdk:10.0
 # (UseHeadlessDrawing=false + .UseSkia(), see features/EditSpreadsheets/Cellestra.UiTests/TestAppBuilder.cs),
 # so SkiaSharp/Avalonia must resolve fontconfig, freetype and a few X11 stubs. (Typage's and Puffinote's
 # UI tests use Avalonia's null drawing unconditionally and need none of this.)
-# `make` drives the repo's Makefile — the documented entry point for every build/test/format flow
-# (`make check` is the definition of done); the .NET SDK image doesn't ship it.
+# `just` drives the repo's justfile — the documented entry point for every build/test/format flow
+# (`just check` is the definition of done). It isn't in this base image's apt archive, so it comes
+# from the upstream installer below instead.
 # git/sudo/curl round out the dev experience. openssh-client provides
 # ssh-keygen, which git invokes to make SSH-signed commits via the forwarded
 # agent (gpg.format=ssh); without it `git commit -S` fails on ssh-keygen.
@@ -19,12 +20,16 @@ RUN apt-get update \
         libsm6 \
         libx11-6 \
         fonts-liberation \
-        make \
         git \
         curl \
         sudo \
         openssh-client \
     && rm -rf /var/lib/apt/lists/*
+
+# just, from the upstream installer (pinned; --to a system path so every user gets it).
+RUN curl --proto '=https' --tlsv1.2 -sSf https://just.systems/install.sh \
+    | bash -s -- --tag 1.57.0 --to /usr/local/bin \
+    && just --version
 
 # Non-root user to match the devcontainer convention. The :10.0 base image is
 # Ubuntu-based and already ships an `ubuntu` user/group at UID/GID 1000, so we
