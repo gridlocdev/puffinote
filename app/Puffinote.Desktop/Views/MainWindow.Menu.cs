@@ -62,6 +62,14 @@ public partial class MainWindow
                 () => _ = SaveCurrentAsync(), () => _tabHost.ActivePane is not null, icon: "save"),
             new("shell.closeTab", "Close Tab", "Close the active tab", Bound("shell.closeTab", Shortcut.Cmd(Key.W)),
                 () => _ = _tabHost.CloseActiveAsync(), () => _tabHost.ActivePane is not null),
+
+            // ⌥⌘W, the platform's "close all" convention. Deliberately *not* in the reserved set: the reserved
+            // list is fixed and documented (PRD §7.6), and ⌘W already guarantees a tab can always be closed, so
+            // this one stays an ordinary — and rebindable — binding. Each dirty tab still gets its own
+            // Save/Don't-Save/Cancel prompt via TabHost.CloseAllAsync; cancelling one stops the whole run.
+            new("shell.closeAllTabs", "Close All Tabs", "Close every open tab, prompting for unsaved changes",
+                Bound("shell.closeAllTabs", Shortcut.Cmd(Key.W, KeyModifiers.Alt)),
+                () => _ = _tabHost.CloseAllAsync(), () => _tabHost.Count > 0),
             new("shell.nextTab", "Next Tab", "Switch to the next tab", Bound("shell.nextTab", Shortcut.Cmd(Key.OemCloseBrackets, KeyModifiers.Shift)),
                 () => _tabHost.ActivateRelative(1)),
             new("shell.prevTab", "Previous Tab", "Switch to the previous tab", Bound("shell.prevTab", Shortcut.Cmd(Key.OemOpenBrackets, KeyModifiers.Shift)),
@@ -174,7 +182,7 @@ public partial class MainWindow
             {
                 Items =
                 {
-                    new NativeMenuItem { Header = "File", Menu = BuildNativeMenu("shell.openNotebook", "shell.quickOpen", "shell.newNote", "shell.newSpreadsheet", "shell.newFolder", "shell.save", "shell.closeTab") },
+                    new NativeMenuItem { Header = "File", Menu = BuildNativeMenu("shell.openNotebook", "shell.quickOpen", "shell.newNote", "shell.newSpreadsheet", "shell.newFolder", "shell.save", "shell.closeTab", "shell.closeAllTabs") },
                     new NativeMenuItem { Header = "View", Menu = BuildNativeMenu("shell.commandPalette", "shell.toggleSidebar", "shell.focusTree", "shell.focusEditor", "shell.toggleEditorToolbar", "shell.nextTab", "shell.prevTab") },
                     new NativeMenuItem { Header = "Help", Menu = BuildNativeMenu("shell.shortcuts", "shell.about") },
                 },
@@ -191,7 +199,7 @@ public partial class MainWindow
         {
             Items =
             {
-                new MenuItem { Header = "_File", ItemsSource = BuildMenuItems("shell.openNotebook", "shell.quickOpen", "shell.newNote", "shell.newSpreadsheet", "shell.newFolder", "shell.save", "shell.closeTab") },
+                new MenuItem { Header = "_File", ItemsSource = BuildMenuItems("shell.openNotebook", "shell.quickOpen", "shell.newNote", "shell.newSpreadsheet", "shell.newFolder", "shell.save", "shell.closeTab", "shell.closeAllTabs") },
                 new MenuItem { Header = "_View", ItemsSource = BuildMenuItems("shell.commandPalette", "shell.toggleSidebar", "shell.focusTree", "shell.focusEditor", "shell.toggleEditorToolbar", "shell.nextTab", "shell.prevTab") },
                 new MenuItem { Header = "_Help", ItemsSource = BuildMenuItems("shell.shortcuts", "shell.about") },
             },

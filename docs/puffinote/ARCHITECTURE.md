@@ -169,6 +169,8 @@ editors. `IEditorPane.SaveAsync()` calls the editor's save; Puffinote never writ
 - **Close semantics:** closing a dirty tab calls `PromptCloseAsync()` (shared `ConfirmDialog`); closing
   the notebook/window prompts per dirty tab. New tabs open after the active one; `⌘{`/`⌘}` switch; `⌘W`
   closes. Tab order persists per notebook.
+- **Close-all** (`shell.closeAllTabs`, `⌥⌘W`) is `TabHost.CloseAllAsync()` — the same per-tab
+  `CloseAsync` path the window-close handler uses, so it runs the same dirty prompt and stops on a Cancel.
 - **The active tab drives context:** it supplies the merged-palette editor commands (§7), the outline
   panel, the status bar, and which shortcut layer is active (§8).
 

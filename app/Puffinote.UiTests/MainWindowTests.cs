@@ -202,6 +202,41 @@ public sealed class MainWindowTests
         }
     }
 
+    [AvaloniaFact]
+    public async Task Close_all_tabs_command_empties_the_editor_area_and_is_disabled_with_nothing_open()
+    {
+        var dir = Directory.CreateTempSubdirectory("puffinote-close-all");
+        try
+        {
+            var one = Path.Combine(dir.FullName, "one.md");
+            var two = Path.Combine(dir.FullName, "two.md");
+            File.WriteAllText(one, "# one");
+            File.WriteAllText(two, "# two");
+
+            var window = new MainWindow(new NotebookService());
+            window.Show();
+            window.OpenNotebook(dir.FullName);
+
+            var closeAll = window.ShellCommandsForTest.Single(c => c.Id == "shell.closeAllTabs");
+            Assert.False(closeAll.IsEnabled); // nothing open yet
+
+            await window.OpenFileForTest(one);
+            await window.OpenFileForTest(two);
+            Assert.True(closeAll.IsEnabled);
+
+            window.InvokeShellForTest("shell.closeAllTabs"); // both are clean → closes without a prompt
+            Dispatcher.UIThread.RunJobs();
+
+            Assert.Null(window.ActiveTabPathForTest);
+            Assert.False(closeAll.IsEnabled);
+            Assert.False(window.IsOverlayOpenForTest);
+        }
+        finally
+        {
+            dir.Delete(recursive: true);
+        }
+    }
+
     /// <summary>The font weight the sidebar's file tree is drawing <paramref name="stem"/>'s row name in.</summary>
     private static FontWeight TreeWeight(MainWindow window, string rowName, string stem)
     {

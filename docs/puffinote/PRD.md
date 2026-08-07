@@ -384,6 +384,9 @@ Typage §12. Where a behavior belongs to an editor, Puffinote **delegates** and 
   override.
 - **Tabs:** new documents open **after** the active tab; `⌘{`/`⌘}` (or platform equivalents) switch tabs;
   a middle-click / `⌘W` closes (with the dirty prompt). Tab order is persisted per notebook.
+- **Close All Tabs (`⌥⌘W`):** closes every open tab, prompting per dirty tab exactly as `⌘W` does;
+  cancelling one prompt stops the run and leaves the remaining tabs open. It is **not** in the reserved
+  set (§7.6) — `⌘W` already guarantees a tab can always be closed — so it stays rebindable.
 
 *(Anything not pinned here defers to the owning editor's PRD: Typage §7.4/§8/§12 for Markdown behavior,
 Cellestra §8/§10 for spreadsheet behavior. If a shell behavior is genuinely unspecified, stop and ask,

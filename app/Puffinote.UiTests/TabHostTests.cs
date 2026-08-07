@@ -81,6 +81,48 @@ public sealed class TabHostTests
         Assert.Equal(1, host.Count);
     }
 
+    [AvaloniaFact]
+    public async Task Close_all_closes_every_tab()
+    {
+        var host = new TabHost();
+        host.OpenForTest(new FakePane("/notebook/one.md"), "/notebook/one.md");
+        host.OpenForTest(new FakePane("/notebook/two.md"), "/notebook/two.md");
+
+        Assert.True(await host.CloseAllAsync());
+        Assert.Equal(0, host.Count);
+        Assert.Null(host.ActivePane);
+    }
+
+    [AvaloniaFact]
+    public async Task Close_all_prompts_per_dirty_tab_and_a_cancel_stops_the_run()
+    {
+        // Close-all is close-one, N times — so a dirty tab gets the same Save/Don't-Save/Cancel prompt, and
+        // Cancel must abort the whole run rather than discarding it (or ploughing on through the rest).
+        var host = new TabHost();
+        host.OpenForTest(new FakePane("/notebook/clean.md"), "/notebook/clean.md");
+        var dirty = new FakePane("/notebook/dirty.md") { IsDirty = true };
+        host.OpenForTest(dirty, "/notebook/dirty.md");
+        host.OpenForTest(new FakePane("/notebook/last.md"), "/notebook/last.md");
+
+        var prompted = 0;
+        host.ConfirmClose = _ =>
+        {
+            prompted++;
+            return Task.FromResult(CloseDecision.Cancel);
+        };
+
+        Assert.False(await host.CloseAllAsync());
+        Assert.Equal(1, prompted);           // only the dirty tab prompts
+        Assert.False(dirty.Saved);
+        Assert.Equal(2, host.Count);         // clean.md closed; dirty.md and the untouched last.md remain
+
+        // Answering Save instead writes the dirty document and finishes the run.
+        host.ConfirmClose = _ => Task.FromResult(CloseDecision.Save);
+        Assert.True(await host.CloseAllAsync());
+        Assert.True(dirty.Saved);
+        Assert.Equal(0, host.Count);
+    }
+
     private static (string md, string ods) Seed(DirectoryInfo dir)
     {
         var md = Path.Combine(dir.FullName, "note.md");
