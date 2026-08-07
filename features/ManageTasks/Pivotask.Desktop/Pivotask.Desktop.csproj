@@ -1,0 +1,30 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- The standalone shell: window, menu, status bar, open/save dialogs, recent boards, and args[0] on
+       launch. Thin — everything that acts on the board lives in Pivotask.Control. -->
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <RootNamespace>Pivotask.Desktop</RootNamespace>
+    <AssemblyName>Pivotask</AssemblyName>
+    <AvaloniaUseCompiledBindingsByDefault>true</AvaloniaUseCompiledBindingsByDefault>
+    <BuiltInComInteropSupport>true</BuiltInComInteropSupport>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Avalonia" />
+    <PackageReference Include="Avalonia.Desktop" />
+    <PackageReference Include="Avalonia.Themes.Fluent" />
+    <PackageReference Include="Avalonia.Fonts.Inter" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Pivotask.Control\Pivotask.Control.csproj" />
+    <ProjectReference Include="..\Pivotask.Core\Pivotask.Core.csproj" />
+    <ProjectReference Include="..\..\..\shared\Puffinote.Components\Puffinote.Components.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="Pivotask.UiTests" />
+  </ItemGroup>
+
+</Project>

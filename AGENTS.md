@@ -9,6 +9,7 @@ A monorepo for **Puffinote**, a notebook-style workspace that composes independe
 - **Typage** — a Markdown (`.md`) live-preview editor.
 - **Cellestra** — an OpenDocument Spreadsheet (`.ods`) editor (macOS-first for 1.0).
 - **Plaintain** — a plaintext (`.txt`, `.log`, anything decodable) editor.
+- **Pivotask** — a task board (`.pivotask.json`).
 - **Puffinote** — the composite shell/app that embeds them, plus a unifying CLI.
 
 Each editor builds, tests, and ships on its own; the shell embeds them without reaching into their internals. Removing Puffinote must leave every editor fully working.
@@ -20,6 +21,7 @@ app/                          Puffinote — the composite shell (Desktop + CLI) 
 features/EditMarkdown/        Typage — the Markdown editor (engine, control, desktop, CLI, tests)
 features/EditSpreadsheets/    Cellestra — the spreadsheet editor (core, editor, charts, desktop, CLI, tests)
 features/EditPlaintext/       Plaintain — the plaintext editor (control, desktop, CLI, tests)
+features/ManageTasks/         Pivotask — the task board (core, control, desktop, CLI, tests)
 shared/                       Cross-cutting libraries used by the shell and the editors:
                                 Puffinote.Components (Avalonia: theming, icons, overlays, shell chrome)
                                 Puffinote.Components.Core (non-UI: CLI helpers — safe for CLI projects)
@@ -39,6 +41,7 @@ There is no single root solution. Each area has its own:
 | Markdown editor (`features/EditMarkdown/`) | [`features/EditMarkdown/AGENTS.md`](features/EditMarkdown/AGENTS.md) | `features/EditMarkdown/Typage.slnx` |
 | Spreadsheet editor (`features/EditSpreadsheets/`) | [`features/EditSpreadsheets/AGENTS.md`](features/EditSpreadsheets/AGENTS.md) | `features/EditSpreadsheets/Cellestra.slnx` |
 | Plaintext editor (`features/EditPlaintext/`) | [`features/EditPlaintext/AGENTS.md`](features/EditPlaintext/AGENTS.md) | `features/EditPlaintext/Plaintain.slnx` |
+| Task board (`features/ManageTasks/`) | [`features/ManageTasks/AGENTS.md`](features/ManageTasks/AGENTS.md) | `features/ManageTasks/Pivotask.slnx` |
 
 `shared/` has no guide of its own because it isn't an area you work in — it's a dependency of every other one. Its projects are compiled into **every solution**, so a change there is a change to every area: build and test them all (`just check`) before you call it done.
 
@@ -59,7 +62,7 @@ The `justfile` is the front door — it knows every area's solution path, so you
 
 ```bash
 just build                                # every area   (also: just test, just format)
-just build-typage                         # one area     (verb-first: <verb>-puffinote | -typage | -cellestra | -plaintain)
+just build-typage                         # one area     (verb-first: <verb>-puffinote | -typage | -cellestra | -plaintain | -pivotask)
 just test-filter SomeTest typage          # one test / a subset — prefer this while iterating
 just check                                # format-verify + build + test, every area
 ```

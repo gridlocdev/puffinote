@@ -33,6 +33,8 @@
     <!-- Embedded editor #3: the Plaintain plaintext surface (PlainTextEditorView; the pane owns the
          file I/O, as it does for Markdown). -->
     <ProjectReference Include="..\..\features\EditPlaintext\Plaintain.Control\Plaintain.Control.csproj" />
+    <!-- Embedded editor #4: the Pivotask board (TaskBoardView; the document owns its own atomic write). -->
+    <ProjectReference Include="..\..\features\ManageTasks\Pivotask.Control\Pivotask.Control.csproj" />
   </ItemGroup>
 
   <ItemGroup>

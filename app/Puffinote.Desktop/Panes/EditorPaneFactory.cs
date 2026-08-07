@@ -2,18 +2,29 @@ namespace Puffinote.Desktop.Panes;
 
 /// <summary>
 /// Maps a file to the pane that can edit it (ARCHITECTURE §4.1): <c>.md</c> → Typage, <c>.ods</c> →
-/// Cellestra, and <b>anything else that decodes as text</b> → Plaintain. A future file type is one new
-/// <see cref="IEditorPane"/> plus a branch here — no shell rewrite.
+/// Cellestra, <c>.pivotask.json</c> → Pivotask, and <b>anything else that reads as text</b> → Plaintain.
+/// A future file type is one new <see cref="IEditorPane"/> plus a branch here — no shell rewrite.
 ///
-/// <para><b>The order matters.</b> The specific editors are asked first, because a Markdown file and a
-/// spreadsheet are both "text" to a decoder and neither should open in a plaintext pane. Plaintain is
-/// last, and it is a <i>fallback</i> rather than another whitelist: a known-extension list routes fast,
-/// and anything else that decodes cleanly opens too. That is what lets Puffinote genuinely open any
-/// text file — a <c>.log</c>, a <c>.conf</c>, an extensionless <c>LICENSE</c> — without maintaining an
-/// infinite list of extensions (proposal 0003, Phase 4).</para>
+/// <para><b>The order matters, twice.</b> The specific editors are asked first, because a Markdown file
+/// and a spreadsheet are both "text" to a decoder and neither should open in a plaintext pane. And a
+/// board is matched by <i>suffix</i> before anything looks at extensions at all:
+/// <c>Path.GetExtension("board.pivotask.json")</c> returns <c>".json"</c>, so extension matching is
+/// structurally unable to see one — and <c>.json</c> is on Plaintain's fast list, so a board would
+/// otherwise open as text (proposal 0004 §4, and the risk its §7 records).</para>
+///
+/// <para>Plaintain is last, and it is a <i>fallback</i> rather than another whitelist: a
+/// known-extension list routes fast, and anything else that reads as text opens too. That is what lets
+/// Puffinote genuinely open any text file — a <c>.log</c>, a <c>.conf</c>, an extensionless
+/// <c>LICENSE</c> — without maintaining an infinite list of extensions (proposal 0003, Phase 4).</para>
 /// </summary>
 internal static class EditorPaneFactory
 {
+    /// <summary>
+    /// A board's compound extension. Matched with <c>EndsWith</c>, deliberately: this is a suffix, and
+    /// treating it as an extension is exactly the bug §4 of the proposal warns about.
+    /// </summary>
+    private const string BoardSuffix = ".pivotask.json";
+
     /// <summary>Extensions Plaintain routes on sight, so the common cases never touch the disk twice.</summary>
     private static readonly string[] PlainTextExtensions =
     [
@@ -42,7 +53,7 @@ internal static class EditorPaneFactory
     private const int ProbeBytes = 8 * 1024;
 
     /// <summary>True when some pane in this build can open <paramref name="path"/>.</summary>
-    public static bool CanOpen(string path) => IsMarkdown(path) || IsSpreadsheet(path) || IsPlainText(path);
+    public static bool CanOpen(string path) => IsMarkdown(path) || IsSpreadsheet(path) || IsBoard(path) || IsPlainText(path);
 
     /// <summary>
     /// Create a pane for <paramref name="path"/>, or null when no editor handles its type.
@@ -61,6 +72,12 @@ internal static class EditorPaneFactory
             return new SheetPane();
         }
 
+        // Before any extension test: ".pivotask.json" ends in ".json", which Plaintain routes on sight.
+        if (IsBoard(path))
+        {
+            return new TaskBoardPane();
+        }
+
         if (IsPlainText(path))
         {
             return new PlainTextPane();
@@ -74,6 +91,9 @@ internal static class EditorPaneFactory
 
     private static bool IsSpreadsheet(string path) =>
         HasExtension(path, ".ods");
+
+    private static bool IsBoard(string path) =>
+        path is not null && path.EndsWith(BoardSuffix, StringComparison.OrdinalIgnoreCase);
 
     /// <summary>
     /// Whether Plaintain should take this file: a known text extension, or — for anything else — bytes

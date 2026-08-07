@@ -1,0 +1,83 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!-- macOS bundle metadata, assembled into Pivotask.app/Contents/Info.plist by build/package-mac.sh.
+
+     THE DOCUMENT CLAIM IS A COMPOUND EXTENSION, and that is the risky part (proposal 0004 §4).
+     CFBundleTypeExtensions matches the *final* component, so claiming "pivotask.json" needs an
+     exported custom UTI whose UTTypeTagSpecification carries the two-part filename extension. macOS
+     does support this — .tar.gz works the same way — but it MUST BE VERIFIED ON A REAL MAC. If it
+     doesn't hold, §10.3 settles the fallback: remove the CFBundleDocumentTypes and UTExportedTypeDeclarations
+     arrays entirely and ship with no Finder claim. Pivotask then opens via the app, `ptask`, and
+     Puffinote, which is a smaller loss than the alternative.
+
+     Bare "json" is NOT claimed at any rank, Owner or Alternate. Putting Pivotask in the "Open With"
+     menu of every JSON file on the machine is noise for files it cannot parse. -->
+<plist version="1.0">
+<dict>
+    <key>CFBundleName</key>
+    <string>Pivotask</string>
+    <key>CFBundleDisplayName</key>
+    <string>Pivotask</string>
+    <key>CFBundleIdentifier</key>
+    <string>com.pivotask.Pivotask</string>
+    <key>CFBundleExecutable</key>
+    <string>Pivotask</string>
+    <key>CFBundlePackageType</key>
+    <string>APPL</string>
+    <key>CFBundleInfoDictionaryVersion</key>
+    <string>6.0</string>
+    <key>CFBundleShortVersionString</key>
+    <string>1.0.0</string>
+    <key>CFBundleVersion</key>
+    <string>1</string>
+    <key>CFBundleIconFile</key>
+    <string>Pivotask</string>
+    <key>LSMinimumSystemVersion</key>
+    <string>11.0</string>
+    <key>LSApplicationCategoryType</key>
+    <string>public.app-category.productivity</string>
+    <key>NSHighResolutionCapable</key>
+    <true/>
+    <key>NSPrincipalClass</key>
+    <string>NSApplication</string>
+    <key>NSRequiresAquaSystemAppearance</key>
+    <false/>
+
+    <key>UTExportedTypeDeclarations</key>
+    <array>
+        <dict>
+            <key>UTTypeIdentifier</key>
+            <string>com.pivotask.board</string>
+            <key>UTTypeDescription</key>
+            <string>Pivotask Board</string>
+            <key>UTTypeConformsTo</key>
+            <array>
+                <string>public.json</string>
+            </array>
+            <key>UTTypeTagSpecification</key>
+            <dict>
+                <key>public.filename-extension</key>
+                <array>
+                    <string>pivotask.json</string>
+                </array>
+            </dict>
+        </dict>
+    </array>
+
+    <key>CFBundleDocumentTypes</key>
+    <array>
+        <dict>
+            <key>CFBundleTypeName</key>
+            <string>Pivotask Board</string>
+            <key>CFBundleTypeRole</key>
+            <string>Editor</string>
+            <key>LSHandlerRank</key>
+            <string>Owner</string>
+            <key>LSItemContentTypes</key>
+            <array>
+                <string>com.pivotask.board</string>
+            </array>
+        </dict>
+    </array>
+</dict>
+</plist>

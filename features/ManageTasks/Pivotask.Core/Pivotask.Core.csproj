@@ -1,0 +1,20 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    The document model, the JSON codec, every mutation as an undoable command, and the filter/search
+    logic. GOLDEN RULE: ZERO UI dependencies — no Avalonia.* here, ever. Only the .NET BCL
+    (System.Text.Json is BCL, which is why the format is JSON and needs no new package).
+
+    This is where most of Pivotask's logic and tests live. The CLI and the control are both consumers.
+  -->
+  <PropertyGroup>
+    <RootNamespace>Pivotask.Core</RootNamespace>
+    <AssemblyName>Pivotask.Core</AssemblyName>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="Pivotask.Core.Tests" />
+    <InternalsVisibleTo Include="ptask" />
+  </ItemGroup>
+
+</Project>

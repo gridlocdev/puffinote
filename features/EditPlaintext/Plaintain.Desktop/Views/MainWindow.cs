@@ -4,6 +4,7 @@ using Avalonia.Input;
 using Avalonia.Layout;
 using Avalonia.Media;
 using Plaintain.Control.Commands;
+using Plaintain.Control.Controls;
 using Plaintain.Control.Views;
 using Plaintain.Desktop.Services;
 using Puffinote.Components.Commands;
@@ -50,6 +51,19 @@ public sealed partial class MainWindow : Window
         EditorView.Editor.ShowLineNumbers = _settings.Settings.ShowLineNumbers;
         EditorView.Editor.FontSize = _settings.Settings.FontSize;
         EditorView.SelectionChanged += (_, _) => UpdateChrome();
+
+        // Wrap and the gutter are remembered, because they are settings people hold an opinion about
+        // once: whoever wants wrap wants it for every file, and whoever doesn't never wants it again.
+        EditorView.Editor.PropertyChanged += (_, change) =>
+        {
+            if (change.Property == PlainTextEditor.WordWrapProperty
+                || change.Property == PlainTextEditor.ShowLineNumbersProperty)
+            {
+                _settings.Settings.WordWrap = EditorView.Editor.WordWrap;
+                _settings.Settings.ShowLineNumbers = EditorView.Editor.ShowLineNumbers;
+                _settings.Save();
+            }
+        };
 
         _commands = EditorView.EditingCommands.ToDictionary(c => c.Id, StringComparer.Ordinal);
         PlainTextEditingCommands.GoToLineRequested += OnGoToLineRequested;

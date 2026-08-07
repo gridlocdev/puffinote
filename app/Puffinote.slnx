@@ -23,6 +23,9 @@
     <Project Path="../features/EditSpreadsheets/Cellestra.Editor/Cellestra.Editor.csproj" />
     <Project Path="../features/EditPlaintext/Plaintain.Control/Plaintain.Control.csproj" />
     <Project Path="../features/EditPlaintext/Plaintain.Cli/Plaintain.Cli.csproj" />
+    <Project Path="../features/ManageTasks/Pivotask.Core/Pivotask.Core.csproj" />
+    <Project Path="../features/ManageTasks/Pivotask.Control/Pivotask.Control.csproj" />
+    <Project Path="../features/ManageTasks/Pivotask.Cli/Pivotask.Cli.csproj" />
   </Folder>
 </Solution>
 

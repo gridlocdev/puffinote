@@ -16,6 +16,7 @@
 #   build/package-mac.sh typage
 #   build/package-mac.sh puffinote
 #   build/package-mac.sh plaintain
+#   build/package-mac.sh pivotask
 #   RID=osx-x64 build/package-mac.sh typage     # cross-target Intel
 #   CONFIG=Debug build/package-mac.sh typage    # debug build
 #   OUT=/tmp/out build/package-mac.sh typage    # somewhere other than artifacts/
@@ -29,7 +30,7 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
 usage() {
-    echo "usage: build/package-mac.sh <puffinote|typage|cellestra|plaintain>" >&2
+    echo "usage: build/package-mac.sh <puffinote|typage|cellestra|plaintain|pivotask>" >&2
 }
 
 APP_SLUG="${1:-}"
@@ -38,6 +39,7 @@ case "$APP_SLUG" in
     typage)    APP_NAME="Typage";    PROJECT_DIR="features/EditMarkdown/Typage.Desktop" ;;
     cellestra) APP_NAME="Cellestra"; PROJECT_DIR="features/EditSpreadsheets/Cellestra.Desktop" ;;
     plaintain) APP_NAME="Plaintain"; PROJECT_DIR="features/EditPlaintext/Plaintain.Desktop" ;;
+    pivotask)  APP_NAME="Pivotask";  PROJECT_DIR="features/ManageTasks/Pivotask.Desktop" ;;
     "")        usage; exit 2 ;;
     *)         echo "unknown app: $APP_SLUG" >&2; usage; exit 2 ;;
 esac

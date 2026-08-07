@@ -5,6 +5,7 @@
 #   features/EditMarkdown/      Typage    — Markdown editor
 #   features/EditSpreadsheets/  Cellestra — spreadsheet editor
 #   features/EditPlaintext/     Plaintain — plaintext editor
+#   features/ManageTasks/       Pivotask  — task board
 #
 # Common flows:
 #   just                  list every recipe (grouped)
@@ -15,7 +16,7 @@
 #   just test-typage      one area's suite (recipes read verb-first: test-puffinote, publish-cellestra-app)
 #   just test-filter SomeTest typage    run a subset while iterating
 #   just publish          self-contained Release builds of every app into artifacts/
-#   just install          put the CLIs (puffinote, typage, cellestra, pltn) on PATH
+#   just install          put the CLIs (puffinote, typage, cellestra, pltn, ptask) on PATH
 #   just publish-app      macOS .app bundles for every app (macOS only)
 #   just install-app      ...and copy them into /Applications
 #
@@ -40,18 +41,21 @@ PUFFINOTE_SLN := "app/Puffinote.slnx"
 TYPAGE_SLN    := "features/EditMarkdown/Typage.slnx"
 CELLESTRA_SLN := "features/EditSpreadsheets/Cellestra.slnx"
 PLAINTAIN_SLN := "features/EditPlaintext/Plaintain.slnx"
+PIVOTASK_SLN  := "features/ManageTasks/Pivotask.slnx"
 
 # ---- CLI entry projects (run headless in the Linux devcontainer) --------------
 PUFFINOTE_CLI := "app/Puffinote.Cli"
 TYPAGE_CLI    := "features/EditMarkdown/Typage.Cli"
 CELLESTRA_CLI := "features/EditSpreadsheets/Cellestra.Cli"
 PLAINTAIN_CLI := "features/EditPlaintext/Plaintain.Cli"
+PIVOTASK_CLI  := "features/ManageTasks/Pivotask.Cli"
 
 # ---- Desktop (GUI) entry projects (run on a native host, not the container) ---
 PUFFINOTE_DESKTOP := "app/Puffinote.Desktop"
 TYPAGE_DESKTOP    := "features/EditMarkdown/Typage.Desktop"
 CELLESTRA_DESKTOP := "features/EditSpreadsheets/Cellestra.Desktop"
 PLAINTAIN_DESKTOP := "features/EditPlaintext/Plaintain.Desktop"
+PIVOTASK_DESKTOP  := "features/ManageTasks/Pivotask.Desktop"
 
 DOTNET := "dotnet"
 
@@ -74,6 +78,7 @@ PUFFINOTE_OUT := ARTIFACTS / "puffinote" / RID
 TYPAGE_OUT    := ARTIFACTS / "typage" / RID
 CELLESTRA_OUT := ARTIFACTS / "cellestra" / RID
 PLAINTAIN_OUT := ARTIFACTS / "plaintain" / RID
+PIVOTASK_OUT  := ARTIFACTS / "pivotask" / RID
 
 # Both surfaces publish self-contained, so an artifact runs on a machine with no .NET installed.
 # The CLI additionally publishes as a single self-extracting file (native libraries included) so
@@ -106,27 +111,27 @@ all: build test
 
 # Restore NuGet packages for every area
 [group('all areas')]
-restore: restore-puffinote restore-typage restore-cellestra restore-plaintain
+restore: restore-puffinote restore-typage restore-cellestra restore-plaintain restore-pivotask
 
 # Build every area (warnings are errors)
 [group('all areas')]
-build: build-puffinote build-typage build-cellestra build-plaintain
+build: build-puffinote build-typage build-cellestra build-plaintain build-pivotask
 
 # Test every area
 [group('all areas')]
-test: test-puffinote test-typage test-cellestra test-plaintain
+test: test-puffinote test-typage test-cellestra test-plaintain test-pivotask
 
 # Auto-format every area
 [group('all areas')]
-format: format-puffinote format-typage format-cellestra format-plaintain
+format: format-puffinote format-typage format-cellestra format-plaintain format-pivotask
 
 # Verify formatting for every area (no changes)
 [group('all areas')]
-format-check: format-check-puffinote format-check-typage format-check-cellestra format-check-plaintain
+format-check: format-check-puffinote format-check-typage format-check-cellestra format-check-plaintain format-check-pivotask
 
 # Remove build artifacts for every area, including everything publish wrote (all RIDs)
 [group('all areas')]
-clean: clean-puffinote clean-typage clean-cellestra clean-plaintain
+clean: clean-puffinote clean-typage clean-cellestra clean-plaintain clean-pivotask
     rm -rf "{{ ARTIFACTS }}"
 
 # Definition of done: formatting verified, all areas build clean and green
@@ -135,31 +140,31 @@ check: format-check build test
 
 # Publish every app (CLI + desktop, self-contained) to artifacts/
 [group('all areas')]
-publish: publish-puffinote publish-typage publish-cellestra publish-plaintain
+publish: publish-puffinote publish-typage publish-cellestra publish-plaintain publish-pivotask
 
 # Remove every app's published output for this RID (the inverse of publish)
 [group('all areas')]
-unpublish: unpublish-puffinote unpublish-typage unpublish-cellestra unpublish-plaintain
+unpublish: unpublish-puffinote unpublish-typage unpublish-cellestra unpublish-plaintain unpublish-pivotask
 
 # Install every CLI into PREFIX/bin (default ~/.local/bin)
 [group('all areas')]
-install: install-puffinote install-typage install-cellestra install-plaintain
+install: install-puffinote install-typage install-cellestra install-plaintain install-pivotask
 
 # Remove every installed CLI from PREFIX/bin
 [group('all areas')]
-uninstall: uninstall-puffinote uninstall-typage uninstall-cellestra uninstall-plaintain
+uninstall: uninstall-puffinote uninstall-typage uninstall-cellestra uninstall-plaintain uninstall-pivotask
 
 # Build every macOS .app bundle (macOS only)
 [group('all areas')]
-publish-app: publish-puffinote-app publish-typage-app publish-cellestra-app publish-plaintain-app
+publish-app: publish-puffinote-app publish-typage-app publish-cellestra-app publish-plaintain-app publish-pivotask-app
 
 # Install every macOS .app into APPS_DIR (macOS only)
 [group('all areas')]
-install-app: install-puffinote-app install-typage-app install-cellestra-app install-plaintain-app
+install-app: install-puffinote-app install-typage-app install-cellestra-app install-plaintain-app install-pivotask-app
 
 # Remove every macOS .app from APPS_DIR (the inverse of install-app; macOS only)
 [group('all areas')]
-uninstall-app: uninstall-puffinote-app uninstall-typage-app uninstall-cellestra-app uninstall-plaintain-app
+uninstall-app: uninstall-puffinote-app uninstall-typage-app uninstall-cellestra-app uninstall-plaintain-app uninstall-pivotask-app
 
 # ==============================================================================
 # Puffinote — the composite shell (app/)
@@ -558,11 +563,111 @@ uninstall-plaintain-app:
     rm -rf "{{ APPS_DIR }}/Plaintain.app"
     @echo "removed {{ APPS_DIR }}/Plaintain.app"
 
+
+# ==============================================================================
+# Pivotask — the task board (features/ManageTasks/)
+# ==============================================================================
+
+# Restore Pivotask packages
+[group('pivotask')]
+restore-pivotask:
+    {{ DOTNET }} restore {{ PIVOTASK_SLN }}
+
+# Build Pivotask
+[group('pivotask')]
+build-pivotask:
+    {{ DOTNET }} build {{ PIVOTASK_SLN }}
+
+# Test Pivotask
+[group('pivotask')]
+test-pivotask:
+    {{ DOTNET }} test {{ PIVOTASK_SLN }}
+
+# Auto-format Pivotask
+[group('pivotask')]
+format-pivotask:
+    {{ DOTNET }} format {{ PIVOTASK_SLN }}
+
+# Verify Pivotask formatting (fails if unformatted)
+[group('pivotask')]
+format-check-pivotask:
+    {{ DOTNET }} format {{ PIVOTASK_SLN }} --verify-no-changes
+
+# Clean Pivotask build artifacts
+[group('pivotask')]
+clean-pivotask:
+    {{ DOTNET }} clean {{ PIVOTASK_SLN }}
+
+# Run the Pivotask desktop editor (native host — GUI won't launch in the container)
+[group('pivotask')]
+run-pivotask:
+    {{ DOTNET }} run --project {{ PIVOTASK_DESKTOP }}
+
+# Run the ptask CLI: just run-pivotask-cli list --due-soon
+[group('pivotask')]
+run-pivotask-cli *ARGS:
+    {{ DOTNET }} run --project {{ PIVOTASK_CLI }} -- {{ ARGS }}
+
+# Publish the ptask CLI + Pivotask app to artifacts/pivotask/<rid>/
+[group('pivotask')]
+publish-pivotask: publish-pivotask-cli publish-pivotask-desktop
+
+# Publish the `ptask` CLI (single self-contained file)
+[group('pivotask')]
+publish-pivotask-cli:
+    {{ DOTNET }} publish {{ PIVOTASK_CLI }} {{ PUBLISH_CLI_FLAGS }} -o {{ PIVOTASK_OUT }}/cli
+
+# Publish the Pivotask desktop app (self-contained)
+[group('pivotask')]
+publish-pivotask-desktop:
+    {{ DOTNET }} publish {{ PIVOTASK_DESKTOP }} {{ PUBLISH_DESKTOP_FLAGS }} -o {{ PIVOTASK_OUT }}/desktop
+
+# Build Pivotask.app (macOS only)
+[group('pivotask')]
+publish-pivotask-app:
+    CONFIG={{ CONFIG }} RID={{ RID }} OUT={{ PIVOTASK_OUT }} {{ PACKAGE_MAC }} pivotask
+
+# Install the `ptask` CLI into PREFIX/bin (default ~/.local/bin)
+[group('pivotask')]
+install-pivotask: publish-pivotask-cli
+    @mkdir -p "{{ BINDIR }}"
+    install -m 0755 {{ PIVOTASK_OUT }}/cli/ptask "{{ BINDIR }}/ptask"
+    @echo "installed {{ BINDIR }}/ptask — make sure {{ BINDIR }} is on your PATH"
+
+# Install Pivotask.app into APPS_DIR (default /Applications, macOS only)
+[group('pivotask')]
+install-pivotask-app: publish-pivotask-app
+    @mkdir -p "{{ APPS_DIR }}"
+    rm -rf "{{ APPS_DIR }}/Pivotask.app"
+    cp -R {{ PIVOTASK_OUT }}/Pivotask.app "{{ APPS_DIR }}/Pivotask.app"
+    @echo "installed {{ APPS_DIR }}/Pivotask.app"
+
+# Remove Pivotask's published output for this RID (the inverse of publish-pivotask)
+[group('pivotask')]
+unpublish-pivotask:
+    rm -rf "{{ PIVOTASK_OUT }}"
+    @rmdir "{{ ARTIFACTS }}/pivotask" 2>/dev/null || true
+    @rmdir "{{ ARTIFACTS }}" 2>/dev/null || true
+    @echo "removed {{ PIVOTASK_OUT }}"
+
+# Remove the installed `ptask` CLI from PREFIX/bin
+[group('pivotask')]
+uninstall-pivotask:
+    rm -f "{{ BINDIR }}/ptask"
+    @echo "removed {{ BINDIR }}/ptask"
+
+# Remove Pivotask.app from APPS_DIR (the inverse of install-pivotask-app; macOS only)
+[group('pivotask')]
+uninstall-pivotask-app:
+    @{{ LSREGISTER }} -u "{{ APPS_DIR }}/Pivotask.app" >/dev/null 2>&1 || true
+    rm -rf "{{ APPS_DIR }}/Pivotask.app"
+    @echo "removed {{ APPS_DIR }}/Pivotask.app"
+
 # ==============================================================================
 # Iterating on a single test / subset (prefer this while developing)
 # ==============================================================================
 
-# Run a filtered subset: just test-filter SomeTest [puffinote|typage|cellestra|plaintain]
+# Run a filtered subset: just test-filter SomeTest [puffinote|typage|cellestra|plaintain|pivotask]
 [group('all areas')]
 test-filter FILTER AREA="puffinote":
-    {{ DOTNET }} test {{ if AREA == "typage" { TYPAGE_SLN } else if AREA == "cellestra" { CELLESTRA_SLN } else if AREA == "plaintain" { PLAINTAIN_SLN } else { PUFFINOTE_SLN } }} --filter "FullyQualifiedName~{{ FILTER }}"
+    {{ DOTNET }} test {{ if AREA == "typage" { TYPAGE_SLN } else if AREA == "cellestra" { CELLESTRA_SLN } else if AREA == "plaintain" { PLAINTAIN_SLN } else if AREA == "pivotask" { PIVOTASK_SLN } else { PUFFINOTE_SLN } }} --filter "FullyQualifiedName~{{ FILTER }}"

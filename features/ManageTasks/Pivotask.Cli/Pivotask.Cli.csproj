@@ -1,0 +1,33 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    `ptask` — the second consumer of Pivotask.Core, and a genuinely useful one. Task management is
+    scriptable in a way text editing isn't, so this ships a full mutating verb set (proposal 0004 §10.5)
+    and landed *before* the GUI, which is what got the core's API exercised while it was still cheap to
+    change.
+
+    The binary is short (`ptask`, not `pivotask`) because a task CLI is typed many times a day and an
+    editor's is not — §10.2. The app, assembly, bundle, and justfile recipes stay Pivotask.
+
+    GOLDEN RULE: no Avalonia, no network.
+  -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <RootNamespace>Pivotask.Cli</RootNamespace>
+    <AssemblyName>ptask</AssemblyName>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="System.CommandLine" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Pivotask.Core\Pivotask.Core.csproj" />
+    <ProjectReference Include="..\..\..\shared\Puffinote.Components.Core\Puffinote.Components.Core.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="Pivotask.Cli.Tests" />
+  </ItemGroup>
+
+</Project>

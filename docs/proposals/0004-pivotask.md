@@ -1,7 +1,10 @@
 # Proposal 0004 — **Pivotask**, a task-board editor for the Puffinote family
 
-- **Status:** Draft — no phase started. **All §10 decisions are settled**; sequencing against proposal
-  0003 is open by choice (§10.8 — the two are independent).
+- **Status:** **Built** — Phases 0–5 landed, in that order, alongside proposal 0003 (§10.8 said the
+  sequencing was free; both were asked for at once). All §10 decisions held as written. The one item
+  that cannot be verified from here is §4's compound-extension Finder claim, which needs a real Mac —
+  the plist ships the exported UTI, and §10.3's fallback (remove the claim entirely) is the answer if
+  it doesn't hold.
 - **Author:** (you) · drafted with Claude
 - **Affects:** new `features/ManageTasks` (Pivotask), `app/` (Puffinote shell — a fourth pane type),
   `shared/` (small additions to `Puffinote.Components`), `build/`, `justfile`

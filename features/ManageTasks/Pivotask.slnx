@@ -1,0 +1,15 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="Pivotask.Core/Pivotask.Core.csproj" />
+    <Project Path="Pivotask.Control/Pivotask.Control.csproj" />
+    <Project Path="Pivotask.Desktop/Pivotask.Desktop.csproj" />
+    <Project Path="Pivotask.Cli/Pivotask.Cli.csproj" />
+    <Project Path="Pivotask.Core.Tests/Pivotask.Core.Tests.csproj" />
+    <Project Path="Pivotask.Cli.Tests/Pivotask.Cli.Tests.csproj" />
+    <Project Path="Pivotask.UiTests/Pivotask.UiTests.csproj" />
+  </Folder>
+  <Folder Name="/shared/">
+    <Project Path="../../shared/Puffinote.Components/Puffinote.Components.csproj" />
+    <Project Path="../../shared/Puffinote.Components.Core/Puffinote.Components.Core.csproj" />
+  </Folder>
+</Solution>
