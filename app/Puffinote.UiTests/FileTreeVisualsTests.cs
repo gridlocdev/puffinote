@@ -151,6 +151,27 @@ public sealed class FileTreeVisualsTests : IDisposable
     private static FontWeight Weight(Window window, string name, string stem) =>
         In<TextBlock>(Row(window, name)).Single(t => t.Text == stem).FontWeight;
 
+    private static IBrush? Ink(Window window, string name, string stem) =>
+        In<TextBlock>(Row(window, name)).Single(t => t.Text == stem).Foreground;
+
+    [AvaloniaFact]
+    public void Unselected_folders_and_files_are_written_in_the_same_ink()
+    {
+        // Folders used to keep the brighter inherited brush while files were muted, so a list of folders read
+        // as a wall of highlights — the loudest thing on screen was the scaffolding, not the note being read.
+        var (tree, window) = Open();
+        tree.SetActiveDocument(Path("Inbox.md"));
+        Settle(window);
+
+        Assert.Equal(Ink(window, "cover.png", "cover"), Ink(window, "Projects", "Projects"));
+
+        // ...and muted is the level they meet at, not the bright one.
+        Assert.Equal(Tokens.Dark.MutedText, Ink(window, "Projects", "Projects"));
+
+        // The active note is still the exception: colour and weight both single it out.
+        Assert.NotEqual(Ink(window, "Projects", "Projects"), Ink(window, "Inbox.md", "Inbox"));
+    }
+
     [AvaloniaFact]
     public void Only_the_document_you_are_reading_is_bold_and_folders_never_are()
     {

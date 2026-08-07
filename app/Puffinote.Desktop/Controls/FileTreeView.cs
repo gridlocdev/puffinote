@@ -549,11 +549,14 @@ internal sealed class FileTreeView : UserControl
             TextTrimming = TextTrimming.CharacterEllipsis,
             FontWeight = isActive ? FontWeight.SemiBold : FontWeight.Normal,
         };
-        if (!row.Node.IsDirectory && !isActive)
+        if (!isActive)
         {
-            // Files read one step back from folders, which keep the inherited default text brush. The active
-            // one comes back up to full strength, so weight and colour say "here" together. (Assigning `null`
-            // here to mean "use the default" would instead set a local null brush — and paint nothing.)
+            // Every unselected row reads the same, folders included. Giving folders the brighter inherited
+            // brush made them jump out of a list they only organise, and in a folder-heavy notebook that
+            // brightness landed on most of the rows — loud enough to compete with the one row that matters.
+            // The chevron and folder glyph already say "folder"; colour is spent on "here" instead, and only
+            // the active file comes up to full strength. (Assigning `null` here to mean "use the default"
+            // would instead set a local null brush — and paint nothing.)
             name.Foreground = palette.MutedText;
         }
 
