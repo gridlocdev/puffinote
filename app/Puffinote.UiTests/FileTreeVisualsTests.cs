@@ -168,35 +168,72 @@ public sealed class FileTreeVisualsTests : IDisposable
         // ...and muted is the level they meet at, not the bright one.
         Assert.Equal(Tokens.Dark.MutedText, Ink(window, "Projects", "Projects"));
 
-        // The active note is still the exception: colour and weight both single it out.
-        Assert.NotEqual(Ink(window, "Projects", "Projects"), Ink(window, "Inbox.md", "Inbox"));
+        // Every row, the open one included: what marks it is the wash behind it, not its ink.
+        Assert.Equal(Tokens.Dark.MutedText, Ink(window, "Inbox.md", "Inbox"));
     }
 
+    /// <summary>The wash painted behind a row, which is what "highlighted" means here.</summary>
+    private static IBrush? Wash(Window window, string name) =>
+        In<DockPanel>(Row(window, name)).First().Background;
+
     [AvaloniaFact]
-    public void Only_the_document_you_are_reading_is_bold_and_folders_never_are()
+    public void The_document_you_are_reading_is_highlighted_and_never_bold()
     {
-        // Bold used to mean "is a folder", which put the tree's loudest mark on its most numerous rows and left
-        // the one row you actually care about — the note in front of you — indistinguishable from every other file.
+        // Weight is deliberately not a signal: bold made the active row wider than the same row inactive, so the
+        // mark that moves as you switch notes also shifted its neighbours sideways.
         var (tree, window) = Open();
         tree.SetActiveDocument(Path("Inbox.md"));
         Settle(window);
 
-        Assert.Equal(FontWeight.SemiBold, Weight(window, "Inbox.md", "Inbox"));
-        Assert.Equal(FontWeight.Normal, Weight(window, "Projects", "Projects")); // a folder is a folder, not a shout
+        Assert.Equal(Tokens.Dark.AccentSubtle, Wash(window, "Inbox.md"));
+        Assert.Equal(FontWeight.Normal, Weight(window, "Inbox.md", "Inbox"));
+
+        // Nothing is bold anywhere, so no row's width depends on which note is open.
+        Assert.Equal(FontWeight.Normal, Weight(window, "Projects", "Projects"));
         Assert.Equal(FontWeight.Normal, Weight(window, "cover.png", "cover"));
 
-        // The bold follows the tab you switch to; it never smears across two rows.
+        // The highlight follows the tab you switch to; it never smears across two rows.
         tree.SetActiveDocument(Path("cover.png"));
         Settle(window);
 
-        Assert.Equal(FontWeight.SemiBold, Weight(window, "cover.png", "cover"));
-        Assert.Equal(FontWeight.Normal, Weight(window, "Inbox.md", "Inbox"));
+        Assert.Equal(Tokens.Dark.AccentSubtle, Wash(window, "cover.png"));
+        Assert.Equal(Brushes.Transparent, Wash(window, "Inbox.md"));
 
-        // Close the last tab and nothing is being read, so nothing is bold.
+        // Close the last tab and nothing is being read, so nothing is highlighted.
         tree.SetActiveDocument(null);
         Settle(window);
 
-        Assert.Equal(FontWeight.Normal, Weight(window, "cover.png", "cover"));
+        Assert.Equal(Brushes.Transparent, Wash(window, "cover.png"));
+    }
+
+    [AvaloniaFact]
+    public void The_highlight_survives_clicking_a_folder_elsewhere_in_the_tree()
+    {
+        // The highlight is painted from the active document, not from the ListBox selection. Driving it off
+        // selection instead would look identical until you clicked anything else — and then the row telling you
+        // which note is open would go dark, which is exactly when you want it.
+        var (tree, window) = Open();
+        tree.SetActiveDocument(Path("Inbox.md"));
+        Settle(window);
+
+        tree.SelectPath(Path("Projects"));
+        Settle(window);
+
+        Assert.Equal(Tokens.Dark.AccentSubtle, Wash(window, "Inbox.md"));
+    }
+
+    [AvaloniaFact]
+    public void The_open_document_announces_itself_to_a_screen_reader()
+    {
+        // The wash is the only visual mark left, and colour alone is not a signal (WCAG 2.2 §1.4.1).
+        var (tree, window) = Open();
+        tree.SetActiveDocument(Path("Inbox.md"));
+        Settle(window);
+
+        var active = In<DockPanel>(Row(window, "Inbox.md")).First();
+        Assert.Equal("open", AutomationProperties.GetHelpText(active));
+
+        Assert.Null(AutomationProperties.GetHelpText(In<DockPanel>(Row(window, "cover.png")).First()));
     }
 
     [AvaloniaFact]
@@ -213,7 +250,7 @@ public sealed class FileTreeVisualsTests : IDisposable
         Settle(window);
 
         Assert.Contains("Attention.md", tree.VisibleNamesForTest);
-        Assert.Equal(FontWeight.SemiBold, Weight(window, "Attention.md", "Attention"));
+        Assert.Equal(Tokens.Dark.AccentSubtle, Wash(window, "Attention.md"));
         Assert.Equal(Path("Inbox.md"), tree.SelectedNode?.Path); // the reveal did not hijack the selection
     }
 
@@ -252,7 +289,7 @@ public sealed class FileTreeVisualsTests : IDisposable
 
         var scroller = In<ScrollViewer>(window).First();
         Assert.Equal(0, scroller.Offset.Y);
-        Assert.Equal(FontWeight.SemiBold, Weight(window, "note-01.md", "note-01")); // and it is on screen, bold
+        Assert.Equal(Tokens.Dark.AccentSubtle, Wash(window, "note-01.md")); // and it is on screen, highlighted
     }
 
     /// <summary>How far the row named <paramref name="name"/> sits from the vertical middle of the panel, in px.</summary>
@@ -284,11 +321,11 @@ public sealed class FileTreeVisualsTests : IDisposable
     }
 
     [AvaloniaFact]
-    public void Selecting_a_row_is_not_the_same_as_opening_it_and_only_one_of_them_is_bold()
+    public void Selecting_a_row_is_not_the_same_as_opening_it()
     {
-        // Two different questions get two different marks: the accent bar says "Rename/Delete will act on this",
-        // weight says "this is what you are reading". ⌘-clicking a note to rename it must not claim to have
-        // opened it — and the note you *are* in must stay bold while you do.
+        // Two different questions, tracked separately: selection says "Rename/Delete will act on this", the wash
+        // says "this is what you are reading". Clicking a note to rename it must not claim to have opened it —
+        // and the note you *are* in must stay highlighted while you do.
         var (tree, window) = Open();
         tree.SetActiveDocument(Path("Inbox.md"));
         tree.SelectPath(Path("cover.png"));
@@ -296,7 +333,7 @@ public sealed class FileTreeVisualsTests : IDisposable
 
         Assert.Equal(Path("cover.png"), tree.SelectedNode?.Path);
         Assert.Equal(FontWeight.Normal, Weight(window, "cover.png", "cover")); // selected, but not open
-        Assert.Equal(FontWeight.SemiBold, Weight(window, "Inbox.md", "Inbox")); // open, though not selected
+        Assert.Equal(Tokens.Dark.AccentSubtle, Wash(window, "Inbox.md")); // open, though not selected
     }
 
     [AvaloniaFact]

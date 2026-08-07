@@ -536,40 +536,42 @@ internal sealed class FileTreeView : UserControl
             ? (row.Node.Name, string.Empty)
             : FileGlyph.Split(row.Node.Name);
 
-        // Weight marks the one document you are reading, and nothing else. Bolding every folder spent the
-        // tree's loudest signal on its most numerous rows — a deep notebook came out mostly bold, which is the
-        // same as nothing being bold. A folder is already unmistakably a folder (chevron, folder glyph, its own
-        // colour), so it needs no weight to say so; "which note am I in?" is the question a sidebar is actually
-        // asked, and now the answer is the only heavy thing on screen.
+        // Colour alone marks the document you are reading. Every row keeps the same weight: bold changes a
+        // row's width, so the one signal that moves as you switch notes was also the one that nudged its
+        // neighbours sideways. Folders read at the muted level too — the chevron and folder glyph already say
+        // "folder", and giving them the brighter brush spent the tree's loudest ink on its most numerous rows,
+        // where it competed with the only row that answers "which note am I in?".
         bool isActive = !row.Node.IsDirectory && string.Equals(row.Node.Path, _activePath, StringComparison.OrdinalIgnoreCase);
         var name = new TextBlock
         {
             Text = stem,
             VerticalAlignment = VerticalAlignment.Center,
             TextTrimming = TextTrimming.CharacterEllipsis,
-            FontWeight = isActive ? FontWeight.SemiBold : FontWeight.Normal,
+            FontWeight = FontWeight.Normal,
+
+            // Every row, folders included, reads at the same level. Assigning `null` to mean "inherit the
+            // default" would instead set a local null brush — and paint nothing.
+            Foreground = palette.MutedText,
         };
-        if (!isActive)
-        {
-            // Every unselected row reads the same, folders included. Giving folders the brighter inherited
-            // brush made them jump out of a list they only organise, and in a folder-heavy notebook that
-            // brightness landed on most of the rows — loud enough to compete with the one row that matters.
-            // The chevron and folder glyph already say "folder"; colour is spent on "here" instead, and only
-            // the active file comes up to full strength. (Assigning `null` here to mean "use the default"
-            // would instead set a local null brush — and paint nothing.)
-            name.Foreground = palette.MutedText;
-        }
 
         var content = new DockPanel
         {
             LastChildFill = true,
             MinHeight = RowHeight,
 
-            // Transparent, not null: a panel with no background is not hit-testable in Avalonia, so the pointer
-            // would sail straight through this row and the PointerEntered/Exited below would never fire — leaving
-            // the pin star invisible forever on an unpinned folder. Transparent still paints nothing, so the
-            // ListBoxItem's own hover/selection wash (drawn behind it) shows through unchanged.
-            Background = Brushes.Transparent,
+            // The document you are reading wears the same wash the ListBox paints behind a selected row, so
+            // "open in a tab" and "clicked in the tree" look alike — the sidebar highlight now follows the
+            // active tab however you got there, from the tree or from the tab strip.
+            //
+            // Painted here rather than by moving the ListBox selection, because selection answers a different
+            // question (what Rename acts on, where the keyboard is). Merging them would drop this highlight the
+            // moment you clicked a folder, which is exactly when you still want to see where you were.
+            //
+            // Transparent otherwise, never null: a panel with no background is not hit-testable in Avalonia, so
+            // the pointer would sail straight through this row and the PointerEntered/Exited below would never
+            // fire — leaving the pin star invisible forever on an unpinned folder. Transparent still paints
+            // nothing, so the ListBoxItem's own hover/selection wash (drawn behind it) shows through unchanged.
+            Background = isActive ? palette.AccentSubtle : Brushes.Transparent,
         };
         content.Children.Add(Dock(BuildGuides(row, palette), Avalonia.Controls.Dock.Left));
         content.Children.Add(Dock(disclosure, Avalonia.Controls.Dock.Left));
@@ -595,6 +597,13 @@ internal sealed class FileTreeView : UserControl
         if (expandable)
         {
             AutomationProperties.SetHelpText(content, expanded ? "expanded" : "collapsed");
+        }
+        else if (isActive)
+        {
+            // The wash is the only visual mark left now that weight says nothing, so the state has to be spoken
+            // too — a screen reader would otherwise get an ordinary row (WCAG 2.2 §1.4.1). Folders are never
+            // active, so this can't collide with the disclosure state above.
+            AutomationProperties.SetHelpText(content, "open");
         }
 
         // The pin star is revealed by hovering the row (it is always visible once the folder *is* pinned).
