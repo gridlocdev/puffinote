@@ -11,31 +11,35 @@ namespace Cellestra.UiTests;
 public class KeyboardShortcutsTests
 {
     [Fact]
-    public void Help_command_is_bound_to_question_mark()
+    public void Help_command_is_bound_to_command_question_mark()
     {
         // Metadata only — build the catalog against a no-op environment (no MainWindow needed).
         var command = FakeAppEnvironment.Catalog.ById("help.shortcuts");
         Assert.NotNull(command);
-        Assert.Equal(new KeyGesture(Key.OemQuestion, KeyModifiers.Shift), command!.Gesture);
+
+        // ⌘⇧/ — the command modifier is the point: a bare "?" is a character you type into a cell, and the
+        // grid is exactly where you'd type it, so no focus gate could keep the two apart.
+        Assert.True(command!.Shortcut!.Value.UsesCommand);
+        Assert.Equal(new KeyGesture(Key.OemQuestion, KeyModifiers.Shift | KeyModifiers.Meta), command.Shortcut!.Value.ToGesture(mac: true));
+
         // Cellestra is macOS-only; assert the macOS rendering explicitly (the test host is Linux).
-        Assert.Equal("?", ShortcutFormatter.Format(command.Shortcut!.Value, mac: true));
+        Assert.Equal("⌘?", ShortcutFormatter.Format(command.Shortcut!.Value, mac: true));
     }
 
     [AvaloniaFact]
-    public void Help_command_is_disabled_while_a_text_field_has_focus()
+    public void Help_command_stays_available_while_a_text_field_has_focus()
     {
         var window = new MainWindow();
         window.Show();
         IAppEnvironment env = window.Editor;
 
-        // Grid has focus by default: the "?" shortcut is live.
-        Assert.False(env.IsTextInputFocused);
         Assert.True(env.Commands.ById("help.shortcuts")!.IsEnabled);
 
-        // While editing a cell the character must type normally, so the shortcut backs off.
+        // It used to switch itself off mid-edit so the bare "?" could reach the cell. ⌘? has no such
+        // conflict, so the reference stays reachable from wherever you are.
         env.BeginEdit();
         Assert.True(env.IsTextInputFocused);
-        Assert.False(env.Commands.ById("help.shortcuts")!.IsEnabled);
+        Assert.True(env.Commands.ById("help.shortcuts")!.IsEnabled);
     }
 
     [AvaloniaFact]

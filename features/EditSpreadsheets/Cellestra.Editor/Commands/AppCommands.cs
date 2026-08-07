@@ -187,10 +187,11 @@ public sealed class AppCommands
             isActive: () => e.Session.ActiveSheet.FindMerge(e.Selection.ActiveRow, e.Selection.ActiveColumn) is not null, icon: "table-cells-merge"),
 
         // Help
-        // "?" (⇧/) opens the shortcuts reference; gated off while a text field has focus so the
-        // character types normally when editing a cell, the formula bar, or a dialog.
-        new("help.shortcuts", "Keyboard Shortcuts", "List every keyboard shortcut.", Shortcut.Bare(Key.OemQuestion, KeyModifiers.Shift),
-            () => e.ShowKeyboardShortcuts(), canExecute: () => !e.IsTextInputFocused, icon: "keyboard"),
+        // ⌘? (⌘⇧/) opens the shortcuts reference. It carries the command modifier because "?" is a character
+        // people type into cells: a bare "?" from the grid opened this dialog instead of starting an edit,
+        // and no focus gate can fix that — the grid is exactly where you'd be typing it.
+        new("help.shortcuts", "Keyboard Shortcuts", "List every keyboard shortcut.", Shortcut.Cmd(Key.OemQuestion, KeyModifiers.Shift),
+            () => e.ShowKeyboardShortcuts(), icon: "keyboard"),
         new("help.about", "About Cellestra", "About Cellestra — version, pronunciation, and license.", null, () => e.ShowAbout(), icon: "info"),
     ];
 

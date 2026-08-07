@@ -276,7 +276,7 @@ Shortcuts use macOS modifiers (⌘ Command, ⇧ Shift, ⌥ Option, ⌃ Control).
 | Recalculate all | F9 |
 | Find / Find & Replace | ⌘F / ⌥⌘F |
 | Zoom in / out / reset | ⌘= / ⌘− / ⌘0 |
-| Keyboard Shortcuts reference | ? |
+| Keyboard Shortcuts reference | ⌘? |
 
 ### 6.5 Status bar
 

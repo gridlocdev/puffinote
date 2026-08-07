@@ -19,10 +19,17 @@ public static class ShortcutFormatter
     {
         var mods = shortcut.ModifiersFor(mac);
 
-        // "?" is inherently the shifted "/" key; show it bare rather than "⇧?" / "Shift+/".
-        if (shortcut.Key == Key.OemQuestion && mods == KeyModifiers.Shift)
+        // "?" is inherently the shifted "/" key, so the Shift is spelled by the character itself: ⌘⇧/ is
+        // how a keyboard produces it, but "⌘?" is what a person calls it. Drop the Shift glyph and print
+        // the question mark; every other modifier still renders around it.
+        bool questionMark = shortcut.Key == Key.OemQuestion && mods.HasFlag(KeyModifiers.Shift);
+        if (questionMark)
         {
-            return "?";
+            mods &= ~KeyModifiers.Shift;
+            if (mods == KeyModifiers.None)
+            {
+                return "?";
+            }
         }
 
         var sb = new StringBuilder();
@@ -71,7 +78,7 @@ public static class ShortcutFormatter
             }
         }
 
-        sb.Append(KeyText(shortcut.Key));
+        sb.Append(questionMark ? "?" : KeyText(shortcut.Key));
         return sb.ToString();
     }
 
