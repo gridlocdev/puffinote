@@ -1,0 +1,32 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- The Avalonia 12 desktop shell: single window, menu bar, status bar (encoding, line endings,
+       caret position), file dialogs, recent files, settings. A thin host around the embeddable
+       PlainTextEditorView — everything that acts on the open document lives in the control. -->
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <RootNamespace>Plaintain.Desktop</RootNamespace>
+    <AssemblyName>Plaintain</AssemblyName>
+    <AvaloniaUseCompiledBindingsByDefault>true</AvaloniaUseCompiledBindingsByDefault>
+    <BuiltInComInteropSupport>true</BuiltInComInteropSupport>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Avalonia" />
+    <PackageReference Include="Avalonia.Desktop" />
+    <PackageReference Include="Avalonia.Themes.Fluent" />
+    <PackageReference Include="Avalonia.Fonts.Inter" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Plaintain.Control\Plaintain.Control.csproj" />
+    <ProjectReference Include="..\..\..\shared\Puffinote.Components\Puffinote.Components.csproj" />
+    <ProjectReference Include="..\..\..\shared\Puffinote.Text\Puffinote.Text.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- Headless UI tests reach a few internal test seams. -->
+    <InternalsVisibleTo Include="Plaintain.UiTests" />
+  </ItemGroup>
+
+</Project>

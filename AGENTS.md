@@ -4,26 +4,28 @@ Orientation for an AI coding agent (and any human) working anywhere in the **Puf
 
 ## What Puffinote is
 
-A monorepo for **Puffinote**, a notebook-style workspace that composes two independent, from-scratch native editors into one shell:
+A monorepo for **Puffinote**, a notebook-style workspace that composes independent, from-scratch native editors into one shell:
 
 - **Typage** — a Markdown (`.md`) live-preview editor.
 - **Cellestra** — an OpenDocument Spreadsheet (`.ods`) editor (macOS-first for 1.0).
-- **Puffinote** — the composite shell/app that embeds both, plus a unifying CLI.
+- **Plaintain** — a plaintext (`.txt`, `.log`, anything decodable) editor.
+- **Puffinote** — the composite shell/app that embeds them, plus a unifying CLI.
 
-Each editor builds, tests, and ships on its own; the shell embeds them without reaching into their internals. Removing Puffinote must leave both editors fully working.
+Each editor builds, tests, and ships on its own; the shell embeds them without reaching into their internals. Removing Puffinote must leave every editor fully working.
 
 ## Repository map
 
 ```
-app/                          Puffinote — the composite shell (Desktop + CLI) that embeds both editors
+app/                          Puffinote — the composite shell (Desktop + CLI) that embeds the editors
 features/EditMarkdown/        Typage — the Markdown editor (engine, control, desktop, CLI, tests)
 features/EditSpreadsheets/    Cellestra — the spreadsheet editor (core, editor, charts, desktop, CLI, tests)
+features/EditPlaintext/       Plaintain — the plaintext editor (control, desktop, CLI, tests)
 shared/                       Cross-cutting libraries used by the shell and the editors:
                                 Puffinote.Components (Avalonia: theming, icons, overlays, shell chrome)
                                 Puffinote.Components.Core (non-UI: CLI helpers — safe for CLI projects)
                                 Puffinote.Text (non-UI: piece table, graphemes, selection, undo, search, file codec)
 docs/                         PRD / ARCHITECTURE (per-area) + proposals/ (repo-wide)
-build/                        package-mac.sh — the shared macOS .app bundler for all three apps
+build/                        package-mac.sh — the shared macOS .app bundler for every app
 justfile                      Build/test/format/ship entry points for every area — prefer these
 Directory.Build.props         Shared MSBuild settings (framework, nullable, analyzers, OS-specific bin/obj)
 Directory.Packages.props      Central NuGet version pins — the single source of truth for versions
@@ -36,6 +38,7 @@ There is no single root solution. Each area has its own:
 | The shell / CLI (`app/`) | [`app/AGENTS.md`](app/AGENTS.md) | `app/Puffinote.slnx` |
 | Markdown editor (`features/EditMarkdown/`) | [`features/EditMarkdown/AGENTS.md`](features/EditMarkdown/AGENTS.md) | `features/EditMarkdown/Typage.slnx` |
 | Spreadsheet editor (`features/EditSpreadsheets/`) | [`features/EditSpreadsheets/AGENTS.md`](features/EditSpreadsheets/AGENTS.md) | `features/EditSpreadsheets/Cellestra.slnx` |
+| Plaintext editor (`features/EditPlaintext/`) | [`features/EditPlaintext/AGENTS.md`](features/EditPlaintext/AGENTS.md) | `features/EditPlaintext/Plaintain.slnx` |
 
 `shared/` has no guide of its own because it isn't an area you work in — it's a dependency of every other one. Its projects are compiled into **every solution**, so a change there is a change to every area: build and test them all (`just check`) before you call it done.
 
@@ -56,9 +59,9 @@ The `justfile` is the front door — it knows every area's solution path, so you
 
 ```bash
 just build                                # every area   (also: just test, just format)
-just build-typage                         # one area     (verb-first: <verb>-puffinote | -typage | -cellestra)
+just build-typage                         # one area     (verb-first: <verb>-puffinote | -typage | -cellestra | -plaintain)
 just test-filter SomeTest typage          # one test / a subset — prefer this while iterating
-just check                                # format-verify + build + test, all areas
+just check                                # format-verify + build + test, every area
 ```
 
 Every recipe is a thin wrapper over `dotnet build|test|format <area>.slnx` (e.g. `features/EditMarkdown/Typage.slnx`) — **if `just` isn't on `PATH`, run those directly**; they're equivalent, and some agent sandboxes aren't the devcontainer. (`just --dry-run <recipe>` prints the exact commands a recipe would run.) Likewise, if `dotnet` isn't on `PATH`, `export PATH="$PATH:/root/.dotnet"` (and `libicu` must be installed).
@@ -68,7 +71,7 @@ Every recipe is a thin wrapper over `dotnet build|test|format <area>.slnx` (e.g.
 
 ```bash
 just publish                              # CLI + desktop, self-contained Release → artifacts/<app>/<rid>/
-just install                              # the three CLIs onto PATH (override: just PREFIX=/usr/local install)
+just install                              # every CLI onto PATH (override: just PREFIX=/usr/local install)
 just publish-typage-app                   # artifacts/typage/<rid>/Typage.app  (also: just install-app)
 ```
 

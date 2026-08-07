@@ -4,18 +4,19 @@
 #   app/                        Puffinote — composite shell (Desktop + CLI)
 #   features/EditMarkdown/      Typage    — Markdown editor
 #   features/EditSpreadsheets/  Cellestra — spreadsheet editor
+#   features/EditPlaintext/     Plaintain — plaintext editor
 #
 # Common flows:
 #   just                  list every recipe (grouped)
-#   just build            build all three areas
-#   just test             test all three areas
-#   just format           auto-format all three areas
+#   just build            build every area
+#   just test             test every area
+#   just format           auto-format every area
 #   just check            format-verify + build + test all areas (CI gate / definition of done)
 #   just test-typage      one area's suite (recipes read verb-first: test-puffinote, publish-cellestra-app)
 #   just test-filter SomeTest typage    run a subset while iterating
-#   just publish          self-contained Release builds of all three apps into artifacts/
-#   just install          put the three CLIs (puffinote, typage, cellestra) on PATH
-#   just publish-app      macOS .app bundles for all three apps (macOS only)
+#   just publish          self-contained Release builds of every app into artifacts/
+#   just install          put the CLIs (puffinote, typage, cellestra, pltn) on PATH
+#   just publish-app      macOS .app bundles for every app (macOS only)
 #   just install-app      ...and copy them into /Applications
 #
 # Every install has an inverse that undoes exactly what it did, and nothing else:
@@ -38,16 +39,19 @@
 PUFFINOTE_SLN := "app/Puffinote.slnx"
 TYPAGE_SLN    := "features/EditMarkdown/Typage.slnx"
 CELLESTRA_SLN := "features/EditSpreadsheets/Cellestra.slnx"
+PLAINTAIN_SLN := "features/EditPlaintext/Plaintain.slnx"
 
 # ---- CLI entry projects (run headless in the Linux devcontainer) --------------
 PUFFINOTE_CLI := "app/Puffinote.Cli"
 TYPAGE_CLI    := "features/EditMarkdown/Typage.Cli"
 CELLESTRA_CLI := "features/EditSpreadsheets/Cellestra.Cli"
+PLAINTAIN_CLI := "features/EditPlaintext/Plaintain.Cli"
 
 # ---- Desktop (GUI) entry projects (run on a native host, not the container) ---
 PUFFINOTE_DESKTOP := "app/Puffinote.Desktop"
 TYPAGE_DESKTOP    := "features/EditMarkdown/Typage.Desktop"
 CELLESTRA_DESKTOP := "features/EditSpreadsheets/Cellestra.Desktop"
+PLAINTAIN_DESKTOP := "features/EditPlaintext/Plaintain.Desktop"
 
 DOTNET := "dotnet"
 
@@ -69,6 +73,7 @@ RID      := RID_OS + "-" + RID_ARCH
 PUFFINOTE_OUT := ARTIFACTS / "puffinote" / RID
 TYPAGE_OUT    := ARTIFACTS / "typage" / RID
 CELLESTRA_OUT := ARTIFACTS / "cellestra" / RID
+PLAINTAIN_OUT := ARTIFACTS / "plaintain" / RID
 
 # Both surfaces publish self-contained, so an artifact runs on a machine with no .NET installed.
 # The CLI additionally publishes as a single self-extracting file (native libraries included) so
@@ -101,27 +106,27 @@ all: build test
 
 # Restore NuGet packages for every area
 [group('all areas')]
-restore: restore-puffinote restore-typage restore-cellestra
+restore: restore-puffinote restore-typage restore-cellestra restore-plaintain
 
 # Build every area (warnings are errors)
 [group('all areas')]
-build: build-puffinote build-typage build-cellestra
+build: build-puffinote build-typage build-cellestra build-plaintain
 
 # Test every area
 [group('all areas')]
-test: test-puffinote test-typage test-cellestra
+test: test-puffinote test-typage test-cellestra test-plaintain
 
 # Auto-format every area
 [group('all areas')]
-format: format-puffinote format-typage format-cellestra
+format: format-puffinote format-typage format-cellestra format-plaintain
 
 # Verify formatting for every area (no changes)
 [group('all areas')]
-format-check: format-check-puffinote format-check-typage format-check-cellestra
+format-check: format-check-puffinote format-check-typage format-check-cellestra format-check-plaintain
 
 # Remove build artifacts for every area, including everything publish wrote (all RIDs)
 [group('all areas')]
-clean: clean-puffinote clean-typage clean-cellestra
+clean: clean-puffinote clean-typage clean-cellestra clean-plaintain
     rm -rf "{{ ARTIFACTS }}"
 
 # Definition of done: formatting verified, all areas build clean and green
@@ -130,31 +135,31 @@ check: format-check build test
 
 # Publish every app (CLI + desktop, self-contained) to artifacts/
 [group('all areas')]
-publish: publish-puffinote publish-typage publish-cellestra
+publish: publish-puffinote publish-typage publish-cellestra publish-plaintain
 
 # Remove every app's published output for this RID (the inverse of publish)
 [group('all areas')]
-unpublish: unpublish-puffinote unpublish-typage unpublish-cellestra
+unpublish: unpublish-puffinote unpublish-typage unpublish-cellestra unpublish-plaintain
 
 # Install every CLI into PREFIX/bin (default ~/.local/bin)
 [group('all areas')]
-install: install-puffinote install-typage install-cellestra
+install: install-puffinote install-typage install-cellestra install-plaintain
 
 # Remove every installed CLI from PREFIX/bin
 [group('all areas')]
-uninstall: uninstall-puffinote uninstall-typage uninstall-cellestra
+uninstall: uninstall-puffinote uninstall-typage uninstall-cellestra uninstall-plaintain
 
 # Build every macOS .app bundle (macOS only)
 [group('all areas')]
-publish-app: publish-puffinote-app publish-typage-app publish-cellestra-app
+publish-app: publish-puffinote-app publish-typage-app publish-cellestra-app publish-plaintain-app
 
 # Install every macOS .app into APPS_DIR (macOS only)
 [group('all areas')]
-install-app: install-puffinote-app install-typage-app install-cellestra-app
+install-app: install-puffinote-app install-typage-app install-cellestra-app install-plaintain-app
 
 # Remove every macOS .app from APPS_DIR (the inverse of install-app; macOS only)
 [group('all areas')]
-uninstall-app: uninstall-puffinote-app uninstall-typage-app uninstall-cellestra-app
+uninstall-app: uninstall-puffinote-app uninstall-typage-app uninstall-cellestra-app uninstall-plaintain-app
 
 # ==============================================================================
 # Puffinote — the composite shell (app/)
@@ -453,11 +458,111 @@ uninstall-cellestra-app:
     rm -rf "{{ APPS_DIR }}/Cellestra.app"
     @echo "removed {{ APPS_DIR }}/Cellestra.app"
 
+
+# ==============================================================================
+# Plaintain — the plaintext editor (features/EditPlaintext/)
+# ==============================================================================
+
+# Restore Plaintain packages
+[group('plaintain')]
+restore-plaintain:
+    {{ DOTNET }} restore {{ PLAINTAIN_SLN }}
+
+# Build the Plaintain editor
+[group('plaintain')]
+build-plaintain:
+    {{ DOTNET }} build {{ PLAINTAIN_SLN }}
+
+# Test the Plaintain editor
+[group('plaintain')]
+test-plaintain:
+    {{ DOTNET }} test {{ PLAINTAIN_SLN }}
+
+# Auto-format the Plaintain editor
+[group('plaintain')]
+format-plaintain:
+    {{ DOTNET }} format {{ PLAINTAIN_SLN }}
+
+# Verify Plaintain formatting (fails if unformatted)
+[group('plaintain')]
+format-check-plaintain:
+    {{ DOTNET }} format {{ PLAINTAIN_SLN }} --verify-no-changes
+
+# Clean Plaintain build artifacts
+[group('plaintain')]
+clean-plaintain:
+    {{ DOTNET }} clean {{ PLAINTAIN_SLN }}
+
+# Run the Plaintain desktop editor (native host — GUI won't launch in the container)
+[group('plaintain')]
+run-plaintain:
+    {{ DOTNET }} run --project {{ PLAINTAIN_DESKTOP }}
+
+# Run the pltn CLI: just run-plaintain-cli info server.log
+[group('plaintain')]
+run-plaintain-cli *ARGS:
+    {{ DOTNET }} run --project {{ PLAINTAIN_CLI }} -- {{ ARGS }}
+
+# Publish the pltn CLI + Plaintain shell to artifacts/plaintain/<rid>/
+[group('plaintain')]
+publish-plaintain: publish-plaintain-cli publish-plaintain-desktop
+
+# Publish the `pltn` CLI (single self-contained file)
+[group('plaintain')]
+publish-plaintain-cli:
+    {{ DOTNET }} publish {{ PLAINTAIN_CLI }} {{ PUBLISH_CLI_FLAGS }} -o {{ PLAINTAIN_OUT }}/cli
+
+# Publish the Plaintain desktop editor (self-contained)
+[group('plaintain')]
+publish-plaintain-desktop:
+    {{ DOTNET }} publish {{ PLAINTAIN_DESKTOP }} {{ PUBLISH_DESKTOP_FLAGS }} -o {{ PLAINTAIN_OUT }}/desktop
+
+# Build Plaintain.app (macOS only)
+[group('plaintain')]
+publish-plaintain-app:
+    CONFIG={{ CONFIG }} RID={{ RID }} OUT={{ PLAINTAIN_OUT }} {{ PACKAGE_MAC }} plaintain
+
+# Install the `pltn` CLI into PREFIX/bin (default ~/.local/bin)
+[group('plaintain')]
+install-plaintain: publish-plaintain-cli
+    @mkdir -p "{{ BINDIR }}"
+    install -m 0755 {{ PLAINTAIN_OUT }}/cli/pltn "{{ BINDIR }}/pltn"
+    @echo "installed {{ BINDIR }}/pltn — make sure {{ BINDIR }} is on your PATH"
+
+# Install Plaintain.app into APPS_DIR (default /Applications, macOS only)
+[group('plaintain')]
+install-plaintain-app: publish-plaintain-app
+    @mkdir -p "{{ APPS_DIR }}"
+    rm -rf "{{ APPS_DIR }}/Plaintain.app"
+    cp -R {{ PLAINTAIN_OUT }}/Plaintain.app "{{ APPS_DIR }}/Plaintain.app"
+    @echo "installed {{ APPS_DIR }}/Plaintain.app"
+
+# Remove Plaintain's published output for this RID (the inverse of publish-plaintain)
+[group('plaintain')]
+unpublish-plaintain:
+    rm -rf "{{ PLAINTAIN_OUT }}"
+    @rmdir "{{ ARTIFACTS }}/plaintain" 2>/dev/null || true
+    @rmdir "{{ ARTIFACTS }}" 2>/dev/null || true
+    @echo "removed {{ PLAINTAIN_OUT }}"
+
+# Remove the installed `pltn` CLI from PREFIX/bin
+[group('plaintain')]
+uninstall-plaintain:
+    rm -f "{{ BINDIR }}/pltn"
+    @echo "removed {{ BINDIR }}/pltn"
+
+# Remove Plaintain.app from APPS_DIR (the inverse of install-plaintain-app; macOS only)
+[group('plaintain')]
+uninstall-plaintain-app:
+    @{{ LSREGISTER }} -u "{{ APPS_DIR }}/Plaintain.app" >/dev/null 2>&1 || true
+    rm -rf "{{ APPS_DIR }}/Plaintain.app"
+    @echo "removed {{ APPS_DIR }}/Plaintain.app"
+
 # ==============================================================================
 # Iterating on a single test / subset (prefer this while developing)
 # ==============================================================================
 
-# Run a filtered subset: just test-filter SomeTest [puffinote|typage|cellestra]
+# Run a filtered subset: just test-filter SomeTest [puffinote|typage|cellestra|plaintain]
 [group('all areas')]
 test-filter FILTER AREA="puffinote":
-    {{ DOTNET }} test {{ if AREA == "typage" { TYPAGE_SLN } else if AREA == "cellestra" { CELLESTRA_SLN } else { PUFFINOTE_SLN } }} --filter "FullyQualifiedName~{{ FILTER }}"
+    {{ DOTNET }} test {{ if AREA == "typage" { TYPAGE_SLN } else if AREA == "cellestra" { CELLESTRA_SLN } else if AREA == "plaintain" { PLAINTAIN_SLN } else { PUFFINOTE_SLN } }} --filter "FullyQualifiedName~{{ FILTER }}"
