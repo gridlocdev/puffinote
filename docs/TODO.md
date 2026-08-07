@@ -1,0 +1,17 @@
+- [ ] Puffinote: UI bug where clicking a tab in the tab bar at the top double highlights content in the sidebar. The sidebar should always simply match the highlight of the single file that corresponds to the active tab on the top, if there is a tab open.
+- [ ] Cellestra: active tab should have a colored underline underneath it in addition to the bold
+- [ ] Cellestra: auto resize columns to fit contents while in a table
+- [ ] Cellestra: header column format should also copy when adding new line after
+- [ ] Cellestra: editing text in a column that has word wrapped should word wrap as well (textbox should contain the contents and the cursor behavior should be expected)
+- [ ] Cellestra: double clicking the title bar to expand the column should widen it to the widest non-word-wrapped column, instead of all column lengths
+- [ ] Cellestra: while editing a value with white text in the light theme (table header) the text remains white, it should be black so you can see it against the background
+- [ ] Cellestra: pre-fill previous commands done in the current session at the top of the command bar so you can quickly do them again
+- [ ] Cellestra: change "?" keyboard shortcut to cmd+? since I do actually type "?" into cells from the main navigation view
+- [ ] Cellestra: if text is autocompleted while entering, if I use a different case than the autocomplete does it should stop autocompleting and type the correct capitalization on the letter
+- [ ] Cellestra: saving the document should append "- Saved" to the top title bar for a brief period
+- [ ] Cellestra: shift+return to enter newline in editing textbox
+- [ ] Cellestra: when editing cell, keep the current behavior of the cell remaining on screen, but ensure it continues being edited without the odd delay it has currently for new characters
+- [ ] Cellestra: when scrolling and a table's contents are on screen, visually show table's column titles in the top column headers (and remember to also do the opposite, if scrolling past the table end it should revert back to not include the titles at the top headers)
+- [ ] Typage: bug fix for unexpected behavior that adds extra newlines unexpectedly
+- [ ] Plaintain: Create a new plaintext editor (use the plan file)
+- [ ] Pivotask: Create a new todos editor (use the plan file)
