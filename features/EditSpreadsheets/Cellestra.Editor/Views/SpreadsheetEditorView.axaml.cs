@@ -294,7 +294,12 @@ public partial class SpreadsheetEditorView : UserControl, IAppEnvironment
     {
         _lastSavedAt = DateTime.Now;
         UpdateChrome();
+        Saved?.Invoke(this, EventArgs.Empty);
     }
+
+    /// <summary>Raised each time the document reaches disk, however it got there (⌘S, Save As, or a host
+    /// shell's stream save). A host can use it to acknowledge the save in its own chrome.</summary>
+    public event EventHandler? Saved;
 
     // ---- Embedding contract (stream-based load/save for a host shell) -----
     //

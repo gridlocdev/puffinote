@@ -282,6 +282,8 @@ Shortcuts use macOS modifiers (⌘ Command, ⇧ Shift, ⌥ Option, ⌃ Control).
 
 Left to right: a **last-action indicator** (a dot plus a short narration of the most recent action — "Selected B2", "Bold on · B2", "Font size 18 · B2" — a quick reference to what just happened); the **active cell reference**; in the middle, **live selection stats** — **Count** (number of non-empty cells in the selection), and, when at least one numeric cell is selected, **Sum** and **Average** over the numeric cells; on the right, a **calculation-mode badge** (Auto/Manual), a **zoom percentage**, and a **save-state indicator** ("Edited" / "Saved HH:mm" / "Not saved").
 
+The **window title** is the document's file name (`Budget.ods`, or `Untitled`), prefixed with ● while there are unsaved changes, and followed by **"— Saved"** for three seconds after a save. A save with no dialog and no visible change is the one command whose whole point is that nothing happened; the badge says so without needing you to have been watching the dot. An edit within those three seconds restores the ●, which is the honest half of the pair.
+
 ### 6.6 Iconography
 
 - **Style:** flat, **monochrome line icons** with a consistent stroke weight, no fills or gradients, ~17 px in the command bar. They adapt automatically to light/dark mode (icons inherit the themed text colour) and use an accent tint for active/toggled states.

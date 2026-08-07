@@ -2,6 +2,7 @@ using Avalonia.Controls;
 using Avalonia.Layout;
 using Avalonia.Media;
 using Avalonia.Platform.Storage;
+using Avalonia.Threading;
 using Cellestra.Desktop.Services;
 using Cellestra.Editor;
 using Puffinote.Components.Commands;
@@ -39,6 +40,7 @@ public partial class MainWindow : Window, IEditorHost
         Editor.CommandBarCollapsed = _settings.CommandBarCollapsed;
         Editor.RadialConfig = _settings.RadialMenu;
         Editor.DocumentChanged += (_, _) => UpdateTitle();
+        Editor.Saved += (_, _) => FlashSavedInTitle();
         Editor.CommandStateChanged += (_, _) => RefreshCommandStates();
         Editor.CommandBarCollapsedChanged += (_, _) => PersistSettings();
         Editor.RadialConfigChanged += (_, _) => PersistSettings();
@@ -62,15 +64,54 @@ public partial class MainWindow : Window, IEditorHost
     }
 
     /// <summary>The window title: the document's file name (e.g. <c>Budget.ods</c>, or <c>Untitled</c>),
-    /// with a leading ● when there are unsaved changes. No app-name suffix; transient errors/status never
-    /// overwrite it — those surface in the editor's status line instead (#15/#16/#17a).</summary>
-    internal static string ComposeTitle(string? filePath, bool modified)
+    /// with a leading ● when there are unsaved changes, and a brief "— Saved" right after a save. No
+    /// app-name suffix; transient errors/status never overwrite it — those surface in the editor's status
+    /// line instead (#15/#16/#17a).</summary>
+    internal static string ComposeTitle(string? filePath, bool modified, bool justSaved = false)
     {
         string name = filePath is null ? "Untitled" : Path.GetFileName(filePath);
-        return $"{(modified ? "● " : string.Empty)}{name}";
+
+        // A ● and a "Saved" say opposite things, so they can never appear together: the dot wins, because
+        // by then the save it refers to is out of date.
+        string saved = justSaved && !modified ? " — Saved" : string.Empty;
+        return $"{(modified ? "● " : string.Empty)}{name}{saved}";
     }
 
-    private void UpdateTitle() => Title = ComposeTitle(Editor.Session.FilePath, Editor.Session.IsModified);
+    /// <summary>How long the title says "Saved". Long enough to be read after a ⌘S you didn't look up for,
+    /// short enough that it is gone before it could be mistaken for part of the file's name.</summary>
+    private static readonly TimeSpan SavedBadgeDuration = TimeSpan.FromSeconds(3);
+
+    private DispatcherTimer? _savedBadge;
+
+    /// <summary>
+    /// Flash "— Saved" in the title. ⌘S with no dialog and no visible change is the one command in the app
+    /// whose whole point is that nothing happened; the dot going away says it, but only if you happened to
+    /// be looking at the dot. The status line's "Saved HH:mm" is the permanent record — this is the notice.
+    /// </summary>
+    private void FlashSavedInTitle()
+    {
+        _savedBadge?.Stop();
+        _savedBadge = new DispatcherTimer { Interval = SavedBadgeDuration };
+        _savedBadge.Tick += (_, _) =>
+        {
+            _savedBadge?.Stop();
+            _savedBadge = null;
+            UpdateTitle();
+        };
+        _savedBadge.Start();
+        UpdateTitle();
+    }
+
+    private void UpdateTitle() =>
+        Title = ComposeTitle(Editor.Session.FilePath, Editor.Session.IsModified, _savedBadge is not null);
+
+    /// <summary>Test seam: end the badge's few seconds now, rather than making a test wait them out.</summary>
+    internal void ExpireSavedBadgeForTest()
+    {
+        _savedBadge?.Stop();
+        _savedBadge = null;
+        UpdateTitle();
+    }
 
     // ---- Window close / settings -----------------------------------------
 

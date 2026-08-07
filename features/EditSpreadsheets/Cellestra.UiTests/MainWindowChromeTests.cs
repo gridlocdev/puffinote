@@ -1,5 +1,6 @@
 using Avalonia.Headless.XUnit;
 using Avalonia.Input;
+using Avalonia.Threading;
 using Cellestra.Core.Editing;
 using Cellestra.Core.Values;
 using Cellestra.Desktop.Commands;
@@ -34,6 +35,33 @@ public class MainWindowChromeTests
     {
         Assert.Equal("● Budget.ods", MainWindow.ComposeTitle("/home/me/Budget.ods", modified: true));
         Assert.Equal("● Untitled", MainWindow.ComposeTitle(null, modified: true));
+    }
+
+    [Fact]
+    public void Title_says_Saved_for_a_moment_after_a_save()
+    {
+        Assert.Equal("Budget.ods — Saved", MainWindow.ComposeTitle("/home/me/Budget.ods", modified: false, justSaved: true));
+    }
+
+    [Fact]
+    public void The_modified_dot_beats_a_stale_Saved_badge()
+    {
+        // Editing during the badge's few seconds makes "Saved" untrue; the dot is the honest half.
+        Assert.Equal("● Budget.ods", MainWindow.ComposeTitle("/home/me/Budget.ods", modified: true, justSaved: true));
+    }
+
+    [AvaloniaFact]
+    public void Saving_flashes_the_badge_and_it_clears_itself()
+    {
+        var window = new MainWindow();
+        window.Show();
+
+        window.Editor.MarkSavedNow(); // what every save path ends with
+        Dispatcher.UIThread.RunJobs();
+        Assert.EndsWith("— Saved", window.Title, StringComparison.Ordinal);
+
+        window.ExpireSavedBadgeForTest();
+        Assert.DoesNotContain("Saved", window.Title, StringComparison.Ordinal);
     }
 
     // ---- #8: cell commands that conflict with text editing yield to a focused text input ----
