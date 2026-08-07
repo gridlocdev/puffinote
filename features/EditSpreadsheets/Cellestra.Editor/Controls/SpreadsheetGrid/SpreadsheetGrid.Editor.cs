@@ -27,6 +27,16 @@ public sealed partial class SpreadsheetGrid
     /// <summary>Test seams: the live editor's text and selected substring, to verify select-all-on-open.</summary>
     internal string EditorText => _editor.Text ?? string.Empty;
 
+    /// <summary>Test seam: where the caret sits in the live editor.</summary>
+    internal int EditorCaretIndex => _editor.CaretIndex;
+
+    /// <summary>Test seams: the colours the live editor actually paints with, and whether it wraps.</summary>
+    internal Color EditorInk => (_editor.Foreground as ISolidColorBrush)?.Color ?? default;
+
+    internal Color EditorFill => (_editor.Background as ISolidColorBrush)?.Color ?? default;
+
+    internal bool EditorWraps => _editor.TextWrapping == TextWrapping.Wrap;
+
     /// <summary>Test seam: the inline editor's actual arranged bounds (so its rightward growth can be verified).</summary>
     internal Rect EditorBoundsForTest => _editor.Bounds;
 
@@ -47,12 +57,18 @@ public sealed partial class SpreadsheetGrid
         _editor.FontWeight = style.Font.Bold ? FontWeight.Bold : FontWeight.Normal;
         _editor.FontStyle = style.Font.Italic ? FontStyle.Italic : FontStyle.Normal;
 
+        // A Wrap Text cell wraps while you edit it too: the editor keeps the column's width and grows
+        // downward (see ExpandedEditorRect), so the text you are typing sits where it will be drawn and
+        // the caret lands on the line you can see it on.
+        _editor.TextWrapping = style.Alignment.WrapText ? TextWrapping.Wrap : TextWrapping.NoWrap;
+
         var value = cell?.Value ?? CellValue.Empty;
+        var background = EditorBackground(style, Selection.ActiveRow, Selection.ActiveColumn);
+        _editor.Background = new SolidColorBrush(ToColor(background));
+
         // Use the cell's text colour, but not the crimson error colour — you're typing a replacement.
-        _editor.Foreground = value.IsError ? _palette.DefaultText : TextBrushFor(style, value);
-        _editor.Background = style.Fill.HasBackground
-            ? new SolidColorBrush(ToColor(style.Fill.Background!.Value))
-            : _palette.Canvas;
+        var ink = value.IsError ? _palette.DefaultText : TextBrushFor(style, value);
+        _editor.Foreground = Legible(ink, background);
 
         // Mirror the cell's horizontal alignment so an Align command applied mid-edit shifts the text;
         // the decoration overlay (underline/strikethrough) repaints alongside via Redraw().
@@ -63,6 +79,86 @@ public sealed partial class SpreadsheetGrid
             _ => TextAlignment.Left,
         };
     }
+
+    /// <summary>
+    /// The colour the inline editor paints behind the text: the cell's own fill, else the table band it
+    /// sits in, else the canvas. Painting plain canvas over a banded row made the cell blink white the
+    /// moment you opened it — and, for a table header, put white header text on a white surface.
+    /// </summary>
+    private ArgbColor EditorBackground(CellStyle style, int row, int column)
+    {
+        if (style.Fill.HasBackground)
+        {
+            return style.Fill.Background!.Value;
+        }
+
+        if (Sheet is { } sheet && TableBandFor(sheet, row, column) is { } band)
+        {
+            return band;
+        }
+
+        return FromBrush(_palette.Canvas);
+    }
+
+    /// <summary>The banding colour <see cref="DrawTableBanding"/> paints under a cell, or null if none does.</summary>
+    private ArgbColor? TableBandFor(Worksheet sheet, int row, int column)
+    {
+        foreach (var table in sheet.Tables)
+        {
+            if (row < table.Range.Top || row > table.Range.Bottom
+                || column < table.Range.Left || column > table.Range.Right)
+            {
+                continue;
+            }
+
+            bool isHeaderRow = table.HasHeader && row == table.Range.Top;
+            if (isHeaderRow || (table.HasHeaderColumn && column == table.Range.Left))
+            {
+                return FromBrush(_palette.TableHeaderBand);
+            }
+
+            int dataIndex = row - table.Range.Top - (table.HasHeader ? 1 : 0);
+            return dataIndex % 2 == 1 ? FromBrush(_palette.TableRowBand) : null;
+        }
+
+        return null;
+    }
+
+    /// <summary>
+    /// The contrast floor the inline editor's text has to clear against the surface behind it. 3:1 is
+    /// WCAG 2.2's non-text/large-text floor rather than the 4.5:1 body-text one, deliberately: a cell's
+    /// font colour is document data, and overriding a merely-lowish-contrast choice would misreport
+    /// what the document says. This threshold only catches ink that is genuinely unreadable.
+    /// </summary>
+    private const double EditorInkFloor = 3.0;
+
+    /// <summary>
+    /// <paramref name="ink"/>, unless it would be invisible on <paramref name="background"/> — in which
+    /// case the theme's default text colour, or black/white if even that doesn't read. A table header
+    /// styled with white text is the case that forces this: the header band it was chosen against is
+    /// the grid's chrome, not the cell's fill, so the editor could paint white on white.
+    /// </summary>
+    private IBrush Legible(IBrush ink, ArgbColor background)
+    {
+        if (ink is not ISolidColorBrush solid || Contrast.Ratio(FromColor(solid.Color), background) >= EditorInkFloor)
+        {
+            return ink;
+        }
+
+        if (_palette.DefaultText is ISolidColorBrush themed
+            && Contrast.Ratio(FromColor(themed.Color), background) >= EditorInkFloor)
+        {
+            return _palette.DefaultText;
+        }
+
+        // Neither the cell's ink nor the theme's reads — fall back to whichever pole the surface isn't.
+        return Contrast.RelativeLuminance(background) > 0.5 ? Brushes.Black : Brushes.White;
+    }
+
+    private static ArgbColor FromColor(Color color) => ArgbColor.FromArgb(color.A, color.R, color.G, color.B);
+
+    private static ArgbColor FromBrush(IBrush brush) =>
+        brush is ISolidColorBrush solid ? FromColor(solid.Color) : ArgbColor.White;
 
     /// <summary>Draw the editor's underline/strikethrough on the overlay, measured against the live text so they line up with the glyphs.</summary>
     private void DrawEditorDecorations(DrawingContext context)
@@ -195,17 +291,54 @@ public sealed partial class SpreadsheetGrid
             && TryPointModeArrow(e.Key, e.KeyModifiers.HasFlag(KeyModifiers.Shift)))
         {
             e.Handled = true;
+            return;
         }
+
+        // Return is decided in the tunnel phase, ahead of the TextBox's own handling: the editor accepts
+        // returns (so a multi-line cell renders and the caret walks its lines), which means leaving this
+        // to the bubble phase would let the TextBox insert its own newline first and swallow the commit.
+        if (e.Key == Key.Return)
+        {
+            if (e.KeyModifiers.HasFlag(KeyModifiers.Shift))
+            {
+                InsertNewlineInEditor();
+            }
+            else
+            {
+                CommitEdit(1, 0);
+            }
+
+            e.Handled = true;
+        }
+    }
+
+    /// <summary>
+    /// ⇧↩ breaks the line inside the cell rather than committing it. Inserted here rather than left to
+    /// the TextBox so the caret placement is ours and the change routes through TextChanged exactly like
+    /// a typed character. The cell's style is left alone: a value with a line break in it grows its row
+    /// on its own (see <c>RebuildRowFontMap</c>), so nothing has to be toggled to see the second line.
+    /// </summary>
+    private void InsertNewlineInEditor()
+    {
+        string text = _editor.Text ?? string.Empty;
+        int caret = Math.Clamp(_editor.CaretIndex, 0, text.Length);
+        int start = Math.Min(_editor.SelectionStart, _editor.SelectionEnd);
+        int end = Math.Max(_editor.SelectionStart, _editor.SelectionEnd);
+        if (end > start)
+        {
+            // A ⇧↩ over a selection replaces it, the way typing a character would.
+            text = text.Remove(start, end - start);
+            caret = start;
+        }
+
+        _editor.Text = text.Insert(caret, "\n");
+        _editor.CaretIndex = caret + 1;
     }
 
     private void EditorKeyDown(object? sender, KeyEventArgs e)
     {
         switch (e.Key)
         {
-            case Key.Return:
-                CommitEdit(e.KeyModifiers.HasFlag(KeyModifiers.Shift) ? -1 : 1, 0);
-                e.Handled = true;
-                break;
             case Key.Tab:
                 CommitEdit(0, e.KeyModifiers.HasFlag(KeyModifiers.Shift) ? -1 : 1);
                 e.Handled = true;
@@ -330,7 +463,13 @@ public sealed partial class SpreadsheetGrid
     /// <summary>
     /// The rectangle the inline editor should occupy: the cell, widened rightward to fit the text as
     /// it grows (covering the cells to its right), like Google Sheets/Excel. Never narrower than the
-    /// cell, never past the grid's right edge; height stays the cell's so it never grows downward.
+    /// cell, never past the grid's right edge.
+    ///
+    /// <para>A wrapping cell grows the other way. Widening it would be a contradiction — the whole point
+    /// of wrap is that the column's width is the line length — and it also put the caret a line above
+    /// where the committed text would sit. So a wrapped editor keeps the column's width and grows
+    /// <b>downward</b> instead, down to the grid's bottom edge. Text with a hard line break in it grows
+    /// downward too, for the same reason, whether or not the cell wraps.</para>
     /// </summary>
     private Rect ExpandedEditorRect(Rect cell, Size finalSize)
     {
@@ -340,12 +479,25 @@ public sealed partial class SpreadsheetGrid
             return cell;
         }
 
+        bool wraps = _editor.TextWrapping == TextWrapping.Wrap;
         var typeface = new Typeface(_editor.FontFamily, _editor.FontStyle, _editor.FontWeight);
         var measured = new FormattedText(text, CultureInfo.CurrentCulture, FlowDirection.LeftToRight,
             typeface, _editor.FontSize, Brushes.Black);
+        if (wraps)
+        {
+            measured.MaxTextWidth = Math.Max(1, cell.Width - (2 * EditorPadX));
+        }
+
         // Room for the text, the editor's own horizontal padding, and a little slack for the caret.
-        double needed = measured.Width + 2 * EditorPadX + 6;
-        double width = Math.Clamp(needed, cell.Width, Math.Max(cell.Width, finalSize.Width - cell.X));
-        return new Rect(cell.X, cell.Y, width, cell.Height);
+        double width = wraps
+            ? cell.Width
+            : Math.Clamp(measured.Width + (2 * EditorPadX) + 6, cell.Width, Math.Max(cell.Width, finalSize.Width - cell.X));
+
+        double height = Math.Clamp(
+            measured.Height + (2 * EditorPadY),
+            cell.Height,
+            Math.Max(cell.Height, finalSize.Height - cell.Y));
+
+        return new Rect(cell.X, cell.Y, width, height);
     }
 }

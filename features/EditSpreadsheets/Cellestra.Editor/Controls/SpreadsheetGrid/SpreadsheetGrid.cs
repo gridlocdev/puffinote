@@ -46,6 +46,11 @@ public sealed partial class SpreadsheetGrid : Panel
         Padding = new Thickness(EditorPadX, EditorPadY, EditorPadX, 0),
         Background = Brushes.White,
         VerticalContentAlignment = Avalonia.Layout.VerticalAlignment.Top, // sit at the top of the cell, like the drawn text
+
+        // ⇧↩ puts a line break in the cell, so the editor has to hold one. Return itself never reaches
+        // the TextBox — EditorPreviewKeyDown decides it in the tunnel phase — so accepting returns buys
+        // the rendering and caret behaviour of a multi-line field without giving up the commit key.
+        AcceptsReturn = true,
     };
 
     // A TextBox can't render underline/strikethrough, so a thin overlay above the editor draws those

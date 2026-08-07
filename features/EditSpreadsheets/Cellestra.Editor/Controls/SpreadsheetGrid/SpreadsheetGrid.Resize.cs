@@ -68,8 +68,11 @@ public sealed partial class SpreadsheetGrid
             }
 
             // A Wrap-Text cell needs a row tall enough for every wrapped line at this column's width.
+            // So does a value someone broke by hand with ⇧↩: the line break is in the text either way,
+            // and a second line the row can't show is a line you can't tell you typed.
             bool numeric = cell.Value.IsNumber || cell.Value.IsBoolean || cell.Value.IsError;
-            if (style.Alignment.WrapText && !numeric && !sheet.IsColumnHidden(col))
+            bool multiline = cell.Value.IsText && cell.Value.AsText.Contains('\n', StringComparison.Ordinal);
+            if ((style.Alignment.WrapText || multiline) && !numeric && !sheet.IsColumnHidden(col))
             {
                 double wrapped = MeasureWrappedRowHeight(sheet, cell, style, row, col);
                 if (!_rowWrappedPixels.TryGetValue(row, out double existing) || wrapped > existing)
@@ -125,7 +128,9 @@ public sealed partial class SpreadsheetGrid
         var formatted = new FormattedText(text, System.Globalization.CultureInfo.CurrentCulture, FlowDirection.LeftToRight,
             typeface, fontSize, Brushes.Black)
         {
-            MaxTextWidth = Math.Max(1, widthModel - 2 * CellPadX),
+            // Only a wrapping cell is measured against the column: a cell that merely contains a hard
+            // line break keeps its lines whole, and constraining it here would count wraps it never draws.
+            MaxTextWidth = style.Alignment.WrapText ? Math.Max(1, widthModel - 2 * CellPadX) : double.PositiveInfinity,
             Trimming = TextTrimming.None,
         };
 

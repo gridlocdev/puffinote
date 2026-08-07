@@ -200,6 +200,25 @@ public class OdsRoundTripTests
     }
 
     [Fact]
+    public void A_hand_broken_string_survives_as_one_paragraph_per_line()
+    {
+        // ODF has no newline *inside* a paragraph — a literal one is whitespace, which a conformant
+        // reader collapses to a space — so a ⇧↩ cell has to be written as one text:p per line. The
+        // reader has always joined paragraphs with "\n"; this is the other half of that round trip.
+        var workbook = Workbook.CreateNew();
+        workbook.ActiveSheet.SetValue(0, 0, CellValue.Text("first\nsecond"));
+
+        byte[] bytes = OdsWriter.WriteToBytes(workbook);
+        using var stream = new MemoryStream(bytes);
+        var content = new System.IO.Compression.ZipArchive(stream, ZipArchiveMode.Read).GetEntry("content.xml")!;
+        using var reader = new StreamReader(content.Open());
+        string xml = reader.ReadToEnd();
+
+        Assert.DoesNotContain("first\nsecond", xml, StringComparison.Ordinal);
+        Assert.Equal("first\nsecond", RoundTrip(workbook).ActiveSheet.GetValue(0, 0).AsText);
+    }
+
+    [Fact]
     public void Mimetype_is_first_and_stored_uncompressed()
     {
         byte[] bytes = OdsWriter.WriteToBytes(BuildSample());

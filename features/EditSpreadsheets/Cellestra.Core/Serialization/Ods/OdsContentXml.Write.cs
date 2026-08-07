@@ -316,7 +316,17 @@ public static partial class OdsContentXml
                 break;
             case CellValueType.Text:
                 element.Add(new XAttribute(Office + "value-type", "string"));
-                element.Add(new XElement(Text + "p", value.AsText));
+
+                // One text:p per line. ODF has no newline inside a paragraph — a literal one is
+                // whitespace, and a conformant reader collapses it to a space — so a hand-broken cell
+                // would come back from LibreOffice as a single run-on line. The reader already joins
+                // paragraphs with "\n" (ReadText), so this is the write side of a round-trip that was
+                // only ever half-specified.
+                foreach (string line in value.AsText.Split('\n'))
+                {
+                    element.Add(new XElement(Text + "p", line));
+                }
+
                 break;
             case CellValueType.Error:
                 element.Add(new XAttribute(Office + "value-type", "string"));
