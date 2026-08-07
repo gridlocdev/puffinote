@@ -33,7 +33,7 @@ internal sealed class SidebarView : UserControl
         LetterSpacing = 0.3,
         TextTrimming = TextTrimming.CharacterEllipsis,
         VerticalAlignment = Avalonia.Layout.VerticalAlignment.Center,
-        Margin = new Thickness(12, 8),
+        Margin = new Thickness(4, 8, 8, 8),
     };
 
     /// <summary>The header's icon buttons — hidden until a notebook is open, since neither means anything without one.</summary>
@@ -79,8 +79,16 @@ internal sealed class SidebarView : UserControl
         BuildActions(palette);
         _body.Child = _active.View;
 
+        // The collapse control leads the row, in the window's top-left corner — the same spot the handle takes
+        // over once the sidebar is hidden, so the affordance never moves. It sits outside `_actions` because it
+        // is meaningful with no notebook open (the other two aren't), and so it never hides itself away.
+        var collapse = IconButton("panel-left", "Hide sidebar", palette, () => ToggleRequested?.Invoke());
+        collapse.Margin = new Thickness(6, 0, 0, 0);
+        CollapseButtonForTest = collapse;
+
         // The notebook name takes the row; the actions sit at its right edge, where a title bar's controls go.
         var headerRow = new DockPanel { LastChildFill = true };
+        headerRow.Children.Add(Dock(collapse, Avalonia.Controls.Dock.Left));
         headerRow.Children.Add(Dock(_actions, Avalonia.Controls.Dock.Right));
         headerRow.Children.Add(_header);
 
@@ -103,6 +111,9 @@ internal sealed class SidebarView : UserControl
 
     /// <summary>Raised when a panel becomes active (so the shell can refresh e.g. the outline on view).</summary>
     public event Action<string>? PanelActivated;
+
+    /// <summary>Raised by the header's collapse control; the shell owns the layout, so it does the hiding.</summary>
+    public event Action? ToggleRequested;
 
     /// <summary>Raised when the file tree's pinned folders change, so the shell persists them to the session.</summary>
     public event Action? PinnedChanged;
@@ -136,6 +147,9 @@ internal sealed class SidebarView : UserControl
 
     /// <summary>The id of the currently shown panel (test seam).</summary>
     internal string ActivePanelId => _active.Id;
+
+    /// <summary>The header's collapse control (test seam — click it as a user would).</summary>
+    internal Button CollapseButtonForTest { get; }
 
     /// <summary>The outline panel's current items (test seam).</summary>
     internal IReadOnlyList<Panes.OutlineItem> OutlineItemsForTest => _outline.ItemsForTest;
@@ -199,13 +213,18 @@ internal sealed class SidebarView : UserControl
     /// </summary>
     private void BuildActions(ThemePalette palette)
     {
-        _actions.Children.Add(ActionButton(
+        _actions.Children.Add(IconButton(
             "file-plus", "New note", palette, () => NewNoteRequested?.Invoke(_files.SelectedNode)));
-        _actions.Children.Add(ActionButton(
+        _actions.Children.Add(IconButton(
             "chevrons-up", "Collapse all folders", palette, () => _files.CollapseAll()));
     }
 
-    private static Button ActionButton(string icon, string label, ThemePalette palette, Action run)
+    /// <summary>
+    /// The sidebar chrome's icon-button shape — transparent, 28×28 (a real pointer target, WCAG 2.2 §2.5.8),
+    /// tooltipped and named for a screen reader. Internal so the collapsed-state handle in the shell is built
+    /// from the same one and the control doesn't change shape when it changes place.
+    /// </summary>
+    internal static Button IconButton(string icon, string label, ThemePalette palette, Action run)
     {
         var button = new Button
         {

@@ -201,6 +201,9 @@ CLI harness `CliHost`/`CliException`). Both editors already run their palette an
 - The sidebar is **collapsible** to a zero/handle width and back, via a toolbar control, a menu item, a
   command-palette action, and a keyboard shortcut. Collapsed state is persisted per notebook. Collapsing the
   sidebar moves focus to the active editor; expanding it can optionally restore focus to the tree.
+- **The toolbar control is one affordance in two places.** Expanded, it leads the sidebar's own header;
+  collapsed, the sidebar is zero-width and a narrow **handle** takes the column, carrying the same button in
+  the same corner. Neither state can strand the user: the sidebar is always one click from where it was.
 
 #### 7.2.2 Focusable & keyboard-operable (hard requirement)
 

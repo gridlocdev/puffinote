@@ -175,9 +175,32 @@ public partial class MainWindow
     private void OnSearchIndexUpdated() =>
         SidebarForTest.SetSearchStatus(SearchForTest is { IsIndexing: false } s ? $"{s.FileCount} files indexed" : "Indexing…");
 
-    private void ToggleSidebar()
+    private void ToggleSidebar() => SetSidebarCollapsed(!_sidebarLayout.IsCollapsed);
+
+    /// <summary>
+    /// The one road in and out of the collapsed state, whichever affordance asked (⌘\, the menu, the palette,
+    /// the header's collapse button, its handle while hidden, or a two-finger swipe). Idempotent, so a swipe
+    /// in the direction the sidebar is already in costs nothing — not a session write, and not a focus jump.
+    /// </summary>
+    private void SetSidebarCollapsed(bool collapsed)
     {
-        _sidebarLayout.Toggle();
+        if (collapsed == _sidebarLayout.IsCollapsed)
+        {
+            return;
+        }
+
+        if (collapsed)
+        {
+            _sidebarLayout.Collapse();
+
+            // Hiding the pane you were in shouldn't leave focus nowhere (PRD §7.2.1) — hand it to the document.
+            _tabHost.ActivePane?.Focus();
+        }
+        else
+        {
+            _sidebarLayout.Expand();
+        }
+
         PersistSession(); // remember the collapsed/expanded state per notebook (PRD §7.1)
     }
 

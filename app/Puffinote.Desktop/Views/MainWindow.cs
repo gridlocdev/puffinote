@@ -1,3 +1,4 @@
+using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Media;
@@ -34,6 +35,7 @@ public partial class MainWindow : Window
     private readonly ColumnDefinition _sidebarColumn = new(260, GridUnitType.Pixel) { MinWidth = 160 };
     private Border _sidebar = null!;
     private GridSplitter _splitter = null!;
+    private Border _sidebarHandle = null!;
     private SidebarLayout _sidebarLayout = null!;
 
     // The notebook-scoped recent-files list (PRD §7.2.3): promotion, rename-remap, and delete-drop all live in
@@ -94,6 +96,7 @@ public partial class MainWindow : Window
         SidebarForTest.RevealRequested += node => _ = RevealAsync(node);
         SidebarForTest.OpenExternallyRequested += node => _ = OpenExternallyAsync(node);
         SidebarForTest.PinnedChanged += PersistSession;
+        SidebarForTest.ToggleRequested += ToggleSidebar;
 
         Width = 1000;
         Height = 700;
@@ -138,6 +141,15 @@ public partial class MainWindow : Window
 
     /// <summary>The sidebar (test seam — drive the tree in end-to-end mutation tests).</summary>
     internal Sidebar.SidebarView SidebarForTest { get; } = new();
+
+    /// <summary>Whether the sidebar is currently hidden (test seam).</summary>
+    internal bool IsSidebarCollapsedForTest => _sidebarLayout.IsCollapsed;
+
+    /// <summary>Whether the collapsed-state handle is showing (test seam).</summary>
+    internal bool IsSidebarHandleVisibleForTest => _sidebarHandle.IsVisible;
+
+    /// <summary>The handle's button — the only way back to a collapsed sidebar by pointer (test seam).</summary>
+    internal Button SidebarHandleButtonForTest => (Button)_sidebarHandle.Child!;
 
     /// <summary>The notebook search service (test seam — await a deterministic rebuild, then query).</summary>
     internal Search.NotebookSearchService? SearchForTest { get; private set; }
@@ -188,6 +200,21 @@ public partial class MainWindow : Window
 
         _splitter = new GridSplitter { Width = 4, Background = palette.SurfaceBorder };
 
+        // The collapsed sidebar's handle (PRD §7.2.1 — "zero/handle width"). It shares the splitter's Auto
+        // column because the two are never shown together: expanded, the column is the 4px splitter; collapsed,
+        // it's this strip, sitting where the sidebar's own header button was so the affordance doesn't move.
+        var handleButton = Sidebar.SidebarView.IconButton("panel-left", "Show sidebar", palette, ToggleSidebar);
+        handleButton.VerticalAlignment = Avalonia.Layout.VerticalAlignment.Top;
+        handleButton.Margin = new Thickness(2, 8, 2, 0); // level with the sidebar header's own copy of it
+        _sidebarHandle = new Border
+        {
+            Background = palette.Surface,
+            BorderBrush = palette.SurfaceBorder,
+            BorderThickness = new Thickness(0, 0, 1, 0),
+            IsVisible = false,
+            Child = handleButton,
+        };
+
         var grid = new Grid
         {
             ColumnDefinitions =
@@ -199,12 +226,14 @@ public partial class MainWindow : Window
         };
         Grid.SetColumn(_sidebar, 0);
         Grid.SetColumn(_splitter, 1);
+        Grid.SetColumn(_sidebarHandle, 1);
         Grid.SetColumn(_tabHost, 2);
         grid.Children.Add(_sidebar);
         grid.Children.Add(_splitter);
+        grid.Children.Add(_sidebarHandle);
         grid.Children.Add(_tabHost);
 
-        _sidebarLayout = new SidebarLayout(_sidebarColumn, _sidebar, _splitter, SessionStore.DefaultSidebarWidth);
+        _sidebarLayout = new SidebarLayout(_sidebarColumn, _sidebar, _splitter, _sidebarHandle, SessionStore.DefaultSidebarWidth);
         return grid;
     }
 }
