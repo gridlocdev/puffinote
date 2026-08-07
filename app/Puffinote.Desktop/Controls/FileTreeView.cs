@@ -427,7 +427,7 @@ internal sealed class FileTreeView : UserControl
     }
 
     /// <summary>
-    /// Paint row selection with the app's accent.
+    /// Mark the selected row with the app's accent — as a leading-edge <b>bar</b>, and only that.
     ///
     /// <para>This list never styled its own <see cref="ListBoxItem"/>s, so its selected row fell through to
     /// FluentTheme's default system accent — <b>blue</b> — while every hand-built surface in the shell (the
@@ -435,10 +435,16 @@ internal sealed class FileTreeView : UserControl
     /// state, "this is the current thing", was being said in two colours at once: the selected file showed blue
     /// in the tree and orange in its tab. That reads as an accident, not a system.</para>
     ///
-    /// <para>The selected row also carries an accent <b>bar</b> down its leading edge, not just the wash —
-    /// a second, non-colour channel for "you are here" (WCAG 2.2 §1.4.1), spelled the same way as the sidebar's
-    /// active nav underline. The bar's width is reserved (transparent) on every row so selecting one doesn't
-    /// shove its name two pixels sideways.</para>
+    /// <para><b>The wash belongs to the open document, not to the selection</b> (see <see cref="BuildRow"/>).
+    /// Selection and "what is in the active tab" are different questions, and while both wore the same
+    /// highlight the tree could answer them in two places at once: click a row, then switch tabs from the strip
+    /// above, and two rows were washed — the one you last clicked and the one you were actually reading. The
+    /// sidebar now highlights exactly the file behind the active tab, and nothing else ever wears that wash.</para>
+    ///
+    /// <para>Selection keeps the bar it already had — a non-colour channel for "the keyboard is here, this is
+    /// what Rename acts on" (WCAG 2.2 §1.4.1), spelled the same way as the sidebar's active nav underline. The
+    /// bar's width is reserved (transparent) on every row so selecting one doesn't shove its name two pixels
+    /// sideways.</para>
     /// </summary>
     private static void StyleRows(ListBox list)
     {
@@ -468,17 +474,19 @@ internal sealed class FileTreeView : UserControl
             new Setter(ContentPresenter.BackgroundProperty, palette.SurfaceHover)));
 
         // Selected (including when the list doesn't have focus — Avalonia drops :focus but keeps :selected).
-        foreach (var selected in new Func<Selector?, Selector>[]
-                 {
-                     x => x.OfType<ListBoxItem>().Class(":selected"),
-                     x => x.OfType<ListBoxItem>().Class(":selected").Class(":pointerover"),
-                 })
-        {
-            list.Styles.Add(Item(
-                selected,
-                new Setter(ContentPresenter.BackgroundProperty, palette.AccentSubtle),
-                new Setter(ContentPresenter.BorderBrushProperty, palette.Accent)));
-        }
+        // The bar only: the wash is reserved for the open document, so the tree never highlights two rows.
+        // Background is still set — to Transparent, and to the ordinary hover wash when hovered — because
+        // leaving it unset doesn't mean "no wash"; it means falling back through to FluentTheme's ListBoxItem
+        // theme, which is where the system-accent blue this method exists to displace comes from.
+        list.Styles.Add(Item(
+            x => x.OfType<ListBoxItem>().Class(":selected"),
+            new Setter(ContentPresenter.BackgroundProperty, Brushes.Transparent),
+            new Setter(ContentPresenter.BorderBrushProperty, palette.Accent)));
+
+        list.Styles.Add(Item(
+            x => x.OfType<ListBoxItem>().Class(":selected").Class(":pointerover"),
+            new Setter(ContentPresenter.BackgroundProperty, palette.SurfaceHover),
+            new Setter(ContentPresenter.BorderBrushProperty, palette.Accent)));
 
         // The container itself carries the row's outer spacing; the ListBoxItem's own default padding would
         // otherwise inset the content *inside* the rounded, accent-barred presenter.
@@ -559,9 +567,10 @@ internal sealed class FileTreeView : UserControl
             LastChildFill = true,
             MinHeight = RowHeight,
 
-            // The document you are reading wears the same wash the ListBox paints behind a selected row, so
-            // "open in a tab" and "clicked in the tree" look alike — the sidebar highlight now follows the
-            // active tab however you got there, from the tree or from the tab strip.
+            // The one wash in the tree, and it belongs to the document behind the active tab — exactly one row
+            // is highlighted, whichever way you got there, from the tree or from the tab strip. Selection wears
+            // the leading-edge bar instead (see StyleRows); when both were washes, clicking a row and then
+            // switching tabs above lit two of them, and the sidebar stopped answering "which note am I in?".
             //
             // Painted here rather than by moving the ListBox selection, because selection answers a different
             // question (what Rename acts on, where the keyboard is). Merging them would drop this highlight the
@@ -570,7 +579,7 @@ internal sealed class FileTreeView : UserControl
             // Transparent otherwise, never null: a panel with no background is not hit-testable in Avalonia, so
             // the pointer would sail straight through this row and the PointerEntered/Exited below would never
             // fire — leaving the pin star invisible forever on an unpinned folder. Transparent still paints
-            // nothing, so the ListBoxItem's own hover/selection wash (drawn behind it) shows through unchanged.
+            // nothing, so the ListBoxItem's own hover wash (drawn behind it) shows through unchanged.
             Background = isActive ? palette.AccentSubtle : Brushes.Transparent,
         };
         content.Children.Add(Dock(BuildGuides(row, palette), Avalonia.Controls.Dock.Left));

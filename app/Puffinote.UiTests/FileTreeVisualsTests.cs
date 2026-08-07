@@ -1,6 +1,7 @@
 using Avalonia;
 using Avalonia.Automation;
 using Avalonia.Controls;
+using Avalonia.Controls.Presenters;
 using Avalonia.Headless;
 using Avalonia.Headless.XUnit;
 using Avalonia.Interactivity;
@@ -220,6 +221,37 @@ public sealed class FileTreeVisualsTests : IDisposable
         Settle(window);
 
         Assert.Equal(Tokens.Dark.AccentSubtle, Wash(window, "Inbox.md"));
+    }
+
+    /// <summary>What the <see cref="ListBoxItem"/> itself paints — the selection's channel, behind the row.</summary>
+    private static (IBrush? Wash, IBrush? Bar) Selection(Window window, string name)
+    {
+        var presenter = In<ContentPresenter>(Row(window, name)).First(p => p.Name == "PART_ContentPresenter");
+        return (presenter.Background, presenter.BorderBrush);
+    }
+
+    [AvaloniaFact]
+    public void Selecting_one_row_while_reading_another_still_highlights_only_the_open_one()
+    {
+        // Regression: selection and "open in a tab" both wore the accent wash, so clicking a row in the tree and
+        // then switching tabs from the strip above left *two* rows highlighted — the one you last clicked and the
+        // one you were actually reading. The tree highlights the active tab's file and nothing else; selection
+        // has its own channel, the bar down the leading edge.
+        var (tree, window) = Open();
+        tree.SelectPath(Path("cover.png"));
+        tree.SetActiveDocument(Path("Inbox.md"));
+        Settle(window);
+
+        Assert.Equal(Tokens.Dark.AccentSubtle, Wash(window, "Inbox.md"));
+
+        var selected = Selection(window, "cover.png");
+        Assert.Equal(Brushes.Transparent, selected.Wash); // no second highlight...
+        Assert.Equal(Tokens.Dark.Accent, selected.Bar);   // ...but you can still see where the keyboard is
+
+        // And nothing else in the tree — the ListBox's own selected row included — wears the open document's wash.
+        var washed = window.GetVisualDescendants().OfType<ListBoxItem>()
+            .Count(row => Equals(In<DockPanel>(row).First().Background, Tokens.Dark.AccentSubtle));
+        Assert.Equal(1, washed);
     }
 
     [AvaloniaFact]
