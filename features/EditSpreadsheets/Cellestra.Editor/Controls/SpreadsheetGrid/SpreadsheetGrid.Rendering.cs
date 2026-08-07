@@ -1,6 +1,7 @@
 using System.Globalization;
 using Avalonia;
 using Avalonia.Media;
+using Cellestra.Core.Data;
 using Cellestra.Core.Model;
 using Cellestra.Core.Styling;
 using Cellestra.Core.Values;
@@ -443,7 +444,7 @@ public sealed partial class SpreadsheetGrid
                 bool active = col >= Selection.Left && col <= Selection.Right;
                 context.FillRectangle(active ? _palette.ActiveHeaderFill : headerBrush, rect);
                 context.DrawRectangle(null, gridPen, rect);
-                DrawCentered(context, SheetDimensions.ColumnToLetters(col), rect, typeface, textBrush, headerFontSize);
+                DrawCentered(context, ColumnHeaderLabel(col), rect, typeface, textBrush, headerFontSize, rect.Width - 4);
             }
         }
 
@@ -460,9 +461,63 @@ public sealed partial class SpreadsheetGrid
         }
     }
 
-    private static void DrawCentered(DrawingContext context, string text, Rect rect, Typeface typeface, IBrush brush, double fontSize)
+    /// <summary>
+    /// What the column-header strip says above <paramref name="column"/>: the table's own column title
+    /// while you are scrolled inside that table's body, and the column's letter the rest of the time
+    /// (including once you scroll past the table's last row, when there is no table any more).
+    /// </summary>
+    private string ColumnHeaderLabel(int column)
     {
-        var formatted = new FormattedText(text, CultureInfo.InvariantCulture, FlowDirection.LeftToRight, typeface, fontSize, brush);
+        string letters = SheetDimensions.ColumnToLetters(column);
+        if (Sheet is not { } sheet
+            || FirstScrollableVisibleRow() is not { } topRow
+            || StickyTableHeader.LabelRow(sheet, column, topRow) is not { } headerRow)
+        {
+            return letters;
+        }
+
+        // An unnamed header cell has nothing to say, so the letter stays — better than a blank strip.
+        string title = CellDisplayText(sheet, headerRow, column);
+        return title.Length > 0 ? title : letters;
+    }
+
+    /// <summary>
+    /// The topmost row that actually scrolls, skipping any frozen band. Frozen rows sit above the fold
+    /// permanently, so asking "what have I scrolled into?" of one always answers "nothing".
+    /// </summary>
+    private int? FirstScrollableVisibleRow()
+    {
+        int frozen = Sheet?.FrozenRows ?? 0;
+        foreach (var (row, _, _) in _visibleRows)
+        {
+            if (row >= frozen)
+            {
+                return row;
+            }
+        }
+
+        return null;
+    }
+
+    /// <summary>A cell's text exactly as the grid would draw it (formatted through its number format).</summary>
+    private string CellDisplayText(Worksheet sheet, int row, int column)
+    {
+        var cell = sheet.Find(row, column);
+        return cell is null ? string.Empty : NumberFormatter.Format(cell.Value, ResolveStyle(cell, row, column).NumberFormat, Culture);
+    }
+
+    /// <summary>Test seam: the label the header strip shows above <paramref name="column"/> right now.</summary>
+    internal string ColumnHeaderLabelForTest(int column) => ColumnHeaderLabel(column);
+
+    private static void DrawCentered(DrawingContext context, string text, Rect rect, Typeface typeface, IBrush brush, double fontSize, double maxWidth = double.PositiveInfinity)
+    {
+        var formatted = new FormattedText(text, CultureInfo.InvariantCulture, FlowDirection.LeftToRight, typeface, fontSize, brush)
+        {
+            // A table's column title can be far wider than its column; a letter never is.
+            MaxTextWidth = double.IsPositiveInfinity(maxWidth) ? double.PositiveInfinity : Math.Max(1, maxWidth),
+            Trimming = TextTrimming.CharacterEllipsis,
+        };
+
         context.DrawText(formatted, new Point(
             rect.X + (rect.Width - formatted.Width) / 2,
             rect.Y + (rect.Height - formatted.Height) / 2));
