@@ -46,7 +46,7 @@ public class ClipboardTests
         var window = new Window { Content = editor };
         window.Show();
 
-        editor.Buffer.Selection = new Engine.Document.Selection(0, 5); // "hello"
+        editor.Buffer.Selection = new Puffinote.Text.Document.Selection(0, 5); // "hello"
         await editor.CutAsync();
         Assert.Equal(" world", editor.Text);
 

@@ -1,7 +1,7 @@
 using System.CommandLine;
 using System.Text;
+using Puffinote.Text.Document;
 using Typage.Cli.Infrastructure;
-using Typage.Engine.Document;
 using Typage.Engine.Html;
 using Typage.Engine.Markdown;
 

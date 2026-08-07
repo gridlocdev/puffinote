@@ -18,9 +18,10 @@ Each editor builds, tests, and ships on its own; the shell embeds them without r
 app/                          Puffinote — the composite shell (Desktop + CLI) that embeds both editors
 features/EditMarkdown/        Typage — the Markdown editor (engine, control, desktop, CLI, tests)
 features/EditSpreadsheets/    Cellestra — the spreadsheet editor (core, editor, charts, desktop, CLI, tests)
-shared/                       Cross-cutting libraries used by the shell and both editors:
+shared/                       Cross-cutting libraries used by the shell and the editors:
                                 Puffinote.Components (Avalonia: theming, icons, overlays, shell chrome)
                                 Puffinote.Components.Core (non-UI: CLI helpers — safe for CLI projects)
+                                Puffinote.Text (non-UI: piece table, graphemes, selection, undo, search, file codec)
 docs/                         PRD / ARCHITECTURE (per-area) + proposals/ (repo-wide)
 build/                        package-mac.sh — the shared macOS .app bundler for all three apps
 justfile                      Build/test/format/ship entry points for every area — prefer these
@@ -36,7 +37,7 @@ There is no single root solution. Each area has its own:
 | Markdown editor (`features/EditMarkdown/`) | [`features/EditMarkdown/AGENTS.md`](features/EditMarkdown/AGENTS.md) | `features/EditMarkdown/Typage.slnx` |
 | Spreadsheet editor (`features/EditSpreadsheets/`) | [`features/EditSpreadsheets/AGENTS.md`](features/EditSpreadsheets/AGENTS.md) | `features/EditSpreadsheets/Cellestra.slnx` |
 
-`shared/` has no guide of its own because it isn't an area you work in — it's a dependency of all three. Both `Puffinote.Components*` projects are compiled into **all three solutions**, so a change there is a change to every area: build and test all three (`just check`) before you call it done.
+`shared/` has no guide of its own because it isn't an area you work in — it's a dependency of every other one. Its projects are compiled into **every solution**, so a change there is a change to every area: build and test them all (`just check`) before you call it done.
 
 When this file and an area guide or a linked doc disagree, the deeper doc wins for design detail; this file wins for repo-wide process.
 

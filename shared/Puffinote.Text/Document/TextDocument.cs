@@ -1,4 +1,4 @@
-namespace Typage.Engine.Document;
+namespace Puffinote.Text.Document;
 
 /// <summary>
 /// The document buffer: an <b>immutable</b> piece table (PRD §9.1 — "piece tree / rope

@@ -5,10 +5,10 @@ using Avalonia.Platform.Storage;
 using Avalonia.Threading;
 using Puffinote.Components.Commands;
 using Puffinote.Components.Overlays;
+using Puffinote.Text.Document;
 using Typage.Control.Controls;
 using Typage.Control.Views;
 using Typage.Desktop.Services;
-using Typage.Engine.Document;
 
 namespace Typage.Desktop.Views;
 

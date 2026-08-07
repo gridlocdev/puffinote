@@ -2,8 +2,8 @@ using Avalonia.Controls;
 using Avalonia.Platform.Storage;
 using Avalonia.Threading;
 using Puffinote.Components.Commands;
+using Puffinote.Text.Document;
 using Typage.Control;
-using Typage.Engine.Document;
 
 namespace Typage.Desktop.Views;
 
@@ -13,8 +13,23 @@ public partial class MainWindow
     {
         try
         {
-            var (text, format) = TextFileCodec.Decode(File.ReadAllBytes(path));
+            var read = TextFileCodec.Read(File.ReadAllBytes(path));
+            var (text, format) = (read.Text, read.Format);
             _format = format; // remember the encoding/BOM so a save round-trips it
+
+            // Bytes that aren't valid UTF-8 were read through a total single-byte fallback, so the file
+            // round-trips — but which characters those bytes stand for is a guess, and saving would write
+            // the guess back over the original. Open it, say so, and block the save until someone
+            // confirms an encoding (PRD §7.1).
+            _encodingUnconfirmed = read.IsReadOnly;
+            if (read.IsReadOnly)
+            {
+                ShowError($"“{Path.GetFileName(path)}” isn't valid UTF-8.",
+                    $"It has been opened as {format.DisplayName} so you can read it, and nothing has been changed.\n\n" +
+                    "Saving is held back until the encoding is confirmed, because writing this guess back " +
+                    "would be the edit that actually damages the file.");
+            }
+
             EditorView.LoadText(text);
             SetCurrentPath(path);
             _lastKnownDiskText = text; // the on-disk baseline for external-change detection
@@ -100,6 +115,7 @@ public partial class MainWindow
         SetCurrentPath(null);
         _lastKnownDiskText = null;
         _format = TextFileFormat.Utf8NoBom; // new documents default to UTF-8 (no BOM)
+        _encodingUnconfirmed = false;       // nothing was guessed about a document that has no bytes yet
         UpdateChrome();
         WatchCurrentFile(); // nothing to watch now
     }
@@ -186,12 +202,22 @@ public partial class MainWindow
             return await SaveAsAsync();
         }
 
+        if (!await ConfirmEncodingAsync())
+        {
+            return false;
+        }
+
         await ReconcileStagedImagesAsync(_currentPath);
         return WriteToPath(_currentPath);
     }
 
     private async Task<bool> SaveAsAsync()
     {
+        if (!await ConfirmEncodingAsync())
+        {
+            return false;
+        }
+
         var file = await StorageProvider.SaveFilePickerAsync(new FilePickerSaveOptions
         {
             Title = "Save Markdown",
@@ -221,6 +247,30 @@ public partial class MainWindow
         }
 
         return false;
+    }
+
+    /// <summary>
+    /// True while the open document's encoding was <i>guessed</i> (its bytes were not valid UTF-8).
+    /// A save would write that guess back, so it is held until a person confirms — which is the one
+    /// point in the flow where "are these really Latin-1?" is a question anyone can answer.
+    /// </summary>
+    private bool _encodingUnconfirmed;
+
+    private async Task<bool> ConfirmEncodingAsync()
+    {
+        if (!_encodingUnconfirmed)
+        {
+            return true;
+        }
+
+        bool confirmed = await ConfirmAsync(
+            $"This file wasn't valid UTF-8 and was read as {_format.DisplayName}. Saving now writes it back that way — " +
+            "if that guess is wrong, the characters it got wrong become wrong on disk.",
+            confirmLabel: $"Save as {_format.DisplayName}",
+            denyLabel: "Cancel");
+
+        _encodingUnconfirmed = !confirmed; // confirmed once is confirmed for the rest of the session
+        return confirmed;
     }
 
     private bool WriteToPath(string path)

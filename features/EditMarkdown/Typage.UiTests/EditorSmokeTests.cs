@@ -38,7 +38,7 @@ public class EditorSmokeTests
     {
         var editor = new MarkdownEditor { Text = "# Title\n\n**bold**" };
         // The control rebuilds the engine model on text change; confirm the wiring produced tokens.
-        var model = MarkdownModel.Build(Engine.Document.TextDocument.FromString(editor.Text));
+        var model = MarkdownModel.Build(Puffinote.Text.Document.TextDocument.FromString(editor.Text));
         Assert.Contains(model.AllTokens(), t => t.Type == TokenType.Strong);
     }
 
@@ -47,7 +47,7 @@ public class EditorSmokeTests
     {
         var editor = new MarkdownEditor { Text = string.Empty };
         editor.Buffer.Insert("word");
-        editor.Buffer.Selection = new Engine.Document.Selection(0, 4);
+        editor.Buffer.Selection = new Puffinote.Text.Document.Selection(0, 4);
         editor.ToggleBold();
         Assert.Equal("**word**", editor.Text);
     }
@@ -65,7 +65,7 @@ public class EditorSmokeTests
     {
         var editor = new MarkdownEditor { Text = string.Empty };
         editor.Buffer.Insert("site");
-        editor.Buffer.Selection = new Engine.Document.Selection(0, 4);
+        editor.Buffer.Selection = new Puffinote.Text.Document.Selection(0, 4);
         editor.InsertLink();
         Assert.Equal("[site]()", editor.Text);
     }
@@ -125,9 +125,9 @@ public class EditorSmokeTests
         var editor = new MarkdownEditor { Text = new string('x', 100) };
         editor.SetSearchMatches(
             [
-                new Engine.Document.SearchMatch(5, 2),  // ends at 7
-                new Engine.Document.SearchMatch(20, 2), // ends at 22
-                new Engine.Document.SearchMatch(50, 2), // ends at 52
+                new Puffinote.Text.Document.SearchMatch(5, 2),  // ends at 7
+                new Puffinote.Text.Document.SearchMatch(20, 2), // ends at 22
+                new Puffinote.Text.Document.SearchMatch(50, 2), // ends at 52
             ],
             current: 0);
 

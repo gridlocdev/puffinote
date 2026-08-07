@@ -1,6 +1,6 @@
 using System.Text.RegularExpressions;
 
-namespace Typage.Engine.Document;
+namespace Puffinote.Text.Document;
 
 /// <summary>A single search hit: a source range <c>[Start, Start+Length)</c>.</summary>
 public readonly record struct SearchMatch(int Start, int Length)

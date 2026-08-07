@@ -1,0 +1,29 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    Puffinote.Text — the format-agnostic half of a text editor, shared by every editor in the family
+    that edits characters (proposal 0003 §4). The immutable piece table, grapheme-aware navigation,
+    selection, undo/redo, search, stats, and the file codec: everything that is true of text before
+    anyone decides what the text *means*.
+
+    NON-UI, like Puffinote.Components.Core and unlike Puffinote.Components: no Avalonia reference,
+    ever. Nothing here knows about Markdown, or about any other format — that knowledge lives in the
+    editor that owns the format (Typage.Engine for Markdown), which is exactly why this could be
+    lifted out of Typage.Engine as a pure move.
+    (Framework, nullable, and package versions come from the repo-root Directory.Build.props /
+    Directory.Packages.props.)
+  -->
+  <PropertyGroup>
+    <RootNamespace>Puffinote.Text</RootNamespace>
+    <AssemblyName>Puffinote.Text</AssemblyName>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- The tests reach a few internal helpers; the CLIs read the codec's internals for `info`. -->
+    <InternalsVisibleTo Include="Puffinote.Text.Tests" />
+    <InternalsVisibleTo Include="Typage.Engine.Tests" />
+    <InternalsVisibleTo Include="typage" />
+    <InternalsVisibleTo Include="pltn" />
+  </ItemGroup>
+
+</Project>

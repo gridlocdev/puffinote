@@ -9,6 +9,8 @@
   <Folder Name="/shared/">
     <Project Path="../shared/Puffinote.Components/Puffinote.Components.csproj" />
     <Project Path="../shared/Puffinote.Components.Core/Puffinote.Components.Core.csproj" />
+    <Project Path="../shared/Puffinote.Text/Puffinote.Text.csproj" />
+    <Project Path="../shared/Puffinote.Text.Tests/Puffinote.Text.Tests.csproj" />
   </Folder>
   <Folder Name="/editors/">
     <!-- Embedded editor surfaces (composed unchanged). -->

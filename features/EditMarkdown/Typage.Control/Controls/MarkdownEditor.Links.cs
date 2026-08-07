@@ -2,7 +2,7 @@ using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Media;
-using Typage.Engine.Document;
+using Puffinote.Text.Document;
 using Typage.Engine.Markdown;
 
 namespace Typage.Control.Controls;

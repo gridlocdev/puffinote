@@ -1,4 +1,4 @@
-using Typage.Engine.Document;
+using Puffinote.Text.Document;
 
 namespace Typage.Control.Rendering;
 

@@ -1,6 +1,6 @@
-using Typage.Engine.Document;
+using Puffinote.Text.Document;
 
-namespace Typage.Engine.Editing;
+namespace Puffinote.Text.Editing;
 
 /// <summary>One recorded step: the edit plus the selection before and after it.</summary>
 public readonly record struct HistoryEntry(TextEdit Edit, Selection Before, Selection After);

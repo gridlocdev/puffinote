@@ -1,6 +1,6 @@
 using Typage.Engine.Markdown;
 
-namespace Typage.Engine.Editing;
+namespace Puffinote.Text.Editing;
 
 /// <summary>The kind of list a line's marker belongs to (or none).</summary>
 public enum ListKind

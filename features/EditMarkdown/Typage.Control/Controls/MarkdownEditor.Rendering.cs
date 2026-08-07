@@ -1,8 +1,8 @@
 using Avalonia;
 using Avalonia.Media;
 using Avalonia.Threading;
+using Puffinote.Text.Document;
 using Typage.Control.Rendering;
-using Typage.Engine.Document;
 using Typage.Engine.Markdown;
 
 namespace Typage.Control.Controls;

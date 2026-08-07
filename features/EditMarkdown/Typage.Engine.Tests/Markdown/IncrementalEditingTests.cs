@@ -1,4 +1,4 @@
-using Typage.Engine.Editing;
+using Puffinote.Text.Editing;
 using Typage.Engine.Markdown;
 using Xunit;
 
@@ -30,11 +30,11 @@ public class IncrementalEditingTests
         Apply(() => buffer.Insert("\n\n- item one\n- item two"));
 
         // Edit in the middle of the document.
-        buffer.Selection = Engine.Document.Selection.At(2);
+        buffer.Selection = Puffinote.Text.Document.Selection.At(2);
         Apply(() => buffer.Insert("# "));
 
         // The worst case: a fence opener at the very top flips everything below into code.
-        buffer.Selection = Engine.Document.Selection.At(0);
+        buffer.Selection = Puffinote.Text.Document.Selection.At(0);
         Apply(() => buffer.Insert("```\n"));
 
         // Undo and redo must keep the incremental model correct too.

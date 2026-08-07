@@ -1,6 +1,6 @@
-using Typage.Engine.Document;
+using Puffinote.Text.Document;
 
-namespace Typage.Engine.Editing;
+namespace Puffinote.Text.Editing;
 
 /// <summary>
 /// The editable document model: the current immutable <see cref="TextDocument"/> snapshot, the
@@ -36,8 +36,9 @@ public sealed class DocumentBuffer
 
     /// <summary>
     /// The first line affected by the most recent text change — the seam for incremental
-    /// re-tokenization. Lines above it are unchanged, so a consumer can reuse their tokens and
-    /// only re-run <see cref="Markdown.MarkdownModel.Update"/> from here down.
+    /// re-tokenization. Lines above it are unchanged, so a consumer can reuse whatever it derived
+    /// from them and re-derive only from here down. (Typage's Markdown tokenizer is the case this
+    /// was written for; a consumer with nothing to re-derive can ignore it.)
     /// </summary>
     public int LastChangedLine { get; private set; }
 

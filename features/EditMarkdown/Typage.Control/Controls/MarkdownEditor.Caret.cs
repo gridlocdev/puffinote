@@ -1,6 +1,6 @@
 using Avalonia;
+using Puffinote.Text.Document;
 using Typage.Control.Rendering;
-using Typage.Engine.Document;
 
 namespace Typage.Control.Controls;
 

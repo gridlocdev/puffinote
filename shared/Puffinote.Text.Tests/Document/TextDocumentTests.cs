@@ -1,7 +1,7 @@
-using Typage.Engine.Document;
+using Puffinote.Text.Document;
 using Xunit;
 
-namespace Typage.Engine.Tests.Document;
+namespace Puffinote.Text.Tests.Document;
 
 public class TextDocumentTests
 {

@@ -1,4 +1,4 @@
-namespace Typage.Engine.Document;
+namespace Puffinote.Text.Document;
 
 /// <summary>
 /// A 0-based line/column position in a document. The UI surfaces this as 1-based

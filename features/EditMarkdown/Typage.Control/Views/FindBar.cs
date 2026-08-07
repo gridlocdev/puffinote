@@ -5,7 +5,7 @@ using Avalonia.Input;
 using Avalonia.Layout;
 using Avalonia.Media;
 using Puffinote.Components.Controls.CommandBar;
-using Typage.Engine.Document;
+using Puffinote.Text.Document;
 
 namespace Typage.Control.Views;
 

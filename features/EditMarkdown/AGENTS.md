@@ -15,9 +15,13 @@ tested first as a standalone, headless library.
 
 The code is laid out as a **pure brain with two faces and a control**:
 
-1. **`Typage.Engine`** — the pure brain: immutable document model (piece table), grapheme-aware
-   navigation, undo/redo, the incremental Markdown tokenizer + checkpoint cache, and the HTML
-   renderer. **Zero UI dependencies.** Headless-testable. This is where most logic and tests live.
+1. **`Typage.Engine`** — the Markdown brain: the incremental tokenizer + checkpoint cache, the inline
+   model, the list/quote line-prefix rules, and the HTML renderer. **Zero UI dependencies.**
+   Headless-testable. Everything here knows what the text *means*; everything true of text before
+   that — the immutable document model (piece table), grapheme-aware navigation, selection, undo/redo,
+   search, stats, and the file codec — lives in **`shared/Puffinote.Text`** (proposal 0003 §4), which
+   Plaintain stands on too. Types you used to find in `Typage.Engine.Document`/`.Editing` are now in
+   `Puffinote.Text.Document`/`.Editing`; nothing else about them changed.
 2. **`Typage.Control`** — an Avalonia control library: the custom live-preview editing surface
    (`MarkdownEditor`/`MarkdownEditorView`) built on `Avalonia.Media.TextFormatting`, the two
    presentation seams (`MarkdownTheme`, `IEmbedResolver`), and — crucially — **everything that acts on
@@ -163,7 +167,10 @@ surface consumes, so what it prints is what the editor styles.
 
 ## Where things go
 
-- **Engine logic** → `Typage.Engine/` (`Document/`, `Editing/`, `Markdown/`, `Html/`).
+- **Markdown logic** → `Typage.Engine/` (`Markdown/`, `Html/`, and the list/quote rules in `Editing/`).
+- **Anything true of text regardless of format** — the piece table, graphemes, selection, undo, search,
+  the file codec → **`shared/Puffinote.Text/`**. If a change would read the same in a plaintext editor,
+  it belongs there; if it mentions a `#` or a `-`, it belongs in the engine.
 - **Editing surface + presentation seams + every editing command** → `Typage.Control/` (`Commands/`,
   `Controls/`, `Views/`, `Rendering/`). Puffinote embeds *this*, so a command added to the shell instead
   would be invisible there — see the note in "What this project is."
@@ -174,7 +181,8 @@ surface consumes, so what it prints is what the editor styles.
   use). Both are in `Typage.slnx`, so you can edit them from here — but they're in Cellestra's and
   Puffinote's solutions too, so a change there is a change to all three: run `just check`, not only
   `just test-typage`.
-- **Tests** → `Typage.Engine.Tests/`, `Typage.Cli.Tests/`, `Typage.UiTests/`.
+- **Tests** → `Typage.Engine.Tests/`, `Typage.Cli.Tests/`, `Typage.UiTests/` (and
+  `shared/Puffinote.Text.Tests/`, which the moved types' tests travelled into).
 - Don't invent new top-level projects; extend the existing structure. If a new home seems necessary,
   note it and ask.
 

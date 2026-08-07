@@ -68,7 +68,7 @@ public class RenderTests
         // on it; the render must still execute (the caret is drawn in the resolved content block, not lost
         // in the skipped zero-row block).
         view.Text = "Hello\n";
-        view.Editor.Buffer.Selection = Typage.Engine.Document.Selection.At(view.Editor.Buffer.Document.Length);
+        view.Editor.Buffer.Selection = Puffinote.Text.Document.Selection.At(view.Editor.Buffer.Document.Length);
 
         window.CaptureRenderedFrame(); // must not throw
 

@@ -1,8 +1,8 @@
 using Avalonia.Headless.XUnit;
 using Avalonia.Media;
+using Puffinote.Text.Document;
 using Typage.Control.Controls;
 using Typage.Control.Rendering;
-using Typage.Engine.Document;
 using Xunit;
 
 namespace Typage.UiTests;

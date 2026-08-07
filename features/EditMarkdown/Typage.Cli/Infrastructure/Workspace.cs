@@ -1,6 +1,6 @@
 using System.Text;
 using Puffinote.Components.Core.Cli;
-using Typage.Engine.Document;
+using Puffinote.Text.Document;
 
 namespace Typage.Cli.Infrastructure;
 

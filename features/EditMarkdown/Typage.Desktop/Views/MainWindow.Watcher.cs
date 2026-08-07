@@ -1,6 +1,6 @@
 using Avalonia.Threading;
 using Puffinote.Components.Overlays;
-using Typage.Engine.Document;
+using Puffinote.Text.Document;
 
 namespace Typage.Desktop.Views;
 

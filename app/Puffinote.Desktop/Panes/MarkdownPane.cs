@@ -1,8 +1,8 @@
 using Avalonia.Controls;
 using Puffinote.Components.Commands;
+using Puffinote.Text.Document;
 using Typage.Control;
 using Typage.Control.Views;
-using Typage.Engine.Document;
 using Typage.Engine.Markdown;
 
 namespace Puffinote.Desktop.Panes;

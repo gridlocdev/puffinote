@@ -6,10 +6,10 @@ using Avalonia.Platform.Storage;
 using Avalonia.Threading;
 using Puffinote.Components.Commands;
 using Puffinote.Components.Overlays;
+using Puffinote.Text.Document;
 using Typage.Control.Commands;
 using Typage.Control.Controls;
 using Typage.Control.Rendering;
-using Typage.Engine.Document;
 using Typage.Engine.Html;
 
 namespace Typage.Control.Views;

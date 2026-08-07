@@ -1,4 +1,4 @@
-namespace Typage.Engine.Editing;
+namespace Puffinote.Text.Editing;
 
 /// <summary>
 /// Resequences the numbers of a contiguous run of ordered list items (PRD §7.2 "renumbers").

@@ -1,4 +1,4 @@
-namespace Typage.Engine.Document;
+namespace Puffinote.Text.Document;
 
 /// <summary>The line-ending convention a document uses (PRD §7.1, §7.5 — surfaced in the status bar).</summary>
 public enum NewlineStyle

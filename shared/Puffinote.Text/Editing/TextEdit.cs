@@ -1,6 +1,6 @@
-using Typage.Engine.Document;
+using Puffinote.Text.Document;
 
-namespace Typage.Engine.Editing;
+namespace Puffinote.Text.Editing;
 
 /// <summary>
 /// One reversible change to the document: replace <see cref="Removed"/> at

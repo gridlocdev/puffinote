@@ -3,10 +3,10 @@ using Avalonia.Headless;
 using Avalonia.Headless.XUnit;
 using Avalonia.Interactivity;
 using Avalonia.Media;
+using Puffinote.Text.Document;
 using Typage.Control.Controls;
 using Typage.Control.Rendering;
 using Typage.Control.Views;
-using Typage.Engine.Document;
 using Typage.Engine.Markdown;
 using Xunit;
 

@@ -1,5 +1,5 @@
 using Avalonia.Media;
-using Typage.Engine.Editing;
+using Puffinote.Text.Editing;
 using Typage.Engine.Markdown;
 
 namespace Typage.Control.Controls;

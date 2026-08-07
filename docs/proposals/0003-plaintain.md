@@ -1,7 +1,9 @@
 # Proposal 0003 — **Plaintain**, a plaintext editor for the Puffinote family
 
-- **Status:** Draft — no phase started. **Sequencing decided (§9.6): Phase 0 lands now; Phases 1–5 are
-  post-1.0 and do not gate the family's 1.0 date.**
+- **Status:** **Phase 0 landed** — `shared/Puffinote.Text` exists, all four areas stand on it, and the
+  `TextFileCodec` decision tree is complete. Phases 1–5 followed (§9.6 was re-opened by a direct request
+  to build the editor now rather than after the family's 1.0; the sequencing argument in §9.6 was about
+  *when*, not *whether*, and nothing in §5's design changed).
 - **Author:** (you) · drafted with Claude
 - **Affects:** `shared/` (new `Puffinote.Text`), `features/EditMarkdown` (Typage — engine split),
   new `features/EditPlaintext` (Plaintain), `app/` (Puffinote shell — a third pane type), `build/`, `justfile`

@@ -1,16 +1,25 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <!--
-    The pure brain: document model (immutable piece table), grapheme-aware
-    navigation, undo/redo, the incremental Markdown tokenizer + checkpoint cache,
-    and the HTML renderer. GOLDEN RULE #1: ZERO UI dependencies. No Avalonia.* here,
-    ever. Only the .NET BCL (System.Globalization for grapheme clusters / text
-    elements). Headless-testable without a window.
+    The Markdown brain: the incremental tokenizer + checkpoint cache, the inline model, the list/
+    quote line-prefix rules, and the HTML renderer. Everything here knows what the text *means*;
+    everything that is true of text before that — the piece table, grapheme navigation, selection,
+    undo, search, stats, the file codec — moved to shared/Puffinote.Text (proposal 0003 §4).
+
+    GOLDEN RULE #1: ZERO UI dependencies. No Avalonia.* here, ever. Only the .NET BCL and the shared
+    text library. Headless-testable without a window.
   -->
   <PropertyGroup>
     <RootNamespace>Typage.Engine</RootNamespace>
     <AssemblyName>Typage.Engine</AssemblyName>
   </PropertyGroup>
+
+  <ItemGroup>
+    <!-- The format-agnostic half of the engine lives in the shared text library (proposal 0003 §4):
+         the piece table, grapheme navigation, selection, undo, search, stats, and the file codec.
+         What stays here is what knows about Markdown. -->
+    <ProjectReference Include="..\..\..\shared\Puffinote.Text\Puffinote.Text.csproj" />
+  </ItemGroup>
 
   <ItemGroup>
     <!-- The CLI and the headless engine tests reach a few internal helpers. -->

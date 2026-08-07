@@ -2,10 +2,10 @@ using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Controls.Primitives.PopupPositioning;
 using Avalonia.Threading;
+using Puffinote.Text.Document;
+using Puffinote.Text.Editing;
 using Typage.Control.Rendering;
 using Typage.Control.Views;
-using Typage.Engine.Document;
-using Typage.Engine.Editing;
 using Typage.Engine.Markdown;
 
 namespace Typage.Control.Controls;

@@ -1,5 +1,5 @@
 using System.Text;
-using Typage.Engine.Document;
+using Puffinote.Text.Document;
 using Typage.Engine.Markdown;
 
 namespace Typage.Engine.Html;

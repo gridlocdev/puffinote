@@ -1,7 +1,7 @@
 using Avalonia.Headless.XUnit;
+using Puffinote.Text.Document;
 using Typage.Control.Controls;
 using Typage.Control.Rendering;
-using Typage.Engine.Document;
 using Typage.Engine.Markdown;
 using Xunit;
 

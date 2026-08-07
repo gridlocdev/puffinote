@@ -1,6 +1,6 @@
 using Avalonia.Headless.XUnit;
+using Puffinote.Text.Document;
 using Typage.Control.Controls;
-using Typage.Engine.Document;
 using Xunit;
 
 namespace Typage.UiTests;

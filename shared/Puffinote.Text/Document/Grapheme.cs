@@ -1,6 +1,6 @@
 using System.Globalization;
 
-namespace Typage.Engine.Document;
+namespace Puffinote.Text.Document;
 
 /// <summary>
 /// Grapheme-cluster boundary math (PRD §7.2 / §9.7). Caret movement, selection, and

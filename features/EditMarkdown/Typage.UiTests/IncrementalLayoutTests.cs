@@ -79,7 +79,7 @@ public class IncrementalLayoutTests
     {
         var seed = "\n\n\n\n\n";
         var editor = new MarkdownEditor { Text = seed };
-        editor.Buffer.Selection = Typage.Engine.Document.Selection.At(2);
+        editor.Buffer.Selection = Puffinote.Text.Document.Selection.At(2);
 
         editor.TypeForTest('t');
         editor.BackspaceForTest();

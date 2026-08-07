@@ -1,4 +1,4 @@
-namespace Typage.Engine.Document;
+namespace Puffinote.Text.Document;
 
 /// <summary>
 /// A caret-and-selection: an <see cref="Anchor"/> (where selection started) and a moving

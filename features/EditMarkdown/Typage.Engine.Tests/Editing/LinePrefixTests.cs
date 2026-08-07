@@ -1,4 +1,4 @@
-using Typage.Engine.Editing;
+using Puffinote.Text.Editing;
 using Typage.Engine.Markdown;
 using Xunit;
 

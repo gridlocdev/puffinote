@@ -1,5 +1,5 @@
 using System.Text.RegularExpressions;
-using Typage.Engine.Document;
+using Puffinote.Text.Document;
 using Typage.Engine.Html;
 using Xunit;
 

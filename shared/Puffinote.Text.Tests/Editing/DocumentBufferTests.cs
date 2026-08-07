@@ -1,8 +1,8 @@
-using Typage.Engine.Document;
-using Typage.Engine.Editing;
+using Puffinote.Text.Document;
+using Puffinote.Text.Editing;
 using Xunit;
 
-namespace Typage.Engine.Tests.Document;
+namespace Puffinote.Text.Tests.Editing;
 
 public class DocumentBufferTests
 {

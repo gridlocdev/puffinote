@@ -1,9 +1,9 @@
 using Avalonia.Controls;
 using Avalonia.Headless;
 using Avalonia.Headless.XUnit;
+using Puffinote.Text.Document;
 using Typage.Control.Controls;
 using Typage.Control.Views;
-using Typage.Engine.Document;
 using Xunit;
 
 namespace Typage.UiTests;

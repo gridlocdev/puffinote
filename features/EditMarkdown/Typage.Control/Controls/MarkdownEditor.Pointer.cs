@@ -1,7 +1,7 @@
 using Avalonia;
 using Avalonia.Input;
+using Puffinote.Text.Document;
 using Typage.Control.Rendering;
-using Typage.Engine.Document;
 using Typage.Engine.Markdown;
 
 namespace Typage.Control.Controls;
