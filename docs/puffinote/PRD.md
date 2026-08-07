@@ -204,6 +204,11 @@ CLI harness `CliHost`/`CliException`). Both editors already run their palette an
 - **The toolbar control is one affordance in two places.** Expanded, it leads the sidebar's own header;
   collapsed, the sidebar is zero-width and a narrow **handle** takes the column, carrying the same button in
   the same corner. Neither state can strand the user: the sidebar is always one click from where it was.
+- **Touchpad gesture.** A two-finger horizontal swipe over the window also toggles it: **swipe left opens**
+  the sidebar, **swipe right collapses** it. A swipe is only recognized when its horizontal travel clearly
+  dominates the vertical and accumulates past a deliberate-gesture threshold, and it acts **once** per
+  physical swipe. It never overrides a region that genuinely scrolls sideways (the tab strip, a wide table, a
+  document with lines past the right edge) — those keep the horizontal axis.
 
 #### 7.2.2 Focusable & keyboard-operable (hard requirement)
 

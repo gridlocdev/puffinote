@@ -114,6 +114,7 @@ public partial class MainWindow : Window
         var root = new DockPanel();
         InstallMenu(root);
         root.Children.Add(BuildBody(palette));
+        InstallSwipeGestures();
 
         // Stack the shared overlay host above the content so dialogs (dirty-close prompt, messages) render
         // over the whole window with a dimmed backdrop.
