@@ -16,6 +16,22 @@ public partial class SpreadsheetEditorView
     private IBrush TabBackground(bool active) => active ? ThemedSurface : Brushes.Transparent;
 
     /// <summary>
+    /// The active tab's underline. Inactive tabs keep the same 2px edge in Transparent, so activating a tab
+    /// only recolors it — the strip never changes height and no tab moves.
+    /// </summary>
+    private IBrush TabUnderline(bool active) => active ? ThemedAccent : Brushes.Transparent;
+
+    /// <summary>
+    /// The accent under the active tab: the app's green, lightened for dark themes. Flat #15734F sits at
+    /// only 2.6:1 against the dark tab surface — under the 3:1 WCAG 2.2 §1.4.11 floor for a non-text
+    /// indicator — and in dark the surface itself barely separates the active tab from the strip
+    /// (#2B2B2B on #2D2D2E), so the underline has to carry the state on its own.
+    /// </summary>
+    private IBrush ThemedAccent => ActualThemeVariant == Avalonia.Styling.ThemeVariant.Dark
+        ? new SolidColorBrush(Color.FromRgb(0x3F, 0xB0, 0x84))
+        : new SolidColorBrush(Color.FromRgb(0x15, 0x73, 0x4F));
+
+    /// <summary>
     /// Repaint the existing tabs for the current theme variant.
     ///
     /// <see cref="ThemedSurface"/> reads <c>ActualThemeVariant</c>, which only reports the real variant
@@ -34,7 +50,9 @@ public partial class SpreadsheetEditorView
         {
             if (SheetTabs.Children[i] is Border tab)
             {
-                tab.Background = TabBackground(ReferenceEquals(Session.Workbook.Worksheets[i], Session.ActiveSheet));
+                bool active = ReferenceEquals(Session.Workbook.Worksheets[i], Session.ActiveSheet);
+                tab.Background = TabBackground(active);
+                tab.BorderBrush = TabUnderline(active);
             }
         }
     }
@@ -51,6 +69,12 @@ public partial class SpreadsheetEditorView
             {
                 Padding = new Thickness(10, 2),
                 Background = TabBackground(active),
+                // Surface, weight, *and* an accent underline. In dark the active surface is #2B2B2B on a
+                // #2D2D2E strip — near-invisible — so weight was doing all the work; the underline is the
+                // one mark that reads in both themes, and it costs no width. Reserved on every tab in
+                // Transparent so activating one recolors an edge rather than resizing the strip.
+                BorderThickness = new Thickness(0, 0, 0, 2),
+                BorderBrush = TabUnderline(active),
                 Cursor = new Avalonia.Input.Cursor(Avalonia.Input.StandardCursorType.Hand),
                 Child = new TextBlock
                 {
@@ -347,9 +371,12 @@ public partial class SpreadsheetEditorView
 
     // ---- Test seams (headless UI tests; InternalsVisibleTo Cellestra.UiTests) ----
 
+    /// <summary>The sheet tab at <paramref name="index"/>, or null if there's no such tab.</summary>
+    internal Border? TabForTest(int index) =>
+        index >= 0 && index < SheetTabs.Children.Count ? SheetTabs.Children[index] as Border : null;
+
     /// <summary>The background brush on the tab at <paramref name="index"/>, or null if there's no such tab.</summary>
-    internal IBrush? TabBackgroundForTest(int index) =>
-        index >= 0 && index < SheetTabs.Children.Count && SheetTabs.Children[index] is Border tab ? tab.Background : null;
+    internal IBrush? TabBackgroundForTest(int index) => TabForTest(index)?.Background;
 
     /// <summary>Clear all drag affordances — opacity, cursor, drop marker — and reset the gesture state.</summary>
     private void EndTabDragVisual()
