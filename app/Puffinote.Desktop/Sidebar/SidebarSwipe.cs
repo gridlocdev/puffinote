@@ -29,6 +29,10 @@ internal enum SwipeAction
 /// gesture and re-arms. That gap is also what separates two deliberate swipes, so the accumulator never
 /// carries stray delta from minutes ago into the next one.</para>
 ///
+/// <para>Only travel in the direction just fired is absorbed. Swiping <em>back</em> re-arms immediately,
+/// without waiting for the idle gap — that gap measures quiet, and a swipe back that starts while the tail
+/// is still coasting never produces any, so latching on it alone swallowed the whole return gesture.</para>
+///
 /// <para>Sign convention matches the rest of the repo (<c>SpreadsheetGrid.ApplyWheelScroll</c>): a positive
 /// X delta means "toward the left edge", which on a natural-scrolling trackpad is fingers moving <em>right</em>.
 /// Hence positive travel is <see cref="SwipeAction.SwipeRight"/>.</para>
@@ -50,7 +54,7 @@ internal sealed class SidebarSwipe
 
     private double _travel;
     private ulong _lastMs;
-    private bool _spent;
+    private int _spentSign;
 
     /// <summary>
     /// Feed one wheel event. <paramref name="timestampMs"/> is the event's own timestamp (not a clock read),
@@ -64,7 +68,7 @@ internal sealed class SidebarSwipe
         if (idle)
         {
             _travel = 0;
-            _spent = false;
+            _spentSign = 0;
         }
 
         // Vertical or diagonal: not a swipe. Abandon the accumulation — a swipe is a horizontal gesture, and
@@ -75,13 +79,21 @@ internal sealed class SidebarSwipe
             return SwipeAction.None;
         }
 
-        if (_spent)
+        // Past the dominance test the delta is non-zero, so this is always ±1.
+        int sign = Math.Sign(deltaX);
+
+        // Still coasting the way we already fired: the momentum tail. Swallow it, and drop any counter-travel
+        // that jitter crept in — a tail this strong proves the original gesture, not a swipe back.
+        if (sign == _spentSign)
         {
-            return SwipeAction.Absorb; // same physical swipe, already acted on
+            _travel = 0;
+            return SwipeAction.Absorb;
         }
 
-        // A reversal is a new swipe, not a cancellation of the old one — start counting again from here.
-        if (_travel != 0 && Math.Sign(_travel) != Math.Sign(deltaX))
+        // A reversal is a new swipe, not a cancellation of the old one — start counting again from here. This
+        // is also what lets a swipe back land while the previous tail is still going: the idle gap can't end a
+        // gesture that never goes quiet, because every event (absorbed ones included) pushes it out.
+        if (_travel != 0 && Math.Sign(_travel) != sign)
         {
             _travel = 0;
         }
@@ -94,7 +106,7 @@ internal sealed class SidebarSwipe
 
         var action = _travel > 0 ? SwipeAction.SwipeRight : SwipeAction.SwipeLeft;
         _travel = 0;
-        _spent = true;
+        _spentSign = sign;
         return action;
     }
 }

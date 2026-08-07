@@ -102,6 +102,46 @@ public sealed class SidebarSwipeTests
         Assert.Equal(SwipeAction.SwipeRight, swipe.Feed(SidebarSwipe.Threshold * 0.9, 0, 1020));
     }
 
+    /// <summary>
+    /// Swipe one way, then straight back with no pause: the second swipe must fire. The trackpad's momentum
+    /// tail keeps events arriving, so there is never an idle gap to end the first gesture — when the "already
+    /// fired" latch cleared on idle alone, the entire return swipe was absorbed and the sidebar sat still
+    /// until the user did something else long enough for the tail to die.
+    /// </summary>
+    [Fact]
+    public void Swiping_straight_back_fires_without_waiting_for_an_idle_gap()
+    {
+        var swipe = new SidebarSwipe();
+        Assert.Single(Swipe(swipe, -SidebarSwipe.Threshold * 2, startMs: 1000), a => a == SwipeAction.SwipeLeft);
+
+        // The tail of that first swipe, still coasting left, 10ms apart — no gap anywhere in here.
+        for (ulong t = 1060; t < 1200; t += 10)
+        {
+            Assert.Equal(SwipeAction.Absorb, swipe.Feed(-1.0, 0, t));
+        }
+
+        // Fingers go back down and swipe right while the tail is still warm.
+        Assert.Single(Swipe(swipe, SidebarSwipe.Threshold * 2, startMs: 1210), a => a == SwipeAction.SwipeRight);
+    }
+
+    /// <summary>
+    /// The flip side of the rule above: a tail is not perfectly monotone, and a few counter-signed jitter
+    /// events in the middle of one must not add up into a phantom swipe back.
+    /// </summary>
+    [Fact]
+    public void Jitter_inside_a_momentum_tail_is_not_a_swipe_back()
+    {
+        var swipe = new SidebarSwipe();
+        Assert.Single(Swipe(swipe, -SidebarSwipe.Threshold * 2, startMs: 1000), a => a == SwipeAction.SwipeLeft);
+
+        ulong t = 1060;
+        for (int i = 0; i < 30; i++, t += 10)
+        {
+            // A decaying leftward tail speckled with small rightward wobble.
+            Assert.NotEqual(SwipeAction.SwipeRight, swipe.Feed(i % 4 == 3 ? 0.4 : -2.0, 0, t));
+        }
+    }
+
     /// <summary>A clock that jumps backwards (or a fresh input session) is treated as a new gesture, not a 500-million-year gap.</summary>
     [Fact]
     public void A_backwards_timestamp_restarts_rather_than_underflowing()
