@@ -582,23 +582,35 @@ public static class DataEditCommands
         }
 
         var grown = table.WithRange(grownRange);
-        var replace = ReplaceTable(sheet, table, grown);
+        var steps = new List<IEditCommand> { ReplaceTable(sheet, table, grown) };
 
-        // Growing right adds new header cell(s) in the top row of the new column(s); give them the
-        // table-header style so the band reads as part of the table. Growing down adds only data
-        // rows (the header stays on the original top row), so no header restyle is needed.
-        bool grewRight = grownRange.Right > table.Range.Right;
-        if (table.HasHeader && grewRight)
+        // A table absorbing a new line has to absorb its header cells too, or the header stops one row
+        // (or one column) short of the table it labels — which reads as the band having a hole in it.
+        //
+        // Growing right adds a header *row* cell above each new column…
+        if (table.HasHeader && grownRange.Right > table.Range.Right)
         {
-            var newHeaderCells = new CellRange(
-                new CellAddress(table.Range.Right + 1, grownRange.Top),
-                new CellAddress(grownRange.Right, grownRange.Top));
-            var styleHeader = EditCommands.ApplyStyle(workbook, sheet, newHeaderCells, StyleTableHeader, "Expand Table");
-            return EditCommands.Composite("Expand Table", [replace, styleHeader]);
+            steps.Add(HeaderStyle(workbook, sheet,
+                new CellRange(
+                    new CellAddress(table.Range.Right + 1, grownRange.Top),
+                    new CellAddress(grownRange.Right, grownRange.Top))));
         }
 
-        return EditCommands.Composite("Expand Table", [replace]);
+        // …and growing down adds a header *column* cell beside each new row, when the table has one.
+        // The two are the same rule read along the other axis; only the row half had been written.
+        if (table.HasHeaderColumn && grownRange.Bottom > table.Range.Bottom)
+        {
+            steps.Add(HeaderStyle(workbook, sheet,
+                new CellRange(
+                    new CellAddress(grownRange.Left, table.Range.Bottom + 1),
+                    new CellAddress(grownRange.Left, grownRange.Bottom))));
+        }
+
+        return EditCommands.Composite("Expand Table", steps);
     }
+
+    private static IEditCommand HeaderStyle(Workbook workbook, string sheet, CellRange range) =>
+        EditCommands.ApplyStyle(workbook, sheet, range, StyleTableHeader, "Expand Table");
 
     // ---- Validation -------------------------------------------------------
 

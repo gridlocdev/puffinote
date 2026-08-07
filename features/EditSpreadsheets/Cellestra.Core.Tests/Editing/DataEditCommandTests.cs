@@ -269,6 +269,40 @@ public class DataEditCommandTests
     }
 
     [Fact]
+    public void Expand_table_for_edit_below_carries_the_header_column_onto_the_new_row()
+    {
+        // The mirror of the header-row case above, read along the other axis: a table with a header
+        // column that grows downward has to style the new row's first cell, or the header column stops
+        // one row short of the table it labels and the band reads as having a hole in it.
+        var (workbook, history, sheet) = New();
+        var table = new Table("Data", CellRange.Parse("A1:B3"), HasHeader: true) { HasHeaderColumn = true };
+        history.Execute(DataEditCommands.CreateTable(workbook, sheet.Name, table));
+
+        var command = DataEditCommands.ExpandTableForEdit(workbook, sheet.Name, table, editedRow: 3, editedColumn: 1);
+        Assert.NotNull(command);
+        history.Execute(command!);
+
+        var header = workbook.Styles.Get(sheet.GetOrCreate(3, 0).StyleId);
+        Assert.Equal(Cellestra.Core.Styling.ArgbColor.FromHex("#1E4FB5"), header.Fill.Background);
+        Assert.True(header.Font.Bold);
+
+        history.Undo();
+        Assert.Equal(Cellestra.Core.Styling.StylePool.DefaultId, sheet.GetOrCreate(3, 0).StyleId);
+    }
+
+    [Fact]
+    public void Expand_table_for_edit_below_leaves_the_first_cell_plain_without_a_header_column()
+    {
+        var (workbook, history, sheet) = New();
+        var table = new Table("Data", CellRange.Parse("A1:B3"), HasHeader: true);
+        history.Execute(DataEditCommands.CreateTable(workbook, sheet.Name, table));
+
+        history.Execute(DataEditCommands.ExpandTableForEdit(workbook, sheet.Name, table, editedRow: 3, editedColumn: 1)!);
+
+        Assert.Equal(Cellestra.Core.Styling.StylePool.DefaultId, sheet.GetOrCreate(3, 0).StyleId);
+    }
+
+    [Fact]
     public void Expand_table_for_edit_returns_null_when_not_adjacent()
     {
         var (workbook, _, sheet) = New();
