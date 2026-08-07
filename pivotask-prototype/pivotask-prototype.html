@@ -1,0 +1,1940 @@
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link
+    href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,800&family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;450;500;600&display=swap"
+    rel="stylesheet">
+
+<style>
+    :root {
+        --paper: #eef0f4;
+        --surface: #ffffff;
+        --ink: #16181f;
+        --muted: #697084;
+        --faint: #9aa1b1;
+        --line: #dfe3ea;
+        --edge: #c9cfda;
+        --rule: rgba(22, 24, 31, .05);
+        --accent: #5b4bdb;
+        --accent-soft: #ecebfc;
+        --star: #c8931f;
+        --overdue: #c0392f;
+        --done: #4d7c0f;
+        --r: 10px;
+        --col-w: 290px;
+        --sans: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+        --display: "Bricolage Grotesque", "Archivo", var(--sans);
+        --mono: "IBM Plex Mono", ui-monospace, "SF Mono", Menlo, monospace;
+    }
+
+    * {
+        box-sizing: border-box
+    }
+
+    html,
+    body {
+        height: 100%
+    }
+
+    body {
+        margin: 0;
+        background: var(--paper);
+        color: var(--ink);
+        font-family: var(--sans);
+        font-size: 14px;
+        line-height: 1.45;
+        -webkit-font-smoothing: antialiased;
+        display: flex;
+        flex-direction: column;
+        overflow: hidden;
+    }
+
+    button,
+    input,
+    textarea,
+    select {
+        font: inherit;
+        color: inherit
+    }
+
+    button {
+        background: none;
+        border: 0;
+        padding: 0;
+        cursor: pointer
+    }
+
+    :focus-visible {
+        outline: 2px solid var(--accent);
+        outline-offset: 2px;
+        border-radius: 4px
+    }
+
+    /* ============ top bar ============ */
+    .bar {
+        flex: 0 0 auto;
+        display: flex;
+        align-items: center;
+        gap: 18px;
+        flex-wrap: wrap;
+        padding: 13px 20px;
+        background: var(--surface);
+        border-bottom: 1px solid var(--line);
+        position: relative;
+        z-index: 5;
+    }
+
+    .brand {
+        display: flex;
+        align-items: center;
+        gap: 10px
+    }
+
+    .mark {
+        width: 26px;
+        height: 26px;
+        flex: 0 0 auto;
+        display: block;
+        color: var(--ink)
+    }
+
+    .brand h1 {
+        font-family: var(--display);
+        font-size: 19px;
+        font-weight: 800;
+        letter-spacing: -.02em;
+        margin: 0;
+        line-height: 1
+    }
+
+    .brand p {
+        margin: 3px 0 0;
+        font-size: 10.5px;
+        color: var(--faint);
+        font-family: var(--mono)
+    }
+
+    .search {
+        flex: 1 1 170px;
+        max-width: 290px;
+        display: flex;
+        align-items: center;
+        gap: 7px;
+        background: var(--paper);
+        border: 1px solid transparent;
+        border-radius: 8px;
+        padding: 6px 10px;
+    }
+
+    .search:focus-within {
+        border-color: var(--accent);
+        background: var(--surface)
+    }
+
+    .search svg {
+        flex: 0 0 auto;
+        color: var(--faint)
+    }
+
+    .search input {
+        border: 0;
+        background: none;
+        outline: 0;
+        width: 100%;
+        font-size: 13px;
+        min-width: 0
+    }
+
+    .search input::placeholder {
+        color: var(--faint)
+    }
+
+    .filters {
+        display: flex;
+        gap: 2px;
+        margin-left: auto
+    }
+
+    .filters button {
+        padding: 5px 10px;
+        border-radius: 7px;
+        font-size: 12.5px;
+        color: var(--muted);
+        white-space: nowrap
+    }
+
+    .filters button:hover {
+        background: var(--paper);
+        color: var(--ink)
+    }
+
+    .filters button[aria-pressed="true"] {
+        color: var(--ink);
+        font-weight: 600;
+        background: var(--paper)
+    }
+
+    .switch {
+        display: flex;
+        background: var(--paper);
+        border-radius: 9px;
+        padding: 3px;
+        gap: 2px
+    }
+
+    .switch button {
+        display: flex;
+        align-items: center;
+        gap: 7px;
+        padding: 6px 12px;
+        border-radius: 7px;
+        font-family: var(--display);
+        font-size: 11.5px;
+        font-weight: 600;
+        letter-spacing: .05em;
+        text-transform: uppercase;
+        color: var(--muted);
+        transition: color .18s;
+    }
+
+    .switch button[aria-pressed="true"] {
+        color: var(--accent);
+        background: var(--surface);
+        box-shadow: 0 1px 2px rgba(22, 24, 31, .08)
+    }
+
+    .switch button:hover:not([aria-pressed="true"]) {
+        color: var(--ink)
+    }
+
+    /* ============ stage + axis rules ============ */
+    .stage {
+        flex: 1 1 auto;
+        position: relative;
+        overflow: hidden
+    }
+
+    .rules {
+        position: absolute;
+        inset: 0;
+        pointer-events: none;
+        transition: opacity .5s ease
+    }
+
+    .rules.vert {
+        background-image: repeating-linear-gradient(to right, var(--rule) 0 1px, transparent 1px 28px)
+    }
+
+    .rules.horiz {
+        background-image: repeating-linear-gradient(to bottom, var(--rule) 0 1px, transparent 1px 28px)
+    }
+
+    .stage[data-view="board"] .rules.horiz {
+        opacity: 0
+    }
+
+    .stage[data-view="list"] .rules.vert {
+        opacity: 0
+    }
+
+    .scroll {
+        position: absolute;
+        inset: 0;
+        overflow: auto;
+        padding: 20px
+    }
+
+    .stage[data-view="board"] .scroll {
+        display: flex;
+        gap: 14px;
+        align-items: flex-start
+    }
+
+    .stage[data-view="list"] .scroll {
+        max-width: 740px;
+        margin: 0 auto;
+        padding: 20px 20px 80px
+    }
+
+    /* ============ board columns ============ */
+    .col {
+        flex: 0 0 var(--col-w);
+        width: var(--col-w);
+        max-height: 100%;
+        background: var(--surface);
+        border: 1px solid var(--line);
+        border-radius: var(--r);
+        display: flex;
+        flex-direction: column;
+    }
+
+    .col.drop-on {
+        border-color: var(--accent);
+        box-shadow: 0 0 0 3px var(--accent-soft)
+    }
+
+    .col-head {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 11px 12px 9px
+    }
+
+    .group-name {
+        font-family: var(--display);
+        font-size: 12.5px;
+        font-weight: 600;
+        letter-spacing: .055em;
+        text-transform: uppercase;
+        min-width: 0;
+        border-radius: 4px;
+        padding: 1px 3px;
+        margin: -1px -3px;
+    }
+
+    .col-head .group-name {
+        flex: 1 1 auto
+    }
+
+    .group-name:focus {
+        outline: 2px solid var(--accent);
+        outline-offset: 1px;
+        background: var(--paper)
+    }
+
+    .count {
+        font-family: var(--mono);
+        font-size: 11px;
+        color: var(--faint);
+        flex: 0 0 auto
+    }
+
+    .col-head .kill,
+    .sect-head .kill {
+        opacity: 0
+    }
+
+    .col-head:hover .kill,
+    .sect-head:hover .kill,
+    .kill:focus-visible {
+        opacity: 1
+    }
+
+    .col-body {
+        padding: 0 8px;
+        overflow-y: auto;
+        flex: 1 1 auto;
+        min-height: 10px
+    }
+
+    .col-foot {
+        padding: 6px 8px 8px
+    }
+
+    /* ============ the task, shared by both views ============ */
+    .task {
+        background: var(--surface);
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        padding: 9px 10px;
+        margin-bottom: 7px;
+        cursor: pointer;
+        display: grid;
+        grid-template-columns: auto 1fr auto;
+        gap: 0 9px;
+        align-items: start;
+    }
+
+    .task:hover {
+        border-color: var(--edge)
+    }
+
+    .task.is-dragging {
+        opacity: .3
+    }
+
+    .task.sel {
+        border-color: var(--accent);
+        box-shadow: 0 0 0 3px var(--accent-soft)
+    }
+
+    .task.done .title {
+        color: var(--faint);
+        text-decoration: line-through
+    }
+
+    .check {
+        width: 17px;
+        height: 17px;
+        flex: 0 0 auto;
+        border: 1.5px solid var(--edge);
+        border-radius: 50%;
+        margin-top: 1px;
+        display: grid;
+        place-items: center;
+        transition: background .15s, border-color .15s;
+    }
+
+    .check:hover {
+        border-color: var(--done)
+    }
+
+    .check svg {
+        opacity: 0;
+        color: #fff;
+        width: 10px;
+        height: 10px
+    }
+
+    .check.on {
+        background: var(--done);
+        border-color: var(--done)
+    }
+
+    .check.on svg {
+        opacity: 1
+    }
+
+    .title {
+        grid-column: 2;
+        font-size: 13.5px;
+        font-weight: 450;
+        word-break: break-word
+    }
+
+    .star {
+        grid-column: 3;
+        grid-row: 1;
+        width: 19px;
+        height: 19px;
+        color: var(--edge)
+    }
+
+    .star:hover {
+        color: var(--star)
+    }
+
+    .star.on {
+        color: var(--star)
+    }
+
+    .footline {
+        grid-column: 2;
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 5px 10px;
+        margin-top: 6px;
+        font-family: var(--mono);
+        font-size: 11px;
+        color: var(--muted);
+    }
+
+    .footline b {
+        display: flex;
+        align-items: center;
+        gap: 4px;
+        font-weight: 400
+    }
+
+    .footline .over,
+    .sec-note.over {
+        color: var(--overdue);
+        font-weight: 500
+    }
+
+    .footline .soon,
+    .sec-note.soon {
+        color: var(--accent);
+        font-weight: 500
+    }
+
+    .chip {
+        font-family: var(--mono);
+        font-size: 10px;
+        padding: 1px 6px;
+        border-radius: 4px;
+        color: #fff
+    }
+
+    .add {
+        display: flex;
+        align-items: center;
+        gap: 7px;
+        width: 100%;
+        padding: 7px 8px;
+        border-radius: 7px;
+        color: var(--muted);
+        font-size: 13px;
+        text-align: left
+    }
+
+    .add:hover {
+        background: var(--paper);
+        color: var(--ink)
+    }
+
+    .add-input {
+        width: 100%;
+        padding: 8px 10px;
+        border: 1px solid var(--accent);
+        border-radius: 7px;
+        background: var(--surface);
+        outline: 0;
+        font-size: 13.5px
+    }
+
+    .ghost {
+        flex: 0 0 200px;
+        padding: 11px 14px;
+        border: 1px dashed var(--edge);
+        border-radius: var(--r);
+        color: var(--muted);
+        font-size: 13px;
+        text-align: left;
+        display: flex;
+        align-items: center;
+        gap: 7px
+    }
+
+    .ghost:hover {
+        border-color: var(--accent);
+        color: var(--accent);
+        background: var(--surface)
+    }
+
+    /* ============ list sections ============ */
+    .sect {
+        margin-bottom: 26px
+    }
+
+    .sect-head {
+        display: flex;
+        align-items: center;
+        gap: 9px;
+        padding: 0 4px 7px
+    }
+
+    .caret {
+        width: 16px;
+        height: 16px;
+        color: var(--faint);
+        flex: 0 0 auto;
+        transition: transform .2s
+    }
+
+    .caret svg {
+        width: 100%;
+        height: 100%;
+        display: block
+    }
+
+    .sect.collapsed .caret {
+        transform: rotate(-90deg)
+    }
+
+    .dots {
+        flex: 1 1 auto;
+        border-bottom: 1px dotted var(--edge);
+        margin: 2px 2px 0
+    }
+
+    .sect-body {
+        border-top: 1px solid var(--line);
+        border-radius: 8px
+    }
+
+    .sect.collapsed .sect-body,
+    .sect.collapsed .sect-foot {
+        display: none
+    }
+
+    .sect.drop-on .sect-body {
+        box-shadow: 0 0 0 3px var(--accent-soft)
+    }
+
+    .sect-foot {
+        padding: 5px 4px 0
+    }
+
+    .stage[data-view="list"] .task {
+        border: 0;
+        border-bottom: 1px solid var(--line);
+        border-radius: 0;
+        margin: 0;
+        padding: 10px 8px;
+    }
+
+    .stage[data-view="list"] .task:hover {
+        background: #fafbfd
+    }
+
+    .stage[data-view="list"] .task.sel {
+        box-shadow: inset 3px 0 0 var(--accent);
+        background: #fafbfd
+    }
+
+    .stage[data-view="list"] .title {
+        font-size: 14px
+    }
+
+    .sect-body>.task:last-child {
+        border-bottom: 0
+    }
+
+    .subhead {
+        display: flex;
+        align-items: center;
+        gap: 7px;
+        width: 100%;
+        text-align: left;
+        padding: 9px 8px 7px;
+        font-family: var(--mono);
+        font-size: 11px;
+        color: var(--faint);
+        border-top: 1px solid var(--line);
+    }
+
+    .subhead:hover {
+        color: var(--ink)
+    }
+
+    .subhead .caret {
+        width: 12px;
+        height: 12px
+    }
+
+    .subhead.folded .caret {
+        transform: rotate(-90deg)
+    }
+
+    .empty {
+        padding: 13px 10px;
+        margin: 0;
+        color: var(--faint);
+        font-size: 13px;
+        font-style: italic
+    }
+
+    /* ============ centred detail modal ============ */
+    .scrim {
+        position: fixed;
+        inset: 0;
+        background: rgba(22, 24, 31, .34);
+        opacity: 0;
+        pointer-events: none;
+        transition: opacity .22s;
+        z-index: 20
+    }
+
+    .scrim.open {
+        opacity: 1;
+        pointer-events: auto
+    }
+
+    .modal-wrap {
+        position: fixed;
+        inset: 0;
+        z-index: 21;
+        display: grid;
+        place-items: center;
+        padding: 24px;
+        pointer-events: none
+    }
+
+    .modal {
+        width: min(620px, 100%);
+        max-height: min(84vh, 780px);
+        pointer-events: auto;
+        background: var(--surface);
+        border: 1px solid var(--line);
+        border-radius: 14px;
+        box-shadow: 0 18px 50px rgba(22, 24, 31, .18), 0 2px 8px rgba(22, 24, 31, .07);
+        display: flex;
+        flex-direction: column;
+        opacity: 0;
+        visibility: hidden;
+        transform: translateY(10px) scale(.985);
+        transition: opacity .2s ease, transform .26s cubic-bezier(.2, .8, .2, 1), visibility 0s .26s;
+    }
+
+    .modal.open {
+        opacity: 1;
+        visibility: visible;
+        transform: none;
+        transition-delay: 0s, 0s, 0s
+    }
+
+    .m-head {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 12px 14px;
+        border-bottom: 1px solid var(--line)
+    }
+
+    .grp {
+        position: relative;
+        display: flex;
+        align-items: center;
+        min-width: 0
+    }
+
+    .grp select {
+        appearance: none;
+        -webkit-appearance: none;
+        max-width: 230px;
+        cursor: pointer;
+        outline: 0;
+        background: var(--paper);
+        border: 1px solid transparent;
+        border-radius: 8px;
+        padding: 6px 29px 6px 11px;
+        font-family: var(--display);
+        font-size: 11.5px;
+        font-weight: 600;
+        letter-spacing: .055em;
+        text-transform: uppercase;
+    }
+
+    .grp select:hover {
+        border-color: var(--edge)
+    }
+
+    .grp select:focus-visible {
+        border-color: var(--accent);
+        outline: none
+    }
+
+    .grp .caret {
+        position: absolute;
+        right: 9px;
+        width: 13px;
+        height: 13px;
+        color: var(--muted);
+        pointer-events: none
+    }
+
+    .m-head .spacer {
+        flex: 1 1 auto
+    }
+
+    .icon-btn {
+        width: 28px;
+        height: 28px;
+        display: grid;
+        place-items: center;
+        border-radius: 6px;
+        color: var(--muted);
+        flex: 0 0 auto
+    }
+
+    .icon-btn:hover {
+        background: var(--paper);
+        color: var(--ink)
+    }
+
+    .m-body {
+        overflow-y: auto;
+        padding: 22px 24px 28px;
+        flex: 1 1 auto
+    }
+
+    .sec {
+        display: grid;
+        grid-template-columns: 24px 1fr auto;
+        gap: 0 12px;
+        align-items: start;
+        margin-top: 26px
+    }
+
+    .sec:first-child {
+        margin-top: 0
+    }
+
+    .sec-ico {
+        grid-column: 1;
+        color: var(--faint);
+        display: grid;
+        place-items: center;
+        height: 21px
+    }
+
+    .sec-ico.tall {
+        height: 27px
+    }
+
+    .sec-ico svg {
+        width: 15px;
+        height: 15px
+    }
+
+    .sec-head {
+        grid-column: 2;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        min-height: 21px;
+        margin-bottom: 9px
+    }
+
+    .sec-title {
+        font-family: var(--display);
+        font-size: 11.5px;
+        font-weight: 600;
+        letter-spacing: .075em;
+        text-transform: uppercase;
+        color: var(--muted)
+    }
+
+    .sec-note {
+        font-family: var(--mono);
+        font-size: 11px;
+        color: var(--faint)
+    }
+
+    .sec-body {
+        grid-column: 2
+    }
+
+    .link {
+        font-size: 12px;
+        color: var(--muted);
+        margin-left: auto;
+        padding: 2px 7px;
+        border-radius: 5px
+    }
+
+    .link:hover {
+        background: var(--paper);
+        color: var(--ink)
+    }
+
+    .link.danger:hover {
+        background: #fdf0ef;
+        color: var(--overdue)
+    }
+
+    .m-title {
+        grid-column: 2;
+        width: 100%;
+        border: 1px solid transparent;
+        border-radius: 8px;
+        background: none;
+        resize: none;
+        overflow: hidden;
+        outline: 0;
+        font-family: var(--sans);
+        font-size: 21px;
+        font-weight: 600;
+        line-height: 1.28;
+        letter-spacing: -.015em;
+        padding: 4px 8px;
+        margin: -4px -8px;
+    }
+
+    .m-title:hover {
+        border-color: var(--line)
+    }
+
+    .m-title:focus {
+        border-color: var(--accent)
+    }
+
+    .sec .check {
+        width: 20px;
+        height: 20px;
+        margin-top: 0
+    }
+
+    .sec .check svg {
+        width: 12px;
+        height: 12px
+    }
+
+    .addwrap {
+        grid-column: 3;
+        position: relative;
+        align-self: start;
+        margin-left: 10px
+    }
+
+    .add-btn {
+        width: 30px;
+        height: 30px;
+        display: grid;
+        place-items: center;
+        border-radius: 8px;
+        border: 1px solid var(--line);
+        color: var(--muted)
+    }
+
+    .add-btn svg {
+        width: 16px;
+        height: 16px
+    }
+
+    .add-btn:hover,
+    .add-btn[aria-expanded="true"] {
+        border-color: var(--accent);
+        color: var(--accent);
+        background: var(--accent-soft)
+    }
+
+    .menu {
+        position: absolute;
+        top: 37px;
+        right: 0;
+        z-index: 12;
+        min-width: 186px;
+        padding: 5px;
+        background: var(--surface);
+        border: 1px solid var(--line);
+        border-radius: 10px;
+        box-shadow: 0 12px 30px rgba(22, 24, 31, .15);
+        animation: pop .13s ease-out;
+    }
+
+    @keyframes pop {
+        from {
+            opacity: 0;
+            transform: translateY(-5px)
+        }
+
+        to {
+            opacity: 1;
+            transform: none
+        }
+    }
+
+    .menu-h {
+        font-family: var(--display);
+        font-size: 9.5px;
+        font-weight: 600;
+        letter-spacing: .09em;
+        text-transform: uppercase;
+        color: var(--faint);
+        padding: 6px 9px 5px
+    }
+
+    .menu button {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        width: 100%;
+        padding: 8px 9px;
+        border-radius: 7px;
+        font-size: 13px;
+        color: var(--ink);
+        text-align: left
+    }
+
+    .menu button:hover {
+        background: var(--paper)
+    }
+
+    .menu button svg {
+        width: 14px;
+        height: 14px;
+        color: var(--muted);
+        flex: 0 0 auto
+    }
+
+    .menu .on-mark {
+        margin-left: auto;
+        font-family: var(--mono);
+        font-size: 10px;
+        color: var(--done)
+    }
+
+    .field {
+        width: 100%;
+        padding: 9px 11px;
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        background: var(--surface);
+        outline: 0;
+        font-size: 13.5px;
+        font-family: var(--sans)
+    }
+
+    .field:focus {
+        border-color: var(--accent)
+    }
+
+    .field::placeholder {
+        color: var(--faint)
+    }
+
+    textarea.field {
+        resize: vertical;
+        min-height: 86px;
+        line-height: 1.55
+    }
+
+    input[type="date"].field {
+        font-family: var(--mono);
+        font-size: 13px;
+        max-width: 210px
+    }
+
+    .chip-pick {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px
+    }
+
+    .chip-pick button {
+        font-family: var(--mono);
+        font-size: 11px;
+        padding: 4px 9px;
+        border-radius: 6px;
+        border: 1px solid var(--line);
+        color: var(--muted)
+    }
+
+    .chip-pick button:hover {
+        border-color: var(--edge)
+    }
+
+    .chip-pick button.on {
+        color: #fff;
+        border-color: transparent
+    }
+
+    .progress {
+        display: flex;
+        align-items: center;
+        gap: 9px;
+        margin-bottom: 6px
+    }
+
+    .progress b {
+        font-family: var(--mono);
+        font-size: 11px;
+        font-weight: 400;
+        color: var(--faint);
+        width: 30px;
+        flex: 0 0 auto
+    }
+
+    .progress i {
+        flex: 1 1 auto;
+        height: 4px;
+        background: var(--paper);
+        border-radius: 2px;
+        overflow: hidden
+    }
+
+    .progress i u {
+        display: block;
+        height: 100%;
+        background: var(--done);
+        border-radius: 2px;
+        transition: width .25s
+    }
+
+    .step {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 5px 0
+    }
+
+    .step .check {
+        width: 17px;
+        height: 17px;
+        margin-top: 0
+    }
+
+    .step .check svg {
+        width: 10px;
+        height: 10px
+    }
+
+    .step-t {
+        flex: 1 1 auto;
+        font-size: 13.5px;
+        border-radius: 4px;
+        padding: 2px 4px;
+        margin: -2px -4px
+    }
+
+    .step.done .step-t {
+        color: var(--faint);
+        text-decoration: line-through
+    }
+
+    .step .icon-btn {
+        width: 22px;
+        height: 22px;
+        opacity: 0
+    }
+
+    .step:hover .icon-btn,
+    .step .icon-btn:focus-visible {
+        opacity: 1
+    }
+
+    .m-foot {
+        padding: 12px 16px;
+        border-top: 1px solid var(--line);
+        display: flex;
+        gap: 8px;
+        align-items: center
+    }
+
+    .btn {
+        padding: 8px 13px;
+        border-radius: 8px;
+        font-size: 13px;
+        font-weight: 500;
+        border: 1px solid var(--line);
+        color: var(--muted);
+        display: flex;
+        align-items: center;
+        gap: 7px
+    }
+
+    .btn:hover {
+        background: var(--paper);
+        color: var(--ink)
+    }
+
+    .btn.danger:hover {
+        background: #fdf0ef;
+        color: var(--overdue);
+        border-color: #f2c9c5
+    }
+
+    @media (max-width:660px) {
+        .bar {
+            gap: 10px;
+            padding: 11px 14px
+        }
+
+        .brand p {
+            display: none
+        }
+
+        .search {
+            order: 3;
+            max-width: none;
+            flex-basis: 100%
+        }
+
+        .switch button span {
+            display: none
+        }
+
+        .switch button {
+            padding: 6px 10px
+        }
+
+        .modal-wrap {
+            padding: 12px
+        }
+
+        .modal {
+            max-height: 92vh
+        }
+
+        .m-body {
+            padding: 18px 16px 22px
+        }
+
+        .sec {
+            grid-template-columns: 20px 1fr auto;
+            gap: 0 9px;
+            margin-top: 22px
+        }
+
+        .m-title {
+            font-size: 19px
+        }
+    }
+
+    @media (prefers-reduced-motion:reduce) {
+        * {
+            transition-duration: .01ms !important;
+            animation-duration: .01ms !important
+        }
+    }
+</style>
+
+<header class="bar">
+    <div class="brand">
+        <svg class="mark" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+            <rect x="1.6" y="1.6" width="20.8" height="20.8" rx="5" stroke="currentColor" stroke-width="1.5" />
+            <path d="M7.5 17.5V8" stroke="var(--accent)" stroke-width="2.2" stroke-linecap="round" />
+            <path d="M7.5 17.5H17" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" />
+            <path d="M12.6 12.6a5.6 5.6 0 0 1 4.4 4.4" stroke="var(--accent)" stroke-width="1.5"
+                stroke-linecap="round" />
+        </svg>
+        <div>
+            <h1>Pivot</h1>
+            <p>same tasks, turned 90&deg;</p>
+        </div>
+    </div>
+
+    <div class="search">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
+            <circle cx="11" cy="11" r="7" />
+            <path d="M20 20l-3.5-3.5" stroke-linecap="round" />
+        </svg>
+        <input id="q" type="search" placeholder="Search tasks" aria-label="Search tasks">
+    </div>
+
+    <nav class="filters" id="filters" aria-label="Filter tasks">
+        <button data-f="all" aria-pressed="true">All</button>
+        <button data-f="star" aria-pressed="false">Starred</button>
+        <button data-f="soon" aria-pressed="false">Due soon</button>
+        <button data-f="open" aria-pressed="false">Unfinished</button>
+    </nav>
+
+    <div class="switch" role="group" aria-label="Choose a view">
+        <button id="vBoard" aria-pressed="true" title="Board view (V)">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                <rect x="2" y="4" width="5.5" height="16" rx="1.5" />
+                <rect x="9.25" y="4" width="5.5" height="11" rx="1.5" />
+                <rect x="16.5" y="4" width="5.5" height="16" rx="1.5" />
+            </svg><span>Board</span>
+        </button>
+        <button id="vList" aria-pressed="false" title="List view (V)">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                <rect x="4" y="3" width="16" height="4.5" rx="1.5" />
+                <rect x="4" y="9.75" width="11" height="4.5" rx="1.5" />
+                <rect x="4" y="16.5" width="16" height="4.5" rx="1.5" />
+            </svg><span>List</span>
+        </button>
+    </div>
+</header>
+
+<main class="stage" id="stage" data-view="board">
+    <div class="rules vert"></div>
+    <div class="rules horiz"></div>
+    <div class="scroll" id="scroll"></div>
+</main>
+
+<div class="scrim" id="scrim"></div>
+<div class="modal-wrap">
+    <aside class="modal" id="drawer" tabindex="-1" role="dialog" aria-modal="true" aria-hidden="true"
+        aria-label="Task details"></aside>
+</div>
+
+<script>
+    "use strict";
+
+    /* ===================== constants ===================== */
+    const LABELS = [
+        { id: "design", name: "design", color: "#0e7490" },
+        { id: "client", name: "client", color: "#b45309" },
+        { id: "ops", name: "ops", color: "#4d7c0f" },
+        { id: "bug", name: "bug", color: "#be123c" },
+        { id: "research", name: "research", color: "#334155" }
+    ];
+    const KEY = "pivot:board:v1";
+    const uid = () => Math.random().toString(36).slice(2, 9);
+    const esc = s => String(s).replace(/[&<>"']/g, c =>
+        ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+
+    /* ===================== state ===================== */
+    let state = null;
+    const ui = { view: "board", filter: "all", query: "", open: null, focusAdd: null, dragId: null, reveal: new Set(), menu: false };
+
+    function seed() {
+        const day = n => { const d = new Date(); d.setDate(d.getDate() + n); return d.toISOString().slice(0, 10); };
+        const t = (title, o) => Object.assign(
+            { id: uid(), title, notes: "", due: null, important: false, done: false, steps: [], labels: [] }, o || {});
+        const st = text => ({ id: uid(), text, done: false });
+        const stx = text => ({ id: uid(), text, done: true });
+
+        return {
+            groups: [
+                {
+                    id: uid(), name: "Inbox", collapsed: false, foldDone: false, tasks: [
+                        t("Rewrite the onboarding empty states", { labels: ["design"], due: day(3) }),
+                        t("Halden Co. still owes on invoice 2231", { labels: ["client"], important: true, due: day(-2) }),
+                        t("Pick a typeface for the docs site", {
+                            labels: ["design", "research"],
+                            steps: [stx("Shortlist three"), st("Test them at 13px")]
+                        })
+                    ]
+                },
+                {
+                    id: uid(), name: "This week", collapsed: false, foldDone: false, tasks: [
+                        t("Draft the Q3 retro agenda", {
+                            labels: ["ops"], due: day(0), important: true,
+                            notes: "Keep it to 45 minutes. Ask Nadia to run the timeline section.",
+                            steps: [stx("Pull last quarter's notes"), st("Collect anonymous input"), st("Book the room")]
+                        }),
+                        t("Sort out the flaky payment webhook", { labels: ["bug"], due: day(1) }),
+                        t("Book flights for the Lisbon workshop", { due: day(5) })
+                    ]
+                },
+                {
+                    id: uid(), name: "In progress", collapsed: false, foldDone: false, tasks: [
+                        t("Migrate the settings screen to the new tokens", {
+                            labels: ["design"],
+                            steps: [stx("Colors"), stx("Spacing"), st("Type scale")]
+                        }),
+                        t("Write up the Thursday interview notes", {
+                            labels: ["research"],
+                            notes: "Three of five people hit the same navigation problem."
+                        })
+                    ]
+                },
+                {
+                    id: uid(), name: "Done", collapsed: false, foldDone: false, tasks: [
+                        t("Send the revised statement of work", { labels: ["client"], done: true }),
+                        t("Renew the domain", { labels: ["ops"], done: true })
+                    ]
+                }
+            ]
+        };
+    }
+
+    /* ===================== storage ===================== */
+    let saveTimer = null;
+    function save() {
+        clearTimeout(saveTimer);
+        saveTimer = setTimeout(() => {
+            try { window.storage.set(KEY, JSON.stringify(state)); }
+            catch (e) { /* storage unavailable — this session still works */ }
+        }, 250);
+    }
+    async function load() {
+        try {
+            const r = await window.storage.get(KEY);
+            if (r && r.value) {
+                const d = JSON.parse(r.value);
+                if (d && Array.isArray(d.groups) && d.groups.length) return d;
+            }
+        } catch (e) { /* first run */ }
+        return seed();
+    }
+
+    /* ===================== lookups ===================== */
+    const allPairs = () => state.groups.flatMap(g => g.tasks.map(t => ({ t, g })));
+    const findTask = id => allPairs().find(p => p.t.id === id) || null;
+    const labelOf = id => LABELS.find(l => l.id === id);
+
+    function matches(t) {
+        if (ui.query) {
+            const hay = (t.title + " " + t.notes + " " + t.steps.map(s => s.text).join(" ")).toLowerCase();
+            if (!hay.includes(ui.query.toLowerCase())) return false;
+        }
+        if (ui.filter === "star") return t.important;
+        if (ui.filter === "open") return !t.done;
+        if (ui.filter === "soon") return !!t.due && !t.done && dayDiff(t.due) <= 1;
+        return true;
+    }
+
+    /* ===================== dates ===================== */
+    function dayDiff(iso) {
+        const a = new Date(iso + "T00:00:00"), b = new Date();
+        b.setHours(0, 0, 0, 0);
+        return Math.round((a - b) / 86400000);
+    }
+    function dueText(iso) {
+        const d = dayDiff(iso);
+        if (d === 0) return { text: "Today", cls: "soon" };
+        if (d === 1) return { text: "Tomorrow", cls: "soon" };
+        if (d < 0) return { text: (d === -1 ? "1 day late" : Math.abs(d) + " days late"), cls: "over" };
+        return {
+            text: new Date(iso + "T00:00:00")
+                .toLocaleDateString(undefined, { weekday: "short", day: "numeric", month: "short" }), cls: ""
+        };
+    }
+
+    /* ===================== icons ===================== */
+    const I = {
+        tick: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.6" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12.5l5.5 5.5L20 6.5"/></svg>',
+        star: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linejoin="round"><path d="M12 3.2l2.7 5.6 6.1.9-4.4 4.3 1 6.1-5.4-2.9-5.4 2.9 1-6.1L3.2 9.7l6.1-.9z"/></svg>',
+        starOn: '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 3.2l2.7 5.6 6.1.9-4.4 4.3 1 6.1-5.4-2.9-5.4 2.9 1-6.1L3.2 9.7l6.1-.9z"/></svg>',
+        caret: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg>',
+        plus: '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>',
+        x: '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg>',
+        note: '<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M5 7h14M5 12h14M5 17h8"/></svg>',
+        clock: '<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 1.8"/></svg>',
+        trash: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 7h16M9 7V4.5h6V7M6.5 7l1 13h9l1-13"/></svg>',
+        /* section-heading icons, sized by CSS */
+        tagI: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M3.5 11.6V4.6a1.1 1.1 0 0 1 1.1-1.1h7l9 9-8.1 8.1z"/><circle cx="7.6" cy="7.6" r="1.5" fill="currentColor" stroke="none"/></svg>',
+        clockI: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="8.6"/><path d="M12 7.2V12l3.2 1.9"/></svg>',
+        linesI: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M4 6.5h16M4 12h16M4 17.5h9"/></svg>',
+        boxI: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><rect x="3.4" y="3.4" width="17.2" height="17.2" rx="3.4"/><path d="M7.8 12.2l2.9 2.9 5.5-6.2" stroke-linecap="round"/></svg>'
+    };
+
+    /* ===================== the task, one markup for both views ===================== */
+    function taskHTML(t) {
+        const dn = t.steps.filter(s => s.done).length;
+        const bits = t.labels.map(id => {
+            const l = labelOf(id);
+            return l ? `<span class="chip" style="background:${l.color}">${esc(l.name)}</span>` : "";
+        });
+        if (t.due) { const d = dueText(t.due); bits.push(`<b class="${d.cls}">${I.clock}${esc(d.text)}</b>`); }
+        if (t.steps.length) bits.push(`<b>${dn}/${t.steps.length} steps</b>`);
+        if (t.notes.trim()) bits.push(`<b>${I.note}note</b>`);
+
+        return `<article class="task${t.done ? " done" : ""}${ui.open === t.id ? " sel" : ""}"
+      data-task-id="${t.id}" draggable="true" tabindex="0" role="button"
+      aria-label="${esc(t.title)}">
+    <button class="check${t.done ? " on" : ""}" data-act="toggle"
+      aria-label="${t.done ? "Mark unfinished" : "Mark finished"}">${I.tick}</button>
+    <div class="title">${esc(t.title)}</div>
+    <button class="star${t.important ? " on" : ""}" data-act="star"
+      aria-label="${t.important ? "Remove star" : "Add star"}">${t.important ? I.starOn : I.star}</button>
+    ${bits.length ? `<div class="footline">${bits.join("")}</div>` : ""}
+  </article>`;
+    }
+
+    function addHTML(gid) {
+        return ui.focusAdd === gid
+            ? `<input class="add-input" data-addinput="${gid}" placeholder="Task name, then Enter" aria-label="New task name">`
+            : `<button class="add" data-act="add" data-group="${gid}">${I.plus} Add a task</button>`;
+    }
+    function nameHTML(g) {
+        return `<div class="group-name" contenteditable="true" spellcheck="false" role="textbox"
+    data-rename="${g.id}" aria-label="Rename ${esc(g.name)}">${esc(g.name)}</div>`;
+    }
+    function killHTML(g) {
+        return `<button class="icon-btn kill" data-act="delgroup" data-group="${g.id}"
+    aria-label="Delete ${esc(g.name)}">${I.x}</button>`;
+    }
+    const emptyHTML = g => `<p class="empty">${g.tasks.length
+        ? "Nothing here matches the filter." : "Empty. Add the first task below."}</p>`;
+
+    /* ===================== board view ===================== */
+    function boardHTML() {
+        return state.groups.map(g => {
+            const vis = g.tasks.filter(matches);
+            return `<section class="col" data-group="${g.id}">
+      <header class="col-head">${nameHTML(g)}<span class="count">${vis.length}</span>${killHTML(g)}</header>
+      <div class="col-body" data-drop="${g.id}">${vis.map(taskHTML).join("") || emptyHTML(g)}</div>
+      <div class="col-foot">${addHTML(g.id)}</div>
+    </section>`;
+        }).join("") + `<button class="ghost" data-act="addgroup">${I.plus} Add a list</button>`;
+    }
+
+    /* ===================== list view ===================== */
+    function listHTML() {
+        return state.groups.map(g => {
+            const vis = g.tasks.filter(matches);
+            const open = vis.filter(t => !t.done), fin = vis.filter(t => t.done);
+            let body = open.map(taskHTML).join("");
+            if (!open.length && !fin.length) body = emptyHTML(g);
+            if (fin.length) {
+                body += `<button class="subhead${g.foldDone ? " folded" : ""}" data-act="folddone" data-group="${g.id}"
+          aria-expanded="${!g.foldDone}"><span class="caret">${I.caret}</span>finished &middot; ${fin.length}</button>`;
+                if (!g.foldDone) body += fin.map(taskHTML).join("");
+            }
+            return `<section class="sect${g.collapsed ? " collapsed" : ""}" data-group="${g.id}">
+      <header class="sect-head">
+        <button class="caret" data-act="collapse" data-group="${g.id}"
+          aria-expanded="${!g.collapsed}" aria-label="Collapse ${esc(g.name)}">${I.caret}</button>
+        ${nameHTML(g)}<span class="dots"></span><span class="count">${vis.length}</span>${killHTML(g)}
+      </header>
+      <div class="sect-body" data-drop="${g.id}">${body}</div>
+      <div class="sect-foot">${addHTML(g.id)}</div>
+    </section>`;
+        }).join("") + `<button class="ghost" data-act="addgroup" style="width:100%">${I.plus} Add a group</button>`;
+    }
+
+    /* ===================== render + the pivot morph ===================== */
+    const stage = document.getElementById("stage");
+    const scroll = document.getElementById("scroll");
+    const drawer = document.getElementById("drawer");
+    const scrim = document.getElementById("scrim");
+
+    function render() {
+        stage.dataset.view = ui.view;
+        scroll.innerHTML = ui.view === "board" ? boardHTML() : listHTML();
+        if (ui.focusAdd) {
+            const el = scroll.querySelector('[data-addinput="' + ui.focusAdd + '"]');
+            if (el) el.focus();
+        }
+        renderDrawer();
+    }
+    const commit = () => { save(); render(); };
+
+    /* FLIP — measure, re-render, then fly every task from where it was to where it lands */
+    function pivot(view) {
+        if (view === ui.view) return;
+        const reduce = matchMedia("(prefers-reduced-motion: reduce)").matches;
+        const first = new Map();
+        if (!reduce) scroll.querySelectorAll("[data-task-id]")
+            .forEach(el => first.set(el.dataset.taskId, el.getBoundingClientRect()));
+
+        ui.view = view;
+        document.getElementById("vBoard").setAttribute("aria-pressed", String(view === "board"));
+        document.getElementById("vList").setAttribute("aria-pressed", String(view === "list"));
+        render();
+        if (reduce) return;
+
+        scroll.querySelectorAll("[data-task-id]").forEach(el => {
+            const f = first.get(el.dataset.taskId);
+            const l = el.getBoundingClientRect();
+            const fade = [{ opacity: 0, transform: "translateY(8px)" }, { opacity: 1, transform: "none" }];
+            if (!f) return void el.animate(fade, { duration: 300, easing: "ease-out" });
+            const dx = f.left - l.left, dy = f.top - l.top;
+            if (Math.abs(dx) > 1600 || Math.abs(dy) > 1600)
+                return void el.animate(fade, { duration: 300, easing: "ease-out" });
+            if (!dx && !dy && Math.abs(f.width - l.width) < 1) return;
+            el.style.willChange = "transform,width";
+            const anim = el.animate(
+                [{ transform: "translate(" + dx + "px," + dy + "px)", width: f.width + "px" },
+                { transform: "translate(0,0)", width: l.width + "px" }],
+                { duration: 540, easing: "cubic-bezier(.2,.85,.25,1)" });
+            anim.finished.then(() => { el.style.willChange = ""; }).catch(() => { });
+        });
+    }
+
+    /* ===================== mutations ===================== */
+    function addTask(gid, title) {
+        const g = state.groups.find(x => x.id === gid);
+        if (!g || !title.trim()) return;
+        g.tasks.push({
+            id: uid(), title: title.trim(), notes: "", due: null,
+            important: false, done: false, steps: [], labels: []
+        });
+        save();
+    }
+    function moveTask(id, toGid, beforeId) {
+        let task = null;
+        for (const g of state.groups) {
+            const i = g.tasks.findIndex(t => t.id === id);
+            if (i > -1) { task = g.tasks.splice(i, 1)[0]; break; }
+        }
+        if (!task) return;
+        const g = state.groups.find(x => x.id === toGid) || state.groups[0];
+        const i = beforeId ? g.tasks.findIndex(t => t.id === beforeId) : -1;
+        if (i > -1) g.tasks.splice(i, 0, task); else g.tasks.push(task);
+        save();
+    }
+
+    /* ===================== stage: clicks ===================== */
+    scroll.addEventListener("click", e => {
+        const act = e.target.closest("[data-act]");
+        const card = e.target.closest("[data-task-id]");
+
+        if (act) {
+            const a = act.dataset.act;
+            const g = act.dataset.group ? state.groups.find(x => x.id === act.dataset.group) : null;
+
+            if (a === "toggle" && card) {
+                const p = findTask(card.dataset.taskId);
+                p.t.done = !p.t.done;
+                if (p.t.done) p.t.steps.forEach(s => s.done = true);
+                return commit();
+            }
+            if (a === "star" && card) {
+                const p = findTask(card.dataset.taskId);
+                p.t.important = !p.t.important;
+                return commit();
+            }
+            if (a === "add") { ui.focusAdd = act.dataset.group; return render(); }
+            if (a === "collapse" && g) { g.collapsed = !g.collapsed; return commit(); }
+            if (a === "folddone" && g) { g.foldDone = !g.foldDone; return commit(); }
+            if (a === "delgroup" && g) {
+                if (g.tasks.length && !confirm('Delete "' + g.name + '" and its ' + g.tasks.length + ' task(s)?')) return;
+                state.groups = state.groups.filter(x => x.id !== g.id);
+                if (!state.groups.length)
+                    state.groups.push({ id: uid(), name: "Tasks", collapsed: false, foldDone: false, tasks: [] });
+                return commit();
+            }
+            if (a === "addgroup") {
+                state.groups.push({ id: uid(), name: "New list", collapsed: false, foldDone: false, tasks: [] });
+                save(); render();
+                const names = scroll.querySelectorAll("[data-rename]");
+                const el = names[names.length - 1];
+                if (el) { el.focus(); const s = getSelection(); s && s.selectAllChildren(el); }
+                return;
+            }
+            return;
+        }
+
+        if (card) openTask(card.dataset.taskId);
+    });
+
+    /* ===================== stage: keyboard + inline edits ===================== */
+    scroll.addEventListener("keydown", e => {
+        const inp = e.target.closest("[data-addinput]");
+        if (inp) {
+            if (e.key === "Enter") {
+                addTask(inp.dataset.addinput, inp.value);
+                inp.value = "";
+                render();
+                const again = scroll.querySelector('[data-addinput="' + inp.dataset.addinput + '"]');
+                if (again) again.focus();
+            } else if (e.key === "Escape") { ui.focusAdd = null; render(); }
+            return;
+        }
+        const ren = e.target.closest("[data-rename]");
+        if (ren && e.key === "Enter") { e.preventDefault(); return void ren.blur(); }
+
+        const card = e.target.closest("[data-task-id]");
+        if (card && (e.key === "Enter" || e.key === " ")) {
+            e.preventDefault(); openTask(card.dataset.taskId);
+        }
+    });
+
+    scroll.addEventListener("focusout", e => {
+        const inp = e.target.closest("[data-addinput]");
+        if (inp) {
+            if (inp.value.trim()) addTask(inp.dataset.addinput, inp.value);
+            ui.focusAdd = null;
+            return render();
+        }
+        const ren = e.target.closest("[data-rename]");
+        if (ren) {
+            const g = state.groups.find(x => x.id === ren.dataset.rename);
+            if (!g) return;
+            const v = ren.textContent.trim();
+            if (v && v !== g.name) { g.name = v; ren.textContent = v; save(); renderDrawer(); }
+            else ren.textContent = g.name;
+        }
+    });
+
+    /* ===================== drag & drop ===================== */
+    scroll.addEventListener("dragstart", e => {
+        const card = e.target.closest("[data-task-id]");
+        if (!card) return;
+        ui.dragId = card.dataset.taskId;
+        card.classList.add("is-dragging");
+        e.dataTransfer.effectAllowed = "move";
+        try { e.dataTransfer.setData("text/plain", ui.dragId); } catch (err) { }
+    });
+    scroll.addEventListener("dragend", () => {
+        ui.dragId = null;
+        scroll.querySelectorAll(".is-dragging").forEach(el => el.classList.remove("is-dragging"));
+        scroll.querySelectorAll(".drop-on").forEach(el => el.classList.remove("drop-on"));
+    });
+    scroll.addEventListener("dragover", e => {
+        const zone = e.target.closest("[data-drop]");
+        if (!zone || !ui.dragId) return;
+        e.preventDefault();
+        e.dataTransfer.dropEffect = "move";
+        scroll.querySelectorAll(".drop-on").forEach(el => el.classList.remove("drop-on"));
+        const shell = zone.closest(".col, .sect");
+        if (shell) shell.classList.add("drop-on");
+
+        const dragEl = scroll.querySelector(".is-dragging");
+        if (!dragEl) return;
+        const after = [...zone.querySelectorAll("[data-task-id]:not(.is-dragging)")].reduce((best, el) => {
+            const box = el.getBoundingClientRect();
+            const off = e.clientY - box.top - box.height / 2;
+            return (off < 0 && off > best.off) ? { off, el } : best;
+        }, { off: -Infinity, el: null }).el;
+        if (after) zone.insertBefore(dragEl, after); else zone.appendChild(dragEl);
+    });
+    scroll.addEventListener("drop", e => {
+        const zone = e.target.closest("[data-drop]");
+        if (!zone || !ui.dragId) return;
+        e.preventDefault();
+        const ids = [...zone.querySelectorAll("[data-task-id]")].map(el => el.dataset.taskId);
+        const at = ids.indexOf(ui.dragId);
+        moveTask(ui.dragId, zone.dataset.drop, ids[at + 1] || null);
+        ui.dragId = null;
+        render();
+    });
+
+    /* ===================== detail modal ===================== */
+    function openTask(id) { ui.open = id; ui.reveal.clear(); ui.menu = false; render(); openModal(); }
+
+    function openModal() {
+        lastFocus = document.activeElement;
+        drawer.classList.add("open");
+        scrim.classList.add("open");
+        drawer.setAttribute("aria-hidden", "false");
+        const ta = drawer.querySelector(".m-title");
+        if (ta) autogrow(ta);
+        drawer.focus();
+    }
+    /* keep Tab inside the modal while it is open */
+    drawer.addEventListener("keydown", e => {
+        if (ui.menu && (e.key === "ArrowDown" || e.key === "ArrowUp")) {
+            const items = [...drawer.querySelectorAll(".menu button")];
+            if (items.length) {
+                e.preventDefault();
+                const i = items.indexOf(document.activeElement);
+                const n = e.key === "ArrowDown" ? i + 1 : i - 1;
+                items[(n + items.length) % items.length].focus();
+                return;
+            }
+        }
+        if (e.key !== "Tab" || !drawer.classList.contains("open")) return;
+        const f = [...drawer.querySelectorAll(
+            'button,select,input,textarea,[contenteditable="true"]')].filter(el => el.offsetParent !== null);
+        if (!f.length) return;
+        const first = f[0], last = f[f.length - 1];
+        if (e.shiftKey && (document.activeElement === first || document.activeElement === drawer)) {
+            e.preventDefault(); last.focus();
+        } else if (!e.shiftKey && document.activeElement === last) {
+            e.preventDefault(); first.focus();
+        }
+    });
+    function closeModal() {
+        drawer.classList.remove("open");
+        scrim.classList.remove("open");
+        drawer.setAttribute("aria-hidden", "true");
+        ui.open = null;
+        ui.reveal.clear();
+        ui.menu = false;
+        render();
+        if (lastFocus && document.contains(lastFocus)) lastFocus.focus();
+        lastFocus = null;
+    }
+    let lastFocus = null;
+    function autogrow(ta) { ta.style.height = "auto"; ta.style.height = ta.scrollHeight + "px"; }
+    const current = () => (ui.open ? findTask(ui.open) : null);
+
+    /* one section = icon in the margin, heading, body */
+    function sec(icon, title, extra, body) {
+        return `<div class="sec">
+    <span class="sec-ico">${icon}</span>
+    <div class="sec-head"><span class="sec-title">${title}</span>${extra || ""}</div>
+    <div class="sec-body">${body}</div>
+  </div>`;
+    }
+
+    function renderDrawer() {
+        const p = current();
+        if (!p) { drawer.innerHTML = ""; return; }
+        const t = p.t, g = p.g;
+        const dn = t.steps.filter(s => s.done).length;
+        const show = {
+            labels: t.labels.length > 0 || ui.reveal.has("labels"),
+            due: !!t.due || ui.reveal.has("due"),
+            steps: t.steps.length > 0 || ui.reveal.has("steps")
+        };
+
+        /* One control opens the whole field list. Notes is absent: it's on by default.
+           Fields already on the task stay listed and are marked, so the menu is a
+           complete map of what a task can hold rather than a shrinking list. */
+        const menu = ui.menu ? `<div class="menu" role="menu">
+      <div class="menu-h">Add to task</div>
+      ${[["labels", I.tagI, "Labels", show.labels],
+            ["due", I.clockI, "Due date", show.due],
+            ["steps", I.boxI, "Steps", show.steps]]
+                .map(([k, ico, name, on]) =>
+                    `<button data-d="pick" data-sec="${k}" role="menuitem">${ico}${name}${on ? `<span class="on-mark">on</span>` : ""}</button>`).join("")}
+    </div>` : "";
+
+        const dueChip = t.due ? (d => `<span class="sec-note ${d.cls}">${esc(d.text)}</span>`)(dueText(t.due)) : "";
+
+        drawer.innerHTML =
+            `<header class="m-head">
+      <span class="grp">
+        <select data-d="group" aria-label="Move to list">
+          ${state.groups.map(x => `<option value="${x.id}"${x.id === g.id ? " selected" : ""}>${esc(x.name)}</option>`).join("")}
+        </select>
+        <span class="caret">${I.caret}</span>
+      </span>
+      <span class="spacer"></span>
+      <button class="star${t.important ? " on" : ""}" data-d="star"
+        aria-label="${t.important ? "Remove star" : "Add star"}">${t.important ? I.starOn : I.star}</button>
+      <button class="icon-btn" data-d="close" aria-label="Close details">${I.x}</button>
+    </header>
+
+    <div class="m-body">
+      <div class="sec">
+        <span class="sec-ico tall"><button class="check${t.done ? " on" : ""}" data-d="done"
+          aria-label="${t.done ? "Mark unfinished" : "Mark finished"}">${I.tick}</button></span>
+        <textarea class="m-title" data-d="title" rows="1" aria-label="Task name">${esc(t.title)}</textarea>
+        <span class="addwrap">
+          <button class="add-btn" data-d="menu" aria-haspopup="menu" aria-expanded="${ui.menu}"
+            aria-label="Add a field to this task">${I.plus}</button>${menu}
+        </span>
+      </div>
+
+      ${show.labels ? sec(I.tagI, "Labels", "", `<div class="chip-pick">${LABELS.map(l => {
+                const on = t.labels.indexOf(l.id) > -1;
+                return `<button data-d="label" data-id="${l.id}" class="${on ? "on" : ""}"
+            style="${on ? "background:" + l.color : ""}" aria-pressed="${on}">${esc(l.name)}</button>`;
+            }).join("")}</div>`) : ""}
+
+      ${show.due ? sec(I.clockI, "Due date", dueChip +
+                (t.due ? `<button class="link" data-d="clear" data-sec="due">Clear</button>` : ""),
+                `<input class="field" type="date" value="${t.due || ""}" data-d="due" aria-label="Due date">`) : ""}
+
+      ${sec(I.linesI, "Notes", "",
+                    `<textarea class="field" data-d="notes" placeholder="Add a more detailed note…">${esc(t.notes)}</textarea>`)}
+
+      ${show.steps ? sec(I.boxI, "Steps",
+                        `${t.steps.length ? `<span class="sec-note">${dn} of ${t.steps.length}</span>` : ""}
+         ${t.steps.length ? `<button class="link danger" data-d="clear" data-sec="steps">Delete all</button>` : ""}`,
+                        `${t.steps.length ? `<div class="progress"><b>${Math.round(dn / t.steps.length * 100)}%</b>
+            <i><u style="width:${Math.round(dn / t.steps.length * 100)}%"></u></i></div>` : ""}
+         ${t.steps.map(s => `<div class="step${s.done ? " done" : ""}" data-step="${s.id}">
+            <button class="check${s.done ? " on" : ""}" data-d="stepdone" aria-label="Toggle step">${I.tick}</button>
+            <div class="step-t" contenteditable="true" data-d="steptext" role="textbox">${esc(s.text)}</div>
+            <button class="icon-btn" data-d="stepdel" aria-label="Delete step">${I.x}</button>
+          </div>`).join("")}
+         <input class="field" data-d="stepadd" placeholder="Add an item" aria-label="Add a step" style="margin-top:8px">`) : ""}
+    </div>
+
+    <footer class="m-foot">
+      <button class="btn danger" data-d="del">${I.trash} Delete task</button>
+      <button class="btn" data-d="close" style="margin-left:auto">Done</button>
+    </footer>`;
+
+        const ta = drawer.querySelector(".m-title");
+        if (ta && drawer.classList.contains("open")) autogrow(ta);
+    }
+
+    drawer.addEventListener("click", e => {
+        const p = current();
+        if (!p) return;
+        const el = e.target.closest("[data-d]");
+        const a = el ? el.dataset.d : null;
+
+        /* anything that isn't the trigger or a menu item dismisses the menu */
+        if (ui.menu && a !== "menu" && a !== "pick") {
+            ui.menu = false;
+            if (!a) return renderDrawer();
+        }
+        if (!el) return;
+        const t = p.t;
+
+        if (a === "close") return closeModal();
+        if (a === "done") { t.done = !t.done; if (t.done) t.steps.forEach(s => s.done = true); return commit(); }
+        if (a === "star") { t.important = !t.important; return commit(); }
+
+        if (a === "menu") {
+            ui.menu = !ui.menu;
+            renderDrawer();
+            const next = ui.menu ? drawer.querySelector(".menu button") : drawer.querySelector(".add-btn");
+            if (next) next.focus();
+            return;
+        }
+        if (a === "pick") {
+            const s = el.dataset.sec;
+            ui.reveal.add(s);
+            ui.menu = false;
+            renderDrawer();
+            const first = { labels: ".chip-pick button", due: '[data-d="due"]', steps: '[data-d="stepadd"]' }[s];
+            const f = drawer.querySelector(first);
+            if (f) f.focus();
+            return;
+        }
+        if (a === "clear") {
+            if (el.dataset.sec === "due") { t.due = null; ui.reveal.delete("due"); }
+            else { t.steps = []; ui.reveal.delete("steps"); }
+            return commit();
+        }
+        if (a === "label") {
+            const id = el.dataset.id;
+            t.labels = t.labels.indexOf(id) > -1 ? t.labels.filter(x => x !== id) : t.labels.concat(id);
+            ui.reveal.add("labels");         // stay open even if you clear the last one
+            return commit();
+        }
+        if (a === "stepdone") {
+            const s = t.steps.find(x => x.id === el.closest("[data-step]").dataset.step);
+            if (s) s.done = !s.done;
+            return commit();
+        }
+        if (a === "stepdel") {
+            t.steps = t.steps.filter(s => s.id !== el.closest("[data-step]").dataset.step);
+            ui.reveal.add("steps");
+            return commit();
+        }
+        if (a === "del") {
+            if (!confirm('Delete "' + t.title + '"?')) return;
+            state.groups.forEach(g => { g.tasks = g.tasks.filter(x => x.id !== t.id); });
+            save();
+            return closeModal();
+        }
+    });
+
+    drawer.addEventListener("input", e => {
+        const el = e.target.closest("[data-d]");
+        const p = current();
+        if (!el || !p) return;
+        if (el.dataset.d === "title") {
+            p.t.title = el.value; autogrow(el);
+            const live = scroll.querySelector('[data-task-id="' + p.t.id + '"] .title');
+            if (live) live.textContent = el.value;
+            save();
+        }
+        if (el.dataset.d === "notes") { p.t.notes = el.value; save(); }
+    });
+
+    drawer.addEventListener("change", e => {
+        const el = e.target.closest("[data-d]");
+        const p = current();
+        if (!el || !p) return;
+        if (el.dataset.d === "due") {
+            p.t.due = el.value || null;
+            ui.reveal.add("due");            // don't yank the section away mid-edit
+            return commit();
+        }
+        if (el.dataset.d === "group") { moveTask(p.t.id, el.value, null); return commit(); }
+    });
+
+    drawer.addEventListener("keydown", e => {
+        const el = e.target.closest("[data-d]");
+        const p = current();
+        if (!el || !p) return;
+        const a = el.dataset.d;
+        if (a === "stepadd" && e.key === "Enter") {
+            if (!el.value.trim()) return;
+            p.t.steps.push({ id: uid(), text: el.value.trim(), done: false });
+            el.value = "";
+            save(); render();
+            const again = drawer.querySelector('[data-d="stepadd"]');
+            if (again) again.focus();
+        }
+        if ((a === "steptext" || a === "title") && e.key === "Enter") { e.preventDefault(); el.blur(); }
+    });
+
+    drawer.addEventListener("focusout", e => {
+        const el = e.target.closest('[data-d="steptext"]');
+        const p = current();
+        if (!el || !p) return;
+        const s = p.t.steps.find(x => x.id === el.closest("[data-step]").dataset.step);
+        if (!s) return;
+        const v = el.textContent.trim();
+        if (v) { s.text = v; el.textContent = v; save(); } else el.textContent = s.text;
+    });
+
+    scrim.addEventListener("click", closeModal);
+
+    /* ===================== chrome ===================== */
+    document.getElementById("vBoard").addEventListener("click", () => pivot("board"));
+    document.getElementById("vList").addEventListener("click", () => pivot("list"));
+
+    const qEl = document.getElementById("q");
+    qEl.addEventListener("input", () => { ui.query = qEl.value; render(); });
+
+    const filters = document.getElementById("filters");
+    filters.addEventListener("click", e => {
+        const b = e.target.closest("[data-f]");
+        if (!b) return;
+        ui.filter = b.dataset.f;
+        [...filters.children].forEach(x => x.setAttribute("aria-pressed", String(x === b)));
+        render();
+    });
+
+    addEventListener("keydown", e => {
+        const typing = /^(INPUT|TEXTAREA|SELECT)$/.test(e.target.tagName) || e.target.isContentEditable;
+        if (e.key === "Escape") {
+            if (ui.menu) {
+                ui.menu = false;
+                renderDrawer();
+                const b = drawer.querySelector(".add-btn");
+                if (b) b.focus();
+                return;
+            }
+            if (drawer.classList.contains("open")) return closeModal();
+            if (typing) e.target.blur();
+            return;
+        }
+        if (typing || e.metaKey || e.ctrlKey || e.altKey) return;
+        if (drawer.classList.contains("open")) return;
+        if (e.key === "/") { e.preventDefault(); qEl.focus(); qEl.select(); }
+        if (e.key === "v" || e.key === "V") pivot(ui.view === "board" ? "list" : "board");
+    });
+
+    /* ===================== go ===================== */
+    load().then(d => { state = d; render(); });
+</script>
