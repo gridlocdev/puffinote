@@ -66,6 +66,8 @@ internal sealed class FakeAppEnvironment : IAppEnvironment
     public void ApplyCellStyle(Func<CellStyle, CellStyle> transform, string label) => throw Nope();
     public void PreviewCellStyle(Func<CellStyle, CellStyle>? transform) => throw Nope();
     public void AutofitColumns(int left, int right) => throw Nope();
+
+    public void FitColumns(int left, int right) => throw Nope();
     public void ToggleFreezePanes() => throw Nope();
     public void ShowKeyboardShortcuts() => throw Nope();
     public void ShowRadialSettings() => throw Nope();

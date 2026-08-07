@@ -421,4 +421,6 @@ public partial class SpreadsheetEditorView
     }
 
     public void AutofitColumns(int left, int right) => Grid.GrowColumnsToFit(left, right);
+
+    public void FitColumns(int left, int right) => Grid.FitColumnsExactly(left, right);
 }

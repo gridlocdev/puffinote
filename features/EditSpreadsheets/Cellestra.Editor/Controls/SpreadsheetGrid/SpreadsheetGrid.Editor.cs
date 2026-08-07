@@ -30,6 +30,9 @@ public sealed partial class SpreadsheetGrid
     /// <summary>Test seam: where the caret sits in the live editor.</summary>
     internal int EditorCaretIndex => _editor.CaretIndex;
 
+    /// <summary>Test seam: commit the open edit in place, as ↩ does but without moving the selection.</summary>
+    internal void CommitEditForTest() => CommitEdit(0, 0);
+
     /// <summary>Test seams: the colours the live editor actually paints with, and whether it wraps.</summary>
     internal Color EditorInk => (_editor.Foreground as ISolidColorBrush)?.Color ?? default;
 
@@ -394,6 +397,7 @@ public sealed partial class SpreadsheetGrid
             _session.Workbook, _session.ActiveSheet.Name, row, column, text, Culture));
 
         ExpandTableIfAdjacent(row, column, text);
+        GrowTableColumnToFit(row, column);
 
         int targetColumn = column + moveColumn;
         if (moveColumn != 0 && moveRow == 0)
@@ -449,6 +453,20 @@ public sealed partial class SpreadsheetGrid
                 _session.Execute(expand);
                 break; // tables can't overlap, so at most one absorbs the edit
             }
+        }
+    }
+
+    /// <summary>
+    /// A column inside a table keeps up with what you type into it. A table is a declared shape — you
+    /// told the grid these cells are one thing — so a value that arrives too wide for its column is a
+    /// column that's the wrong width, not a value to be clipped or ##### -ed. Widen-only: a width you
+    /// set by hand is yours, and an edit shouldn't claw it back.
+    /// </summary>
+    private void GrowTableColumnToFit(int row, int column)
+    {
+        if (Sheet?.FindTable(row, column) is not null)
+        {
+            GrowColumnsToFit(column, column);
         }
     }
 

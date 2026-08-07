@@ -128,6 +128,9 @@ public interface IAppEnvironment
     /// <summary>Grow columns <paramref name="left"/>…<paramref name="right"/> to fit their content if they clip (never shrink).</summary>
     void AutofitColumns(int left, int right);
 
+    /// <summary>Size columns <paramref name="left"/>…<paramref name="right"/> to their content exactly — narrowing as well as widening.</summary>
+    void FitColumns(int left, int right);
+
     void ToggleFreezePanes();
 
     /// <summary>Display the keyboard shortcuts reference.</summary>

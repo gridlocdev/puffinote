@@ -166,6 +166,8 @@ public sealed class AppCommands
         new("data.headerColumn", "Header Column", "Style the table's first column like its header row.",
             null, () => e.ToggleTableHeaderColumn(), canExecute: () => e.ActiveTable is not null,
             isActive: () => e.ActiveTable?.HasHeaderColumn ?? false, icon: "columns"),
+        new("data.autofitColumns", "Auto-fit Columns", "Size the table's columns to their contents.",
+            null, () => AutofitColumns(e), icon: "arrow-right-to-line"),
         new("data.removeDuplicates", "Remove Duplicates…", "Drop repeated rows from the range.", null, () => e.ShowRemoveDuplicatesDialog(), icon: "list-x"),
         new("data.textToColumns", "Text to Columns…", "Split a column on a delimiter.", null, () => e.ShowTextToColumnsDialog(), icon: "columns"),
         new("data.validation", "Data Validation…", "Restrict what can be entered.", null, () => e.ShowDataValidationDialog(), icon: "square-check"),
@@ -607,6 +609,22 @@ public sealed class AppCommands
         sheet.ActiveFilterSpec = null;
         sheet.ActiveSort = null;
         e.Refresh();
+    }
+
+    /// <summary>
+    /// Size columns to their contents. Inside a table the target is the whole table — that is the shape
+    /// the user declared, and fitting only the one selected column of it leaves the table looking ragged
+    /// for no reason. Outside one, it's the selected columns, the way the header double-click acts.
+    /// </summary>
+    private static void AutofitColumns(IAppEnvironment e)
+    {
+        if (e.ActiveTable is { } table)
+        {
+            e.FitColumns(table.Range.Left, table.Range.Right);
+            return;
+        }
+
+        e.FitColumns(e.Selection.Left, e.Selection.Right);
     }
 
     private static void CreateTable(IAppEnvironment e)

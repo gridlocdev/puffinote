@@ -152,7 +152,7 @@ public partial class MainWindow : Window, IEditorHost
         menu.Items.Add(Submenu("Insert", "insert.rowsAbove", "insert.columnsLeft", "edit.deleteRows", "edit.deleteColumns", null,
             "insert.sheet", "data.createTable", "insert.function", "insert.namedRange", "insert.hyperlink", null, "sheet.rename", "sheet.delete"));
         menu.Items.Add(Submenu("Data", "data.sortAsc", "data.sortDesc", "data.customSort", "data.sortAndFilter", null,
-            "data.toggleFilter", "data.clearFilter", null, "data.createTable", "data.removeDuplicates",
+            "data.toggleFilter", "data.clearFilter", null, "data.createTable", "data.autofitColumns", "data.removeDuplicates",
             "data.textToColumns", "data.validation", null, "formula.recalc"));
         menu.Items.Add(Submenu("View", "view.commandPalette", "view.goToSheet", null, "view.zoomIn", "view.zoomOut", "view.actualSize", null, "view.freezePanes", null, "view.radialSettings"));
         menu.Items.Add(Submenu("Help", "help.shortcuts", null, "help.about"));

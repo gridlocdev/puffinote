@@ -47,7 +47,7 @@ public sealed partial class SpreadsheetGrid
         double widest = 0;
         foreach (var (_, col, cell) in sheet.EnumerateCells())
         {
-            if (col == column && !cell.Value.IsEmpty)
+            if (col == column && Fits(cell))
             {
                 widest = Math.Max(widest, MeasureCellWidth(cell));
             }
@@ -56,6 +56,60 @@ public sealed partial class SpreadsheetGrid
         double target = widest > 0 ? Math.Clamp(widest + 10, 24, 600) : Defaults.ColumnWidth;
         _session.Execute(EditCommands.SetColumnWidth(sheet.Name, column, target));
         Redraw();
+    }
+
+    /// <summary>
+    /// Whether a cell gets a say in how wide its column should be. A Wrap Text cell doesn't: its text
+    /// was told to fold at the column's edge, so measuring it flat asks the column to be as wide as a
+    /// paragraph — one wrapped note used to drag the whole column out to the length of its contents
+    /// and undo the wrap it was set to have. A column of nothing but wrapped cells keeps its width.
+    /// </summary>
+    private bool Fits(Cellestra.Core.Model.Cell cell) =>
+        !cell.Value.IsEmpty && !_session!.Workbook.Styles.Get(cell.StyleId).Alignment.WrapText;
+
+    /// <summary>
+    /// Size each column in the range to its content exactly — the explicit "Auto-fit Columns" command,
+    /// so it may narrow a column as well as widen one. <see cref="GrowColumnsToFit"/> is the other half:
+    /// it only ever widens, because it fires as a side effect of something else the user asked for.
+    /// </summary>
+    internal void FitColumnsExactly(int left, int right)
+    {
+        var sheet = Sheet;
+        if (_session is null || sheet is null)
+        {
+            return;
+        }
+
+        var edits = new List<IEditCommand>();
+        for (int column = left; column <= right; column++)
+        {
+            double widest = WidestIn(sheet, column);
+            double target = widest > 0 ? Math.Clamp(widest + 10, 24, 600) : Defaults.ColumnWidth;
+            if (Math.Abs(target - sheet.GetColumnWidth(column)) > 0.5)
+            {
+                edits.Add(EditCommands.SetColumnWidth(sheet.Name, column, target));
+            }
+        }
+
+        if (edits.Count > 0)
+        {
+            _session.Execute(edits.Count == 1 ? edits[0] : EditCommands.Composite("Auto-fit Columns", edits));
+            Redraw();
+        }
+    }
+
+    private double WidestIn(Cellestra.Core.Model.Worksheet sheet, int column)
+    {
+        double widest = 0;
+        foreach (var (_, col, cell) in sheet.EnumerateCells())
+        {
+            if (col == column && Fits(cell))
+            {
+                widest = Math.Max(widest, MeasureCellWidth(cell));
+            }
+        }
+
+        return widest;
     }
 
     /// <summary>
@@ -74,7 +128,7 @@ public sealed partial class SpreadsheetGrid
         var widest = new double[right - left + 1];
         foreach (var (_, column, cell) in sheet.EnumerateCells())
         {
-            if (column < left || column > right || cell.Value.IsEmpty)
+            if (column < left || column > right || !Fits(cell))
             {
                 continue;
             }
