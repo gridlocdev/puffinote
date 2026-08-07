@@ -122,12 +122,12 @@ public sealed partial class SpreadsheetGrid
 
                 break;
             default:
-                if (IsTypingKey(e))
-                {
-                    BeginEdit(string.Empty);
-                    return;
-                }
-
+                // Every printable key starts its edit from OnTextInput, seeded with the character it
+                // produced. Opening an *empty* editor here and leaving the character to find its own way
+                // in — which is what a separate A–Z/0–9 branch did — meant the first keystroke of an edit
+                // travelled by a different road than every one after it, arriving only if the text-input
+                // event was re-routed to a TextBox that had been focused mid-event. It is also the only
+                // road that knows what "$" or "é" is: this branch only ever recognised A–Z and 0–9.
                 return;
         }
 
@@ -171,10 +171,6 @@ public sealed partial class SpreadsheetGrid
 
         return rowDelta != 0 || columnDelta != 0;
     }
-
-    private static bool IsTypingKey(KeyEventArgs e) =>
-        !e.KeyModifiers.HasFlag(KeyModifiers.Meta) && !e.KeyModifiers.HasFlag(KeyModifiers.Control) &&
-        e.Key is (>= Key.A and <= Key.Z) or (>= Key.D0 and <= Key.D9);
 
     /// <summary>
     /// Move (or extend) the active cell by one step, skipping over any merged region: a step starts

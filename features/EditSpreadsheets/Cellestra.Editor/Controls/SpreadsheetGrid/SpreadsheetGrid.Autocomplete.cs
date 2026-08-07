@@ -7,6 +7,11 @@ namespace Cellestra.Desktop.Controls.SpreadsheetGrid;
 /// entry higher in the same column is offered — its remaining suffix is appended and selected, so
 /// the next keystroke replaces it and Enter accepts it. Only triggers while appending at the end of
 /// non-formula text, so backspacing or editing mid-string never fights the user.
+///
+/// <para>Matching is <b>case-sensitive</b>, which is what makes the feature stay out of the way. Case
+/// is the one thing the typist is unambiguously asserting: type "ID" under a column of "Id" and an
+/// insensitive match would silently rewrite the two characters you just chose. Diverging in case
+/// simply ends the offer for that entry, and what you typed stands.</para>
 /// </summary>
 public sealed partial class SpreadsheetGrid
 {
@@ -46,31 +51,37 @@ public sealed partial class SpreadsheetGrid
         _lastEditorTextLength = text.Length; // the real typed length, so the next keystroke counts as growth
     }
 
+    /// <summary>
+    /// The nearest text entry above <paramref name="activeRow"/> in this column that starts with
+    /// <paramref name="prefix"/>, or null.
+    ///
+    /// <para>Walks up from the cell being typed in and stops at the first gap — the contiguous block the
+    /// cell belongs to is the list it is an entry of, which is both the useful answer and a bounded one.
+    /// Scanning the whole sheet's cell store on every keystroke, which is what this did before, is what
+    /// made typing into a large workbook feel like it was lagging a character behind.</para>
+    /// </summary>
     private static string? FindColumnCompletion(Worksheet sheet, int column, int activeRow, string prefix)
     {
-        string? best = null;
-        int bestRow = -1;
-        foreach (var (row, col, cell) in sheet.EnumerateCells())
+        for (int row = activeRow - 1; row >= 0; row--)
         {
-            if (col != column || row >= activeRow || !cell.Value.IsText)
+            var cell = sheet.Find(row, column);
+            if (cell is null || cell.Value.IsEmpty)
+            {
+                return null; // the block ended; entries beyond it belong to a different list
+            }
+
+            if (!cell.Value.IsText)
             {
                 continue;
             }
 
             string value = cell.Value.AsText;
-            if (value.Length <= prefix.Length ||
-                !value.StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
+            if (value.Length > prefix.Length && value.StartsWith(prefix, StringComparison.Ordinal))
             {
-                continue;
-            }
-
-            if (row > bestRow)
-            {
-                bestRow = row; // nearest non-empty text cell above the active cell
-                best = value;
+                return value; // nearest first — the walk is already in order
             }
         }
 
-        return best;
+        return null;
     }
 }
