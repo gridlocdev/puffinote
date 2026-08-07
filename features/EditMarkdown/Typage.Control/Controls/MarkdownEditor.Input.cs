@@ -291,6 +291,26 @@ public partial class MarkdownEditor
         {
             case EnterKind.Exit:
                 Buffer.ReplaceRange(lineStart + result.ExitStart, result.ExitLength, string.Empty);
+
+                // Leaving a list at the top level has to leave the *block*, not just drop the marker.
+                // Stripping "- " alone left the caret on an empty line that is still inside the list: the
+                // renderer collapses it (so Enter looked like it had done nothing) and Markdown reads the
+                // next line as a lazy continuation (so the paragraph you then typed rejoined the bullet).
+                //
+                // Both faults pushed the same way — the user presses Enter again, and again, because
+                // nothing appears to happen, and the file quietly collects the blank lines those presses
+                // made. One newline here terminates the list properly and puts the caret on a row it can
+                // actually see, so the second press never happens.
+                //
+                // ExitStart == 0 is exactly "nothing precedes the marker": no indent, no enclosing quote.
+                // A nested item keeps its indentation and a quoted one keeps its "> ", so those lines are
+                // still visible rows inside a block the user has not left.
+                if (result.ExitStart == 0)
+                {
+                    Buffer.ReplaceRange(lineStart, 0, nl);
+                    Buffer.Selection = Selection.At(Math.Min(lineStart + nl.Length, Buffer.Document.Length));
+                }
+
                 break;
             case EnterKind.Continue:
                 Buffer.ReplaceRange(sel.Caret, 0, result.Text.Replace("\n", nl)); // match the doc's line ending

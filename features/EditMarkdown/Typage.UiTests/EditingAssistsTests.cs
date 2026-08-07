@@ -30,9 +30,11 @@ public class EditingAssistsTests
     [AvaloniaFact]
     public void Enter_ExitsEmptyItem()
     {
+        // Enter on an empty item leaves the list *block*, blank line and all — see
+        // <see cref="ListExitTests"/> for why dropping the marker alone was not enough.
         var editor = At("- apple\n- ", 10);
         editor.EnterForTest();
-        Assert.Equal("- apple\n", editor.Text);
+        Assert.Equal("- apple\n\n", editor.Text);
     }
 
     // ----- Enter on a hard-wrapped item's continuation line -----
