@@ -96,7 +96,7 @@ public sealed class MarkdownPaneTests
     public void Factory_creates_a_markdown_pane_for_md_and_declines_unsupported_types()
     {
         Assert.IsType<MarkdownPane>(EditorPaneFactory.Create("/x/note.MD"));
-        Assert.Null(EditorPaneFactory.Create("/x/photo.png")); // no editor for images yet (Phase 3)
+        Assert.Null(EditorPaneFactory.Create("/x/photo.png")); // an image is nobody's to edit here
         Assert.False(EditorPaneFactory.CanOpen("/x/photo.png"));
     }
 }

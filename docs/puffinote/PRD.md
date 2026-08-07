@@ -188,8 +188,10 @@ CLI harness `CliHost`/`CliException`). Both editors already run their palette an
 - **Layout:** a left sidebar with a **file tree** rooted at the notebook, plus additional panels (§7.2.4).
   The main area is the **tab strip + active editor**.
 - **File tree contents (all files shown):** the tree shows *every* file and folder in the notebook.
-  - `.md` → opens in the **Typage** surface. `.ods` → opens in the **Cellestra** surface.
-  - **Unsupported files** (images, PDFs, `.txt`, etc.) are shown for context and are **actionable**:
+  - `.md` → opens in the **Typage** surface. `.ods` → opens in the **Cellestra** surface. **Anything else
+    that reads as text** — a `.log`, a `.conf`, an extensionless `LICENSE` — opens in the **Plaintain**
+    surface, decided by a probe over the file's first few KB rather than a list of extensions.
+  - **Files no editor here can open** (images, PDFs, archives) are shown for context and are **actionable**:
     where feasible a lightweight **read-only preview** (e.g. images), otherwise **"Open in default app"**
     / **"Reveal in Finder."** No new editor is built for them (§2.2).
   - Standard tree affordances: expand/collapse folders, new file/folder, rename, delete (confirmed),

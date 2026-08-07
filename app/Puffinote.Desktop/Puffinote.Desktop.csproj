@@ -30,6 +30,9 @@
     <!-- Embedded editor #2: the Cellestra spreadsheet surface (SpreadsheetEditorView self-hosts its
          IAppEnvironment; the shell supplies IEditorHost). -->
     <ProjectReference Include="..\..\features\EditSpreadsheets\Cellestra.Editor\Cellestra.Editor.csproj" />
+    <!-- Embedded editor #3: the Plaintain plaintext surface (PlainTextEditorView; the pane owns the
+         file I/O, as it does for Markdown). -->
+    <ProjectReference Include="..\..\features\EditPlaintext\Plaintain.Control\Plaintain.Control.csproj" />
   </ItemGroup>
 
   <ItemGroup>

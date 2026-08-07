@@ -133,8 +133,12 @@ IEditorPane                         // one per open tab; wraps a concrete editor
 - **A future file type** = one new `IEditorPane` implementation + its control. No shell rewrite. This is
   why the abstraction is designed *against the two real editors that exist now*, not guessed at (Proposal
   0001 deferred the cross-app embed protocol until there was a real consumer — Puffinote is it).
-- **`IEditorPaneFactory`** maps a file extension to a pane (`.md`→`MarkdownPane`, `.ods`→`SheetPane`,
-  else a `PreviewPane`/open-externally action; PRD §7.3).
+- **`IEditorPaneFactory`** maps a file to a pane: `.md`→`MarkdownPane`, `.ods`→`SheetPane`, and anything
+  else that reads as text→`PlainTextPane` (Plaintain). The specific editors are asked first — Markdown
+  and a spreadsheet are both "text" to a decoder — and the text route is a **fallback, not a whitelist**:
+  a known-extension list routes fast, and anything else opens if a probe over its first 8 KB finds no
+  bytes a text file wouldn't have. An extension that *declares* a binary format (`.png`, `.zip`, …) is
+  believed over its bytes, and everything left gets the open-externally action (PRD §7.3).
 
 ### 4.2 What Puffinote deliberately does *not* own
 
