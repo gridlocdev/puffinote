@@ -16,16 +16,60 @@ public sealed class AppCommands
 {
     private readonly List<AppCommand> _all;
     private readonly Dictionary<string, AppCommand> _byId;
+    private readonly List<string> _recent = [];
+
+    /// <summary>How many recent commands the palette offers back. Enough to cover a repeated task, short
+    /// enough that the list still reads as "what I was just doing" rather than a second catalog.</summary>
+    private const int RecentLimit = 5;
 
     public AppCommands(IAppEnvironment environment)
     {
-        _all = Build(environment);
+        // Every command is wrapped so that running it — from anywhere: a menu, a shortcut, the bar, the
+        // palette itself — is remembered. Wrapping here rather than asking each surface to report what it
+        // ran is the same reasoning as the one-catalog rule: a surface that forgot would silently make the
+        // history wrong, and there would be no single place to notice.
+        _all = [.. Build(environment).Select(Recording)];
         _byId = _all.ToDictionary(c => c.Id, StringComparer.Ordinal);
     }
 
     public IReadOnlyList<AppCommand> All => _all;
 
     public AppCommand? ById(string id) => _byId.GetValueOrDefault(id);
+
+    /// <summary>The titles of the commands run this session, most recent first, capped at <see cref="RecentLimit"/>.
+    /// Session-only and never persisted — it answers "what was I just doing", not "what do I usually do".</summary>
+    public IReadOnlyList<string> RecentTitles => [.. _recent.Select(id => _byId[id].Title)];
+
+    private AppCommand Recording(AppCommand command) => new(
+        command.Id,
+        command.Title,
+        command.Description,
+        command.Shortcut,
+        () =>
+        {
+            Remember(command.Id);
+            command.Execute();
+        },
+        command.CanExecute,
+        command.IsActive,
+        command.Icon);
+
+    private void Remember(string id)
+    {
+        // The surfaces that only *offer* commands are not commands you ran. Recording ⌘K would put
+        // "Command Palette…" at the top of its own Recent list every single time it opened.
+        if (id is "view.commandPalette" or "view.goToSheet")
+        {
+            return;
+        }
+
+        _recent.Remove(id);
+        _recent.Insert(0, id);
+        if (_recent.Count > RecentLimit)
+        {
+            _recent.RemoveAt(_recent.Count - 1);
+        }
+    }
 
     private static List<AppCommand> Build(IAppEnvironment e) =>
     [

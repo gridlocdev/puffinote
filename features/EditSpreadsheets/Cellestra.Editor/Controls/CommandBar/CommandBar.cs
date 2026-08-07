@@ -50,7 +50,11 @@ public sealed class CommandBar : UserControl
             "Find a tool…",
             shortcut,
             "Search and run any command",
-            Flyout: PaletteFlyout.Anchored(() => PaletteCatalog.Entries(_env.Commands), PaletteCatalog.Placeholder, LucideIcon.PaletteGlyph));
+            Flyout: PaletteFlyout.Anchored(
+                () => PaletteCatalog.Entries(_env.Commands),
+                PaletteCatalog.Placeholder,
+                LucideIcon.PaletteGlyph,
+                () => _env.Commands.RecentTitles));
 
         _bar = new AdaptiveCommandBar(sections, search);
         _bar.CollapsedChanged += (_, _) => CollapsedChanged?.Invoke(this, EventArgs.Empty);

@@ -42,9 +42,13 @@ public sealed class PaletteListView : StackPanel
     /// <summary>The gap between a row's glyph and its title.</summary>
     private const double IconGutter = 11;
 
+    /// <summary>The section the recently-run entries are listed under when the query is empty.</summary>
+    public const string RecentCategory = "Recent";
+
     private readonly ListBox _list;
     private readonly Func<string?, Control?>? _iconFactory;
     private IReadOnlyList<PaletteEntry> _entries = [];
+    private IReadOnlyList<string> _recent = [];
 
     /// <param name="iconFactory">
     /// Builds the icon control for a row's <see cref="PaletteEntry.IconKey"/> (return null for none), sized but
@@ -91,6 +95,10 @@ public sealed class PaletteListView : StackPanel
         set => SearchBox.PlaceholderText = value;
     }
 
+    /// <summary>The rows currently listed, section headers included, in display order.</summary>
+    public IReadOnlyList<string> ListedTitles =>
+        _list.ItemsSource is IEnumerable<Row> rows ? [.. rows.Select(r => r.Title)] : [];
+
     /// <summary>Raised when a row is chosen (Enter or click). The host typically closes, then runs it.</summary>
     public event Action<PaletteEntry>? Chosen;
 
@@ -98,9 +106,16 @@ public sealed class PaletteListView : StackPanel
     public event EventHandler? Cancelled;
 
     /// <summary>Load (or reload) the entries and reset the query to empty.</summary>
-    public void SetItems(IReadOnlyList<PaletteEntry> entries)
+    /// <param name="recent">
+    /// Titles the host has seen run lately, most recent first. They are lifted out of their own sections
+    /// into a "Recent" one at the top — but only while the query is empty, which is the moment the palette
+    /// has nothing better to offer than "the thing you just did, again". Once you type, the ranking is the
+    /// answer and a second copy of a row would only be in the way.
+    /// </param>
+    public void SetItems(IReadOnlyList<PaletteEntry> entries, IReadOnlyList<string>? recent = null)
     {
         _entries = entries;
+        _recent = recent ?? [];
         SearchBox.Text = string.Empty;
         Populate(string.Empty);
     }
@@ -138,7 +153,24 @@ public sealed class PaletteListView : StackPanel
             .OrderByDescending(x => x.Score)
             .ToList();
 
+        // With nothing typed, the entries the host has seen run lately are moved — not copied — to the
+        // front under their own header, in the order they were last used.
+        var recent = query.Length == 0 && _recent.Count > 0
+            ? _recent
+                .Select(title => matches.Find(x => x.Entry.Title == title).Entry)
+                .OfType<PaletteEntry>() // a title the catalog no longer offers (it went disabled) simply drops out
+                .ToList()
+            : [];
+
         var rows = new List<Row>();
+        if (recent.Count > 0)
+        {
+            rows.Add(new Row(RecentCategory, string.Empty, string.Empty, null, null, IsHeader: true));
+            rows.AddRange(recent.Select(entry => new Row(
+                entry.Title, entry.Description, entry.Shortcut, entry.IconKey, entry, IsHeader: false)));
+            matches.RemoveAll(x => recent.Contains(x.Entry));
+        }
+
         foreach (var group in matches.GroupBy(x => x.Entry.Category))
         {
             if (!string.IsNullOrEmpty(group.Key))

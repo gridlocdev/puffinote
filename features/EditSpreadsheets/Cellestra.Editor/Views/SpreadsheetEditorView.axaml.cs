@@ -460,13 +460,13 @@ public partial class SpreadsheetEditorView : UserControl, IAppEnvironment
     /// shortcut is fired from a neutral, centred gaze, so the results meet the eye in the middle of the window.
     /// The search pill's click drops its list from the pill instead — see <see cref="PaletteFlyout"/>.
     /// </summary>
-    private void ShowPalette(string placeholder, IReadOnlyList<PaletteEntry> entries)
+    private void ShowPalette(string placeholder, IReadOnlyList<PaletteEntry> entries, IReadOnlyList<string>? recent = null)
     {
         var palette = new PaletteListView(LucideIcon.PaletteGlyph)
         {
             Placeholder = placeholder,
         };
-        palette.SetItems(entries);
+        palette.SetItems(entries, recent);
         palette.Cancelled += (_, _) => OverlayHost.Close();
         palette.Chosen += entry =>
         {

@@ -25,10 +25,15 @@ public static class PaletteFlyout
     /// </param>
     /// <param name="placeholder">The search box's placeholder text.</param>
     /// <param name="iconFactory">Builds a row's glyph (see <see cref="PaletteListView"/>); omit for icon-less rows.</param>
+    /// <param name="recent">
+    /// Supplies the titles run lately, most recent first, and is re-invoked on every open for the same
+    /// reason <paramref name="entries"/> is — the whole point is that it changed since last time.
+    /// </param>
     public static Flyout Anchored(
         Func<IReadOnlyList<PaletteEntry>> entries,
         string placeholder,
-        Func<string?, Control?>? iconFactory = null)
+        Func<string?, Control?>? iconFactory = null,
+        Func<IReadOnlyList<string>>? recent = null)
     {
         var palette = new PaletteListView(iconFactory) { Placeholder = placeholder };
 
@@ -47,7 +52,7 @@ public static class PaletteFlyout
         palette.Cancelled += (_, _) => flyout.Hide();
         flyout.Opened += (_, _) =>
         {
-            palette.SetItems(entries());
+            palette.SetItems(entries(), recent?.Invoke());
             // Defer focus until the popup is realized, otherwise focusing the just-shown box can silently fail
             // and the user has to click into it before they can type.
             Dispatcher.UIThread.Post(() => palette.SearchBox.Focus());

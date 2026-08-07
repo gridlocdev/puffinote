@@ -16,7 +16,8 @@ public partial class SpreadsheetEditorView
     /// The keyboard palette (⌘K): the same commands the search pill drops, but opened centred over the window —
     /// a shortcut is fired from a neutral gaze, so the list meets the eye in the middle rather than off in a corner.
     /// </summary>
-    public void ShowCommandPalette() => ShowPalette(PaletteCatalog.Placeholder, PaletteCatalog.Entries(Commands));
+    public void ShowCommandPalette() =>
+        ShowPalette(PaletteCatalog.Placeholder, PaletteCatalog.Entries(Commands), Commands.RecentTitles);
 
     /// <summary>Build a right-click menu from catalog command ids (null = separator); each row shows its icon, label, and shortcut.</summary>
     private MenuFlyout BuildCommandFlyout(params string?[] ids)
