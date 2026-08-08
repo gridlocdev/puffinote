@@ -17,12 +17,12 @@
 - [x] Pivotask: Create a new todos editor (use the plan file)
 
 
-- [ ] Across all apps, add a settings menu to be able to configure the options present in the configuration file.
-    - [ ] Cellestra
-    - [ ] Puffinote
-    - [ ] Typage
-    - [ ] Plaintain
-    - [ ] Pivotask
+- [x] Across all apps, add a settings menu to be able to configure the options present in the configuration file.
+    - [x] Cellestra
+    - [x] Puffinote
+    - [x] Typage
+    - [x] Plaintain
+    - [x] Pivotask
 
 - [ ] Across all apps, Center-align the document name in the title bar
     - [ ] Cellestra

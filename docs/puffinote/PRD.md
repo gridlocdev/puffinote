@@ -302,6 +302,15 @@ navigation PKM users expect. (The command palette stays commands-only; file navi
 - **Theme:** Puffinote sets the family theme/accent as a top-level override so notes and sheets render as
   one design language via the shared `Tokens` contract; domain-surface colors (Markdown syntax, grid
   cells) remain the editors' own.
+- **Editing them:** every app in the family — the shell and all four editors — has a **Preferences dialog
+  on ⌘,**, built from the shared `SettingsEditorView` (`Puffinote.Components`): a declared list of typed
+  fields over that app's own settings object, which writes nothing until the dialog is accepted. A config
+  file nobody can edit without a text editor is a config file that doesn't exist. What the dialogs cover
+  is *preferences*, not session state — a recent-files list and a remembered window size are records of
+  what you did, and they stay out.
+- **Applied live:** changing Puffinote's overrides re-resolves them and re-seeds the panes that are
+  **already open** (`TabHost.Settings` → `IConfigurablePane.ApplyConfig`), not only the next document
+  opened. A setting that doesn't reach the document in front of you reads as a setting that didn't work.
 
 ### 7.6 Keyboard shortcuts — shared editor, layered resolution, conflict handling
 

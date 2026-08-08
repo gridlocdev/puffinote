@@ -64,7 +64,19 @@ tasks, so a rebuild is cheap, and it removes an entire class of bug: a view that
 agreeing with the model. If a board ever gets big enough for this to show, that is the moment to
 virtualize, and not before.
 
-## 5. The Puffinote seam
+## 5. Settings
+
+`Pivotask.Desktop/Services/SettingsService.cs` — an `AppSettings` of **two** fields (the board's default
+layout and default filter), persisted as JSON under the OS per-user app-config path through the shared
+tolerant `SettingsStore`. File ▸ Preferences… (⌘,) edits them via the shared `SettingsEditorView`.
+
+It is two fields on purpose. Everything else about a board — its groups, labels, ordering — lives *in the
+board file*, where it travels with the document and is shared by everyone who opens it. Only a standing
+personal preference about how *you* read a board belongs in a per-user config, and there are exactly two
+of those. Nothing about the window (its size, its position) is here either: that's session state, not a
+preference, and inventing settings to fill out a dialog is how a config file stops meaning anything.
+
+## 6. The Puffinote seam
 
 `TaskBoardPane` wraps `TaskBoardView`, and `EditorPaneFactory` routes to it — **by suffix, ahead of every
 extension test**. `Path.GetExtension("board.pivotask.json")` returns `".json"`, which is on Plaintain's
@@ -74,7 +86,7 @@ this in `Puffinote.UiTests`, which is what proposal 0004 §7 asks for.
 `GetOutline()` returns the group list — unlike Plaintain, which returns nothing permanently, a board has
 real structure to lend, and it maps onto the existing outline contract without changing it.
 
-## 6. Packaging
+## 7. Packaging
 
 `build/package-mac.sh pivotask` builds `Pivotask.app` from `Pivotask.Desktop/Info.plist`. The compound
 extension needs an **exported custom UTI** (`com.pivotask.board`, conforming to `public.json`, with a
