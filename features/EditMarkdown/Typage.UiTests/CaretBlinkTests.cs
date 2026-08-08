@@ -33,6 +33,41 @@ public class CaretBlinkTests
     }
 
     [AvaloniaFact]
+    public void Focus_starts_the_blink_and_losing_it_stops_it()
+    {
+        // The regression this whole file is about was a caret that never blinked, and every other assertion
+        // here would look identical if the timer had simply never been started — they step the phase by hand.
+        // The headless dispatcher won't run a DispatcherTimer, so this asserts the timer is *running* rather
+        // than waiting to catch a tick it will never deliver.
+        var editor = new MarkdownEditor { Text = "hello" };
+        var other = new Button { Content = "elsewhere" };
+        var window = new Window { Width = 600, Height = 400, Content = new StackPanel { Children = { editor, other } } };
+        window.Show();
+        window.UpdateLayout();
+        Assert.False(editor.IsCaretBlinkingForTest); // nothing ticking behind an unfocused surface
+
+        editor.Focus();
+        Assert.True(editor.IsCaretBlinkingForTest);
+
+        other.Focus();
+        Assert.False(editor.IsCaretBlinkingForTest);
+    }
+
+    [AvaloniaFact]
+    public void Leaving_the_visual_tree_stops_the_blink()
+    {
+        // Closing a tab detaches a focused surface without ever raising LostFocus; the timer has to stop
+        // anyway, or a closed document keeps waking the dispatcher to repaint a caret nobody can see.
+        var (editor, window) = Open("hello");
+        Assert.True(editor.IsCaretBlinkingForTest);
+
+        window.Content = new Button { Content = "instead" };
+        window.UpdateLayout();
+
+        Assert.False(editor.IsCaretBlinkingForTest);
+    }
+
+    [AvaloniaFact]
     public void The_caret_goes_dark_and_comes_back()
     {
         var (editor, _) = Open("hello");

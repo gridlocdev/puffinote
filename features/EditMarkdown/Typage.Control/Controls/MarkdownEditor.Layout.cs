@@ -113,6 +113,9 @@ public partial class MarkdownEditor
     /// <summary>Test seam: whether the blink is currently on its lit phase.</summary>
     internal bool IsCaretLitForTest => _caretBlink.IsCaretVisible;
 
+    /// <summary>Test seam: whether the blink's timer is running — the caret is blinking, not just lit.</summary>
+    internal bool IsCaretBlinkingForTest => _caretBlink.IsBlinking;
+
     /// <summary>The global visual row the caret is actually drawn on, mirroring RenderBlock's placement; for tests.</summary>
     internal int CaretDrawnRowForTest()
     {

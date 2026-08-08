@@ -320,6 +320,9 @@ public sealed partial class PlainTextEditor
     /// <summary>Test seam: whether the blink is currently on its lit phase.</summary>
     internal bool IsCaretLitForTest => _caretBlink.IsCaretVisible;
 
+    /// <summary>Test seam: whether the blink's timer is running — the caret is blinking, not just lit.</summary>
+    internal bool IsCaretBlinkingForTest => _caretBlink.IsBlinking;
+
     /// <summary>Test seam: the caret's pixel rectangle, so a headless test can check where it is drawn.</summary>
     internal Rect CaretRectForTest()
     {

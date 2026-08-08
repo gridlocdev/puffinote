@@ -55,6 +55,14 @@ public sealed class CaretBlink
     public bool IsCaretVisible { get; private set; } = true;
 
     /// <summary>
+    /// Whether the phase timer is running — i.e. the caret is actually blinking rather than sitting lit.
+    /// True while the surface is focused and in the tree. Worth asserting on: every other observable here
+    /// would look exactly the same if the timer had never been started, which is the bug this class exists
+    /// to fix, and a headless test has no way to catch a tick to prove otherwise.
+    /// </summary>
+    public bool IsBlinking => _timer.IsEnabled;
+
+    /// <summary>
     /// Give <paramref name="surface"/> a blinking caret: it blinks while focused, stops when focus leaves,
     /// and repaints itself on every phase. The surface still decides <i>where</i> the caret goes and
     /// whether to draw one at all — it just gates that on <see cref="IsCaretVisible"/> — and calls
