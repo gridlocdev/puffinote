@@ -175,6 +175,11 @@ editors. `IEditorPane.SaveAsync()` calls the editor's save; Puffinote never writ
   closes. Tab order persists per notebook.
 - **Close-all** (`shell.closeAllTabs`, `⌥⌘W`) is `TabHost.CloseAllAsync()` — the same per-tab
   `CloseAsync` path the window-close handler uses, so it runs the same dirty prompt and stops on a Cancel.
+- **Close-others** (`shell.closeOtherTabs`, no default key) is `TabHost.CloseOthersAsync(keep)`, over that
+  same `CloseAsync` path; it activates `keep` first so the survivor is in front even if a Cancel cuts the
+  run short. Each tab in the strip carries its **own** `ContextMenu`, built in `TabHost.BuildTabMenu` and
+  closed over that tab, so the menu's verbs target the tab that was right-clicked (PRD §8). The shell
+  command is the same call keeping `TabHost.ActiveTab`, for the palette and the File menu.
 - **The active tab drives context:** it supplies the merged-palette editor commands (§7), the outline
   panel, the status bar, and which shortcut layer is active (§8).
 

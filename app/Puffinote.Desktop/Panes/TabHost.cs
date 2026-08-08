@@ -50,7 +50,6 @@ internal sealed class TabHost : UserControl
     private readonly Border _content = new();
     private readonly Control _placeholder;
     private readonly List<TabItem> _tabs = [];
-    private TabItem? _active;
 
     public TabHost()
     {
@@ -118,7 +117,10 @@ internal sealed class TabHost : UserControl
 
     public IReadOnlyList<TabItem> Tabs => _tabs;
 
-    public IEditorPane? ActivePane => _active?.Pane;
+    public IEditorPane? ActivePane => ActiveTab?.Pane;
+
+    /// <summary>The active tab itself (not just its pane) — what a tab-scoped command like close-others acts on.</summary>
+    public TabItem? ActiveTab { get; private set; }
 
     public int Count => _tabs.Count;
 
@@ -189,7 +191,7 @@ internal sealed class TabHost : UserControl
             return;
         }
 
-        _active = tab;
+        ActiveTab = tab;
         _content.Child = tab.Pane.View;
         RebuildStrip();
         Changed?.Invoke(this, EventArgs.Empty);
@@ -240,12 +242,39 @@ internal sealed class TabHost : UserControl
         return true;
     }
 
-    public Task<bool> CloseActiveAsync() => _active is { } a ? CloseAsync(a) : Task.FromResult(true);
+    public Task<bool> CloseActiveAsync() => ActiveTab is { } a ? CloseAsync(a) : Task.FromResult(true);
 
     /// <summary>Close every tab, prompting for dirty ones. Returns false as soon as the user cancels one.</summary>
     public async Task<bool> CloseAllAsync()
     {
         foreach (var tab in _tabs.ToList())
+        {
+            if (!await CloseAsync(tab))
+            {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    /// <summary>
+    /// Close every tab <em>except</em> <paramref name="keep"/> — the tab that was right-clicked, or the active
+    /// one when run from the palette/menu. Same per-tab <see cref="CloseAsync"/> path as close-all, so each
+    /// dirty tab gets its own Save/Don't-Save/Cancel prompt and a Cancel stops the run (leaving the tabs it
+    /// hasn't reached yet open). <paramref name="keep"/> is activated first, so the document you chose to keep
+    /// is the one in front whether or not the run finishes — and so a cancelled run doesn't strand you on some
+    /// arbitrary survivor. Returns false if the user cancelled.
+    /// </summary>
+    public async Task<bool> CloseOthersAsync(TabItem keep)
+    {
+        if (!_tabs.Contains(keep))
+        {
+            return true;
+        }
+
+        Activate(keep);
+        foreach (var tab in _tabs.Where(t => !ReferenceEquals(t, keep)).ToList())
         {
             if (!await CloseAsync(tab))
             {
@@ -298,12 +327,12 @@ internal sealed class TabHost : UserControl
     /// <summary>Activate the next (<paramref name="direction"/> = +1) or previous (-1) tab, wrapping around.</summary>
     public void ActivateRelative(int direction)
     {
-        if (_active is null || _tabs.Count < 2)
+        if (ActiveTab is null || _tabs.Count < 2)
         {
             return;
         }
 
-        int index = (_tabs.IndexOf(_active) + direction + _tabs.Count) % _tabs.Count;
+        int index = (_tabs.IndexOf(ActiveTab) + direction + _tabs.Count) % _tabs.Count;
         Activate(_tabs[index]);
     }
 
@@ -318,10 +347,10 @@ internal sealed class TabHost : UserControl
         _tabs.Remove(tab);
         tab.Pane.Dispose();
 
-        if (_active == tab)
+        if (ActiveTab == tab)
         {
-            _active = _tabs.Count > 0 ? _tabs[Math.Min(index, _tabs.Count - 1)] : null;
-            _content.Child = _active is { } next ? next.Pane.View : _placeholder;
+            ActiveTab = _tabs.Count > 0 ? _tabs[Math.Min(index, _tabs.Count - 1)] : null;
+            _content.Child = ActiveTab is { } next ? next.Pane.View : _placeholder;
         }
 
         RebuildStrip();
@@ -356,7 +385,7 @@ internal sealed class TabHost : UserControl
     private Control BuildTab(TabItem tab)
     {
         var palette = Tokens.Dark;
-        bool active = ReferenceEquals(tab, _active);
+        bool active = ReferenceEquals(tab, ActiveTab);
 
         var label = new Button
         {
@@ -402,6 +431,11 @@ internal sealed class TabHost : UserControl
             // underline makes it a fourth, non-colour channel, and matches how the sidebar's nav marks itself.
             BorderThickness = new Avalonia.Thickness(0, 0, 0, 2),
             BorderBrush = active ? palette.Accent : Brushes.Transparent,
+
+            // Built per tab and closed over *this* tab, so every item targets the tab that was actually
+            // right-clicked rather than whichever one happens to be active. The strip is rebuilt on every
+            // tab change, so the menu's enablement can be decided here and stays current.
+            ContextMenu = BuildTabMenu(tab),
             Child = new StackPanel
             {
                 Orientation = Orientation.Horizontal,
@@ -409,4 +443,38 @@ internal sealed class TabHost : UserControl
             },
         };
     }
+
+    /// <summary>
+    /// A tab's right-click menu: the three closing verbs, scoped to <paramref name="tab"/>. It is deliberately
+    /// only about closing — the tab strip has no other per-tab state to offer, and the file-level commands
+    /// (rename, reveal, delete) belong to the tree row that owns the file, not to a view of it.
+    /// </summary>
+    private ContextMenu BuildTabMenu(TabItem tab) =>
+        new() { ItemsSource = BuildTabMenuItems(tab) };
+
+    private List<MenuItem> BuildTabMenuItems(TabItem tab)
+    {
+        var closeOthers = Item("Close Other Tabs", () => _ = CloseOthersAsync(tab));
+
+        // With one tab open, "close the others" has nothing to close: shown (so the menu doesn't change shape
+        // as you open files) but greyed, rather than silently doing nothing when picked.
+        closeOthers.IsEnabled = _tabs.Count > 1;
+
+        return
+        [
+            Item("Close Tab", () => _ = CloseAsync(tab)),
+            closeOthers,
+            Item("Close All Tabs", () => _ = CloseAllAsync()),
+        ];
+    }
+
+    private static MenuItem Item(string header, Action run)
+    {
+        var item = new MenuItem { Header = header };
+        item.Click += (_, _) => run();
+        return item;
+    }
+
+    /// <summary>The menu a right click on <paramref name="tab"/> would show, live items (test seam).</summary>
+    internal IReadOnlyList<MenuItem> TabMenuForTest(TabItem tab) => BuildTabMenuItems(tab);
 }

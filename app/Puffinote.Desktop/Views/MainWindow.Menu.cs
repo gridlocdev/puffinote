@@ -70,6 +70,19 @@ public partial class MainWindow
             new("shell.closeAllTabs", "Close All Tabs", "Close every open tab, prompting for unsaved changes",
                 Bound("shell.closeAllTabs", Shortcut.Cmd(Key.W, KeyModifiers.Alt)),
                 () => _ = _tabHost.CloseAllAsync(), () => _tabHost.Count > 0),
+
+            // The palette/menu twin of the tab strip's right-click "Close Other Tabs": same TabHost call, but
+            // keeping the *active* tab, since there's no clicked tab to scope it to. No default gesture —
+            // there's no platform convention for it, and it stays rebindable for anyone who wants one.
+            new("shell.closeOtherTabs", "Close Other Tabs", "Close every tab except the active one",
+                Bound("shell.closeOtherTabs", null),
+                () =>
+                {
+                    if (_tabHost.ActiveTab is { } active)
+                    {
+                        _ = _tabHost.CloseOthersAsync(active);
+                    }
+                }, () => _tabHost.Count > 1),
             new("shell.nextTab", "Next Tab", "Switch to the next tab", Bound("shell.nextTab", Shortcut.Cmd(Key.OemCloseBrackets, KeyModifiers.Shift)),
                 () => _tabHost.ActivateRelative(1)),
             new("shell.prevTab", "Previous Tab", "Switch to the previous tab", Bound("shell.prevTab", Shortcut.Cmd(Key.OemOpenBrackets, KeyModifiers.Shift)),
@@ -197,7 +210,7 @@ public partial class MainWindow
             {
                 Items =
                 {
-                    new NativeMenuItem { Header = "File", Menu = BuildNativeMenu("shell.openNotebook", "shell.quickOpen", "shell.newNote", "shell.newSpreadsheet", "shell.newFolder", "shell.save", "shell.closeTab", "shell.closeAllTabs") },
+                    new NativeMenuItem { Header = "File", Menu = BuildNativeMenu("shell.openNotebook", "shell.quickOpen", "shell.newNote", "shell.newSpreadsheet", "shell.newFolder", "shell.save", "shell.closeTab", "shell.closeOtherTabs", "shell.closeAllTabs") },
                     new NativeMenuItem { Header = "View", Menu = BuildNativeMenu("shell.commandPalette", "shell.toggleSidebar", "shell.focusTree", "shell.focusEditor", "shell.toggleEditorToolbar", "shell.nextTab", "shell.prevTab", "shell.preferences") },
                     new NativeMenuItem { Header = "Help", Menu = BuildNativeMenu("shell.shortcuts", "shell.about") },
                 },
@@ -214,7 +227,7 @@ public partial class MainWindow
         {
             Items =
             {
-                new MenuItem { Header = "_File", ItemsSource = BuildMenuItems("shell.openNotebook", "shell.quickOpen", "shell.newNote", "shell.newSpreadsheet", "shell.newFolder", "shell.save", "shell.closeTab", "shell.closeAllTabs") },
+                new MenuItem { Header = "_File", ItemsSource = BuildMenuItems("shell.openNotebook", "shell.quickOpen", "shell.newNote", "shell.newSpreadsheet", "shell.newFolder", "shell.save", "shell.closeTab", "shell.closeOtherTabs", "shell.closeAllTabs") },
                 new MenuItem { Header = "_View", ItemsSource = BuildMenuItems("shell.commandPalette", "shell.toggleSidebar", "shell.focusTree", "shell.focusEditor", "shell.toggleEditorToolbar", "shell.nextTab", "shell.prevTab", "shell.preferences") },
                 new MenuItem { Header = "_Help", ItemsSource = BuildMenuItems("shell.shortcuts", "shell.about") },
             },

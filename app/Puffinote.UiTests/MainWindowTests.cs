@@ -239,6 +239,43 @@ public sealed class MainWindowTests
         }
     }
 
+    [AvaloniaFact]
+    public async Task Close_other_tabs_command_leaves_only_the_active_tab_and_needs_a_second_tab()
+    {
+        var dir = Directory.CreateTempSubdirectory("puffinote-close-others");
+        try
+        {
+            var one = Path.Combine(dir.FullName, "one.md");
+            var two = Path.Combine(dir.FullName, "two.md");
+            File.WriteAllText(one, "# one");
+            File.WriteAllText(two, "# two");
+
+            var window = new MainWindow(new NotebookService());
+            window.Show();
+            window.OpenNotebook(dir.FullName);
+
+            var closeOthers = window.ShellCommandsForTest.Single(c => c.Id == "shell.closeOtherTabs");
+            Assert.False(closeOthers.IsEnabled); // nothing open yet
+
+            await window.OpenFileForTest(one);
+            Assert.False(closeOthers.IsEnabled); // one tab has no "others"
+
+            await window.OpenFileForTest(two);
+            Assert.True(closeOthers.IsEnabled);
+
+            window.InvokeShellForTest("shell.closeOtherTabs"); // both are clean → closes without a prompt
+            Dispatcher.UIThread.RunJobs();
+
+            Assert.Equal(two, window.ActiveTabPathForTest); // the active tab is the one that survives
+            Assert.False(closeOthers.IsEnabled);
+            Assert.False(window.IsOverlayOpenForTest);
+        }
+        finally
+        {
+            dir.Delete(recursive: true);
+        }
+    }
+
     /// <summary>The wash the sidebar's file tree is painting behind <paramref name="rowName"/>'s row.</summary>
     private static IBrush? TreeWash(MainWindow window, string rowName)
     {

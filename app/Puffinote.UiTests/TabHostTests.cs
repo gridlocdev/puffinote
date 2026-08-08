@@ -1,5 +1,6 @@
 using Avalonia.Controls;
 using Avalonia.Headless.XUnit;
+using Avalonia.Interactivity;
 using Cellestra.Desktop.Services;
 using Puffinote.Components.Commands;
 using Puffinote.Desktop.Panes;
@@ -121,6 +122,87 @@ public sealed class TabHostTests
         Assert.True(await host.CloseAllAsync());
         Assert.True(dirty.Saved);
         Assert.Equal(0, host.Count);
+    }
+
+    [AvaloniaFact]
+    public async Task Close_others_keeps_the_clicked_tab_and_makes_it_active()
+    {
+        var host = new TabHost();
+        host.OpenForTest(new FakePane("/notebook/one.md"), "/notebook/one.md");
+        var keep = host.OpenForTest(new FakePane("/notebook/two.md"), "/notebook/two.md");
+        host.OpenForTest(new FakePane("/notebook/three.md"), "/notebook/three.md");
+
+        // three.md is active (opened last) — closing the others is scoped to the tab that was *clicked*,
+        // which then becomes the active one.
+        Assert.True(await host.CloseOthersAsync(keep));
+        Assert.Equal(1, host.Count);
+        Assert.Same(keep.Pane, host.ActivePane);
+    }
+
+    [AvaloniaFact]
+    public async Task Close_others_prompts_per_dirty_tab_and_a_cancel_stops_the_run()
+    {
+        var host = new TabHost();
+        var dirty = new FakePane("/notebook/dirty.md") { IsDirty = true };
+        host.OpenForTest(dirty, "/notebook/dirty.md");
+        host.OpenForTest(new FakePane("/notebook/clean.md"), "/notebook/clean.md");
+        var keep = host.OpenForTest(new FakePane("/notebook/keep.md"), "/notebook/keep.md");
+
+        var prompted = 0;
+        host.ConfirmClose = _ =>
+        {
+            prompted++;
+            return Task.FromResult(CloseDecision.Cancel);
+        };
+
+        // Same per-tab close path as close-all: only the dirty tab prompts, and Cancel aborts the run before
+        // it reaches clean.md — which stays open alongside the tab we were keeping.
+        Assert.False(await host.CloseOthersAsync(keep));
+        Assert.Equal(1, prompted);
+        Assert.False(dirty.Saved);
+        Assert.Equal(3, host.Count);
+        Assert.Same(keep.Pane, host.ActivePane);
+
+        host.ConfirmClose = _ => Task.FromResult(CloseDecision.Save);
+        Assert.True(await host.CloseOthersAsync(keep));
+        Assert.True(dirty.Saved);
+        Assert.Equal(1, host.Count);
+    }
+
+    [AvaloniaFact]
+    public async Task Close_others_on_the_only_tab_closes_nothing()
+    {
+        var host = new TabHost();
+        var only = host.OpenForTest(new FakePane("/notebook/one.md"), "/notebook/one.md");
+
+        Assert.True(await host.CloseOthersAsync(only));
+        Assert.Equal(1, host.Count);
+        Assert.Same(only.Pane, host.ActivePane);
+    }
+
+    [AvaloniaFact]
+    public async Task A_tabs_context_menu_offers_the_three_closing_verbs_scoped_to_that_tab()
+    {
+        var host = new TabHost();
+        var first = host.OpenForTest(new FakePane("/notebook/one.md"), "/notebook/one.md");
+
+        // With one tab open, "close the others" has nothing to close — offered, but greyed.
+        var solo = host.TabMenuForTest(first);
+        Assert.Equal(["Close Tab", "Close Other Tabs", "Close All Tabs"], solo.Select(i => i.Header as string));
+        Assert.False(solo.Single(i => (string?)i.Header == "Close Other Tabs").IsEnabled);
+
+        host.OpenForTest(new FakePane("/notebook/two.md"), "/notebook/two.md");
+        host.OpenForTest(new FakePane("/notebook/three.md"), "/notebook/three.md");
+
+        // Picking it from the *first* tab's menu keeps that tab, not the active one (three.md).
+        var menu = host.TabMenuForTest(first);
+        var closeOthers = menu.Single(i => (string?)i.Header == "Close Other Tabs");
+        Assert.True(closeOthers.IsEnabled);
+        closeOthers.RaiseEvent(new RoutedEventArgs(MenuItem.ClickEvent));
+        await Task.Yield(); // the item's handler is fire-and-forget; let the close run
+
+        Assert.Equal(1, host.Count);
+        Assert.Same(first.Pane, host.ActivePane);
     }
 
     private static (string md, string ods) Seed(DirectoryInfo dir)

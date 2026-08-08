@@ -406,6 +406,15 @@ Typage §12. Where a behavior belongs to an editor, Puffinote **delegates** and 
 - **Close All Tabs (`⌥⌘W`):** closes every open tab, prompting per dirty tab exactly as `⌘W` does;
   cancelling one prompt stops the run and leaves the remaining tabs open. It is **not** in the reserved
   set (§7.6) — `⌘W` already guarantees a tab can always be closed — so it stays rebindable.
+- **Close Other Tabs:** closes every tab **except one** — the tab that was right-clicked when run from the
+  tab strip's context menu, the active tab when run from the palette or the File menu. Same per-tab
+  prompting and stop-on-Cancel as Close All. The kept tab is **activated first**, so it's the document in
+  front whether or not the run completes. No default gesture (there's no platform convention for one); it's
+  rebindable like any non-reserved command, and disabled when fewer than two tabs are open.
+- **Tab context menu:** right-clicking a tab offers the three closing verbs — Close Tab, Close Other Tabs,
+  Close All Tabs — all scoped to the tab *clicked*, not the active one. Closing is all it offers: the
+  file-level commands (rename, reveal, delete) belong to the tree row that owns the file (§7.2.2), not to
+  a view of it.
 
 *(Anything not pinned here defers to the owning editor's PRD: Typage §7.4/§8/§12 for Markdown behavior,
 Cellestra §8/§10 for spreadsheet behavior. If a shell behavior is genuinely unspecified, stop and ask,
