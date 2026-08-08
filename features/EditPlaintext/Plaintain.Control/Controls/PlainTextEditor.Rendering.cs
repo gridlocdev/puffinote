@@ -301,6 +301,15 @@ public sealed partial class PlainTextEditor
         context.FillRectangle(palette.Caret, new Rect(x, y, 2, _rowHeight));
     }
 
+    /// <summary>
+    /// Test seam: the width the renderer will actually lay <paramref name="text"/> out at — measured
+    /// through the same typeface and size <see cref="Render"/> draws with, so a test can hold the drawn
+    /// text against the column arithmetic the caret is placed by.
+    /// </summary>
+    internal double MeasureRowForTest(string text) =>
+        new FormattedText(text, CultureInfo.CurrentCulture, FlowDirection.LeftToRight, _typeface, ScaledFontSize,
+            Brushes.Black).WidthIncludingTrailingWhitespace;
+
     /// <summary>Test seam: the caret's pixel rectangle, so a headless test can check where it is drawn.</summary>
     internal Rect CaretRectForTest()
     {

@@ -117,9 +117,20 @@ public sealed partial class PlainTextEditor : Avalonia.Controls.Control, IScroll
         set => SetValue(ShowLineNumbersProperty, value);
     }
 
+    /// <summary>
+    /// The surface's font. Registered as the editor's <i>own</i> property rather than adopted from
+    /// <see cref="TextBlock"/>, and that is load-bearing rather than a style choice: the text properties
+    /// on <c>TextElement</c> are <b>inherited</b>, so adopting one lets the nearest ancestor that sets a
+    /// font — a themed <see cref="Window"/>, a Puffinote tab — silently win over the default below, and
+    /// nothing here sets a family explicitly. The surface would then draw plaintext in the proportional
+    /// UI font while every caret, selection and hit test still stepped in fixed <see cref="CharWidth"/>
+    /// units, so the caret drifted further from the glyphs the further along a line it went (PRD §3 and
+    /// the uniform-rows rule this class opens with). A non-inherited property can only be changed by a
+    /// host that means to change it.
+    /// </summary>
     public static readonly StyledProperty<FontFamily> FontFamilyProperty =
-        TextBlock.FontFamilyProperty.AddOwner<PlainTextEditor>(
-            new StyledPropertyMetadata<FontFamily>(defaultValue: new FontFamily("Menlo, Consolas, DejaVu Sans Mono, monospace")));
+        AvaloniaProperty.Register<PlainTextEditor, FontFamily>(nameof(FontFamily),
+            defaultValue: new FontFamily("Menlo, Consolas, DejaVu Sans Mono, monospace"));
 
     public FontFamily FontFamily
     {
@@ -127,8 +138,9 @@ public sealed partial class PlainTextEditor : Avalonia.Controls.Control, IScroll
         set => SetValue(FontFamilyProperty, value);
     }
 
+    /// <summary>Not inherited either, for the reason <see cref="FontFamilyProperty"/> gives.</summary>
     public static readonly StyledProperty<double> FontSizeProperty =
-        TextBlock.FontSizeProperty.AddOwner<PlainTextEditor>(new StyledPropertyMetadata<double>(defaultValue: 13.0));
+        AvaloniaProperty.Register<PlainTextEditor, double>(nameof(FontSize), defaultValue: 13.0);
 
     /// <summary>The authored text size — what the reader chose in preferences, before any zoom.</summary>
     public double FontSize

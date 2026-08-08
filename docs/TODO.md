@@ -64,7 +64,21 @@
 
 - [ ] Pivotask: The UI significantly drifts from the prototype. Launch the prototype and compare its UI to the current implementation. The prototype is a reference for the intended design, and the current implementation should be updated to match it.
 
-- [ ] Plaintain: The cursor is slightly offset from the text in the editor.
+- [x] Plaintain: The cursor is slightly offset from the text in the editor.
+
+    The surface was not drawing in a monospace font at all. `FontFamily`/`FontSize` were adopted from
+    `TextBlock` via `AddOwner`, and `TextElement`'s text properties **inherit** — so the ambient UI font
+    of whatever hosted the editor (the themed window, or a Puffinote tab) beat the monospace default
+    underneath it, and nothing ever sets a family explicitly. The surface then measured one advance from
+    `"0"` and stepped every column by it while the renderer laid out proportional glyphs, so the error
+    accumulated along the row: measured against Inter at 14pt, a 16-character line drew 130.3px wide
+    where the column arithmetic placed the caret at 140.0px — a caret sitting more than a full character
+    past the text by the end of a short line, and further out on a longer one. The caret was only the
+    visible symptom; selection, the find highlights, click-to-position and the wrap column were all
+    reading the same wrong width. Both properties are now the editor's own non-inherited registrations,
+    so a host can still set a font deliberately but can no longer leak one in. `CaretGeometryTests`
+    covers the inheritance and the invariant the caret is placed by — that `n` columns of text occupy
+    exactly `n * CharWidth`.
 - [ ] Plaintain: pinch-to-zoom. The keyboard half is done (⌘= / ⌘− / ⌥⌘0 — the reset moved off ⌘0, see above), and zoom multiplies the configured font size rather than replacing it, so Actual Size returns to the reader's own size. What is left is the trackpad gesture, and it is not Plaintain's alone: all four editors now share `ZoomScale`, so a pinch should be wired once wherever the gesture can be observed for every one of them rather than four times.
 
 - [ ] Plaintain: ⌥⌘W (Word Wrap) collides with Puffinote's ⌥⌘W (Close All Tabs) — inside a Plaintain tab one of them wins and the other silently doesn't. Move one; the shell's is the older claim.
