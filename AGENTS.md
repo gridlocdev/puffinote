@@ -129,7 +129,7 @@ Delegate by read vs. write, mapped onto this repo's structure:
 
 ## Git workflow
 
-- **Commit directly on `main`. Do not create branches.** This repo is trunk-based: all work — including refactors and multi-commit efforts — lands as commits straight on `main`. Do not open feature branches, and do not use merge commits.
+- Always create a git worktree from the `main` branch, and rebase onto `main` before merging. Do not merge `main` into your branch.
 - Keep commits small and coherent; split unrelated changes into separate commits.
 - Use **Conventional Commits** with an area scope, matching the existing history: `feat(puffinote): …`, `fix(cellestra): …`, `refactor(typage): …`, `test(typage): …`, `perf(…): …`.
 - Add a co-author line for your commit signature, e.g. `Co-Authored-By: <name> <email>`.
