@@ -99,7 +99,17 @@ someone's documents, settings, or unsaved-work snapshots.
 
 **Definition of done:** `just check` passes for every area you touched — i.e. formatting verified, solution builds clean, tests green. Warnings **are** errors here (`TreatWarningsAsErrors=true`), so a warning fails the build — "builds" already means "no warnings," this is not advisory. Formatting is a gate too: `just format-check` runs `dotnet format --verify-no-changes`, and a non-zero exit is a failure to fix, not a suggestion.
 
-**Never run two `dotnet build`/`dotnet test` invocations at once** — concurrent runs deadlock on the MSBuild-node and build-output locks and hang indefinitely. (This is why `just check` is serial — recipe dependencies run one at a time, in the order written.) If it happens: kill the `dotnet`/`testhost`/`MSBuild` processes, `dotnet build-server shutdown`, retry.
+**Never run two `dotnet build`/`dotnet test` invocations at once** — concurrent runs deadlock on the MSBuild-node and build-output locks and hang indefinitely, and they are also what gets a container OOM-killed: each build brings MSBuild worker nodes (one per core by default), a Roslyn `VBCSCompiler` that outlives it, restore, and a `testhost` per test project. (This is why `just check` is serial — recipe dependencies run one at a time, in the order written.) If it happens: kill the `dotnet`/`testhost`/`MSBuild` processes, `dotnet build-server shutdown`, retry.
+
+That rule holds *across* worktrees, not just within one — several agents in `.claude/worktrees/*` share one container's memory. Editing in parallel is fine; building in parallel is not. In a sandbox with no lock of its own, take one:
+
+```bash
+flock -w 900 /tmp/dotnet-build.lock dotnet build features/EditMarkdown/Typage.slnx
+```
+
+**If a build sits there having printed `agentbox: waiting for the dotnet build lock`, it is queued, not hung** — some container wraps `dotnet` in exactly that lock, so a build starts only once the one ahead of it finishes. Let it block. Killing `dotnet`/`MSBuild`/`testhost` or rerunning the command in another shell is the wrong move, and it is the move the "if a suite runs for minutes, it is hung" rule above would otherwise push you toward. The message names the holder (pid, working directory, command line); a `dotnet` that exits **199** never built anything — it timed out waiting, which is not a build failure, so re-run it (optionally with a longer `AGENTBOX_BUILD_LOCK_WAIT`) rather than going looking for a compile error. Locks are held by a live process and released when it exits, so there is never a stale lock file to clear by hand.
+
+Memory-wise, a container running more than one worktree wants `DOTNET_gcServer=0` (workstation GC — the biggest single win, since Server GC reserves a heap per logical core), `MSBUILDDISABLENODEREUSE=1`, and `DOTNET_CLI_USE_MSBUILD_SERVER=0`; pass `-m:2` to `dotnet build` rather than letting MSBuild fan out to every core, and run `dotnet build-server shutdown` between tasks to reclaim the lingering compiler server. `.devcontainer/devcontainer.json` sets those three vars — a container it didn't build (an agent sandbox) does not have them.
 
 **CI:** only `.github/workflows/typage-ci.yml` exists, and its push/PR triggers are commented out (`workflow_dispatch` only) — so nothing is gated for you on push. `just check` locally *is* the gate.
 

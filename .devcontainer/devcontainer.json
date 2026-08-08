@@ -17,8 +17,19 @@
   // This var (read by Cellestra.UiTests/TestAppBuilder.cs) switches them to Avalonia's null drawing so
   // `dotnet test` just runs. CI and a real desktop leave it unset and keep real Skia, so render-capture
   // tests get real frames there. Typage's and Puffinote's UI tests always use null drawing and ignore this.
+  //
+  // The rest cut the per-build memory footprint, which matters whenever more than one thing here is
+  // building — several agent worktrees in one container, or a build alongside the C# Dev Kit's own
+  // MSBuild. Server GC reserves a GC heap per logical core, so a handful of concurrent .NET processes
+  // reserve enormously before doing any real work; workstation GC costs some throughput on a single
+  // build and roughly halves resident memory when several overlap. Node reuse otherwise keeps MSBuild
+  // workers alive ~15 minutes after a build holding their heaps, and the MSBuild server is a third
+  // resident process. See "Never run two dotnet build/test invocations at once" in AGENTS.md.
   "containerEnv": {
-    "CELLESTRA_HEADLESS_NULL_DRAWING": "1"
+    "CELLESTRA_HEADLESS_NULL_DRAWING": "1",
+    "DOTNET_gcServer": "0",
+    "MSBUILDDISABLENODEREUSE": "1",
+    "DOTNET_CLI_USE_MSBUILD_SERVER": "0"
   },
   "customizations": {
     "vscode": {
