@@ -452,6 +452,22 @@ internal sealed class FilesPanel : ISidebarPanel
     /// <summary>Shut every folder in the tree (the sidebar's "Collapse all" button).</summary>
     public void CollapseAll() => _tree.CollapseAll();
 
+    /// <summary>Open every folder in the tree (what that same button offers once the tree is fully collapsed).</summary>
+    public void ExpandAll() => _tree.ExpandAll();
+
+    /// <summary>Whether any folder is open — false when the tree is fully collapsed, so the button offers Expand.</summary>
+    public bool AnyFolderExpanded => _tree.AnyFolderExpanded;
+
+    /// <summary>Whether the tree has a folder worth opening or shutting at all (a flat notebook has none).</summary>
+    public bool HasExpandableFolder => _tree.HasExpandableFolder;
+
+    /// <summary>Raised when the tree re-renders, so the header's toggle can re-label itself.</summary>
+    public event Action? ExpansionChanged
+    {
+        add => _tree.ExpansionChanged += value;
+        remove => _tree.ExpansionChanged -= value;
+    }
+
     // ---- Chip drag-to-reorder -------------------------------------------------------------------
 
     private void OnChipPressed(Border chip, string path, PointerPressedEventArgs e)

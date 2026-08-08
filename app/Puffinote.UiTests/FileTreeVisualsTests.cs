@@ -476,4 +476,84 @@ public sealed class FileTreeVisualsTests : IDisposable
         Assert.Contains("Projects", tree.VisibleNamesForTest);
         Assert.Contains("Inbox.md", tree.VisibleNamesForTest);
     }
+
+    /// <summary>
+    /// Expand all is Collapse all's inverse, and reaches folders that are not on screen to be clicked — the whole
+    /// point of the command is the ones you cannot see.
+    /// </summary>
+    [AvaloniaFact]
+    public void Expand_all_opens_folders_the_collapsed_tree_was_not_even_showing()
+    {
+        var (tree, window) = Open();
+        tree.CollapseAll();
+        Settle(window);
+        Assert.DoesNotContain("Neural Nets", tree.VisibleNamesForTest); // nested, and its parent is shut
+
+        tree.ExpandAll();
+        Settle(window);
+
+        Assert.Contains("Projects", tree.VisibleNamesForTest);
+        Assert.Contains("Neural Nets", tree.VisibleNamesForTest);
+        Assert.Contains("Attention.md", tree.VisibleNamesForTest); // two levels down, never once clicked
+    }
+
+    /// <summary>
+    /// The tree must land in exactly the same place every time it is rebuilt — and it did not.
+    ///
+    /// <para>A vertical margin on the row <em>container</em> is accumulated by Avalonia's virtualizing panel each
+    /// time the items are replaced: every rebuild added one row's top margin to the extent and slid the whole
+    /// tree a pixel further down, for good. Collapse all four times and the tree sat four pixels lower than it
+    /// started, with a growing band of dead space above the first row. The spacing now lives on the presenter
+    /// inside the container, which measures the same and does not accumulate.</para>
+    ///
+    /// <para>This pins both the header's button and the plain rebuilds — refresh, tab switch — that drifted just
+    /// as badly and are much easier to regress.</para>
+    /// </summary>
+    [AvaloniaFact]
+    public void Rebuilding_the_tree_never_drifts_it_downwards()
+    {
+        for (var i = 0; i < 14; i++)
+        {
+            Touch($"Projects/Neural Nets/Note{i:00}.md"); // enough rows that the panel really has to scroll
+        }
+
+        var (tree, window) = Open();
+
+        double TopRowY() => window.GetVisualDescendants().OfType<ListBoxItem>()
+            .Min(item => item.TranslatePoint(default, window)!.Value.Y);
+        double Extent() => window.GetVisualDescendants().OfType<ScrollViewer>().First().Extent.Height;
+
+        // Open the deep folders and scroll away from the top — the state the drift used to be seeded from.
+        tree.SelectPath(Path("Projects/Neural Nets/Note09.md"));
+        Settle(window);
+
+        tree.CollapseAll();
+        Settle(window);
+        var top = TopRowY();
+        var extent = Extent();
+
+        for (var click = 0; click < 5; click++)
+        {
+            tree.CollapseAll();
+            Settle(window);
+            Assert.Equal(top, TopRowY(), 3);
+            Assert.Equal(extent, Extent(), 3);
+        }
+
+        for (var refresh = 0; refresh < 5; refresh++)
+        {
+            tree.Refresh();
+            Settle(window);
+            Assert.Equal(top, TopRowY(), 3);
+            Assert.Equal(extent, Extent(), 3);
+        }
+
+        // Round-tripping through a fully expanded tree must also come back to the same top.
+        tree.ExpandAll();
+        Settle(window);
+        tree.CollapseAll();
+        Settle(window);
+        Assert.Equal(top, TopRowY(), 3);
+        Assert.Equal(extent, Extent(), 3);
+    }
 }

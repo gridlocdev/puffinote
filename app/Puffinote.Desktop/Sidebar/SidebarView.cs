@@ -76,7 +76,9 @@ internal sealed class SidebarView : UserControl
         _header.Foreground = palette.MutedText;
 
         BuildSwitcher();
-        BuildActions(palette);
+        FoldersToggle = BuildActions(palette);
+        _files.ExpansionChanged += RefreshFoldersToggle;
+        RefreshFoldersToggle();
         _body.Child = _active.View;
 
         // The collapse control leads the row, in the window's top-left corner — the same spot the handle takes
@@ -154,6 +156,12 @@ internal sealed class SidebarView : UserControl
     /// <summary>The header's collapse control (test seam — click it as a user would).</summary>
     internal Button CollapseButtonForTest { get; }
 
+    /// <summary>
+    /// The header's expand/collapse-all-folders toggle — one button, two states (<see cref="BuildActions"/>).
+    /// Also the test seam: click it as a user would.
+    /// </summary>
+    internal Button FoldersToggle { get; }
+
     /// <summary>The outline panel's current items (test seam).</summary>
     internal IReadOnlyList<Panes.OutlineItem> OutlineItemsForTest => _outline.ItemsForTest;
 
@@ -213,13 +221,62 @@ internal sealed class SidebarView : UserControl
     ///
     /// <para>They carry no <c>Tag</c>: the panel switcher identifies its own buttons by a string tag, and these
     /// share a parent with it.</para>
+    ///
+    /// <para>The second is a <em>toggle</em>, and returns so the constructor can keep hold of it: shutting every
+    /// folder leaves a button whose only remaining meaning is the opposite action, so it says so — chevrons-down,
+    /// "Expand all folders" — rather than sitting there inert and identical, asking to be pressed again for
+    /// nothing. See <see cref="RefreshFoldersToggle"/> for the two states.</para>
     /// </summary>
-    private void BuildActions(ThemePalette palette)
+    private Button BuildActions(ThemePalette palette)
     {
         _actions.Children.Add(IconButton(
             "file-plus", "New note", palette, () => NewNoteRequested?.Invoke(_files.SelectedNode)));
-        _actions.Children.Add(IconButton(
-            "chevrons-up", "Collapse all folders", palette, () => _files.CollapseAll()));
+
+        var toggle = IconButton("chevrons-up", "Collapse all folders", palette, ToggleAllFolders);
+        _actions.Children.Add(toggle);
+        return toggle;
+    }
+
+    /// <summary>
+    /// Shut every folder, or — when they are all shut already — open every one. Which of the two it is, is
+    /// exactly what the button was showing when it was pressed, so the click always does the thing its label and
+    /// glyph just promised.
+    /// </summary>
+    private void ToggleAllFolders()
+    {
+        if (_files.AnyFolderExpanded)
+        {
+            _files.CollapseAll();
+        }
+        else
+        {
+            _files.ExpandAll();
+        }
+    }
+
+    /// <summary>
+    /// Point the toggle at whichever action is left. Driven by the tree's own re-render rather than by the click
+    /// handler, so the button is equally right after a folder is opened from the twisty, the context menu, the
+    /// keyboard, or a revealed document — not only after the header pressed it.
+    ///
+    /// <para>A notebook with no folders in it gets a disabled button: there is nothing to expand and nothing to
+    /// collapse, and dimming it says so before the click rather than after.</para>
+    /// </summary>
+    private void RefreshFoldersToggle()
+    {
+        var collapsing = _files.AnyFolderExpanded;
+        var label = collapsing ? "Collapse all folders" : "Expand all folders";
+
+        if (FoldersToggle.Content is LucideIcon icon)
+        {
+            icon.IconKey = collapsing ? "chevrons-up" : "chevrons-down";
+        }
+
+        ToolTip.SetTip(FoldersToggle, label);
+        AutomationProperties.SetName(FoldersToggle, label);
+
+        FoldersToggle.IsEnabled = _files.HasExpandableFolder;
+        FoldersToggle.Opacity = FoldersToggle.IsEnabled ? 1 : 0.4;
     }
 
     /// <summary>

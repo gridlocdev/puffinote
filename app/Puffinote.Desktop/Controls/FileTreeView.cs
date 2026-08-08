@@ -159,6 +159,31 @@ internal sealed class FileTreeView : UserControl
     /// <summary>Raised to open a file Puffinote has no editor for in its default app (context menu, PRD §7.2).</summary>
     public event Action<NotebookNode>? OpenExternallyRequested;
 
+    /// <summary>
+    /// Raised whenever the tree re-renders, so the sidebar's expand/collapse toggle can re-read
+    /// <see cref="AnyFolderExpanded"/> and re-label itself. Every route into a changed expansion state ends in a
+    /// rebuild — the header button, the context menu, a click on a twisty, Left/Right, revealing the active
+    /// document — so listening here catches all of them rather than only the ones the header started.
+    /// </summary>
+    public event Action? ExpansionChanged;
+
+    /// <summary>
+    /// Whether any folder in the tree is open and showing its contents — false exactly when the tree is fully
+    /// collapsed, which is what makes the header's toggle read "Expand all folders" instead. A folder with
+    /// nothing in it doesn't count: opening one changes nothing on screen, and a button that claims there is
+    /// something to collapse when the tree plainly shows there isn't reads as broken.
+    ///
+    /// <para>Both this and <see cref="HasExpandableFolder"/> are recomputed by each <see cref="Rebuild"/> from
+    /// the rows it just laid out.</para>
+    /// </summary>
+    public bool AnyFolderExpanded { get; private set; }
+
+    /// <summary>
+    /// Whether the tree holds a folder with anything in it — false for a flat notebook, where neither collapsing
+    /// nor expanding has anything to act on and the toggle is disabled rather than dead to the click.
+    /// </summary>
+    public bool HasExpandableFolder { get; private set; }
+
     /// <summary>The currently selected node, or null when nothing is selected.</summary>
     public NotebookNode? SelectedNode => (_list.SelectedItem as Row)?.Node;
 
@@ -295,6 +320,38 @@ internal sealed class FileTreeView : UserControl
         Rebuild(selectPath: SelectedNode?.Path);
     }
 
+    /// <summary>
+    /// Open every folder in the scope, however deep (the sidebar's "Expand all") — the inverse of
+    /// <see cref="CollapseAll"/>, and what its button offers once the tree is fully shut.
+    ///
+    /// <para>This walks the notebook rather than only the rows on screen: the point of the command is to reach
+    /// the folders you <em>cannot</em> see, so stopping at the visible level would make it a no-op the second
+    /// time you pressed it.</para>
+    /// </summary>
+    public void ExpandAll()
+    {
+        if (_root is null)
+        {
+            return;
+        }
+
+        _expanded.Add(_root.Path);
+        ExpandDescendants(_root);
+        Rebuild(selectPath: SelectedNode?.Path);
+    }
+
+    private void ExpandDescendants(NotebookNode directory)
+    {
+        foreach (var child in directory.EnumerateChildren())
+        {
+            if (child.IsDirectory)
+            {
+                _expanded.Add(child.Path);
+                ExpandDescendants(child);
+            }
+        }
+    }
+
     /// <summary>Re-read the tree from disk, preserving expansion and (when it still exists) the selection.</summary>
     public void Refresh() => Rebuild(selectPath: SelectedNode?.Path);
 
@@ -389,10 +446,17 @@ internal sealed class FileTreeView : UserControl
         // (and the breadcrumb names a scoped folder), so the tree shows only what's *inside* it, top-level
         // entries at depth 0. Its children are always visible because SetRoot/SetScope expand the root path.
         var rows = new List<Row>();
+        AnyFolderExpanded = false;
         if (_root is not null)
         {
             AppendChildren(_root, 0, rows);
         }
+
+        // What the header's toggle keys off. "Is anything open?" falls out of the walk above for free. "Is there
+        // anything to open?" needs a look inside the collapsed folders — but only until the first one that has
+        // something in it, so in practice this is one directory read, and none at all once a folder is open.
+        HasExpandableFolder = AnyFolderExpanded
+            || rows.Any(r => r.Node.IsDirectory && r.Node.EnumerateChildren().Count > 0);
 
         _list.ItemsSource = rows;
 
@@ -407,23 +471,34 @@ internal sealed class FileTreeView : UserControl
         {
             _list.ScrollIntoView(index);
         }
+
+        ExpansionChanged?.Invoke();
     }
 
-    private void AppendChildren(NotebookNode directory, int depth, List<Row> rows)
+    /// <summary>
+    /// Appends <paramref name="directory"/>'s visible descendants as rows. Returns whether it added any — which
+    /// is what tells the caller this folder is not just flagged open but actually <em>showing</em> something, and
+    /// so feeds <see cref="AnyFolderExpanded"/>.
+    /// </summary>
+    private bool AppendChildren(NotebookNode directory, int depth, List<Row> rows)
     {
         if (!_expanded.Contains(directory.Path))
         {
-            return;
+            return false;
         }
 
+        var added = false;
         foreach (var child in directory.EnumerateChildren())
         {
             rows.Add(new Row(child, depth));
-            if (child.IsDirectory)
+            added = true;
+            if (child.IsDirectory && AppendChildren(child, depth + 1, rows))
             {
-                AppendChildren(child, depth + 1, rows);
+                AnyFolderExpanded = true;
             }
         }
+
+        return added;
     }
 
     /// <summary>
@@ -462,8 +537,16 @@ internal sealed class FileTreeView : UserControl
         }
 
         // Resting: rounded, with the selected row's accent bar reserved but invisible.
+        //
+        // The 1px of air above and below each row's rounded surface is a margin on the *presenter*, not on the
+        // ListBoxItem container (which carries only the horizontal inset, below). The two look identical — the
+        // container measures 2px taller than its content either way — but a vertical margin on the container is
+        // accumulated by the virtualizing panel: every time the tree's ItemsSource is replaced, one row's worth
+        // of top margin was added to the extent and every row slid a pixel further down. Collapse all, refresh,
+        // switch tabs — anything that rebuilds — and the tree crept downwards, a pixel a click, forever.
         list.Styles.Add(Item(
             x => x.OfType<ListBoxItem>(),
+            new Setter(Layoutable.MarginProperty, new Thickness(0, 1)),
             new Setter(ContentPresenter.CornerRadiusProperty, new CornerRadius(6)),
             new Setter(ContentPresenter.BorderThicknessProperty, new Thickness(SelectionBarWidth, 0, 0, 0)),
             new Setter(ContentPresenter.BorderBrushProperty, Brushes.Transparent),
@@ -488,13 +571,14 @@ internal sealed class FileTreeView : UserControl
             new Setter(ContentPresenter.BackgroundProperty, palette.SurfaceHover),
             new Setter(ContentPresenter.BorderBrushProperty, palette.Accent)));
 
-        // The container itself carries the row's outer spacing; the ListBoxItem's own default padding would
-        // otherwise inset the content *inside* the rounded, accent-barred presenter.
+        // The container carries the row's horizontal inset only — the vertical pair lives on the presenter (see
+        // above). The ListBoxItem's own default padding would otherwise inset the content *inside* the rounded,
+        // accent-barred presenter.
         list.Styles.Add(new Style(x => x.OfType<ListBoxItem>())
         {
             Setters =
             {
-                new Setter(Layoutable.MarginProperty, new Thickness(4, 1)),
+                new Setter(Layoutable.MarginProperty, new Thickness(4, 0)),
                 new Setter(ListBoxItem.PaddingProperty, new Thickness(0)),
             },
         });
