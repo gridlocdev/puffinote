@@ -356,6 +356,12 @@ public sealed partial class SpreadsheetGrid : Panel
         if (IsInlineEditing && TryGetActiveCellRect(out var rect))
         {
             rect = ExpandedEditorRect(rect, finalSize); // grow rightward over neighbours as the text widens
+            // Measure the editor at the size it is about to occupy, not at the grid's full width (which
+            // is what Panel.MeasureOverride hands it). A TextBox lays its text out against the width it
+            // was *measured* with, so without this a wrapping editor folded its lines at the grid's width
+            // and then got arranged at the column's — the caret and the visible line breaks landed
+            // nowhere near where the committed cell draws them.
+            _editor.Measure(rect.Size);
             _editor.Arrange(rect);
             _editorDecorations.Arrange(rect); // the decoration overlay tracks the editor exactly
             ArrangeSignatureTip(rect, finalSize);

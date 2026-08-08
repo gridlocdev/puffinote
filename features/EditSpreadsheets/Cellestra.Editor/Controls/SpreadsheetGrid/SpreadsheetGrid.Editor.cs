@@ -1,7 +1,9 @@
 using System.Globalization;
 using Avalonia;
+using Avalonia.Controls.Presenters;
 using Avalonia.Input;
 using Avalonia.Media;
+using Avalonia.VisualTree;
 using Cellestra.Core.Formulas.References;
 using Cellestra.Core.Model;
 using Cellestra.Core.Styling;
@@ -39,6 +41,15 @@ public sealed partial class SpreadsheetGrid
     internal Color EditorFill => (_editor.Background as ISolidColorBrush)?.Color ?? default;
 
     internal bool EditorWraps => _editor.TextWrapping == TextWrapping.Wrap;
+
+    /// <summary>
+    /// Test seam: the width the inline editor's text is actually folded at. Distinct from
+    /// <see cref="EditorWraps"/>, which only says the editor was told to wrap — a TextBox folds its
+    /// lines against the width it was <i>measured</i> with, which is not automatically the width it
+    /// ends up arranged at (see <see cref="ArrangeOverride"/>).
+    /// </summary>
+    internal double EditorWrapWidth =>
+        _editor.GetVisualDescendants().OfType<TextPresenter>().FirstOrDefault()?.TextLayout.MaxWidth ?? double.NaN;
 
     /// <summary>Test seam: the inline editor's actual arranged bounds (so its rightward growth can be verified).</summary>
     internal Rect EditorBoundsForTest => _editor.Bounds;

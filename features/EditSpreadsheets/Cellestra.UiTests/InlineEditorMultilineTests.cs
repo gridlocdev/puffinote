@@ -103,6 +103,30 @@ public class InlineEditorMultilineTests
     }
 
     [AvaloniaFact]
+    public void A_wrapping_editor_folds_its_lines_at_the_column_width()
+    {
+        // Being *told* to wrap is not the same as wrapping in the right place. The editor is a child of
+        // the grid panel, which measures every child at the grid's full size, and a TextBox lays its
+        // text out against the width it was measured with — so the editor used to fold its lines at the
+        // width of the whole grid and then get arranged at the column's. The text you were typing broke
+        // in different places than the text the cell draws, and the caret followed the wrong lines.
+        var window = Open();
+        IAppEnvironment env = window.Editor;
+        var grid = window.Editor.Grid;
+
+        env.Session.Execute(EditCommands.ApplyStyle(env.Session.Workbook, env.Session.ActiveSheet.Name,
+            CellRange.Parse("A1"), s => s with { Alignment = s.Alignment with { WrapText = true } }));
+
+        env.Selection.MoveTo(0, 0);
+        grid.BeginEdit("the quick brown fox jumps over the lazy dog and keeps on running");
+        Layout(grid);
+
+        double column = grid.ActiveEditorRect.Width;
+        Assert.True(grid.EditorWrapWidth <= column,
+            $"the editor folds at {grid.EditorWrapWidth}px but its column is only {column}px wide");
+    }
+
+    [AvaloniaFact]
     public void A_cell_that_does_not_wrap_still_grows_rightward()
     {
         // The wrap branch must not swallow the ordinary case: a plain cell keeps the Google-Sheets feel.
