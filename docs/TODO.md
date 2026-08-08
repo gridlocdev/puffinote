@@ -99,10 +99,49 @@
       device — and adding that recognizer changes how touch scrolling competes on all four surfaces, which is
       a decision for whenever a touch device is actually a target.
 
-- [ ] Cellestra: editing text in a column that has word wrapped should word wrap the popup text editor as well (the textbox popup should contain similar contents and the cursor behavior should be expected)
-- [ ] Cellestra: If text is autocompleted while entering, It should also not autocomplete the title of a table, only the distinct value of one of its preceding rows in that column.
+- [x] Cellestra: editing text in a column that has word wrapped should word wrap the popup text editor as well (the textbox popup should contain similar contents and the cursor behavior should be expected)
+- [x] Cellestra: If text is autocompleted while entering, It should also not autocomplete the title of a table, only the distinct value of one of its preceding rows in that column.
 
-- [ ] Cellestra: shift+return to enter newline in editing textbox has unexpected UI behavior in the top formula textbox, it should only extend the height of the specific textbox editor my cursor is in. There are two textbox editors, one inline, and one in the formula bar. 
+- [x] Cellestra: shift+return to enter newline in editing textbox has unexpected UI behavior in the top formula textbox, it should only extend the height of the specific textbox editor my cursor is in. There are two textbox editors, one inline, and one in the formula bar. 
+
+- [x] Cellestra IN Puffinote: ![Weird extra texbox shows up while editing formula bar content](image.png)
+
+    Not a second editor — the *inline* one, drawn where it doesn't belong. Typing in the formula bar
+    opens a mirrored, focus-less edit on the active cell, and that cell is often off screen (one tall
+    wrapped row above it is enough; a Puffinote tab is shorter than the standalone window, so it happens
+    sooner there). With no cell to sit on, `ArrangeOverride` "hid" the editor by arranging it at
+    `(0,0,0,0)` — which hides nothing: the theme floors a TextBox at 64×32 and Avalonia centres a control
+    it couldn't shrink inside the rect it was handed, so the editor reappeared as a stray box over the
+    grid's top-left corner. It is now parked far off the grid instead, and the editor's own minimums are
+    zeroed so an arranged rect is honoured exactly. That second half fixed a quieter bug of the same
+    cause: on a default 20px row the editor was drawn 6px *above* its own cell, so the text you were
+    typing sat above the text you were about to commit. Parked rather than `IsVisible = false` on
+    purpose — hiding blurs the editor and the blur handler commits, which would make scrolling silently
+    write the cell.
+
+- [x] Puffinote: Add a "Close Other Tabs" command to the tab bar context menu, which closes all tabs except the one that was right-clicked. This is a common feature in tabbed interfaces and would improve usability. (Add a command to the command bar for this as well)
+- [x] Puffinote: When opening a note in the left sidebar, the tab in the top bar should scroll into view if it is not currently visible. This ensures that the user can always see which tab is active and improves navigation within the application.
+
+- [ ] Puffinote: The "Collapse All Folders" button should change to "Expand All Folders" when the file tree is fully collapsed, and vice versa. This provides clear feedback to the user about the current state of the file tree and what action the button will perform. Ensure that the top of the file tree stays in place, and does not repeat a current UI bug where each time the button is clicked it increases a small visual gap downwards by one or a few pixels each time. This is a visual bug that should be fixed to maintain a consistent and stable UI.
+
+- [ ] Puffinote: The "New Note" button should just be a "New" button with a normal "Plus" icon, and when clicked, show a context menu with options for "New Folder", "New Note", "New Spreadsheet", "New Taskboard", and "New File". New File should permit the user to use any file extension (other than the ones reserved for other pre-defined document types). This change would streamline the UI and provide users with quick access to different types of new documents.
+
+- [ ] Puffinote: Use icon buttons for the top bar's "Files", "Outline", "Search", and "Recent" buttons. Add an icon button next to them for "Settings".
+- [ ] Puffinote: The "Settings" menu should show a list of tabs for settings for each of the apps from their corresponding configuration directories. The tabs shouldn't be named with their app names, it should be named with the app's purpose, for example "General" for Puffinote's settings, "Notes" for Typage, "Spreadsheets" for Cellestra, "Tasks" for Pivotask. Each tab should show the settings for that app, and allow the user to change them. The settings should be saved to the corresponding configuration file for that app. In each UI, provide a clickable button to open the configuration file in the default text editor for that file type, so that users can edit the configuration file directly if they wish. This allows for advanced users to make changes that may not be exposed in the UI.
+
+- [ ] Puffinote: Change the "Show Only" feature such that it is "Enter Folder" instead. Instead of showing a list of pills corresponding to pinned folders, it should not show the pills but instead it should show an option "Enter Folder" in the right click context menu of a folder in the sidebar. When clicked, it should, similar to how it does now, make the sidebar only show the contents within that folder. At the top, above the files, a new label showing the folder name like "In Folder: <FolderName>" followed by a back arrow icon button pinned to the right of that row that when clicked changes the sidebar UI back to the previous view of everything.
+
+- [ ] Puffinote: For files with the `.pivotask.json` combined file extension, use lucide's square-check icon. This makes it visually different from the regular JSON icon and helps users quickly identify Pivotask files in the file tree.
+- [ ] Puffinote: Add an option to set whether the tab bar is visible or hidden in the settings menu. This allows users to customize their workspace according to their preferences, either by keeping the tab bar visible for easy navigation or hiding it for a cleaner interface. Also provide the same command in the command bar for quick access to toggle the tab bar visibility temporarily during the current session.
+- [ ] Puffinote: The text on the sidebar should be brighter and more readable. The current text color is too dim, making it difficult to read, especially in low-light conditions. Adjust the text color to a brighter shade that improves readability while maintaining the overall aesthetic of the application.
+- [ ] Puffinote: Instead of the pill with the file extension pinned to the right, ![alt text](sidebar-extension-mockup.png) show the file extension after the first part in muted text color. The combined file extension for `.pivotask.json` should be muted.
+- [ ] Puffinote: Add an option to set whether the muted file extension in the file tree is visible or hidden by default in the settings menu. This allows users to customize their workspace according to their preferences, either by keeping the tab bar visible for easy navigation or hiding it for a cleaner interface. Also provide the same command in the command bar for quick access to toggle the visibility temporarily during the current session.
+
+- [ ] Puffinote: Add a "Filter" button, which when clicked, shows a text box that allows the user to filter the files in the file tree by name. The filter should be applied in real-time as the user types, and should be case-insensitive. This provides a quick and easy way for users to find specific files in large projects.
+
+- [ ] Cellestra: When clicking the Zoom percentage bar, it should show a menu with a slider that allows selecting the available zoom level to its existing snap points. The user should be able to select a zoom level from this menu, and the application should immediately apply the selected zoom level to the content. This provides a quick and intuitive way for users to adjust the zoom level without needing to use keyboard shortcuts or menu commands.
+
+- [ ] Cellestra: When selecting a range, the cell indicator next to the formula bar should show the range of the selected cells, e.g., "A1:B2". This provides clear feedback to the user about which cells are currently selected and allows for easier reference when working with formulas or data. This should happen both when selecting a range with the mouse and when using keyboard shortcuts to select a range, and when typing directly in the textbox.
 
 
 - [ ] Pivotask: The UI significantly drifts from the prototype. Launch the prototype and compare its UI to the current implementation. The prototype is a reference for the intended design, and the current implementation should be updated to match it.
