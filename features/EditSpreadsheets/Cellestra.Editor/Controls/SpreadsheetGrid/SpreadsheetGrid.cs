@@ -48,6 +48,14 @@ public sealed partial class SpreadsheetGrid : Panel
         Background = Brushes.White,
         VerticalContentAlignment = Avalonia.Layout.VerticalAlignment.Top, // sit at the top of the cell, like the drawn text
 
+        // The editor is sized by the cell it covers, so the theme's stock minimums (64×32) have to go:
+        // a 20px row is shorter than 32, and Avalonia centres a control it couldn't shrink inside the
+        // rect it was handed — which drew the editor 6px above its own cell and shifted the text you
+        // were typing off the text you'd committed. Zero here means the arranged rect is honoured
+        // exactly, on any row height or zoom.
+        MinWidth = 0,
+        MinHeight = 0,
+
         // ⇧↩ puts a line break in the cell, so the editor has to hold one. Return itself never reaches
         // the TextBox — EditorPreviewKeyDown decides it in the tunnel phase — so accepting returns buys
         // the rendering and caret behaviour of a multi-line field without giving up the commit key.
@@ -350,6 +358,14 @@ public sealed partial class SpreadsheetGrid : Panel
         }
     }
 
+    /// <summary>
+    /// Where the inline editor and its overlays sit when they have no cell to sit on. Far enough out
+    /// that a control the theme refuses to shrink below its minimum size still lands off the grid.
+    /// Parking rather than <c>IsVisible = false</c> is deliberate: hiding blurs the editor, and its
+    /// blur handler commits — scrolling an open edit out of view would silently write the cell.
+    /// </summary>
+    private static readonly Rect Parked = new(-10000, -10000, 0, 0);
+
     protected override Size ArrangeOverride(Size finalSize)
     {
         _surface.Arrange(new Rect(finalSize));
@@ -371,9 +387,16 @@ public sealed partial class SpreadsheetGrid : Panel
         }
         else
         {
-            _editor.Arrange(new Rect(0, 0, 0, 0));
-            _editorDecorations.Arrange(new Rect(0, 0, 0, 0));
-            _signatureTip.Arrange(new Rect(0, 0, 0, 0));
+            // No edit, or an edit whose cell has scrolled out of the visible band. Park the editor and
+            // its overlays off the grid rather than at (0,0,0,0): a zero-size Arrange does not by itself
+            // hide a control — a themed control with a minimum size lands at that size, centred on the
+            // rect it was handed, which is how the "hidden" editor came back as a stray box straddling
+            // the grid's top-left corner whenever an edit mirrored from the formula bar belonged to an
+            // off-screen cell. The editor's own minimums are zeroed at construction; the overlays are
+            // not ours to assume anything about, so park all three.
+            _editor.Arrange(Parked);
+            _editorDecorations.Arrange(Parked);
+            _signatureTip.Arrange(Parked);
         }
 
         LayoutScrollBars(finalSize);

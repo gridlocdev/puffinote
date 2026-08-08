@@ -48,6 +48,30 @@ public class InlineEditorGrowthTests
         Assert.True(wide > Cellestra.Core.Defaults.ColumnWidth, "the editor should grow past a single column");
     }
 
+    /// <summary>
+    /// Before it grows anywhere, the editor sits exactly on its cell. Avalonia centres a control it
+    /// could not shrink to the rect it was handed, so the theme's stock TextBox minimum (64×32) used to
+    /// lift the editor 6px above a default 20px row — the text you were typing sat above the text you
+    /// were about to commit.
+    /// </summary>
+    [AvaloniaFact]
+    public void The_editor_sits_exactly_on_the_cell_it_edits()
+    {
+        var window = new MainWindow();
+        window.Show();
+        window.Editor.Grid.Zoom = 1.0;
+        Layout(window.Editor.Grid);
+        var env = (IAppEnvironment)window.Editor;
+        env.Selection.MoveTo(4, 2); // C5 — a plain cell at default width and height
+        env.BeginEdit();
+        Pump();
+
+        window.Editor.Grid.SetInlineEditorText("hi"); // too short to grow the editor anywhere
+        Layout(window.Editor.Grid);
+
+        Assert.Equal(window.Editor.Grid.ActiveEditorRect, window.Editor.Grid.EditorBoundsForTest);
+    }
+
     [AvaloniaFact]
     public void The_editor_never_shrinks_below_its_cell_or_grows_downward()
     {
