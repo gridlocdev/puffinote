@@ -4,6 +4,7 @@ using Pivotask.Core.Query;
 using Pivotask.Desktop.Services;
 using Puffinote.Components.Controls;
 using Puffinote.Components.Overlays;
+using Puffinote.Components.Shell;
 using Puffinote.Components.Theming;
 
 namespace Pivotask.Desktop.Views;
@@ -47,6 +48,10 @@ public sealed partial class MainWindow
                 ["All tasks", "Starred", "Due soon", "Unfinished"],
                 "The filter a board opens with. The View menu still switches it per session."),
         ]),
+        new SettingsSection("Saving",
+        [
+            AutoSave.IntervalField(() => s.AutoSaveSeconds, v => s.AutoSaveSeconds = v),
+        ]),
     ]);
 
     /// <summary>Push the committed settings into the live board.</summary>
@@ -62,5 +67,6 @@ public sealed partial class MainWindow
 
         BoardView.Layout = s.Layout;
         BoardView.Filter = s.Filter;
+        _autoSave.IntervalSeconds = s.AutoSaveSeconds; // takes effect on the board already open
     }
 }

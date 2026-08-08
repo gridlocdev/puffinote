@@ -41,6 +41,10 @@ public sealed partial class MainWindow : Window
     private readonly DocumentTitleBar _titleBar = new();
     private bool _closingConfirmed;
 
+    // Document auto-save: write the open board back once the editing stops (AutoSaveTick decides whether
+    // it can be written at all).
+    private readonly AutoSave _autoSave;
+
     public MainWindow()
         : this(new SettingsService())
     {
@@ -54,10 +58,25 @@ public sealed partial class MainWindow : Window
         Width = 1000;
         Height = 680;
 
+        // Built before ApplySettings, which is where the interval is pushed in — from here and from the
+        // Preferences dialog alike, so there is one place that knows what a committed setting means.
+        _autoSave = new AutoSave(() =>
+        {
+            AutoSaveTick();
+            return Task.CompletedTask;
+        });
+
         ApplySettings(_settings.Settings);
 
         _commands = _view.EditingCommands.ToDictionary(c => c.Id, StringComparer.Ordinal);
-        _view.DocumentChanged += (_, _) => UpdateChrome();
+
+        // Push the countdown back on every board edit, so a save lands in the pause after a burst of work
+        // rather than in the middle of one.
+        _view.DocumentChanged += (_, _) =>
+        {
+            UpdateChrome();
+            _autoSave.Notify();
+        };
         TaskEditingCommands.SearchRequested += OnSearchRequested;
 
         var root = new DockPanel { LastChildFill = true };
@@ -89,6 +108,7 @@ public sealed partial class MainWindow : Window
     protected override void OnClosed(EventArgs e)
     {
         base.OnClosed(e);
+        _autoSave.Dispose();
         TaskEditingCommands.SearchRequested -= OnSearchRequested;
     }
 
@@ -98,6 +118,7 @@ public sealed partial class MainWindow : Window
         try
         {
             _view.Document = BoardDocument.Open(path);
+            _autoSave.Cancel(); // any countdown was aimed at the board this one just replaced
             UpdateChrome();
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or BoardFormatException)
@@ -232,6 +253,7 @@ public sealed partial class MainWindow : Window
         if (await EnsureCanDiscardAsync())
         {
             _view.Document = new BoardDocument();
+            _autoSave.Cancel(); // ditto: the previous board is gone
             UpdateChrome();
         }
     }
@@ -278,11 +300,52 @@ public sealed partial class MainWindow : Window
         return file?.TryGetLocalPath() is { } path && Write(path);
     }
 
+    /// <summary>
+    /// Write the open board back once editing has paused, if it can be written without asking anyone
+    /// anything. A board that has never been saved has nowhere to go — Save As is a question, and an
+    /// auto-save that opens dialogs is a worse feature than no auto-save — and a modal already up owns
+    /// the screen.
+    /// </summary>
+    private void AutoSaveTick()
+    {
+        if (_view.Document.Path is not { } path || !_view.Document.IsDirty || _overlay.IsOpen)
+        {
+            return;
+        }
+
+        try
+        {
+            _view.Document.Save(path);
+            UpdateChrome();
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            // Stand auto-save down and say so once: the disk that refused this write will refuse the next
+            // one too, and the same modal every thirty seconds is a siege, not a report. ⌘S still works,
+            // and a manual save that succeeds switches auto-save back on.
+            _autoSave.Suspended = true;
+            _ = _overlay.ShowModalAsync(new MessageDialog(
+                heading: "Auto-save couldn't write the board.",
+                message: $"{ex.Message}\n\nAuto-save is paused until you save successfully yourself (⌘S)."));
+        }
+    }
+
+    /// <summary>Run one auto-save cycle now; for tests (a DispatcherTimer can't tick headlessly).</summary>
+    internal Task AutoSaveNowForTest() => _autoSave.RunAsync();
+
+    /// <summary>Whether an auto-save is armed and waiting out the pause (test seam).</summary>
+    internal bool AutoSavePendingForTest => _autoSave.IsPending;
+
     private bool Write(string path)
     {
         try
         {
             _view.Document.Save(path);
+
+            // The board is on disk, so a countdown aimed at it has nothing left to write — and a manual
+            // save that succeeded is the answer to whatever made auto-save stand itself down.
+            _autoSave.Cancel();
+            _autoSave.Suspended = false;
             UpdateChrome();
             return true;
         }

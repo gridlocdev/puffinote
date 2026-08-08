@@ -1,3 +1,5 @@
+using System.Text.Json.Serialization;
+using Puffinote.Components.Shell;
 using Puffinote.Components.Theming;
 using Typage.Control.Controls;
 using RecentFilesHelper = Puffinote.Components.Shell.RecentFiles;
@@ -83,8 +85,36 @@ public sealed class AppSettings
     /// </summary>
     public MarkdownEditor.ViewMode View { get; set; } = MarkdownEditor.ViewMode.Rich;
 
-    /// <summary>Seconds between crash-recovery autosaves; 0 disables it (PRD §9.4).</summary>
-    public int AutosaveSeconds { get; set; } = 30;
+    /// <summary>
+    /// Seconds of no editing before the document is written back to its own file; 0 turns auto-save off.
+    /// Distinct from <see cref="RecoverySnapshotSeconds"/>: this saves the <i>document</i>, that snapshots
+    /// unsaved work to a sidecar. Both exist because they cover different holes — a document that was never
+    /// saved has no path to auto-save to, and is exactly the one worth recovering.
+    /// </summary>
+    public int AutoSaveSeconds { get; set; } = AutoSave.DefaultSeconds;
+
+    /// <summary>Seconds between crash-recovery snapshots; 0 disables them (PRD §9.4).</summary>
+    public int RecoverySnapshotSeconds { get; set; } = 30;
+
+    /// <summary>
+    /// What <see cref="RecoverySnapshotSeconds"/> was called before document auto-save existed and took the
+    /// name. Read so an existing settings file keeps the interval its owner chose; never written back — the
+    /// getter is always null, and a null is omitted from the output — so the key retires on the next save
+    /// rather than living on beside a similarly-spelled one that means something else.
+    /// </summary>
+    [JsonPropertyName("AutosaveSeconds")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public int? LegacyAutosaveSeconds
+    {
+        get => null;
+        set
+        {
+            if (value is { } seconds)
+            {
+                RecoverySnapshotSeconds = seconds;
+            }
+        }
+    }
 
     /// <summary>
     /// How a checkbox list re-orders itself when a task is toggled: leave items in place

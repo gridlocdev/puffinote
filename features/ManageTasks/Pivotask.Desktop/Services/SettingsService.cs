@@ -26,6 +26,13 @@ public sealed class AppSettings
 
     /// <summary>The filter the board opens with — for someone who works from "unfinished", every time.</summary>
     public TaskFilter Filter { get; set; } = TaskFilter.All;
+
+    /// <summary>
+    /// Seconds of no editing before the open board is written back to its file; 0 turns auto-save off.
+    /// A board is edited in small deliberate strokes — tick a task, drag a card — with long pauses in
+    /// between, which is exactly the shape an inactivity timer is good at.
+    /// </summary>
+    public int AutoSaveSeconds { get; set; } = AutoSave.DefaultSeconds;
 }
 
 /// <summary>

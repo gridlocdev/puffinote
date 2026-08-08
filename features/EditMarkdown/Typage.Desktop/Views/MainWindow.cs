@@ -54,9 +54,14 @@ public partial class MainWindow : Window
     private string? _lastKnownDiskText;
     private bool _conflictPromptOpen;
 
-    // Crash recovery (PRD §9.4): autosave the dirty buffer to a sidecar snapshot; clear it on a clean save.
+    // Crash recovery (PRD §9.4): snapshot the dirty buffer to a sidecar; clear it on a clean save.
     private readonly RecoveryService _recovery;
-    private DispatcherTimer? _autosaveTimer;
+    private DispatcherTimer? _snapshotTimer;
+
+    // Document auto-save: write the open file back once the typing stops (AutoSaveTick decides whether it
+    // can be written at all). Separate from the snapshot above — that one rescues an untitled buffer, this
+    // one keeps a named file up to date.
+    private readonly AutoSave _autoSave;
     private DispatcherTimer? _statsTimer; // debounces the whole-document word/char scan while typing
     private bool _recoveryChecked;
     private readonly List<(AppTheme Theme, CheckItem Item)> _themeItems = [];
@@ -150,6 +155,12 @@ public partial class MainWindow : Window
         Content = new Panel { Children = { root, _palette, _overlayHost } };
         _overlayHost.Closed += (_, _) => EditorView.Focus();
 
+        _autoSave = new AutoSave(() =>
+        {
+            AutoSaveTick();
+            return Task.CompletedTask;
+        });
+
         EditorView.TextChanged += (_, _) =>
         {
             // The title + caret status are cheap; refresh them now. The word/char counts scan the whole
@@ -157,6 +168,10 @@ public partial class MainWindow : Window
             UpdateTitle();
             UpdateCaretStatus();
             ScheduleDocumentStatus();
+
+            // And push the auto-save countdown back: it is meant to land in the pause after a burst of
+            // typing, not in the middle of one.
+            _autoSave.Notify();
         };
         EditorView.SelectionChanged += (_, _) => UpdateCaretStatus();
 
@@ -167,7 +182,8 @@ public partial class MainWindow : Window
         Closing += OnClosing;
         Closed += (_, _) =>
         {
-            _autosaveTimer?.Stop();
+            _snapshotTimer?.Stop();
+            _autoSave.Dispose();
             _statsTimer?.Stop();
             _recovery.Clear(); // a clean exit means there is nothing to recover next launch
             _watcher?.Dispose();
@@ -193,7 +209,8 @@ public partial class MainWindow : Window
         EditorView.Editor.VerticalPadding = _settings.Settings.EditorPaddingVertical;
         EditorView.Zoom = _settings.Settings.Zoom; // and the zoom the reader left it at
 
-        SetupAutosave();
+        SetupRecoverySnapshots();
+        _autoSave.IntervalSeconds = _settings.Settings.AutoSaveSeconds;
         Opened += async (_, _) => await CheckForRecoveryAsync(); // offer recovery once the window is up
 
         RefreshRecentMenu();

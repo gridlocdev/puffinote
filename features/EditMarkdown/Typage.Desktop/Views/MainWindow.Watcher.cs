@@ -1,6 +1,7 @@
 using Avalonia.Threading;
 using Puffinote.Components.Overlays;
 using Puffinote.Text.Document;
+using Typage.Control;
 
 namespace Typage.Desktop.Views;
 
@@ -8,23 +9,23 @@ public partial class MainWindow
 {
     // ----- crash recovery (PRD §9.4) -----
 
-    private void SetupAutosave()
+    private void SetupRecoverySnapshots()
     {
-        _autosaveTimer?.Stop();
-        var seconds = _settings.Settings.AutosaveSeconds;
+        _snapshotTimer?.Stop();
+        var seconds = _settings.Settings.RecoverySnapshotSeconds;
         if (seconds <= 0)
         {
-            _autosaveTimer = null; // autosave disabled
+            _snapshotTimer = null; // snapshots disabled
             return;
         }
 
-        _autosaveTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(seconds) };
-        _autosaveTimer.Tick += (_, _) => AutosaveTick();
-        _autosaveTimer.Start();
+        _snapshotTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(seconds) };
+        _snapshotTimer.Tick += (_, _) => RecoverySnapshotTick();
+        _snapshotTimer.Start();
     }
 
     /// <summary>Snapshot the buffer if it has unsaved changes, else drop any stale snapshot.</summary>
-    private void AutosaveTick()
+    private void RecoverySnapshotTick()
     {
         if (EditorView.IsDirty)
         {
@@ -36,8 +37,65 @@ public partial class MainWindow
         }
     }
 
-    /// <summary>Run one autosave cycle; for tests (the timer can't tick headlessly).</summary>
-    internal void AutosaveTickForTest() => AutosaveTick();
+    /// <summary>Run one snapshot cycle; for tests (the timer can't tick headlessly).</summary>
+    internal void RecoverySnapshotTickForTest() => RecoverySnapshotTick();
+
+    // ----- document auto-save (write the open file after the typing stops) -----
+
+    /// <summary>
+    /// Write the open document back to its own file once editing has paused, if it can be written without
+    /// asking anyone anything. Every early return here is a case where a save would have to open a dialog,
+    /// and an auto-save that opens dialogs is a worse feature than no auto-save:
+    /// <list type="bullet">
+    /// <item>an untitled buffer has no path — Save As is a question, and the crash-recovery snapshot is
+    /// already covering it;</item>
+    /// <item>a file whose encoding was only guessed must not have that guess written back until someone
+    /// confirms it (the whole point of <see cref="_encodingUnconfirmed"/>);</item>
+    /// <item>a modal is up — including the external-change conflict prompt, where the question on screen is
+    /// literally "whose version wins?" and answering it by writing ours would be the wrong answer.</item>
+    /// </list>
+    /// Staged images stay staged: the manual save offers to move them into an <c>images/</c> folder, and
+    /// that offer is a dialog too. The document saves with the links it has, which still open.
+    /// </summary>
+    private void AutoSaveTick()
+    {
+        if (_currentPath is null
+            || !EditorView.IsDirty
+            || _encodingUnconfirmed
+            || _conflictPromptOpen
+            || _overlayHost.IsOpen)
+        {
+            return;
+        }
+
+        try
+        {
+            MarkdownDocumentSession.AtomicWrite(_currentPath, TextFileCodec.Encode(EditorView.Text, _format));
+            _lastKnownDiskText = EditorView.Text; // so the watcher recognises this as our own save
+            EditorView.MarkSaved();
+            _recovery.Clear(); // the save is durable now; drop the crash-recovery snapshot
+            UpdateChrome();
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            // Stand auto-save down and say so once. The disk that just refused this write will refuse the
+            // next one too, and a modal every thirty seconds for the rest of the afternoon is not a report,
+            // it's a siege. The document stays dirty, ⌘S still works, and a manual save that succeeds
+            // switches auto-save back on.
+            _autoSave.Suspended = true;
+            ShowError("Auto-save couldn't write the document.",
+                $"{ex.Message}\n\nAuto-save is paused until you save successfully yourself (⌘S).");
+        }
+    }
+
+    /// <summary>Run one auto-save cycle now; for tests (a DispatcherTimer can't tick headlessly).</summary>
+    internal Task AutoSaveNowForTest() => _autoSave.RunAsync();
+
+    /// <summary>Whether an auto-save is armed and waiting out the pause (test seam).</summary>
+    internal bool AutoSavePendingForTest => _autoSave.IsPending;
+
+    /// <summary>Whether auto-save has stood itself down after a failed write (test seam).</summary>
+    internal bool AutoSaveSuspendedForTest => _autoSave.Suspended;
 
     /// <summary>On startup, if a snapshot from an unclean shutdown exists, offer to recover it (PRD §9.4).</summary>
     private async Task CheckForRecoveryAsync()

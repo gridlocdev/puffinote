@@ -41,6 +41,10 @@ public sealed partial class MainWindow : Window
     private string? CurrentPath { get; set; }
     private TextFileFormat _format = TextFileFormat.Utf8NoBom;
 
+    // Document auto-save: write the open file back once the typing stops (AutoSaveTick decides whether it
+    // can be written at all).
+    private readonly AutoSave _autoSave;
+
     public MainWindow()
         : this(new SettingsService())
     {
@@ -60,6 +64,19 @@ public sealed partial class MainWindow : Window
         EditorView.Editor.FontSize = _settings.Settings.FontSize;
         EditorView.Zoom = _settings.Settings.Zoom;
         EditorView.SelectionChanged += (_, _) => UpdateChrome();
+
+        // Push the auto-save countdown back on every edit, so a save lands in the pause after a burst of
+        // typing rather than in the middle of one. The buffer's own TextChanged, not the selection's:
+        // moving the caret is not an edit, and an edit that leaves the caret alone still is one.
+        _autoSave = new AutoSave(() =>
+        {
+            AutoSaveTick();
+            return Task.CompletedTask;
+        })
+        {
+            IntervalSeconds = _settings.Settings.AutoSaveSeconds,
+        };
+        EditorView.Editor.Buffer.TextChanged += (_, _) => _autoSave.Notify();
 
         // Zoom is remembered for the same reason wrap is: someone who needs bigger text needs it every
         // session, not once.
@@ -123,6 +140,7 @@ public sealed partial class MainWindow : Window
     protected override void OnClosed(EventArgs e)
     {
         base.OnClosed(e);
+        _autoSave.Dispose();
         PlainTextEditingCommands.GoToLineRequested -= OnGoToLineRequested;
     }
 

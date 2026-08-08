@@ -32,6 +32,7 @@ public partial class MainWindow
 
             EditorView.LoadText(text);
             SetCurrentPath(path);
+            _autoSave.Cancel(); // any countdown was aimed at the document this one just replaced
             _lastKnownDiskText = text; // the on-disk baseline for external-change detection
             _settings.Settings.PushRecent(path);
             _settings.Save();
@@ -113,6 +114,7 @@ public partial class MainWindow
 
         EditorView.LoadText(string.Empty);
         SetCurrentPath(null);
+        _autoSave.Cancel(); // ditto: the previous document is gone
         _lastKnownDiskText = null;
         _format = TextFileFormat.Utf8NoBom; // new documents default to UTF-8 (no BOM)
         _encodingUnconfirmed = false;       // nothing was guessed about a document that has no bytes yet
@@ -282,6 +284,11 @@ public partial class MainWindow
             _lastKnownDiskText = EditorView.Text; // so the watcher recognises this as our own save
             EditorView.MarkSaved();
             _recovery.Clear(); // the save is durable now; drop the crash-recovery snapshot
+
+            // The document is on disk, so a countdown aimed at it has nothing left to write. And a manual
+            // save that succeeded is the answer to whatever made auto-save stand itself down.
+            _autoSave.Cancel();
+            _autoSave.Suspended = false;
             UpdateChrome();
             return true;
         }

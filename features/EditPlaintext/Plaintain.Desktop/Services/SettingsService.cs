@@ -1,5 +1,6 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using Puffinote.Components.Shell;
 using Puffinote.Components.Theming;
 
 namespace Plaintain.Desktop.Services;
@@ -24,6 +25,13 @@ public sealed class AppSettings
     /// <summary>The reading zoom applied on top of <see cref="FontSize"/>, on the family's shared ladder
     /// (1.0 = 100%).</summary>
     public double Zoom { get; set; } = 1.0;
+
+    /// <summary>
+    /// Seconds of no editing before the open file is written back to disk; 0 turns auto-save off.
+    /// Plaintain opens logs and config files as readily as notes, so this only ever runs for a file whose
+    /// encoding is confirmed — see the guard in the window.
+    /// </summary>
+    public int AutoSaveSeconds { get; set; } = AutoSave.DefaultSeconds;
 
     /// <summary>Most-recently-used files, newest first.</summary>
     public List<string> RecentFiles { get; init; } = [];

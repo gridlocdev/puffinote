@@ -60,7 +60,7 @@ public class SettingsTests
             [
                 "Theme", "Default view", "Show the formatting toolbar",
                 "Tab width", "Horizontal padding", "Vertical padding", "Reading width",
-                "Autosave", "Completed tasks",
+                "Auto-save", "Recovery snapshots", "Completed tasks",
             ],
             form.Fields.Select(f => f.Label));
     }
@@ -94,7 +94,8 @@ public class SettingsTests
         harness.Combos[0].SelectedIndex = (int)AppTheme.HighContrast;
         harness.Numbers[0].Value = 8m;    // tab width
         harness.Numbers[3].Value = 0m;    // reading width: 0 = full width
-        harness.Numbers[4].Value = 0m;    // autosave off
+        harness.Numbers[4].Value = 0m;    // auto-save off
+        harness.Numbers[5].Value = 60m;   // recovery snapshots, every minute
         harness.Toolbar.IsChecked = false;
 
         Assert.Equal(AppTheme.System, settings.Theme); // nothing written until the dialog is accepted
@@ -103,7 +104,8 @@ public class SettingsTests
         Assert.Equal(AppTheme.HighContrast, settings.Theme);
         Assert.Equal(8, settings.TabWidth);
         Assert.Equal(0, settings.EditorMaxContentWidth);
-        Assert.Equal(0, settings.AutosaveSeconds);
+        Assert.Equal(0, settings.AutoSaveSeconds);
+        Assert.Equal(60, settings.RecoverySnapshotSeconds);
         Assert.False(settings.ShowToolbar);
     }
 

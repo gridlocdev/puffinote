@@ -2,6 +2,7 @@ using Avalonia;
 using Plaintain.Desktop.Services;
 using Puffinote.Components.Controls;
 using Puffinote.Components.Overlays;
+using Puffinote.Components.Shell;
 using Puffinote.Components.Theming;
 
 namespace Plaintain.Desktop.Views;
@@ -46,6 +47,10 @@ public sealed partial class MainWindow
             new NumberSetting("Font size", () => s.FontSize, v => s.FontSize = v, 8, 48, step: 1, decimals: 1,
                 hint: "Point size of the editor text."),
         ]),
+        new SettingsSection("Saving",
+        [
+            AutoSave.IntervalField(() => s.AutoSaveSeconds, v => s.AutoSaveSeconds = v),
+        ]),
     ]);
 
     /// <summary>Push the committed settings into the live editor.</summary>
@@ -58,6 +63,7 @@ public sealed partial class MainWindow
         EditorView.Editor.WordWrap = s.WordWrap;
         EditorView.Editor.ShowLineNumbers = s.ShowLineNumbers;
         EditorView.Editor.FontSize = s.FontSize;
+        _autoSave.IntervalSeconds = s.AutoSaveSeconds; // takes effect on the document already open
     }
 
     /// <summary>

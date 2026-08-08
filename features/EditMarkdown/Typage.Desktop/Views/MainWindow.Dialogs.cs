@@ -1,6 +1,7 @@
 using Avalonia.Controls;
 using Puffinote.Components.Controls;
 using Puffinote.Components.Overlays;
+using Puffinote.Components.Shell;
 using Puffinote.Components.Theming;
 using Typage.Control.Controls;
 using Typage.Desktop.Services;
@@ -139,8 +140,10 @@ public partial class MainWindow
         ]),
         new SettingsSection("Editing",
         [
-            new NumberSetting("Autosave", () => s.AutosaveSeconds, v => s.AutosaveSeconds = (int)v, 0, 600, step: 5,
-                hint: "Seconds between crash-recovery snapshots. 0 turns autosave off."),
+            AutoSave.IntervalField(() => s.AutoSaveSeconds, v => s.AutoSaveSeconds = v),
+            new NumberSetting("Recovery snapshots", () => s.RecoverySnapshotSeconds, v => s.RecoverySnapshotSeconds = (int)v, 0, 600, step: 5,
+                hint: "Seconds between crash-recovery snapshots of unsaved work — the safety net for a document "
+                    + "that has never been saved, and so has nowhere to auto-save to. 0 turns them off."),
             ChoiceSetting.ForEnum<MarkdownEditor.CompletedTaskSortMode>("Completed tasks",
                 () => s.CompletedTaskSort, v => s.CompletedTaskSort = v,
                 ["Leave in place", "Move to top", "Move to bottom"]),
@@ -163,7 +166,8 @@ public partial class MainWindow
 
         _toggleToolbarItem?.IsChecked = s.ShowToolbar;
 
-        SetupAutosave(); // pick up the new interval (or disable when 0)
+        SetupRecoverySnapshots(); // pick up the new interval (or disable when 0)
+        _autoSave.IntervalSeconds = s.AutoSaveSeconds; // ditto, on the document already open
         EditorView.Editor.CompletedTaskSorting = s.CompletedTaskSort;
 
         // Applies the mode; the surface's ViewModeChanged then syncs the View ▸ radio and persists it.

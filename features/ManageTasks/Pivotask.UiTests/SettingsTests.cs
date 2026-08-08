@@ -49,7 +49,7 @@ public class SettingsTests : IDisposable
     public void The_form_covers_every_preference_in_the_settings_file()
     {
         var form = MainWindow.BuildSettingsForm(new AppSettings());
-        Assert.Equal(["Theme", "Open in", "Show"], form.Fields.Select(f => f.Label));
+        Assert.Equal(["Theme", "Open in", "Show", "Auto-save"], form.Fields.Select(f => f.Label));
     }
 
     /// <summary>
@@ -96,12 +96,14 @@ public class SettingsTests : IDisposable
         var combos = form.GetLogicalDescendants().OfType<ComboBox>().ToList();
         combos[1].SelectedIndex = 1; // List      (combos[0] is Appearance ▸ Theme)
         combos[2].SelectedIndex = 3; // Unfinished
+        form.GetLogicalDescendants().OfType<NumericUpDown>().Single().Value = 60m; // auto-save
 
         Assert.Equal(BoardLayout.Board, settings.Layout); // nothing written until the dialog is accepted
         form.Commit();
 
         Assert.Equal(BoardLayout.List, settings.Layout);
         Assert.Equal(TaskFilter.Unfinished, settings.Filter);
+        Assert.Equal(60, settings.AutoSaveSeconds);
     }
 
     [AvaloniaFact]

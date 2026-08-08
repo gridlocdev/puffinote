@@ -49,7 +49,7 @@ public class SettingsTests : IDisposable
         var form = MainWindow.BuildSettingsForm(settings);
 
         Assert.Equal(
-            ["Theme", "Wrap long lines", "Show line numbers", "Font size"],
+            ["Theme", "Wrap long lines", "Show line numbers", "Font size", "Auto-save"],
             form.Fields.Select(f => f.Label));
     }
 
@@ -97,7 +97,9 @@ public class SettingsTests : IDisposable
         var boxes = form.GetLogicalDescendants().OfType<CheckBox>().ToList();
         boxes[0].IsChecked = true;   // wrap
         boxes[1].IsChecked = false;  // line numbers
-        form.GetLogicalDescendants().OfType<NumericUpDown>().Single().Value = 20m;
+        var numbers = form.GetLogicalDescendants().OfType<NumericUpDown>().ToList();
+        numbers[0].Value = 20m;  // font size
+        numbers[1].Value = 60m;  // auto-save, once a minute
 
         Assert.False(settings.WordWrap); // nothing written until the dialog is accepted
         form.Commit();
@@ -105,6 +107,7 @@ public class SettingsTests : IDisposable
         Assert.True(settings.WordWrap);
         Assert.False(settings.ShowLineNumbers);
         Assert.Equal(20, settings.FontSize);
+        Assert.Equal(60, settings.AutoSaveSeconds);
     }
 
     [AvaloniaFact]
