@@ -155,6 +155,13 @@ internal sealed class TabHost : UserControl
     /// <summary>Raised on any change to the tabs or the active document's dirty state (for the window title/Save).</summary>
     public event EventHandler? Changed;
 
+    /// <summary>
+    /// Raised whenever any open pane reports an edit — on every keystroke, not only when a tab flips
+    /// clean⇄dirty like <see cref="Changed"/>. It exists for the shell's auto-save countdown, which has to
+    /// be pushed back by each edit rather than only by the first one after a save.
+    /// </summary>
+    public event EventHandler? DocumentEdited;
+
     public IReadOnlyList<TabItem> Tabs => _tabs;
 
     public IEditorPane? ActivePane => ActiveTab?.Pane;
@@ -399,9 +406,14 @@ internal sealed class TabHost : UserControl
 
     private void OnPaneDirtyChanged(TabItem tab)
     {
-        // Editors raise DirtyChanged on every keystroke, but the tab strip (and the window title) only
-        // change when a tab flips clean⇄dirty. Skip the rebuild and the Changed fan-out otherwise, so
-        // typing doesn't rebuild the whole strip and re-query every command per character.
+        // Every keystroke is an edit, and the auto-save countdown is measured from the last one — so this
+        // fires before the clean⇄dirty filter below, which would otherwise report only the first keystroke
+        // after a save and let the countdown expire in the middle of a sentence.
+        DocumentEdited?.Invoke(this, EventArgs.Empty);
+
+        // The tab strip (and the window title), by contrast, only change when a tab flips clean⇄dirty.
+        // Skip the rebuild and the Changed fan-out otherwise, so typing doesn't rebuild the whole strip
+        // and re-query every command per character.
         if (tab.RenderedDirty == tab.Pane.IsDirty)
         {
             return;

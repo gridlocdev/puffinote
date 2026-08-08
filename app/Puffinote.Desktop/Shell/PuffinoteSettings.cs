@@ -53,6 +53,18 @@ internal sealed record PuffinoteSettings
     /// </summary>
     public bool? ShowFileExtensions { get; init; }
 
+    /// <summary>
+    /// Seconds of no editing before a dirty tab is written back to its file; null means the family default
+    /// (<see cref="AutoSave.DefaultSeconds"/>), and 0 turns auto-save off. Like <see cref="ShowTabBar"/>
+    /// this overrides nothing in an embedded editor: saving an open document is the shell's own job here
+    /// (the tab host owns every pane's <c>SaveAsync</c>), so an editor's standalone interval has no say
+    /// over what Puffinote does with its tabs. It stays nullable so the two scopes still layer.
+    /// </summary>
+    public int? AutoSaveSeconds { get; init; }
+
+    /// <summary>The effective interval — the resolved value, or the family default when nothing set one.</summary>
+    public int AutoSaveSecondsOrDefault => AutoSaveSeconds ?? AutoSave.DefaultSeconds;
+
     /// <summary>Extensions are shown until someone turns them off: it is what the file is called.</summary>
     public const bool ShowFileExtensionsDefault = true;
 
@@ -98,5 +110,6 @@ internal sealed record PuffinoteSettings
             Theme = over.Theme ?? Theme,
             ShowTabBar = over.ShowTabBar ?? ShowTabBar,
             ShowFileExtensions = over.ShowFileExtensions ?? ShowFileExtensions,
+            AutoSaveSeconds = over.AutoSaveSeconds ?? AutoSaveSeconds,
         };
 }

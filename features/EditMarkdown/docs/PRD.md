@@ -176,7 +176,7 @@ Uses **OS-native spell services** (Windows Spell Checking API, macOS `NSSpellChe
 
 ### 7.9 Settings and preferences
 
-A local JSON preferences store with a Settings UI: theme mode; toolbar visibility; focus-mode defaults; tab width and tabs-vs-spaces; new-document line-ending and encoding defaults; autosave/recovery interval; attachments folder name; copy-vs-link default; spell-check enable + language; dialect flags (wiki-links / embeds on-off; off by default in standalone); raw-source default; selection-reveal behavior; recent-files list.
+A local JSON preferences store with a Settings UI: theme mode; toolbar visibility; focus-mode defaults; tab width and tabs-vs-spaces; new-document line-ending and encoding defaults; auto-save interval and recovery-snapshot interval (§9.4 — two separate settings); attachments folder name; copy-vs-link default; spell-check enable + language; dialect flags (wiki-links / embeds on-off; off by default in standalone); raw-source default; selection-reveal behavior; recent-files list.
 
 ---
 
@@ -384,7 +384,21 @@ The document model is an **immutable-snapshot piece tree**: an edit produces a n
 
 ### 9.4 Reliability / data safety
 
-Autosave/recovery snapshot to a sidecar location at a configurable interval; offer recovery on crash restart. External-change detection with self-save suppression and the three-way conflict choice. Unsaved-change prompts on every exit path.
+Two independent safety nets, each with its own interval in Preferences, because they cover different holes:
+
+- **Document auto-save** (`AutoSaveSeconds`, 30s, 0 = off) writes the open file back to itself after that
+  long with no editing. It runs only where it can run silently: the document must have a path (an untitled
+  buffer has nowhere to go, and Save As is a question), its encoding must be confirmed rather than guessed,
+  and no modal may be up — including the external-change conflict prompt, whose whole subject is whose
+  version wins. Staged images stay staged, since offering to move them is a dialog too. A refused write
+  pauses auto-save and reports once rather than every 30 seconds; a successful ⌘S resumes it.
+- **Crash-recovery snapshot** (`RecoverySnapshotSeconds`, 30s, 0 = off) writes the dirty buffer to a
+  sidecar and offers it back on an unclean restart. This is what covers the untitled buffer that auto-save
+  can't touch, and the window between one auto-save and the next. Cleared on any clean save or exit.
+
+External-change detection with self-save suppression and the three-way conflict choice. Unsaved-change prompts on every exit path.
+
+*Naming note:* `RecoverySnapshotSeconds` was called `AutosaveSeconds` before document auto-save existed. A settings file using the old key is migrated on load and rewritten with the new one.
 
 ### 9.5 Cross-platform
 

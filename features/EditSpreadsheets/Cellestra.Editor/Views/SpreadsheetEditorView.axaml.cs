@@ -212,6 +212,15 @@ public partial class SpreadsheetEditorView : UserControl, IAppEnvironment
         get => _commandBar?.Collapsed ?? false; set => _commandBar?.Collapsed = value;
     }
 
+    /// <summary>
+    /// Seconds of no editing before the workbook is written back to its own file; 0 turns auto-save off.
+    /// The value lives here so it can sit in the Preferences dialog with the rest of them — but the
+    /// <em>saving</em> is the host's, as all file operations here are (<see cref="IEditorHost"/>), so the
+    /// host reads this to persist it and to drive its own timer. An embedder that saves differently, or not
+    /// at all, is free to ignore it.
+    /// </summary>
+    public int AutoSaveSeconds { get; set; } = Puffinote.Components.Shell.AutoSave.DefaultSeconds;
+
     /// <summary>The press-and-hold radial menu's bindings; pushed in from settings and edited via its dialog.</summary>
     public RadialMenuConfig RadialConfig
     {
@@ -269,6 +278,11 @@ public partial class SpreadsheetEditorView : UserControl, IAppEnvironment
                     hint: "Percent. ⌘+ and ⌘− change it while you work; this is where it starts."),
                 new ToggleSetting("Collapse the command bar", () => CommandBarCollapsed, v => CommandBarCollapsed = v,
                     "Fold the toolbar to its slim handle, for more grid."),
+            ]),
+            new SettingsSection("Saving",
+            [
+                Puffinote.Components.Shell.AutoSave.IntervalField(
+                    () => AutoSaveSeconds, v => AutoSaveSeconds = v),
             ]),
             new SettingsSection("Radial menu",
             [

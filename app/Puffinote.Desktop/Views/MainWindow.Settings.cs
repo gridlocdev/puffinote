@@ -3,6 +3,7 @@ using Avalonia;
 using Avalonia.Platform.Storage;
 using Puffinote.Components.Controls;
 using Puffinote.Components.Overlays;
+using Puffinote.Components.Shell;
 using Puffinote.Components.Theming;
 using Puffinote.Desktop.Panes;
 using Puffinote.Desktop.Shell;
@@ -60,6 +61,11 @@ public partial class MainWindow
         // there is no editor setting underneath it to inherit. Unset simply means shown.
         var showTabBar = _settings.ShowTabBar ?? true;
 
+        // Nor is this one. Saving an open document is the shell's own job here — the tab host calls each
+        // pane's SaveAsync — so an editor's standalone interval has no say over what Puffinote's tabs do,
+        // and unset simply means the family default.
+        var autoSaveSeconds = _settings.AutoSaveSecondsOrDefault;
+
         // Each editor's own file, read fresh: it may have changed since the tabs were opened — the
         // standalone app may have written it, or the user may have edited it by hand from this very dialog.
         var notes = NoteConfig.Load();
@@ -90,6 +96,10 @@ public partial class MainWindow
                     new ToggleSetting("Show file extensions in the file tree",
                         () => showExtensions, v => showExtensions = v,
                         "Off writes each file by its name alone, leaving its glyph to say what it is."),
+                ]),
+                new SettingsSection("Saving",
+                [
+                    AutoSave.IntervalField(() => autoSaveSeconds, v => autoSaveSeconds = v),
                 ]),
                 new SettingsSection("Notes",
                 [
@@ -138,6 +148,7 @@ public partial class MainWindow
             ShowTabBar = showTabBar,
             ShowFileExtensions = showExtensions,
             Theme = theme,
+            AutoSaveSeconds = autoSaveSeconds,
         };
         _settings.SaveUser();
 
@@ -160,6 +171,7 @@ public partial class MainWindow
     {
         var resolved = PuffinoteSettings.Resolve(_settings, _notebook.RootPath);
         _tabHost.Settings = resolved;
+        _autoSave.IntervalSeconds = resolved.AutoSaveSecondsOrDefault;
         SidebarForTest.ShowFileExtensions = _extensionsThisSession ?? resolved.ShowFileExtensionsOrDefault;
 
         // The appearance, applied to the application rather than to this window: requesting the variant is

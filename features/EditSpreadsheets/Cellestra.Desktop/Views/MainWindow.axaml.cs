@@ -26,6 +26,7 @@ public partial class MainWindow : Window, IEditorHost
     private AppSettings _settings;
     private FileLock? _fileLock;
     private bool _fileBusy;
+    private readonly AutoSave _autoSave;
 
     // The native-menu items gate on the editor's modal/text-input state; held so opening/closing an
     // overlay (which the editor signals via CommandStateChanged) can re-publish their CanExecute.
@@ -68,7 +69,22 @@ public partial class MainWindow : Window, IEditorHost
         Editor.Zoom = _settings.Zoom;
         Editor.CommandBarCollapsed = _settings.CommandBarCollapsed;
         Editor.RadialConfig = _settings.RadialMenu;
-        Editor.DocumentChanged += (_, _) => UpdateTitle();
+        Editor.AutoSaveSeconds = _settings.AutoSaveSeconds;
+
+        // Document auto-save: write the workbook back once the editing stops. Saving is the host's job
+        // here (the editor routes every file operation out through IEditorHost), so the timer lives here
+        // even though the interval is edited in the editor's own Preferences dialog.
+        _autoSave = new AutoSave(AutoSaveTickAsync) { IntervalSeconds = _settings.AutoSaveSeconds };
+
+        Editor.DocumentChanged += (_, _) =>
+        {
+            UpdateTitle();
+
+            // Push the countdown back on every edit, so a save lands in the pause after a burst of work
+            // rather than in the middle of one — which on a large sheet would mean a full serialize
+            // competing with the typing.
+            _autoSave.Notify();
+        };
         Editor.Saved += (_, _) => FlashSavedInTitle();
         Editor.CommandStateChanged += (_, _) => RefreshCommandStates();
         Editor.CommandBarCollapsedChanged += (_, _) => PersistSettings();
@@ -179,6 +195,7 @@ public partial class MainWindow : Window, IEditorHost
         }
 
         PersistSettings();
+        _autoSave.Dispose();
         ReleaseFileLock();
     }
 
@@ -209,11 +226,72 @@ public partial class MainWindow : Window, IEditorHost
             CommandBarCollapsed = Editor.CommandBarCollapsed,
             RadialMenu = Editor.RadialConfig,
             Zoom = Editor.Zoom,
+            AutoSaveSeconds = Editor.AutoSaveSeconds,
             WindowWidth = Width,
             WindowHeight = Height,
         };
         _settingsService.Save(_settings);
+
+        // A change made in Preferences takes effect on the workbook already open, not the next one.
+        _autoSave.IntervalSeconds = _settings.AutoSaveSeconds;
     }
+
+    /// <summary>
+    /// Write the workbook back once editing has paused, if it can be written without asking anyone
+    /// anything: a workbook that has never been saved has nowhere to go (Save As is a question, and an
+    /// auto-save that opens dialogs is a worse feature than no auto-save), and a file operation already in
+    /// flight owns the document — <see cref="_fileBusy"/> is taken for the duration so a manual ⌘S can't
+    /// race this write, and vice versa.
+    /// <para>
+    /// No busy overlay, unlike <see cref="SaveWorkbookAsync"/>: nobody asked for this save, so blanking
+    /// the window for it would read as the app seizing up. The serialize is on the UI thread for a
+    /// consistent snapshot and the bytes go to disk off it — the same shape as the manual save.
+    /// </para>
+    /// </summary>
+    private async Task AutoSaveTickAsync()
+    {
+        if (Editor.Session.FilePath is not { } filePath || !Editor.Session.IsModified || _fileBusy)
+        {
+            return;
+        }
+
+        _fileBusy = true;
+        try
+        {
+            byte[] image = Editor.Session.SerializeToBytes();
+            await Task.Run(() => WorkbookSession.WriteBytesAtomically(filePath, image));
+            Editor.Session.MarkSaved(filePath);
+            Editor.MarkSavedNow();
+            FlashSavedInTitle();
+
+            // Marking it saved raises DocumentChanged — that is how the title drops its dot — and that
+            // reaches the countdown, re-arming it against a workbook that is now clean. Drop it, unless
+            // an edit really did land while the write was in flight, in which case it is right to run.
+            if (!Editor.Session.IsModified)
+            {
+                _autoSave.Cancel();
+            }
+        }
+        catch (Exception ex)
+        {
+            // Stand auto-save down and say so once: the disk that refused this write will refuse the next
+            // one too, and the same dialog every thirty seconds is a siege, not a report. ⌘S still works,
+            // and a manual save that succeeds switches auto-save back on.
+            _autoSave.Suspended = true;
+            Editor.ShowMessage("Auto-save couldn't write the file",
+                $"{ex.Message}\n\nAuto-save is paused until you save successfully yourself (⌘S).");
+        }
+        finally
+        {
+            _fileBusy = false;
+        }
+    }
+
+    /// <summary>Run one auto-save cycle now; for tests (a DispatcherTimer can't tick headlessly).</summary>
+    internal Task AutoSaveNowForTest() => _autoSave.RunAsync();
+
+    /// <summary>Whether an auto-save is armed and waiting out the pause (test seam).</summary>
+    internal bool AutoSavePendingForTest => _autoSave.IsPending;
 
     private void RememberRecentFile(string path)
     {
@@ -412,6 +490,7 @@ public partial class MainWindow : Window, IEditorHost
         }
 
         ReleaseFileLock();
+        _autoSave.Cancel(); // any countdown was aimed at the workbook this one replaces
         Editor.ReplaceSession(WorkbookSession.NewBlank());
     }
 
@@ -461,6 +540,7 @@ public partial class MainWindow : Window, IEditorHost
                 });
 
                 Editor.AdoptLoaded(loaded, path);
+                _autoSave.Cancel(); // any countdown was aimed at the workbook this one replaces
 
                 ReleaseFileLock();
                 _fileLock = FileLock.TryAcquire(path);
@@ -521,6 +601,11 @@ public partial class MainWindow : Window, IEditorHost
             }
 
             Editor.MarkSavedNow();
+
+            // On disk, so a countdown aimed at it has nothing left to write — and a manual save that
+            // succeeded is the answer to whatever made auto-save stand itself down.
+            _autoSave.Cancel();
+            _autoSave.Suspended = false;
             RememberRecentFile(filePath);
         }
     }
@@ -564,6 +649,8 @@ public partial class MainWindow : Window, IEditorHost
             }
 
             Editor.MarkSavedNow();
+            _autoSave.Cancel();
+            _autoSave.Suspended = false;
 
             // We now own this file on disk — take its lock so other editors are warned.
             if (_fileLock?.DocumentPath != Path.GetFullPath(path))
@@ -599,6 +686,7 @@ public partial class MainWindow : Window, IEditorHost
         string text = await File.ReadAllTextAsync(files[0].Path.LocalPath);
         var workbook = Cellestra.Core.Serialization.Csv.CsvReader.ReadToWorkbook(text);
         ReleaseFileLock();
+        _autoSave.Cancel(); // any countdown was aimed at the workbook this one replaces
         Editor.ReplaceSession(new WorkbookSession(workbook));
     }
 

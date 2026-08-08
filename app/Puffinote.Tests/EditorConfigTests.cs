@@ -71,7 +71,7 @@ public sealed class EditorConfigTests : IDisposable
             {
               "Theme": "Light",
               "RecentFiles": [ "/notes/a.md", "/notes/b.md" ],
-              "AutosaveSeconds": 90,
+              "RecoverySnapshotSeconds": 90,
               "TabWidth": 4
             }
             """);
@@ -83,7 +83,7 @@ public sealed class EditorConfigTests : IDisposable
         var written = Read(path);
         Assert.Equal(2, (int)written["TabWidth"]!);
         Assert.Equal("Light", (string?)written["Theme"]);                  // Puffinote sets no theme here
-        Assert.Equal(90, (int)written["AutosaveSeconds"]!);               // nor an autosave interval
+        Assert.Equal(90, (int)written["RecoverySnapshotSeconds"]!);       // nor a recovery-snapshot interval
         Assert.Equal(2, written["RecentFiles"]!.AsArray().Count);         // and it never touches your history
     }
 

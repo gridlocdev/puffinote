@@ -374,6 +374,26 @@ On open, cached values from the file are shown immediately. If calculation mode 
 - **Confirm only above a threshold:** clearing or deleting a range is silent (undo covers it) **unless** it would remove data from **more than 100 non-empty cells**, in which case Cellestra asks first.
 - Everything else relies on undo rather than nagging.
 
+### 8.7a Auto-save
+Supersedes the v1 non-goal in §9. A workbook **that already has a file** is written back to it after
+**30 seconds of no editing** — configurable in Preferences ▸ Saving, where **0 turns it off** and anything
+below 5 seconds is treated as 5.
+
+- **Inactivity, not a heartbeat.** Each edit pushes the countdown back, so the save lands in the pause after
+  a burst of work. On a large sheet that matters twice over: a mid-burst save writes half a thought to
+  disk, and its serialize competes with the typing.
+- **It never asks a question.** A workbook that has never been saved has nowhere to go, and Save As is a
+  dialog nobody invited — so it is left alone (and §8.7's unsaved-changes prompt still catches it on the way
+  out). Nor does it run while another file operation is in flight; the same guard that stops two manual
+  saves overlapping stops this one racing them.
+- **It is the same write as ⌘S** — serialize on the UI thread for a consistent snapshot, then the atomic
+  temp-then-rename off it (§10.2) — so an unattended save is exactly as safe as a deliberate one. The title
+  bar flashes "— Saved" as it does for ⌘S, which is the only way to tell it happened.
+- **A failure stands it down.** A refused write pauses auto-save and reports once, rather than raising the
+  same dialog every thirty seconds; the workbook stays modified, ⌘S still works, and a manual save that
+  succeeds turns it back on.
+- Still out: crash auto-recovery of *unsaved* work (§9). There is no sidecar snapshot.
+
 ### 8.8 New-workbook and cell defaults
 - A new workbook has **one worksheet named `Sheet1`**.
 - **Default cell style:** Helvetica Neue, 10 pt, black text, no fill, "General" number format.
@@ -455,7 +475,7 @@ A second face on the same brain (`ARCHITECTURE.md` §1): the `cellestra` binary 
 Intentional exclusions, not oversights.
 
 - **Printing and page layout / print-to-PDF.** (Why it's called out: users may expect it, and it's why the menu bar has no "Page Layout.")
-- **Autosave / crash auto-recovery.** v1 relies on manual save plus the unsaved-changes warnings in §8.7.
+- ~~**Autosave / crash auto-recovery.**~~ **Superseded — document auto-save is now in v1** (§8.7a). What remains a non-goal is *crash auto-recovery*: there is no sidecar snapshot of an unsaved workbook, and a workbook that has never been saved is not auto-saved at all, because it has nowhere to be written and asking where is a dialog nobody invited. Manual save plus the unsaved-changes warnings in §8.7 still carry that case.
 - **Charts and graphs.**
 - **Pivot tables.**
 - **Macros / scripting.**
@@ -483,7 +503,7 @@ Intentional exclusions, not oversights.
 | How tables map to `.ods` | Tables are native **database ranges** (`table:database-range`) with banded styling and filters; **no Excel structured references** (§8.10, §9), to protect the LibreOffice round-trip. |
 | Data validation, hide/unhide, hyperlinks, remove-duplicates, text-to-columns | **In v1** (§4 Data, §8.13–§8.14). |
 | Fill-handle behavior | Copy-fill only; **no series extrapolation** in v1 (§8.15). |
-| Autosave | None in v1 (§9). |
+| Autosave | **In v1** (§8.7a): a saved workbook is written back after 30s of no editing, configurable in Preferences (0 = off). Crash auto-recovery is still out (§9). |
 | CSV specifics | UTF-8, comma default, RFC 4180 quoting, exports computed values (§8.4). |
 
 If a new ambiguity surfaces during build, resolve it here (or in `ARCHITECTURE.md` for technical detail) rather than guessing in code.
@@ -520,11 +540,11 @@ editing match spreadsheet muscle memory (§3 *Feel*). Each is implemented and te
 
 | Behavior | Decision |
 |---|---|
-| Atomic save | Write to a sibling temp file then rename over the target, so a crash mid-write never corrupts the original `.ods`. (This is write-safety, not the autosave that remains a non-goal.) |
+| Atomic save | Write to a sibling temp file then rename over the target, so a crash mid-write never corrupts the original `.ods`. Auto-save (§8.7a) goes through this same write, so an unattended save is exactly as safe as ⌘S. |
 | LibreOffice locks | Detect a `.~lock.<name>#` and warn on open; place our own compatible lock while a file is open and remove it on close. Advisory, best-effort. |
 | Cached vs recompute | On open, cached values are shown immediately then recomputed; cells whose recompute disagrees with the file cache are counted and surfaced (a function-coverage signal), rather than silently masked. |
 | Locale separator | Formula syntax stays canonical (`,` argument separator, `.` decimal) regardless of locale — locale affects display only. Typing `SUM(1;2)` in comma-decimal locales is **not** supported in v1 (a deliberate scope limit, not an oversight). |
 
 ## 11. Possible later versions (not commitments)
 
-Printing/PDF, autosave/recovery, conditional formatting, charts, pivot tables, `.xlsx` import, cell comments/notes, Excel-style structured references, fill-handle series, more functions (e.g. `SUBTOTAL`/`SUMIFS`/`XLOOKUP`), and eventually other platforms — once the core is rock-solid.
+Printing/PDF, crash auto-recovery of unsaved work (document auto-save itself landed in v1, §8.7a), conditional formatting, charts, pivot tables, `.xlsx` import, cell comments/notes, Excel-style structured references, fill-handle series, more functions (e.g. `SUBTOTAL`/`SUMIFS`/`XLOOKUP`), and eventually other platforms — once the core is rock-solid.

@@ -13,9 +13,11 @@ namespace Puffinote.Desktop.Panes;
 /// wins (<see cref="WithOverrides"/>).
 /// <para>
 /// The mirror covers what Puffinote can act on. Settings that only mean something to Typage's own window
-/// (its theme — Puffinote sets the family theme itself — and its autosave interval) are left out and left
-/// alone: they stay in the file, untouched by a save from here, and the Preferences tab's "edit the file"
-/// button is how you reach them.
+/// are left out and left alone — they stay in the file, untouched by a save from here, and the Preferences
+/// tab's "edit the file" button is how you reach them. That is its theme (Puffinote sets the family theme
+/// itself), its crash-recovery snapshot interval, and its auto-save interval: saving an open document in
+/// Puffinote is the <em>shell's</em> job, so a note in a tab is auto-saved on Puffinote's own interval
+/// (General ▸ Saving) and Typage's has nothing to say about it.
 /// </para>
 /// </summary>
 internal sealed record NoteConfig

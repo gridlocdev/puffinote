@@ -57,6 +57,11 @@ public partial class MainWindow : Window
     private Shell.NotebookWatcher? _watcher;
 
     private readonly TabHost _tabHost = new();
+
+    // Document auto-save: write every dirty tab back once the editing stops. The shell owns this rather
+    // than the editors because in Puffinote the shell owns saving — each pane's SaveAsync is the editor's
+    // own byte-faithful atomic write, and the tab host is what calls it.
+    private readonly AutoSave _autoSave;
     private readonly OverlayHost _overlayHost = new()
     {
         Background = new SolidColorBrush(Color.FromArgb(0x66, 0, 0, 0)),
@@ -115,6 +120,11 @@ public partial class MainWindow : Window
 
         _tabHost.ConfirmClose = PromptCloseAsync;
 
+        // Built before ApplySettings, which is where the resolved interval is pushed in — from startup,
+        // from each notebook open, and from Preferences alike.
+        _autoSave = new AutoSave(AutoSaveTickAsync);
+        _tabHost.DocumentEdited += (_, _) => _autoSave.Notify();
+
         // Seed the host with the per-user layer before any notebook opens, so a preference like a hidden tab
         // bar holds from the first frame. Opening a notebook re-assigns this with its own settings layered on.
         _tabHost.Settings = _settings;
@@ -148,9 +158,72 @@ public partial class MainWindow : Window
         Closed += (_, _) =>
         {
             PersistSession();
+            _autoSave.Dispose();
             _watcher?.Dispose();
         };
     }
+
+    /// <summary>
+    /// Write every dirty tab back once the editing has paused — every one, not just the active one: a
+    /// background tab with unsaved edits is precisely the work most likely to be lost, because nobody is
+    /// looking at it to notice the dot.
+    /// <para>
+    /// A pane declines by itself where a save would be wrong or impossible: <c>ErrorPane</c> reports no
+    /// path, and <c>PlainTextPane</c> holds its write back while the file's encoding is only a guess. A
+    /// modal already up stands the whole pass down — an auto-save must never write underneath a question
+    /// the user is still answering, least of all the dirty-close prompt, whose answer may be "discard".
+    /// </para>
+    /// <para>
+    /// One failure suspends auto-save for the session and is reported once, rather than raising the same
+    /// dialog every thirty seconds; the tab stays dirty, ⌘S still works, and a manual save resumes it.
+    /// </para>
+    /// </summary>
+    private async Task AutoSaveTickAsync()
+    {
+        if (_overlayHost.IsOpen)
+        {
+            return;
+        }
+
+        foreach (var tab in _tabHost.Tabs.ToList())
+        {
+            if (!tab.Pane.IsDirty || tab.Pane.Path is null)
+            {
+                continue;
+            }
+
+            try
+            {
+                await tab.Pane.SaveAsync();
+            }
+            catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+            {
+                _autoSave.Suspended = true;
+                await _overlayHost.ShowModalAsync(new MessageDialog(
+                    "Auto-save couldn't write the document",
+                    $"{System.IO.Path.GetFileName(tab.Path)}: {e.Message}\n\n" +
+                    "Auto-save is paused until you save successfully yourself (⌘S)."));
+                return;
+            }
+        }
+
+        // Saving a pane raises its DirtyChanged — that is how the tab strip drops the dot — and that
+        // reaches the countdown through DocumentEdited, re-arming it against documents that are now
+        // clean. Drop it, unless something really is still unsaved (a pane that declined, or an edit
+        // made while the pass was in flight), in which case the countdown is right to be running.
+        if (!_tabHost.HasDirtyTabs)
+        {
+            _autoSave.Cancel();
+        }
+
+        UpdatePaneChrome();
+    }
+
+    /// <summary>Run one auto-save cycle now; for tests (a DispatcherTimer can't tick headlessly).</summary>
+    internal Task AutoSaveNowForTest() => _autoSave.RunAsync();
+
+    /// <summary>Whether an auto-save is armed and waiting out the pause (test seam).</summary>
+    internal bool AutoSavePendingForTest => _autoSave.IsPending;
 
     /// <summary>Open <paramref name="path"/> as the notebook (used by the CLI-arg path and the menu).</summary>
     public void OpenNotebook(string path) => _notebook.OpenNotebook(path);

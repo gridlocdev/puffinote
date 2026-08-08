@@ -199,7 +199,55 @@
 
 - [ ] All Apps: All applications that use the command menu (all of them except Plaintain) should have a command for opening the settings menu, with the existing keyboard shortcut listed.
 
-- [ ] All Apps: All applications should have an auto-save feature that saves the current document automatically after a certain period of inactivity (e.g., 30 seconds). This prevents data loss in case of unexpected application crashes or power outages. The auto-save interval should be configurable in the settings menu.
+- [x] All Apps: All applications should have an auto-save feature that saves the current document automatically after a certain period of inactivity (e.g., 30 seconds). This prevents data loss in case of unexpected application crashes or power outages. The auto-save interval should be configurable in the settings menu.
+    - [x] Cellestra
+    - [x] Puffinote
+    - [x] Typage
+    - [x] Plaintain
+    - [x] Pivotask
+
+    One countdown, `shared/Puffinote.Components/Shell/AutoSave.cs`, that each edit pushes back and that
+    writes the document once the editing stops. Every app carries the interval in its own Preferences under
+    **Saving ▸ Auto-save** — 30 seconds by default, **0 turns it off**, and anything under 5 is treated as 5
+    (a hand-edited `1` is a disk that never idles). Changing it takes effect on the document already open,
+    not the next one.
+
+    **Inactivity, not a heartbeat.** Each edit restarts the countdown, so the save lands in the pause after
+    a burst of typing. That is what was asked for and it is the kinder reading: a mid-burst save writes half
+    a thought to disk, and on a large sheet its serialize competes with the typing. The cost is real and
+    worth stating — someone who types for ten minutes without pausing is not auto-saved in those ten
+    minutes. Typage's crash-recovery snapshots and every app's unsaved-changes prompt on close still cover
+    them; a second "save at least every N regardless" timer would close it, and is deliberately not here
+    because nobody asked for one.
+
+    **It never opens a dialog** — that is the rule the whole design hangs on, because an auto-save that
+    could ask a question would ask it while you were reading something else. So it declines instead, and
+    the next edit simply arms it again: an untitled document has nowhere to be written (Save As is a
+    question, and it is exactly the case Typage's recovery snapshot already covers); a file read through the
+    Latin-1 fallback must not have that guess written back before someone confirms it (Typage and Plaintain
+    both); a modal already up owns the screen — including Typage's external-change conflict prompt, where
+    the question on screen *is* "whose version wins?", and Puffinote's dirty-close prompt, whose answer may
+    be "discard". Typage's staged images stay staged for the same reason: offering to move them into an
+    `images/` folder is a dialog too, and the document saves with links that still open.
+
+    **A failed write stands auto-save down** and reports once, rather than raising the same I/O error every
+    thirty seconds for an afternoon. The document stays dirty, ⌘S still works, and a manual save that
+    succeeds turns it back on.
+
+    Per app, the only differences are what "the document" means and who owns the write. Cellestra takes the
+    same `_fileBusy` guard as a manual save so the two can't race, serializes on the UI thread and writes
+    off it, and shows no busy overlay (nobody asked for this save; blanking the window would read as a
+    seize-up) — this reverses its PRD §9 non-goal, now written up as §8.7a. Puffinote saves **every dirty
+    tab, not just the active one**, because the background tab is the work whose unsaved dot nobody is
+    looking at; its interval is the shell's own preference (General ▸ Saving), since in Puffinote the shell
+    owns saving, and it layers per-notebook like every other setting there.
+
+    Typage's `AutosaveSeconds` meant the *crash-recovery snapshot* interval and would now read as the wrong
+    thing entirely, so it is `RecoverySnapshotSeconds`, with the old key read on load and retired on the
+    next save. The two intervals are separate settings and both are in Preferences: they cover different
+    holes, and the snapshot is what still catches the untitled buffer.
+
+    Not done: the CLIs, which are non-interactive and have no open document to auto-save.
 
 - [ ] All Apps: When quitting, always ensure that the program removes file locks for any files that were opened in the application. This prevents issues with other applications being unable to access those files after the application has been closed.
 

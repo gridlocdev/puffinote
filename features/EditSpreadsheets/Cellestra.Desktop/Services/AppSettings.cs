@@ -1,4 +1,5 @@
 using Cellestra.Desktop.Commands;
+using Puffinote.Components.Shell;
 using Puffinote.Components.Theming;
 using RecentFilesHelper = Puffinote.Components.Shell.RecentFiles;
 
@@ -25,6 +26,14 @@ public sealed record AppSettings
     public RadialMenuConfig RadialMenu { get; init; } = RadialMenuConfig.Default;
 
     public double Zoom { get; init; } = 1.0;
+
+    /// <summary>
+    /// Seconds of no editing before the workbook is written back to its own file; 0 turns auto-save off.
+    /// PRD §9 listed autosave as a v1 non-goal on the reasoning that manual save plus the unsaved-changes
+    /// warnings were enough; this supersedes that. The write itself is the same atomic temp-then-rename as
+    /// ⌘S, so the "never corrupt an .ods mid-write" guarantee the PRD does insist on is unchanged.
+    /// </summary>
+    public int AutoSaveSeconds { get; init; } = AutoSave.DefaultSeconds;
 
     public double WindowWidth { get; init; } = 1100;
 
