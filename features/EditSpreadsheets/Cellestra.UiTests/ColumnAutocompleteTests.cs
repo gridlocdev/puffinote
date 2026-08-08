@@ -1,5 +1,8 @@
 using Avalonia.Headless;
 using Avalonia.Headless.XUnit;
+using Cellestra.Core.Data;
+using Cellestra.Core.Editing;
+using Cellestra.Core.Model;
 using Cellestra.Core.Values;
 using Cellestra.Desktop.Commands;
 using Cellestra.Desktop.Views;
@@ -61,6 +64,41 @@ public class ColumnAutocompleteTests
         var (window, _) = Column("Avocado");
         string text = TypeInto(window, "Avo");
         Assert.StartsWith("Avo", text, StringComparison.Ordinal);
+    }
+
+    [AvaloniaFact]
+    public void A_tables_header_is_a_title_not_an_entry_to_complete_from()
+    {
+        // A1 is the table's header ("Fruit"), A2 its first entry. Typing "F" into A3 must not be
+        // completed to the column's own title — only to a value some earlier row put in the column.
+        var window = new MainWindow();
+        window.Show();
+        var env = window.Editor;
+        var sheet = env.Session.ActiveSheet;
+        sheet.SetValue(0, 0, CellValue.Text("Fruit"));
+        sheet.SetValue(1, 0, CellValue.Text("Apple"));
+        env.Session.Execute(DataEditCommands.CreateTable(env.Session.Workbook, sheet.Name,
+            new Table("Fruits", CellRange.Parse("A1:A2"))));
+        env.Selection.MoveTo(2, 0);
+
+        Assert.Equal("F", TypeInto(window, "F"));
+    }
+
+    [AvaloniaFact]
+    public void A_tables_own_entries_still_complete()
+    {
+        // The header is skipped, not the whole table: the values under it are exactly the list.
+        var window = new MainWindow();
+        window.Show();
+        var env = window.Editor;
+        var sheet = env.Session.ActiveSheet;
+        sheet.SetValue(0, 0, CellValue.Text("Fruit"));
+        sheet.SetValue(1, 0, CellValue.Text("Apple"));
+        env.Session.Execute(DataEditCommands.CreateTable(env.Session.Workbook, sheet.Name,
+            new Table("Fruits", CellRange.Parse("A1:A2"))));
+        env.Selection.MoveTo(2, 0);
+
+        Assert.Equal("Apple", TypeInto(window, "Ap"));
     }
 
     [AvaloniaFact]

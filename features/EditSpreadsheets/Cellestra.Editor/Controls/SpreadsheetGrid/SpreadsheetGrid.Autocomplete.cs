@@ -59,11 +59,21 @@ public sealed partial class SpreadsheetGrid
     /// cell belongs to is the list it is an entry of, which is both the useful answer and a bounded one.
     /// Scanning the whole sheet's cell store on every keystroke, which is what this did before, is what
     /// made typing into a large workbook feel like it was lagging a character behind.</para>
+    ///
+    /// <para>A table's header row ends the walk without being offered: the header is the column's
+    /// <i>title</i>, not one of its entries, so completing "F" to "Fruit" while you type the first fruit
+    /// is offering the label of the list rather than a member of it. Anything above the header is
+    /// outside the table, so it is a different list either way.</para>
     /// </summary>
     private static string? FindColumnCompletion(Worksheet sheet, int column, int activeRow, string prefix)
     {
         for (int row = activeRow - 1; row >= 0; row--)
         {
+            if (sheet.FindTable(row, column) is { HasHeader: true } table && row == table.Range.Top)
+            {
+                return null; // the title of the column, not a value in it
+            }
+
             var cell = sheet.Find(row, column);
             if (cell is null || cell.Value.IsEmpty)
             {
