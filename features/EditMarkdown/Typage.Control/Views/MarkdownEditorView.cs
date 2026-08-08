@@ -5,6 +5,7 @@ using Avalonia.Media;
 using Avalonia.Platform.Storage;
 using Avalonia.Threading;
 using Puffinote.Components.Commands;
+using Puffinote.Components.Input;
 using Puffinote.Components.Overlays;
 using Puffinote.Components.Theming;
 using Puffinote.Text.Document;
@@ -59,6 +60,9 @@ public class MarkdownEditorView : UserControl
             Children = { new DockPanel { Children = { CommandBar, FindBar, scroll } }, Overlays },
         };
         Overlays.Closed += (_, _) => Editor.Focus(); // never strand focus in a torn-down overlay
+
+        // The trackpad half of zoom, over the same seam the ⌘= / ⌘− catalog uses (see PinchZoom).
+        PinchZoom.Attach(this, () => Zoom, zoom => Zoom = zoom);
 
         Editor.TextChanged += (_, e) =>
         {

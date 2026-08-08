@@ -13,6 +13,7 @@ using Cellestra.Desktop.Views.Dialogs;
 using Puffinote.Components.Commands;
 using Puffinote.Components.Controls;
 using Puffinote.Components.Controls.Icons;
+using Puffinote.Components.Input;
 using Puffinote.Components.Overlays;
 using Puffinote.Components.Theming;
 // The view moved to the Cellestra.Editor namespace; the moved command bar keeps its original
@@ -163,6 +164,10 @@ public partial class SpreadsheetEditorView : UserControl, IAppEnvironment
         // where focus sits inside it. Handled on the tunnelling route so it fires before any inner
         // control (a TextBox, ListBox, default/cancel button) can swallow the key first.
         AddHandler(KeyDownEvent, OnPreviewKeyDownForOverlay, RoutingStrategies.Tunnel);
+
+        // The trackpad half of zoom, over the same seam the ⌘= / ⌘− catalog uses (see PinchZoom). Also
+        // tunnelling, and for the same reason: the grid scrolls on the wheel and marks it handled.
+        PinchZoom.Attach(this, () => Zoom, zoom => Zoom = zoom);
 
         UpdateChrome();
         RefreshSheetView();

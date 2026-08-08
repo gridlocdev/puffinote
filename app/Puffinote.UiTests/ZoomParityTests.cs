@@ -1,11 +1,18 @@
+using Avalonia;
+using Avalonia.Controls;
 using Avalonia.Headless;
 using Avalonia.Headless.XUnit;
 using Avalonia.Input;
+using Avalonia.Interactivity;
 using Avalonia.Threading;
 using Cellestra.Desktop.Services;
+using Cellestra.Editor;
+using Pivotask.Control.Views;
 using Pivotask.Core.Model;
 using Pivotask.Core.Serialization;
+using Plaintain.Control.Views;
 using Puffinote.Components.Commands;
+using Puffinote.Components.Input;
 using Puffinote.Components.Theming;
 using Puffinote.Desktop.Panes;
 using Puffinote.Desktop.Shell;
@@ -88,6 +95,79 @@ public sealed class ZoomParityTests
     }
 
     private static AppCommand Zoom(IEditorPane pane, string id) => pane.Commands.Single(c => c.Id == id);
+
+    /// <summary>
+    /// Each editor's own zoom factor. There is no interface for it — the shell never needed one, because the
+    /// editors reach parity by sharing <see cref="ZoomScale"/> rather than by sharing a base type — so the
+    /// test reads each one where it lives, which is also what makes "all four moved" worth asserting.
+    /// </summary>
+    private static double ZoomOf(IEditorPane pane) => pane.View switch
+    {
+        MarkdownEditorView v => v.Zoom,
+        PlainTextEditorView v => v.Zoom,
+        SpreadsheetEditorView v => v.Zoom,
+        TaskBoardView v => v.Zoom,
+        _ => throw new Xunit.Sdk.XunitException($"{pane.GetType().Name} has no known zoom factor"),
+    };
+
+    /// <summary>
+    /// Raise the gesture macOS reports for a trackpad pinch, where the backend would put it. Headless input
+    /// can synthesise keys and a mouse, but not a platform gesture, so the event is posted directly.
+    /// </summary>
+    private static void Magnify(Visual target, double magnification, ulong timestampMs) =>
+        ((Interactive)target).RaiseEvent(new PointerDeltaEventArgs(
+            InputElement.PointerTouchPadGestureMagnifyEvent,
+            target,
+            new Pointer(0, PointerType.Mouse, isPrimary: true),
+            TopLevel.GetTopLevel(target)!,
+            default,
+            timestampMs,
+            new PointerPointProperties(RawInputModifiers.None, PointerUpdateKind.Other),
+            KeyModifiers.None,
+            new Vector(magnification, magnification)));
+
+    [AvaloniaFact]
+    public async Task A_pinch_zooms_every_pane_type_onto_the_same_stop()
+    {
+        var dir = Directory.CreateTempSubdirectory("puffinote-zoom-pinch");
+        try
+        {
+            var panes = new[]
+            {
+                await PaneForAsync(dir.FullName, "note.md"),
+                await PaneForAsync(dir.FullName, "log.txt"),
+                await PaneForAsync(dir.FullName, "book.ods", WorkbookSession.NewBlank().SerializeToBytes()),
+                await PaneForAsync(dir.FullName, "board.pivotask.json", BlankBoard()),
+            };
+
+            foreach (var pane in panes)
+            {
+                var window = new Window { Width = 600, Height = 400, Content = pane.View };
+                window.Show();
+                window.UpdateLayout();
+
+                Assert.Equal(ZoomScale.Default, ZoomOf(pane));
+
+                // One stop's worth of pinch, spread over three increments the way a trackpad delivers it.
+                Magnify(pane.View, PinchZoom.MagnificationPerStop / 3, 100);
+                Magnify(pane.View, PinchZoom.MagnificationPerStop / 3, 120);
+                Magnify(pane.View, PinchZoom.MagnificationPerStop / 3, 140);
+                Dispatcher.UIThread.RunJobs();
+
+                // The same 110% a note, a log, a sheet and a board all reach with ⌘=. One gesture, wired
+                // once against the shared ladder — not four implementations that agree by luck.
+                Assert.Equal(1.1, ZoomOf(pane));
+
+                window.Content = null;
+                window.Close();
+                pane.Dispose();
+            }
+        }
+        finally
+        {
+            dir.Delete(recursive: true);
+        }
+    }
 
     [AvaloniaFact]
     public async Task The_shell_binds_the_active_editors_zoom_chords_including_the_shifted_plus()

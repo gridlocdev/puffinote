@@ -56,6 +56,24 @@
       meaning two things depending on the open Puffinote tab is the thing this repo keeps saying not to do.
       Puffinote itself has no zoom code: it binds the active pane's catalog.
 
+- [x] Plaintain: pinch-to-zoom — and with it Typage, Cellestra and Pivotask, since all four share `ZoomScale`.
+    - Wired once, in `Puffinote.Components` (`PinchZoom`, over the `PinchZoomGesture` accumulator), against
+      the same read/write pair each editor already hands `ZoomCommands`. Each view attaches it in one line.
+    - The gesture is watched in both places it can be observed. macOS reports a trackpad pinch as its own
+      gesture (`PointerTouchPadGestureMagnify`, carrying an NSEvent magnification); Windows and X11 have no
+      such event and their drivers report it as **ctrl+wheel** — which is also what a mouse user presses to
+      zoom, so the two arrive as one case. The wheel route has to tunnel: the surfaces underneath (Plaintain's
+      editor, Cellestra's grid) handle the wheel themselves and mark it handled, so a bubbling handler would
+      scroll the document instead of zooming it.
+    - A pinch lands on the same stops as ⌘= / ⌘−, rather than zooming continuously. One ladder for the family
+      is the point: a reader who pinches to "137%" and then presses ⌘= has to be told what the next size even
+      is, and every intermediate value would re-lay out a whole sheet on the way past. About 0.15 of
+      magnification (or one wheel notch) buys a stop, so a full-hand pinch covers roughly 100% → 300%; the
+      residue is dropped after 250ms of quiet, so one pinch can never finish the one before it.
+    - Not done: a touchscreen two-finger pinch (Avalonia's `PinchGestureRecognizer`). Same word, different
+      device — and adding that recognizer changes how touch scrolling competes on all four surfaces, which is
+      a decision for whenever a touch device is actually a target.
+
 - [ ] Cellestra: editing text in a column that has word wrapped should word wrap the popup text editor as well (the textbox popup should contain similar contents and the cursor behavior should be expected)
 - [ ] Cellestra: If text is autocompleted while entering, It should also not autocomplete the title of a table, only the distinct value of one of its preceding rows in that column.
 
@@ -79,8 +97,6 @@
     so a host can still set a font deliberately but can no longer leak one in. `CaretGeometryTests`
     covers the inheritance and the invariant the caret is placed by — that `n` columns of text occupy
     exactly `n * CharWidth`.
-- [ ] Plaintain: pinch-to-zoom. The keyboard half is done (⌘= / ⌘− / ⌥⌘0 — the reset moved off ⌘0, see above), and zoom multiplies the configured font size rather than replacing it, so Actual Size returns to the reader's own size. What is left is the trackpad gesture, and it is not Plaintain's alone: all four editors now share `ZoomScale`, so a pinch should be wired once wherever the gesture can be observed for every one of them rather than four times.
-
 - [ ] Plaintain: ⌥⌘W (Word Wrap) collides with Puffinote's ⌥⌘W (Close All Tabs) — inside a Plaintain tab one of them wins and the other silently doesn't. Move one; the shell's is the older claim.
 - [ ] Pivotask: the board has no way to rename a group, delete a group, delete a task, fold completed tasks, or create a label. `BoardCommands` has all five, tested, with no caller outside the tests — the commands are done and the affordances aren't.
 - [ ] Puffinote: an external edit (a `git pull`, an edit in another app) refreshes the file tree and the search index but never reloads an open tab, so the pane keeps showing stale content and can overwrite the change on save. Proposal 0004 Phase 4 asks for this and it applies to every pane type, not just boards.

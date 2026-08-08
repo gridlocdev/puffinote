@@ -7,6 +7,7 @@ using Pivotask.Core;
 using Pivotask.Core.Model;
 using Pivotask.Core.Query;
 using Puffinote.Components.Commands;
+using Puffinote.Components.Input;
 using Puffinote.Components.Overlays;
 using Puffinote.Components.Theming;
 
@@ -60,6 +61,9 @@ public sealed class TaskBoardView : UserControl
         root.Children.Add(_zoomHost);
 
         Content = new Panel { Children = { root, OverlayForTest } };
+
+        // The trackpad half of zoom, over the same seam the ⌘= / ⌘− catalog uses (see PinchZoom).
+        PinchZoom.Attach(this, () => Zoom, zoom => Zoom = zoom);
         BuildFilters();
         ApplyLayout();
         Document = Document;

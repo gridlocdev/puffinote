@@ -4,6 +4,7 @@ using Avalonia.Input;
 using Plaintain.Control.Commands;
 using Plaintain.Control.Controls;
 using Puffinote.Components.Commands;
+using Puffinote.Components.Input;
 using Puffinote.Components.Theming;
 using Puffinote.Text.Document;
 
@@ -41,6 +42,9 @@ public sealed class PlainTextEditorView : UserControl
         };
 
         Editor.SelectionChanged += (_, _) => SelectionChanged?.Invoke(this, EventArgs.Empty);
+
+        // The trackpad half of zoom, over the same seam the ⌘= / ⌘− catalog uses (see PinchZoom).
+        PinchZoom.Attach(this, () => Zoom, zoom => Zoom = zoom);
 
         var root = new DockPanel { LastChildFill = true };
         DockPanel.SetDock(Find, Dock.Top);
