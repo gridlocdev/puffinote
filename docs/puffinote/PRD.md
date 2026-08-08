@@ -250,7 +250,10 @@ navigation PKM users expect. (The command palette stays commands-only; file navi
 - **Tabs:** the main area is a **tab strip** over a stack of live editor instances. Multiple documents
   are open at once, **freely mixing notes and sheets**. Each tab owns its own document, **dirty state**,
   and **undo/redo stack** (delegated to that editor). Puffinote owns **document lifecycle** for N live
-  editors: create on open, dispose on close, prompt-to-save on close-with-unsaved.
+  editors: create on open, dispose on close, prompt-to-save on close-with-unsaved. With more tabs open
+  than fit, the strip **scrolls the active tab into view** whenever it changes — by the shortest scroll
+  that does it, so a tab already on screen never moves. Otherwise opening a document from the sidebar can
+  leave the one mark of *which* document you are in off the end of the strip.
 - **Embedding contract:** Puffinote hosts the **existing** embeddable controls — `Typage.Control`'s
   `MarkdownEditor`/`MarkdownEditorView` for `.md`, and `Cellestra.Editor`'s `SpreadsheetEditorView` for
   `.ods` — **unchanged**. A small shell-side **pane abstraction** (`IEditorPane`: *view to mount*,

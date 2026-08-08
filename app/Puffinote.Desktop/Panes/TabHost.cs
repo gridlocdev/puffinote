@@ -3,6 +3,7 @@ using Avalonia.Automation;
 using Avalonia.Controls;
 using Avalonia.Layout;
 using Avalonia.Media;
+using Avalonia.Threading;
 using Puffinote.Components.Theming;
 using Puffinote.Desktop.Shell;
 
@@ -46,10 +47,14 @@ internal sealed class TabItem
 internal sealed class TabHost : UserControl
 {
     private readonly StackPanel _strip = new() { Orientation = Orientation.Horizontal, Spacing = 2, Margin = new Avalonia.Thickness(4, 2) };
+    private readonly ScrollViewer _stripScroll;
     private readonly Border _stripBar;
     private readonly Border _content = new();
     private readonly Control _placeholder;
     private readonly List<TabItem> _tabs = [];
+
+    /// <summary>The strip button built for <see cref="_active"/>, kept so the reveal pass knows what to scroll to.</summary>
+    private Control? _activeTabControl;
 
     public TabHost()
     {
@@ -64,17 +69,19 @@ internal sealed class TabHost : UserControl
         };
         _content.Child = _placeholder;
 
+        _stripScroll = new ScrollViewer
+        {
+            HorizontalScrollBarVisibility = Avalonia.Controls.Primitives.ScrollBarVisibility.Auto,
+            VerticalScrollBarVisibility = Avalonia.Controls.Primitives.ScrollBarVisibility.Disabled,
+            Content = _strip,
+        };
+
         _stripBar = new Border
         {
             Background = palette.Surface,
             BorderBrush = palette.SurfaceBorder,
             BorderThickness = new Avalonia.Thickness(0, 0, 0, 1),
-            Child = new ScrollViewer
-            {
-                HorizontalScrollBarVisibility = Avalonia.Controls.Primitives.ScrollBarVisibility.Auto,
-                VerticalScrollBarVisibility = Avalonia.Controls.Primitives.ScrollBarVisibility.Disabled,
-                Content = _strip,
-            },
+            Child = _stripScroll,
             IsVisible = false, // hidden until the first tab opens
         };
 
@@ -375,11 +382,50 @@ internal sealed class TabHost : UserControl
     {
         _stripBar.IsVisible = _tabs.Count > 0;
         _strip.Children.Clear();
+        _activeTabControl = null;
         foreach (var tab in _tabs)
         {
             tab.RenderedDirty = tab.Pane.IsDirty;
-            _strip.Children.Add(BuildTab(tab));
+            var control = BuildTab(tab);
+            if (ReferenceEquals(tab, _active))
+            {
+                _activeTabControl = control;
+            }
+
+            _strip.Children.Add(control);
         }
+
+        // With enough documents open the strip scrolls, and the tab you just opened from the sidebar (or
+        // reached with ⌘⇧[ / ⌘⇧]) can be off the end of it — so the one thing that says which document you are
+        // looking at is the one thing you can't see. Bring it back on screen. Posted because these buttons were
+        // built a statement ago and have no measured bounds until the next layout pass.
+        Dispatcher.UIThread.Post(RevealActiveTab, DispatcherPriority.Loaded);
+    }
+
+    /// <summary>Scroll the strip the shortest distance that puts the active tab fully on screen.</summary>
+    private void RevealActiveTab()
+    {
+        if (_activeTabControl is not { } tab)
+        {
+            return;
+        }
+
+        // The strip may not have been laid out since the rebuild — callers that drive the dispatcher by hand
+        // (the headless tests) can run this job before the layout pass rather than after it.
+        _stripScroll.UpdateLayout();
+
+        if (tab.Bounds.Width <= 0 || tab.TranslatePoint(default, _stripScroll) is not { } origin)
+        {
+            return; // not on screen at all: no window, or the editor area is collapsed
+        }
+
+        var offset = _stripScroll.Offset;
+        _stripScroll.Offset = offset.WithX(TabStripScroll.Reveal(
+            offset.X,
+            _stripScroll.Viewport.Width,
+            _stripScroll.Extent.Width,
+            offset.X + origin.X, // origin is viewport-relative; the helper works in content coordinates
+            tab.Bounds.Width));
     }
 
     private Control BuildTab(TabItem tab)

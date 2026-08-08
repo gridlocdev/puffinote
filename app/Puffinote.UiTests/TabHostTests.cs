@@ -1,6 +1,9 @@
+using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Headless.XUnit;
 using Avalonia.Interactivity;
+using Avalonia.Threading;
+using Avalonia.VisualTree;
 using Cellestra.Desktop.Services;
 using Puffinote.Components.Commands;
 using Puffinote.Desktop.Panes;
@@ -395,6 +398,91 @@ public sealed class TabHostTests
         {
             dir.Delete(recursive: true);
         }
+    }
+
+    // ---- Keeping the active tab on screen ------------------------------------------------------------
+
+    private static void Settle(Window window)
+    {
+        Dispatcher.UIThread.RunJobs();
+        window.UpdateLayout();
+        Dispatcher.UIThread.RunJobs();
+    }
+
+    /// <summary>A strip with more tabs than fit, in a window narrow enough that it has to scroll.</summary>
+    private static (TabHost Host, Window Window) OpenCrowdedStrip()
+    {
+        var host = new TabHost();
+        var window = new Window { Width = 420, Height = 300, Content = host };
+        window.Show();
+
+        for (var i = 0; i < 12; i++)
+        {
+            host.OpenForTest(new FakePane($"/notebook/note-{i:00}.md"), $"/notebook/note-{i:00}.md");
+        }
+
+        Settle(window);
+        return (host, window);
+    }
+
+    private static ScrollViewer Strip(Window window) =>
+        window.GetVisualDescendants().OfType<ScrollViewer>().First();
+
+    /// <summary>Where the tab titled <paramref name="title"/> sits, in viewport coordinates (0 = left edge).</summary>
+    private static (double Left, double Right) TabEdges(Window window, string title)
+    {
+        var strip = Strip(window);
+        var label = window.GetVisualDescendants().OfType<Button>().First(b => (b.Content as string) == title);
+        var tab = label.GetVisualAncestors().OfType<Border>().First();
+        var left = tab.TranslatePoint(default, strip)!.Value.X;
+        return (left, left + tab.Bounds.Width);
+    }
+
+    [AvaloniaFact]
+    public void The_tab_you_open_is_scrolled_into_view_when_it_is_off_the_end_of_the_strip()
+    {
+        // Twelve documents open in a 420px window: the newest tab is well past the right edge, so the one
+        // thing that says which document you're looking at would otherwise be the one thing you can't see.
+        var (_, window) = OpenCrowdedStrip();
+
+        var strip = Strip(window);
+        Assert.True(strip.Extent.Width > strip.Viewport.Width, "the strip never overflowed — widen the test");
+        Assert.True(strip.Offset.X > 0, "the strip never scrolled to the tab that was just opened");
+
+        var (left, right) = TabEdges(window, "note-11.md");
+        Assert.True(left >= -0.5 && right <= strip.Viewport.Width + 0.5, $"active tab sat at {left}…{right} of a {strip.Viewport.Width}px strip");
+    }
+
+    [AvaloniaFact]
+    public void Activating_a_tab_behind_the_left_edge_scrolls_back_to_it()
+    {
+        // The sidebar reopening an early document — or ⌘⇧[ wrapping round to it — scrolls the other way.
+        var (host, window) = OpenCrowdedStrip();
+
+        host.Activate(host.Tabs[0]);
+        Settle(window);
+
+        var strip = Strip(window);
+
+        // Back at the beginning of the strip: the first tab starts 4px in (the strip's margin), and the
+        // shortest scroll that shows it is exactly that far — it never overshoots into empty space.
+        Assert.True(strip.Offset.X <= 4, $"the strip stopped {strip.Offset.X}px short of the first tab");
+        var (left, right) = TabEdges(window, "note-00.md");
+        Assert.True(left >= -0.5 && right <= strip.Viewport.Width + 0.5, $"first tab sat at {left}…{right}");
+    }
+
+    [AvaloniaFact]
+    public void A_tab_already_on_screen_does_not_move_the_strip()
+    {
+        // Re-opening the file you're already looking at (a double-click in the sidebar) must not shuffle the
+        // strip under the cursor — the reveal only ever scrolls when it has to.
+        var (host, window) = OpenCrowdedStrip();
+        var settled = Strip(window).Offset.X;
+
+        host.Activate(host.Tabs[^1]);
+        Settle(window);
+
+        Assert.Equal(settled, Strip(window).Offset.X);
     }
 
     [AvaloniaFact]
