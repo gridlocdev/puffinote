@@ -236,5 +236,11 @@ public partial class MainWindow
         {
             Title = title;
         }
+
+        // The title *bar* shows the open document alone — no app name, no notebook — because the notebook
+        // is already named at the top of the sidebar and the tab strip is right below. With no tab open
+        // there is no document to name, so it falls back to the notebook, then to the app.
+        TitleBarForTest.DocumentName = _tabHost.ActivePane?.Title ?? notebookName ?? "Puffinote";
+        TitleBarForTest.IsDirty = _tabHost.ActivePane?.IsDirty ?? false;
     }
 }

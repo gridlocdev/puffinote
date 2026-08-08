@@ -9,6 +9,7 @@ using Plaintain.Control.Views;
 using Plaintain.Desktop.Services;
 using Puffinote.Components.Commands;
 using Puffinote.Components.Overlays;
+using Puffinote.Components.Shell;
 using Puffinote.Components.Theming;
 using Puffinote.Text.Document;
 
@@ -33,6 +34,8 @@ public sealed partial class MainWindow : Window
     private readonly MenuItem _recentMenu = new() { Header = "Open _Recent" };
     private readonly OverlayHost _overlay = new() { Background = new SolidColorBrush(Color.FromArgb(0x40, 0, 0, 0)) };
     private readonly Dictionary<string, AppCommand> _commands;
+    // The family's unified title bar: the document's name, centred, in the app's own chrome.
+    private readonly DocumentTitleBar _titleBar = new();
 
     /// <summary>The file being edited, or null for an untitled buffer.</summary>
     private string? CurrentPath { get; set; }
@@ -83,6 +86,13 @@ public sealed partial class MainWindow : Window
         PlainTextEditingCommands.GoToLineRequested += OnGoToLineRequested;
 
         var root = new DockPanel { LastChildFill = true };
+
+        // The title bar is the topmost strip, above even the in-window menu, because on macOS it *is* the
+        // window's title bar — the traffic lights are drawn over it.
+        DockPanel.SetDock(_titleBar, Dock.Top);
+        root.Children.Add(_titleBar);
+        DocumentTitleBar.Extend(this);
+
         var menu = BuildMenu();
         DockPanel.SetDock(menu, Dock.Top);
         root.Children.Add(menu);
@@ -236,6 +246,8 @@ public sealed partial class MainWindow : Window
     {
         string name = CurrentPath is null ? "Untitled" : Path.GetFileName(CurrentPath);
         Title = $"{(EditorView.IsDirty ? "● " : string.Empty)}{name}";
+        _titleBar.DocumentName = name;
+        _titleBar.IsDirty = EditorView.IsDirty;
 
         var caret = EditorView.CaretPosition;
         _statusPosition.Text = $"Ln {caret.DisplayLine}, Col {caret.DisplayColumn}";

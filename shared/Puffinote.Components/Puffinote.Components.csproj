@@ -25,4 +25,13 @@
     <AvaloniaResource Include="Assets\**" />
   </ItemGroup>
 
+  <ItemGroup>
+    <!--
+      This library has no test project of its own — it is compiled into every solution, so its controls
+      are exercised from whichever area's UI suite hosts them (the pattern Puffinote.Text already uses).
+      Puffinote.UiTests is where the shared chrome is covered.
+    -->
+    <InternalsVisibleTo Include="Puffinote.UiTests" />
+  </ItemGroup>
+
 </Project>

@@ -7,6 +7,7 @@ using Cellestra.Desktop.Services;
 using Cellestra.Editor;
 using Puffinote.Components.Commands;
 using Puffinote.Components.Overlays;
+using Puffinote.Components.Shell;
 
 namespace Cellestra.Desktop.Views;
 
@@ -58,6 +59,7 @@ public partial class MainWindow : Window, IEditorHost
         Editor.PreferencesChanged += (_, _) => PersistSettings();
 
         BuildNativeMenu();
+        DocumentTitleBar.Extend(this);
         Closing += OnWindowClosing;
         UpdateTitle();
     }
@@ -114,8 +116,17 @@ public partial class MainWindow : Window, IEditorHost
         UpdateTitle();
     }
 
-    private void UpdateTitle() =>
-        Title = ComposeTitle(Editor.Session.FilePath, Editor.Session.IsModified, _savedBadge is not null);
+    private void UpdateTitle()
+    {
+        var session = Editor.Session;
+        Title = ComposeTitle(session.FilePath, session.IsModified, _savedBadge is not null);
+
+        // The bar carries the same three facts as the title string, but as separate pieces rather than one
+        // composed line — it draws the dot and the badge itself.
+        TitleBar.DocumentName = session.FilePath is null ? "Untitled" : Path.GetFileName(session.FilePath);
+        TitleBar.IsDirty = session.IsModified;
+        TitleBar.Badge = _savedBadge is not null ? "Saved" : null;
+    }
 
     /// <summary>Test seam: end the badge's few seconds now, rather than making a test wait them out.</summary>
     internal void ExpireSavedBadgeForTest()

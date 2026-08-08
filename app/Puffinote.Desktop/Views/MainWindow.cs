@@ -5,6 +5,7 @@ using Avalonia.Media;
 using Puffinote.Components.Commands;
 using Puffinote.Components.Controls;
 using Puffinote.Components.Overlays;
+using Puffinote.Components.Shell;
 using Puffinote.Components.Theming;
 using Puffinote.Desktop.Panes;
 using Puffinote.Desktop.Shell;
@@ -112,6 +113,13 @@ public partial class MainWindow : Window
         };
 
         var root = new DockPanel();
+
+        // The title bar is the topmost strip, above even the in-window menu, because on macOS it *is* the
+        // window's title bar — the traffic lights are drawn over it.
+        DockPanel.SetDock(TitleBarForTest, Dock.Top);
+        root.Children.Add(TitleBarForTest);
+        DocumentTitleBar.Extend(this);
+
         InstallMenu(root);
         root.Children.Add(BuildBody(palette));
         InstallSwipeGestures();
@@ -142,6 +150,12 @@ public partial class MainWindow : Window
 
     /// <summary>The sidebar (test seam — drive the tree in end-to-end mutation tests).</summary>
     internal Sidebar.SidebarView SidebarForTest { get; } = new();
+
+    /// <summary>
+    /// The family's unified title bar: the active document's name, centred, in the app's own chrome.
+    /// (Also the test seam for asserting what it names.)
+    /// </summary>
+    internal DocumentTitleBar TitleBarForTest { get; } = new();
 
     /// <summary>Whether the sidebar is currently hidden (test seam).</summary>
     internal bool IsSidebarCollapsedForTest => _sidebarLayout.IsCollapsed;

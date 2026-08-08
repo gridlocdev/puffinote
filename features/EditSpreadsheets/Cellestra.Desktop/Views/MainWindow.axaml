@@ -1,6 +1,7 @@
 <Window xmlns="https://github.com/avaloniaui"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:editor="clr-namespace:Cellestra.Editor;assembly=Cellestra.Editor"
+        xmlns:shell="clr-namespace:Puffinote.Components.Shell;assembly=Puffinote.Components"
         x:Class="Cellestra.Desktop.Views.MainWindow"
         Title="Cellestra"
         Width="1100" Height="720"
@@ -9,7 +10,13 @@
     <!-- The window is a thin shell around the embeddable editor: it owns the native menu, file dialogs,
          document lock, recent files, settings, and this file-progress overlay; the editor owns the rest. -->
     <Panel>
-        <editor:SpreadsheetEditorView x:Name="Editor" />
+        <!-- The title bar is the topmost strip and, on macOS, *is* the window's title bar: the client
+             area is extended under it (see DocumentTitleBar.Extend) so the traffic lights draw over it
+             and the document's name sits centred where the system title used to. -->
+        <DockPanel>
+            <shell:DocumentTitleBar x:Name="TitleBar" DockPanel.Dock="Top" />
+            <editor:SpreadsheetEditorView x:Name="Editor" />
+        </DockPanel>
 
         <!-- Blocking busy indicator shown while a file open/save runs off the UI thread (#A). Sits on
              top of everything and intercepts input so the document can't be edited mid-load/save. -->

@@ -24,12 +24,24 @@
     - [x] Plaintain
     - [x] Pivotask
 
-- [ ] Across all apps, Center-align the document name in the title bar
-    - [ ] Cellestra
-    - [ ] Puffinote
-    - [ ] Typage
-    - [ ] Plaintain
-    - [ ] Pivotask
+- [x] Across all apps, Center-align the document name in the title bar
+    - [x] Cellestra
+    - [x] Puffinote
+    - [x] Typage
+    - [x] Plaintain
+    - [x] Pivotask
+
+    One shared control, `shared/Puffinote.Components/Shell/DocumentTitleBar.cs`. There was nothing to
+    align before this: every app left its title to the native title bar, which macOS centres and the
+    other platforms left-align, and which showed whatever `Window.Title` said — suffixes and all. The
+    bar is the app's own, so it can show the document's name alone, centred, with the "edited" dot and
+    Cellestra's transient "Saved" badge. `DocumentTitleBar.Extend` merges it with the window on macOS
+    (extending the client area keeps the traffic lights and drops only the system's title text), which
+    is Cellestra PRD §6.1's "unified with the window". `Window.Title` is unchanged — it is what the
+    Window menu and app switcher show. **Not verified on a real Mac**: the container is headless, so
+    the extended-client-area path (traffic-light inset, drag, double-click zoom) is reasoned about, not
+    seen. Windows and Linux keep their native title bar with this one below it; taking those over means
+    owning the caption buttons too, which is its own piece of work.
 
 - [x] If not present, implement zooming in/out across all apps (puffinote and typage)(cmd + zooms in, cmd - zooms out)
     - [x] Cellestra

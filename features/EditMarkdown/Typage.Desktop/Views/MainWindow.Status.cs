@@ -63,7 +63,13 @@ public partial class MainWindow
     private void UpdateTitle()
     {
         var name = _currentPath is null ? "Untitled" : Path.GetFileName(_currentPath);
+
+        // Window.Title still carries the app-name suffix: it is what the Window menu and the app switcher
+        // show, where "notes.md" alone would not say which app it belongs to. The title *bar* shows the
+        // document's name and nothing else, centred.
         Title = (EditorView.IsDirty ? "• " : string.Empty) + name + " — Typage";
+        _titleBar.DocumentName = name;
+        _titleBar.IsDirty = EditorView.IsDirty;
     }
 
     /// <summary>

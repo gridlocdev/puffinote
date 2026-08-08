@@ -5,6 +5,7 @@ using Avalonia.Platform.Storage;
 using Avalonia.Threading;
 using Puffinote.Components.Commands;
 using Puffinote.Components.Overlays;
+using Puffinote.Components.Shell;
 using Puffinote.Text.Document;
 using Typage.Control.Controls;
 using Typage.Control.Views;
@@ -40,6 +41,8 @@ public partial class MainWindow : Window
     private readonly OverlayHost _overlayHost = new() { Background = new SolidColorBrush(Color.FromArgb(0x40, 0, 0, 0)) };
     private Dictionary<string, AppCommand> _commandsById = [];
     private readonly Border? _statusBar;
+    // The family's unified title bar: the document's name, centred, in the app's own chrome.
+    private readonly DocumentTitleBar _titleBar = new();
     private CheckItem? _toggleToolbarItem;
     private CheckItem? _toggleFocusItem;
     private readonly List<(MarkdownEditor.ViewMode Mode, CheckItem Item)> _viewModeItems = [];
@@ -125,6 +128,13 @@ public partial class MainWindow : Window
         Resources["ChromeBorder"] = _chromeBorder;
 
         var root = new DockPanel();
+
+        // The title bar is the topmost strip, above even the in-window menu, because on macOS it *is* the
+        // window's title bar — the traffic lights are drawn over it.
+        DockPanel.SetDock(_titleBar, Dock.Top);
+        root.Children.Add(_titleBar);
+        DocumentTitleBar.Extend(this);
+
         InstallMenu(root); // macOS native menu bar, or the in-window menu elsewhere; plus key bindings
 
         // The formatting toolbar and the find bar are the editor's own, docked inside it — this shell just

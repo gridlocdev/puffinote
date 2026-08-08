@@ -12,6 +12,7 @@ using Pivotask.Core.Serialization;
 using Pivotask.Desktop.Services;
 using Puffinote.Components.Commands;
 using Puffinote.Components.Overlays;
+using Puffinote.Components.Shell;
 using Puffinote.Components.Theming;
 
 namespace Pivotask.Desktop.Views;
@@ -36,6 +37,8 @@ public sealed partial class MainWindow : Window
     private readonly TextBlock _status = new();
     private readonly OverlayHost _overlay = new() { Background = new SolidColorBrush(Color.FromArgb(0x40, 0, 0, 0)) };
     private readonly Dictionary<string, AppCommand> _commands;
+    // The family's unified title bar: the document's name, centred, in the app's own chrome.
+    private readonly DocumentTitleBar _titleBar = new();
     private bool _closingConfirmed;
 
     public MainWindow()
@@ -58,6 +61,13 @@ public sealed partial class MainWindow : Window
         TaskEditingCommands.SearchRequested += OnSearchRequested;
 
         var root = new DockPanel { LastChildFill = true };
+
+        // The title bar is the topmost strip, above even the in-window menu, because on macOS it *is* the
+        // window's title bar — the traffic lights are drawn over it.
+        DockPanel.SetDock(_titleBar, Dock.Top);
+        root.Children.Add(_titleBar);
+        DocumentTitleBar.Extend(this);
+
         var menu = BuildMenu();
         DockPanel.SetDock(menu, Dock.Top);
         root.Children.Add(menu);
@@ -198,6 +208,8 @@ public sealed partial class MainWindow : Window
         var document = _view.Document;
         string name = document.Path is { } path ? Path.GetFileName(path) : "Untitled board";
         Title = $"{(document.IsDirty ? "● " : string.Empty)}{name}";
+        _titleBar.DocumentName = name;
+        _titleBar.IsDirty = document.IsDirty;
 
         int tasks = document.Board.Groups.Sum(g => g.Tasks.Count);
         int open = document.Board.Groups.Sum(g => g.Tasks.Count(t => !t.Done));
