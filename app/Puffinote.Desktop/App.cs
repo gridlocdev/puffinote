@@ -5,6 +5,7 @@ using Avalonia.Markup.Xaml.Styling;
 using Avalonia.Media;
 using Avalonia.Styling;
 using Avalonia.Themes.Fluent;
+using Puffinote.Components.Input;
 using Puffinote.Components.Theming;
 using Puffinote.Desktop.Shell;
 using Puffinote.Desktop.Views;
@@ -24,6 +25,11 @@ public class App : Application
     public override void Initialize()
     {
         Styles.Add(new FluentTheme());
+
+        // Every TextBox in the shell — search, rename, the embedded editors' own fields — blinks at the same
+        // rate the embedded custom surfaces do (CaretBlink). The shell is where the mismatch was most visible:
+        // one window, a spreadsheet cell in one tab and a Markdown document in the next.
+        Styles.Add(CaretBlink.TextBoxStyles());
 
         // The embedded Cellestra editor uses a ColorPicker (Format Cells) — supply its control theme, exactly
         // as the standalone Cellestra app does in its App.axaml, or that dialog fails for lack of a template.

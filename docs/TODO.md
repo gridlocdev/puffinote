@@ -251,7 +251,26 @@
 
 - [ ] All Apps: When quitting, always ensure that the program removes file locks for any files that were opened in the application. This prevents issues with other applications being unable to access those files after the application has been closed.
 
-- [ ] All Apps: Ensure the cursor blinks at a consistent rate across all applications while application focus is on editing text. The current implementation has no blinking, which can make it difficult to locate the cursor. 
+- [x] All Apps: Ensure the cursor blinks at a consistent rate across all applications while application focus is on editing text. The current implementation has no blinking, which can make it difficult to locate the cursor.
+
+    One rate, defined once: `Puffinote.Components.Input.CaretBlink` — 500 ms lit, 500 ms dark (macOS's
+    own caret; we ship macOS-first). Two kinds of surface had to be brought onto it. Typage and
+    Plaintain paint their own caret and painted a *steady* one, so `CaretBlink.Attach` gives each a
+    timer, and both now gate the caret on `IsCaretVisible` as well as focus. Cellestra's cell editor and
+    formula bar, Pivotask's task fields and the shell's search box are Avalonia `TextBox`es, which blink
+    on their own but at whatever `CaretBlinkInterval` that version of Avalonia defaults to — so all five
+    apps register `CaretBlink.TextBoxStyles()` and pin them to the same number. The interval is the time
+    between phase flips rather than the cycle length, because that is the unit `TextBox` states it in and
+    the two must not drift apart.
+
+    The caret goes solid again on every edit and every caret move (`Show`, called from each surface's
+    `Buffer.Changed`): a caret that blinks *through* a keystroke can be dark at the instant the character
+    lands, hiding the one thing the blink exists to point at. Avalonia's own `TextPresenter` restarts its
+    phase the same way. Blinking runs only while the surface has focus, and the timer is stopped when it
+    leaves the visual tree — a closed tab must not keep waking the dispatcher to repaint a caret nobody
+    can see. Each app's UI suite asserts the rate arrived at `BindingPriority.Style`, so the test fails if
+    an app ever stops registering the styles rather than passing on an Avalonia default that happens to
+    match today.
 
 - [x] All Apps: Allow selecting the theme (light, dark, or system default) in the settings menu for all applications. This allows users to customize the appearance of the application according to their preferences and system settings. Default to system theme if no preference is set. The theme should be applied immediately upon selection, and the application should remember the user's preference for future sessions. In Puffinote, only display this a single time for itself in the settings menu, and not in the settings for each individual app.
 

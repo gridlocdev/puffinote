@@ -104,6 +104,15 @@ public partial class MarkdownEditor
         return _rowPrefix[BlockOf(line)];
     }
 
+    /// <summary>
+    /// Test seam: step the caret's blink one phase, as its timer would. A headless test has no wall clock
+    /// to wait on, so this is how it observes the caret going dark and coming back.
+    /// </summary>
+    internal void AdvanceCaretBlinkForTest() => _caretBlink.Advance();
+
+    /// <summary>Test seam: whether the blink is currently on its lit phase.</summary>
+    internal bool IsCaretLitForTest => _caretBlink.IsCaretVisible;
+
     /// <summary>The global visual row the caret is actually drawn on, mirroring RenderBlock's placement; for tests.</summary>
     internal int CaretDrawnRowForTest()
     {

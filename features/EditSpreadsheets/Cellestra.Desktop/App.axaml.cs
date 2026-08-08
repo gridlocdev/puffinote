@@ -5,6 +5,7 @@ using Avalonia.Markup.Xaml;
 using Avalonia.Media;
 using Cellestra.Desktop.Views;
 using Puffinote.Components.Commands;
+using Puffinote.Components.Input;
 using Puffinote.Components.Theming;
 
 namespace Cellestra.Desktop;
@@ -14,6 +15,11 @@ public partial class App : Application
     public override void Initialize()
     {
         AvaloniaXamlLoader.Load(this);
+
+        // The cell editor and formula bar are TextBoxes; this puts their caret on the family's blink rate,
+        // the same one Typage's and Plaintain's custom surfaces paint themselves with. Added here rather
+        // than in App.axaml so the rate has exactly one definition (CaretBlink) for all five apps.
+        Styles.Add(CaretBlink.TextBoxStyles());
         Tokens.Current = new PuffinoteTheme(Color.FromRgb(0x2A, 0x7D, 0xE1)); // Cellestra's blue accent
 
         // App.axaml requests the Default variant — the OS's — and the window narrows that to the saved

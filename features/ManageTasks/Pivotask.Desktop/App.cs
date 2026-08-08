@@ -3,6 +3,7 @@ using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Media;
 using Avalonia.Themes.Fluent;
 using Pivotask.Desktop.Views;
+using Puffinote.Components.Input;
 using Puffinote.Components.Theming;
 
 namespace Pivotask.Desktop;
@@ -16,6 +17,7 @@ public class App : Application
     public override void Initialize()
     {
         Styles.Add(new FluentTheme());
+        Styles.Add(CaretBlink.TextBoxStyles()); // task titles and notes blink at the family rate
         Tokens.Current = new PuffinoteTheme(Color.FromRgb(0x0E, 0x74, 0x90)); // Pivotask's teal accent
 
         // No variant is requested here: the window applies the saved appearance (Preferences ▸ Appearance ▸

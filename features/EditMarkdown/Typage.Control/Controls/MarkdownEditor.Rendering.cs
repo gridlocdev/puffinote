@@ -296,8 +296,9 @@ public partial class MarkdownEditor
         }
 
         // Caret — placed through the map (correct amid hidden markers) on its wrapped row. It takes the row's
-        // own height, so it grows on a heading line rather than staying body-sized.
-        if (caretBlock == block && IsFocused)
+        // own height, so it grows on a heading line rather than staying body-sized. Drawn only while focused,
+        // and then only on the lit half of the blink (CaretBlink).
+        if (caretBlock == block && IsFocused && _caretBlink.IsCaretVisible)
         {
             var col = Math.Clamp(sel.Caret - blockStart, 0, visual.RawLength);
             var caretX = visual.ColumnToX(col);

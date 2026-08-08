@@ -2,6 +2,7 @@ using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Controls.Primitives;
 using Avalonia.Media;
+using Puffinote.Components.Input;
 using Puffinote.Components.Theming;
 using Puffinote.Text.Editing;
 
@@ -56,11 +57,15 @@ public sealed partial class PlainTextEditor : Avalonia.Controls.Control, IScroll
     /// <summary>The widest line seen while wrap is off, in columns — the horizontal scroll extent.</summary>
     private int _widestColumns;
 
+    /// <summary>The family's blinking caret (<see cref="CaretBlink"/>) — one rate across every app.</summary>
+    private readonly CaretBlink _caretBlink;
+
     public PlainTextEditor()
     {
         Focusable = true;
         _typeface = new Typeface(FontFamily);
         WatchFocus();
+        _caretBlink = CaretBlink.Attach(this);
 
         // The surface resolves its palette from ActualThemeVariant at paint time (see Render), so a theme
         // switch changes what it *would* draw — but nothing about a theme change asks a custom-drawn control
@@ -69,6 +74,9 @@ public sealed partial class PlainTextEditor : Avalonia.Controls.Control, IScroll
         ActualThemeVariantChanged += (_, _) => InvalidateVisual();
         Buffer.Changed += (_, _) =>
         {
+            // Every edit and every caret move comes through here, which is exactly when the caret has to
+            // go solid again — it must not be mid-blink-out at the moment a character lands under it.
+            _caretBlink.Show();
             InvalidateMetrics();
             InvalidateVisual();
             SelectionChanged?.Invoke(this, EventArgs.Empty);

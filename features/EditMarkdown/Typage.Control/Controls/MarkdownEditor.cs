@@ -3,6 +3,7 @@ using Avalonia.Controls.Primitives;
 using Avalonia.Input;
 using Avalonia.Media;
 using Avalonia.Threading;
+using Puffinote.Components.Input;
 using Puffinote.Text.Document;
 using Puffinote.Text.Editing;
 using Typage.Control.Rendering;
@@ -37,6 +38,7 @@ public partial class MarkdownEditor : Avalonia.Controls.Control, ILogicalScrolla
 
     private readonly TextMeasurer _measurer; // text measurement + FormattedText/width caches (theme-only dep)
     private readonly LayoutModel _layout; // owns block grouping, row counts, and the VisualLine cache
+    private readonly CaretBlink _caretBlink; // the family's blinking caret — one rate across every app
     private MarkdownModel _model;
     private IBrush _dimMarker = new SolidColorBrush(Color.FromArgb(0x46, 0x6E, 0x76, 0x81));
 
@@ -67,6 +69,7 @@ public partial class MarkdownEditor : Avalonia.Controls.Control, ILogicalScrolla
         Focusable = true;
         _measurer = new TextMeasurer(() => IndentWidth);
         _layout = new LayoutModel(this, _measurer);
+        _caretBlink = CaretBlink.Attach(this);
         _model = MarkdownModel.Build(Buffer.Document);
         Buffer.TextChanged += (_, _) =>
         {
@@ -87,6 +90,9 @@ public partial class MarkdownEditor : Avalonia.Controls.Control, ILogicalScrolla
         };
         Buffer.Changed += (_, _) =>
         {
+            // Every edit and every caret move lands here, which is when the caret has to go solid again:
+            // blinking through a keystroke can leave it dark exactly where the character appears.
+            _caretBlink.Show();
             InvalidateVisual();
             ScrollCaretIntoView();
             SelectionChanged?.Invoke(this, EventArgs.Empty);

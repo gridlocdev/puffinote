@@ -3,6 +3,7 @@ using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Media;
 using Avalonia.Themes.Fluent;
 using Plaintain.Desktop.Views;
+using Puffinote.Components.Input;
 using Puffinote.Components.Theming;
 
 namespace Plaintain.Desktop;
@@ -16,6 +17,7 @@ public class App : Application
     public override void Initialize()
     {
         Styles.Add(new FluentTheme());
+        Styles.Add(CaretBlink.TextBoxStyles()); // find bar and dialogs blink at the family rate, like the surface
         Tokens.Current = new PuffinoteTheme(Color.FromRgb(0x8B, 0x8B, 0x8B)); // grey: plaintext has no opinion
 
         // No variant is requested here: the window applies the saved appearance (Preferences ▸ Appearance ▸

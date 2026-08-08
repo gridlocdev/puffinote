@@ -2,6 +2,7 @@ using Avalonia;
 using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Media;
 using Avalonia.Themes.Fluent;
+using Puffinote.Components.Input;
 using Puffinote.Components.Theming;
 using Typage.Desktop.Services;
 using Typage.Desktop.Views;
@@ -17,6 +18,7 @@ public class App : Application
     public override void Initialize()
     {
         Styles.Add(new FluentTheme());
+        Styles.Add(CaretBlink.TextBoxStyles()); // find bar and dialogs blink at the family rate, like the surface
         Tokens.Current = new PuffinoteTheme(Color.FromRgb(0x57, 0x9D, 0xF6)); // Typage's blue accent
 
         // No variant is requested here: the window applies the saved appearance (Preferences ▸ Appearance ▸

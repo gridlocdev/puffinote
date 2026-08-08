@@ -286,7 +286,8 @@ public sealed partial class PlainTextEditor
 
     private void DrawCaret(DrawingContext context, Palette palette, int row, int column, Rect bounds)
     {
-        if (!IsFocused)
+        // Unfocused: no caret at all. Focused: only on the lit half of the blink (CaretBlink).
+        if (!IsFocused || !_caretBlink.IsCaretVisible)
         {
             return;
         }
@@ -309,6 +310,15 @@ public sealed partial class PlainTextEditor
     internal double MeasureRowForTest(string text) =>
         new FormattedText(text, CultureInfo.CurrentCulture, FlowDirection.LeftToRight, _typeface, ScaledFontSize,
             Brushes.Black).WidthIncludingTrailingWhitespace;
+
+    /// <summary>
+    /// Test seam: step the caret's blink one phase, as its timer would. A headless test has no wall clock
+    /// to wait on, so this is how it observes the caret going dark and coming back.
+    /// </summary>
+    internal void AdvanceCaretBlinkForTest() => _caretBlink.Advance();
+
+    /// <summary>Test seam: whether the blink is currently on its lit phase.</summary>
+    internal bool IsCaretLitForTest => _caretBlink.IsCaretVisible;
 
     /// <summary>Test seam: the caret's pixel rectangle, so a headless test can check where it is drawn.</summary>
     internal Rect CaretRectForTest()
