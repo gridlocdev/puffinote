@@ -124,7 +124,23 @@
 
 - [x] Puffinote: The "Collapse All Folders" button should change to "Expand All Folders" when the file tree is fully collapsed, and vice versa. This provides clear feedback to the user about the current state of the file tree and what action the button will perform. Ensure that the top of the file tree stays in place, and does not repeat a current UI bug where each time the button is clicked it increases a small visual gap downwards by one or a few pixels each time. This is a visual bug that should be fixed to maintain a consistent and stable UI.
 
-- [ ] Puffinote: The "New Note" button should just be a "New" button with a normal "Plus" icon, and when clicked, show a context menu with options for "New Folder", "New Note", "New Spreadsheet", "New Taskboard", and "New File". New File should permit the user to use any file extension (other than the ones reserved for other pre-defined document types). This change would streamline the UI and provide users with quick access to different types of new documents.
+- [x] Puffinote: The "New Note" button should just be a "New" button with a normal "Plus" icon, and when clicked, show a context menu with options for "New Folder", "New Note", "New Spreadsheet", "New Taskboard", and "New File". New File should permit the user to use any file extension (other than the ones reserved for other pre-defined document types). This change would streamline the UI and provide users with quick access to different types of new documents.
+
+    The header button is now a `plus` with a `MenuFlyout` of the five, and the file tree's folder and
+    empty-space context menus offer the same five in the same order — one list of what a notebook can
+    hold, wherever you ask for it. Two new shell commands (`shell.newTaskboard`, `shell.newFile`) carry
+    them into the File menu and the palette as well.
+
+    A new board is *seeded* with `BoardDocument.Starter()` for the same reason a new spreadsheet is
+    seeded with a blank workbook: Pivotask reads a board out of JSON, so a 0-byte `.pivotask.json` is a
+    parse error, not an empty board. "New File…" is the opposite — it writes nothing, because a type the
+    shell knows nothing about is one it has no business seeding.
+
+    What "reserved" means lives in one place now (`Panes/DocumentTypes.cs`), read by both sides of the
+    claim: `EditorPaneFactory` asks it what opens a file, and New File asks it what a typed name may not
+    be. Two lists would have drifted, and silently — a "New File" called `budget.ods` would produce an
+    empty workbook that the spreadsheet pane then refuses to open. The refusal names the command that
+    does make one (`.ods` → "New Spreadsheet…"), and the dialog says the rule before you type.
 
 - [x] Puffinote: Use icon buttons for the top bar's "Files", "Outline", "Search", and "Recent" buttons. Add an icon button next to them for "Settings".
 - [x] Puffinote: The "Settings" menu should show a list of tabs for settings for each of the apps from their corresponding configuration directories. The tabs shouldn't be named with their app names, it should be named with the app's purpose, for example "General" for Puffinote's settings, "Notes" for Typage, "Spreadsheets" for Cellestra, "Tasks" for Pivotask. Each tab should show the settings for that app, and allow the user to change them. The settings should be saved to the corresponding configuration file for that app. In each UI, provide a clickable button to open the configuration file in the default text editor for that file type, so that users can edit the configuration file directly if they wish. This allows for advanced users to make changes that may not be exposed in the UI.

@@ -53,6 +53,8 @@ internal sealed class FilesPanel : ISidebarPanel
         _tree.DeleteRequested += node => DeleteRequested?.Invoke(node);
         _tree.NewNoteRequested += node => NewNoteRequested?.Invoke(node);
         _tree.NewSpreadsheetRequested += node => NewSpreadsheetRequested?.Invoke(node);
+        _tree.NewTaskboardRequested += node => NewTaskboardRequested?.Invoke(node);
+        _tree.NewFileRequested += node => NewFileRequested?.Invoke(node);
         _tree.NewFolderRequested += node => NewFolderRequested?.Invoke(node);
         _tree.PinRequested += node => Pin(node.Path);
         _tree.UnpinRequested += node => Unpin(node.Path);
@@ -145,6 +147,8 @@ internal sealed class FilesPanel : ISidebarPanel
     public event Action<NotebookNode>? DeleteRequested;
     public event Action<NotebookNode?>? NewNoteRequested;
     public event Action<NotebookNode?>? NewSpreadsheetRequested;
+    public event Action<NotebookNode?>? NewTaskboardRequested;
+    public event Action<NotebookNode?>? NewFileRequested;
     public event Action<NotebookNode?>? NewFolderRequested;
 
     /// <summary>Hand-offs to the host OS (tree context menu), fulfilled by the shell.</summary>

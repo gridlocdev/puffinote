@@ -78,7 +78,7 @@ public sealed class FileTreeVisualsTests : IDisposable
             "star",                          // pin a folder
             "x",                             // unpin a chip
             "layers",                        // the "All notes" chip
-            "file-plus",                     // the header's New note
+            "plus",                          // the header's New menu
             "chevrons-up",                   // the header's Collapse all
         ];
 

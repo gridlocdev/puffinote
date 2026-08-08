@@ -19,12 +19,6 @@ namespace Puffinote.Desktop.Panes;
 /// </summary>
 internal static class EditorPaneFactory
 {
-    /// <summary>
-    /// A board's compound extension. Matched with <c>EndsWith</c>, deliberately: this is a suffix, and
-    /// treating it as an extension is exactly the bug §4 of the proposal warns about.
-    /// </summary>
-    private const string BoardSuffix = ".pivotask.json";
-
     /// <summary>Extensions Plaintain routes on sight, so the common cases never touch the disk twice.</summary>
     private static readonly string[] PlainTextExtensions =
     [
@@ -99,14 +93,16 @@ internal static class EditorPaneFactory
         return null;
     }
 
+    // Which extension belongs to which editor is DocumentTypes' to say — the New menu reserves exactly
+    // what these three route, and a list per side would drift.
     private static bool IsMarkdown(string path) =>
-        HasExtension(path, ".md", ".markdown", ".mdown");
+        HasExtension(path, DocumentTypes.MarkdownExtensions);
 
     private static bool IsSpreadsheet(string path) =>
-        HasExtension(path, ".ods");
+        HasExtension(path, DocumentTypes.SpreadsheetExtensions);
 
     private static bool IsBoard(string path) =>
-        path is not null && path.EndsWith(BoardSuffix, StringComparison.OrdinalIgnoreCase);
+        path is not null && path.EndsWith(DocumentTypes.BoardSuffix, StringComparison.OrdinalIgnoreCase);
 
     /// <summary>
     /// Whether Plaintain should take this file: a known text extension, or — for anything else — bytes

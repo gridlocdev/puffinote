@@ -40,8 +40,12 @@ public partial class MainWindow
                 () => _ = PromptNewNoteAsync(SidebarForTest.SelectedTreeNode), () => _notebook.Root is not null, icon: "file-plus"),
             new("shell.newSpreadsheet", "New Spreadsheet…", "Create a new spreadsheet in the selected folder", Bound("shell.newSpreadsheet", null),
                 () => _ = PromptNewSpreadsheetAsync(SidebarForTest.SelectedTreeNode), () => _notebook.Root is not null, icon: "table"),
+            new("shell.newTaskboard", "New Taskboard…", "Create a new task board in the selected folder", Bound("shell.newTaskboard", null),
+                () => _ = PromptNewTaskboardAsync(SidebarForTest.SelectedTreeNode), () => _notebook.Root is not null, icon: "square-check"),
+            new("shell.newFile", "New File…", "Create a file of any other type in the selected folder", Bound("shell.newFile", null),
+                () => _ = PromptNewFileAsync(SidebarForTest.SelectedTreeNode), () => _notebook.Root is not null, icon: "file"),
             new("shell.newFolder", "New Folder…", "Create a new folder in the selected folder", Bound("shell.newFolder", null),
-                () => _ = PromptNewFolderAsync(SidebarForTest.SelectedTreeNode), () => _notebook.Root is not null),
+                () => _ = PromptNewFolderAsync(SidebarForTest.SelectedTreeNode), () => _notebook.Root is not null, icon: "folder"),
             new("shell.renameEntry", "Rename…", "Rename the selected file or folder", Bound("shell.renameEntry", null),
                 () =>
                 {
@@ -218,7 +222,7 @@ public partial class MainWindow
             {
                 Items =
                 {
-                    new NativeMenuItem { Header = "File", Menu = BuildNativeMenu("shell.openNotebook", "shell.quickOpen", "shell.newNote", "shell.newSpreadsheet", "shell.newFolder", "shell.save", "shell.closeTab", "shell.closeOtherTabs", "shell.closeAllTabs") },
+                    new NativeMenuItem { Header = "File", Menu = BuildNativeMenu("shell.openNotebook", "shell.quickOpen", "shell.newFolder", "shell.newNote", "shell.newSpreadsheet", "shell.newTaskboard", "shell.newFile", "shell.save", "shell.closeTab", "shell.closeOtherTabs", "shell.closeAllTabs") },
                     new NativeMenuItem { Header = "View", Menu = BuildNativeMenu("shell.commandPalette", "shell.toggleSidebar", "shell.toggleTabBar", "shell.focusTree", "shell.focusEditor", "shell.toggleEditorToolbar", "shell.nextTab", "shell.prevTab", "shell.preferences") },
                     new NativeMenuItem { Header = "Help", Menu = BuildNativeMenu("shell.shortcuts", "shell.about") },
                 },
@@ -235,7 +239,7 @@ public partial class MainWindow
         {
             Items =
             {
-                new MenuItem { Header = "_File", ItemsSource = BuildMenuItems("shell.openNotebook", "shell.quickOpen", "shell.newNote", "shell.newSpreadsheet", "shell.newFolder", "shell.save", "shell.closeTab", "shell.closeOtherTabs", "shell.closeAllTabs") },
+                new MenuItem { Header = "_File", ItemsSource = BuildMenuItems("shell.openNotebook", "shell.quickOpen", "shell.newFolder", "shell.newNote", "shell.newSpreadsheet", "shell.newTaskboard", "shell.newFile", "shell.save", "shell.closeTab", "shell.closeOtherTabs", "shell.closeAllTabs") },
                 new MenuItem { Header = "_View", ItemsSource = BuildMenuItems("shell.commandPalette", "shell.toggleSidebar", "shell.toggleTabBar", "shell.focusTree", "shell.focusEditor", "shell.toggleEditorToolbar", "shell.nextTab", "shell.prevTab", "shell.preferences") },
                 new MenuItem { Header = "_Help", ItemsSource = BuildMenuItems("shell.shortcuts", "shell.about") },
             },

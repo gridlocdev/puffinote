@@ -144,6 +144,12 @@ internal sealed class FileTreeView : UserControl
     /// <summary>Raised to create a new spreadsheet; the argument is the selected node (the shell picks the folder).</summary>
     public event Action<NotebookNode?>? NewSpreadsheetRequested;
 
+    /// <summary>Raised to create a new task board; the argument is the selected node (the shell picks the folder).</summary>
+    public event Action<NotebookNode?>? NewTaskboardRequested;
+
+    /// <summary>Raised to create a file of any other type; the argument is the selected node (the shell picks the folder).</summary>
+    public event Action<NotebookNode?>? NewFileRequested;
+
     /// <summary>Raised to create a new folder; the argument is the selected node (the shell picks the folder).</summary>
     public event Action<NotebookNode?>? NewFolderRequested;
 
@@ -1071,9 +1077,9 @@ internal sealed class FileTreeView : UserControl
             items.Add(new Separator());
         }
 
-        items.Add(Item("New Note…", () => NewNoteRequested?.Invoke(folder)));
-        items.Add(Item("New Spreadsheet…", () => NewSpreadsheetRequested?.Invoke(folder)));
-        items.Add(Item("New Folder…", () => NewFolderRequested?.Invoke(folder)));
+        // The same five, in the same order, as the sidebar header's New button — one list of what a notebook
+        // can hold, wherever you ask for it.
+        items.AddRange(NewItems(folder));
         items.Add(new Separator());
 
         items.Add(_pinned.Contains(folder.Path)
@@ -1101,11 +1107,22 @@ internal sealed class FileTreeView : UserControl
     /// <summary>The menu for the tree's empty space: it acts on the scope, which is the only thing that was clicked.</summary>
     private List<Control> ScopeMenu() =>
     [
-        Item("New Note…", () => NewNoteRequested?.Invoke(_root)),
-        Item("New Spreadsheet…", () => NewSpreadsheetRequested?.Invoke(_root)),
-        Item("New Folder…", () => NewFolderRequested?.Invoke(_root)),
+        .. NewItems(_root),
         new Separator(),
         Item("Collapse All", CollapseAll),
+    ];
+
+    /// <summary>
+    /// The "New …" block, creating inside <paramref name="target"/>: folder first, then the three document
+    /// types the shell seeds, then the any-extension escape hatch.
+    /// </summary>
+    private List<Control> NewItems(NotebookNode? target) =>
+    [
+        Item("New Folder…", () => NewFolderRequested?.Invoke(target)),
+        Item("New Note…", () => NewNoteRequested?.Invoke(target)),
+        Item("New Spreadsheet…", () => NewSpreadsheetRequested?.Invoke(target)),
+        Item("New Taskboard…", () => NewTaskboardRequested?.Invoke(target)),
+        Item("New File…", () => NewFileRequested?.Invoke(target)),
     ];
 
     /// <summary>

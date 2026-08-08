@@ -221,7 +221,8 @@ public sealed class FileTreeViewTests : IDisposable
         Assert.Equal(
             [
                 "Expand", "—",                                     // "sub" holds child.md, so it can be opened
-                "New Note…", "New Spreadsheet…", "New Folder…", "—", // a folder is the only row that creates
+                // A folder is the only row that creates — and it offers every type the header's New button does.
+                "New Folder…", "New Note…", "New Spreadsheet…", "New Taskboard…", "New File…", "—",
                 "Pin to Sidebar", SystemFileManager.RevealLabel, "—",
                 "Rename…", "Delete",
             ],
@@ -232,6 +233,16 @@ public sealed class FileTreeViewTests : IDisposable
         tree.NewNoteRequested += node => noteContext = node;
         tree.InvokeContextMenuItemForTest("New Note…");
         Assert.Equal("sub", noteContext?.Name);
+
+        NotebookNode? boardContext = null;
+        tree.NewTaskboardRequested += node => boardContext = node;
+        tree.InvokeContextMenuItemForTest("New Taskboard…");
+        Assert.Equal("sub", boardContext?.Name);
+
+        NotebookNode? fileContext = null;
+        tree.NewFileRequested += node => fileContext = node;
+        tree.InvokeContextMenuItemForTest("New File…");
+        Assert.Equal("sub", fileContext?.Name);
 
         // Expand/Collapse names what the row will do next, and does it.
         tree.InvokeContextMenuItemForTest("Expand");
@@ -317,7 +328,7 @@ public sealed class FileTreeViewTests : IDisposable
         RightClick(window, belowTheRows);
         Assert.Null(tree.SelectedNameForTest);
         Assert.Equal(
-            ["New Note…", "New Spreadsheet…", "New Folder…", "Collapse All"],
+            ["New Folder…", "New Note…", "New Spreadsheet…", "New Taskboard…", "New File…", "Collapse All"],
             menu.Items.OfType<MenuItem>().Select(item => item.Header as string));
         menu.Close();
     }
@@ -343,7 +354,7 @@ public sealed class FileTreeViewTests : IDisposable
         tree.ClearSelectionForTest(); // what a right click on the empty space does
 
         Assert.Equal(
-            ["New Note…", "New Spreadsheet…", "New Folder…", "—", "Collapse All"],
+            ["New Folder…", "New Note…", "New Spreadsheet…", "New Taskboard…", "New File…", "—", "Collapse All"],
             tree.ContextMenuHeadersForTest);
 
         // Nothing was clicked, so nothing can be renamed or deleted by accident.

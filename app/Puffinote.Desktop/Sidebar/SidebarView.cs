@@ -1,6 +1,7 @@
 using Avalonia;
 using Avalonia.Automation;
 using Avalonia.Controls;
+using Avalonia.Interactivity;
 using Avalonia.Layout;
 using Avalonia.Media;
 using Puffinote.Components.Controls.Icons;
@@ -54,6 +55,9 @@ internal sealed class SidebarView : UserControl
     private readonly Border _body = new();
     private ISidebarPanel _active;
 
+    /// <summary>The header New button's menu, kept so a test can read and click it without a popup window.</summary>
+    private List<MenuItem> _newItems = [];
+
     public SidebarView()
     {
         _panels = [_files, _search, _outline, _recent];
@@ -67,6 +71,8 @@ internal sealed class SidebarView : UserControl
         _files.DeleteRequested += node => DeleteRequested?.Invoke(node);
         _files.NewNoteRequested += node => NewNoteRequested?.Invoke(node);
         _files.NewSpreadsheetRequested += node => NewSpreadsheetRequested?.Invoke(node);
+        _files.NewTaskboardRequested += node => NewTaskboardRequested?.Invoke(node);
+        _files.NewFileRequested += node => NewFileRequested?.Invoke(node);
         _files.NewFolderRequested += node => NewFolderRequested?.Invoke(node);
         _files.RevealRequested += node => RevealRequested?.Invoke(node);
         _files.OpenExternallyRequested += node => OpenExternallyRequested?.Invoke(node);
@@ -128,6 +134,8 @@ internal sealed class SidebarView : UserControl
     public event Action<NotebookNode>? DeleteRequested;
     public event Action<NotebookNode?>? NewNoteRequested;
     public event Action<NotebookNode?>? NewSpreadsheetRequested;
+    public event Action<NotebookNode?>? NewTaskboardRequested;
+    public event Action<NotebookNode?>? NewFileRequested;
     public event Action<NotebookNode?>? NewFolderRequested;
 
     /// <summary>Hand-offs to the host OS (tree context menu), fulfilled by the shell.</summary>
@@ -161,6 +169,15 @@ internal sealed class SidebarView : UserControl
     /// Also the test seam: click it as a user would.
     /// </summary>
     internal Button FoldersToggle { get; }
+
+    /// <summary>The headers on the header New button's menu, in order (test seam).</summary>
+    internal IReadOnlyList<string> NewMenuHeadersForTest => [.. _newItems.Select(i => i.Header as string ?? string.Empty)];
+
+    /// <summary>Click an item on the New menu by its header (test seam).</summary>
+    internal void InvokeNewMenuItemForTest(string header) =>
+        _newItems
+            .First(item => string.Equals(item.Header as string, header, StringComparison.Ordinal))
+            .RaiseEvent(new RoutedEventArgs(MenuItem.ClickEvent));
 
     /// <summary>The outline panel's current items (test seam).</summary>
     internal IReadOnlyList<Panes.OutlineItem> OutlineItemsForTest => _outline.ItemsForTest;
@@ -215,7 +232,7 @@ internal sealed class SidebarView : UserControl
 
     /// <summary>
     /// The two things you reach for while looking at a file tree and could previously only get to through a menu
-    /// or a chord: make a note, and shut every folder you have opened rummaging around. They are icon buttons —
+    /// or a chord: make something, and shut every folder you have opened rummaging around. They are icon buttons —
     /// tooltipped and named for a screen reader — so they cost the header no width it would rather give the
     /// notebook's name.
     ///
@@ -229,8 +246,7 @@ internal sealed class SidebarView : UserControl
     /// </summary>
     private Button BuildActions(ThemePalette palette)
     {
-        _actions.Children.Add(IconButton(
-            "file-plus", "New note", palette, () => NewNoteRequested?.Invoke(_files.SelectedNode)));
+        _actions.Children.Add(BuildNewButton(palette));
 
         var toggle = IconButton("chevrons-up", "Collapse all folders", palette, ToggleAllFolders);
         _actions.Children.Add(toggle);
@@ -280,11 +296,55 @@ internal sealed class SidebarView : UserControl
     }
 
     /// <summary>
+    /// The header's "New" control: one plus button that drops the five things a notebook is made of. It used to
+    /// be a New Note button, which made the one type it wrote the only one you could reach without going through
+    /// a menu or knowing a chord — a board or a spreadsheet cost the same trip either way. A menu says what the
+    /// notebook can hold in one glance and keeps the header at one glyph wide.
+    ///
+    /// <para>Folder leads, then the three document types the shell knows how to seed, then the escape hatch for
+    /// everything else. The target folder is read at <em>click</em> time (<see cref="FilesPanel.SelectedNode"/>),
+    /// so the menu acts on the selection you can see, exactly as the tree's own context menu does.</para>
+    /// </summary>
+    private Button BuildNewButton(ThemePalette palette)
+    {
+        _newItems =
+        [
+            MenuEntry("New Folder…", () => NewFolderRequested?.Invoke(_files.SelectedNode)),
+            MenuEntry("New Note…", () => NewNoteRequested?.Invoke(_files.SelectedNode)),
+            MenuEntry("New Spreadsheet…", () => NewSpreadsheetRequested?.Invoke(_files.SelectedNode)),
+            MenuEntry("New Taskboard…", () => NewTaskboardRequested?.Invoke(_files.SelectedNode)),
+            MenuEntry("New File…", () => NewFileRequested?.Invoke(_files.SelectedNode)),
+        ];
+
+        var button = IconButtonChrome("plus", "New", palette);
+
+        // Built once and handed over as ItemsSource at construction: the items never vary (the folder they act
+        // on is resolved in the handler), and a source assigned later — inside Opening — is not picked up.
+        button.Flyout = new MenuFlyout { ItemsSource = _newItems, Placement = PlacementMode.BottomEdgeAlignedRight };
+        return button;
+    }
+
+    private static MenuItem MenuEntry(string header, Action run)
+    {
+        var item = new MenuItem { Header = header };
+        item.Click += (_, _) => run();
+        return item;
+    }
+
+    /// <summary>
     /// The sidebar chrome's icon-button shape — transparent, 28×28 (a real pointer target, WCAG 2.2 §2.5.8),
     /// tooltipped and named for a screen reader. Internal so the collapsed-state handle in the shell is built
     /// from the same one and the control doesn't change shape when it changes place.
     /// </summary>
     internal static Button IconButton(string icon, string label, ThemePalette palette, Action run)
+    {
+        var button = IconButtonChrome(icon, label, palette);
+        button.Click += (_, _) => run();
+        return button;
+    }
+
+    /// <summary>The shape alone, for a button whose click opens a menu rather than running something.</summary>
+    private static Button IconButtonChrome(string icon, string label, ThemePalette palette)
     {
         var button = new Button
         {
@@ -298,7 +358,6 @@ internal sealed class SidebarView : UserControl
             HorizontalContentAlignment = Avalonia.Layout.HorizontalAlignment.Center,
             VerticalContentAlignment = Avalonia.Layout.VerticalAlignment.Center,
         };
-        button.Click += (_, _) => run();
         ToolTip.SetTip(button, label);
         AutomationProperties.SetName(button, label);
         return button;

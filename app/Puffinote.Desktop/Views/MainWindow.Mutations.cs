@@ -1,9 +1,12 @@
 using System.ComponentModel;
+using System.Text;
 using Avalonia.Controls;
 using Avalonia.Layout;
+using Avalonia.Media;
 using Avalonia.Platform.Storage;
 using Avalonia.Threading;
 using Cellestra.Desktop.Services;
+using Pivotask.Core;
 using Puffinote.Components.Overlays;
 using Puffinote.Components.Theming;
 using Puffinote.Desktop.Panes;
@@ -63,13 +66,83 @@ public partial class MainWindow
 
     private Task PromptNewNoteAsync(NotebookNode? context) =>
         // A note is a plain Markdown file — an empty .md opens fine.
-        PromptNewDocumentAsync(context, ".md", "New Note", "note", static () => []);
+        PromptNewDocumentAsync(context, DocumentTypes.NoteExtension, "New Note", "note", static () => []);
 
     private Task PromptNewSpreadsheetAsync(NotebookNode? context) =>
         // A spreadsheet must be seeded with a blank-workbook image: an empty (0-byte) .ods isn't a valid
         // workbook and would fail to open (that's the empty-file trap this split avoids).
-        PromptNewDocumentAsync(context, ".ods", "New Spreadsheet", "spreadsheet",
+        PromptNewDocumentAsync(context, DocumentTypes.SpreadsheetExtension, "New Spreadsheet", "spreadsheet",
             static () => WorkbookSession.NewBlank().SerializeToBytes());
+
+    private Task PromptNewTaskboardAsync(NotebookNode? context) =>
+        // Seeded for the same reason a spreadsheet is: Pivotask reads a board *out of* JSON, so a 0-byte
+        // ".pivotask.json" is not an empty board, it's a parse error. BoardDocument's own starter is the
+        // seed — the shell doesn't get its own opinion about what a new board contains.
+        PromptNewDocumentAsync(context, DocumentTypes.BoardSuffix, "New Taskboard", "task board",
+            static () => Encoding.UTF8.GetBytes(new BoardDocument().Serialize()));
+
+    /// <summary>
+    /// "New File…": whatever the notebook needs that Puffinote has no command for — a <c>.txt</c>, a
+    /// <c>.csv</c>, a <c>.gitignore</c>. The whole name is typed here, extension included (the three
+    /// commands above each own theirs), and it is created empty: a type the shell knows nothing about is
+    /// a type it has no business seeding. Plaintain opens whatever of these reads as text; the rest land
+    /// in the tree and open in the host's app.
+    /// </summary>
+    private async Task PromptNewFileAsync(NotebookNode? context)
+    {
+        if (_overlayHost.IsOpen || TargetDirectory(context) is not { } dir)
+        {
+            return;
+        }
+
+        var box = new TextBox { Width = 240, PlaceholderText = "name.ext" };
+        var body = new StackPanel
+        {
+            Spacing = 6,
+            Children =
+            {
+                box,
+
+                // Say the rule up front rather than only in the refusal: the reserved extensions each have
+                // their own command a few rows up this menu, which is the answer to "why not".
+                new TextBlock
+                {
+                    Text = $"Any extension except {DocumentTypes.ReservedSummary} — those have their own commands.",
+                    FontSize = 11,
+                    MaxWidth = 240,
+                    TextWrapping = TextWrapping.Wrap,
+                    Foreground = Tokens.Dark.MutedText,
+                },
+            },
+        };
+
+        var pending = _overlayHost.ShowModalAsync(new FormDialog("New File", body, "Create"));
+        Dispatcher.UIThread.Post(() =>
+        {
+            box.Focus();
+            box.SelectAll();
+        });
+        if (!await pending || string.IsNullOrWhiteSpace(box.Text))
+        {
+            return;
+        }
+
+        var name = box.Text.Trim();
+        if (DocumentTypes.ReservedFor(name) is { } reserved)
+        {
+            await _overlayHost.ShowModalAsync(new MessageDialog(
+                "Couldn't create the file",
+                $"“{reserved.Extension}” is reserved for {reserved.Kind} — use {reserved.Command} to make one."));
+            return;
+        }
+
+        await MutateAsync("Couldn't create the file", async () =>
+        {
+            var path = NotebookMutations.CreateFile(dir, name);
+            SidebarForTest.RevealInTree(path);
+            await OpenFileAsync(path); // no-ops for a type no pane opens — the file is still made and revealed
+        });
+    }
 
     /// <summary>
     /// Prompt for a base name (the <paramref name="extension"/> is shown as a suffix after the box, not typed),

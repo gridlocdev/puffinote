@@ -91,6 +91,8 @@ public partial class MainWindow : Window
         };
         SidebarForTest.NewNoteRequested += node => _ = PromptNewNoteAsync(node);
         SidebarForTest.NewSpreadsheetRequested += node => _ = PromptNewSpreadsheetAsync(node);
+        SidebarForTest.NewTaskboardRequested += node => _ = PromptNewTaskboardAsync(node);
+        SidebarForTest.NewFileRequested += node => _ = PromptNewFileAsync(node);
         SidebarForTest.NewFolderRequested += node => _ = PromptNewFolderAsync(node);
         SidebarForTest.RenameRequested += node => _ = PromptRenameAsync(node);
         SidebarForTest.DeleteRequested += node => _ = PromptDeleteAsync(node);
