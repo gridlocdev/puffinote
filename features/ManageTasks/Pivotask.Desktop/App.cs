@@ -3,6 +3,7 @@ using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Media;
 using Avalonia.Themes.Fluent;
 using Pivotask.Desktop.Views;
+using Puffinote.Components.Core.Documents;
 using Puffinote.Components.Input;
 using Puffinote.Components.Theming;
 
@@ -30,6 +31,13 @@ public class App : Application
     {
         if (ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop)
         {
+            // Any document lock this process takes is removed before it exits, down every path —
+            // including the ones that never close a window. Pivotask takes none today, so the sweep is
+            // empty; it is installed so the guarantee belongs to the family rather than to whichever
+            // app remembered it. See DocumentLocks.
+            DocumentLocks.Install("Pivotask");
+            desktop.Exit += (_, _) => DocumentLocks.ReleaseAll();
+
             var window = new MainWindow();
             desktop.MainWindow = window;
 

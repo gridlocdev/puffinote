@@ -21,6 +21,7 @@
     <ProjectReference Include="..\Pivotask.Control\Pivotask.Control.csproj" />
     <ProjectReference Include="..\Pivotask.Core\Pivotask.Core.csproj" />
     <ProjectReference Include="..\..\..\shared\Puffinote.Components\Puffinote.Components.csproj" />
+    <ProjectReference Include="..\..\..\shared\Puffinote.Components.Core\Puffinote.Components.Core.csproj" />
   </ItemGroup>
 
   <ItemGroup>

@@ -5,6 +5,7 @@ using Avalonia.Markup.Xaml.Styling;
 using Avalonia.Media;
 using Avalonia.Styling;
 using Avalonia.Themes.Fluent;
+using Puffinote.Components.Core.Documents;
 using Puffinote.Components.Input;
 using Puffinote.Components.Theming;
 using Puffinote.Desktop.Shell;
@@ -68,6 +69,13 @@ public class App : Application
     {
         if (ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop)
         {
+            // Any document lock this process takes is removed before it exits, down every path —
+            // including the ones that never close a window. The shell takes none today (its sheet panes
+            // open a workbook without claiming it — see docs/TODO.md); it is installed so the guarantee
+            // belongs to the family rather than to whichever app remembered it. See DocumentLocks.
+            DocumentLocks.Install("Puffinote");
+            desktop.Exit += (_, _) => DocumentLocks.ReleaseAll();
+
             var notebook = new NotebookService();
             var window = new MainWindow(notebook);
             desktop.MainWindow = window;

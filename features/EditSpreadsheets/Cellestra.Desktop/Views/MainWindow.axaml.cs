@@ -8,6 +8,7 @@ using Cellestra.Desktop.Services;
 using Cellestra.Editor;
 using Puffinote.Components.Commands;
 using Puffinote.Components.Controls;
+using Puffinote.Components.Core.Documents;
 using Puffinote.Components.Overlays;
 using Puffinote.Components.Shell;
 using Puffinote.Components.Theming;
@@ -544,13 +545,16 @@ public partial class MainWindow : Window, IEditorHost
                 _autoSave.Cancel(); // any countdown was aimed at the workbook this one replaces
 
                 ReleaseFileLock();
-                _fileLock = FileLock.TryAcquire(path);
+                _fileLock = DocumentLocks.TryAcquire(path);
 
                 RememberRecentFile(path);
 
                 // The title stays the document name (#15); transient open conditions are narrated in the
-                // status line so they don't hijack the title bar.
-                if (existingLock is not null)
+                // status line so they don't hijack the title bar. A *stale* lock says nothing about who
+                // else has the file — it is our own leftover from a session that was killed, and
+                // TryAcquire has just taken it back — so warning about it would be warning about
+                // ourselves.
+                if (existingLock is { IsStale: false })
                 {
                     string who = string.IsNullOrWhiteSpace(existingLock.User) ? "another application" : existingLock.User;
                     string host = string.IsNullOrWhiteSpace(existingLock.Host) ? string.Empty : $" on {existingLock.Host}";
@@ -657,7 +661,7 @@ public partial class MainWindow : Window, IEditorHost
             if (_fileLock?.DocumentPath != Path.GetFullPath(path))
             {
                 ReleaseFileLock();
-                _fileLock = FileLock.TryAcquire(path);
+                _fileLock = DocumentLocks.TryAcquire(path);
             }
 
             RememberRecentFile(path);
@@ -711,10 +715,10 @@ public partial class MainWindow : Window, IEditorHost
         await File.WriteAllTextAsync(file.Path.LocalPath, csv);
     }
 
-    /// <summary>Remove our document lock, if we hold one.</summary>
+    /// <summary>Remove our document lock, if we hold one, and stop tracking it for the quit sweep.</summary>
     private void ReleaseFileLock()
     {
-        _fileLock?.Dispose();
+        DocumentLocks.Release(_fileLock);
         _fileLock = null;
     }
 

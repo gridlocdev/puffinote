@@ -24,6 +24,7 @@
   <ItemGroup>
     <!-- Shared app-shell / design-system library (Puffinote family). -->
     <ProjectReference Include="..\..\shared\Puffinote.Components\Puffinote.Components.csproj" />
+    <ProjectReference Include="..\..\shared\Puffinote.Components.Core\Puffinote.Components.Core.csproj" />
     <!-- Embedded editor #1: the Typage Markdown surface (composed unchanged; its file-host seam is
          MarkdownDocumentSession). -->
     <ProjectReference Include="..\..\features\EditMarkdown\Typage.Control\Typage.Control.csproj" />

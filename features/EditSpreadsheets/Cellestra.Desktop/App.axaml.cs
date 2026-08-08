@@ -5,6 +5,7 @@ using Avalonia.Markup.Xaml;
 using Avalonia.Media;
 using Cellestra.Desktop.Views;
 using Puffinote.Components.Commands;
+using Puffinote.Components.Core.Documents;
 using Puffinote.Components.Input;
 using Puffinote.Components.Theming;
 
@@ -59,6 +60,14 @@ public partial class App : Application
     {
         if (ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop)
         {
+            // Whatever this process locks, it unlocks. Cellestra places a LibreOffice-style .~lock file
+            // beside every open spreadsheet, and until now the only thing that removed one was the
+            // window's Closing handler — so quitting from the dock, logging out, or killing the app left
+            // the document looking busy to LibreOffice and to Cellestra itself, permanently. Installed
+            // before the window so a document opened from argv is covered too.
+            DocumentLocks.Install("Cellestra");
+            desktop.Exit += (_, _) => DocumentLocks.ReleaseAll();
+
             var window = new MainWindow();
             desktop.MainWindow = window;
 

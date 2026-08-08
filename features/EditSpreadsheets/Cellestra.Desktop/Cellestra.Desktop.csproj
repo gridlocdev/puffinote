@@ -28,6 +28,7 @@
     <ProjectReference Include="..\Cellestra.Charts\Cellestra.Charts.csproj" />
     <!-- Shared app-shell / design-system library (Puffinote family). -->
     <ProjectReference Include="..\..\..\shared\Puffinote.Components\Puffinote.Components.csproj" />
+    <ProjectReference Include="..\..\..\shared\Puffinote.Components.Core\Puffinote.Components.Core.csproj" />
   </ItemGroup>
 
   <ItemGroup>
