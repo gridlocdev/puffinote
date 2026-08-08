@@ -31,12 +31,18 @@
     - [ ] Plaintain
     - [ ] Pivotask
 
-- [ ] If not present, implement zooming in/out across all apps (puffinote and typage)(cmd + zooms in, cmd - zooms out)
-    - [ ] Cellestra
-    - [ ] Puffinote
-    - [ ] Typage
-    - [ ] Plaintain
-    - [ ] Pivotask
+- [x] If not present, implement zooming in/out across all apps (puffinote and typage)(cmd + zooms in, cmd - zooms out)
+    - [x] Cellestra
+    - [x] Puffinote
+    - [x] Typage
+    - [x] Plaintain
+    - [x] Pivotask
+    - Zoom In / Zoom Out / Actual Size are defined once in `Puffinote.Components` (`ZoomCommands` over the
+      shared `ZoomScale` ladder, 50%–400%) and spliced into each editor's own catalog, so all five apps carry
+      one id, one title and one chord. ⌘= in, ⌘− out, **⌥⌘0** reset — reset avoids plain ⌘0 because that is
+      already the last rung of Typage's heading ladder (⌘1–⌘6 apply a level, ⌘0 removes it), and one chord
+      meaning two things depending on the open Puffinote tab is the thing this repo keeps saying not to do.
+      Puffinote itself has no zoom code: it binds the active pane's catalog.
 
 - [ ] Cellestra: editing text in a column that has word wrapped should word wrap the popup text editor as well (the textbox popup should contain similar contents and the cursor behavior should be expected)
 - [ ] Cellestra: If text is autocompleted while entering, It should also not autocomplete the title of a table, only the distinct value of one of its preceding rows in that column.
@@ -47,7 +53,7 @@
 - [ ] Pivotask: The UI significantly drifts from the prototype. Launch the prototype and compare its UI to the current implementation. The prototype is a reference for the intended design, and the current implementation should be updated to match it.
 
 - [ ] Plaintain: The cursor is slightly offset from the text in the editor.
-- [ ] Plaintain: Add the ability to zoom to expand the text size in the editor. Respond to both [⌘+ and ⌘-] and [⌘0] to reset, and gestures for pinch-to-zoom.
+- [ ] Plaintain: pinch-to-zoom. The keyboard half is done (⌘= / ⌘− / ⌥⌘0 — the reset moved off ⌘0, see above), and zoom multiplies the configured font size rather than replacing it, so Actual Size returns to the reader's own size. What is left is the trackpad gesture, and it is not Plaintain's alone: all four editors now share `ZoomScale`, so a pinch should be wired once wherever the gesture can be observed for every one of them rather than four times.
 
 - [ ] Plaintain: ⌥⌘W (Word Wrap) collides with Puffinote's ⌥⌘W (Close All Tabs) — inside a Plaintain tab one of them wins and the other silently doesn't. Move one; the shell's is the older claim.
 - [ ] Pivotask: the board has no way to rename a group, delete a group, delete a task, fold completed tasks, or create a label. `BoardCommands` has all five, tested, with no caller outside the tests — the commands are done and the affordances aren't.
@@ -61,4 +67,5 @@
 - [ ] Plaintain: no crash-recovery snapshot and no external-change detection, both of which Typage has (its PRD §7.1). A plaintext editor holding an unsaved 50 MB log is exactly where losing the buffer hurts most.
 - [ ] Shared: the rule-of-three check both proposals defer to Phase 5, now that the duplication is real and observable — Plaintain's `FindBar` against Typage's, and Pivotask's label chip and relative-date pill against anything similar. Promote to `Puffinote.Components` only where the duplication genuinely is.
 - [ ] Puffinote: `docs/puffinote/ARCHITECTURE.md` §13's folder tree still lists the pane files as they were two panes ago (it names an `IOutline.cs` and an `IEditorPaneFactory.cs` that don't exist). Refresh it now that `PlainTextPane` and `TaskBoardPane` are there.
+- [ ] Puffinote: zoom is per-pane and per-session. The shell binds each editor's own zoom commands, so ⌘= works in every tab, but nothing persists the factor — every tab reopens at 100%, while the four standalone apps each remember theirs. Decide whether the shell should carry it in `SessionStore` (per tab, restored with the tab) or in `PuffinoteSettings` (one override for the window); the two answers behave differently for a notebook of mixed file types.
 - [ ] Puffinote: decide whether the shell's title bar should flash "— Saved" the way Cellestra's now does. The editor raises a `Saved` event the shell could subscribe to; whether a notebook tab wants that acknowledgement is a design call, not an oversight.
