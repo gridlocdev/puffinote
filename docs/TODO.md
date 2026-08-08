@@ -197,7 +197,23 @@
     earlier — the one thing "for this session" must not do. Answering the question in the dialog clears
     the session override, so the setting you just picked actually takes.
 
-- [ ] Puffinote: Add a "Filter" button, which when clicked, shows a text box that allows the user to filter the files in the file tree by name. The filter should be applied in real-time as the user types, and should be case-insensitive. This provides a quick and easy way for users to find specific files in large projects.
+- [ ] All Apps: All applications that use the command menu (all of them except Plaintain) should have a command for opening the settings menu, with the existing keyboard shortcut listed.
+
+- [ ] All Apps: When quitting, always ensure that the program removes file locks for any files that were opened in the application. This prevents issues with other applications being unable to access those files after the application has been closed.
+
+- [ ] All Apps: Ensure the cursor blinks at a consistent rate across all applications while application focus is on editing text. The current implementation has no blinking, which can make it difficult to locate the cursor. 
+
+- [ ] Puffinote: In the "Outline" view and "Recent" view and "Search" view, make it a single click to navigate to the selection in the UI rather than a double click. This improves usability and allows for quicker navigation within the document.
+
+- [ ] Puffinote: Move "Enter Folder" to the top of the right click context menu for folders in the sidebar. This makes it more accessible and easier for users to find and use this feature.
+
+- [ ] Puffinote: When the sidebar is in collapsed state, the icon button shouldn't have space above it. This is a visual bug that currently visually vertically moves the button when expanding and collapsing the sidebar. The button should remain in the same vertical position regardless of the sidebar state.
+
+- [ ] Plaintain: When running in MacOS, use the native top menu bar for the application menu instead of the custom title bar. This provides a more native experience for Mac users and aligns with platform conventions.
+
+- [ ] Plaintain: Add a settings option to hide the highlighting of the current line in the editor. Some users may find the highlighting distracting or unnecessary, and providing an option to disable it allows for a more customizable user experience.
+
+- [ ] Typage: Add an optional (default toggled off) visual highlight to the line currently being edited in the editor (in all three view modes). This helps users easily identify which line they are working on, especially in large documents, and improves overall usability. Add a settings option to enable or disable this feature by default, add a command to toggle it during the current session, allowing users to customize their editing experience according to their preferences.
 
 - [ ] Cellestra: When clicking the Zoom percentage bar, it should show a menu with a slider that allows selecting the available zoom level to its existing snap points. The user should be able to select a zoom level from this menu, and the application should immediately apply the selected zoom level to the content. This provides a quick and intuitive way for users to adjust the zoom level without needing to use keyboard shortcuts or menu commands.
 
