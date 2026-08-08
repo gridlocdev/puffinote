@@ -54,6 +54,7 @@ public sealed partial class MainWindow : Window
         Height = 640;
 
         EditorView = new PlainTextEditorView();
+        ApplyTheme(_settings.Settings.Theme); // the saved appearance, before the first paint
         EditorView.Editor.WordWrap = _settings.Settings.WordWrap;
         EditorView.Editor.ShowLineNumbers = _settings.Settings.ShowLineNumbers;
         EditorView.Editor.FontSize = _settings.Settings.FontSize;
@@ -211,7 +212,7 @@ public sealed partial class MainWindow : Window
 
     private Border BuildStatusBar()
     {
-        var palette = Tokens.Dark;
+        var palette = Tokens.Active;
         foreach (var block in new[] { _statusPosition, _statusCounts, _statusEncoding, _statusZoom })
         {
             block.VerticalAlignment = VerticalAlignment.Center;

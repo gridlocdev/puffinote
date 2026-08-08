@@ -7,6 +7,7 @@ using Pivotask.Control.Views;
 using Pivotask.Core.Query;
 using Pivotask.Desktop.Services;
 using Pivotask.Desktop.Views;
+using Puffinote.Components.Theming;
 using Xunit;
 
 namespace Pivotask.UiTests;
@@ -48,7 +49,38 @@ public class SettingsTests : IDisposable
     public void The_form_covers_every_preference_in_the_settings_file()
     {
         var form = MainWindow.BuildSettingsForm(new AppSettings());
-        Assert.Equal(["Open in", "Show"], form.Fields.Select(f => f.Label));
+        Assert.Equal(["Theme", "Open in", "Show"], form.Fields.Select(f => f.Label));
+    }
+
+    /// <summary>
+    /// The appearance is a preference like any other: unset it follows the OS, and choosing one is written
+    /// to the file so the next launch opens in it. The drop-down's options are the family's three, in the
+    /// order the shared enum declares them — which is the order an index maps back to a value in.
+    /// </summary>
+    [AvaloniaFact]
+    public void The_theme_can_be_chosen_and_is_remembered()
+    {
+        var settings = new AppSettings();
+        Assert.Equal(ThemePreference.System, settings.Theme); // nobody has said otherwise yet
+
+        var form = MainWindow.BuildSettingsForm(settings);
+        var window = new Window { Width = 400, Height = 300, Content = form };
+        window.Show();
+        window.UpdateLayout();
+        Dispatcher.UIThread.RunJobs();
+
+        var theme = form.GetLogicalDescendants().OfType<ComboBox>().First();
+        Assert.Equal(ThemePreferences.Labels, theme.ItemsSource);
+        theme.SelectedIndex = (int)ThemePreference.Dark;
+
+        Assert.Equal(ThemePreference.System, settings.Theme); // nothing written until the dialog is accepted
+        form.Commit();
+        Assert.Equal(ThemePreference.Dark, settings.Theme);
+
+        var service = new SettingsService(_path);
+        service.Settings.Theme = ThemePreference.Dark;
+        service.Save();
+        Assert.Equal(ThemePreference.Dark, new SettingsService(_path).Settings.Theme); // i.e. the next launch
     }
 
     [AvaloniaFact]
@@ -62,8 +94,8 @@ public class SettingsTests : IDisposable
         Dispatcher.UIThread.RunJobs();
 
         var combos = form.GetLogicalDescendants().OfType<ComboBox>().ToList();
-        combos[0].SelectedIndex = 1; // List
-        combos[1].SelectedIndex = 3; // Unfinished
+        combos[1].SelectedIndex = 1; // List      (combos[0] is Appearance ▸ Theme)
+        combos[2].SelectedIndex = 3; // Unfinished
 
         Assert.Equal(BoardLayout.Board, settings.Layout); // nothing written until the dialog is accepted
         form.Commit();

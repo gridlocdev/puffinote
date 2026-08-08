@@ -1,6 +1,7 @@
 using Avalonia.Controls;
 using Puffinote.Components.Controls;
 using Puffinote.Components.Overlays;
+using Puffinote.Components.Theming;
 using Typage.Control.Controls;
 using Typage.Desktop.Services;
 
@@ -118,7 +119,8 @@ public partial class MainWindow
         new SettingsSection("Appearance",
         [
             ChoiceSetting.ForEnum<AppTheme>("Theme", () => s.Theme, v => s.Theme = v,
-                [ThemeLabel(AppTheme.System), ThemeLabel(AppTheme.Light), ThemeLabel(AppTheme.Dark), ThemeLabel(AppTheme.HighContrast)]),
+                [ThemeLabel(AppTheme.System), ThemeLabel(AppTheme.Light), ThemeLabel(AppTheme.Dark), ThemeLabel(AppTheme.HighContrast)],
+                ThemePreferences.Hint),
             ChoiceSetting.ForEnum<MarkdownEditor.ViewMode>("Default view", () => s.View, v => s.View = v,
                 [
                     ViewModeLabel(MarkdownEditor.ViewMode.Rich),

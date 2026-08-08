@@ -1,8 +1,10 @@
+using Avalonia;
 using Pivotask.Control.Views;
 using Pivotask.Core.Query;
 using Pivotask.Desktop.Services;
 using Puffinote.Components.Controls;
 using Puffinote.Components.Overlays;
+using Puffinote.Components.Theming;
 
 namespace Pivotask.Desktop.Views;
 
@@ -31,6 +33,11 @@ public sealed partial class MainWindow
     /// <summary>The Preferences form over <paramref name="s"/> (also the seam the UI tests drive).</summary>
     internal static SettingsEditorView BuildSettingsForm(AppSettings s) => new(
     [
+        new SettingsSection("Appearance",
+        [
+            ChoiceSetting.ForEnum<ThemePreference>("Theme", () => s.Theme, v => s.Theme = v,
+                ThemePreferences.Labels, ThemePreferences.Hint),
+        ]),
         new SettingsSection("Board",
         [
             ChoiceSetting.ForEnum<BoardLayout>("Open in", () => s.Layout, v => s.Layout = v,
@@ -45,6 +52,14 @@ public sealed partial class MainWindow
     /// <summary>Push the committed settings into the live board.</summary>
     private void ApplySettings(AppSettings s)
     {
+        if (Application.Current is { } app)
+        {
+            // Requesting the variant re-resolves Fluent's control themes and re-tints the family's chrome
+            // tokens in one go, and the board paints from those tokens — so the cards, columns and dialogs
+            // follow without this having to walk them.
+            s.Theme.Apply(app);
+        }
+
         BoardView.Layout = s.Layout;
         BoardView.Filter = s.Filter;
     }

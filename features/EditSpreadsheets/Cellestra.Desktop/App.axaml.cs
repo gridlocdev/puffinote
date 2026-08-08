@@ -15,6 +15,11 @@ public partial class App : Application
     {
         AvaloniaXamlLoader.Load(this);
         Tokens.Current = new PuffinoteTheme(Color.FromRgb(0x2A, 0x7D, 0xE1)); // Cellestra's blue accent
+
+        // App.axaml requests the Default variant — the OS's — and the window narrows that to the saved
+        // preference as it opens. Following the resolved variant from here is what keeps the family's
+        // chrome tokens in step with it, including when the OS flips appearance mid-session.
+        Tokens.Follow(this);
         BuildApplicationMenu();
     }
 

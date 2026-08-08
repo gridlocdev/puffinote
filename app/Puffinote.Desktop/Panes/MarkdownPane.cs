@@ -1,7 +1,9 @@
 using Avalonia.Controls;
+using Avalonia.Styling;
 using Puffinote.Components.Commands;
 using Puffinote.Text.Document;
 using Typage.Control;
+using Typage.Control.Rendering;
 using Typage.Control.Views;
 using Typage.Engine.Markdown;
 
@@ -27,7 +29,22 @@ internal sealed class MarkdownPane : IEditorPane, IConfigurablePane
 
         // The editor raises TextChanged on every edit; re-surface it so the shell repaints the dirty dot.
         _view.TextChanged += (_, _) => DirtyChanged?.Invoke(this, EventArgs.Empty);
+
+        // Alone among the embedded editors, Typage's takes its document palette as a value rather than
+        // resolving one from the variant it finds itself in — so a note would keep its dark page in a light
+        // window unless someone hands it the other palette. That someone is this pane: it follows the shell's
+        // appearance (Preferences ▸ General ▸ Theme) and the OS's alike, both of which arrive here as a
+        // change of ActualThemeVariant. The variant only resolves once the view is in a tree, hence also
+        // applying on attach rather than only at construction.
+        _view.ActualThemeVariantChanged += (_, _) => ApplyEditorTheme();
+        _view.AttachedToVisualTree += (_, _) => ApplyEditorTheme();
     }
+
+    /// <summary>Give the note the document palette that matches the window's appearance.</summary>
+    private void ApplyEditorTheme() =>
+        _view.EditorTheme = _view.ActualThemeVariant == ThemeVariant.Light
+            ? MarkdownTheme.Light
+            : MarkdownTheme.Dark;
 
     /// <summary>
     /// Apply the resolved note settings (PRD §7.5): Typage's own config as the base, with any Puffinote

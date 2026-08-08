@@ -108,6 +108,15 @@ Puffinote tab offer the same set under the same chords.
 
 ⌘K is **not** Pivotask's: it opens the host's command palette, as in the sibling editors.
 
+### 7.1 Preferences
+
+⌘, opens Preferences over what `settings.json` keeps. **Appearance → Theme** — *Follow System* (the
+default), *Light*, or *Dark* — is the family's, worded and ordered the same in all five apps: unset, the
+window wears whatever the desktop is wearing and keeps following it when that changes; choosing one takes
+the choice back for good. It applies the moment the dialog is accepted, board included, and is remembered
+for the next launch. Embedded in Puffinote, this setting isn't Pivotask's to make — the shell settles
+appearance once for every editor it hosts, and this file's value is what Pivotask wears standalone.
+
 ## 8. The `ptask` CLI
 
 A **full mutating verb set**, because task management is scriptable in a way text editing isn't:

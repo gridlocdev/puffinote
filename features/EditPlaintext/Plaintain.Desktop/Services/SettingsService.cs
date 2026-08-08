@@ -1,11 +1,18 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using Puffinote.Components.Theming;
 
 namespace Plaintain.Desktop.Services;
 
 /// <summary>What Plaintain remembers between sessions. Deliberately short.</summary>
 public sealed class AppSettings
 {
+    /// <summary>
+    /// Light, dark, or whatever the OS is wearing. Unset means <see cref="ThemePreference.System"/>,
+    /// because an app that has never been told which appearance to wear should wear the desktop's.
+    /// </summary>
+    public ThemePreference Theme { get; set; } = ThemePreference.System;
+
     /// <summary>Whether long lines fold. Off is the Notepad default; the toggle is remembered because
     /// people who want wrap want it for everything, and people who don't never want it once.</summary>
     public bool WordWrap { get; set; }
@@ -43,6 +50,9 @@ public sealed class SettingsService
     {
         WriteIndented = true,
         DefaultIgnoreCondition = JsonIgnoreCondition.Never,
+        // Readable enum names, as the rest of the family writes them: "Dark" in the file says what it
+        // means to whoever opens it, where a 2 would send them looking for the enum that defines it.
+        Converters = { new JsonStringEnumConverter() },
     };
 
     private readonly string _path;

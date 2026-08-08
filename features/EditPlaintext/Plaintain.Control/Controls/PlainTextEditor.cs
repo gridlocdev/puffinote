@@ -61,6 +61,12 @@ public sealed partial class PlainTextEditor : Avalonia.Controls.Control, IScroll
         Focusable = true;
         _typeface = new Typeface(FontFamily);
         WatchFocus();
+
+        // The surface resolves its palette from ActualThemeVariant at paint time (see Render), so a theme
+        // switch changes what it *would* draw — but nothing about a theme change asks a custom-drawn control
+        // to draw again. Without this, choosing Light in Preferences leaves the text on the old canvas until
+        // something else happens to invalidate it.
+        ActualThemeVariantChanged += (_, _) => InvalidateVisual();
         Buffer.Changed += (_, _) =>
         {
             InvalidateMetrics();

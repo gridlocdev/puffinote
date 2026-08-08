@@ -1,5 +1,6 @@
 using System.Text.Json;
 using Puffinote.Components.Shell;
+using Puffinote.Components.Theming;
 
 namespace Puffinote.Desktop.Shell;
 
@@ -15,6 +16,23 @@ internal sealed record PuffinoteSettings
 {
     /// <summary>Overrides the note editor's indent (tab) width, in spaces; null inherits Typage's own.</summary>
     public int? TabWidth { get; init; }
+
+    /// <summary>
+    /// The appearance the whole shell wears — and with it every editor it embeds; null means the default,
+    /// <see cref="ThemePreference.System"/>. Deliberately settled <em>once</em>, here, rather than per
+    /// embedded editor: a window showing a note beside a spreadsheet cannot be half light, and someone
+    /// choosing an appearance is choosing it for the app in front of them, not for one pane of it. The
+    /// editors' own theme settings stay in their own files, untouched, for when they run standalone.
+    /// <para>
+    /// Nullable for the reason every field here is: the per-notebook file has to be able to say nothing
+    /// and leave the user's choice alone (a plain enum would deserialize as <c>System</c> and silently
+    /// overrule it for every notebook that never mentioned a theme).
+    /// </para>
+    /// </summary>
+    public ThemePreference? Theme { get; init; }
+
+    /// <summary>The effective appearance — the resolved value, or following the OS when nothing set one.</summary>
+    public ThemePreference ThemeOrDefault => Theme ?? ThemePreference.System;
 
     /// <summary>
     /// Whether the tab strip above the editor is shown; null means the default, which is shown. Unlike
@@ -77,6 +95,7 @@ internal sealed record PuffinoteSettings
         new()
         {
             TabWidth = over.TabWidth ?? TabWidth,
+            Theme = over.Theme ?? Theme,
             ShowTabBar = over.ShowTabBar ?? ShowTabBar,
             ShowFileExtensions = over.ShowFileExtensions ?? ShowFileExtensions,
         };

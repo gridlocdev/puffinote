@@ -3,6 +3,7 @@ using System.Text.Json.Serialization;
 using Pivotask.Control.Views;
 using Pivotask.Core.Query;
 using Puffinote.Components.Shell;
+using Puffinote.Components.Theming;
 
 namespace Pivotask.Desktop.Services;
 
@@ -14,6 +15,12 @@ namespace Pivotask.Desktop.Services;
 /// </summary>
 public sealed class AppSettings
 {
+    /// <summary>
+    /// Light, dark, or whatever the OS is wearing. Unset means <see cref="ThemePreference.System"/>,
+    /// because an app that has never been told which appearance to wear should wear the desktop's.
+    /// </summary>
+    public ThemePreference Theme { get; set; } = ThemePreference.System;
+
     /// <summary>The reading the board opens in. Columns is the default; the list is the same tasks.</summary>
     public BoardLayout Layout { get; set; } = BoardLayout.Board;
 

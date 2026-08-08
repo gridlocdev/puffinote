@@ -1,7 +1,11 @@
+using Avalonia;
 using Avalonia.Headless.XUnit;
+using Avalonia.Styling;
+using Avalonia.Threading;
 using Puffinote.Desktop.Panes;
 using Puffinote.Desktop.Shell;
 using Puffinote.Desktop.Views;
+using Typage.Control.Rendering;
 using Typage.Control.Views;
 using Xunit;
 
@@ -85,6 +89,43 @@ public sealed class MarkdownPaneTests
             // A .md that doesn't exist → load throws → the good document must stay open.
             await window.OpenFileAsync(Path.Combine(dir.FullName, "missing.md"));
             Assert.Contains("good.md", window.Title);
+        }
+        finally
+        {
+            dir.Delete(recursive: true);
+        }
+    }
+
+    /// <summary>
+    /// A note follows the shell's appearance. Typage's editor is the one embedded surface that takes its
+    /// document palette as a value instead of resolving one from the variant it is in, so without the pane
+    /// handing it the other palette a note would keep its dark page in a light window — the single most
+    /// visible thing a half-applied theme could leave behind.
+    /// </summary>
+    [AvaloniaFact]
+    public async Task An_open_note_takes_the_document_palette_of_the_shells_appearance()
+    {
+        var dir = Directory.CreateTempSubdirectory("puffinote-pane-theme");
+        try
+        {
+            var note = Path.Combine(dir.FullName, "note.md");
+            File.WriteAllText(note, "# hi");
+
+            var window = new MainWindow(new NotebookService());
+            window.Show();
+            window.OpenNotebook(dir.FullName);
+            await window.OpenFileAsync(note);
+            Dispatcher.UIThread.RunJobs();
+
+            var view = Assert.IsType<MarkdownEditorView>(window.ActiveEditorViewForTest);
+
+            Application.Current!.RequestedThemeVariant = ThemeVariant.Light;
+            Dispatcher.UIThread.RunJobs();
+            Assert.Same(MarkdownTheme.Light.Background, view.EditorTheme.Background);
+
+            Application.Current!.RequestedThemeVariant = ThemeVariant.Dark;
+            Dispatcher.UIThread.RunJobs();
+            Assert.Same(MarkdownTheme.Dark.Background, view.EditorTheme.Background);
         }
         finally
         {

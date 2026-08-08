@@ -1,6 +1,7 @@
 using Avalonia;
 using Avalonia.Media;
 using Avalonia.Styling;
+using Puffinote.Components.Theming;
 using Typage.Control.Controls;
 using Typage.Control.Rendering;
 using Typage.Desktop.Services;
@@ -11,11 +12,8 @@ public partial class MainWindow
 {
     private static string ThemeLabel(AppTheme theme) => theme switch
     {
-        AppTheme.System => "Follow System",
-        AppTheme.Light => "Light",
-        AppTheme.Dark => "Dark",
         AppTheme.HighContrast => "High Contrast",
-        _ => theme.ToString(),
+        _ => ThemePreferences.Label(theme.ToPreference()),
     };
 
     private void SetTheme(AppTheme theme)
@@ -29,6 +27,13 @@ public partial class MainWindow
     /// Apply an appearance mode (PRD §7.2): set the Fluent variant for the chrome, the matching
     /// <see cref="MarkdownTheme"/> for the editor, and re-tint the shared chrome brushes. System
     /// follows the OS; high contrast pairs a dark shell with the high-contrast editor palette.
+    /// <para>
+    /// The variant goes through the shared <see cref="ThemePreferences.Apply"/>, which is also what puts
+    /// <see cref="Tokens"/> into the new variant — so the family chrome this window borrows (the command
+    /// palette, the modal dialogs, the title bar) changes with it rather than staying whatever it was
+    /// built in. What stays Typage's own is the editor palette below, which is a document's typography
+    /// and not chrome, and the high-contrast mode, which nothing else in the family offers.
+    /// </para>
     /// </summary>
     private void ApplyTheme(AppTheme theme)
     {
@@ -37,19 +42,14 @@ public partial class MainWindow
             return;
         }
 
-        app.RequestedThemeVariant = theme switch
-        {
-            AppTheme.Light => ThemeVariant.Light,
-            AppTheme.Dark or AppTheme.HighContrast => ThemeVariant.Dark,
-            _ => ThemeVariant.Default, // follow OS
-        };
+        var variant = theme.ToPreference().Apply(app);
 
         var editorTheme = theme switch
         {
             AppTheme.Light => MarkdownTheme.Light,
             AppTheme.HighContrast => MarkdownTheme.HighContrast,
             AppTheme.Dark => MarkdownTheme.Dark,
-            _ => app.ActualThemeVariant == ThemeVariant.Light ? MarkdownTheme.Light : MarkdownTheme.Dark,
+            _ => variant == ThemeVariant.Light ? MarkdownTheme.Light : MarkdownTheme.Dark,
         };
         EditorView.EditorTheme = editorTheme;
 

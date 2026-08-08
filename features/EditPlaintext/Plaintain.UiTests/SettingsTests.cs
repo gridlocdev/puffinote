@@ -5,6 +5,7 @@ using Avalonia.LogicalTree;
 using Avalonia.Threading;
 using Plaintain.Desktop.Services;
 using Plaintain.Desktop.Views;
+using Puffinote.Components.Theming;
 using Xunit;
 
 namespace Plaintain.UiTests;
@@ -48,8 +49,39 @@ public class SettingsTests : IDisposable
         var form = MainWindow.BuildSettingsForm(settings);
 
         Assert.Equal(
-            ["Wrap long lines", "Show line numbers", "Font size"],
+            ["Theme", "Wrap long lines", "Show line numbers", "Font size"],
             form.Fields.Select(f => f.Label));
+    }
+
+    /// <summary>
+    /// The appearance is a preference like any other: unset it follows the OS, and choosing one is written
+    /// to the file so the next launch opens in it. The drop-down's options are the family's three, in the
+    /// order the shared enum declares them — which is the order an index maps back to a value in.
+    /// </summary>
+    [AvaloniaFact]
+    public void The_theme_can_be_chosen_and_is_remembered()
+    {
+        var settings = new AppSettings();
+        Assert.Equal(ThemePreference.System, settings.Theme); // nobody has said otherwise yet
+
+        var form = MainWindow.BuildSettingsForm(settings);
+        var window = new Window { Width = 400, Height = 300, Content = form };
+        window.Show();
+        window.UpdateLayout();
+        Dispatcher.UIThread.RunJobs();
+
+        var theme = form.GetLogicalDescendants().OfType<ComboBox>().First();
+        Assert.Equal(ThemePreferences.Labels, theme.ItemsSource);
+        theme.SelectedIndex = (int)ThemePreference.Light;
+
+        Assert.Equal(ThemePreference.System, settings.Theme); // nothing written until the dialog is accepted
+        form.Commit();
+        Assert.Equal(ThemePreference.Light, settings.Theme);
+
+        var service = new SettingsService(_path);
+        service.Settings.Theme = ThemePreference.Light;
+        service.Save();
+        Assert.Equal(ThemePreference.Light, new SettingsService(_path).Settings.Theme); // i.e. the next launch
     }
 
     [AvaloniaFact]

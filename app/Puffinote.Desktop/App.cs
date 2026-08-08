@@ -32,8 +32,13 @@ public class App : Application
             Source = new Uri("avares://Avalonia.Controls.ColorPicker/Themes/Fluent/Fluent.xaml"),
         });
 
-        RequestedThemeVariant = ThemeVariant.Dark; // a dark shell to sit alongside the dark editors
         Tokens.Current = new PuffinoteTheme(Accent);
+
+        // No variant is requested here: the window applies the saved appearance (Preferences ▸ General ▸
+        // Appearance ▸ Theme) as it opens, and that setting defaults to following the system — which is
+        // what leaving RequestedThemeVariant unset already does, so the moment before the window exists is
+        // spent in the OS's appearance rather than in a dark one we would then have to switch away from.
+        Tokens.Follow(this);
 
         // The embedded Cellestra editor's chrome (formula bar, sheet-tab strip, status bar, chart border)
         // binds to these host-provided brushes via DynamicResource. Standalone Cellestra defines them in its

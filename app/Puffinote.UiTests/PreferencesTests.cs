@@ -1,12 +1,15 @@
+using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Headless.XUnit;
 using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.LogicalTree;
+using Avalonia.Styling;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
 using Puffinote.Components.Controls;
 using Puffinote.Components.Overlays;
+using Puffinote.Components.Theming;
 using Puffinote.Desktop.Panes;
 using Puffinote.Desktop.Shell;
 using Puffinote.Desktop.Views;
@@ -193,6 +196,44 @@ public sealed class PreferencesTests
 
         Assert.Equal(ConfigFiles, tabs.Tabs.Select(tab => tab.ConfigPath));
         Assert.Equal(0, tabs.SelectedIndex);
+    }
+
+    /// <summary>
+    /// The appearance is asked once, on Puffinote's own tab, and applies to the whole shell — editors
+    /// included. The editors' tabs deliberately don't repeat it: a window showing a note beside a sheet
+    /// can't be half light, so offering a theme per embedded editor would be offering a choice the shell
+    /// can't honour. Their own files keep their own theme setting, untouched, for running standalone.
+    /// </summary>
+    [AvaloniaFact]
+    public void The_theme_is_asked_once_on_the_General_tab_and_applies_to_the_whole_shell()
+    {
+        var window = new MainWindow(new NotebookService());
+        window.Show();
+        window.InvokeShellForTest("shell.preferences");
+        Dispatcher.UIThread.RunJobs();
+
+        var overlay = Overlay(window);
+        var tabs = Tabs(overlay);
+
+        // Exactly one Theme row in the whole dialog, and it is General's.
+        Assert.Equal(
+            ["General"],
+            tabs.Tabs.Where(t => t.Form.Fields.Any(f => f.Label == "Theme")).Select(t => t.Title));
+
+        var theme = Row<ComboBox>(Tab(overlay, "General"), "Theme");
+        Assert.Equal(ThemePreferences.Labels, theme.ItemsSource);
+        Assert.Equal((int)ThemePreference.System, theme.SelectedIndex); // nobody has said otherwise yet
+
+        theme.SelectedIndex = (int)ThemePreference.Light;
+        Dispatcher.UIThread.RunJobs();
+        Assert.NotEqual(ThemeVariant.Light, Application.Current!.RequestedThemeVariant); // not while it's open
+
+        ClickOk(overlay);
+        Dispatcher.UIThread.RunJobs();
+
+        Assert.Equal(ThemeVariant.Light, Application.Current!.ActualThemeVariant);
+        Assert.Equal(ThemeVariant.Light, Tokens.Variant); // and the shell's chrome tokens went with it
+        Assert.Equal(ThemePreference.Light, PuffinoteSettings.LoadUser().Theme); // remembered for next launch
     }
 
     [AvaloniaFact]

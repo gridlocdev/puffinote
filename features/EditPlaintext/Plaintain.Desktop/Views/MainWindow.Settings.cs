@@ -1,6 +1,8 @@
+using Avalonia;
 using Plaintain.Desktop.Services;
 using Puffinote.Components.Controls;
 using Puffinote.Components.Overlays;
+using Puffinote.Components.Theming;
 
 namespace Plaintain.Desktop.Views;
 
@@ -31,6 +33,11 @@ public sealed partial class MainWindow
     /// <summary>The Preferences form over <paramref name="s"/> (also the seam the UI tests drive).</summary>
     internal static SettingsEditorView BuildSettingsForm(AppSettings s) => new(
     [
+        new SettingsSection("Appearance",
+        [
+            ChoiceSetting.ForEnum<ThemePreference>("Theme", () => s.Theme, v => s.Theme = v,
+                ThemePreferences.Labels, ThemePreferences.Hint),
+        ]),
         new SettingsSection("Editor",
         [
             new ToggleSetting("Wrap long lines", () => s.WordWrap, v => s.WordWrap = v,
@@ -44,10 +51,28 @@ public sealed partial class MainWindow
     /// <summary>Push the committed settings into the live editor.</summary>
     private void ApplySettings(AppSettings s)
     {
+        ApplyTheme(s.Theme);
+
         // WordWrap and ShowLineNumbers persist themselves through the editor's PropertyChanged hook
         // (see the constructor); assigning them here is what makes the change visible.
         EditorView.Editor.WordWrap = s.WordWrap;
         EditorView.Editor.ShowLineNumbers = s.ShowLineNumbers;
         EditorView.Editor.FontSize = s.FontSize;
+    }
+
+    /// <summary>
+    /// Wear <paramref name="theme"/>: request the variant, which re-resolves Fluent's control themes and
+    /// the family's chrome tokens together, and repaint the editing surface, which draws itself and so
+    /// isn't reached by either. Called as the window opens and again whenever Preferences commits, so the
+    /// choice lands on the window in front of you rather than on the next one you open.
+    /// </summary>
+    private void ApplyTheme(ThemePreference theme)
+    {
+        if (Application.Current is { } app)
+        {
+            theme.Apply(app);
+        }
+
+        EditorView.Editor.InvalidateVisual();
     }
 }

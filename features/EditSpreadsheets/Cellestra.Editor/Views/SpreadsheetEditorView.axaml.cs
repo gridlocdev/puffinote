@@ -66,6 +66,19 @@ public partial class SpreadsheetEditorView : UserControl, IAppEnvironment
     /// <summary>Raised when the Preferences dialog is accepted, so the host writes its settings file.</summary>
     public event EventHandler? PreferencesChanged;
 
+    /// <summary>
+    /// Extra sections the host contributes to the top of the Preferences dialog, built fresh each time it
+    /// opens (so the rows read the host's current values, not the ones it held when it wired this up).
+    /// <para>
+    /// This exists so a setting that belongs to the <em>app around</em> the grid — standalone Cellestra's
+    /// appearance, say — can be offered by the app that owns it rather than hardcoded into an embeddable
+    /// control that four other shells would then inherit it from. Left null, as Puffinote leaves it, the
+    /// dialog is exactly the grid's own options; Puffinote settles appearance once, in its own Preferences,
+    /// for every editor it hosts.
+    /// </para>
+    /// </summary>
+    public Func<IReadOnlyList<SettingsSection>>? HostSettingsSections { get; set; }
+
     // Gated shortcut commands backing this control's KeyBindings. A command backs off (CanExecute=false)
     // while a modal overlay is open or a focused text input owns the key, so the overlay/editor handles
     // it instead (see RefreshCommandStates).
@@ -239,11 +252,17 @@ public partial class SpreadsheetEditorView : UserControl, IAppEnvironment
     /// menu's bindings have an editor of their own (View ▸ Radial Menu Settings…) that a row in a form
     /// couldn't improve on — the overlay host shows one modal at a time, so a nested one isn't offered.
     /// </para>
+    /// <para>
+    /// The host's own sections (<see cref="HostSettingsSections"/>) come first, because what they hold is
+    /// the shell's business rather than the grid's: standalone Cellestra puts its appearance there, and a
+    /// shell that embeds this view — Puffinote — leaves it empty and settles appearance once, for itself.
+    /// </para>
     /// </summary>
     public async void ShowPreferences()
     {
         var form = new SettingsEditorView(
         [
+            .. HostSettingsSections?.Invoke() ?? [],
             new SettingsSection("View",
             [
                 new NumberSetting("Zoom", () => Zoom * 100, v => Zoom = v / 100, 25, 400, step: 10,

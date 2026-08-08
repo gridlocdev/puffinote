@@ -1,7 +1,9 @@
 using System.ComponentModel;
+using Avalonia;
 using Avalonia.Platform.Storage;
 using Puffinote.Components.Controls;
 using Puffinote.Components.Overlays;
+using Puffinote.Components.Theming;
 using Puffinote.Desktop.Panes;
 using Puffinote.Desktop.Shell;
 
@@ -48,6 +50,12 @@ public partial class MainWindow
         double tabWidth = _settings.TabWidth ?? new NoteConfig().TabWidth;
         var showExtensions = _settings.ShowFileExtensionsOrDefault;
 
+        // The one appearance choice in the dialog, and deliberately the only one: it is set here, in General,
+        // for the whole shell, and the editors' tabs below don't repeat it. A window showing a note beside a
+        // sheet cannot be half light, and an editor's own theme setting only means something when that editor
+        // is the app — so it stays in its own file (untouched by a save from here) for when it runs standalone.
+        var theme = _settings.ThemeOrDefault;
+
         // Not an override, so no paired "override it?" checkbox: the tab strip is Puffinote's own chrome and
         // there is no editor setting underneath it to inherit. Unset simply means shown.
         var showTabBar = _settings.ShowTabBar ?? true;
@@ -70,6 +78,9 @@ public partial class MainWindow
             [
                 new SettingsSection("Appearance",
                 [
+                    ChoiceSetting.ForEnum<ThemePreference>("Theme", () => theme, v => theme = v,
+                        ThemePreferences.Labels,
+                        ThemePreferences.Hint + " It sets the whole window, editors included."),
                     new ToggleSetting("Show the tab bar",
                         () => showTabBar, v => showTabBar = v,
                         "Off hides the strip of open documents. They stay open — switch with ⌘⇧[ / ⌘⇧] or ⌘O."),
@@ -126,6 +137,7 @@ public partial class MainWindow
             TabWidth = overrideTabWidth ? (int)tabWidth : null,
             ShowTabBar = showTabBar,
             ShowFileExtensions = showExtensions,
+            Theme = theme,
         };
         _settings.SaveUser();
 
@@ -149,6 +161,16 @@ public partial class MainWindow
         var resolved = PuffinoteSettings.Resolve(_settings, _notebook.RootPath);
         _tabHost.Settings = resolved;
         SidebarForTest.ShowFileExtensions = _extensionsThisSession ?? resolved.ShowFileExtensionsOrDefault;
+
+        // The appearance, applied to the application rather than to this window: requesting the variant is
+        // what re-resolves the chrome resources and re-tints the shared tokens, which between them are what
+        // the sidebar, the tab strip and every embedded editor paint from. Nothing here has to walk the open
+        // panes — each editor already follows the variant it finds itself in, because each of them has to be
+        // able to follow an OS that changes appearance under it.
+        if (Application.Current is { } app)
+        {
+            resolved.ThemeOrDefault.Apply(app);
+        }
     }
 
     /// <summary>

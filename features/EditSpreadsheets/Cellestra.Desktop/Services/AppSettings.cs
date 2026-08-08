@@ -1,4 +1,5 @@
 using Cellestra.Desktop.Commands;
+using Puffinote.Components.Theming;
 using RecentFilesHelper = Puffinote.Components.Shell.RecentFiles;
 
 namespace Cellestra.Desktop.Services;
@@ -10,6 +11,13 @@ namespace Cellestra.Desktop.Services;
 /// </summary>
 public sealed record AppSettings
 {
+    /// <summary>
+    /// Light, dark, or whatever the OS is wearing. Unset means <see cref="ThemePreference.System"/> —
+    /// which is what Cellestra has always done, since its <c>App.axaml</c> requests the Default variant;
+    /// what is new is being able to say otherwise, and have it remembered.
+    /// </summary>
+    public ThemePreference Theme { get; init; } = ThemePreference.System;
+
     /// <summary>Whether the adaptive command bar is folded to its slim handle. Default: expanded.</summary>
     public bool CommandBarCollapsed { get; init; }
 

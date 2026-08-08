@@ -421,6 +421,14 @@ Typage §12. Where a behavior belongs to an editor, Puffinote **delegates** and 
 - **Config precedence:** sub-app defaults < sub-app config file < Puffinote overrides (§7.5).
 - **Theme default:** follows OS light/dark; a notebook may pin a theme; accent comes from Puffinote's token
   override.
+- **Theme, where it is chosen:** **Preferences → General → Appearance → "Theme"** — *Follow System*
+  (the default), *Light*, or *Dark* — and **only** there. It is asked once, for the shell, and applies to
+  every embedded editor with it: a window showing a note beside a sheet cannot be half light, so a theme
+  row on the per-editor tabs would be offering a choice the shell could not honour. The editors' own theme
+  settings stay in their own files, untouched by a save from here, and are what they wear when each runs
+  standalone (where each offers the same three options in its own Preferences). Applied on the spot, and
+  layered across the two scopes like every other setting here, so a notebook's committed
+  `.puffinote/settings.json` can pin an appearance for everyone who opens it.
 - **Tabs:** new documents open **after** the active tab; `⌘{`/`⌘}` (or platform equivalents) switch tabs;
   a middle-click / `⌘W` closes (with the dirty prompt). Tab order is persisted per notebook.
 - **Close All Tabs (`⌥⌘W`):** closes every open tab, prompting per dirty tab exactly as `⌘W` does;

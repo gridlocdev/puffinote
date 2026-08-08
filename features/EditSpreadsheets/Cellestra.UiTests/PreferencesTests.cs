@@ -1,10 +1,14 @@
+using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Headless.XUnit;
 using Avalonia.Input;
 using Avalonia.LogicalTree;
+using Avalonia.Styling;
 using Avalonia.Threading;
 using Cellestra.Desktop.Views;
+using Cellestra.Editor;
 using Puffinote.Components.Commands;
+using Puffinote.Components.Theming;
 using Xunit;
 
 namespace Cellestra.UiTests;
@@ -71,6 +75,56 @@ public class PreferencesTests : IDisposable
         Assert.Equal(1.5, window.Editor.Zoom, precision: 3);
         Assert.True(window.Editor.CommandBarCollapsed);
         Assert.Equal(1, persisted);
+    }
+
+    /// <summary>
+    /// Appearance belongs to the app around the grid, so the standalone window contributes it through the
+    /// editor's host seam rather than the grid carrying a theme row wherever it is embedded. Accepting the
+    /// dialog applies the choice — the app really is in the light variant afterwards — and persists it, so
+    /// the next launch opens the way this one was left.
+    /// </summary>
+    [AvaloniaFact]
+    public void The_theme_is_offered_by_the_window_applied_at_once_and_remembered()
+    {
+        var window = ScratchWindow();
+        window.Show();
+        Dispatcher.UIThread.RunJobs();
+
+        window.Editor.ShowPreferences();
+        Dispatcher.UIThread.RunJobs();
+
+        var overlay = window.Editor.OverlayHost;
+        var theme = overlay.GetLogicalDescendants().OfType<ComboBox>().First();
+        Assert.Equal(ThemePreferences.Labels, theme.ItemsSource); // the host's section, at the top
+        theme.SelectedIndex = (int)ThemePreference.Light;
+        Dispatcher.UIThread.RunJobs();
+
+        overlay.GetLogicalDescendants().OfType<Button>().First(b => b.IsDefault).RaiseEvent(
+            new Avalonia.Interactivity.RoutedEventArgs(Button.ClickEvent));
+        Dispatcher.UIThread.RunJobs();
+
+        Assert.Equal(ThemeVariant.Light, Application.Current!.ActualThemeVariant);
+        Assert.Equal(ThemeVariant.Light, Tokens.Variant); // and the family's chrome tokens went with it
+        Assert.Equal(ThemePreference.Light, new Cellestra.Desktop.Services.SettingsService(_path).Load().Theme);
+    }
+
+    /// <summary>
+    /// The seam is opt-in: an embedding shell that contributes nothing — as Puffinote does, settling the
+    /// theme once for itself — gets the grid's own options and no appearance row at all.
+    /// </summary>
+    [AvaloniaFact]
+    public void An_embedding_host_that_contributes_nothing_gets_no_appearance_row()
+    {
+        var editor = new SpreadsheetEditorView();
+        var window = new Window { Width = 900, Height = 600, Content = editor };
+        window.Show();
+        Dispatcher.UIThread.RunJobs();
+
+        editor.ShowPreferences();
+        Dispatcher.UIThread.RunJobs();
+
+        var combos = editor.OverlayHost.GetLogicalDescendants().OfType<ComboBox>().ToList();
+        Assert.Empty(combos); // the grid's own options are two numbers and a checkbox — no drop-down
     }
 
     [AvaloniaFact]

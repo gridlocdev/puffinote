@@ -1,3 +1,4 @@
+using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Layout;
 using Avalonia.Media;
@@ -6,8 +7,10 @@ using Avalonia.Threading;
 using Cellestra.Desktop.Services;
 using Cellestra.Editor;
 using Puffinote.Components.Commands;
+using Puffinote.Components.Controls;
 using Puffinote.Components.Overlays;
 using Puffinote.Components.Shell;
+using Puffinote.Components.Theming;
 
 namespace Cellestra.Desktop.Views;
 
@@ -48,6 +51,20 @@ public partial class MainWindow : Window, IEditorHost
         Height = _settings.WindowHeight;
 
         Editor.Host = this;
+        ApplyTheme(_settings.Theme); // the saved appearance, before the first paint
+
+        // Appearance is the shell's setting, not the grid's, so the shell is what contributes its row —
+        // through the editor's host seam, which Puffinote leaves empty because it settles the theme once
+        // for every editor it embeds. Rebuilt per open, so the drop-down shows the theme in force now.
+        Editor.HostSettingsSections = () =>
+        [
+            new SettingsSection("Appearance",
+            [
+                ChoiceSetting.ForEnum<ThemePreference>("Theme", () => _settings.Theme, ApplyTheme,
+                    ThemePreferences.Labels, ThemePreferences.Hint),
+            ]),
+        ];
+
         Editor.Zoom = _settings.Zoom;
         Editor.CommandBarCollapsed = _settings.CommandBarCollapsed;
         Editor.RadialConfig = _settings.RadialMenu;
@@ -163,6 +180,26 @@ public partial class MainWindow : Window, IEditorHost
 
         PersistSettings();
         ReleaseFileLock();
+    }
+
+    /// <summary>
+    /// Adopt an appearance: remember it, and request the variant it means. Requesting it is the whole of
+    /// applying it — the grid, the chart, the sheet tabs and the chrome brushes all resolve themselves from
+    /// the app's variant already (they have to: this app has always been able to follow a Mac that switches
+    /// itself at dusk), so choosing Light here reaches them the same way the OS doing it would.
+    /// <para>
+    /// Writing it to the file is the Preferences dialog's job, on the way out: this runs from that dialog's
+    /// Commit, and <see cref="PersistSettings"/> follows on <c>PreferencesChanged</c>.
+    /// </para>
+    /// </summary>
+    private void ApplyTheme(ThemePreference theme)
+    {
+        _settings = _settings with { Theme = theme };
+
+        if (Application.Current is { } app)
+        {
+            theme.Apply(app);
+        }
     }
 
     private void PersistSettings()

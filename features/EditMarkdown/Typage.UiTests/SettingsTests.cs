@@ -1,8 +1,11 @@
+using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Headless.XUnit;
 using Avalonia.Input;
 using Avalonia.LogicalTree;
+using Avalonia.Styling;
 using Avalonia.Threading;
+using Puffinote.Components.Theming;
 using Typage.Control.Controls;
 using Typage.Desktop.Services;
 using Typage.Desktop.Views;
@@ -94,7 +97,7 @@ public class SettingsTests
         harness.Numbers[4].Value = 0m;    // autosave off
         harness.Toolbar.IsChecked = false;
 
-        Assert.Equal(AppTheme.Dark, settings.Theme); // nothing written until the dialog is accepted
+        Assert.Equal(AppTheme.System, settings.Theme); // nothing written until the dialog is accepted
         harness.Form.Commit();
 
         Assert.Equal(AppTheme.HighContrast, settings.Theme);
@@ -102,6 +105,32 @@ public class SettingsTests
         Assert.Equal(0, settings.EditorMaxContentWidth);
         Assert.Equal(0, settings.AutosaveSeconds);
         Assert.False(settings.ShowToolbar);
+    }
+
+    /// <summary>
+    /// Unset, the appearance follows the OS — an app nobody has told which appearance to wear should wear
+    /// the desktop's. Choosing one puts the whole shell in that variant, the family's chrome tokens
+    /// included, so the palette and the modal dialogs match the window they open over. High contrast is
+    /// Typage's own, and rides the dark variant: what makes it high contrast is the editor palette.
+    /// </summary>
+    [AvaloniaTheory]
+    [InlineData(AppTheme.Light, "Light")]
+    [InlineData(AppTheme.Dark, "Dark")]
+    [InlineData(AppTheme.HighContrast, "Dark")]
+    public void The_chosen_appearance_puts_the_shell_and_the_family_chrome_in_one_variant(AppTheme theme, string expected)
+    {
+        Assert.Equal(AppTheme.System, new AppSettings().Theme); // the default: whatever the desktop is wearing
+
+        var settings = TestShell.NewSettings();
+        settings.Settings.Theme = theme;
+
+        var window = TestShell.NewWindow(settings);
+        window.Show();
+        Dispatcher.UIThread.RunJobs();
+
+        var variant = expected == "Light" ? ThemeVariant.Light : ThemeVariant.Dark;
+        Assert.Equal(variant, Application.Current!.ActualThemeVariant);
+        Assert.Equal(variant, Tokens.Variant);
     }
 
     [AvaloniaFact]

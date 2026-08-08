@@ -1,9 +1,20 @@
+using Puffinote.Components.Theming;
 using Typage.Control.Controls;
 using RecentFilesHelper = Puffinote.Components.Shell.RecentFiles;
 
 namespace Typage.Desktop.Services;
 
-/// <summary>The appearance mode (PRD §7.2). <see cref="System"/> follows the OS light/dark setting.</summary>
+/// <summary>
+/// The appearance mode (PRD §7.2) — the family's three choices, plus one of Typage's own.
+/// <see cref="System"/> follows the OS light/dark setting.
+/// <para>
+/// <see cref="HighContrast"/> is not a fourth colour scheme so much as a stronger dark one: it pairs the
+/// dark shell with an editor palette built for maximum separation. It stays Typage-only, and stays in this
+/// enum rather than in the shared <see cref="ThemePreference"/>, because no other app in the family has a
+/// document palette to render it in — offering it where it changed nothing but the drop-down would be a
+/// promise the app couldn't keep.
+/// </para>
+/// </summary>
 public enum AppTheme
 {
     System,
@@ -12,13 +23,34 @@ public enum AppTheme
     HighContrast,
 }
 
+/// <summary>Maps Typage's appearance modes onto the family's shared three.</summary>
+public static class AppThemeExtensions
+{
+    /// <summary>
+    /// The shared preference this mode is an instance of. High contrast resolves to
+    /// <see cref="ThemePreference.Dark"/>: it is the variant its chrome is drawn in, and what the editor
+    /// then does with it is the part that makes it high contrast.
+    /// </summary>
+    public static ThemePreference ToPreference(this AppTheme theme) => theme switch
+    {
+        AppTheme.Light => ThemePreference.Light,
+        AppTheme.Dark or AppTheme.HighContrast => ThemePreference.Dark,
+        _ => ThemePreference.System,
+    };
+}
+
 /// <summary>
 /// User preferences persisted as JSON in the OS app-config location (PRD §7.9). A small subset
 /// for v1: theme, recent files, tab width, and the formatting-toolbar visibility.
 /// </summary>
 public sealed class AppSettings
 {
-    public AppTheme Theme { get; set; } = AppTheme.Dark;
+    /// <summary>
+    /// The appearance mode. Unset means <see cref="AppTheme.System"/>: an app that has never been told
+    /// which appearance to wear should wear the one the rest of the desktop is wearing, not the one its
+    /// authors happened to prefer.
+    /// </summary>
+    public AppTheme Theme { get; set; } = AppTheme.System;
 
     public List<string> RecentFiles { get; set; } = [];
 

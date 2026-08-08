@@ -205,7 +205,7 @@
 
 - [ ] All Apps: Ensure the cursor blinks at a consistent rate across all applications while application focus is on editing text. The current implementation has no blinking, which can make it difficult to locate the cursor. 
 
-- [ ] All Apps: Allow selecting the theme (light, dark, or system default) in the settings menu for all applications. This allows users to customize the appearance of the application according to their preferences and system settings. Default to system theme if no preference is set. The theme should be applied immediately upon selection, and the application should remember the user's preference for future sessions. In Puffinote, only display this a single time for itself in the settings menu, and not in the settings for each individual app.
+- [x] All Apps: Allow selecting the theme (light, dark, or system default) in the settings menu for all applications. This allows users to customize the appearance of the application according to their preferences and system settings. Default to system theme if no preference is set. The theme should be applied immediately upon selection, and the application should remember the user's preference for future sessions. In Puffinote, only display this a single time for itself in the settings menu, and not in the settings for each individual app.
 
 - [ ] All Apps: Use consistent verbiage for shared elements. For example, "Command Bar" means the horizontal bar at the top of Typage and Cellestra. "Command Menu" means the menu that opens when using Cmd+K or clicking the "Search for commands" button in the top right of the window.
 

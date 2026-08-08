@@ -1,7 +1,6 @@
 using Avalonia;
 using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Media;
-using Avalonia.Styling;
 using Avalonia.Themes.Fluent;
 using Plaintain.Desktop.Views;
 using Puffinote.Components.Theming;
@@ -17,8 +16,12 @@ public class App : Application
     public override void Initialize()
     {
         Styles.Add(new FluentTheme());
-        RequestedThemeVariant = ThemeVariant.Dark;
         Tokens.Current = new PuffinoteTheme(Color.FromRgb(0x8B, 0x8B, 0x8B)); // grey: plaintext has no opinion
+
+        // No variant is requested here: the window applies the saved appearance (Preferences ▸ Appearance ▸
+        // Theme) as it opens, and that setting defaults to following the system — which is what leaving
+        // RequestedThemeVariant unset already does, so nothing flashes dark on the way to a light desktop.
+        Tokens.Follow(this);
     }
 
     public override void OnFrameworkInitializationCompleted()

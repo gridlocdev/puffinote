@@ -156,7 +156,8 @@ MVVM stays for the chrome; the grid's hot path is deliberate direct code.
 - **Undo/redo manager** — holds the stacks (session-only, 1,000-step cap); drives Core's edit commands.
 - **Clipboard service** — copy/paste as tab-separated text to/from other apps; backs Paste Special.
 - **File-dialog & dialog services** — native open/save and modal dialogs, including the confirmations in `PRD.md` §8.7 (the "more than 100 non-empty cells" threshold lives here).
-- **Recent-files & settings services** — persisted to `~/Library/Application Support/Cellestra/settings.json` (window state, recent files, shortcut remaps, command-bar collapsed/zoom/view toggles, default calc mode).
+- **Recent-files & settings services** — persisted to `~/Library/Application Support/Cellestra/settings.json` (window state, recent files, shortcut remaps, command-bar collapsed/zoom/view toggles, default calc mode, appearance).
+- **Appearance (Preferences → Appearance → Theme)** — *Follow System* (the default), *Light*, or *Dark*, the family's three, applied on the spot and remembered. The row is contributed by the **window**, through `SpreadsheetEditorView.HostSettingsSections`, not by the editor view: appearance belongs to the app around the grid, and a shell that embeds the view (Puffinote) settles it once for every editor it hosts rather than per sheet. Nothing else is needed to make a theme switch land — the grid, chart, tab strip and chrome brushes all resolve themselves from the app's variant already, because they have to follow an OS that changes appearance mid-session.
 
 ## 9. Threading
 Recalculation and file I/O run off the UI thread; results are marshaled back. Only the UI thread touches Avalonia controls.
