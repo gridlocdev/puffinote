@@ -130,6 +130,8 @@ internal sealed class FilesPanel : ISidebarPanel
 
     public string Title => "Files";
 
+    public string Icon => "folder";
+
     public Control View => _view;
 
     /// <summary>Raised when a file is activated in the tree (double-click / Enter).</summary>

@@ -32,6 +32,8 @@ internal sealed class RecentPanel : ISidebarPanel
 
     public string Title => "Recent";
 
+    public string Icon => "history";
+
     public Control View => _list;
 
     /// <summary>Raised when a recent entry is activated (double-click / Enter), to open it in a tab.</summary>

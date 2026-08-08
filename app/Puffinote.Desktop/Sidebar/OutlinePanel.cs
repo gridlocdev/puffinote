@@ -30,6 +30,8 @@ internal sealed class OutlinePanel : ISidebarPanel
 
     public string Title => "Outline";
 
+    public string Icon => "list";
+
     public Control View => _list;
 
     public void Focus() => _list.FocusList();

@@ -115,6 +115,9 @@ internal sealed class SidebarView : UserControl
     /// <summary>Raised by the header's collapse control; the shell owns the layout, so it does the hiding.</summary>
     public event Action? ToggleRequested;
 
+    /// <summary>Raised by the switcher row's Settings button; the shell owns Preferences, so it opens it.</summary>
+    public event Action? SettingsRequested;
+
     /// <summary>Raised when the file tree's pinned folders change, so the shell persists them to the session.</summary>
     public event Action? PinnedChanged;
 
@@ -244,28 +247,58 @@ internal sealed class SidebarView : UserControl
         return button;
     }
 
+    /// <summary>
+    /// The switcher row: one icon per panel, then Settings.
+    ///
+    /// <para>The four panels are named by glyph rather than by word. Four words in a sidebar this narrow spend
+    /// most of the row on labels for panels a user learns once and thereafter recognises by shape — and the
+    /// row had no space left to grow into. The word doesn't disappear, it moves: every button is tooltipped
+    /// and carries the panel's title as its accessible name, so a screen reader still hears "Files", and the
+    /// active panel is still called out (<see cref="RefreshSwitcher"/>).</para>
+    ///
+    /// <para>Settings sits at the end of the row, after a gap that says it is not a fifth panel — it opens the
+    /// Preferences dialog, so it never lights up as "the panel you are in". It carries no <c>Tag</c>, which is
+    /// how the switcher tells its own buttons from a neighbour's.</para>
+    /// </summary>
     private void BuildSwitcher()
     {
         foreach (var panel in _panels)
         {
-            var button = new Button
-            {
-                Content = panel.Title,
-                Tag = panel.Id,
-                Background = Brushes.Transparent,
-                // Room for the active item's underline. Reserved on every item, active or not, so switching
-                // panels doesn't shift the row by two pixels.
-                BorderThickness = new Thickness(0, 0, 0, 2),
-                BorderBrush = Brushes.Transparent,
-                Padding = new Thickness(10, 5),
-                MinHeight = 28, // a real pointer target (WCAG 2.2 §2.5.8); these were as small as their text
-                FontSize = 12,
-            };
-            button.Click += (_, _) => Activate(panel.Id);
+            var button = SwitcherButton(panel.Icon, panel.Title, () => Activate(panel.Id));
+            button.Tag = panel.Id;
             _switcher.Children.Add(button);
         }
 
+        var settings = SwitcherButton("settings-2", "Settings", () => SettingsRequested?.Invoke());
+        settings.Margin = new Thickness(8, 0, 0, 0); // the gap that separates an action from the panel switcher
+        _switcher.Children.Add(settings);
+
         RefreshSwitcher();
+    }
+
+    /// <summary>
+    /// One button in the switcher row: an icon-only 28×28 target (WCAG 2.2 §2.5.8) that reserves two pixels
+    /// at its foot for the active-panel underline — reserved on every button, active or not, so switching
+    /// panels doesn't shift the row.
+    /// </summary>
+    private static Button SwitcherButton(string icon, string label, Action run)
+    {
+        var button = new Button
+        {
+            Content = new LucideIcon { IconKey = icon, Size = 16 },
+            Background = Brushes.Transparent,
+            BorderThickness = new Thickness(0, 0, 0, 2),
+            BorderBrush = Brushes.Transparent,
+            Padding = new Thickness(0),
+            Width = 28,
+            MinHeight = 28,
+            HorizontalContentAlignment = Avalonia.Layout.HorizontalAlignment.Center,
+            VerticalContentAlignment = Avalonia.Layout.VerticalAlignment.Center,
+        };
+        button.Click += (_, _) => run();
+        ToolTip.SetTip(button, label);
+        AutomationProperties.SetName(button, label);
+        return button;
     }
 
     /// <summary>
@@ -274,7 +307,11 @@ internal sealed class SidebarView : UserControl
     /// <para>Colour was previously the <i>only</i> thing distinguishing the active panel from the other three,
     /// which leaves a user with a colour-vision deficiency no signal at all (WCAG 2.2 §1.4.1, Use of Color). The
     /// active document tab already carries a non-colour indicator; this mirrors it, so the two "you are here"
-    /// signals in the shell are spelled the same way.</para>
+    /// signals in the shell are spelled the same way. It is the whole non-colour signal now that the row is
+    /// icons: a glyph has no weight to thicken the way the old text labels did.</para>
+    ///
+    /// <para>The Settings button is in this row but carries no id, so it lands in the inactive branch and stays
+    /// there — correctly, since it is an action rather than a panel you can be inside of.</para>
     /// </summary>
     private void RefreshSwitcher()
     {
@@ -282,10 +319,17 @@ internal sealed class SidebarView : UserControl
         foreach (var button in _switcher.Children.OfType<Button>())
         {
             bool active = (string?)button.Tag == _active.Id;
-            button.Foreground = active ? palette.Accent : palette.MutedText;
-            button.FontWeight = active ? FontWeight.SemiBold : FontWeight.Normal;
+            var brush = active ? palette.Accent : palette.MutedText;
+            button.Foreground = brush;
             button.BorderBrush = active ? palette.Accent : Brushes.Transparent;
             AutomationProperties.SetHelpText(button, active ? "selected" : null);
+
+            // Named on the glyph as well as on the button: the icon is a bare Control, not text, so it takes
+            // the accent only if it is handed it.
+            if (button.Content is LucideIcon glyph)
+            {
+                glyph.Foreground = brush;
+            }
         }
     }
 

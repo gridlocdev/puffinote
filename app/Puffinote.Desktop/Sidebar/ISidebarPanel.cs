@@ -13,8 +13,14 @@ internal interface ISidebarPanel
     /// <summary>Stable id used by focus/activate commands (e.g. "files", "recent").</summary>
     string Id { get; }
 
-    /// <summary>The switcher button label.</summary>
+    /// <summary>
+    /// The switcher button's label. The switcher draws <see cref="Icon"/> rather than this text, so it is
+    /// what the button is <i>named</i> — its tooltip and its accessible name — not what it prints.
+    /// </summary>
     string Title { get; }
+
+    /// <summary>The vendored Lucide glyph key the switcher draws for this panel (see <c>LucideIcons</c>).</summary>
+    string Icon { get; }
 
     /// <summary>The panel body mounted when this panel is active.</summary>
     Control View { get; }

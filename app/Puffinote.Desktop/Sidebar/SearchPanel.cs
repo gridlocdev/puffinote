@@ -64,6 +64,8 @@ internal sealed class SearchPanel : ISidebarPanel
 
     public string Title => "Search";
 
+    public string Icon => "search";
+
     public Control View { get; }
 
     /// <summary>Raised when a result is activated (Enter / double-click), to open it in a tab.</summary>
