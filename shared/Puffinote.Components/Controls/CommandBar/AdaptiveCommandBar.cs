@@ -13,6 +13,11 @@ namespace Puffinote.Components.Controls.CommandBar;
 /// fold (Google-Sheets style) into a double-chevron overflow drawer rather than scrolling off — plus an
 /// optional search pill and a collapse-to-slim handle. It owns only <em>layout</em>: each app builds its own
 /// sections (tools, per-group drawers) and its folded counterparts, and refreshes command state itself.
+/// <para>
+/// How much of it shows is <see cref="BarVisibility"/>'s three states; the bar's own chevrons move between
+/// the first two, and a host's Settings / menu / palette reach all three (a hidden bar has no chevron left
+/// to click).
+/// </para>
 /// </summary>
 public sealed class AdaptiveCommandBar : UserControl
 {
@@ -50,8 +55,8 @@ public sealed class AdaptiveCommandBar : UserControl
     private int _currentFit = -1;
     private bool _reflowing;
 
-    /// <summary>Raised when the user collapses or expands the bar, so the host can persist the choice.</summary>
-    public event EventHandler? CollapsedChanged;
+    /// <summary>Raised when <see cref="BarVisibility"/> changes, so the host can persist the choice.</summary>
+    public event EventHandler? VisibilityChanged;
 
     /// <summary>Raised when the overflow drawer opens, so the host can refresh the folded tools' state first.</summary>
     public event EventHandler? OverflowOpened;
@@ -71,11 +76,15 @@ public sealed class AdaptiveCommandBar : UserControl
         border.Bind(Border.BorderBrushProperty, this.GetResourceObservable("ChromeBorder"));
         Content = border;
 
-        ApplyCollapsed();
+        ApplyVisibility();
     }
 
-    /// <summary>Whether the bar is folded down to its slim handle (persisted by the host).</summary>
-    public bool Collapsed
+    /// <summary>
+    /// How much of the bar shows — full, slim handle, or nothing at all (persisted by the host).
+    /// <see cref="CommandBarVisibility.Hidden"/> hides the control itself, so the row it occupied goes back
+    /// to the surface below rather than leaving an empty strip behind.
+    /// </summary>
+    public CommandBarVisibility BarVisibility
     {
         get;
         set
@@ -86,8 +95,8 @@ public sealed class AdaptiveCommandBar : UserControl
             }
 
             field = value;
-            ApplyCollapsed();
-            CollapsedChanged?.Invoke(this, EventArgs.Empty);
+            ApplyVisibility();
+            VisibilityChanged?.Invoke(this, EventArgs.Empty);
         }
     }
 
@@ -104,10 +113,11 @@ public sealed class AdaptiveCommandBar : UserControl
     public IReadOnlyList<Control> OverflowDrawerPanels =>
         [.. _overflowHost.Children.Where(c => _folded.Contains(c))];
 
-    private void ApplyCollapsed()
+    private void ApplyVisibility()
     {
-        _full.IsVisible = !Collapsed;
-        _slim.IsVisible = Collapsed;
+        _full.IsVisible = BarVisibility == CommandBarVisibility.Visible;
+        _slim.IsVisible = BarVisibility == CommandBarVisibility.Collapsed;
+        IsVisible = BarVisibility != CommandBarVisibility.Hidden;
     }
 
     private Control BuildFull(IReadOnlyList<Section> sections)
@@ -319,7 +329,7 @@ public sealed class AdaptiveCommandBar : UserControl
             width: 30,
             height: collapse ? 34 : 18,
             collapse ? "Collapse the bar — more room for your work" : "Show the command bar");
-        button.Click += (_, _) => Collapsed = collapse;
+        button.Click += (_, _) => BarVisibility = collapse ? CommandBarVisibility.Collapsed : CommandBarVisibility.Visible;
         return button;
     }
 

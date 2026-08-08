@@ -1,4 +1,5 @@
 using Puffinote.Components.Controls;
+using Puffinote.Components.Controls.CommandBar;
 using Puffinote.Components.Shell;
 using Puffinote.Desktop.Shell;
 using Typage.Control.Controls;
@@ -31,8 +32,8 @@ internal sealed record NoteConfig
     /// <summary>The widest the reading column may grow, in pixels; 0 means the full pane width.</summary>
     public int EditorMaxContentWidth { get; set; } = 760;
 
-    /// <summary>Whether Typage's formatting toolbar sits above the note.</summary>
-    public bool ShowToolbar { get; set; } = true;
+    /// <summary>How much of Typage's formatting toolbar sits above the note: full, slim handle, or nothing.</summary>
+    public CommandBarVisibility Toolbar { get; set; }
 
     /// <summary>The presentation the note opens in: rich, formatted-with-markers, or raw source.</summary>
     public MarkdownEditor.ViewMode View { get; set; } = MarkdownEditor.ViewMode.Rich;
@@ -44,8 +45,20 @@ internal sealed record NoteConfig
     public static string DefaultPath => SettingsStore.AppConfigPath("Typage", "settings.json");
 
     /// <summary>Load Typage's own note settings (tolerant — absent/corrupt yields Typage's defaults).</summary>
-    public static NoteConfig Load(string? path = null) =>
-        SettingsStore.Load(path ?? DefaultPath, static () => new NoteConfig(), EditorConfig.Json);
+    public static NoteConfig Load(string? path = null)
+    {
+        path ??= DefaultPath;
+        var config = SettingsStore.Load(path, static () => new NoteConfig(), EditorConfig.Json);
+
+        // Mirror Typage's own migration of its pre-three-state boolean, so a file that build wrote reads the
+        // same here as it does there — a mirror that skipped it would show a toolbar Typage doesn't.
+        if (SettingsStore.MigratedBool(path, nameof(Toolbar), "ShowToolbar") is { } shown)
+        {
+            config.Toolbar = shown ? CommandBarVisibility.Visible : CommandBarVisibility.Hidden;
+        }
+
+        return config;
+    }
 
     /// <summary>
     /// Write these settings back into Typage's own file, merging rather than replacing so the keys this
@@ -61,7 +74,9 @@ internal sealed record NoteConfig
         [
             ChoiceSetting.ForEnum<MarkdownEditor.ViewMode>("Default view", () => View, v => View = v,
                 ["Rich", "Formatted", "Raw text"]),
-            new ToggleSetting("Show the formatting toolbar", () => ShowToolbar, v => ShowToolbar = v),
+            ChoiceSetting.ForEnum<CommandBarVisibility>("Formatting toolbar", () => Toolbar, v => Toolbar = v,
+                ["Visible", "Collapsed", "Hidden"],
+                "Visible shows the full toolbar; Collapsed folds it to its slim handle; Hidden gives the whole row back to the text."),
         ]),
         new SettingsSection("Editor",
         [

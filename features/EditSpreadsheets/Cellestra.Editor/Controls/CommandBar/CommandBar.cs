@@ -15,7 +15,8 @@ namespace Cellestra.Desktop.Controls.CommandBar;
 /// single <see cref="AppCommands"/> catalog, with bespoke swatch/size/format drawers per group — mounted on
 /// the shared <see cref="AdaptiveCommandBar"/> shell (which owns the reflow/overflow, collapse handle, and
 /// search pill). Tools reflect the selection (disabled when they don't apply, lit when their toggle is on),
-/// narrating each action; the whole bar collapses to a slim handle to give the grid more room.
+/// narrating each action; the whole bar collapses to a slim handle — or goes away entirely — to give the
+/// grid more room (<see cref="CommandBarVisibility"/>).
 /// </summary>
 public sealed class CommandBar : UserControl
 {
@@ -27,8 +28,8 @@ public sealed class CommandBar : UserControl
     private readonly List<CommandTool> _buttons = [];
     private readonly AdaptiveCommandBar _bar;
 
-    /// <summary>Raised when the user collapses or expands the bar, so the host can persist the choice.</summary>
-    public event EventHandler? CollapsedChanged;
+    /// <summary>Raised when the user shows, collapses, or hides the bar, so the host can persist the choice.</summary>
+    public event EventHandler? VisibilityChanged;
 
     public CommandBar(IAppEnvironment environment)
     {
@@ -57,18 +58,18 @@ public sealed class CommandBar : UserControl
                 () => _env.Commands.RecentTitles));
 
         _bar = new AdaptiveCommandBar(sections, search);
-        _bar.CollapsedChanged += (_, _) => CollapsedChanged?.Invoke(this, EventArgs.Empty);
+        _bar.VisibilityChanged += (_, _) => VisibilityChanged?.Invoke(this, EventArgs.Empty);
         _bar.OverflowOpened += (_, _) => RefreshState(); // sync folded tools to the selection as the drawer opens
         Content = _bar;
 
         RefreshState();
     }
 
-    /// <summary>Whether the bar is folded down to its slim handle (persisted by the host).</summary>
-    public bool Collapsed
+    /// <summary>How much of the bar shows: full, slim handle, or nothing (persisted by the host).</summary>
+    public CommandBarVisibility BarVisibility
     {
-        get => _bar.Collapsed;
-        set => _bar.Collapsed = value;
+        get => _bar.BarVisibility;
+        set => _bar.BarVisibility = value;
     }
 
     /// <summary>Test hook: whether any groups are currently folded into the overflow drawer.</summary>

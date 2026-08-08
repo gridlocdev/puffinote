@@ -7,6 +7,7 @@ using Avalonia.Platform.Storage;
 using Avalonia.Threading;
 using Puffinote.Components.Commands;
 using Puffinote.Components.Controls;
+using Puffinote.Components.Controls.CommandBar;
 using Puffinote.Components.Controls.Icons;
 using Puffinote.Components.Overlays;
 using Puffinote.Components.Theming;
@@ -100,8 +101,11 @@ public partial class MainWindow
             // it isn't reserved, so anyone who wants a key can bind one in the shortcuts editor.
             new("shell.toggleTabBar", "Toggle Tab Bar", "Show or hide the tab strip for this session",
                 Bound("shell.toggleTabBar", null), ToggleTabBar),
-            new("shell.toggleEditorToolbar", "Toggle Editor Toolbar", "Show or hide the formatting toolbar over a note",
-                Bound("shell.toggleEditorToolbar", null), ToggleEditorToolbar, () => _tabHost.ActivePane is MarkdownPane, icon: "type"),
+            // The toolbar has three states now (visible, collapsed, hidden), so the one command steps through
+            // them rather than flipping a switch. The id is unchanged: a shortcut someone remapped to it still
+            // reaches the same control (see Bound).
+            new("shell.toggleEditorToolbar", "Cycle Editor Toolbar", "Step the formatting toolbar over a note through visible, collapsed, and hidden",
+                Bound("shell.toggleEditorToolbar", null), CycleEditorToolbar, () => _tabHost.ActivePane is MarkdownPane, icon: "type"),
 
             // The session-only twin of the Preferences toggle (see ShowSettings): flips the tree's extensions now,
             // saves nothing. No default gesture — there is no convention for it, and it stays rebindable.
@@ -397,12 +401,16 @@ public partial class MainWindow
     /// </summary>
     private void ToggleTabBar() => _tabHost.ShowTabBar = !_tabHost.ShowTabBar;
 
-    /// <summary>Toggle the formatting toolbar over the active note (shown by default). No-op for other panes.</summary>
-    private void ToggleEditorToolbar()
+    /// <summary>
+    /// Step the active note's toolbar to its next state, wrapping visible → collapsed → hidden → visible.
+    /// No-op for other panes.
+    /// </summary>
+    private void CycleEditorToolbar()
     {
         if (_tabHost.ActivePane is MarkdownPane note)
         {
-            note.ToolbarVisible = !note.ToolbarVisible;
+            var states = Enum.GetValues<CommandBarVisibility>();
+            note.ToolbarState = states[(Array.IndexOf(states, note.ToolbarState) + 1) % states.Length];
         }
     }
 

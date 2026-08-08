@@ -1,4 +1,5 @@
 using System.Text.Json.Serialization;
+using Puffinote.Components.Controls.CommandBar;
 using Puffinote.Components.Shell;
 using Puffinote.Components.Theming;
 using Typage.Control.Controls;
@@ -43,7 +44,7 @@ public static class AppThemeExtensions
 
 /// <summary>
 /// User preferences persisted as JSON in the OS app-config location (PRD §7.9). A small subset
-/// for v1: theme, recent files, tab width, and the formatting-toolbar visibility.
+/// for v1: theme, recent files, tab width, and how much of the formatting toolbar shows.
 /// </summary>
 public sealed class AppSettings
 {
@@ -71,7 +72,11 @@ public sealed class AppSettings
     /// </summary>
     public int EditorMaxContentWidth { get; set; } = 760;
 
-    public bool ShowToolbar { get; set; } = true;
+    /// <summary>
+    /// How much of the formatting toolbar a window opens with — the full bar, its slim collapse handle, or
+    /// nothing at all (PRD §7.5). Default: the full bar.
+    /// </summary>
+    public CommandBarVisibility Toolbar { get; set; }
 
     /// <summary>
     /// The reading zoom, on the family's shared ladder (1.0 = 100%). Remembered because someone who needs

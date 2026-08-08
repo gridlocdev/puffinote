@@ -12,6 +12,7 @@ using Cellestra.Desktop.Services;
 using Cellestra.Desktop.Views.Dialogs;
 using Puffinote.Components.Commands;
 using Puffinote.Components.Controls;
+using Puffinote.Components.Controls.CommandBar;
 using Puffinote.Components.Controls.Icons;
 using Puffinote.Components.Input;
 using Puffinote.Components.Overlays;
@@ -57,8 +58,8 @@ public partial class SpreadsheetEditorView : UserControl, IAppEnvironment
     /// <summary>Raised when overlay/modal state changes, so a host can re-gate native-menu commands.</summary>
     public event EventHandler? CommandStateChanged;
 
-    /// <summary>Raised when the command bar is collapsed/expanded, so a host can persist the preference.</summary>
-    public event EventHandler? CommandBarCollapsedChanged;
+    /// <summary>Raised when the command bar is shown, collapsed, or hidden, so a host can persist the preference.</summary>
+    public event EventHandler? CommandBarVisibilityChanged;
 
     /// <summary>Raised when the radial-menu configuration changes (via its settings), so a host can persist it.</summary>
     public event EventHandler? RadialConfigChanged;
@@ -156,7 +157,7 @@ public partial class SpreadsheetEditorView : UserControl, IAppEnvironment
         ActualThemeVariantChanged += (_, _) => ApplyTabTheme();
 
         _commandBar = new CommandBar(this);
-        _commandBar.CollapsedChanged += (_, _) => CommandBarCollapsedChanged?.Invoke(this, EventArgs.Empty);
+        _commandBar.VisibilityChanged += (_, _) => CommandBarVisibilityChanged?.Invoke(this, EventArgs.Empty);
         CommandBarHost.Content = _commandBar;
 
         // The shared overlay host owns show/dismiss + the Tab-trap; the app supplies the blur and the
@@ -206,10 +207,14 @@ public partial class SpreadsheetEditorView : UserControl, IAppEnvironment
         }
     }
 
-    /// <summary>Whether the adaptive command bar is collapsed to its slim handle; the host persists it.</summary>
-    public bool CommandBarCollapsed
+    /// <summary>
+    /// How much of the adaptive command bar shows — full, slim handle, or nothing at all (PRD §6.3); the
+    /// host persists it and <see cref="CommandBarVisibilityChanged"/> says when it moved.
+    /// </summary>
+    public CommandBarVisibility CommandBarVisibility
     {
-        get => _commandBar?.Collapsed ?? false; set => _commandBar?.Collapsed = value;
+        get => _commandBar?.BarVisibility ?? CommandBarVisibility.Visible;
+        set => _commandBar?.BarVisibility = value;
     }
 
     /// <summary>
@@ -276,8 +281,9 @@ public partial class SpreadsheetEditorView : UserControl, IAppEnvironment
             [
                 new NumberSetting("Zoom", () => Zoom * 100, v => Zoom = v / 100, 25, 400, step: 10,
                     hint: "Percent. ⌘+ and ⌘− change it while you work; this is where it starts."),
-                new ToggleSetting("Collapse the command bar", () => CommandBarCollapsed, v => CommandBarCollapsed = v,
-                    "Fold the toolbar to its slim handle, for more grid."),
+                ChoiceSetting.ForEnum<CommandBarVisibility>("Command bar", () => CommandBarVisibility, v => CommandBarVisibility = v,
+                    ["Visible", "Collapsed", "Hidden"],
+                    "Visible shows the full toolbar; Collapsed folds it to its slim handle; Hidden gives the whole row back to the grid."),
             ]),
             new SettingsSection("Saving",
             [

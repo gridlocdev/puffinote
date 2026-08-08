@@ -1,6 +1,7 @@
 using Avalonia.Controls;
 using Avalonia.Styling;
 using Puffinote.Components.Commands;
+using Puffinote.Components.Controls.CommandBar;
 using Puffinote.Text.Document;
 using Typage.Control;
 using Typage.Control.Rendering;
@@ -60,15 +61,18 @@ internal sealed class MarkdownPane : IEditorPane, IConfigurablePane
         _view.Editor.VerticalPadding = notes.EditorPaddingVertical;
         _view.Editor.MaxContentWidth = notes.EditorMaxContentWidth;
         _view.Editor.CompletedTaskSorting = notes.CompletedTaskSort;
-        _view.ShowCommandBar = notes.ShowToolbar;
+        _view.CommandBarVisibility = notes.Toolbar;
         _view.ViewMode = notes.View;
     }
 
-    /// <summary>Whether the formatting toolbar is shown over the editor (shell View ▸ Toggle command).</summary>
-    public bool ToolbarVisible
+    /// <summary>
+    /// How much of the formatting toolbar shows over the note — full, slim handle, or nothing (shell
+    /// View ▸ Editor Toolbar command). Session-only: the persisted default is Typage's own setting.
+    /// </summary>
+    public CommandBarVisibility ToolbarState
     {
-        get => _view.ShowCommandBar;
-        set => _view.ShowCommandBar = value;
+        get => _view.CommandBarVisibility;
+        set => _view.CommandBarVisibility = value;
     }
 
     public Control View => _view;

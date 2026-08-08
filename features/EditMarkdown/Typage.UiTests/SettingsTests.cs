@@ -9,6 +9,7 @@ using Avalonia.Threading;
 using Avalonia.VisualTree;
 using Puffinote.Components.Commands;
 using Puffinote.Components.Controls;
+using Puffinote.Components.Controls.CommandBar;
 using Puffinote.Components.Theming;
 using Typage.Control.Controls;
 using Typage.Desktop.Services;
@@ -43,7 +44,8 @@ public class SettingsTests
 
         internal List<NumericUpDown> Numbers => [.. Form.GetLogicalDescendants().OfType<NumericUpDown>()];
 
-        internal CheckBox Toolbar => Form.GetLogicalDescendants().OfType<CheckBox>().Single();
+        /// <summary>The formatting toolbar's three-state picker — the third drop-down on the form.</summary>
+        internal ComboBox Toolbar => Combos[2];
     }
 
     [AvaloniaFact]
@@ -81,7 +83,7 @@ public class SettingsTests
 
         Assert.Equal(
             [
-                "Theme", "Default view", "Show the formatting toolbar",
+                "Theme", "Default view", "Formatting toolbar",
                 "Tab width", "Horizontal padding", "Vertical padding", "Reading width",
                 "Auto-save", "Recovery snapshots", "Completed tasks",
             ],
@@ -95,7 +97,7 @@ public class SettingsTests
         {
             Theme = AppTheme.Light,
             View = MarkdownEditor.ViewMode.RawText,
-            ShowToolbar = false,
+            Toolbar = CommandBarVisibility.Hidden,
             TabWidth = 2,
             EditorMaxContentWidth = 900,
         };
@@ -103,7 +105,7 @@ public class SettingsTests
 
         Assert.Equal((int)AppTheme.Light, harness.Combos[0].SelectedIndex);
         Assert.Equal((int)MarkdownEditor.ViewMode.RawText, harness.Combos[1].SelectedIndex);
-        Assert.False(harness.Toolbar.IsChecked);
+        Assert.Equal((int)CommandBarVisibility.Hidden, harness.Toolbar.SelectedIndex);
         Assert.Equal(2m, harness.Numbers[0].Value);
         Assert.Equal(900m, harness.Numbers[3].Value);
     }
@@ -119,7 +121,7 @@ public class SettingsTests
         harness.Numbers[3].Value = 0m;    // reading width: 0 = full width
         harness.Numbers[4].Value = 0m;    // auto-save off
         harness.Numbers[5].Value = 60m;   // recovery snapshots, every minute
-        harness.Toolbar.IsChecked = false;
+        harness.Toolbar.SelectedIndex = (int)CommandBarVisibility.Collapsed;
 
         Assert.Equal(AppTheme.System, settings.Theme); // nothing written until the dialog is accepted
         harness.Form.Commit();
@@ -129,7 +131,7 @@ public class SettingsTests
         Assert.Equal(0, settings.EditorMaxContentWidth);
         Assert.Equal(0, settings.AutoSaveSeconds);
         Assert.Equal(60, settings.RecoverySnapshotSeconds);
-        Assert.False(settings.ShowToolbar);
+        Assert.Equal(CommandBarVisibility.Collapsed, settings.Toolbar);
     }
 
     /// <summary>

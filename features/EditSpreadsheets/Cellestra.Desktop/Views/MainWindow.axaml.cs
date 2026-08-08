@@ -67,7 +67,7 @@ public partial class MainWindow : Window, IEditorHost
         ];
 
         Editor.Zoom = _settings.Zoom;
-        Editor.CommandBarCollapsed = _settings.CommandBarCollapsed;
+        Editor.CommandBarVisibility = _settings.CommandBar;
         Editor.RadialConfig = _settings.RadialMenu;
         Editor.AutoSaveSeconds = _settings.AutoSaveSeconds;
 
@@ -87,7 +87,7 @@ public partial class MainWindow : Window, IEditorHost
         };
         Editor.Saved += (_, _) => FlashSavedInTitle();
         Editor.CommandStateChanged += (_, _) => RefreshCommandStates();
-        Editor.CommandBarCollapsedChanged += (_, _) => PersistSettings();
+        Editor.CommandBarVisibilityChanged += (_, _) => PersistSettings();
         Editor.RadialConfigChanged += (_, _) => PersistSettings();
         Editor.PreferencesChanged += (_, _) => PersistSettings();
 
@@ -223,7 +223,7 @@ public partial class MainWindow : Window, IEditorHost
     {
         _settings = _settings with
         {
-            CommandBarCollapsed = Editor.CommandBarCollapsed,
+            CommandBar = Editor.CommandBarVisibility,
             RadialMenu = Editor.RadialConfig,
             Zoom = Editor.Zoom,
             AutoSaveSeconds = Editor.AutoSaveSeconds,
@@ -333,7 +333,8 @@ public partial class MainWindow : Window, IEditorHost
         menu.Items.Add(Submenu("Data", "data.sortAsc", "data.sortDesc", "data.customSort", "data.sortAndFilter", null,
             "data.toggleFilter", "data.clearFilter", null, "data.createTable", "data.autofitColumns", "data.removeDuplicates",
             "data.textToColumns", "data.validation", null, "formula.recalc"));
-        menu.Items.Add(Submenu("View", "view.commandPalette", "view.goToSheet", null, "view.zoomIn", "view.zoomOut", "view.actualSize", null, "view.freezePanes", null, "view.radialSettings", "app.preferences"));
+        menu.Items.Add(Submenu("View", "view.commandPalette", "view.goToSheet", null, "view.zoomIn", "view.zoomOut", "view.actualSize", null,
+            "view.commandBarVisible", "view.commandBarCollapsed", "view.commandBarHidden", null, "view.freezePanes", null, "view.radialSettings", "app.preferences"));
         menu.Items.Add(Submenu("Help", "help.shortcuts", null, "help.about"));
         NativeMenu.SetMenu(this, menu);
     }

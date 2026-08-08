@@ -1,6 +1,7 @@
 using Avalonia;
 using Avalonia.Media;
 using Avalonia.Styling;
+using Puffinote.Components.Controls.CommandBar;
 using Puffinote.Components.Theming;
 using Typage.Control.Controls;
 using Typage.Control.Rendering;
@@ -90,15 +91,63 @@ public partial class MainWindow
         }
     }
 
-    private void ToggleToolbar()
+    /// <summary>The menu/command label for a toolbar state (also used for the Preferences default; PRD §7.5).</summary>
+    private static string ToolbarLabel(CommandBarVisibility state) => state switch
     {
-        var show = !EditorView.ShowCommandBar;
-        EditorView.ShowCommandBar = show;
+        CommandBarVisibility.Visible => "Show Toolbar",
+        CommandBarVisibility.Collapsed => "Collapse Toolbar",
+        _ => "Hide Toolbar",
+    };
 
-        _toggleToolbarItem?.IsChecked = show;
+    /// <summary>
+    /// Put the formatting toolbar in <paramref name="state"/> and re-check the View ▸ radio group. A
+    /// <paramref name="persist"/>ed change is a preference — the menu, the palette, Preferences, and the bar's
+    /// own chevron; the unpersisted ones are the shell borrowing the row (startup restore, focus mode), which
+    /// must not overwrite what the reader chose.
+    /// </summary>
+    private void ApplyToolbar(CommandBarVisibility state, bool persist)
+    {
+        _applyingToolbarState = !persist;
+        try
+        {
+            EditorView.CommandBarVisibility = state;
+        }
+        finally
+        {
+            _applyingToolbarState = false;
+        }
 
-        _settings.Settings.ShowToolbar = show;
+        if (persist)
+        {
+            _settings.Settings.Toolbar = state;
+            _settings.Save();
+        }
+
+        SyncToolbarMenu(state);
+    }
+
+    /// <summary>
+    /// The toolbar moved from the surface itself — the bar's collapse or expand chevron. That is the reader
+    /// choosing, so it persists exactly like the menu does (unless the shell was the one moving it).
+    /// </summary>
+    private void OnToolbarVisibilityChanged()
+    {
+        if (_applyingToolbarState || _focusMode)
+        {
+            return; // our own restore, or focus mode's session-only hide — neither is a new preference
+        }
+
+        _settings.Settings.Toolbar = EditorView.CommandBarVisibility;
         _settings.Save();
+        SyncToolbarMenu(EditorView.CommandBarVisibility);
+    }
+
+    private void SyncToolbarMenu(CommandBarVisibility state)
+    {
+        foreach (var (s, item) in _toolbarItems)
+        {
+            item.IsChecked = s == state;
+        }
     }
 
     /// <summary>The menu/command label for a view mode (also used for the Preferences default; PRD §7.4).</summary>
@@ -136,8 +185,9 @@ public partial class MainWindow
     private void ToggleFocusMode()
     {
         _focusMode = !_focusMode;
-        // In focus mode the toolbar is hidden; otherwise restore the user's toolbar preference.
-        EditorView.ShowCommandBar = !_focusMode && _settings.Settings.ShowToolbar;
+        // In focus mode the toolbar is hidden; otherwise restore the user's toolbar preference — neither
+        // half of which is itself a preference, so the borrowed row is never written back over their choice.
+        ApplyToolbar(_focusMode ? CommandBarVisibility.Hidden : _settings.Settings.Toolbar, persist: false);
 
         _statusBar?.IsVisible = !_focusMode;
 

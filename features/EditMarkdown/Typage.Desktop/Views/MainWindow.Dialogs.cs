@@ -1,5 +1,6 @@
 using Avalonia.Controls;
 using Puffinote.Components.Controls;
+using Puffinote.Components.Controls.CommandBar;
 using Puffinote.Components.Overlays;
 using Puffinote.Components.Shell;
 using Puffinote.Components.Theming;
@@ -128,7 +129,9 @@ public partial class MainWindow
                     ViewModeLabel(MarkdownEditor.ViewMode.Formatted),
                     ViewModeLabel(MarkdownEditor.ViewMode.RawText),
                 ]),
-            new ToggleSetting("Show the formatting toolbar", () => s.ShowToolbar, v => s.ShowToolbar = v),
+            ChoiceSetting.ForEnum<CommandBarVisibility>("Formatting toolbar", () => s.Toolbar, v => s.Toolbar = v,
+                ["Visible", "Collapsed", "Hidden"],
+                "Visible shows the full toolbar; Collapsed folds it to its slim handle; Hidden gives the whole row back to the text."),
         ]),
         new SettingsSection("Editor",
         [
@@ -159,12 +162,16 @@ public partial class MainWindow
         EditorView.Editor.VerticalPadding = s.EditorPaddingVertical;
         EditorView.Editor.MaxContentWidth = s.EditorMaxContentWidth;
 
-        if (!_focusMode)
+        // Focus mode has the toolbar's row on loan; leave it be and let exiting focus mode restore the new
+        // choice. The radio group syncs either way, so the menu always shows what Preferences just set.
+        if (_focusMode)
         {
-            EditorView.ShowCommandBar = s.ShowToolbar;
+            SyncToolbarMenu(s.Toolbar);
         }
-
-        _toggleToolbarItem?.IsChecked = s.ShowToolbar;
+        else
+        {
+            ApplyToolbar(s.Toolbar, persist: false); // the form's own Commit already wrote it to settings
+        }
 
         SetupRecoverySnapshots(); // pick up the new interval (or disable when 0)
         _autoSave.IntervalSeconds = s.AutoSaveSeconds; // ditto, on the document already open

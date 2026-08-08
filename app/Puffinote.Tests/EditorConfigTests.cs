@@ -1,5 +1,6 @@
 using System.Text.Json;
 using System.Text.Json.Nodes;
+using Puffinote.Components.Controls.CommandBar;
 using Puffinote.Desktop.Panes;
 using Xunit;
 
@@ -30,11 +31,11 @@ public sealed class EditorConfigTests : IDisposable
         var notes = NoteConfig.Load(At("nope.json"));
         Assert.Equal(4, notes.TabWidth);              // Typage's AppSettings defaults
         Assert.Equal(760, notes.EditorMaxContentWidth);
-        Assert.True(notes.ShowToolbar);
+        Assert.Equal(CommandBarVisibility.Visible, notes.Toolbar);
 
         var sheets = SheetConfig.Load(At("nope.json"));
         Assert.Equal(1.0, sheets.Zoom);               // Cellestra's AppSettings defaults
-        Assert.False(sheets.CommandBarCollapsed);
+        Assert.Equal(CommandBarVisibility.Visible, sheets.CommandBar);
 
         var plainText = PlainTextConfig.Load(At("nope.json"));
         Assert.False(plainText.WordWrap);             // Plaintain's AppSettings defaults

@@ -30,7 +30,7 @@ internal sealed class SheetPane : IEditorPane, IEditorHost, IConfigurablePane
     public void ApplyConfig(EditorConfig config)
     {
         _view.Zoom = config.Sheets.Zoom;
-        _view.CommandBarCollapsed = config.Sheets.CommandBarCollapsed;
+        _view.CommandBarVisibility = config.Sheets.CommandBar;
     }
 
     public Control View => _view;

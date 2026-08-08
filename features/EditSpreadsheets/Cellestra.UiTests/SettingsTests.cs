@@ -1,11 +1,57 @@
 using Cellestra.Desktop.Commands;
 using Cellestra.Desktop.Services;
+using Puffinote.Components.Controls.CommandBar;
 using Xunit;
 
 namespace Cellestra.UiTests;
 
 public class SettingsTests
 {
+    [Fact]
+    public void The_command_bar_state_is_written_by_name_and_read_back()
+    {
+        string path = Path.Combine(Path.GetTempPath(), $"cellestra-settings-{System.Guid.NewGuid():N}.json");
+        try
+        {
+            var service = new SettingsService(path);
+            service.Save(new AppSettings { CommandBar = CommandBarVisibility.Hidden });
+
+            // A settings file is meant to be readable and hand-editable — names, not ordinals.
+            Assert.Contains("\"Hidden\"", File.ReadAllText(path), StringComparison.Ordinal);
+            Assert.Equal(CommandBarVisibility.Hidden, service.Load().CommandBar);
+        }
+        finally
+        {
+            File.Delete(path);
+        }
+    }
+
+    [Fact]
+    public void A_collapsed_bar_from_the_two_state_build_survives_the_upgrade()
+    {
+        string path = Path.Combine(Path.GetTempPath(), $"cellestra-settings-{System.Guid.NewGuid():N}.json");
+        try
+        {
+            // What the pre-three-state build wrote. The bar must not spring back open on first launch.
+            File.WriteAllText(path, "{ \"CommandBarCollapsed\": true, \"Zoom\": 1.5 }");
+            var loaded = new SettingsService(path).Load();
+
+            Assert.Equal(CommandBarVisibility.Collapsed, loaded.CommandBar);
+            Assert.Equal(1.5, loaded.Zoom);
+
+            // An expanded bar in that build is the new default, and the new key always wins over the old one.
+            File.WriteAllText(path, "{ \"CommandBarCollapsed\": false }");
+            Assert.Equal(CommandBarVisibility.Visible, new SettingsService(path).Load().CommandBar);
+
+            File.WriteAllText(path, "{ \"CommandBar\": \"Hidden\", \"CommandBarCollapsed\": true }");
+            Assert.Equal(CommandBarVisibility.Hidden, new SettingsService(path).Load().CommandBar);
+        }
+        finally
+        {
+            File.Delete(path);
+        }
+    }
+
     [Fact]
     public void Radial_menu_config_round_trips_through_disk()
     {
@@ -56,13 +102,13 @@ public class SettingsTests
         try
         {
             var service = new SettingsService(path);
-            var settings = new AppSettings { CommandBarCollapsed = true, Zoom = 1.5, WindowWidth = 800, WindowHeight = 600 }
+            var settings = new AppSettings { CommandBar = CommandBarVisibility.Collapsed, Zoom = 1.5, WindowWidth = 800, WindowHeight = 600 }
                 .WithRecentFile("/a.ods");
 
             service.Save(settings);
             var loaded = service.Load();
 
-            Assert.True(loaded.CommandBarCollapsed);
+            Assert.Equal(CommandBarVisibility.Collapsed, loaded.CommandBar);
             Assert.Equal(1.5, loaded.Zoom);
             Assert.Equal(800, loaded.WindowWidth);
             Assert.Equal("/a.ods", loaded.RecentFiles.Single());

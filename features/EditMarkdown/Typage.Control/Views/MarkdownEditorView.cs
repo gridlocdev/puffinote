@@ -5,6 +5,7 @@ using Avalonia.Media;
 using Avalonia.Platform.Storage;
 using Avalonia.Threading;
 using Puffinote.Components.Commands;
+using Puffinote.Components.Controls.CommandBar;
 using Puffinote.Components.Input;
 using Puffinote.Components.Overlays;
 using Puffinote.Components.Theming;
@@ -48,7 +49,8 @@ public class MarkdownEditorView : UserControl
 
         // The formatting toolbar over the editor's own command catalog. Hidden by default: it's the host's
         // call whether the surface carries chrome (Puffinote and the standalone app both turn it on).
-        CommandBar = new MarkdownCommandBar(EditingCommands) { IsVisible = false };
+        CommandBar = new MarkdownCommandBar(EditingCommands) { BarVisibility = CommandBarVisibility.Hidden };
+        CommandBar.VisibilityChanged += (_, _) => CommandBarVisibilityChanged?.Invoke(this, EventArgs.Empty);
         FindBar = new FindBar(this);
         DockPanel.SetDock(CommandBar, Dock.Top);
         DockPanel.SetDock(FindBar, Dock.Top);
@@ -81,7 +83,7 @@ public class MarkdownEditorView : UserControl
         Editor.EditLinkRequested += (_, _) => _ = ShowEditLinkDialogAsync();
     }
 
-    /// <summary>The formatting toolbar docked over the editor (shown via <see cref="ShowCommandBar"/>).</summary>
+    /// <summary>The formatting toolbar docked over the editor (shown via <see cref="CommandBarVisibility"/>).</summary>
     internal MarkdownCommandBar CommandBar { get; }
 
     /// <summary>The find/replace bar docked under the toolbar (opened via <see cref="ShowFind"/>).</summary>
@@ -91,18 +93,26 @@ public class MarkdownEditorView : UserControl
     internal OverlayHost Overlays { get; } = new() { Background = new SolidColorBrush(Color.FromArgb(0x40, 0, 0, 0)) };
 
     /// <summary>
-    /// Show the formatting command bar (toolbar chrome) over the editor. Off by default; both shells turn it
-    /// on, and each offers a "Toggle Editor Toolbar" command that flips it.
+    /// How much of the formatting command bar (toolbar chrome) sits over the editor: the full bar, its slim
+    /// collapse handle, or nothing at all. <see cref="CommandBarVisibility.Hidden"/> by default — it's the
+    /// host's call whether the surface carries chrome, and both shells turn it on and offer all three states
+    /// from their menu, Preferences, and command palette.
     /// </summary>
-    public bool ShowCommandBar
+    public CommandBarVisibility CommandBarVisibility
     {
-        get => CommandBar.IsVisible;
+        get => CommandBar.BarVisibility;
         set
         {
-            CommandBar.IsVisible = value;
-            CommandBar.RefreshState(); // lit state was skipped while hidden — bring it current on show
+            CommandBar.BarVisibility = value;
+            CommandBar.RefreshState(); // lit state was skipped while it wasn't showing — bring it current
         }
     }
+
+    /// <summary>
+    /// Raised after <see cref="CommandBarVisibility"/> changes — including when the reader works the bar's own
+    /// collapse/expand chevron — so a host can persist it as the new default.
+    /// </summary>
+    public event EventHandler? CommandBarVisibilityChanged;
 
     /// <summary>
     /// The absolute path of the file being edited, or null for an unsaved document. The host sets it (it owns

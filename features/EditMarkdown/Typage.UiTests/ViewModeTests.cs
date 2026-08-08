@@ -1,4 +1,5 @@
 using Avalonia.Headless.XUnit;
+using Puffinote.Components.Controls.CommandBar;
 using Typage.Control.Controls;
 using Xunit;
 
@@ -59,14 +60,34 @@ public class ViewModeTests
     {
         var window = TestShell.NewWindow();
         Assert.True(window.StatusBarVisibleForTest);
-        Assert.True(window.ToolbarVisibleForTest);
+        Assert.Equal(CommandBarVisibility.Visible, window.ToolbarStateForTest);
 
         window.ToggleFocusModeForTest();
         Assert.False(window.StatusBarVisibleForTest);
-        Assert.False(window.ToolbarVisibleForTest);
+        Assert.Equal(CommandBarVisibility.Hidden, window.ToolbarStateForTest);
 
         window.ToggleFocusModeForTest();
         Assert.True(window.StatusBarVisibleForTest);
-        Assert.True(window.ToolbarVisibleForTest); // restored to the toolbar preference
+        Assert.Equal(CommandBarVisibility.Visible, window.ToolbarStateForTest); // restored to the toolbar preference
+    }
+
+    [AvaloniaFact]
+    public void FocusMode_RestoresACollapsedToolbarWithoutOverwritingThePreference()
+    {
+        var settings = TestShell.NewSettings();
+        var window = TestShell.NewWindow(settings);
+
+        window.SetToolbarForTest(CommandBarVisibility.Collapsed);
+        Assert.Equal(CommandBarVisibility.Collapsed, settings.Settings.Toolbar);
+
+        // Focus mode borrows the toolbar's row; that is not the reader choosing to hide it, so the
+        // preference must survive the round trip and come back as the slim handle, not the full bar.
+        window.ToggleFocusModeForTest();
+        Assert.Equal(CommandBarVisibility.Hidden, window.ToolbarStateForTest);
+        Assert.Equal(CommandBarVisibility.Collapsed, settings.Settings.Toolbar);
+
+        window.ToggleFocusModeForTest();
+        Assert.Equal(CommandBarVisibility.Collapsed, window.ToolbarStateForTest);
+        Assert.Equal(CommandBarVisibility.Collapsed, settings.Settings.Toolbar);
     }
 }

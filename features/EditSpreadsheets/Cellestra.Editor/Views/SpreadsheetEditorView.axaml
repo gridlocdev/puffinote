@@ -10,7 +10,7 @@
     <Panel>
     <Grid x:Name="ContentRoot" RowDefinitions="Auto,Auto,*,Auto,Auto">
 
-        <!-- Adaptive command bar — always present, collapses to a slim handle (PRD §6) -->
+        <!-- Adaptive command bar — visible, collapsed to a slim handle, or hidden entirely (PRD §6.3) -->
         <ContentControl x:Name="CommandBarHost" Grid.Row="0" />
 
         <!-- Formula bar: Name Box, fx, formula input, expand toggle. Hidden on chart sheets. -->

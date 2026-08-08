@@ -4,6 +4,7 @@ using Avalonia.Media;
 using Avalonia.Platform.Storage;
 using Avalonia.Threading;
 using Puffinote.Components.Commands;
+using Puffinote.Components.Controls.CommandBar;
 using Puffinote.Components.Overlays;
 using Puffinote.Components.Shell;
 using Puffinote.Text.Document;
@@ -43,8 +44,13 @@ public partial class MainWindow : Window
     private readonly Border? _statusBar;
     // The family's unified title bar: the document's name, centred, in the app's own chrome.
     private readonly DocumentTitleBar _titleBar = new();
-    private CheckItem? _toggleToolbarItem;
+    private readonly List<(CommandBarVisibility State, CheckItem Item)> _toolbarItems = [];
     private CheckItem? _toggleFocusItem;
+
+    // Set while the shell itself moves the toolbar for a reason that is not a preference — restoring the
+    // saved state at startup, or focus mode borrowing the row — so the surface's change event doesn't write
+    // that back over what the user actually chose.
+    private bool _applyingToolbarState;
     private readonly List<(MarkdownEditor.ViewMode Mode, CheckItem Item)> _viewModeItems = [];
     private bool _focusMode;
 
@@ -145,7 +151,7 @@ public partial class MainWindow : Window
         // The formatting toolbar and the find bar are the editor's own, docked inside it — this shell just
         // says whether the toolbar shows. It used to ship a second, hand-rolled bar of Unicode glyphs beside
         // the control's; there is now one icon-driven bar, and Puffinote renders the very same one.
-        EditorView.ShowCommandBar = _settings.Settings.ShowToolbar;
+        ApplyToolbar(_settings.Settings.Toolbar, persist: false);
         _statusBar = BuildStatusBar();
         root.Children.Add(_statusBar);
         root.Children.Add(EditorView);
@@ -178,6 +184,9 @@ public partial class MainWindow : Window
         // The view-mode commands now live in the editor's catalog, so the switch happens inside the control.
         // The shell still owns what a shell owns: persisting the choice and syncing the View ▸ radio group.
         EditorView.ViewModeChanged += (_, _) => OnViewModeChanged();
+
+        // The bar's own collapse/expand chevron is as much a choice as the menu's — remember it too.
+        EditorView.CommandBarVisibilityChanged += (_, _) => OnToolbarVisibilityChanged();
         EditorView.ZoomChanged += (_, _) => OnZoomChanged();
         Closing += OnClosing;
         Closed += (_, _) =>
@@ -223,7 +232,9 @@ public partial class MainWindow : Window
     // Test hooks for the view toggles (the chrome controls are private).
     internal bool StatusBarVisibleForTest => _statusBar?.IsVisible ?? false;
 
-    internal bool ToolbarVisibleForTest => EditorView.ShowCommandBar;
+    internal CommandBarVisibility ToolbarStateForTest => EditorView.CommandBarVisibility;
+
+    internal void SetToolbarForTest(CommandBarVisibility state) => ApplyToolbar(state, persist: true);
 
     internal void ToggleFocusModeForTest() => ToggleFocusMode();
 

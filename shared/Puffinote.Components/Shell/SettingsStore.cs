@@ -87,6 +87,25 @@ public static class SettingsStore
         Save(path, root, options);
     }
 
+    /// <summary>
+    /// The boolean a previous build wrote at <paramref name="legacyKey"/>, for a setting that has since become
+    /// <paramref name="currentKey"/> — or null when there is nothing to migrate: the file already carries the
+    /// new key (it wins; the stale one is history), the old key is absent, or it holds something other than a
+    /// boolean.
+    /// <para>
+    /// A renamed or retyped setting is otherwise silently reset to its default on the first launch after an
+    /// upgrade, which reads to the user as the app forgetting a choice they made. Call this right after
+    /// <see cref="Load{T}"/> and apply the result; the next save writes only the new key.
+    /// </para>
+    /// </summary>
+    public static bool? MigratedBool(string path, string currentKey, string legacyKey)
+    {
+        var root = ReadObject(path);
+        return !root.ContainsKey(currentKey) && root[legacyKey] is JsonValue value && value.TryGetValue(out bool flag)
+            ? flag
+            : null;
+    }
+
     /// <summary>The JSON object stored at <paramref name="path"/>, or an empty one when it is absent or unreadable.</summary>
     private static JsonObject ReadObject(string path)
     {

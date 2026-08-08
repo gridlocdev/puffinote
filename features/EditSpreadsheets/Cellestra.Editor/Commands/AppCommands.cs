@@ -2,6 +2,7 @@ using Avalonia.Input;
 using Cellestra.Core.Editing;
 using Cellestra.Core.Styling;
 using Puffinote.Components.Commands;
+using Puffinote.Components.Controls.CommandBar;
 
 namespace Cellestra.Desktop.Commands;
 
@@ -223,6 +224,19 @@ public sealed class AppCommands
         new("view.commandPalette", "Command Palette…", "Search and run any command.", Shortcut.Cmd(Key.K), () => e.ShowCommandPalette(), icon: "command"),
         new("view.goToSheet", "Go to Sheet…", "Jump to another worksheet.", Shortcut.Cmd(Key.P, KeyModifiers.Shift), () => e.ShowSheetSwitcher(), icon: "list"),
         .. ZoomCommands.Build(() => e.Zoom, zoom => e.Zoom = zoom),
+
+        // The command bar's three states, one command each rather than one cycling toggle: a palette is a
+        // list of destinations, and "Hide Command Bar" says where you land where "Toggle" doesn't. Each is
+        // lit while it is the current state, so the palette also *reports* which one you're in.
+        new("view.commandBarVisible", "Show Command Bar", "Show the full command bar.", null,
+            () => e.CommandBarVisibility = CommandBarVisibility.Visible,
+            isActive: () => e.CommandBarVisibility == CommandBarVisibility.Visible, icon: "panel-top"),
+        new("view.commandBarCollapsed", "Collapse Command Bar", "Fold the command bar to its slim handle.", null,
+            () => e.CommandBarVisibility = CommandBarVisibility.Collapsed,
+            isActive: () => e.CommandBarVisibility == CommandBarVisibility.Collapsed, icon: "chevrons-up"),
+        new("view.commandBarHidden", "Hide Command Bar", "Hide the command bar entirely, giving its row to the grid.", null,
+            () => e.CommandBarVisibility = CommandBarVisibility.Hidden,
+            isActive: () => e.CommandBarVisibility == CommandBarVisibility.Hidden, icon: "x"),
         new("view.freezePanes", "Freeze Panes", "Keep header rows and columns in view.", null, () => e.ToggleFreezePanes(), icon: "layout-grid"),
         new("view.radialSettings", "Radial Menu Settings…", "Configure the hold-right-click radial command menu.", null, () => e.ShowRadialSettings(), icon: "settings-2"),
         new("app.preferences", "Preferences…", "Zoom, the command bar, and the radial menu.", Shortcut.Cmd(Key.OemComma), () => e.ShowPreferences(), icon: "settings-2"),

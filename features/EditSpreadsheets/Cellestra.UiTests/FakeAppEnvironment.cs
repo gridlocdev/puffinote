@@ -51,6 +51,7 @@ internal sealed class FakeAppEnvironment : IAppEnvironment
     public void DeleteActiveSheet() => throw Nope();
     public void ResetSheetData() => throw Nope();
     public double Zoom { get; set; } = ZoomScale.Default;
+    public Puffinote.Components.Controls.CommandBar.CommandBarVisibility CommandBarVisibility { get; set; }
     public void ToggleFilter() => throw Nope();
     public void ShowSortDialog() => throw Nope();
     public void ShowSortFilterDialog() => throw Nope();

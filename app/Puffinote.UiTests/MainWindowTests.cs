@@ -8,6 +8,7 @@ using Avalonia.Media;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
 using Cellestra.Desktop.Services;
+using Puffinote.Components.Controls.CommandBar;
 using Puffinote.Components.Theming;
 using Puffinote.Desktop.Controls;
 using Puffinote.Desktop.Shell;
@@ -20,7 +21,7 @@ namespace Puffinote.UiTests;
 public sealed class MainWindowTests
 {
     [AvaloniaFact]
-    public async Task Toggle_editor_toolbar_command_shows_and_hides_the_note_toolbar()
+    public async Task Cycle_editor_toolbar_command_steps_the_note_toolbar_through_all_three_states()
     {
         var dir = Directory.CreateTempSubdirectory("puffinote-toolbar");
         try
@@ -34,13 +35,17 @@ public sealed class MainWindowTests
             await window.OpenFileAsync(md);
 
             var view = Assert.IsType<MarkdownEditorView>(window.ActiveEditorViewForTest);
-            Assert.True(view.ShowCommandBar); // shown by default
+            Assert.Equal(CommandBarVisibility.Visible, view.CommandBarVisibility); // the full bar by default
+
+            // The command is a ladder, not a toggle: each invocation steps one rung and the last wraps.
+            window.InvokeShellForTest("shell.toggleEditorToolbar");
+            Assert.Equal(CommandBarVisibility.Collapsed, view.CommandBarVisibility);
 
             window.InvokeShellForTest("shell.toggleEditorToolbar");
-            Assert.False(view.ShowCommandBar);
+            Assert.Equal(CommandBarVisibility.Hidden, view.CommandBarVisibility);
 
             window.InvokeShellForTest("shell.toggleEditorToolbar");
-            Assert.True(view.ShowCommandBar);
+            Assert.Equal(CommandBarVisibility.Visible, view.CommandBarVisibility);
         }
         finally
         {

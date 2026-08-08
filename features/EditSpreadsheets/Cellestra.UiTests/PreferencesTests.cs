@@ -10,6 +10,7 @@ using Cellestra.Desktop.Views;
 using Cellestra.Editor;
 using Puffinote.Components.Commands;
 using Puffinote.Components.Controls;
+using Puffinote.Components.Controls.CommandBar;
 using Puffinote.Components.Theming;
 using Xunit;
 
@@ -88,7 +89,8 @@ public class PreferencesTests : IDisposable
 
         var overlay = window.Editor.OverlayHost;
         overlay.GetLogicalDescendants().OfType<NumericUpDown>().First().Value = 150m; // zoom, as a percent
-        overlay.GetLogicalDescendants().OfType<CheckBox>().Single().IsChecked = true; // collapse the bar
+        // Two drop-downs now: the host's appearance row on top, then the grid's own command-bar row.
+        overlay.GetLogicalDescendants().OfType<ComboBox>().ElementAt(1).SelectedIndex = (int)CommandBarVisibility.Hidden;
         Dispatcher.UIThread.RunJobs();
 
         Assert.Equal(1.0, window.Editor.Zoom); // nothing applied while the dialog is still open
@@ -99,7 +101,7 @@ public class PreferencesTests : IDisposable
         Dispatcher.UIThread.RunJobs();
 
         Assert.Equal(1.5, window.Editor.Zoom, precision: 3);
-        Assert.True(window.Editor.CommandBarCollapsed);
+        Assert.Equal(CommandBarVisibility.Hidden, window.Editor.CommandBarVisibility);
         Assert.Equal(1, persisted);
     }
 
@@ -149,8 +151,11 @@ public class PreferencesTests : IDisposable
         editor.ShowPreferences();
         Dispatcher.UIThread.RunJobs();
 
+        // The grid does carry one drop-down of its own — the command bar's three states — so the check is
+        // that it is the *only* one: no appearance row arrived, because no host contributed it.
         var combos = editor.OverlayHost.GetLogicalDescendants().OfType<ComboBox>().ToList();
-        Assert.Empty(combos); // the grid's own options are two numbers and a checkbox — no drop-down
+        var only = Assert.Single(combos);
+        Assert.Equal(["Visible", "Collapsed", "Hidden"], only.ItemsSource!.Cast<string>());
     }
 
     [AvaloniaFact]

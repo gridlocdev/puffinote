@@ -87,6 +87,13 @@ public interface IAppEnvironment
     /// </summary>
     double Zoom { get; set; }
 
+    /// <summary>
+    /// How much of the adaptive command bar shows (PRD §6.3). A command sets it, the same way the bar's own
+    /// chevrons do — which is what lets the palette and the menu bar reach the hidden state, where there is
+    /// no chevron left to click.
+    /// </summary>
+    Puffinote.Components.Controls.CommandBar.CommandBarVisibility CommandBarVisibility { get; set; }
+
     void ToggleFilter();
 
     void ShowSortDialog();

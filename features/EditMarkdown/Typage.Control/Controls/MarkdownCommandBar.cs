@@ -29,6 +29,10 @@ internal sealed class MarkdownCommandBar : UserControl
     private readonly Dictionary<string, AppCommand> _byId;
     private readonly Dictionary<string, string> _sectionOf;
     private readonly List<CommandTool> _tools = [];
+    private readonly AdaptiveCommandBar _bar;
+
+    /// <summary>Raised when the user shows, collapses, or hides the bar, so the host can persist the choice.</summary>
+    public event EventHandler? VisibilityChanged;
 
     public MarkdownCommandBar(IReadOnlyList<AppCommand> commands)
     {
@@ -72,7 +76,16 @@ internal sealed class MarkdownCommandBar : UserControl
         // the host's merged palette, which is a superset of the flyout this pill drops (see PaletteShortcut).
         var search = new AdaptiveCommandBar.SearchPill(
             "Find a tool…", PaletteShortcut, "Search and run any command", Flyout: BuildSearchFlyout(commands));
-        Content = new AdaptiveCommandBar(sections, search);
+        _bar = new AdaptiveCommandBar(sections, search);
+        _bar.VisibilityChanged += (_, _) => VisibilityChanged?.Invoke(this, EventArgs.Empty);
+        Content = _bar;
+    }
+
+    /// <summary>How much of the bar shows: full, slim handle, or nothing (persisted by the host).</summary>
+    public CommandBarVisibility BarVisibility
+    {
+        get => _bar.BarVisibility;
+        set => _bar.BarVisibility = value;
     }
 
     /// <summary>Every command id the bar surfaces (inline or in a dropdown), across all groups (test seam).</summary>
@@ -84,9 +97,9 @@ internal sealed class MarkdownCommandBar : UserControl
     /// <summary>Re-evaluate each inline tool's lit (toggle-active) state — the host calls this as the caret moves.</summary>
     public void RefreshState()
     {
-        if (!IsVisible)
+        if (BarVisibility != CommandBarVisibility.Visible)
         {
-            return; // a host may have toggled the bar off — don't scan tokens for nobody
+            return; // collapsed or hidden — no tool is on screen to light, so don't scan tokens for nobody
         }
 
         foreach (var tool in _tools)

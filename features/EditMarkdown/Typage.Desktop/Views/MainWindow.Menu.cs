@@ -1,6 +1,7 @@
 using Avalonia.Controls;
 using Avalonia.Input;
 using Puffinote.Components.Commands;
+using Puffinote.Components.Controls.CommandBar;
 using Typage.Control.Controls;
 using Typage.Desktop.Services;
 
@@ -146,7 +147,23 @@ public partial class MainWindow
         var view = new MenuItem { Header = "_View" };
         view.Items.Add(InWindowItem("view.commandPalette"));
         view.Items.Add(new Separator());
-        _toggleToolbarItem = new CheckItem(AddInWindowCheck(view, "Show _Toolbar", _settings.Settings.ShowToolbar, ToggleToolbar));
+        // The toolbar's three states as a radio group, the same shape as the view modes below: they are one
+        // choice with three answers, not three independent switches.
+        foreach (var state in System.Enum.GetValues<CommandBarVisibility>())
+        {
+            var choice = state;
+            var item = new MenuItem
+            {
+                Header = ToolbarLabel(state),
+                ToggleType = MenuItemToggleType.Radio,
+                GroupName = "toolbar",
+                IsChecked = _settings.Settings.Toolbar == state,
+            };
+            item.Click += (_, _) => ApplyToolbar(choice, persist: true);
+            _toolbarItems.Add((state, new CheckItem(item)));
+            view.Items.Add(item);
+        }
+
         _toggleFocusItem = new CheckItem(AddInWindowCheck(view, "_Focus Mode", _focusMode, ToggleFocusMode, _commandsById["view.toggleFocus"].Gesture));
         view.Items.Add(new Separator());
         foreach (var m in System.Enum.GetValues<MarkdownEditor.ViewMode>())
@@ -309,7 +326,19 @@ public partial class MainWindow
         var view = NativeSubmenu("View");
         view.Menu!.Items.Add(NativeItem("view.commandPalette"));
         view.Menu.Items.Add(new NativeMenuItemSeparator());
-        _toggleToolbarItem = new CheckItem(AddNativeCheck(view.Menu, "Show Toolbar", _settings.Settings.ShowToolbar, ToggleToolbar));
+        foreach (var state in System.Enum.GetValues<CommandBarVisibility>())
+        {
+            var choice = state;
+            var item = new NativeMenuItem(ToolbarLabel(state))
+            {
+                ToggleType = MenuItemToggleType.Radio,
+                IsChecked = _settings.Settings.Toolbar == state,
+                Command = new RelayCommand(() => ApplyToolbar(choice, persist: true)),
+            };
+            _toolbarItems.Add((state, new CheckItem(item)));
+            view.Menu.Items.Add(item);
+        }
+
         _toggleFocusItem = new CheckItem(AddNativeCheck(view.Menu, "Focus Mode", _focusMode, ToggleFocusMode, _commandsById["view.toggleFocus"].Gesture));
         view.Menu.Items.Add(new NativeMenuItemSeparator());
         foreach (var m in System.Enum.GetValues<MarkdownEditor.ViewMode>())
@@ -420,7 +449,17 @@ public partial class MainWindow
         // ⌘K, matching Puffinote — where it is a reserved global key. It used to be ⌘⇧P here while ⌘K
         // inserted a link; the link prompt is now ⌘⌥K in both apps (see MarkdownEditingCommands).
         new("view.commandPalette", "Command Palette…", "Search and run any command.", Shortcut.Cmd(Key.K), OpenPalette, icon: "command"),
-        new("view.toggleToolbar", "Toggle Toolbar", "Show or hide the formatting toolbar.", null, ToggleToolbar, icon: "type"),
+        // One command per state rather than one cycling toggle: a palette is a list of destinations, and
+        // "Hide Toolbar" says where you land where "Toggle" doesn't. Each is lit while it is the state in force.
+        new("view.toolbarVisible", ToolbarLabel(CommandBarVisibility.Visible), "Show the full formatting toolbar.", null,
+            () => ApplyToolbar(CommandBarVisibility.Visible, persist: true),
+            isActive: () => EditorView.CommandBarVisibility == CommandBarVisibility.Visible, icon: "panel-top"),
+        new("view.toolbarCollapsed", ToolbarLabel(CommandBarVisibility.Collapsed), "Fold the formatting toolbar to its slim handle.", null,
+            () => ApplyToolbar(CommandBarVisibility.Collapsed, persist: true),
+            isActive: () => EditorView.CommandBarVisibility == CommandBarVisibility.Collapsed, icon: "chevrons-up"),
+        new("view.toolbarHidden", ToolbarLabel(CommandBarVisibility.Hidden), "Hide the formatting toolbar entirely, giving its row to the text.", null,
+            () => ApplyToolbar(CommandBarVisibility.Hidden, persist: true),
+            isActive: () => EditorView.CommandBarVisibility == CommandBarVisibility.Hidden, icon: "x"),
         new("view.toggleFocus", "Toggle Focus Mode", "Distraction-free: hide the toolbar and status bar.", Shortcut.Bare(Key.F11), ToggleFocusMode, icon: "maximize"),
         new("app.preferences", "Preferences…", "Theme, tab width, and toolbar settings.", Shortcut.Cmd(Key.OemComma), ShowSettings, icon: "settings-2"),
     ];

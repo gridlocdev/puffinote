@@ -5,18 +5,35 @@ using Avalonia.Threading;
 using Avalonia.VisualTree;
 using Cellestra.Desktop.Controls.CommandBar;
 using Cellestra.Desktop.Views;
+using Puffinote.Components.Controls.CommandBar;
 using Xunit;
 // The Cellestra command bar and Avalonia both expose a `CommandBar` type; bind the bare name to ours.
 using CommandBar = Cellestra.Desktop.Controls.CommandBar.CommandBar;
 
 namespace Cellestra.UiTests;
 
-public class CommandBarTests
+public class CommandBarTests : IDisposable
 {
+    private readonly string _path = Path.Combine(Path.GetTempPath(), $"cellestra-commandbar-{Guid.NewGuid():N}.json");
+
+    public void Dispose()
+    {
+        File.Delete(_path);
+        GC.SuppressFinalize(this);
+    }
+
+    /// <summary>
+    /// A window on a scratch settings file. These tests move the bar through its states on the window's own
+    /// editor, and the host persists every move — so without this they would write the developer's real
+    /// Cellestra profile, and a run that left the bar Hidden would then hide it for every other test that
+    /// opens a window (the search pill included).
+    /// </summary>
+    private MainWindow ScratchWindow() => new(new Cellestra.Desktop.Services.SettingsService(_path));
+
     [AvaloniaFact]
     public void Command_bar_is_shown_in_the_window_by_default()
     {
-        var window = new MainWindow();
+        var window = ScratchWindow();
         window.Show();
 
         // No longer hidden-by-default: the adaptive bar is always present (PRD §6).
@@ -24,20 +41,79 @@ public class CommandBarTests
     }
 
     [AvaloniaFact]
-    public void Command_bar_builds_refreshes_and_collapses()
+    public void Command_bar_builds_refreshes_and_moves_through_its_three_states()
     {
-        var window = new MainWindow();
+        var window = ScratchWindow();
         var bar = new CommandBar(window.Editor);
 
         bar.RefreshState(); // every referenced command id resolved; state evaluation doesn't throw
-        Assert.False(bar.Collapsed); // expanded by default
+        Assert.Equal(CommandBarVisibility.Visible, bar.BarVisibility); // the full bar by default
 
-        bool notified = false;
-        bar.CollapsedChanged += (_, _) => notified = true;
-        bar.Collapsed = true;
+        int notified = 0;
+        bar.VisibilityChanged += (_, _) => notified++;
 
-        Assert.True(bar.Collapsed);
-        Assert.True(notified); // host persists the choice off this event
+        bar.BarVisibility = CommandBarVisibility.Collapsed;
+        Assert.Equal(CommandBarVisibility.Collapsed, bar.BarVisibility);
+
+        bar.BarVisibility = CommandBarVisibility.Hidden;
+        Assert.Equal(CommandBarVisibility.Hidden, bar.BarVisibility);
+
+        bar.BarVisibility = CommandBarVisibility.Hidden; // idempotent — the same state is not a change
+        Assert.Equal(2, notified); // host persists the choice off this event
+    }
+
+    [AvaloniaFact]
+    public void A_hidden_command_bar_takes_no_room_and_comes_back()
+    {
+        var window = ScratchWindow();
+        window.Show();
+        Dispatcher.UIThread.RunJobs();
+        window.UpdateLayout(); // Bounds are only meaningful once a layout pass has run
+
+        var bar = window.GetVisualDescendants().OfType<CommandBar>().Single();
+        double shownHeight = bar.Bounds.Height;
+        Assert.True(shownHeight > 0);
+
+        window.Editor.CommandBarVisibility = CommandBarVisibility.Hidden;
+        Dispatcher.UIThread.RunJobs();
+        window.Editor.Measure(window.Editor.Bounds.Size);
+        window.Editor.Arrange(new Avalonia.Rect(window.Editor.Bounds.Size));
+        Assert.Equal(0, bar.Bounds.Height); // the row goes back to the grid, not to an empty strip
+
+        window.Editor.CommandBarVisibility = CommandBarVisibility.Visible;
+        Dispatcher.UIThread.RunJobs();
+        window.Editor.Measure(window.Editor.Bounds.Size);
+        window.Editor.Arrange(new Avalonia.Rect(window.Editor.Bounds.Size));
+        Assert.True(bar.Bounds.Height > 0);
+    }
+
+    [AvaloniaFact]
+    public void The_catalog_carries_one_command_per_state_and_lights_the_one_in_force()
+    {
+        var window = ScratchWindow();
+        window.Show();
+
+        var byState = new (string Id, CommandBarVisibility State)[]
+        {
+            ("view.commandBarVisible", CommandBarVisibility.Visible),
+            ("view.commandBarCollapsed", CommandBarVisibility.Collapsed),
+            ("view.commandBarHidden", CommandBarVisibility.Hidden),
+        };
+
+        foreach (var (id, state) in byState)
+        {
+            var command = window.Editor.Commands.ById(id);
+            Assert.NotNull(command);
+
+            command.Execute();
+            Assert.Equal(state, window.Editor.CommandBarVisibility);
+
+            // Each reports whether it is the state in force, so the palette shows where you already are.
+            foreach (var (otherId, otherState) in byState)
+            {
+                Assert.Equal(otherState == state, window.Editor.Commands.ById(otherId)!.IsToggleActive);
+            }
+        }
     }
 
     [AvaloniaFact]

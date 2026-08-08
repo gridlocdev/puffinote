@@ -1,4 +1,5 @@
 using Cellestra.Desktop.Commands;
+using Puffinote.Components.Controls.CommandBar;
 using Puffinote.Components.Shell;
 using Puffinote.Components.Theming;
 using RecentFilesHelper = Puffinote.Components.Shell.RecentFiles;
@@ -19,8 +20,8 @@ public sealed record AppSettings
     /// </summary>
     public ThemePreference Theme { get; init; } = ThemePreference.System;
 
-    /// <summary>Whether the adaptive command bar is folded to its slim handle. Default: expanded.</summary>
-    public bool CommandBarCollapsed { get; init; }
+    /// <summary>How much of the adaptive command bar a window opens with. Default: the full bar.</summary>
+    public CommandBarVisibility CommandBar { get; init; }
 
     /// <summary>The press-and-hold radial command menu's segment count, labels, and per-segment bindings.</summary>
     public RadialMenuConfig RadialMenu { get; init; } = RadialMenuConfig.Default;

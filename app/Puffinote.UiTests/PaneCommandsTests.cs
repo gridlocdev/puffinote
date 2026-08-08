@@ -1,4 +1,5 @@
 using Avalonia.Headless.XUnit;
+using Puffinote.Components.Controls.CommandBar;
 using Puffinote.Desktop.Panes;
 using Typage.Control.Views;
 using Xunit;
@@ -9,18 +10,22 @@ namespace Puffinote.UiTests;
 public sealed class PaneCommandsTests
 {
     [AvaloniaFact]
-    public void Markdown_pane_shows_the_formatting_toolbar_by_default_and_can_toggle_it()
+    public void Markdown_pane_shows_the_formatting_toolbar_by_default_and_carries_all_three_states()
     {
         var pane = new MarkdownPane();
         var view = Assert.IsType<MarkdownEditorView>(pane.View);
 
-        Assert.True(pane.ToolbarVisible); // shown by default
-        Assert.True(view.ShowCommandBar);
+        Assert.Equal(CommandBarVisibility.Visible, pane.ToolbarState); // the full bar by default
+        Assert.Equal(CommandBarVisibility.Visible, view.CommandBarVisibility);
 
-        pane.ToolbarVisible = false;
-        Assert.False(view.ShowCommandBar);
-        pane.ToolbarVisible = true;
-        Assert.True(view.ShowCommandBar);
+        // The pane's state is the surface's state — it reads and writes straight through, so each of the
+        // three reaches the editor rather than only the two a boolean could express.
+        pane.ToolbarState = CommandBarVisibility.Collapsed;
+        Assert.Equal(CommandBarVisibility.Collapsed, view.CommandBarVisibility);
+        pane.ToolbarState = CommandBarVisibility.Hidden;
+        Assert.Equal(CommandBarVisibility.Hidden, view.CommandBarVisibility);
+        pane.ToolbarState = CommandBarVisibility.Visible;
+        Assert.Equal(CommandBarVisibility.Visible, view.CommandBarVisibility);
     }
 
     [AvaloniaFact]
