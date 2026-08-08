@@ -47,4 +47,18 @@
     <DefaultItemExcludes>$(DefaultItemExcludes);obj/**;bin/**</DefaultItemExcludes>
   </PropertyGroup>
 
+  <!--
+    Hermetic tests. Every test project compiles the same two files: a module initializer that points
+    HOME and the XDG/AppData variables at a throwaway directory before any test runs, and the test that
+    proves it did. Linked from one place rather than copied, but compiled *into* each assembly, because a
+    module initializer only runs for the assembly that carries it.
+
+    Applied here rather than per-project so a test project added tomorrow is hermetic without anyone
+    remembering to opt in — which is the only version of this that keeps working.
+  -->
+  <ItemGroup Condition="$(MSBuildProjectName.EndsWith('Tests'))">
+    <Compile Include="$(MSBuildThisFileDirectory)shared/TestSupport/HermeticProfile.cs" Link="TestSupport/HermeticProfile.cs" />
+    <Compile Include="$(MSBuildThisFileDirectory)shared/TestSupport/HermeticProfileTests.cs" Link="TestSupport/HermeticProfileTests.cs" />
+  </ItemGroup>
+
 </Project>
