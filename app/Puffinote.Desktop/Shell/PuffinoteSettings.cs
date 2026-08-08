@@ -18,7 +18,8 @@ internal sealed record PuffinoteSettings
 
     private static readonly JsonSerializerOptions Options = new() { WriteIndented = true };
 
-    private static string UserPath => SettingsStore.AppConfigPath("Puffinote", "settings.json");
+    /// <summary>Puffinote's own per-user config file — the one the General tab of Preferences writes.</summary>
+    public static string UserPath => SettingsStore.AppConfigPath("Puffinote", "settings.json");
 
     private static string NotebookPath(string root) =>
         System.IO.Path.Combine(root, NotebookNode.StateDirectoryName, "settings.json");

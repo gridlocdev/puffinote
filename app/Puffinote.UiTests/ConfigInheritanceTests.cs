@@ -11,9 +11,10 @@ namespace Puffinote.UiTests;
 public sealed class ConfigInheritanceTests
 {
     [AvaloniaFact]
-    public void Constructing_a_note_pane_applies_the_resolved_config_to_the_editor()
+    public void Applying_the_resolved_config_to_a_note_pane_reaches_the_editor()
     {
-        var pane = new MarkdownPane(new NoteConfig { TabWidth = 8, EditorPadding = 30 });
+        var pane = new MarkdownPane();
+        pane.ApplyConfig(new EditorConfig { Notes = new NoteConfig { TabWidth = 8, EditorPadding = 30 } });
 
         var view = Assert.IsType<MarkdownEditorView>(pane.View);
         Assert.Equal(8, view.Editor.IndentWidth);

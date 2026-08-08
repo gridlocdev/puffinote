@@ -10,11 +10,25 @@ namespace Puffinote.Desktop.Panes;
 /// exactly as <see cref="MarkdownPane"/> wraps Typage: Puffinote adds no task logic — the model, the
 /// codec, the undo stack, and the atomic write are all the editor's.
 /// </summary>
-internal sealed class TaskBoardPane : IEditorPane
+internal sealed class TaskBoardPane : IEditorPane, IConfigurablePane
 {
     private readonly TaskBoardView _view = new();
 
-    public TaskBoardPane() => _view.DocumentChanged += (_, _) => DirtyChanged?.Invoke(this, EventArgs.Empty);
+    public TaskBoardPane()
+    {
+        _view.DocumentChanged += (_, _) => DirtyChanged?.Invoke(this, EventArgs.Empty);
+        ApplyConfig(new EditorConfig()); // Pivotask's defaults until the host supplies the resolved config
+    }
+
+    /// <summary>
+    /// Apply Pivotask's own settings (PRD §7.5), so a board opens here in the reading and slice the
+    /// standalone app would open it in, and a Preferences edit reaches the board already in front of you.
+    /// </summary>
+    public void ApplyConfig(EditorConfig config)
+    {
+        _view.Layout = config.Tasks.Layout;
+        _view.Filter = config.Tasks.Filter;
+    }
 
     public Control View => _view;
 

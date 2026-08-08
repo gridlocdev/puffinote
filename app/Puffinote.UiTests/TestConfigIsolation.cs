@@ -9,7 +9,12 @@ namespace Puffinote.UiTests;
 /// run leaks state into the next one — and into the developer's own app. Mirrors the same guard in
 /// Typage's suite. <see cref="Environment.SpecialFolder.ApplicationData"/> resolves via
 /// <c>$XDG_CONFIG_HOME</c> on Linux and macOS (.NET follows the XDG base-dir spec on Unix), which is what
-/// <c>SettingsStore.AppConfigPath</c> builds on — so setting it here isolates every store the tests touch.
+/// <c>SettingsStore.AppConfigPath</c> builds on — so setting it here isolates every store built on that.
+/// <para>
+/// <c>$HOME</c> is redirected too, for the one store that isn't: Cellestra keeps its settings in the macOS
+/// <c>~/Library/Application Support</c> directory, which no XDG variable reaches. Preferences writes that
+/// file now (the Spreadsheets tab), and on a developer's Mac that is a real file with real settings in it.
+/// </para>
 /// </summary>
 internal static class TestConfigIsolation
 {
@@ -35,5 +40,6 @@ internal static class TestConfigIsolation
         // Must point at an existing directory: .NET returns "" for ApplicationData when XDG_CONFIG_HOME
         // names a directory that doesn't exist, so create it first (above).
         Environment.SetEnvironmentVariable("XDG_CONFIG_HOME", dir);
+        Environment.SetEnvironmentVariable("HOME", dir);
     }
 }

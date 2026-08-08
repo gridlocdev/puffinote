@@ -57,14 +57,27 @@ internal static class EditorPaneFactory
 
     /// <summary>
     /// Create a pane for <paramref name="path"/>, or null when no editor handles its type.
-    /// <paramref name="noteConfig"/> is the already-resolved note config (Typage's own settings with
-    /// Puffinote's overrides layered on, PRD §7.5); omit it to inherit the editor's defaults.
+    /// <paramref name="config"/> is the already-resolved editor config (each editor's own settings with
+    /// Puffinote's overrides layered on, PRD §7.5); omit it to inherit the editors' defaults. Seeding
+    /// happens here rather than in each pane's constructor so every pane type inherits its editor's
+    /// settings the same way, through the one interface the tab host also re-applies through.
     /// </summary>
-    public static IEditorPane? Create(string path, NoteConfig? noteConfig = null)
+    public static IEditorPane? Create(string path, EditorConfig? config = null)
+    {
+        var pane = CreateFor(path);
+        if (pane is IConfigurablePane configurable && config is not null)
+        {
+            configurable.ApplyConfig(config);
+        }
+
+        return pane;
+    }
+
+    private static IEditorPane? CreateFor(string path)
     {
         if (IsMarkdown(path))
         {
-            return new MarkdownPane(noteConfig);
+            return new MarkdownPane();
         }
 
         if (IsSpreadsheet(path))

@@ -102,9 +102,10 @@ public partial class MainWindow
             // editor that publishes its own ⌘, (Cellestra does) is shadowed here rather than silently racing
             // us: ApplyShellShortcuts binds the shell's commands before BindActivePaneShortcuts adds the
             // pane's, and the first matching binding handles the key. That is the right way round — inside
-            // Puffinote, ⌘, is Puffinote's preferences — and the editor's own stays one ⌘K away. Deliberately
-            // not reserved: the reserved set is fixed and documented (PRD §7.6), and this is rebindable.
-            new("shell.preferences", "Preferences…", "Puffinote's own settings — the overrides it layers over each editor's",
+            // Puffinote, ⌘, opens the tabbed dialog that holds the editor's own settings too — and the
+            // editor's own stays one ⌘K away. Deliberately not reserved: the reserved set is fixed and
+            // documented (PRD §7.6), and this is rebindable.
+            new("shell.preferences", "Preferences…", "Settings for Puffinote and for each editor it embeds",
                 Bound("shell.preferences", Shortcut.Cmd(Key.OemComma)), ShowSettings, icon: "settings-2"),
             new("shell.about", "About Puffinote", "About this app", null, ShowAbout),
         ];

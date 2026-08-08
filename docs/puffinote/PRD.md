@@ -311,9 +311,26 @@ navigation PKM users expect. (The command palette stays commands-only; file navi
   file nobody can edit without a text editor is a config file that doesn't exist. What the dialogs cover
   is *preferences*, not session state — a recent-files list and a remembered window size are records of
   what you did, and they stay out.
-- **Applied live:** changing Puffinote's overrides re-resolves them and re-seeds the panes that are
-  **already open** (`TabHost.Settings` → `IConfigurablePane.ApplyConfig`), not only the next document
-  opened. A setting that doesn't reach the document in front of you reads as a setting that didn't work.
+- **Puffinote's is tabbed**, over `TabbedSettingsView`: **General** (Puffinote's own config — the override
+  layer), then **Notes**, **Spreadsheets**, **Plain Text** and **Tasks**, one per embedded editor, each
+  writing *that editor's own config file* — the same file it reads when it runs standalone. Tabs are named
+  for **what they change, not for the program that changes it**: someone looking for how their notes indent
+  has no reason to know a note editor is called Typage.
+  - **Puffinote reads and writes those files through per-editor mirrors** (`EditorConfig` and friends),
+    never by referencing an editor's desktop shell (§9, one-way layering). A mirror models the subset of a
+    file Puffinote can act on, defaulted to that editor's own defaults, and **writes back by merging**: keys
+    it doesn't model — Typage's theme and recent files, Cellestra's radial bindings and window size, a key
+    someone added by hand — are left exactly as they were.
+  - **Every tab offers to open its config file** in the OS's default editor for the type, creating it when
+    the owning app has never written one. A form only ever exposes the settings someone thought to expose;
+    the file has all of them, and that is the escape hatch for the rest.
+  - A file is rewritten **only when its values actually changed**, so visiting the dialog is never a reason
+    for an app you have never opened to acquire a config file.
+- **Applied live:** changing anything in Preferences — Puffinote's overrides *or* an editor's own settings —
+  re-resolves the lot and re-seeds the panes that are **already open** (`TabHost.Settings` →
+  `IConfigurablePane.ApplyConfig`), not only the next document opened. A setting that doesn't reach the
+  document in front of you reads as a setting that didn't work. Every pane type inherits its editor's
+  settings this way, so a note, a sheet, a text file and a board each open here the way they open standalone.
 
 ### 7.6 Keyboard shortcuts — shared editor, layered resolution, conflict handling
 

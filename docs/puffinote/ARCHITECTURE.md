@@ -296,6 +296,10 @@ app/                                     # the composite product
 │   │   ├── IEditorPane.cs  IEditorPaneFactory.cs  IOutline.cs
 │   │   ├── MarkdownPane.cs               # wraps Typage.Control (+ new Typage file-host seam)
 │   │   ├── SheetPane.cs                  # wraps Cellestra.Editor (impl IEditorHost + IAppEnvironment)
+│   │   ├── EditorConfig.cs               # + NoteConfig / SheetConfig / PlainTextConfig / BoardConfig:
+│   │   │                                 #   mirrors of each editor's OWN settings file (§7.5), read and
+│   │   │                                 #   merge-written so unmodelled keys survive; never a ref into
+│   │   │                                 #   an editor's desktop shell
 │   │   └── PreviewPane.cs                # images / open-externally
 │   ├── Controls/
 │   │   ├── FileTree/ (FileTree, FileTreeNode, FileTreeAutomationPeer)

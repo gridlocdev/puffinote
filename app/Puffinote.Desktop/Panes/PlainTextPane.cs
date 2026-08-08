@@ -10,7 +10,7 @@ namespace Puffinote.Desktop.Panes;
 /// fork: Puffinote adds no text logic — the editing, the undo, the encoding round-trip and the atomic
 /// write are all the editor's or the shared text library's.
 /// </summary>
-internal sealed class PlainTextPane : IEditorPane
+internal sealed class PlainTextPane : IEditorPane, IConfigurablePane
 {
     private readonly PlainTextEditorView _view = new();
     private TextFileFormat _format = TextFileFormat.Utf8NoBom;
@@ -18,6 +18,18 @@ internal sealed class PlainTextPane : IEditorPane
     public PlainTextPane()
     {
         _view.SelectionChanged += (_, _) => DirtyChanged?.Invoke(this, EventArgs.Empty);
+        ApplyConfig(new EditorConfig()); // Plaintain's defaults until the host supplies the resolved config
+    }
+
+    /// <summary>
+    /// Apply Plaintain's own settings (PRD §7.5), so a text file opens here the way it opens in the
+    /// standalone app, and a Preferences edit reaches the file already in front of you.
+    /// </summary>
+    public void ApplyConfig(EditorConfig config)
+    {
+        _view.Editor.WordWrap = config.PlainText.WordWrap;
+        _view.Editor.ShowLineNumbers = config.PlainText.ShowLineNumbers;
+        _view.Editor.FontSize = config.PlainText.FontSize;
     }
 
     public Control View => _view;

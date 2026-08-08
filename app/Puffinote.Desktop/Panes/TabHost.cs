@@ -95,12 +95,13 @@ internal sealed class TabHost : UserControl
     /// <summary>Prompts the user to Save / Don't-Save / Cancel a dirty tab on close. Injected by the shell.</summary>
     public Func<IEditorPane, Task<CloseDecision>>? ConfirmClose { get; set; }
 
-    private NoteConfig _noteConfig = NoteConfig.Resolve(new PuffinoteSettings());
+    private EditorConfig _editorConfig = EditorConfig.Resolve(new PuffinoteSettings());
 
     /// <summary>
     /// Puffinote's override settings, layered over each editor's own config (PRD §7.5). Setting this resolves
-    /// the note config once (reading Typage's own settings file), so opening notes doesn't re-read it per tab
-    /// (P7); MainWindow assigns it per notebook, and again when Preferences changes them.
+    /// every editor's config once (reading each editor's own settings file), so opening a document doesn't
+    /// re-read them per tab (P7); MainWindow assigns it per notebook, and again when Preferences changes
+    /// either Puffinote's overrides or an editor's own settings.
     /// </summary>
     public PuffinoteSettings Settings
     {
@@ -108,13 +109,13 @@ internal sealed class TabHost : UserControl
         set
         {
             field = value;
-            _noteConfig = NoteConfig.Resolve(value);
+            _editorConfig = EditorConfig.Resolve(value);
 
             // Re-seed the tabs that are already open. Without this a settings change would only ever show
             // up in the next document opened, which reads as the setting not having worked.
             foreach (var tab in _tabs)
             {
-                (tab.Pane as IConfigurablePane)?.ApplyConfig(_noteConfig);
+                (tab.Pane as IConfigurablePane)?.ApplyConfig(_editorConfig);
             }
         }
     } = new();
@@ -146,7 +147,7 @@ internal sealed class TabHost : UserControl
             return;
         }
 
-        var pane = EditorPaneFactory.Create(path, _noteConfig);
+        var pane = EditorPaneFactory.Create(path, _editorConfig);
         if (pane is null)
         {
             return; // unsupported type — Phase 3 preview/external

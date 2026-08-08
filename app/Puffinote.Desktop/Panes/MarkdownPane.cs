@@ -18,13 +18,12 @@ internal sealed class MarkdownPane : IEditorPane, IConfigurablePane
     private readonly MarkdownEditorView _view = new();
     private readonly MarkdownDocumentSession _session = new();
 
-    public MarkdownPane(NoteConfig? config = null)
+    public MarkdownPane()
     {
-        ApplyConfig(config ?? new NoteConfig());
-
-        // Show Typage's formatting toolbar over the editor by default (the standalone app has its own; the
-        // embeddable control keeps it off unless a host asks). Toggle via the shell's View command.
-        _view.ShowCommandBar = true;
+        // Typage's defaults until the host supplies the resolved config — including its formatting toolbar,
+        // which the standalone app shows and the embeddable control keeps off unless a host asks. Toggle via
+        // the shell's View command.
+        ApplyConfig(new EditorConfig());
 
         // The editor raises TextChanged on every edit; re-surface it so the shell repaints the dirty dot.
         _view.TextChanged += (_, _) => DirtyChanged?.Invoke(this, EventArgs.Empty);
@@ -32,15 +31,20 @@ internal sealed class MarkdownPane : IEditorPane, IConfigurablePane
 
     /// <summary>
     /// Apply the resolved note settings (PRD §7.5): Typage's own config as the base, with any Puffinote
-    /// override already layered in. A default config just reproduces the editor's own defaults. Called at
-    /// construction and again whenever the overrides change, so a Preferences edit reaches the note you
-    /// are looking at rather than only the next one you open.
+    /// override already layered in. A default config just reproduces standalone Typage's defaults. Called at
+    /// construction and again whenever the settings change, so a Preferences edit reaches the note you are
+    /// looking at rather than only the next one you open.
     /// </summary>
-    public void ApplyConfig(NoteConfig config)
+    public void ApplyConfig(EditorConfig config)
     {
-        _view.Editor.IndentWidth = config.TabWidth;
-        _view.Editor.HorizontalPadding = config.EditorPadding;
-        _view.Editor.VerticalPadding = config.EditorPaddingVertical;
+        var notes = config.Notes;
+        _view.Editor.IndentWidth = notes.TabWidth;
+        _view.Editor.HorizontalPadding = notes.EditorPadding;
+        _view.Editor.VerticalPadding = notes.EditorPaddingVertical;
+        _view.Editor.MaxContentWidth = notes.EditorMaxContentWidth;
+        _view.Editor.CompletedTaskSorting = notes.CompletedTaskSort;
+        _view.ShowCommandBar = notes.ShowToolbar;
+        _view.ViewMode = notes.View;
     }
 
     /// <summary>Whether the formatting toolbar is shown over the editor (shell View ▸ Toggle command).</summary>

@@ -12,7 +12,7 @@ namespace Puffinote.Desktop.Panes;
 /// through <see cref="IEditorHost"/> and drives documents in/out via the stream embedding contract
 /// (<c>LoadAsync(Stream, path)</c> / snapshot-and-write). Composition, not a fork.
 /// </summary>
-internal sealed class SheetPane : IEditorPane, IEditorHost
+internal sealed class SheetPane : IEditorPane, IEditorHost, IConfigurablePane
 {
     private readonly SpreadsheetEditorView _view = new();
 
@@ -20,6 +20,17 @@ internal sealed class SheetPane : IEditorPane, IEditorHost
     {
         _view.Host = this; // Cellestra's own file commands (its Save) route back through the pane
         _view.ModifiedChanged += (_, _) => DirtyChanged?.Invoke(this, EventArgs.Empty);
+        ApplyConfig(new EditorConfig()); // Cellestra's defaults until the host supplies the resolved config
+    }
+
+    /// <summary>
+    /// Apply Cellestra's own settings (PRD §7.5), so a sheet opens here the way it opens in the standalone
+    /// app, and a Preferences edit reaches the sheet already in front of you.
+    /// </summary>
+    public void ApplyConfig(EditorConfig config)
+    {
+        _view.Zoom = config.Sheets.Zoom;
+        _view.CommandBarCollapsed = config.Sheets.CommandBarCollapsed;
     }
 
     public Control View => _view;
