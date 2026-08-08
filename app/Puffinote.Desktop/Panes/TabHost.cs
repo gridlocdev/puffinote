@@ -53,7 +53,7 @@ internal sealed class TabHost : UserControl
     private readonly Control _placeholder;
     private readonly List<TabItem> _tabs = [];
 
-    /// <summary>The strip button built for <see cref="_active"/>, kept so the reveal pass knows what to scroll to.</summary>
+    /// <summary>The strip button built for <see cref="ActiveTab"/>, kept so the reveal pass knows what to scroll to.</summary>
     private Control? _activeTabControl;
 
     public TabHost()
@@ -387,7 +387,7 @@ internal sealed class TabHost : UserControl
         {
             tab.RenderedDirty = tab.Pane.IsDirty;
             var control = BuildTab(tab);
-            if (ReferenceEquals(tab, _active))
+            if (ReferenceEquals(tab, ActiveTab))
             {
                 _activeTabControl = control;
             }
