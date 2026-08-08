@@ -127,6 +127,29 @@ public class InlineEditorMultilineTests
     }
 
     [AvaloniaFact]
+    public void A_blank_cell_in_a_wrapped_column_wraps_when_you_open_it()
+    {
+        // Formatting a whole column records one default style on the column rather than a style on
+        // every cell, so the cell you start typing in has no style of its own. It still has to wrap —
+        // the editor asks about the position, not the cell object.
+        var window = Open();
+        IAppEnvironment env = window.Editor;
+        var grid = window.Editor.Grid;
+
+        var wholeColumn = new CellRange(new CellAddress(0, 0), new CellAddress(0, SheetDimensions.MaxRows - 1));
+        env.Session.Execute(EditCommands.ApplyStyle(env.Session.Workbook, env.Session.ActiveSheet.Name,
+            wholeColumn, s => s with { Alignment = s.Alignment with { WrapText = true } }));
+
+        env.Selection.MoveTo(4, 0);
+        Assert.Null(env.Session.ActiveSheet.Find(4, 0)); // nothing was materialized to hold the format
+        grid.BeginEdit("a much longer value than one column of this grid can hold on a single line");
+        Layout(grid);
+
+        Assert.True(grid.EditorWraps);
+        Assert.True(grid.EditorWrapWidth <= grid.ActiveEditorRect.Width);
+    }
+
+    [AvaloniaFact]
     public void A_cell_that_does_not_wrap_still_grows_rightward()
     {
         // The wrap branch must not swallow the ordinary case: a plain cell keeps the Google-Sheets feel.

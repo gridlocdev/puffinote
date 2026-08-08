@@ -139,14 +139,14 @@ public static partial class OdsContentXml
         string name = table.Attribute(Table + "name")?.Value ?? workbook.AddSheet().Name;
         var sheet = workbook.FindSheet(name) ?? workbook.AddSheetForLoad(name);
 
-        ReadColumns(table, sheet, columnWidths);
+        ReadColumns(table, sheet, columnWidths, styleLookup);
         ReadRows(table, sheet, styleLookup, rowHeights, validationCells);
 
         // If the table embeds a chart object, attach it so the sheet opens as a chart sheet.
         OdsCharts.ReadChart(table, package, sheet);
     }
 
-    private static void ReadColumns(XElement table, Worksheet sheet, Dictionary<string, double> columnWidths)
+    private static void ReadColumns(XElement table, Worksheet sheet, Dictionary<string, double> columnWidths, Dictionary<string, int> styleLookup)
     {
         int column = 0;
         foreach (var element in table.Elements(Table + "table-column"))
@@ -156,9 +156,16 @@ public static partial class OdsContentXml
             bool hidden = element.Attribute(Table + "visibility")?.Value is "collapse" or "filter";
             double? width = styleName is not null && columnWidths.TryGetValue(styleName, out var w) ? w : null;
 
+            // The column's default cell style — how every writer, ours included, stores "this whole
+            // column is formatted like so" without touching a single cell.
+            string? defaultCellStyle = element.Attribute(Table + "default-cell-style-name")?.Value;
+            int? defaultStyleId = defaultCellStyle is not null && styleLookup.TryGetValue(defaultCellStyle, out int id)
+                ? id
+                : null;
+
             for (int i = 0; i < repeat; i++, column++)
             {
-                if (width is null && !hidden)
+                if (width is null && !hidden && defaultStyleId is null)
                 {
                     continue;
                 }
@@ -167,6 +174,11 @@ public static partial class OdsContentXml
                 if (width is not null)
                 {
                     model.Width = width.Value;
+                }
+
+                if (defaultStyleId is not null)
+                {
+                    model.StyleId = defaultStyleId.Value;
                 }
 
                 model.Hidden = hidden;

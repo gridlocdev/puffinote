@@ -43,8 +43,10 @@ public sealed class FormatBlock
         {
             for (int c = 0; c < range.ColumnCount; c++)
             {
-                var cell = sheet.Find(range.Top + r, range.Left + c);
-                styles[r, c] = workbook.Styles.Get(cell?.StyleId ?? StylePool.DefaultId);
+                // Effective, not own: the format painter picks up how a cell *looks*, which includes
+                // the default its column sets — otherwise copying a format out of a formatted column
+                // paints the sheet default onto the target.
+                styles[r, c] = workbook.Styles.Get(sheet.EffectiveStyleId(range.Top + r, range.Left + c));
             }
         }
 

@@ -9,7 +9,6 @@ using Puffinote.Components.Controls.Icons;
 using ArgbColor = Cellestra.Core.Styling.ArgbColor;
 using AvColor = Avalonia.Media.Color;
 using CellStyle = Cellestra.Core.Styling.CellStyle;
-using StylePool = Cellestra.Core.Styling.StylePool;
 
 namespace Cellestra.Desktop.Controls.CommandBar;
 
@@ -188,8 +187,7 @@ public static partial class CommandBarDrawer
     private static CellStyle ActiveStyle(IAppEnvironment env)
     {
         var sheet = env.Session.ActiveSheet;
-        var active = sheet.Find(env.Selection.ActiveRow, env.Selection.ActiveColumn);
-        return env.Session.Workbook.Styles.Get(active?.StyleId ?? StylePool.DefaultId);
+        return env.Session.Workbook.Styles.Get(sheet.EffectiveStyleId(env.Selection.ActiveRow, env.Selection.ActiveColumn));
     }
 
     /// <summary>The active text colour, defaulting transparent/unset to black so the picker opens on something visible.</summary>

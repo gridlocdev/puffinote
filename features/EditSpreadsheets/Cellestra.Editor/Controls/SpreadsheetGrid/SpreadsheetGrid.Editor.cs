@@ -65,7 +65,10 @@ public sealed partial class SpreadsheetGrid
     /// text colour, and fill — so editing looks the same as the displayed cell (not default black-on-white).</summary>
     private void ApplyEditorFont(Cell? cell)
     {
-        var style = _session!.Workbook.Styles.Get(cell?.StyleId ?? StylePool.DefaultId);
+        // Resolved for the *position*, not the cell object: a blank cell in a column formatted to wrap
+        // has no style of its own, and opening it for editing still has to wrap — the value you are
+        // typing is going to be drawn wrapped the moment you commit it.
+        var style = ResolveStyle(Selection.ActiveRow, Selection.ActiveColumn);
         _editor.FontFamily = new FontFamily(style.Font.Family);
         _editor.FontSize = style.Font.SizePoints * 96.0 / 72.0 * Zoom;
         _editor.FontWeight = style.Font.Bold ? FontWeight.Bold : FontWeight.Normal;
@@ -182,8 +185,7 @@ public sealed partial class SpreadsheetGrid
             return;
         }
 
-        var cell = Sheet?.Find(Selection.ActiveRow, Selection.ActiveColumn);
-        var style = _session.Workbook.Styles.Get(cell?.StyleId ?? StylePool.DefaultId);
+        var style = ResolveStyle(Selection.ActiveRow, Selection.ActiveColumn);
         if (Decorations(style.Font) is null)
         {
             return; // nothing to draw — neither underline nor strikethrough

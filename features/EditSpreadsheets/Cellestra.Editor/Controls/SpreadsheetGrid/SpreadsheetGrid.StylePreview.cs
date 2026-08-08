@@ -30,10 +30,17 @@ public sealed partial class SpreadsheetGrid
         }
     }
 
-    /// <summary>The committed style of a cell, with the live preview applied on top when it covers the cell.</summary>
-    private CellStyle ResolveStyle(Cell cell, int row, int column)
+    /// <summary>
+    /// The committed style of a cell, with the live preview applied on top when it covers the cell.
+    ///
+    /// <para>Resolved through <see cref="Worksheet.EffectiveStyleId"/>, so a cell carrying no style of
+    /// its own picks up the default its row or column sets — which is how a formatted whole column
+    /// looks formatted without a style having been stamped onto every cell in it.</para>
+    /// </summary>
+    private CellStyle ResolveStyle(int row, int column)
     {
-        var style = _session!.Workbook.Styles.Get(cell.StyleId);
+        int styleId = Sheet?.EffectiveStyleId(row, column) ?? StylePool.DefaultId;
+        var style = _session!.Workbook.Styles.Get(styleId);
         return _stylePreview is { } preview && preview.Range.Contains(row, column)
             ? preview.Transform(style)
             : style;

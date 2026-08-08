@@ -60,7 +60,7 @@ public sealed partial class SpreadsheetGrid
                 continue;
             }
 
-            var style = _session!.Workbook.Styles.Get(cell.StyleId);
+            var style = ResolveStyle(row, col);
             double pts = style.Font.SizePoints;
             if (!_rowFontPoints.TryGetValue(row, out double current) || pts > current)
             {

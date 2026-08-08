@@ -189,8 +189,14 @@ public static class EditCommands
     // ---- Styling ----------------------------------------------------------
 
     /// <summary>Apply a style transform to every cell in a range (e.g. toggle bold).</summary>
-    public static IEditCommand ApplyStyle(Workbook workbook, string sheet, CellRange range, Func<CellStyle, CellStyle> change, string label = "Format Cells") =>
-        new CellSnapshotCommand(label, sheet, ws => StylePositions(ws, range), ws =>
+    public static IEditCommand ApplyStyle(Workbook workbook, string sheet, CellRange range, Func<CellStyle, CellStyle> change, string label = "Format Cells")
+    {
+        if (CoversWholeColumns(range))
+        {
+            return ApplyColumnStyle(workbook, sheet, range, change, label);
+        }
+
+        return new CellSnapshotCommand(label, sheet, ws => StylePositions(ws, range), ws =>
         {
             foreach (var (row, column) in StyleRange(ws, range).Positions())
             {
@@ -199,6 +205,80 @@ public static class EditCommands
                 ws.PruneIfBlank(row, column, cell);
             }
         });
+    }
+
+    /// <summary>A selection that spans every row — what clicking a column header gives you.</summary>
+    private static bool CoversWholeColumns(CellRange range) =>
+        range.Top == 0 && range.Bottom >= SheetDimensions.MaxRows - 1;
+
+    /// <summary>
+    /// Format whole columns the way the file format does: one default style per column
+    /// (<see cref="Column.StyleId"/> / ODF <c>table:default-cell-style-name</c>), plus the transform
+    /// applied to the cells that actually carry a style of their own.
+    ///
+    /// <para>The alternative — what this used to do — was to stamp the style onto every position in
+    /// the selection. A column is 1,048,576 of them, exactly the in-place cap, so it took the verbatim
+    /// path and materialized a million cells: ~0.9s to apply, ~1.8s to save, and a used range that had
+    /// grown to A1:A1048576, which is the part that really hurt — the used range is what bounds Ctrl+End,
+    /// auto-fit, CSV export, and the clamp protecting every later whole-sheet operation.</para>
+    ///
+    /// <para>Blank cells are left blank and inherit through <see cref="Worksheet.EffectiveStyleId"/>,
+    /// so they still look formatted, and are still formatted once you type into them.</para>
+    /// </summary>
+    private static IEditCommand ApplyColumnStyle(Workbook workbook, string sheet, CellRange range, Func<CellStyle, CellStyle> change, string label)
+    {
+        List<(int Column, int StyleId)> columnsBefore = [];
+        List<(int Row, int Column, int StyleId)> cellsBefore = [];
+
+        return new ActionCommand(label,
+            wb =>
+            {
+                var ws = Sheet(wb, sheet);
+                columnsBefore = [];
+                cellsBefore = [];
+
+                for (int column = range.Left; column <= range.Right; column++)
+                {
+                    var model = ws.GetOrCreateColumn(column);
+                    columnsBefore.Add((column, model.StyleId));
+                    model.StyleId = workbook.Styles.Intern(change(workbook.Styles.Get(model.StyleId)));
+                }
+
+                // Cells with a style of their own aren't covered by the column default, so they take the
+                // transform directly. Blank/unstyled ones are deliberately left alone: giving them a style
+                // is what materialized the column in the first place.
+                foreach (var (row, column, cell) in ws.EnumerateCells().ToList())
+                {
+                    if (column < range.Left || column > range.Right || cell.StyleId == StylePool.DefaultId)
+                    {
+                        continue;
+                    }
+
+                    cellsBefore.Add((row, column, cell.StyleId));
+                    cell.StyleId = workbook.Styles.Intern(change(workbook.Styles.Get(cell.StyleId)));
+                }
+
+                return EditResult.None; // a style change moves no values, so there is nothing to recalc
+            },
+            wb =>
+            {
+                var ws = Sheet(wb, sheet);
+                foreach (var (column, styleId) in columnsBefore)
+                {
+                    ws.GetOrCreateColumn(column).StyleId = styleId;
+                }
+
+                foreach (var (row, column, styleId) in cellsBefore)
+                {
+                    if (ws.Find(row, column) is { } cell)
+                    {
+                        cell.StyleId = styleId;
+                    }
+                }
+
+                return EditResult.None; // a style change moves no values, so there is nothing to recalc
+            });
+    }
 
     // ---- Layout -----------------------------------------------------------
 

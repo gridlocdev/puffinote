@@ -98,8 +98,12 @@ public class ClearCommandTests
     }
 
     [Fact]
-    public void Apply_style_on_whole_sheet_is_bounded_to_the_used_range()
+    public void Apply_style_on_whole_sheet_is_recorded_per_column_not_per_cell()
     {
+        // A whole-sheet selection spans every row, so it is a whole-column format: it lands on the
+        // columns' default cell styles rather than on 17 billion positions. The cell reads as bold
+        // because it inherits, and — the point of the exercise — the sheet is not now "used" from
+        // A1 to the bottom-right corner of the grid.
         var (workbook, history, sheet) = New();
         sheet.SetValue(1, 1, CellValue.Number(9));
 
@@ -109,6 +113,10 @@ public class ClearCommandTests
         watch.Stop();
 
         Assert.True(watch.ElapsedMilliseconds < 2000, $"whole-sheet style took {watch.ElapsedMilliseconds}ms");
-        Assert.True(workbook.Styles.Get(sheet.Find(1, 1)!.StyleId).Font.Bold);
+        Assert.True(workbook.Styles.Get(sheet.EffectiveStyleId(1, 1)).Font.Bold);
+        Assert.Single(sheet.EnumerateCells()); // no cell was materialized to carry the format
+
+        history.Undo();
+        Assert.False(workbook.Styles.Get(sheet.EffectiveStyleId(1, 1)).Font.Bold);
     }
 }

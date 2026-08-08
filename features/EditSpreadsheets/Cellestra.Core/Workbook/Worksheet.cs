@@ -1,5 +1,6 @@
 using Cellestra.Charts;
 using Cellestra.Core.Data;
+using Cellestra.Core.Styling;
 using Cellestra.Core.Values;
 
 namespace Cellestra.Core.Model;
@@ -197,6 +198,34 @@ public sealed class Worksheet
 
     public IReadOnlyDictionary<int, Column> Columns => _columns;
 
+    /// <summary>
+    /// The style a cell at this position is drawn with: its own if it has one, else the default its
+    /// row carries, else its column's, else the workbook default. This is ODF's
+    /// <c>table:default-cell-style-name</c> — the reason formatting a whole column is one attribute on
+    /// one <c>table:table-column</c> rather than a style stamped onto a million cells.
+    ///
+    /// <para>Row before column because that is the nesting in the file: a cell lives inside its
+    /// <c>table:table-row</c>, so the row is the nearer scope.</para>
+    ///
+    /// <para>Reach for this — not <c>cell.StyleId</c> — anywhere the question is "how does this cell
+    /// look", including for positions that hold no cell at all. A blank cell in a wrapped column still
+    /// wraps the moment you type into it, and that is decided here.</para>
+    /// </summary>
+    public int EffectiveStyleId(int row, int column)
+    {
+        if (Find(row, column)?.StyleId is { } own && own != StylePool.DefaultId)
+        {
+            return own;
+        }
+
+        if (FindRow(row)?.StyleId is { } rowStyle && rowStyle != StylePool.DefaultId)
+        {
+            return rowStyle;
+        }
+
+        return FindColumn(column)?.StyleId ?? StylePool.DefaultId;
+    }
+
     // ---- Merged regions ---------------------------------------------------
 
     public MergedRegion? FindMerge(int row, int column)
@@ -363,14 +392,24 @@ public sealed class Worksheet
             ExtendColumns(region.Range.Left, region.Range.Right);
         }
 
-        foreach (int row in _rows.Keys)
+        // Only rows/columns that actually carry something — a height, a width, a hidden flag, a default
+        // cell style. GetOrCreateRow/Column leave a default-valued entry behind whenever anything merely
+        // *asks* about a line, and counting those would stretch the used range (and with it Ctrl+End,
+        // auto-fit, and CSV export) over lines nobody has touched.
+        foreach (var (row, model) in _rows)
         {
-            ExtendRows(row, row);
+            if (!model.IsDefault)
+            {
+                ExtendRows(row, row);
+            }
         }
 
-        foreach (int column in _columns.Keys)
+        foreach (var (column, model) in _columns)
         {
-            ExtendColumns(column, column);
+            if (!model.IsDefault)
+            {
+                ExtendColumns(column, column);
+            }
         }
 
         if (!hasRow && !hasColumn)

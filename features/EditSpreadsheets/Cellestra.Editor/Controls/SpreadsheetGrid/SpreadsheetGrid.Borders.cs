@@ -32,7 +32,7 @@ public sealed partial class SpreadsheetGrid
                     continue; // no cell object → default (no) border
                 }
 
-                var border = ResolveStyle(cell, row, col).Border;
+                var border = ResolveStyle(row, col).Border;
                 if (border.HasAnyEdge)
                 {
                     DrawBorderEdges(context, new Rect(x, y, w, h), border);
@@ -49,7 +49,7 @@ public sealed partial class SpreadsheetGrid
                 continue;
             }
 
-            var border = ResolveStyle(anchor, region.Range.Top, region.Range.Left).Border;
+            var border = ResolveStyle(region.Range.Top, region.Range.Left).Border;
             if (border.HasAnyEdge &&
                 TryGetRegionRect(region.Range.Top, region.Range.Left, region.Range.Bottom, region.Range.Right, out var rect))
             {

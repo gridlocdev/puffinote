@@ -84,7 +84,7 @@ public sealed partial class SpreadsheetGrid
                 var cell = sheet.Find(row, col);
                 if (cell is not null)
                 {
-                    var style = ResolveStyle(cell, row, col);
+                    var style = ResolveStyle(row, col);
                     if (style.Fill.HasBackground)
                     {
                         context.FillRectangle(new SolidColorBrush(ToColor(style.Fill.Background!.Value)), rect);
@@ -127,7 +127,7 @@ public sealed partial class SpreadsheetGrid
             // Paint the anchor cell's fill across the whole merge (mirroring DrawCells, including any
             // live style-preview); fall back to the blank canvas when it has no background (task 7).
             var anchor = sheet.Find(region.Range.Top, region.Range.Left);
-            if (anchor is not null && ResolveStyle(anchor, region.Range.Top, region.Range.Left).Fill is { HasBackground: true } fill)
+            if (anchor is not null && ResolveStyle(region.Range.Top, region.Range.Left).Fill is { HasBackground: true } fill)
             {
                 context.FillRectangle(new SolidColorBrush(ToColor(fill.Background!.Value)), rect);
             }
@@ -198,7 +198,7 @@ public sealed partial class SpreadsheetGrid
 
     private void DrawCellContent(DrawingContext context, Worksheet sheet, Cell cell, Rect rect, int row, int column, bool allowSpill)
     {
-        var style = ResolveStyle(cell, row, column);
+        var style = ResolveStyle(row, column);
         bool isLink = cell.Hyperlink is not null;
         string text = NumberFormatter.Format(cell.Value, style.NumberFormat, Culture);
         // An empty hyperlinked cell shows its target as the visible (clickable) link text.
@@ -503,7 +503,7 @@ public sealed partial class SpreadsheetGrid
     private string CellDisplayText(Worksheet sheet, int row, int column)
     {
         var cell = sheet.Find(row, column);
-        return cell is null ? string.Empty : NumberFormatter.Format(cell.Value, ResolveStyle(cell, row, column).NumberFormat, Culture);
+        return cell is null ? string.Empty : NumberFormatter.Format(cell.Value, ResolveStyle(row, column).NumberFormat, Culture);
     }
 
     /// <summary>Test seam: the label the header strip shows above <paramref name="column"/> right now.</summary>
@@ -576,7 +576,7 @@ public sealed partial class SpreadsheetGrid
             return null;
         }
 
-        var style = ResolveStyle(cell, row, column);
+        var style = ResolveStyle(row, column);
         string text = NumberFormatter.Format(cell.Value, style.NumberFormat, Culture);
         if (text.Length == 0)
         {

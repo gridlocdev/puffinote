@@ -366,7 +366,7 @@ public sealed partial class SpreadsheetGrid
         }
 
         bool numeric = cell.Value.IsNumber || cell.Value.IsBoolean || cell.Value.IsError;
-        var style = _session.Workbook.Styles.Get(cell.StyleId);
+        var style = ResolveStyle(row, column);
         if (numeric || style.Alignment.WrapText)
         {
             return column; // numbers show #####, wrapped text grows the row — neither spills
@@ -378,7 +378,7 @@ public sealed partial class SpreadsheetGrid
             return column; // only left/general text spills rightward
         }
 
-        double textWidth = MeasureCellWidth(cell);
+        double textWidth = MeasureCellWidth(row, column, cell);
         double available = EffectiveColumnWidth(sheet, column) - 2 * CellPadX;
         if (textWidth <= available)
         {

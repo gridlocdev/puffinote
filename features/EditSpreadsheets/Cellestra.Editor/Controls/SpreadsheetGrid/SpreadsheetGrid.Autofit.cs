@@ -45,11 +45,11 @@ public sealed partial class SpreadsheetGrid
         }
 
         double widest = 0;
-        foreach (var (_, col, cell) in sheet.EnumerateCells())
+        foreach (var (row, col, cell) in sheet.EnumerateCells())
         {
-            if (col == column && Fits(cell))
+            if (col == column && Fits(row, col, cell))
             {
-                widest = Math.Max(widest, MeasureCellWidth(cell));
+                widest = Math.Max(widest, MeasureCellWidth(row, col, cell));
             }
         }
 
@@ -64,8 +64,8 @@ public sealed partial class SpreadsheetGrid
     /// paragraph — one wrapped note used to drag the whole column out to the length of its contents
     /// and undo the wrap it was set to have. A column of nothing but wrapped cells keeps its width.
     /// </summary>
-    private bool Fits(Cellestra.Core.Model.Cell cell) =>
-        !cell.Value.IsEmpty && !_session!.Workbook.Styles.Get(cell.StyleId).Alignment.WrapText;
+    private bool Fits(int row, int column, Cellestra.Core.Model.Cell cell) =>
+        !cell.Value.IsEmpty && !ResolveStyle(row, column).Alignment.WrapText;
 
     /// <summary>
     /// Size each column in the range to its content exactly — the explicit "Auto-fit Columns" command,
@@ -101,11 +101,11 @@ public sealed partial class SpreadsheetGrid
     private double WidestIn(Cellestra.Core.Model.Worksheet sheet, int column)
     {
         double widest = 0;
-        foreach (var (_, col, cell) in sheet.EnumerateCells())
+        foreach (var (row, col, cell) in sheet.EnumerateCells())
         {
-            if (col == column && Fits(cell))
+            if (col == column && Fits(row, col, cell))
             {
-                widest = Math.Max(widest, MeasureCellWidth(cell));
+                widest = Math.Max(widest, MeasureCellWidth(row, col, cell));
             }
         }
 
@@ -126,15 +126,15 @@ public sealed partial class SpreadsheetGrid
 
         // One pass over the populated cells, bucketing the widest content per target column.
         var widest = new double[right - left + 1];
-        foreach (var (_, column, cell) in sheet.EnumerateCells())
+        foreach (var (row, column, cell) in sheet.EnumerateCells())
         {
-            if (column < left || column > right || !Fits(cell))
+            if (column < left || column > right || !Fits(row, column, cell))
             {
                 continue;
             }
 
             int bucket = column - left;
-            double w = MeasureCellWidth(cell);
+            double w = MeasureCellWidth(row, column, cell);
             if (w > widest[bucket])
             {
                 widest[bucket] = w;
@@ -160,9 +160,9 @@ public sealed partial class SpreadsheetGrid
     }
 
     /// <summary>The width of one cell's formatted content, measured in model space (no zoom).</summary>
-    private double MeasureCellWidth(Cellestra.Core.Model.Cell cell)
+    private double MeasureCellWidth(int row, int column, Cellestra.Core.Model.Cell cell)
     {
-        var style = _session!.Workbook.Styles.Get(cell.StyleId);
+        var style = ResolveStyle(row, column);
         string text = NumberFormatter.Format(cell.Value, style.NumberFormat, Culture);
         if (text.Length == 0)
         {

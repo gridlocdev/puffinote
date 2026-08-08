@@ -409,8 +409,7 @@ public sealed class AppCommands
     {
         var session = e.Session;
         var sheet = session.ActiveSheet;
-        var active = sheet.Find(e.Selection.ActiveRow, e.Selection.ActiveColumn);
-        var style = session.Workbook.Styles.Get(active?.StyleId ?? StylePool.DefaultId);
+        var style = session.Workbook.Styles.Get(sheet.EffectiveStyleId(e.Selection.ActiveRow, e.Selection.ActiveColumn));
         bool target = !get(style.Font);
 
         session.Execute(EditCommands.ApplyStyle(session.Workbook, sheet.Name, e.Selection.Range,
@@ -422,8 +421,7 @@ public sealed class AppCommands
     private static CellStyle ActiveStyle(IAppEnvironment e)
     {
         var sheet = e.Session.ActiveSheet;
-        var active = sheet.Find(e.Selection.ActiveRow, e.Selection.ActiveColumn);
-        return e.Session.Workbook.Styles.Get(active?.StyleId ?? StylePool.DefaultId);
+        return e.Session.Workbook.Styles.Get(sheet.EffectiveStyleId(e.Selection.ActiveRow, e.Selection.ActiveColumn));
     }
 
     // ---- Borders ----------------------------------------------------------

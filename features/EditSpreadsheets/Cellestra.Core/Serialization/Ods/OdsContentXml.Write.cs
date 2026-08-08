@@ -75,6 +75,17 @@ public static partial class OdsContentXml
             lastRow = System.Math.Max(lastRow, validation.Target.Bottom);
         }
 
+        // Same reasoning for a column that carries formatting (a width, a default cell style, or a
+        // hidden flag) but no cells: it is past the used range and still has to be written, or the
+        // formatting is lost on save. This is what keeps a wrapped-but-empty column wrapped.
+        foreach (var (index, model) in sheet.Columns)
+        {
+            if (!model.IsDefault)
+            {
+                lastColumn = System.Math.Max(lastColumn, index);
+            }
+        }
+
         WriteColumns(table, sheet, lastColumn, registry);
         WriteRows(table, sheet, lastRow, lastColumn, registry, cellValidation);
 
@@ -97,9 +108,9 @@ public static partial class OdsContentXml
         int column = 0;
         while (column <= lastColumn)
         {
-            var (styleName, hidden) = ColumnSignature(sheet, column, registry);
+            var (styleName, hidden, defaultCellStyle) = ColumnSignature(sheet, column, registry);
             int repeat = 1;
-            while (column + repeat <= lastColumn && ColumnSignature(sheet, column + repeat, registry) == (styleName, hidden))
+            while (column + repeat <= lastColumn && ColumnSignature(sheet, column + repeat, registry) == (styleName, hidden, defaultCellStyle))
             {
                 repeat++;
             }
@@ -120,21 +131,28 @@ public static partial class OdsContentXml
                 element.Add(new XAttribute(Table + "visibility", "collapse"));
             }
 
+            // How a whole formatted column travels: one attribute, not a style on every cell in it.
+            if (defaultCellStyle is not null)
+            {
+                element.Add(new XAttribute(Table + "default-cell-style-name", defaultCellStyle));
+            }
+
             table.Add(element);
             column += repeat;
         }
     }
 
-    private static (string? Style, bool Hidden) ColumnSignature(Worksheet sheet, int column, StyleRegistry registry)
+    private static (string? Style, bool Hidden, string? DefaultCellStyle) ColumnSignature(Worksheet sheet, int column, StyleRegistry registry)
     {
         var model = sheet.FindColumn(column);
         if (model is null)
         {
-            return (null, false);
+            return (null, false, null);
         }
 
         string? style = model.Width != Defaults.ColumnWidth ? registry.ColumnStyle(model.Width) : null;
-        return (style, model.Hidden);
+        string? defaultCellStyle = model.StyleId != StylePool.DefaultId ? registry.CellStyle(model.StyleId) : null;
+        return (style, model.Hidden, defaultCellStyle);
     }
 
     private static void WriteRows(XElement table, Worksheet sheet, int lastRow, int lastColumn, StyleRegistry registry, IReadOnlyDictionary<(int Row, int Column), string> cellValidation)

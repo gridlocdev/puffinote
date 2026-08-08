@@ -415,7 +415,7 @@ public sealed partial class SpreadsheetGrid : Panel
                 return $"{address}: empty";
             }
 
-            var style = ResolveStyle(cell, Selection.ActiveRow, Selection.ActiveColumn);
+            var style = ResolveStyle(Selection.ActiveRow, Selection.ActiveColumn);
             return $"{address}: {NumberFormatter.Format(cell.Value, style.NumberFormat, Culture)}";
         }
     }
