@@ -199,9 +199,19 @@
 
 - [ ] All Apps: All applications that use the command menu (all of them except Plaintain) should have a command for opening the settings menu, with the existing keyboard shortcut listed.
 
+- [ ] All Apps: All applications should have an auto-save feature that saves the current document automatically after a certain period of inactivity (e.g., 30 seconds). This prevents data loss in case of unexpected application crashes or power outages. The auto-save interval should be configurable in the settings menu.
+
 - [ ] All Apps: When quitting, always ensure that the program removes file locks for any files that were opened in the application. This prevents issues with other applications being unable to access those files after the application has been closed.
 
 - [ ] All Apps: Ensure the cursor blinks at a consistent rate across all applications while application focus is on editing text. The current implementation has no blinking, which can make it difficult to locate the cursor. 
+
+- [ ] All Apps: Allow selecting the theme (light, dark, or system default) in the settings menu for all applications. This allows users to customize the appearance of the application according to their preferences and system settings. Default to system theme if no preference is set. The theme should be applied immediately upon selection, and the application should remember the user's preference for future sessions. In Puffinote, only display this a single time for itself in the settings menu, and not in the settings for each individual app.
+
+- [ ] All Apps: Use consistent verbiage for shared elements. For example, "Command Bar" means the horizontal bar at the top of Typage and Cellestra. "Command Menu" means the menu that opens when using Cmd+K or clicking the "Search for commands" button in the top right of the window.
+
+- [ ] Cellestra + Typage: The command bar should have three states, visible, collapsed, and hidden. Reflect this in the settings menu and the command menu. This allows users to customize their workspace according to their preferences, either by keeping the command bar visible for easy access to commands, collapsing it to save space while still allowing access, or hiding it completely for a cleaner interface.
+
+- [ ] Puffinote: In the tabbed settings menu, remember which tab the user was last on before closing, and open the settings menu to that tab when reopened. This improves usability by allowing users to quickly access the settings they were previously working on without having to navigate back to that tab.
 
 - [ ] Puffinote: In the "Outline" view and "Recent" view and "Search" view, make it a single click to navigate to the selection in the UI rather than a double click. This improves usability and allows for quicker navigation within the document.
 
