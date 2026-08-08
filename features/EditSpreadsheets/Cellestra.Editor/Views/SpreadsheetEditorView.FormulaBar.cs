@@ -61,15 +61,31 @@ public partial class SpreadsheetEditorView
     private readonly LucideIcon _formulaExpandIcon = new() { IconKey = "chevron-down", Size = 14 };
 
     /// <summary>
+    /// The tallest the expanded formula bar may grow. Without a ceiling a value with many line breaks
+    /// in it would push the grid off the bottom of the window; past this it scrolls instead.
+    /// </summary>
+    private const int ExpandedFormulaBarLines = 8;
+
+    /// <summary>
     /// Toggle the formula bar between one line and a taller multi-line area for editing long formulas
     /// (task: formula-bar expand/collapse). Expanded, the input grows to several wrapped lines.
+    ///
+    /// <para>Collapsed it is pinned to a single line (<c>MaxLines = 1</c>). That pin is what keeps a
+    /// line break typed into the <i>cell</i> from resizing the bar: the two editors mirror each other's
+    /// text, but ⇧↩ only ever grows the one the caret is in.</para>
     /// </summary>
     private void ToggleFormulaBarExpanded()
     {
-        _formulaBarExpanded = !_formulaBarExpanded;
+        SetFormulaBarExpanded(!_formulaBarExpanded);
+    }
+
+    private void SetFormulaBarExpanded(bool expanded)
+    {
+        _formulaBarExpanded = expanded;
         if (_formulaBarExpanded)
         {
             FormulaInput.MinHeight = 84;
+            FormulaInput.MaxLines = ExpandedFormulaBarLines;
             FormulaInput.TextWrapping = TextWrapping.Wrap;
             FormulaInput.VerticalContentAlignment = VerticalAlignment.Top;
             _formulaExpandIcon.IconKey = "chevron-up";
@@ -78,6 +94,7 @@ public partial class SpreadsheetEditorView
         else
         {
             FormulaInput.MinHeight = 0;
+            FormulaInput.MaxLines = 1;
             FormulaInput.ClearValue(TextBox.HeightProperty);
             FormulaInput.TextWrapping = TextWrapping.NoWrap;
             FormulaInput.VerticalContentAlignment = VerticalAlignment.Center;
@@ -90,7 +107,15 @@ public partial class SpreadsheetEditorView
     {
         if (e.Key == Key.Return)
         {
-            CommitFormulaBar(moveColumn: 0, moveRow: 1);
+            if (e.KeyModifiers.HasFlag(KeyModifiers.Shift))
+            {
+                InsertNewlineInFormulaBar();
+            }
+            else
+            {
+                CommitFormulaBar(moveColumn: 0, moveRow: 1);
+            }
+
             e.Handled = true;
         }
         else if (e.Key == Key.Tab)
@@ -126,6 +151,37 @@ public partial class SpreadsheetEditorView
             DeleteForwardInFormulaBar();
             e.Handled = true;
         }
+    }
+
+    /// <summary>
+    /// ⇧↩ in the formula bar breaks the line there, exactly as it does in the cell — it does not commit.
+    /// Inserted by hand (the input keeps <c>AcceptsReturn="False"</c> so a bare ↩ can never reach the
+    /// TextBox and swallow the commit), and the bar expands so the line you just made is visible: the
+    /// editor the caret is in is the one that grows.
+    /// </summary>
+    private void InsertNewlineInFormulaBar()
+    {
+        string text = FormulaInput.Text ?? string.Empty;
+        int caret = Math.Clamp(FormulaInput.CaretIndex, 0, text.Length);
+        int start = Math.Min(FormulaInput.SelectionStart, FormulaInput.SelectionEnd);
+        int end = Math.Max(FormulaInput.SelectionStart, FormulaInput.SelectionEnd);
+        if (end > start)
+        {
+            text = text.Remove(start, end - start); // ⇧↩ over a selection replaces it, like typing does
+            caret = start;
+        }
+
+        if (!_formulaBarExpanded)
+        {
+            SetFormulaBarExpanded(true);
+        }
+
+        FormulaInput.Text = text.Insert(caret, "\n");
+        FormulaInput.CaretIndex = caret + 1;
+
+        // Mirror into the cell by hand: the TextChanged mirror only runs for a focused bar, and setting
+        // Text above may have moved focus during the expand.
+        Grid.SetInlineEditorText(FormulaInput.Text);
     }
 
     /// <summary>Delete the selection (if any) or the single character to the right of the caret in the formula input.</summary>
