@@ -6,6 +6,7 @@ using Avalonia.LogicalTree;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
 using Puffinote.Components.Overlays;
+using Puffinote.Components.Shell;
 using Puffinote.Desktop.Shell;
 using Puffinote.Desktop.Views;
 using Typage.Control.Views;
@@ -20,6 +21,23 @@ namespace Puffinote.UiTests;
 /// </summary>
 public sealed class PreferencesTests
 {
+    /// <summary>
+    /// Start every test from a pristine override layer. <see cref="TestConfigIsolation"/> redirects the
+    /// config directory once per <i>run</i>, which keeps the developer's real config safe but does not
+    /// separate the tests from each other — so the test that turns the tab-width override on and saves it
+    /// would leak that override into the next test, which expects to inherit Typage's own defaults. xUnit
+    /// builds a fresh instance per test, so clearing the file here makes each one independent of the order
+    /// they happen to run in.
+    /// </summary>
+    public PreferencesTests()
+    {
+        var settings = SettingsStore.AppConfigPath("Puffinote", "settings.json");
+        if (File.Exists(settings))
+        {
+            File.Delete(settings);
+        }
+    }
+
     /// <summary>The overlay currently showing something. The window has more than one — the shell's own,
     /// and the active pane's editor overlay nested inside the tab host — so pick by what's open.</summary>
     private static OverlayHost Overlay(MainWindow window) =>
