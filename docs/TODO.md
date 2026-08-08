@@ -278,7 +278,18 @@
 
 - [ ] Cellestra + Typage: The command bar should have three states, visible, collapsed, and hidden. Reflect this in the settings menu and the command menu. This allows users to customize their workspace according to their preferences, either by keeping the command bar visible for easy access to commands, collapsing it to save space while still allowing access, or hiding it completely for a cleaner interface.
 
-- [ ] Puffinote: In the tabbed settings menu, remember which tab the user was last on before closing, and open the settings menu to that tab when reopened. This improves usability by allowing users to quickly access the settings they were previously working on without having to navigate back to that tab.
+- [x] Puffinote: In the tabbed settings menu, remember which tab the user was last on before closing, and open the settings menu to that tab when reopened. This improves usability by allowing users to quickly access the settings they were previously working on without having to navigate back to that tab.
+
+    `AppState.LastSettingsTab` — per-user and cross-launch, alongside the last-opened notebook, because
+    where you were reading is not a preference: nobody chose it, it isn't layered over an editor's config,
+    and a notebook has no business committing it. Stored by tab **title**, not index, so adding, dropping,
+    or reordering tabs in a later version can only fail to match — where an index survives a reordering by
+    pointing confidently at the wrong subject. An unmatched title leaves the dialog on General, which is
+    also where someone who has never opened it starts. Recorded on the way out whichever button closed the
+    dialog: Cancel abandons the *edits*, and where you were reading isn't one of them — a dialog dismissed
+    with Esc is the case where coming back to the same tab matters most. Both fields now layer onto the
+    state file (`Load() with { … }`) instead of saving a fresh record, or opening a notebook would blank
+    the remembered tab every time.
 
 - [ ] Puffinote: In the "Outline" view and "Recent" view and "Search" view, make it a single click to navigate to the selection in the UI rather than a double click. This improves usability and allows for quicker navigation within the document.
 

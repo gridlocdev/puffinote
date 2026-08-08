@@ -63,9 +63,12 @@ public partial class MainWindow
 
         // Remember this as the notebook to reopen on the next launch (PRD §5). Global, per-user state — kept
         // apart from the per-notebook session below — so a plain launch (no CLI path) comes back here.
+        // Layered onto the file as it stands rather than written fresh: the other things remembered there
+        // (the last Preferences tab) are written by other parts of the shell, and a whole-record save would
+        // blank them every time a notebook is opened.
         if (_notebook.RootPath is { } opened)
         {
-            new AppState { LastNotebookPath = opened }.Save();
+            (AppState.Load() with { LastNotebookPath = opened }).Save();
         }
 
         // Resolve Puffinote's overrides for this notebook (per-user + the notebook's own .puffinote/settings.json)

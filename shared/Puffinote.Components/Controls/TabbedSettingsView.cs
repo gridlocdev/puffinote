@@ -79,6 +79,29 @@ public sealed class TabbedSettingsView : UserControl
         }
     } = -1;
 
+    /// <summary>
+    /// Which page is showing, named rather than numbered — the form a host can persist across runs and still
+    /// resolve later. A title that no longer matches any tab (renamed, dropped, or written by an older version)
+    /// selects nothing rather than throwing or landing on whichever tab happens to hold that position now: an
+    /// index survives a reordering by pointing confidently at the wrong subject, where a name simply stops
+    /// matching, and the caller keeps the tab it already had.
+    /// </summary>
+    public string SelectedTitle
+    {
+        get => Tabs[SelectedIndex].Title;
+        set
+        {
+            for (var index = 0; index < Tabs.Count; index++)
+            {
+                if (string.Equals(Tabs[index].Title, value, StringComparison.Ordinal))
+                {
+                    SelectedIndex = index;
+                    return;
+                }
+            }
+        }
+    }
+
     /// <summary>Raised when a page's "edit the file" button is pressed; the host opens it (this control
     /// builds UI, and launching an external editor is not UI).</summary>
     public event Action<SettingsTab>? OpenConfigFileRequested;

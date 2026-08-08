@@ -34,12 +34,24 @@ public sealed class PreferencesTests
     /// would leak that override into the next test, which expects to inherit Typage's own defaults. xUnit
     /// builds a fresh instance per test, so clearing the files here makes each one independent of the order
     /// they happen to run in.
+    /// <para>
+    /// The per-user app state goes with them, for the same reason and one more: closing this dialog records
+    /// which tab was showing, so without this every test after the first would open on whichever tab its
+    /// predecessor left behind — and that file, unlike the config directory, also outlives the run.
+    /// </para>
     /// </summary>
     public PreferencesTests()
     {
         foreach (var path in ConfigFiles)
         {
-            if (File.Exists(path))
+            Forget(path);
+        }
+
+        Forget(AppState.PathOverrideForTest);
+
+        static void Forget(string? path)
+        {
+            if (path is not null && File.Exists(path))
             {
                 File.Delete(path);
             }
@@ -426,6 +438,127 @@ public sealed class PreferencesTests
         Assert.False(File.Exists(SheetConfig.DefaultPath));
         Assert.False(File.Exists(PlainTextConfig.DefaultPath));
         Assert.False(File.Exists(BoardConfig.DefaultPath));
+    }
+
+    // ---- reopening where you left off ---------------------------------------------------------------
+
+    /// <summary>Open Preferences on <paramref name="window"/> and hand back the strip it's showing.</summary>
+    private static TabbedSettingsView OpenPreferences(MainWindow window)
+    {
+        window.InvokeShellForTest("shell.preferences");
+        Dispatcher.UIThread.RunJobs();
+        return Tabs(Overlay(window));
+    }
+
+    [AvaloniaFact]
+    public void Preferences_reopens_on_the_tab_you_were_last_reading()
+    {
+        var window = new MainWindow(new NotebookService());
+        window.Show();
+
+        // First visit: nothing is remembered yet, so it opens where a first visit should — on General.
+        var tabs = OpenPreferences(window);
+        Assert.Equal("General", tabs.SelectedTitle);
+
+        tabs.SelectedIndex = 2; // Spreadsheets — go read something else, then leave
+        Dispatcher.UIThread.RunJobs();
+        ClickOk(Overlay(window));
+        Dispatcher.UIThread.RunJobs();
+
+        // Settings get worked through a few at a time; coming back to General each visit is a tax on the second.
+        Assert.Equal("Spreadsheets", OpenPreferences(window).SelectedTitle);
+    }
+
+    [AvaloniaFact]
+    public void The_remembered_tab_outlives_the_window_that_chose_it()
+    {
+        var window = new MainWindow(new NotebookService());
+        window.Show();
+
+        var tabs = OpenPreferences(window);
+        tabs.SelectedTitle = "Tasks";
+        Dispatcher.UIThread.RunJobs();
+        ClickOk(Overlay(window));
+        Dispatcher.UIThread.RunJobs();
+
+        // It's per-user app state, not per-window: it's written to disk, so the next launch reads it back.
+        Assert.Equal("Tasks", AppState.Load().LastSettingsTab);
+
+        var next = new MainWindow(new NotebookService());
+        next.Show();
+        Assert.Equal("Tasks", OpenPreferences(next).SelectedTitle);
+    }
+
+    [AvaloniaFact]
+    public void Cancelling_still_remembers_the_tab_you_were_on()
+    {
+        var window = new MainWindow(new NotebookService());
+        window.Show();
+
+        var tabs = OpenPreferences(window);
+        tabs.SelectedTitle = "Plain Text";
+        Row<NumericUpDown>(Tab(Overlay(window), "Notes"), "Tab width").Value = 7m;
+        Dispatcher.UIThread.RunJobs();
+
+        var overlay = Overlay(window);
+        overlay.TryCancel(); // Esc / backdrop
+        Dispatcher.UIThread.RunJobs();
+
+        // Cancel abandons the *edits*; where you were reading isn't one of them — and a dialog dismissed with
+        // Esc is exactly the case where coming back to the same tab matters most.
+        Assert.All(ConfigFiles, path => Assert.False(File.Exists(path)));
+        Assert.Equal("Plain Text", OpenPreferences(window).SelectedTitle);
+    }
+
+    [AvaloniaFact]
+    public async Task Remembering_the_tab_doesnt_make_the_app_forget_its_notebook()
+    {
+        // Both live in the one per-user state file, written at different moments by different parts of the
+        // shell — so each has to layer onto the other rather than save a whole record over it.
+        var dir = Directory.CreateTempSubdirectory("puffinote-prefs-state");
+        try
+        {
+            var window = new MainWindow(new NotebookService());
+            window.Show();
+            window.OpenNotebook(dir.FullName);
+            Dispatcher.UIThread.RunJobs();
+
+            var tabs = OpenPreferences(window);
+            tabs.SelectedTitle = "Notes";
+            Dispatcher.UIThread.RunJobs();
+            ClickOk(Overlay(window));
+            Dispatcher.UIThread.RunJobs();
+
+            var state = AppState.Load();
+            Assert.Equal("Notes", state.LastSettingsTab);
+            Assert.Equal(dir.FullName, state.LastNotebookPath);
+
+            // …and opening a notebook afterwards doesn't blank the tab on the way back.
+            window.OpenNotebook(dir.FullName);
+            Dispatcher.UIThread.RunJobs();
+            Assert.Equal("Notes", AppState.Load().LastSettingsTab);
+
+            // Opening a notebook kicks a background index rebuild that ends by writing into its .puffinote/.
+            // Deleting the folder the moment the assertions pass races that write.
+            await window.IndexRebuildForTest;
+        }
+        finally
+        {
+            dir.Delete(recursive: true);
+        }
+    }
+
+    [AvaloniaFact]
+    public void A_remembered_tab_that_no_longer_exists_opens_on_the_first_one()
+    {
+        // A state file written by an older version can name a tab this one doesn't have. Selecting by title
+        // means that can only fail to match — where an index would confidently select the wrong subject.
+        (AppState.Load() with { LastSettingsTab = "Diagrams" }).Save();
+
+        var window = new MainWindow(new NotebookService());
+        window.Show();
+
+        Assert.Equal("General", OpenPreferences(window).SelectedTitle);
     }
 
     // ---- the escape hatch: edit the file itself -----------------------------------------------------

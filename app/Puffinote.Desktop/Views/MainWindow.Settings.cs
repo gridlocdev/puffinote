@@ -35,7 +35,11 @@ public partial class MainWindow
     /// </para>
     /// <para>
     /// Session state — the last notebook, the sidebar width, the per-notebook recent list — is not a
-    /// preference and isn't here; it's recorded as you work.
+    /// preference and isn't here; it's recorded as you work. Which tab you were last on is the dialog's own
+    /// share of that: it opens where you left it (see <see cref="AppState.LastSettingsTab"/>), because
+    /// settings are worked through a few at a time and starting over at General each visit is a tax on the
+    /// second one. It is remembered on the way out whichever button closed the dialog — Cancel abandons the
+    /// <em>edits</em>, and where you were reading isn't one of them.
     /// </para>
     /// </summary>
     private async void ShowSettings()
@@ -128,7 +132,21 @@ public partial class MainWindow
 
         view.OpenConfigFileRequested += tab => _ = OpenConfigFileAsync(tab, createFile);
 
-        if (!await _overlayHost.ShowModalAsync(new FormDialog("Preferences", view)))
+        // Reopen on the tab this user was last reading. A title that no longer exists simply doesn't match,
+        // leaving the dialog on General — which is also where a user who has never opened it before starts.
+        if (AppState.Load().LastSettingsTab is { } lastTab)
+        {
+            view.SelectedTitle = lastTab;
+        }
+
+        var accepted = await _overlayHost.ShowModalAsync(new FormDialog("Preferences", view));
+
+        // Recorded on both exits, before the accept/cancel fork: where someone was reading is not one of the
+        // edits Cancel throws away, and a dialog dismissed with Esc is the very case where coming back to the
+        // same tab matters most.
+        (AppState.Load() with { LastSettingsTab = view.SelectedTitle }).Save();
+
+        if (!accepted)
         {
             return; // Cancel / Esc — leave every settings file untouched
         }

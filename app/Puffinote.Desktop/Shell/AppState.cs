@@ -5,16 +5,34 @@ namespace Puffinote.Desktop.Shell;
 
 /// <summary>
 /// Puffinote's per-user, cross-launch shell state — <b>global</b> to the app rather than scoped to one
-/// notebook (that's <see cref="NotebookSession"/>). Today it holds a single thing: which notebook to reopen
-/// on the next launch (PRD §5 — one notebook, one window), so Puffinote comes back up where you left it.
-/// Stored at the OS-standard per-user app-config path with the same tolerant-load / best-effort-save contract
-/// as the other stores, so a missing or corrupt file simply means "no notebook to restore" and never blocks
-/// startup.
+/// notebook (that's <see cref="NotebookSession"/>). It holds where the app was when you left it: which
+/// notebook to reopen on the next launch (PRD §5 — one notebook, one window), and which Preferences tab you
+/// were last reading. Stored at the OS-standard per-user app-config path with the same tolerant-load /
+/// best-effort-save contract as the other stores, so a missing or corrupt file simply means "nothing to
+/// restore" and never blocks startup.
+/// <para>
+/// None of this is a <em>preference</em> — nobody chose it, it is just where they were — which is why it
+/// lives here and not in <see cref="PuffinoteSettings"/>: it is neither layered over an editor's config nor
+/// something a notebook should be able to commit and impose on whoever opens it.
+/// </para>
+/// <para>
+/// Every field is written by a different part of the shell at a different moment, so a writer must layer its
+/// one field onto the file as it stands (<c>Load() with { … }</c>) rather than saving a fresh record — a
+/// <c>new AppState { OneField = … }.Save()</c> writes null over every other field.
+/// </para>
 /// </summary>
 internal sealed record AppState
 {
     /// <summary>The absolute path of the last-opened notebook root, or null when none has been opened yet.</summary>
     public string? LastNotebookPath { get; init; }
+
+    /// <summary>
+    /// The title of the Preferences tab that was showing when the dialog last closed, so reopening it comes
+    /// back to the subject you were working on. Null until the dialog has been opened once, and stored by
+    /// title rather than position so that adding, dropping, or reordering tabs in a later version can only
+    /// fail to match — never match the wrong one.
+    /// </summary>
+    public string? LastSettingsTab { get; init; }
 
     private static readonly JsonSerializerOptions Options = new() { WriteIndented = true };
 
