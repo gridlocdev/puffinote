@@ -15,6 +15,7 @@ public sealed class FileGlyphTests
     [InlineData("2026-07-02.md", "2026-07-02", "md")] // a daily note: dots in the stem are not the extension
     [InlineData("README", "README", "")]
     [InlineData("archive.tar.gz", "archive", "tar.gz")] // a compound extension stays whole...
+    [InlineData("Work.pivotask.json", "Work", "pivotask.json")] // ...boards included: this is a board called "Work"
     [InlineData("types.d.ts", "types", "d.ts")]
     [InlineData("app.min.js", "app", "min.js")]
     [InlineData("notes.", "notes.", "")] // a trailing dot is not an extension
@@ -30,6 +31,8 @@ public sealed class FileGlyphTests
     [InlineData("cover.PNG", "image")] // extensions match case-insensitively
     [InlineData("survey.pdf", "file-text")]
     [InlineData("config.json", "file-json")]
+    [InlineData("Work.pivotask.json", "square-check")] // a board is not the JSON it is stored as
+    [InlineData("Work.PIVOTASK.JSON", "square-check")]
     [InlineData("deploy.ts", "code")]
     [InlineData("backup.sh", "terminal")]
     [InlineData("config.yaml", "settings-2")]
@@ -40,6 +43,17 @@ public sealed class FileGlyphTests
     public void A_file_gets_the_glyph_of_its_type(string fileName, string iconKey)
     {
         Assert.Equal(iconKey, FileGlyph.ForFile(fileName).IconKey);
+    }
+
+    [Fact]
+    public void A_board_is_told_apart_from_the_json_it_is_stored_as()
+    {
+        // Both shape and colour, not one or the other: a board sitting beside a config file has to be findable
+        // at a glance by a reader who cannot separate the two hues.
+        var board = FileGlyph.ForFile("Work.pivotask.json");
+        var json = FileGlyph.ForFile("config.json");
+        Assert.NotEqual(json.IconKey, board.IconKey);
+        Assert.NotEqual(json.Color, board.Color);
     }
 
     [Fact]

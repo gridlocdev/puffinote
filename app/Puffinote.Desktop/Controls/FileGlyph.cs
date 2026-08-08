@@ -14,9 +14,11 @@ namespace Puffinote.Desktop.Controls;
 /// <see cref="Split"/>) as the literal, colour-independent statement of what the file is. That triple is
 /// deliberate: shape and text both survive a reader who cannot distinguish the hues.</para>
 ///
-/// <para>Puffinote's own two native types lead the map: <c>.md</c> (Typage) gets the first-party
-/// <c>markdown</c> glyph and <c>.ods</c> (Cellestra) the <c>table</c> glyph, so the files the app actually
-/// edits are the two that never have to be squinted at.</para>
+/// <para>Puffinote's own native types lead the map: <c>.md</c> (Typage) gets the first-party
+/// <c>markdown</c> glyph, <c>.ods</c> (Cellestra) the <c>table</c> glyph, and <c>.pivotask.json</c>
+/// (Pivotask) the <c>square-check</c> glyph, so the files the app actually edits are the ones that never
+/// have to be squinted at. The board's whole point is that it is <em>not</em> drawn as the JSON it happens
+/// to be stored as — a notebook's boards sit among its notes, not among its config files.</para>
 /// </summary>
 internal static class FileGlyph
 {
@@ -39,6 +41,7 @@ internal static class FileGlyph
     // on colour + the extension pill to separate them.
     private static readonly Kind Note = new("markdown", Rgb(0x51, 0x9D, 0xD6));
     private static readonly Kind Sheet = new("table", Rgb(0x62, 0xB5, 0x62));
+    private static readonly Kind Board = new("square-check", Rgb(0x3A, 0xA8, 0xC0));
     private static readonly Kind Image = new("image", Rgb(0x34, 0xB8, 0xC9));
     private static readonly Kind Pdf = new("file-text", Rgb(0xE0, 0x57, 0x4B));
     private static readonly Kind Text = new("file-text", Rgb(0x9A, 0xA4, 0xB2));
@@ -56,7 +59,7 @@ internal static class FileGlyph
 
     private static readonly Dictionary<string, Kind> ByExtension = new(StringComparer.OrdinalIgnoreCase)
     {
-        // Puffinote's own two editable types.
+        // Puffinote's own editable types.
         ["md"] = Note,
         ["markdown"] = Note,
         ["mdown"] = Note,
@@ -65,6 +68,10 @@ internal static class FileGlyph
         ["tsv"] = Sheet,
         ["xlsx"] = Sheet,
         ["xls"] = Sheet,
+
+        // Ahead of "json" only by being the longer key: `For` tries the whole extension before its final
+        // segment, so a board is matched here and never falls through to the generic JSON entry below.
+        ["pivotask.json"] = Board,
 
         ["png"] = Image,
         ["jpg"] = Image,
@@ -166,9 +173,15 @@ internal static class FileGlyph
     /// Extensions that are really two segments and must stay whole. <c>archive.tar.gz</c> is a gzipped tarball,
     /// not a "gz" file called <c>archive.tar</c>, and <c>types.d.ts</c> is a declaration file — splitting on the
     /// last dot would name them wrongly in the pill. Longest first, so <c>tar.gz</c> wins over <c>gz</c>.
+    ///
+    /// <para><c>pivotask.json</c> is here for the same reason it is a compound extension at all: a board named
+    /// <c>Work.pivotask.json</c> is a board called <c>Work</c>, not a JSON file called <c>Work.pivotask</c>.
+    /// Splitting it on the last dot would put "pivotask" in the tree's name column and hand the row the generic
+    /// JSON glyph — the two things this map exists to prevent.</para>
     /// </summary>
     private static readonly string[] Compound =
     [
+        "pivotask.json",
         "tar.gz", "tar.bz2", "tar.xz", "tar.zst",
         "d.ts", "test.ts", "test.tsx", "test.js", "spec.ts", "spec.js", "min.js", "min.css",
     ];
