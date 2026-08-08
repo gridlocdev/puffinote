@@ -111,6 +111,12 @@ internal sealed class TabHost : UserControl
             field = value;
             _editorConfig = EditorConfig.Resolve(value);
 
+            // Re-assert the preference over any session-only toggle. Assigning Settings happens on exactly
+            // two occasions — opening a notebook and accepting Preferences — and on both the persisted
+            // choice is the one that should be showing: the new notebook may hide the strip where the last
+            // one showed it, and a preference you just set must visibly take effect.
+            ShowTabBar = value.ShowTabBar ?? true;
+
             // Re-seed the tabs that are already open. Without this a settings change would only ever show
             // up in the next document opened, which reads as the setting not having worked.
             foreach (var tab in _tabs)
@@ -119,6 +125,32 @@ internal sealed class TabHost : UserControl
             }
         }
     } = new();
+
+    /// <summary>
+    /// Whether the tab strip is shown at all. Seeded from <see cref="PuffinoteSettings.ShowTabBar"/> whenever
+    /// <see cref="Settings"/> is assigned, and flipped on its own by the shell's Toggle Tab Bar command — which
+    /// is why this is a property of the host rather than something read straight off the settings record: the
+    /// command changes what you see for this session without writing a preference to disk.
+    /// <para>
+    /// Hiding the strip hides nothing else: the tabs stay open, ⌘⇧[ / ⌘⇧] still walk them, and the title bar
+    /// still names the active document — so, unlike the collapsed sidebar, there's nothing here that needs a
+    /// handle to get back to.
+    /// </para>
+    /// </summary>
+    public bool ShowTabBar
+    {
+        get;
+        set
+        {
+            if (field == value)
+            {
+                return;
+            }
+
+            field = value;
+            ApplyStripVisibility();
+        }
+    } = true;
 
     /// <summary>Raised on any change to the tabs or the active document's dirty state (for the window title/Save).</summary>
     public event EventHandler? Changed;
@@ -379,9 +411,15 @@ internal sealed class TabHost : UserControl
         Changed?.Invoke(this, EventArgs.Empty);
     }
 
+    /// <summary>
+    /// Show the strip only when it is both wanted and has something to say: an empty strip is chrome with no
+    /// content, so a notebook with no tabs open looks the same either way.
+    /// </summary>
+    private void ApplyStripVisibility() => _stripBar.IsVisible = ShowTabBar && _tabs.Count > 0;
+
     private void RebuildStrip()
     {
-        _stripBar.IsVisible = _tabs.Count > 0;
+        ApplyStripVisibility();
         _strip.Children.Clear();
         _activeTabControl = null;
         foreach (var tab in _tabs)
@@ -521,6 +559,9 @@ internal sealed class TabHost : UserControl
         item.Click += (_, _) => run();
         return item;
     }
+
+    /// <summary>Whether the tab strip is actually on screen — wanted <em>and</em> non-empty (test seam).</summary>
+    internal bool IsStripVisibleForTest => _stripBar.IsVisible;
 
     /// <summary>The menu a right click on <paramref name="tab"/> would show, live items (test seam).</summary>
     internal IReadOnlyList<MenuItem> TabMenuForTest(TabItem tab) => BuildTabMenuItems(tab);

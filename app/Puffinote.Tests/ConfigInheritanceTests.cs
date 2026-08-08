@@ -71,6 +71,29 @@ public sealed class ConfigInheritanceTests : IDisposable
     }
 
     [Fact]
+    public void Layering_a_bool_distinguishes_a_deliberate_false_from_an_unset_one()
+    {
+        // The trap in a nullable bool: "hide the tab bar" is `false`, which is falsy but *set*, so it has to
+        // win over a user who shows it rather than being swallowed as "said nothing".
+        var user = new PuffinoteSettings { ShowTabBar = true };
+
+        Assert.False(user.Layer(new PuffinoteSettings { ShowTabBar = false }).ShowTabBar);
+        Assert.True(user.Layer(new PuffinoteSettings()).ShowTabBar); // unset over → keep the base
+        Assert.Null(new PuffinoteSettings().Layer(new PuffinoteSettings()).ShowTabBar); // neither set
+    }
+
+    [Fact]
+    public void A_notebook_can_hide_the_tab_bar_for_a_user_who_shows_it()
+    {
+        var stateDir = Directory.CreateDirectory(At(NotebookNode.StateDirectoryName));
+        File.WriteAllText(System.IO.Path.Combine(stateDir.FullName, "settings.json"), """{ "ShowTabBar": false }""");
+
+        var resolved = PuffinoteSettings.Resolve(new PuffinoteSettings { ShowTabBar = true }, _dir.FullName);
+
+        Assert.False(resolved.ShowTabBar); // the committed, travels-with-the-repo choice wins
+    }
+
+    [Fact]
     public void Resolve_layers_the_per_notebook_settings_file_over_the_user_settings()
     {
         var stateDir = Directory.CreateDirectory(At(NotebookNode.StateDirectoryName));

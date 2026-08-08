@@ -233,6 +233,86 @@ public sealed class PreferencesTests
         }
     }
 
+    // ---- The optional tab bar -------------------------------------------------------------------------
+
+    [AvaloniaFact]
+    public async Task Turning_the_tab_bar_off_in_Preferences_hides_it_and_is_remembered()
+    {
+        var dir = Directory.CreateTempSubdirectory("puffinote-prefs-tabbar");
+        try
+        {
+            var note = Path.Combine(dir.FullName, "note.md");
+            File.WriteAllText(note, "# hi");
+
+            var window = new MainWindow(new NotebookService());
+            window.Show();
+            window.OpenNotebook(dir.FullName);
+            await window.OpenFileAsync(note);
+            Assert.True(window.IsTabStripVisibleForTest);
+
+            window.InvokeShellForTest("shell.preferences");
+            Dispatcher.UIThread.RunJobs();
+            var overlay = Overlay(window);
+
+            // The tab strip is Puffinote's own chrome, so it lives on the General tab.
+            Toggle(Tab(overlay, "General"), "Show the tab bar").IsChecked = false;
+            Assert.True(window.IsTabStripVisibleForTest); // nothing applied while the dialog is open
+
+            ClickOk(overlay);
+            Dispatcher.UIThread.RunJobs();
+
+            Assert.False(window.IsTabStripVisibleForTest);
+
+            // Unlike the session command, this one is a preference: it survives into the next window.
+            Assert.False(PuffinoteSettings.LoadUser().ShowTabBar);
+            var next = new MainWindow(new NotebookService());
+            next.Show();
+            next.OpenNotebook(dir.FullName);
+            await next.OpenFileAsync(note);
+            Assert.False(next.IsTabStripVisibleForTest);
+        }
+        finally
+        {
+            dir.Delete(recursive: true);
+        }
+    }
+
+    [AvaloniaFact]
+    public async Task Toggle_Tab_Bar_changes_this_session_only_and_writes_no_preference()
+    {
+        var dir = Directory.CreateTempSubdirectory("puffinote-tabbar-command");
+        try
+        {
+            var note = Path.Combine(dir.FullName, "note.md");
+            File.WriteAllText(note, "# hi");
+
+            var window = new MainWindow(new NotebookService());
+            window.Show();
+            window.OpenNotebook(dir.FullName);
+            await window.OpenFileAsync(note);
+
+            var command = window.ShellCommandsForTest.Single(c => c.Id == "shell.toggleTabBar");
+            Assert.Equal("Toggle Tab Bar", command.Title);
+
+            // Unbound by default and rebindable, so it can't collide with an editor's own gesture.
+            Assert.Null(command.Shortcut);
+            Assert.False(ShellCommandCatalog.IsReserved("shell.toggleTabBar"));
+
+            window.InvokeShellForTest("shell.toggleTabBar");
+            Assert.False(window.IsTabStripVisibleForTest);
+
+            // Hiding the strip to read one note doesn't quietly become the default for every future window.
+            Assert.Null(PuffinoteSettings.LoadUser().ShowTabBar);
+
+            window.InvokeShellForTest("shell.toggleTabBar");
+            Assert.True(window.IsTabStripVisibleForTest);
+        }
+        finally
+        {
+            dir.Delete(recursive: true);
+        }
+    }
+
     [AvaloniaFact]
     public async Task Editing_the_plain_text_tab_reaches_an_open_text_file()
     {
@@ -334,5 +414,16 @@ public sealed class PreferencesTests
         overlay.TryCancel();
         Dispatcher.UIThread.RunJobs();
         Assert.Equal(new BoardConfig(), BoardConfig.Load());
+    }
+
+    [AvaloniaFact]
+    public void Toggle_Tab_Bar_is_available_with_no_notebook_open()
+    {
+        // The strip is hidden anyway with nothing open, but the command sets what happens when you next open
+        // a file — greying it out would make the state unsettable exactly on the empty shell.
+        var window = new MainWindow(new NotebookService());
+        var command = window.ShellCommandsForTest.Single(c => c.Id == "shell.toggleTabBar");
+
+        Assert.True(command.IsEnabled);
     }
 }

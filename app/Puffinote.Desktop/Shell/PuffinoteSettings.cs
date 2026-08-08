@@ -16,6 +16,15 @@ internal sealed record PuffinoteSettings
     /// <summary>Overrides the note editor's indent (tab) width, in spaces; null inherits Typage's own.</summary>
     public int? TabWidth { get; init; }
 
+    /// <summary>
+    /// Whether the tab strip above the editor is shown; null means the default, which is shown. Unlike
+    /// <see cref="TabWidth"/> this overrides nothing — the tab strip is the shell's own chrome, and no
+    /// embedded editor has an opinion about it — so "unset" here means Puffinote's default rather than
+    /// "inherit". It stays nullable only so the two scopes still layer: a notebook that hides the strip
+    /// wins over a user who shows it, and one that says nothing leaves the user's choice alone.
+    /// </summary>
+    public bool? ShowTabBar { get; init; }
+
     private static readonly JsonSerializerOptions Options = new() { WriteIndented = true };
 
     /// <summary>Puffinote's own per-user config file — the one the General tab of Preferences writes.</summary>
@@ -49,5 +58,9 @@ internal sealed record PuffinoteSettings
 
     /// <summary>Return a copy with every set field of <paramref name="over"/> replacing this one's.</summary>
     public PuffinoteSettings Layer(PuffinoteSettings over) =>
-        new() { TabWidth = over.TabWidth ?? TabWidth };
+        new()
+        {
+            TabWidth = over.TabWidth ?? TabWidth,
+            ShowTabBar = over.ShowTabBar ?? ShowTabBar,
+        };
 }

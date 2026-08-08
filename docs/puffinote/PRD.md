@@ -435,6 +435,37 @@ Typage §12. Where a behavior belongs to an editor, Puffinote **delegates** and 
   Close All Tabs — all scoped to the tab *clicked*, not the active one. Closing is all it offers: the
   file-level commands (rename, reveal, delete) belong to the tree row that owns the file (§7.2.2), not to
   a view of it.
+- **Optional tab bar:** the strip can be hidden, for a cleaner reading surface. Two controls, deliberately
+  distinct: a **Preferences** toggle ("Show the tab bar", §7.5) is the *durable* choice, and a **Toggle Tab
+  Bar** command in the palette/View menu flips it for **this session only**, writing nothing — so hiding
+  the strip to read one long note doesn't silently become your default. Assigning the resolved settings
+  (opening a notebook, accepting Preferences) re-asserts the persisted choice over a session toggle.
+  - Unlike the tab-width override (§7.5) this is a **plain preference, not an override**: the strip is the
+    shell's own chrome and no embedded editor has an opinion about it, so "unset" means Puffinote's
+    default (shown) rather than "inherit". It is still nullable so the two scopes layer — a notebook that
+    hides the strip wins over a user who shows it.
+  - Hidden, it needs **no handle** to get back from (contrast the collapsed sidebar, §7.2.1): the tabs stay
+    open, `⌘⇧[`/`⌘⇧]` still walk them, `⌘O` still reaches any file, and the title bar still names the
+    active document — so nothing becomes unreachable. The command has **no default gesture** (no platform
+    convention) and is non-reserved, hence rebindable. It stays **enabled with no notebook open**, where it
+    sets what happens when you next open a file.
+  - An **empty** editor area shows no strip either way — "show the tab bar" is not "show an empty bar".
+- **Optional tab bar:** the strip can be hidden, for people who navigate by ⌘O and ⌘⇧[ / ⌘⇧] and want the
+  chrome back. Two surfaces, deliberately different in reach:
+  - **Preferences → Appearance → "Show the tab bar"** is the durable choice. It is a plain shell
+    preference with a default of *shown*, **not** an override in the §7.5 sense — the strip is Puffinote's
+    own chrome and no editor has a setting underneath it to inherit — but it still layers across the two
+    scopes, so a notebook's committed `.puffinote/settings.json` can hide it for everyone who opens that
+    notebook.
+  - **Toggle Tab Bar** (palette + View menu) flips it for **this session only** and writes nothing, so
+    hiding the strip to read one long note never becomes your default. Re-resolving the preference —
+    opening a notebook, or accepting Preferences — re-asserts it over any session toggle. No default
+    gesture (no platform convention); non-reserved, so it's rebindable. Enabled even with nothing open,
+    since it sets what happens when you next open a file.
+  - Hidden or shown, the strip only ever draws when at least one tab is open — "show the tab bar" is not
+    "show an empty bar" — and hiding it closes nothing: the tabs stay open, ⌘⇧[ / ⌘⇧] still walk them, and
+    the title bar still names the active document. That is why it needs no counterpart to the collapsed
+    sidebar's handle (§7.2.1): nothing becomes unreachable.
 
 *(Anything not pinned here defers to the owning editor's PRD: Typage §7.4/§8/§12 for Markdown behavior,
 Cellestra §8/§10 for spreadsheet behavior. If a shell behavior is genuinely unspecified, stop and ask,

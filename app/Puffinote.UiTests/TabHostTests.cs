@@ -7,6 +7,7 @@ using Avalonia.VisualTree;
 using Cellestra.Desktop.Services;
 using Puffinote.Components.Commands;
 using Puffinote.Desktop.Panes;
+using Puffinote.Desktop.Shell;
 using Typage.Control.Views;
 using Xunit;
 
@@ -505,5 +506,75 @@ public sealed class TabHostTests
         {
             dir.Delete(recursive: true);
         }
+    }
+
+    // ---- The optional tab bar -------------------------------------------------------------------------
+
+    [AvaloniaFact]
+    public void Hiding_the_tab_bar_hides_the_strip_without_closing_anything()
+    {
+        var host = new TabHost();
+        host.OpenForTest(new FakePane("/notebook/a.md"), "/notebook/a.md");
+        host.OpenForTest(new FakePane("/notebook/b.md"), "/notebook/b.md");
+        Assert.True(host.IsStripVisibleForTest);
+
+        host.ShowTabBar = false;
+
+        // The strip is chrome, not the documents: both tabs are still open and still switchable, which is
+        // what makes hiding it safe (and why it needs no sidebar-style handle to get back from).
+        Assert.False(host.IsStripVisibleForTest);
+        Assert.Equal(2, host.Count);
+        host.ActivateRelative(1);
+        Assert.Equal("a.md", host.ActivePane!.Title);
+
+        host.ShowTabBar = true;
+        Assert.True(host.IsStripVisibleForTest);
+    }
+
+    [AvaloniaFact]
+    public void A_hidden_tab_bar_stays_hidden_as_tabs_open_and_close()
+    {
+        // The strip is rebuilt on every tab change; the visibility rule has to survive each rebuild, or
+        // opening the next file would quietly bring back the bar you turned off.
+        var host = new TabHost { ShowTabBar = false };
+        host.OpenForTest(new FakePane("/notebook/a.md"), "/notebook/a.md");
+        Assert.False(host.IsStripVisibleForTest);
+
+        var second = host.OpenForTest(new FakePane("/notebook/b.md"), "/notebook/b.md");
+        Assert.False(host.IsStripVisibleForTest);
+
+        host.CloseUnder(second.Path);
+        Assert.False(host.IsStripVisibleForTest);
+    }
+
+    [AvaloniaFact]
+    public void An_empty_editor_area_shows_no_strip_however_the_setting_reads()
+    {
+        // With nothing open the strip has nothing to draw, so it stays hidden either way — "show the tab
+        // bar" is not "show an empty bar".
+        var host = new TabHost { ShowTabBar = true };
+        Assert.False(host.IsStripVisibleForTest);
+
+        var tab = host.OpenForTest(new FakePane("/notebook/a.md"), "/notebook/a.md");
+        Assert.True(host.IsStripVisibleForTest);
+
+        host.CloseUnder(tab.Path);
+        Assert.False(host.IsStripVisibleForTest);
+    }
+
+    [AvaloniaFact]
+    public void Assigning_settings_reasserts_the_preference_over_a_session_toggle()
+    {
+        var host = new TabHost();
+        host.OpenForTest(new FakePane("/notebook/a.md"), "/notebook/a.md");
+
+        host.ShowTabBar = false;            // as the Toggle Tab Bar command does — this session only
+        host.Settings = new PuffinoteSettings(); // opening a notebook: unset means the default, shown
+
+        Assert.True(host.ShowTabBar);
+        Assert.True(host.IsStripVisibleForTest);
+
+        host.Settings = new PuffinoteSettings { ShowTabBar = false };
+        Assert.False(host.IsStripVisibleForTest);
     }
 }

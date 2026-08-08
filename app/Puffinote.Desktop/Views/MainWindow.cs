@@ -106,6 +106,10 @@ public partial class MainWindow : Window
         var palette = Tokens.Dark;
 
         _tabHost.ConfirmClose = PromptCloseAsync;
+
+        // Seed the host with the per-user layer before any notebook opens, so a preference like a hidden tab
+        // bar holds from the first frame. Opening a notebook re-assigns this with its own settings layered on.
+        _tabHost.Settings = _settings;
         _tabHost.Changed += (_, _) =>
         {
             UpdatePaneChrome();
@@ -180,6 +184,9 @@ public partial class MainWindow : Window
 
     /// <summary>The active tab's file path, or null when no tab is open (test seam).</summary>
     internal string? ActiveTabPathForTest => _tabHost.ActivePane?.Path;
+
+    /// <summary>Whether the tab strip is currently on screen (test seam).</summary>
+    internal bool IsTabStripVisibleForTest => _tabHost.IsStripVisibleForTest;
 
     /// <summary>Redirect the shell keymap to a test file (so rebinding tests don't touch the real user config).</summary>
     internal void UseKeymapForTest(ShortcutKeymap keymap)

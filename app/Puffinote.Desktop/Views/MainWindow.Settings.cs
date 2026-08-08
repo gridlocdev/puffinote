@@ -26,6 +26,11 @@ public partial class MainWindow
     /// because that is the point of it being committable.
     /// </para>
     /// <para>
+    /// Not every option here overrides an editor, though: the shell's own chrome — the tab bar — has nothing
+    /// underneath it to inherit from, so it is a plain preference with a default, and the Toggle Tab Bar
+    /// command is the way to change it for one session without changing it for good.
+    /// </para>
+    /// <para>
     /// Session state — the last notebook, the sidebar width, the per-notebook recent list — is not a
     /// preference and isn't here; it's recorded as you work.
     /// </para>
@@ -41,6 +46,10 @@ public partial class MainWindow
         // or inherit" is two controls over one nullable field, which only reads back as a pair.
         var overrideTabWidth = _settings.TabWidth is not null;
         double tabWidth = _settings.TabWidth ?? new NoteConfig().TabWidth;
+
+        // Not an override, so no paired "override it?" checkbox: the tab strip is Puffinote's own chrome and
+        // there is no editor setting underneath it to inherit. Unset simply means shown.
+        var showTabBar = _settings.ShowTabBar ?? true;
 
         // Each editor's own file, read fresh: it may have changed since the tabs were opened — the
         // standalone app may have written it, or the user may have edited it by hand from this very dialog.
@@ -58,6 +67,12 @@ public partial class MainWindow
         [
             new SettingsTab("General", new SettingsEditorView(
             [
+                new SettingsSection("Appearance",
+                [
+                    new ToggleSetting("Show the tab bar",
+                        () => showTabBar, v => showTabBar = v,
+                        "Off hides the strip of open documents. They stay open — switch with ⌘⇧[ / ⌘⇧] or ⌘O."),
+                ]),
                 new SettingsSection("Notes",
                 [
                     new ToggleSetting("Override the note editor's tab width",
@@ -99,7 +114,11 @@ public partial class MainWindow
         SaveIfChanged(plainText, before.PlainText, () => plainText.Save());
         SaveIfChanged(tasks, before.Tasks, () => tasks.Save());
 
-        _settings = _settings with { TabWidth = overrideTabWidth ? (int)tabWidth : null };
+        _settings = _settings with
+        {
+            TabWidth = overrideTabWidth ? (int)tabWidth : null,
+            ShowTabBar = showTabBar,
+        };
         _settings.SaveUser();
 
         // Re-resolve against the open notebook's own file and push the result at the tab host, so open

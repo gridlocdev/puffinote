@@ -89,6 +89,13 @@ public partial class MainWindow
                 () => _tabHost.ActivateRelative(-1)),
             new("shell.toggleSidebar", "Toggle Sidebar", "Show or hide the sidebar", Bound("shell.toggleSidebar", Shortcut.Cmd(Key.OemBackslash)),
                 ToggleSidebar),
+
+            // The session-scoped twin of the Preferences toggle: this flips what you're looking at now and
+            // writes nothing, so hiding the strip to read one long note doesn't quietly become your default.
+            // No gesture out of the box — there's no platform convention for it, and unlike ⌘\ for the sidebar
+            // it isn't reserved, so anyone who wants a key can bind one in the shortcuts editor.
+            new("shell.toggleTabBar", "Toggle Tab Bar", "Show or hide the tab strip for this session",
+                Bound("shell.toggleTabBar", null), ToggleTabBar),
             new("shell.toggleEditorToolbar", "Toggle Editor Toolbar", "Show or hide the formatting toolbar over a note",
                 Bound("shell.toggleEditorToolbar", null), ToggleEditorToolbar, () => _tabHost.ActivePane is MarkdownPane, icon: "type"),
             new("shell.focusTree", "Focus Sidebar", "Move keyboard focus to the sidebar's file tree",
@@ -212,7 +219,7 @@ public partial class MainWindow
                 Items =
                 {
                     new NativeMenuItem { Header = "File", Menu = BuildNativeMenu("shell.openNotebook", "shell.quickOpen", "shell.newNote", "shell.newSpreadsheet", "shell.newFolder", "shell.save", "shell.closeTab", "shell.closeOtherTabs", "shell.closeAllTabs") },
-                    new NativeMenuItem { Header = "View", Menu = BuildNativeMenu("shell.commandPalette", "shell.toggleSidebar", "shell.focusTree", "shell.focusEditor", "shell.toggleEditorToolbar", "shell.nextTab", "shell.prevTab", "shell.preferences") },
+                    new NativeMenuItem { Header = "View", Menu = BuildNativeMenu("shell.commandPalette", "shell.toggleSidebar", "shell.toggleTabBar", "shell.focusTree", "shell.focusEditor", "shell.toggleEditorToolbar", "shell.nextTab", "shell.prevTab", "shell.preferences") },
                     new NativeMenuItem { Header = "Help", Menu = BuildNativeMenu("shell.shortcuts", "shell.about") },
                 },
             });
@@ -229,7 +236,7 @@ public partial class MainWindow
             Items =
             {
                 new MenuItem { Header = "_File", ItemsSource = BuildMenuItems("shell.openNotebook", "shell.quickOpen", "shell.newNote", "shell.newSpreadsheet", "shell.newFolder", "shell.save", "shell.closeTab", "shell.closeOtherTabs", "shell.closeAllTabs") },
-                new MenuItem { Header = "_View", ItemsSource = BuildMenuItems("shell.commandPalette", "shell.toggleSidebar", "shell.focusTree", "shell.focusEditor", "shell.toggleEditorToolbar", "shell.nextTab", "shell.prevTab", "shell.preferences") },
+                new MenuItem { Header = "_View", ItemsSource = BuildMenuItems("shell.commandPalette", "shell.toggleSidebar", "shell.toggleTabBar", "shell.focusTree", "shell.focusEditor", "shell.toggleEditorToolbar", "shell.nextTab", "shell.prevTab", "shell.preferences") },
                 new MenuItem { Header = "_Help", ItemsSource = BuildMenuItems("shell.shortcuts", "shell.about") },
             },
         };
@@ -371,6 +378,14 @@ public partial class MainWindow
             OpenNotebook(path);
         }
     }
+
+    /// <summary>
+    /// Show or hide the tab strip for this session only (PRD §7.3) — the persistent choice lives in
+    /// Preferences. Deliberately enabled with no tabs open, even though the strip stays hidden either way:
+    /// the command sets what happens when you next open a file, and greying it out would make the state
+    /// unsettable exactly when you're on the empty shell.
+    /// </summary>
+    private void ToggleTabBar() => _tabHost.ShowTabBar = !_tabHost.ShowTabBar;
 
     /// <summary>Toggle the formatting toolbar over the active note (shown by default). No-op for other panes.</summary>
     private void ToggleEditorToolbar()
