@@ -26,7 +26,7 @@ public partial class MainWindow : Window
     // Puffinote's per-user override settings (PRD §7.5), loaded once at startup. Resolved against each
     // notebook's own .puffinote/settings.json on open and handed to the tab host, which layers them over an
     // editor's own config when a note/sheet pane opens.
-    private readonly PuffinoteSettings _settings = PuffinoteSettings.LoadUser();
+    private PuffinoteSettings _settings = PuffinoteSettings.LoadUser();
 
     // The user's custom shell shortcuts (PRD §7.6), edited in the shortcuts editor. BuildShellCommands
     // resolves each non-reserved command's gesture through this, so a rebound key reaches menu + palette +

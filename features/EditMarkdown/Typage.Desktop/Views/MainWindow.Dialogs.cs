@@ -1,5 +1,5 @@
 using Avalonia.Controls;
-using Avalonia.Layout;
+using Puffinote.Components.Controls;
 using Puffinote.Components.Overlays;
 using Typage.Control.Controls;
 using Typage.Desktop.Services;
@@ -89,74 +89,71 @@ public partial class MainWindow
         await _overlayHost.ShowModalAsync(
             new ConfirmDialog(heading: string.Empty, message: message, confirmLabel: confirmLabel, denyLabel: denyLabel, confirmIsDefault: false));
 
-    /// <summary>The Preferences dialog (PRD §7.9): theme, tab width, and toolbar visibility.</summary>
+    /// <summary>
+    /// The Preferences dialog (PRD §7.9) — every option in Typage's <c>settings.json</c> that is a
+    /// preference rather than a record of what you did (the recent-files list is the latter, and the
+    /// File ▸ Open Recent menu is where it belongs). Built from the shared
+    /// <see cref="SettingsEditorView"/> so the five apps' Preferences read as one surface; this method
+    /// keeps only what is Typage's own — which settings exist, and what applying one means for the live
+    /// editor, which is more than writing a value for most of them.
+    /// </summary>
     private async void ShowSettings()
     {
         var s = _settings.Settings;
+        var form = BuildSettingsForm(s);
 
-        var themeCombo = new ComboBox
-        {
-            ItemsSource = new[] { ThemeLabel(AppTheme.System), ThemeLabel(AppTheme.Light), ThemeLabel(AppTheme.Dark), ThemeLabel(AppTheme.HighContrast) },
-            SelectedIndex = (int)s.Theme,
-            HorizontalAlignment = HorizontalAlignment.Stretch,
-        };
-        var tabWidth = new NumericUpDown { Minimum = 1, Maximum = 8, Increment = 1, Value = s.TabWidth, FormatString = "0" };
-        var padding = new NumericUpDown { Minimum = 0, Maximum = 200, Increment = 4, Value = s.EditorPadding, FormatString = "0" };
-        var paddingY = new NumericUpDown { Minimum = 0, Maximum = 200, Increment = 4, Value = s.EditorPaddingVertical, FormatString = "0" };
-        var autosave = new NumericUpDown { Minimum = 0, Maximum = 600, Increment = 5, Value = s.AutosaveSeconds, FormatString = "0" };
-        var completedTasks = new ComboBox
-        {
-            ItemsSource = new[] { "Leave in place", "Move to top", "Move to bottom" },
-            SelectedIndex = (int)s.CompletedTaskSort,
-            HorizontalAlignment = HorizontalAlignment.Stretch,
-        };
-        var viewMode = new ComboBox
-        {
-            ItemsSource = new[]
-            {
-                ViewModeLabel(MarkdownEditor.ViewMode.Rich),
-                ViewModeLabel(MarkdownEditor.ViewMode.Formatted),
-                ViewModeLabel(MarkdownEditor.ViewMode.RawText),
-            },
-            SelectedIndex = (int)s.View,
-            HorizontalAlignment = HorizontalAlignment.Stretch,
-        };
-        var showToolbar = new CheckBox { Content = "Show the formatting toolbar", IsChecked = s.ShowToolbar };
-
-        var grid = new Grid
-        {
-            RowDefinitions = new RowDefinitions("Auto,Auto,Auto,Auto,Auto,Auto,Auto,Auto"),
-            ColumnDefinitions = new ColumnDefinitions("Auto,*"),
-            Width = 340,
-        };
-        AddSettingRow(grid, 0, "Theme", themeCombo);
-        AddSettingRow(grid, 1, "Tab width", tabWidth);
-        AddSettingRow(grid, 2, "Horizontal padding (px)", padding);
-        AddSettingRow(grid, 3, "Vertical padding (px)", paddingY);
-        AddSettingRow(grid, 4, "Autosave (sec, 0 = off)", autosave);
-        AddSettingRow(grid, 5, "Completed tasks", completedTasks);
-        AddSettingRow(grid, 6, "Default view", viewMode);
-        Grid.SetRow(showToolbar, 7);
-        Grid.SetColumnSpan(showToolbar, 2);
-        showToolbar.Margin = new Avalonia.Thickness(0, 8, 0, 0);
-        grid.Children.Add(showToolbar);
-
-        if (!await _overlayHost.ShowModalAsync(new FormDialog("Preferences", grid)))
+        if (!await _overlayHost.ShowModalAsync(new FormDialog("Preferences", form)))
         {
             return; // Cancel / Esc — leave settings untouched
         }
 
-        var theme = (AppTheme)System.Math.Clamp(themeCombo.SelectedIndex, 0, 3);
-        s.Theme = theme;
-        ApplyTheme(theme);
-        s.TabWidth = (int)(tabWidth.Value ?? 4);
+        form.Commit();
+        ApplySettings(s);
+        _settings.Save();
+    }
+
+    /// <summary>The Preferences form over <paramref name="s"/> (also the seam the UI tests drive).</summary>
+    internal static SettingsEditorView BuildSettingsForm(AppSettings s) => new(
+    [
+        new SettingsSection("Appearance",
+        [
+            ChoiceSetting.ForEnum<AppTheme>("Theme", () => s.Theme, v => s.Theme = v,
+                [ThemeLabel(AppTheme.System), ThemeLabel(AppTheme.Light), ThemeLabel(AppTheme.Dark), ThemeLabel(AppTheme.HighContrast)]),
+            ChoiceSetting.ForEnum<MarkdownEditor.ViewMode>("Default view", () => s.View, v => s.View = v,
+                [
+                    ViewModeLabel(MarkdownEditor.ViewMode.Rich),
+                    ViewModeLabel(MarkdownEditor.ViewMode.Formatted),
+                    ViewModeLabel(MarkdownEditor.ViewMode.RawText),
+                ]),
+            new ToggleSetting("Show the formatting toolbar", () => s.ShowToolbar, v => s.ShowToolbar = v),
+        ]),
+        new SettingsSection("Editor",
+        [
+            new NumberSetting("Tab width", () => s.TabWidth, v => s.TabWidth = (int)v, 1, 8),
+            new NumberSetting("Horizontal padding", () => s.EditorPadding, v => s.EditorPadding = (int)v, 0, 200, step: 4, hint: "Pixels of inset on each side of the text."),
+            new NumberSetting("Vertical padding", () => s.EditorPaddingVertical, v => s.EditorPaddingVertical = (int)v, 0, 200, step: 4, hint: "Pixels of inset above and below the text."),
+            new NumberSetting("Reading width", () => s.EditorMaxContentWidth, v => s.EditorMaxContentWidth = (int)v, 0, 4000, step: 20,
+                hint: "The widest the text column may grow, in pixels. 0 uses the full window width."),
+        ]),
+        new SettingsSection("Editing",
+        [
+            new NumberSetting("Autosave", () => s.AutosaveSeconds, v => s.AutosaveSeconds = (int)v, 0, 600, step: 5,
+                hint: "Seconds between crash-recovery snapshots. 0 turns autosave off."),
+            ChoiceSetting.ForEnum<MarkdownEditor.CompletedTaskSortMode>("Completed tasks",
+                () => s.CompletedTaskSort, v => s.CompletedTaskSort = v,
+                ["Leave in place", "Move to top", "Move to bottom"]),
+        ]),
+    ]);
+
+    /// <summary>Push the committed settings into the live window — most of them mean more than a value.</summary>
+    private void ApplySettings(AppSettings s)
+    {
+        ApplyTheme(s.Theme);
         EditorView.Editor.IndentWidth = s.TabWidth;
-        s.EditorPadding = (int)(padding.Value ?? 20);
         EditorView.Editor.HorizontalPadding = s.EditorPadding;
-        EditorView.Editor.MaxContentWidth = s.EditorMaxContentWidth;
-        s.EditorPaddingVertical = (int)(paddingY.Value ?? 14);
         EditorView.Editor.VerticalPadding = s.EditorPaddingVertical;
-        s.ShowToolbar = showToolbar.IsChecked == true;
+        EditorView.Editor.MaxContentWidth = s.EditorMaxContentWidth;
+
         if (!_focusMode)
         {
             EditorView.ShowCommandBar = s.ShowToolbar;
@@ -164,27 +161,10 @@ public partial class MainWindow
 
         _toggleToolbarItem?.IsChecked = s.ShowToolbar;
 
-        s.AutosaveSeconds = (int)(autosave.Value ?? 30);
         SetupAutosave(); // pick up the new interval (or disable when 0)
-
-        s.CompletedTaskSort = (MarkdownEditor.CompletedTaskSortMode)System.Math.Clamp(completedTasks.SelectedIndex, 0, 2);
         EditorView.Editor.CompletedTaskSorting = s.CompletedTaskSort;
 
         // Applies the mode; the surface's ViewModeChanged then syncs the View ▸ radio and persists it.
-        EditorView.ViewMode = (MarkdownEditor.ViewMode)System.Math.Clamp(viewMode.SelectedIndex, 0, 2);
-
-        _settings.Save();
-    }
-
-    private static void AddSettingRow(Grid grid, int row, string label, Avalonia.Controls.Control control)
-    {
-        var text = new TextBlock { Text = label, VerticalAlignment = VerticalAlignment.Center, Margin = new Avalonia.Thickness(0, 6, 12, 0), MinWidth = 90 };
-        Grid.SetRow(text, row);
-        Grid.SetColumn(text, 0);
-        Grid.SetRow(control, row);
-        Grid.SetColumn(control, 1);
-        control.Margin = new Avalonia.Thickness(0, 6, 0, 0);
-        grid.Children.Add(text);
-        grid.Children.Add(control);
+        EditorView.ViewMode = s.View;
     }
 }

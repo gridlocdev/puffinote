@@ -225,6 +225,7 @@ public sealed class AppCommands
         .. ZoomCommands.Build(() => e.Zoom, zoom => e.Zoom = zoom),
         new("view.freezePanes", "Freeze Panes", "Keep header rows and columns in view.", null, () => e.ToggleFreezePanes(), icon: "layout-grid"),
         new("view.radialSettings", "Radial Menu Settings…", "Configure the hold-right-click radial command menu.", null, () => e.ShowRadialSettings(), icon: "settings-2"),
+        new("app.preferences", "Preferences…", "Zoom, the command bar, and the radial menu.", Shortcut.Cmd(Key.OemComma), () => e.ShowPreferences(), icon: "settings-2"),
 
         // Insert (merge)
         new("format.merge", "Merge Cells", "Combine the selected cells into one.", null, () => MergeCells(e),

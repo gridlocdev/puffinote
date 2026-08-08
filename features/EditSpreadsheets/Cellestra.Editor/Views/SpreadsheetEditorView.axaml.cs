@@ -62,6 +62,9 @@ public partial class SpreadsheetEditorView : UserControl, IAppEnvironment
     /// <summary>Raised when the radial-menu configuration changes (via its settings), so a host can persist it.</summary>
     public event EventHandler? RadialConfigChanged;
 
+    /// <summary>Raised when the Preferences dialog is accepted, so the host writes its settings file.</summary>
+    public event EventHandler? PreferencesChanged;
+
     // Gated shortcut commands backing this control's KeyBindings. A command backs off (CanExecute=false)
     // while a modal overlay is open or a focused text input owns the key, so the overlay/editor handles
     // it instead (see RefreshCommandStates).
@@ -219,6 +222,46 @@ public partial class SpreadsheetEditorView : UserControl, IAppEnvironment
             RadialConfig = updated;
             RadialConfigChanged?.Invoke(this, EventArgs.Empty);
         }
+    }
+
+    /// <summary>
+    /// Open the Preferences dialog over the options the host keeps in Cellestra's <c>settings.json</c>,
+    /// then apply and persist any change. Reached from the command catalog — see <c>app.preferences</c>.
+    /// <para>
+    /// It covers the file's <em>preferences</em>, not its session state: the recent-files list and the
+    /// remembered window size are records of what you did, and the window size in particular is rewritten
+    /// from the real window on close, so a value typed here could only ever be discarded. The radial
+    /// menu's bindings have an editor of their own (View ▸ Radial Menu Settings…) that a row in a form
+    /// couldn't improve on — the overlay host shows one modal at a time, so a nested one isn't offered.
+    /// </para>
+    /// </summary>
+    public async void ShowPreferences()
+    {
+        var form = new SettingsEditorView(
+        [
+            new SettingsSection("View",
+            [
+                new NumberSetting("Zoom", () => Zoom * 100, v => Zoom = v / 100, 25, 400, step: 10,
+                    hint: "Percent. ⌘+ and ⌘− change it while you work; this is where it starts."),
+                new ToggleSetting("Collapse the command bar", () => CommandBarCollapsed, v => CommandBarCollapsed = v,
+                    "Fold the toolbar to its slim handle, for more grid."),
+            ]),
+            new SettingsSection("Radial menu",
+            [
+                new NumberSetting("Segments", () => RadialConfig.SegmentCount,
+                    v => RadialConfig = RadialConfig with { SegmentCount = (int)v },
+                    RadialMenuConfig.MinSegments, RadialMenuConfig.MaxSegments,
+                    hint: "How many wedges the hold-right-click menu is divided into. View ▸ Radial Menu Settings… binds a command to each."),
+            ]),
+        ]);
+
+        if (!await ShowModalAsync(new FormDialog("Preferences", form)))
+        {
+            return; // Cancel / Esc — leave settings untouched
+        }
+
+        form.Commit();
+        PreferencesChanged?.Invoke(this, EventArgs.Empty);
     }
 
     /// <summary>Esc → dismiss whatever overlay is open: cancel an internal modal (so its

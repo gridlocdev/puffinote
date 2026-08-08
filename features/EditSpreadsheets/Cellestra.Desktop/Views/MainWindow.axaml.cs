@@ -18,7 +18,7 @@ namespace Cellestra.Desktop.Views;
 /// </summary>
 public partial class MainWindow : Window, IEditorHost
 {
-    private readonly SettingsService _settingsService = new();
+    private readonly SettingsService _settingsService;
     private AppSettings _settings;
     private FileLock? _fileLock;
     private bool _fileBusy;
@@ -28,9 +28,20 @@ public partial class MainWindow : Window, IEditorHost
     private readonly List<RelayCommand> _menuGatedCommands = [];
 
     public MainWindow()
+        : this(null)
+    {
+    }
+
+    /// <summary>
+    /// The window over a given settings store. Passing one points both load and save somewhere else — the
+    /// seam the UI tests use to run against a scratch profile, so a headless window neither inherits the
+    /// developer's preferences nor writes its own back over them (the other apps' windows take the same).
+    /// </summary>
+    public MainWindow(SettingsService? settingsService)
     {
         InitializeComponent();
 
+        _settingsService = settingsService ?? new SettingsService();
         _settings = _settingsService.Load();
         Width = _settings.WindowWidth;
         Height = _settings.WindowHeight;
@@ -44,6 +55,7 @@ public partial class MainWindow : Window, IEditorHost
         Editor.CommandStateChanged += (_, _) => RefreshCommandStates();
         Editor.CommandBarCollapsedChanged += (_, _) => PersistSettings();
         Editor.RadialConfigChanged += (_, _) => PersistSettings();
+        Editor.PreferencesChanged += (_, _) => PersistSettings();
 
         BuildNativeMenu();
         Closing += OnWindowClosing;
@@ -195,7 +207,7 @@ public partial class MainWindow : Window, IEditorHost
         menu.Items.Add(Submenu("Data", "data.sortAsc", "data.sortDesc", "data.customSort", "data.sortAndFilter", null,
             "data.toggleFilter", "data.clearFilter", null, "data.createTable", "data.autofitColumns", "data.removeDuplicates",
             "data.textToColumns", "data.validation", null, "formula.recalc"));
-        menu.Items.Add(Submenu("View", "view.commandPalette", "view.goToSheet", null, "view.zoomIn", "view.zoomOut", "view.actualSize", null, "view.freezePanes", null, "view.radialSettings"));
+        menu.Items.Add(Submenu("View", "view.commandPalette", "view.goToSheet", null, "view.zoomIn", "view.zoomOut", "view.actualSize", null, "view.freezePanes", null, "view.radialSettings", "app.preferences"));
         menu.Items.Add(Submenu("Help", "help.shortcuts", null, "help.about"));
         NativeMenu.SetMenu(this, menu);
     }

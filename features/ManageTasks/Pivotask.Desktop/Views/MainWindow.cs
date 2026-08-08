@@ -9,6 +9,7 @@ using Pivotask.Control.Commands;
 using Pivotask.Control.Views;
 using Pivotask.Core;
 using Pivotask.Core.Serialization;
+using Pivotask.Desktop.Services;
 using Puffinote.Components.Commands;
 using Puffinote.Components.Overlays;
 using Puffinote.Components.Theming;
@@ -21,7 +22,7 @@ namespace Pivotask.Desktop.Views;
 /// and the status bar. Every command that acts on the board comes from the control's catalog, so this
 /// window and a Puffinote tab are the same editor.
 /// </summary>
-public sealed class MainWindow : Window
+public sealed partial class MainWindow : Window
 {
     private static readonly FilePickerFileType BoardType = new("Pivotask board")
     {
@@ -31,17 +32,26 @@ public sealed class MainWindow : Window
     };
 
     private readonly TaskBoardView _view;
+    private readonly SettingsService _settings;
     private readonly TextBlock _status = new();
     private readonly OverlayHost _overlay = new() { Background = new SolidColorBrush(Color.FromArgb(0x40, 0, 0, 0)) };
     private readonly Dictionary<string, AppCommand> _commands;
     private bool _closingConfirmed;
 
     public MainWindow()
+        : this(new SettingsService())
+    {
+    }
+
+    public MainWindow(SettingsService settings)
     {
         _view = BoardView;
+        _settings = settings;
         Title = "Untitled board";
         Width = 1000;
         Height = 680;
+
+        ApplySettings(_settings.Settings);
 
         _commands = _view.EditingCommands.ToDictionary(c => c.Id, StringComparer.Ordinal);
         _view.DocumentChanged += (_, _) => UpdateChrome();
@@ -110,6 +120,8 @@ public sealed class MainWindow : Window
         file.Items.Add(new Separator());
         file.Items.Add(Run("_Save", () => _ = SaveAsync(), Shortcut.Cmd(Key.S).ToGesture()));
         file.Items.Add(Run("Save _As…", () => _ = SaveAsAsync(), Shortcut.Cmd(Key.S, KeyModifiers.Shift).ToGesture()));
+        file.Items.Add(new Separator());
+        file.Items.Add(Run("_Preferences…", ShowSettings, PreferencesGesture));
 
         var edit = new MenuItem { Header = "_Edit" };
         edit.Items.Add(Item("_Undo", "edit.undo"));
@@ -158,7 +170,11 @@ public sealed class MainWindow : Window
         KeyBindings.Add(new KeyBinding { Gesture = Shortcut.Cmd(Key.O).ToGesture(), Command = new RelayCommand(() => _ = OpenAsync()) });
         KeyBindings.Add(new KeyBinding { Gesture = Shortcut.Cmd(Key.S).ToGesture(), Command = new RelayCommand(() => _ = SaveAsync()) });
         KeyBindings.Add(new KeyBinding { Gesture = Shortcut.Cmd(Key.S, KeyModifiers.Shift).ToGesture(), Command = new RelayCommand(() => _ = SaveAsAsync()) });
+        KeyBindings.Add(new KeyBinding { Gesture = PreferencesGesture, Command = new RelayCommand(ShowSettings) });
     }
+
+    /// <summary>⌘, (Ctrl+, off macOS) — the platform's Preferences chord, and the same one in every app here.</summary>
+    private static KeyGesture PreferencesGesture => Shortcut.Cmd(Key.OemComma).ToGesture();
 
     private Border BuildStatusBar()
     {

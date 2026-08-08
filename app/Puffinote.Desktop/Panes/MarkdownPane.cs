@@ -13,19 +13,14 @@ namespace Puffinote.Desktop.Panes;
 /// is composition, not a fork: Puffinote adds no Markdown logic — editing, undo, and rendering are the
 /// editor's; save mechanics are the session's.
 /// </summary>
-internal sealed class MarkdownPane : IEditorPane
+internal sealed class MarkdownPane : IEditorPane, IConfigurablePane
 {
     private readonly MarkdownEditorView _view = new();
     private readonly MarkdownDocumentSession _session = new();
 
     public MarkdownPane(NoteConfig? config = null)
     {
-        // Apply the resolved note settings (PRD §7.5): Typage's own config as the base, with any Puffinote
-        // override already layered in. A default config just reproduces the editor's own defaults.
-        var cfg = config ?? new NoteConfig();
-        _view.Editor.IndentWidth = cfg.TabWidth;
-        _view.Editor.HorizontalPadding = cfg.EditorPadding;
-        _view.Editor.VerticalPadding = cfg.EditorPaddingVertical;
+        ApplyConfig(config ?? new NoteConfig());
 
         // Show Typage's formatting toolbar over the editor by default (the standalone app has its own; the
         // embeddable control keeps it off unless a host asks). Toggle via the shell's View command.
@@ -33,6 +28,19 @@ internal sealed class MarkdownPane : IEditorPane
 
         // The editor raises TextChanged on every edit; re-surface it so the shell repaints the dirty dot.
         _view.TextChanged += (_, _) => DirtyChanged?.Invoke(this, EventArgs.Empty);
+    }
+
+    /// <summary>
+    /// Apply the resolved note settings (PRD §7.5): Typage's own config as the base, with any Puffinote
+    /// override already layered in. A default config just reproduces the editor's own defaults. Called at
+    /// construction and again whenever the overrides change, so a Preferences edit reaches the note you
+    /// are looking at rather than only the next one you open.
+    /// </summary>
+    public void ApplyConfig(NoteConfig config)
+    {
+        _view.Editor.IndentWidth = config.TabWidth;
+        _view.Editor.HorizontalPadding = config.EditorPadding;
+        _view.Editor.VerticalPadding = config.EditorPaddingVertical;
     }
 
     /// <summary>Whether the formatting toolbar is shown over the editor (shell View ▸ Toggle command).</summary>

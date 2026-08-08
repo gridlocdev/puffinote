@@ -141,6 +141,9 @@ public interface IAppEnvironment
     /// <summary>Open the radial command menu's settings (segment count, labels, and per-segment bindings).</summary>
     void ShowRadialSettings();
 
+    /// <summary>Open Preferences — the options the host keeps in Cellestra's settings file.</summary>
+    void ShowPreferences();
+
     /// <summary>Show the About screen (app name, pronunciation, description, version, license).</summary>
     void ShowAbout();
 

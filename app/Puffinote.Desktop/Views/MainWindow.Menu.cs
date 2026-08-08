@@ -85,6 +85,14 @@ public partial class MainWindow
                 () => _tabHost.ActivePane is not null, icon: "pen-line"),
             new("shell.shortcuts", "Keyboard Shortcuts…", "View and customize keyboard shortcuts", Bound("shell.shortcuts", null),
                 ShowShortcutsEditor),
+            // ⌘, — the platform's Preferences chord, and the same one in every app in the family. An embedded
+            // editor that publishes its own ⌘, (Cellestra does) is shadowed here rather than silently racing
+            // us: ApplyShellShortcuts binds the shell's commands before BindActivePaneShortcuts adds the
+            // pane's, and the first matching binding handles the key. That is the right way round — inside
+            // Puffinote, ⌘, is Puffinote's preferences — and the editor's own stays one ⌘K away. Deliberately
+            // not reserved: the reserved set is fixed and documented (PRD §7.6), and this is rebindable.
+            new("shell.preferences", "Preferences…", "Puffinote's own settings — the overrides it layers over each editor's",
+                Bound("shell.preferences", Shortcut.Cmd(Key.OemComma)), ShowSettings, icon: "settings-2"),
             new("shell.about", "About Puffinote", "About this app", null, ShowAbout),
         ];
         _shellById = _shellCommands.ToDictionary(c => c.Id);
@@ -190,7 +198,7 @@ public partial class MainWindow
                 Items =
                 {
                     new NativeMenuItem { Header = "File", Menu = BuildNativeMenu("shell.openNotebook", "shell.quickOpen", "shell.newNote", "shell.newSpreadsheet", "shell.newFolder", "shell.save", "shell.closeTab", "shell.closeAllTabs") },
-                    new NativeMenuItem { Header = "View", Menu = BuildNativeMenu("shell.commandPalette", "shell.toggleSidebar", "shell.focusTree", "shell.focusEditor", "shell.toggleEditorToolbar", "shell.nextTab", "shell.prevTab") },
+                    new NativeMenuItem { Header = "View", Menu = BuildNativeMenu("shell.commandPalette", "shell.toggleSidebar", "shell.focusTree", "shell.focusEditor", "shell.toggleEditorToolbar", "shell.nextTab", "shell.prevTab", "shell.preferences") },
                     new NativeMenuItem { Header = "Help", Menu = BuildNativeMenu("shell.shortcuts", "shell.about") },
                 },
             });
@@ -207,7 +215,7 @@ public partial class MainWindow
             Items =
             {
                 new MenuItem { Header = "_File", ItemsSource = BuildMenuItems("shell.openNotebook", "shell.quickOpen", "shell.newNote", "shell.newSpreadsheet", "shell.newFolder", "shell.save", "shell.closeTab", "shell.closeAllTabs") },
-                new MenuItem { Header = "_View", ItemsSource = BuildMenuItems("shell.commandPalette", "shell.toggleSidebar", "shell.focusTree", "shell.focusEditor", "shell.toggleEditorToolbar", "shell.nextTab", "shell.prevTab") },
+                new MenuItem { Header = "_View", ItemsSource = BuildMenuItems("shell.commandPalette", "shell.toggleSidebar", "shell.focusTree", "shell.focusEditor", "shell.toggleEditorToolbar", "shell.nextTab", "shell.prevTab", "shell.preferences") },
                 new MenuItem { Header = "_Help", ItemsSource = BuildMenuItems("shell.shortcuts", "shell.about") },
             },
         };

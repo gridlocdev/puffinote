@@ -71,6 +71,7 @@ internal sealed class FakeAppEnvironment : IAppEnvironment
     public void ToggleFreezePanes() => throw Nope();
     public void ShowKeyboardShortcuts() => throw Nope();
     public void ShowRadialSettings() => throw Nope();
+    public void ShowPreferences() => throw Nope();
     public void ShowAbout() => throw Nope();
     public void ShowMessage(string heading, string message) => throw Nope();
 

@@ -94,7 +94,7 @@ internal sealed class TabHost : UserControl
     /// <summary>
     /// Puffinote's override settings, layered over each editor's own config (PRD §7.5). Setting this resolves
     /// the note config once (reading Typage's own settings file), so opening notes doesn't re-read it per tab
-    /// (P7); MainWindow assigns it per notebook.
+    /// (P7); MainWindow assigns it per notebook, and again when Preferences changes them.
     /// </summary>
     public PuffinoteSettings Settings
     {
@@ -103,6 +103,13 @@ internal sealed class TabHost : UserControl
         {
             field = value;
             _noteConfig = NoteConfig.Resolve(value);
+
+            // Re-seed the tabs that are already open. Without this a settings change would only ever show
+            // up in the next document opened, which reads as the setting not having worked.
+            foreach (var tab in _tabs)
+            {
+                (tab.Pane as IConfigurablePane)?.ApplyConfig(_noteConfig);
+            }
         }
     } = new();
 
