@@ -174,7 +174,7 @@ Everything reachable in the command bar is also reachable in the menu bar, the C
 | **Insert** | Rows Above · Rows Below · Columns Left · Columns Right · Sheet · Table (⌘T) · Function… (⌃⌥F) · Named Range… · Hyperlink… |
 | **Format** | Cells… (⌘1) · Number → … · Bold (⌘B), Italic (⌘I), Underline (⌘U), Strikethrough (⌘⇧X) · Alignment → … · Borders → … · Merge Cells · Rows → Height…, Hide (⌃9), Unhide (⌃⇧9) · Columns → Width…, Hide (⌃0), Unhide (⌃⇧0) |
 | **Data** | Sort… · Sort & Filter… (⇧⌘F) · Filter · Clear Filter · Remove Duplicates… · Text to Columns… · Data Validation… · Recalculate (F9) · Calculation → Automatic / Manual · Named Ranges… · Import CSV… · Export CSV… |
-| **View** | Command Palette… (⌘K) · Go to Sheet… (⌘⇧P) · Zoom In (⌘=) · Zoom Out (⌘−) · Actual Size (⌘0) · Gridlines · Headers · Formula Bar · Status Bar · Freeze Panes |
+| **View** | Command Palette… (⌘K) · Go to Sheet… (⌘⇧P) · Zoom In (⌘=) · Zoom Out (⌘−) · Actual Size (⌥⌘0) · Gridlines · Headers · Formula Bar · Status Bar · Freeze Panes |
 | **Window** | Minimize (⌘M) · Zoom · (standard macOS window items) |
 | **Help** | Cellestra Help · Function Reference… |
 
@@ -275,7 +275,7 @@ Shortcuts use macOS modifiers (⌘ Command, ⇧ Shift, ⌥ Option, ⌃ Control).
 | AutoSum | ⌥⌘= |
 | Recalculate all | F9 |
 | Find / Find & Replace | ⌘F / ⌥⌘F |
-| Zoom in / out / reset | ⌘= / ⌘− / ⌘0 |
+| Zoom in / out / reset | ⌘= / ⌘− / ⌥⌘0 |
 | Keyboard Shortcuts reference | ⌘? |
 
 ### 6.5 Status bar

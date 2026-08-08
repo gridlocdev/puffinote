@@ -94,7 +94,7 @@ public sealed partial class PlainTextEditor
                 DrawRowMatches(context, palette, line, segment, segmentStartColumn, y);
 
                 var formatted = new FormattedText(Expand(rowText, segmentStartColumn), CultureInfo.CurrentCulture,
-                    FlowDirection.LeftToRight, _typeface, FontSize, palette.Text);
+                    FlowDirection.LeftToRight, _typeface, ScaledFontSize, palette.Text);
                 context.DrawText(formatted, new Point(TextLeft - _offset.X, y + ((_rowHeight - formatted.Height) / 2)));
             }
         }
@@ -274,7 +274,7 @@ public sealed partial class PlainTextEditor
             }
 
             var text = new FormattedText((line + 1).ToString(CultureInfo.InvariantCulture), CultureInfo.InvariantCulture,
-                FlowDirection.LeftToRight, _typeface, FontSize,
+                FlowDirection.LeftToRight, _typeface, ScaledFontSize,
                 row == caretRow ? palette.Text : palette.GutterText);
             double y = (row * _rowHeight) - _offset.Y;
             using (context.PushOpacity(opacity))

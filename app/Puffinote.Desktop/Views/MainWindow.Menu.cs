@@ -148,25 +148,32 @@ public partial class MainWindow
     {
         foreach (var command in _tabHost.ActivePane?.Commands ?? [])
         {
-            if (command.Shortcut is not { YieldsToTextInput: false } shortcut)
+            // Every chord the command answers to, not just the advertised one: Zoom In is spelled ⌘= in the
+            // palette but must also fire on the ⇧= that carries the "+" glyph, and on the keypad's key.
+            foreach (var shortcut in command.AllShortcuts)
             {
-                continue;
+                if (shortcut.YieldsToTextInput)
+                {
+                    continue;
+                }
+
+                var gesture = shortcut.ToGesture();
+                if (_reservedBindings.Any(b => b.Gesture.Equals(gesture)))
+                {
+                    continue;
+                }
+
+                var captured = command;
+                KeyBindings.Add(new KeyBinding
+                {
+                    Gesture = gesture,
+
+                    // Stand down while an overlay owns the screen — the shell's palette/dialogs, or one of
+                    // the editor's own (the link prompt) — so a chord typed into a text field can't fire
+                    // behind it.
+                    Command = new RelayCommand(captured.Execute, () => captured.IsEnabled && !AnyOverlayOpen),
+                });
             }
-
-            var gesture = shortcut.ToGesture();
-            if (_reservedBindings.Any(b => b.Gesture.Equals(gesture)))
-            {
-                continue;
-            }
-
-            KeyBindings.Add(new KeyBinding
-            {
-                Gesture = gesture,
-
-                // Stand down while an overlay owns the screen — the shell's palette/dialogs, or one of the
-                // editor's own (the link prompt) — so a chord typed into a text field can't fire behind it.
-                Command = new RelayCommand(command.Execute, () => command.IsEnabled && !AnyOverlayOpen),
-            });
         }
     }
 

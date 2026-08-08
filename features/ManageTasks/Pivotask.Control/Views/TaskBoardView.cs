@@ -27,6 +27,7 @@ public enum BoardLayout
 public sealed class TaskBoardView : UserControl
 {
     private readonly ContentControl _surface = new();
+    private readonly LayoutTransformControl _zoomHost = new();
     private readonly TextBox _search = new() { PlaceholderText = "Search", Width = 200 };
     private readonly StackPanel _filters = new() { Orientation = Orientation.Horizontal, Spacing = 4 };
 
@@ -48,10 +49,15 @@ public sealed class TaskBoardView : UserControl
         strip.Children.Add(_search);
         strip.Children.Add(BuildLayoutSwitch());
 
+        // The board is scaled, the strip above it is not: zoom magnifies the tasks, and a filter row that
+        // grew with them would eat the room the reader zoomed out to get. A LayoutTransformControl (rather
+        // than a RenderTransform) is what makes the columns re-measure at the new size, so the cards
+        // re-wrap and the scroll extent is honest instead of a magnified picture of the old layout.
+        _zoomHost.Child = _surface;
         var root = new DockPanel { LastChildFill = true };
         DockPanel.SetDock(strip, Dock.Top);
         root.Children.Add(strip);
-        root.Children.Add(_surface);
+        root.Children.Add(_zoomHost);
 
         Content = new Panel { Children = { root, OverlayForTest } };
         BuildFilters();
@@ -103,6 +109,32 @@ public sealed class TaskBoardView : UserControl
         get => _search.Text ?? string.Empty;
         set => _search.Text = value;
     }
+
+    /// <summary>
+    /// How much larger than authored the board draws, on the family's shared ladder
+    /// (<see cref="ZoomScale"/>). A board has no single "font size" to scale the way a text editor does —
+    /// it is cards, columns and badges — so it scales the whole surface's layout instead, which is the
+    /// same thing the reader asked for and keeps the card design in one place.
+    /// </summary>
+    public double Zoom
+    {
+        get;
+        set
+        {
+            double clamped = ZoomScale.Clamp(value);
+            if (clamped == field)
+            {
+                return;
+            }
+
+            field = clamped;
+            _zoomHost.LayoutTransform = clamped == ZoomScale.Default ? null : new ScaleTransform(clamped, clamped);
+            ZoomChanged?.Invoke(this, EventArgs.Empty);
+        }
+    } = ZoomScale.Default;
+
+    /// <summary>Raised after <see cref="Zoom"/> changes, so a host can report or persist it.</summary>
+    public event EventHandler? ZoomChanged;
 
     /// <summary>The catalog, built once per view so every surface shares one command instance.</summary>
     public IReadOnlyList<AppCommand> EditingCommands => field ??= TaskEditingCommands.Build(this);

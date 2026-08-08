@@ -84,6 +84,8 @@ public static class MarkdownEditingCommands
             new("format.h4", "Heading 4", "Make this line a level-4 heading.", Shortcut.Cmd(Key.D4), () => ed.ApplyHeading(4), isActive: () => ed.CaretHeadingLevel == 4, icon: "heading-4"),
             new("format.h5", "Heading 5", "Make this line a level-5 heading.", Shortcut.Cmd(Key.D5), () => ed.ApplyHeading(5), isActive: () => ed.CaretHeadingLevel == 5, icon: "heading-5"),
             new("format.h6", "Heading 6", "Make this line a level-6 heading.", Shortcut.Cmd(Key.D6), () => ed.ApplyHeading(6), isActive: () => ed.CaretHeadingLevel == 6, icon: "heading-6"),
+            // ⌘0 completes the heading set — ⌘1–⌘6 apply a level, ⌘0 takes it away — so it stays here, and
+            // zoom's Actual Size takes ⌥⌘0 instead (see ZoomCommands).
             new("format.paragraph", "Paragraph", "Remove the heading from this line.", Shortcut.Cmd(Key.D0), ed.SetParagraph, icon: "remove-formatting"),
 
             // ⌘⌥K, not ⌘K: the palette owns ⌘K in both shells (see the type remarks).
@@ -113,6 +115,8 @@ public static class MarkdownEditingCommands
             new("view.viewRaw", "View Raw Text", "Plain-text source: no rich formatting or decorations.", null,
                 () => view.ViewMode = MarkdownEditor.ViewMode.RawText,
                 isActive: () => view.ViewMode == MarkdownEditor.ViewMode.RawText, icon: "file-text"),
+
+            .. ZoomCommands.Build(() => view.Zoom, zoom => view.Zoom = zoom),
 
             new("file.exportHtml", "Export HTML…", "Render the document to a self-contained HTML file.", null,
                 () => _ = view.ExportHtmlAsync(), icon: "file-down"),

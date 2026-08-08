@@ -9,27 +9,29 @@ public partial class SpreadsheetEditorView
     {
         foreach (var command in Commands.All)
         {
-            if (command.Gesture is null)
-            {
-                continue;
-            }
-
             var captured = command;
-            var binding = new RelayCommand(
-                () => captured.Execute(),
-                () => !IsModalOpen && !BlockedByTextInput(captured.Gesture) && captured.IsEnabled);
-            _gatedCommands.Add(binding);
-            KeyBindings.Add(new KeyBinding
+
+            // AllShortcuts, not Gesture: a command may carry unadvertised aliases for the same action
+            // (Zoom In answers to ⌘=, ⌘+ and the keypad's ⌘＋), and each needs its own binding.
+            foreach (var shortcut in command.AllShortcuts)
             {
-                Gesture = command.Gesture,
-                // While a modal overlay (Command Palette / sheet switcher) is open, the grid behind it
-                // must not react to command shortcuts — only the overlay's own keys apply. So every
-                // global binding backs off, letting the focused overlay field handle the key (e.g. ⌘A
-                // selects the palette text, not all cells). Likewise, a plain-key gesture (no ⌘/⌃, e.g.
-                // Delete) must not fire its global cell command while a text input is focused — there it
-                // is ordinary in-textbox editing, not "clear the cell" (#8).
-                Command = binding,
-            });
+                var gesture = shortcut.ToGesture();
+                var binding = new RelayCommand(
+                    () => captured.Execute(),
+                    () => !IsModalOpen && !BlockedByTextInput(gesture) && captured.IsEnabled);
+                _gatedCommands.Add(binding);
+                KeyBindings.Add(new KeyBinding
+                {
+                    Gesture = gesture,
+                    // While a modal overlay (Command Palette / sheet switcher) is open, the grid behind it
+                    // must not react to command shortcuts — only the overlay's own keys apply. So every
+                    // global binding backs off, letting the focused overlay field handle the key (e.g. ⌘A
+                    // selects the palette text, not all cells). Likewise, a plain-key gesture (no ⌘/⌃, e.g.
+                    // Delete) must not fire its global cell command while a text input is focused — there it
+                    // is ordinary in-textbox editing, not "clear the cell" (#8).
+                    Command = binding,
+                });
+            }
         }
     }
 

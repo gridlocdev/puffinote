@@ -189,7 +189,9 @@ public partial class MarkdownEditor
             case Key.L when ctrl:
                 ToggleTask();
                 break;
-            case Key.D0 when ctrl:
+            // ⌘0 removes the heading — the last rung of the ⌘1–⌘6 ladder. ⌥⌘0 is *not* ours: it is the
+            // family's Actual Size, so it must pass through to the host's binding rather than be eaten here.
+            case Key.D0 when ctrl && !alt:
                 SetParagraph();
                 break;
             case >= Key.D1 and <= Key.D6 when ctrl:

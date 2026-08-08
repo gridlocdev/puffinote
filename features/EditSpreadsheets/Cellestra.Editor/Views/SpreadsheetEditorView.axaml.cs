@@ -14,6 +14,7 @@ using Puffinote.Components.Commands;
 using Puffinote.Components.Controls;
 using Puffinote.Components.Controls.Icons;
 using Puffinote.Components.Overlays;
+using Puffinote.Components.Theming;
 // The view moved to the Cellestra.Editor namespace; the moved command bar keeps its original
 // Cellestra.Desktop.Controls.CommandBar namespace. Alias it to disambiguate from Avalonia's own
 // CommandBar control (Icons and Views.Overlays types are already imported below).
@@ -169,11 +170,19 @@ public partial class SpreadsheetEditorView : UserControl, IAppEnvironment
     /// keyboard works without a priming click — Avalonia doesn't reliably focus a freshly-shown window).</summary>
     public void FocusGrid() => Grid.Focus();
 
-    /// <summary>The grid's zoom factor; the host persists and restores it across sessions.</summary>
+    /// <summary>
+    /// The grid's zoom factor (the family-wide <see cref="Puffinote.Components.Theming.ZoomScale"/> ladder);
+    /// the host persists and restores it across sessions. The grid clamps; setting it repaints the status
+    /// bar's percentage, so the number the reader sees can't lag the size they're looking at.
+    /// </summary>
     public double Zoom
     {
         get => Grid.Zoom;
-        set => Grid.Zoom = value;
+        set
+        {
+            Grid.Zoom = value;
+            UpdateChrome();
+        }
     }
 
     /// <summary>Whether the adaptive command bar is collapsed to its slim handle; the host persists it.</summary>
@@ -395,7 +404,7 @@ public partial class SpreadsheetEditorView : UserControl, IAppEnvironment
 
     private void UpdateChrome()
     {
-        StatusZoom.Text = $"{Grid.Zoom * 100:0}%";
+        StatusZoom.Text = ZoomScale.Format(Grid.Zoom);
         StatusCalc.Text = Session.Workbook.Settings.CalculationMode == CalculationMode.Manual ? "Manual" : "Auto";
         StatusSaved.Text = Session.IsModified ? "Edited"
             : _lastSavedAt is { } saved ? $"Saved {saved:HH:mm}" : "Not saved";

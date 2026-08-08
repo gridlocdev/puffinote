@@ -2,6 +2,7 @@ using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Controls.Primitives;
 using Avalonia.Media;
+using Puffinote.Components.Theming;
 using Puffinote.Text.Editing;
 
 namespace Plaintain.Control.Controls;
@@ -129,11 +130,31 @@ public sealed partial class PlainTextEditor : Avalonia.Controls.Control, IScroll
     public static readonly StyledProperty<double> FontSizeProperty =
         TextBlock.FontSizeProperty.AddOwner<PlainTextEditor>(new StyledPropertyMetadata<double>(defaultValue: 13.0));
 
+    /// <summary>The authored text size — what the reader chose in preferences, before any zoom.</summary>
     public double FontSize
     {
         get => GetValue(FontSizeProperty);
         set => SetValue(FontSizeProperty, value);
     }
+
+    public static readonly StyledProperty<double> ZoomProperty =
+        AvaloniaProperty.Register<PlainTextEditor, double>(nameof(Zoom), defaultValue: ZoomScale.Default);
+
+    /// <summary>
+    /// The reading zoom, on the family's shared ladder (<see cref="ZoomScale"/>). It multiplies
+    /// <see cref="FontSize"/> rather than replacing it, so zooming and then changing the preferred size
+    /// compose instead of one silently overwriting the other — and because "back to 100%" has to mean
+    /// back to <em>your</em> size, not back to 13.
+    /// </summary>
+    public double Zoom
+    {
+        get => GetValue(ZoomProperty);
+        set => SetValue(ZoomProperty, ZoomScale.Clamp(value));
+    }
+
+    /// <summary>The size text is actually drawn at: the authored size taken up by the zoom. Every measure
+    /// and every draw goes through this, so the caret, the gutter and the glyphs can't disagree.</summary>
+    internal double ScaledFontSize => FontSize * Zoom;
 
     /// <summary>
     /// True when the document may not be written back — its bytes were not valid UTF-8, so the encoding
@@ -146,7 +167,8 @@ public sealed partial class PlainTextEditor : Avalonia.Controls.Control, IScroll
     {
         base.OnPropertyChanged(change);
         if (change.Property == WordWrapProperty || change.Property == FontFamilyProperty
-            || change.Property == FontSizeProperty || change.Property == ShowLineNumbersProperty)
+            || change.Property == FontSizeProperty || change.Property == ShowLineNumbersProperty
+            || change.Property == ZoomProperty)
         {
             _typeface = new Typeface(FontFamily);
             InvalidateMetrics();
@@ -177,10 +199,11 @@ public sealed partial class PlainTextEditor : Avalonia.Controls.Control, IScroll
     private void MeasureFont()
     {
         // A monospace face advances every character equally, so one measurement describes all of them.
+        double size = ScaledFontSize;
         var probe = new FormattedText("0", System.Globalization.CultureInfo.InvariantCulture,
-            FlowDirection.LeftToRight, _typeface, FontSize, Brushes.Black);
-        _charWidth = probe.WidthIncludingTrailingWhitespace > 0 ? probe.WidthIncludingTrailingWhitespace : FontSize * 0.6;
-        _rowHeight = Math.Ceiling(probe.Height > 0 ? probe.Height * 1.25 : FontSize * 1.5);
+            FlowDirection.LeftToRight, _typeface, size, Brushes.Black);
+        _charWidth = probe.WidthIncludingTrailingWhitespace > 0 ? probe.WidthIncludingTrailingWhitespace : size * 0.6;
+        _rowHeight = Math.Ceiling(probe.Height > 0 ? probe.Height * 1.25 : size * 1.5);
     }
 
     /// <summary>Forget the row map and the widest-line cache; both are rebuilt on the next layout.</summary>

@@ -8,6 +8,7 @@ using Avalonia.Reactive;
 using Cellestra.Core.Model;
 using Cellestra.Core.Styling;
 using Cellestra.Desktop.Services;
+using Puffinote.Components.Theming;
 
 namespace Cellestra.Desktop.Controls.SpreadsheetGrid;
 
@@ -214,14 +215,16 @@ public sealed partial class SpreadsheetGrid : Panel
     // never types into a cell. KeyDown always precedes the text input it produces, so this stays current.
     private KeyModifiers _lastKeyModifiers;
 
+    /// <summary>The zoom factor applied to every row height, column width and font in the grid, bounded by
+    /// the family-wide ladder (<see cref="ZoomScale"/> — 50%–400%, PRD §4).</summary>
     public double Zoom
     {
         get; set
         {
-            field = Math.Clamp(value, Cellestra.Core.Defaults.MinZoom, Cellestra.Core.Defaults.MaxZoom);
+            field = ZoomScale.Clamp(value);
             Redraw();
         }
-    } = 1.0;
+    } = ZoomScale.Default;
 
     public void Attach(WorkbookSession session)
     {

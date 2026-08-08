@@ -4,6 +4,7 @@ using Avalonia.Input;
 using Plaintain.Control.Commands;
 using Plaintain.Control.Controls;
 using Puffinote.Components.Commands;
+using Puffinote.Components.Theming;
 using Puffinote.Text.Document;
 
 namespace Plaintain.Control.Views;
@@ -89,6 +90,29 @@ public sealed class PlainTextEditorView : UserControl
     public void Undo() => Editor.Undo();
 
     public void Redo() => Editor.Redo();
+
+    /// <summary>
+    /// The reading zoom, on the family's shared ladder. Delegates to the editor, which multiplies the
+    /// configured font size by it; the host persists whatever it lands on.
+    /// </summary>
+    public double Zoom
+    {
+        get => Editor.Zoom;
+        set
+        {
+            double clamped = ZoomScale.Clamp(value);
+            if (Editor.Zoom == clamped)
+            {
+                return;
+            }
+
+            Editor.Zoom = clamped;
+            ZoomChanged?.Invoke(this, EventArgs.Empty);
+        }
+    }
+
+    /// <summary>Raised after <see cref="Zoom"/> changes, so a host can persist it as the new default.</summary>
+    public event EventHandler? ZoomChanged;
 
     public void ToggleWordWrap() => Editor.WordWrap = !Editor.WordWrap;
 

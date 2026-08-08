@@ -26,6 +26,10 @@ public sealed partial class MainWindow : Window
     private readonly TextBlock _statusPosition = new();
     private readonly TextBlock _statusCounts = new();
     private readonly TextBlock _statusEncoding = new();
+
+    // Shown only away from 100%, where it is the answer to "why is this file suddenly huge?"; a permanent
+    // "100%" would just be furniture.
+    private readonly TextBlock _statusZoom = new() { IsVisible = false };
     private readonly MenuItem _recentMenu = new() { Header = "Open _Recent" };
     private readonly OverlayHost _overlay = new() { Background = new SolidColorBrush(Color.FromArgb(0x40, 0, 0, 0)) };
     private readonly Dictionary<string, AppCommand> _commands;
@@ -50,7 +54,17 @@ public sealed partial class MainWindow : Window
         EditorView.Editor.WordWrap = _settings.Settings.WordWrap;
         EditorView.Editor.ShowLineNumbers = _settings.Settings.ShowLineNumbers;
         EditorView.Editor.FontSize = _settings.Settings.FontSize;
+        EditorView.Zoom = _settings.Settings.Zoom;
         EditorView.SelectionChanged += (_, _) => UpdateChrome();
+
+        // Zoom is remembered for the same reason wrap is: someone who needs bigger text needs it every
+        // session, not once.
+        EditorView.ZoomChanged += (_, _) =>
+        {
+            _settings.Settings.Zoom = EditorView.Zoom;
+            _settings.Save();
+            UpdateChrome();
+        };
 
         // Wrap and the gutter are remembered, because they are settings people hold an opinion about
         // once: whoever wants wrap wants it for every file, and whoever doesn't never wants it again.
@@ -144,6 +158,10 @@ public sealed partial class MainWindow : Window
         var view = new MenuItem { Header = "_View" };
         view.Items.Add(Item("_Word Wrap", "view.wordWrap"));
         view.Items.Add(Item("_Line Numbers", "view.lineNumbers"));
+        view.Items.Add(new Separator());
+        view.Items.Add(Item("Zoom _In", ZoomCommands.ZoomInId));
+        view.Items.Add(Item("Zoom _Out", ZoomCommands.ZoomOutId));
+        view.Items.Add(Item("_Actual Size", ZoomCommands.ActualSizeId));
 
         return new Menu { Items = { file, edit, view } };
     }
@@ -156,9 +174,16 @@ public sealed partial class MainWindow : Window
     {
         foreach (var command in EditorView.EditingCommands)
         {
-            if (command.Gesture is { } gesture)
+            // AllShortcuts, so a command's unadvertised aliases bind too — Zoom In shows ⌘= and also
+            // answers to the ⇧= that actually carries the "+" glyph, and to the keypad's own key.
+            foreach (var shortcut in command.AllShortcuts)
             {
-                KeyBindings.Add(new KeyBinding { Gesture = gesture, Command = new RelayCommand(() => command.Execute()) });
+                var captured = command;
+                KeyBindings.Add(new KeyBinding
+                {
+                    Gesture = shortcut.ToGesture(),
+                    Command = new RelayCommand(() => captured.Execute()),
+                });
             }
         }
 
@@ -171,7 +196,7 @@ public sealed partial class MainWindow : Window
     private Border BuildStatusBar()
     {
         var palette = Tokens.Dark;
-        foreach (var block in new[] { _statusPosition, _statusCounts, _statusEncoding })
+        foreach (var block in new[] { _statusPosition, _statusCounts, _statusEncoding, _statusZoom })
         {
             block.VerticalAlignment = VerticalAlignment.Center;
             block.Foreground = palette.MutedText;
@@ -180,10 +205,13 @@ public sealed partial class MainWindow : Window
 
         var row = new DockPanel { LastChildFill = false };
         DockPanel.SetDock(_statusPosition, Dock.Left);
+        DockPanel.SetDock(_statusZoom, Dock.Left);
         DockPanel.SetDock(_statusEncoding, Dock.Right);
         DockPanel.SetDock(_statusCounts, Dock.Right);
+        _statusZoom.Margin = new Thickness(16, 0, 0, 0);
         _statusCounts.Margin = new Thickness(0, 0, 16, 0);
         row.Children.Add(_statusPosition);
+        row.Children.Add(_statusZoom);
         row.Children.Add(_statusEncoding);
         row.Children.Add(_statusCounts);
 
@@ -214,6 +242,9 @@ public sealed partial class MainWindow : Window
         _statusEncoding.Text = EncodingUnconfirmed
             ? $"{_format.DisplayName} (unconfirmed — read-only)"
             : $"{_format.DisplayName} · {stats.NewlineLabel}";
+
+        _statusZoom.Text = ZoomScale.Format(EditorView.Zoom);
+        _statusZoom.IsVisible = EditorView.Zoom != ZoomScale.Default;
     }
 
     private async void OnGoToLineRequested(PlainTextEditorView view)

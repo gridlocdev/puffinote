@@ -40,16 +40,21 @@ public partial class MainWindow
     {
         foreach (var command in _commandsById.Values)
         {
-            if (command.Shortcut is not { } shortcut || shortcut.YieldsToTextInput)
+            // AllShortcuts, so a command's unadvertised aliases bind too — Zoom In shows ⌘= and also
+            // answers to the ⇧= that actually carries the "+" glyph, and to the keypad's own key.
+            foreach (var shortcut in command.AllShortcuts)
             {
-                continue;
-            }
+                if (shortcut.YieldsToTextInput)
+                {
+                    continue;
+                }
 
-            KeyBindings.Add(new KeyBinding
-            {
-                Gesture = shortcut.ToGesture(),
-                Command = CommandFor(command),
-            });
+                KeyBindings.Add(new KeyBinding
+                {
+                    Gesture = shortcut.ToGesture(),
+                    Command = CommandFor(command),
+                });
+            }
         }
 
         if (!OperatingSystem.IsMacOS())
@@ -158,6 +163,11 @@ public partial class MainWindow
             _viewModeItems.Add((m, new CheckItem(item)));
             view.Items.Add(item);
         }
+
+        view.Items.Add(new Separator());
+        view.Items.Add(InWindowItem("view.zoomIn"));
+        view.Items.Add(InWindowItem("view.zoomOut"));
+        view.Items.Add(InWindowItem("view.actualSize"));
 
         view.Items.Add(new Separator());
 
@@ -314,6 +324,11 @@ public partial class MainWindow
             _viewModeItems.Add((m, new CheckItem(item)));
             view.Menu.Items.Add(item);
         }
+
+        view.Menu.Items.Add(new NativeMenuItemSeparator());
+        view.Menu.Items.Add(NativeItem("view.zoomIn"));
+        view.Menu.Items.Add(NativeItem("view.zoomOut"));
+        view.Menu.Items.Add(NativeItem("view.actualSize"));
 
         view.Menu.Items.Add(new NativeMenuItemSeparator());
 

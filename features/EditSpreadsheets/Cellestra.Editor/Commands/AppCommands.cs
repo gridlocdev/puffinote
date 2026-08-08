@@ -222,9 +222,7 @@ public sealed class AppCommands
         // View
         new("view.commandPalette", "Command Palette…", "Search and run any command.", Shortcut.Cmd(Key.K), () => e.ShowCommandPalette(), icon: "command"),
         new("view.goToSheet", "Go to Sheet…", "Jump to another worksheet.", Shortcut.Cmd(Key.P, KeyModifiers.Shift), () => e.ShowSheetSwitcher(), icon: "list"),
-        new("view.zoomIn", "Zoom In", "Make everything larger.", Shortcut.Cmd(Key.OemPlus), () => e.ZoomBy(0.1), icon: "zoom-in"),
-        new("view.zoomOut", "Zoom Out", "Make everything smaller.", Shortcut.Cmd(Key.OemMinus), () => e.ZoomBy(-0.1), icon: "zoom-out"),
-        new("view.actualSize", "Actual Size", "Reset zoom to 100%.", Shortcut.Cmd(Key.D0), () => e.ResetZoom(), icon: "maximize"),
+        .. ZoomCommands.Build(() => e.Zoom, zoom => e.Zoom = zoom),
         new("view.freezePanes", "Freeze Panes", "Keep header rows and columns in view.", null, () => e.ToggleFreezePanes(), icon: "layout-grid"),
         new("view.radialSettings", "Radial Menu Settings…", "Configure the hold-right-click radial command menu.", null, () => e.ShowRadialSettings(), icon: "settings-2"),
 

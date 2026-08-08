@@ -81,9 +81,11 @@ public interface IAppEnvironment
     /// <summary>Clear every cell and its formatting on the active sheet (confirms above the §8.7 threshold; undoable).</summary>
     void ResetSheetData();
 
-    void ZoomBy(double delta);
-
-    void ResetZoom();
+    /// <summary>
+    /// The grid's zoom factor, on the family-wide <see cref="Puffinote.Components.Theming.ZoomScale"/> ladder.
+    /// Setting it clamps to the ladder's bounds and repaints the chrome that reports it.
+    /// </summary>
+    double Zoom { get; set; }
 
     void ToggleFilter();
 

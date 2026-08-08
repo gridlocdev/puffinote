@@ -25,6 +25,11 @@ public partial class MainWindow : Window
     private readonly TextBlock _statusPosition = new();
     private readonly TextBlock _statusCounts = new();
     private readonly TextBlock _statusState = new();
+
+    // Shown only away from 100%: at the default it would be a permanent "100%" that says nothing, and the
+    // one moment it matters is when the page isn't the size the reader expects.
+    private readonly TextBlock _statusZoom = new() { IsVisible = false };
+
     private string? _currentPath;
     private TextFileFormat _format = TextFileFormat.Utf8NoBom;
     private readonly MenuItem _recentMenu = new() { Header = "Open _Recent" };
@@ -148,6 +153,7 @@ public partial class MainWindow : Window
         // The view-mode commands now live in the editor's catalog, so the switch happens inside the control.
         // The shell still owns what a shell owns: persisting the choice and syncing the View ▸ radio group.
         EditorView.ViewModeChanged += (_, _) => OnViewModeChanged();
+        EditorView.ZoomChanged += (_, _) => OnZoomChanged();
         Closing += OnClosing;
         Closed += (_, _) =>
         {
@@ -175,6 +181,7 @@ public partial class MainWindow : Window
         EditorView.Editor.HorizontalPadding = _settings.Settings.EditorPadding; // restore editor padding
         EditorView.Editor.MaxContentWidth = _settings.Settings.EditorMaxContentWidth; // and the reading-column cap
         EditorView.Editor.VerticalPadding = _settings.Settings.EditorPaddingVertical;
+        EditorView.Zoom = _settings.Settings.Zoom; // and the zoom the reader left it at
 
         SetupAutosave();
         Opened += async (_, _) => await CheckForRecoveryAsync(); // offer recovery once the window is up

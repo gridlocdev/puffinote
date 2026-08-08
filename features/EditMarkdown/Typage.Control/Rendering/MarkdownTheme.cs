@@ -53,8 +53,14 @@ public readonly record struct BlockMetrics(
 /// fonts and colors live here. This is the default dark theme (tuned to sit alongside the
 /// Cellestra-style chrome); light and high-contrast variants would parameterize these init
 /// properties (PRD §7.2).
+///
+/// <para>A <b>record</b>, so a caller can say <c>theme with { BaseFontSize = … }</c> and get every one of
+/// the forty-odd brushes carried across. Zoom needs exactly that (<see cref="Scaled"/>): it must not mutate
+/// <see cref="Dark"/>/<see cref="Light"/>/<see cref="HighContrast"/>, which are shared singletons — in
+/// Puffinote two open notes would zoom each other. A hand-written copy constructor would do the same job
+/// and silently drop whichever colour a future edit forgets to add to it.</para>
 /// </summary>
-public class MarkdownTheme
+public record MarkdownTheme
 {
     /// <summary>The default dark palette (the bare init values below).</summary>
     public static MarkdownTheme Dark { get; } = new();
@@ -148,6 +154,17 @@ public class MarkdownTheme
         TaskCheck = new SolidColorBrush(Colors.Black),
         TaskDoneForeground = new SolidColorBrush(Colors.White),
     };
+
+    /// <summary>
+    /// This theme at <paramref name="zoom"/> — the body size and the row height scaled together, which is
+    /// all it takes: every other metric on this type is expressed as a multiple of one or the other, so the
+    /// heading scale, the bullet gutter, the checkbox and the block margins all follow (the "rem" behaviour
+    /// a stylesheet gets for free). Colours, paddings and the reading-column inset are untouched — zoom
+    /// magnifies the text, it doesn't re-theme the page.
+    /// </summary>
+    public MarkdownTheme Scaled(double zoom) => zoom is 1.0
+        ? this
+        : this with { BaseFontSize = BaseFontSize * zoom, LineHeight = LineHeight * zoom };
 
     public double BaseFontSize { get; init; } = 16;
 

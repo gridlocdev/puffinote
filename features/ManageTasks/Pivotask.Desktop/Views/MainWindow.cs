@@ -127,6 +127,10 @@ public sealed class MainWindow : Window
         view.Items.Add(Item("_Starred", "filter.starred"));
         view.Items.Add(Item("_Due Soon", "filter.dueSoon"));
         view.Items.Add(Item("_Unfinished", "filter.unfinished"));
+        view.Items.Add(new Separator());
+        view.Items.Add(Item("Zoom _In", ZoomCommands.ZoomInId));
+        view.Items.Add(Item("Zoom _Out", ZoomCommands.ZoomOutId));
+        view.Items.Add(Item("Actual Si_ze", ZoomCommands.ActualSizeId));
 
         return new Menu { Items = { file, edit, view } };
     }
@@ -137,9 +141,16 @@ public sealed class MainWindow : Window
     {
         foreach (var command in _view.EditingCommands)
         {
-            if (command.Gesture is { } gesture)
+            // AllShortcuts, so a command's unadvertised aliases bind too — Zoom In shows ⌘= and also
+            // answers to the ⇧= that actually carries the "+" glyph, and to the keypad's own key.
+            foreach (var shortcut in command.AllShortcuts)
             {
-                KeyBindings.Add(new KeyBinding { Gesture = gesture, Command = new RelayCommand(() => command.Execute()) });
+                var captured = command;
+                KeyBindings.Add(new KeyBinding
+                {
+                    Gesture = shortcut.ToGesture(),
+                    Command = new RelayCommand(() => captured.Execute()),
+                });
             }
         }
 

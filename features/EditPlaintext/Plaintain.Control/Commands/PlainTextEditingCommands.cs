@@ -49,6 +49,8 @@ public static class PlainTextEditingCommands
                 isActive: () => editor.ShowLineNumbers, icon: "list-ordered"),
             new("view.goToLine", "Go to Line…", "Jump to a line by number.", Shortcut.Cmd(Key.G),
                 () => GoToLineRequested?.Invoke(view), icon: "list"),
+
+            .. ZoomCommands.Build(() => view.Zoom, zoom => view.Zoom = zoom),
         ];
     }
 

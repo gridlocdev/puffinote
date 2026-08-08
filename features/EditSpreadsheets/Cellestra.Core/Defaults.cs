@@ -27,11 +27,9 @@ public static class Defaults
     /// <summary>Default row height.</summary>
     public const double RowHeight = 20d;
 
-    /// <summary>Minimum zoom factor (PRD §4 — 50%).</summary>
-    public const double MinZoom = 0.5d;
-
-    /// <summary>Maximum zoom factor (PRD §4 — 400%).</summary>
-    public const double MaxZoom = 4.0d;
+    // Zoom bounds (PRD §4 — 50%–400%) live with the rest of the family's zoom ladder, in
+    // Puffinote.Components' ZoomScale: they are a presentation concern shared with every sibling
+    // editor, and this core is deliberately UI-free.
 
     /// <summary>The default text color, ARGB. Opaque black.</summary>
     public const uint TextColorArgb = 0xFF000000;

@@ -24,7 +24,8 @@ public sealed class AppCommand
         Action execute,
         Func<bool>? canExecute = null,
         Func<bool>? isActive = null,
-        string? icon = null)
+        string? icon = null,
+        IReadOnlyList<Shortcut>? alternateShortcuts = null)
     {
         Id = id;
         Title = title;
@@ -34,6 +35,7 @@ public sealed class AppCommand
         CanExecute = canExecute;
         IsActive = isActive;
         Icon = icon;
+        AlternateShortcuts = alternateShortcuts ?? [];
     }
 
     public string Id { get; }
@@ -48,6 +50,15 @@ public sealed class AppCommand
 
     /// <summary>The default, platform-agnostic shortcut, or null when the command has none.</summary>
     public Shortcut? Shortcut { get; }
+
+    /// <summary>
+    /// Extra chords that fire the same command but are <b>not</b> advertised — a menu, a tooltip, and the
+    /// palette all show <see cref="Shortcut"/> alone, because a command with three keys listed reads as
+    /// three commands. This is for the aliases a keyboard forces on us rather than ones a user should learn:
+    /// Zoom In is ⌘= on the number row, but the key with "+" printed on it is ⇧= and the numpad has its own,
+    /// and someone pressing what the menu spells as ⌘+ must not find it dead.
+    /// </summary>
+    public IReadOnlyList<Shortcut> AlternateShortcuts { get; }
 
     public Action Execute { get; }
 
@@ -67,4 +78,12 @@ public sealed class AppCommand
 
     /// <summary>The bindable gesture for the current platform, or null when the command has no shortcut.</summary>
     public KeyGesture? Gesture => Shortcut?.ToGesture();
+
+    /// <summary>
+    /// Every shortcut that should fire this command — <see cref="Shortcut"/> first, then
+    /// <see cref="AlternateShortcuts"/>. Hosts registering key bindings iterate this; anything that
+    /// <em>displays</em> a shortcut uses <see cref="Shortcut"/>/<see cref="ShortcutText"/> instead.
+    /// </summary>
+    public IEnumerable<Shortcut> AllShortcuts =>
+        Shortcut is { } s ? [s, .. AlternateShortcuts] : AlternateShortcuts;
 }

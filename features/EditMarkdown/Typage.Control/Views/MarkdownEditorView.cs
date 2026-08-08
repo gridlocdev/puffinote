@@ -6,6 +6,7 @@ using Avalonia.Platform.Storage;
 using Avalonia.Threading;
 using Puffinote.Components.Commands;
 using Puffinote.Components.Overlays;
+using Puffinote.Components.Theming;
 using Puffinote.Text.Document;
 using Typage.Control.Commands;
 using Typage.Control.Controls;
@@ -139,6 +140,9 @@ public class MarkdownEditorView : UserControl
     /// <summary>Raised after <see cref="ViewMode"/> changes, so a host can persist it as the new default.</summary>
     public event EventHandler? ViewModeChanged;
 
+    /// <summary>Raised after <see cref="Zoom"/> changes, so a host can persist it as the new default.</summary>
+    public event EventHandler? ZoomChanged;
+
     /// <summary>The underlying surface, for hosts that need direct access (e.g. the format toolbar).</summary>
     public MarkdownEditor Editor { get; } = new();
 
@@ -161,11 +165,45 @@ public class MarkdownEditorView : UserControl
 
     public bool CanRedo => Editor.CanRedo;
 
+    /// <summary>
+    /// The palette in force — the theme as the <em>host</em> set it, at 100%. What the editor actually
+    /// renders with is this scaled by <see cref="Zoom"/>; keeping the two apart is what lets a reader
+    /// switch to the light theme at 150% and stay at 150%, and lets a host still compare what it set
+    /// against <see cref="MarkdownTheme.Light"/> by reference.
+    /// </summary>
     public MarkdownTheme EditorTheme
     {
-        get => Editor.EditorTheme;
-        set => Editor.EditorTheme = value;
-    }
+        get;
+        set
+        {
+            field = value;
+            ApplyTheme();
+        }
+    } = MarkdownTheme.Default;
+
+    /// <summary>
+    /// How much larger than authored the text renders, on the family's shared ladder
+    /// (<see cref="ZoomScale"/>). Scales the type and the vertical rhythm with it — never the window
+    /// chrome or the find bar.
+    /// </summary>
+    public double Zoom
+    {
+        get;
+        set
+        {
+            double clamped = ZoomScale.Clamp(value);
+            if (clamped == field)
+            {
+                return;
+            }
+
+            field = clamped;
+            ApplyTheme();
+            ZoomChanged?.Invoke(this, EventArgs.Empty);
+        }
+    } = ZoomScale.Default;
+
+    private void ApplyTheme() => Editor.EditorTheme = EditorTheme.Scaled(Zoom);
 
     public IEmbedResolver EmbedResolver
     {

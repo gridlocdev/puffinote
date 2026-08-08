@@ -14,6 +14,10 @@ public sealed class AppSettings
 
     public double FontSize { get; set; } = 13;
 
+    /// <summary>The reading zoom applied on top of <see cref="FontSize"/>, on the family's shared ladder
+    /// (1.0 = 100%).</summary>
+    public double Zoom { get; set; } = 1.0;
+
     /// <summary>Most-recently-used files, newest first.</summary>
     public List<string> RecentFiles { get; init; } = [];
 

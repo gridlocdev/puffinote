@@ -120,18 +120,6 @@ public partial class SpreadsheetEditorView
         flyout.ShowAt(Grid, showAtPointer: true);
     }
 
-    public void ZoomBy(double delta)
-    {
-        Grid.Zoom += delta;
-        UpdateChrome();
-    }
-
-    public void ResetZoom()
-    {
-        Grid.Zoom = 1.0;
-        UpdateChrome();
-    }
-
     public void ToggleFilter()
     {
         var (sheet, range, _) = AppCommands.DataTarget(this);

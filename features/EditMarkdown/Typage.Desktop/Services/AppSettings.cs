@@ -40,6 +40,12 @@ public sealed class AppSettings
     public bool ShowToolbar { get; set; } = true;
 
     /// <summary>
+    /// The reading zoom, on the family's shared ladder (1.0 = 100%). Remembered because someone who needs
+    /// larger text needs it every session, not once.
+    /// </summary>
+    public double Zoom { get; set; } = 1.0;
+
+    /// <summary>
     /// The default presentation mode for the editing surface: the WYSIWYG rich view, the formatted view
     /// with markers revealed, or the plain raw-text source (PRD §7.4).
     /// </summary>

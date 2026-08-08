@@ -3,6 +3,7 @@ using Cellestra.Core.Styling;
 using Cellestra.Desktop.Commands;
 using Cellestra.Desktop.Controls.SpreadsheetGrid;
 using Cellestra.Desktop.Services;
+using Puffinote.Components.Theming;
 
 namespace Cellestra.UiTests;
 
@@ -49,8 +50,7 @@ internal sealed class FakeAppEnvironment : IAppEnvironment
     public void DuplicateActiveSheet() => throw Nope();
     public void DeleteActiveSheet() => throw Nope();
     public void ResetSheetData() => throw Nope();
-    public void ZoomBy(double delta) => throw Nope();
-    public void ResetZoom() => throw Nope();
+    public double Zoom { get; set; } = ZoomScale.Default;
     public void ToggleFilter() => throw Nope();
     public void ShowSortDialog() => throw Nope();
     public void ShowSortFilterDialog() => throw Nope();

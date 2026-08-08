@@ -58,6 +58,8 @@ public static class TaskEditingCommands
 
             new("edit.find", "Search…", "Search titles, notes, and steps.", Shortcut.Cmd(Key.F),
                 () => SearchRequested?.Invoke(view), icon: "search"),
+
+            .. ZoomCommands.Build(() => view.Zoom, zoom => view.Zoom = zoom),
         ];
     }
 

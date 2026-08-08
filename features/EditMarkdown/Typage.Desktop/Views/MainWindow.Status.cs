@@ -1,6 +1,7 @@
 using Avalonia.Controls;
 using Avalonia.Layout;
 using Avalonia.Threading;
+using Puffinote.Components.Theming;
 
 namespace Typage.Desktop.Views;
 
@@ -8,26 +9,29 @@ public partial class MainWindow
 {
     private Border BuildStatusBar()
     {
-        foreach (var block in new[] { _statusState, _statusPosition, _statusCounts })
+        foreach (var block in new[] { _statusState, _statusPosition, _statusCounts, _statusZoom })
         {
             block.Foreground = _mutedText;
             block.FontSize = 12;
             block.VerticalAlignment = VerticalAlignment.Center;
         }
 
-        // State on the left; counts/encoding pushed to the right (like Cellestra's status bar).
+        // State on the left; counts/encoding pushed to the right (like Cellestra's status bar), with the
+        // zoom percentage last — the same place Cellestra puts it.
         _statusCounts.HorizontalAlignment = HorizontalAlignment.Right;
         var grid = new Grid
         {
             Margin = new Avalonia.Thickness(12, 4),
-            ColumnDefinitions = new ColumnDefinitions("Auto,16,Auto,*,Auto"),
+            ColumnDefinitions = new ColumnDefinitions("Auto,16,Auto,*,Auto,16,Auto"),
         };
         Grid.SetColumn(_statusState, 0);
         Grid.SetColumn(_statusPosition, 2);
         Grid.SetColumn(_statusCounts, 4);
+        Grid.SetColumn(_statusZoom, 6);
         grid.Children.Add(_statusState);
         grid.Children.Add(_statusPosition);
         grid.Children.Add(_statusCounts);
+        grid.Children.Add(_statusZoom);
 
         var border = new Border
         {
@@ -47,6 +51,13 @@ public partial class MainWindow
         UpdateTitle();
         UpdateDocumentStatus();
         UpdateCaretStatus();
+        UpdateZoomStatus();
+    }
+
+    private void UpdateZoomStatus()
+    {
+        _statusZoom.Text = ZoomScale.Format(EditorView.Zoom);
+        _statusZoom.IsVisible = EditorView.Zoom != ZoomScale.Default;
     }
 
     private void UpdateTitle()

@@ -124,6 +124,14 @@ public partial class MainWindow
         }
     }
 
+    /// <summary>The reader zoomed. Remember it, and say so in the status bar's zoom readout.</summary>
+    private void OnZoomChanged()
+    {
+        _settings.Settings.Zoom = EditorView.Zoom;
+        _settings.Save();
+        UpdateChrome();
+    }
+
     /// <summary>Toggle distraction-free mode: hide the toolbar and status bar (session-only).</summary>
     private void ToggleFocusMode()
     {
