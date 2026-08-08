@@ -23,6 +23,11 @@ namespace Puffinote.Components.Shell;
 /// <see cref="Window.Title"/> is still the app's to set and still matters: it is what the Window menu, the
 /// app switcher, and Mission Control show. This bar does not touch it.
 /// </para>
+/// <para>
+/// Taking the system's title bar over means owing its habits back: drag it to move the window, double-click
+/// it to zoom, double-click again to land back on the size and place the window had before. Those live in
+/// <see cref="OnPointerPressed"/> and <see cref="OnPointerMoved"/>.
+/// </para>
 /// </remarks>
 public sealed class DocumentTitleBar : UserControl
 {
@@ -44,6 +49,13 @@ public sealed class DocumentTitleBar : UserControl
 
     /// <summary>The gap between the dot, the name, and the badge.</summary>
     private const double RowSpacing = 6;
+
+    /// <summary>
+    /// How far the pointer must travel, from where it was pressed, before a press becomes a window move.
+    /// Windows' own <c>SM_CXDRAG</c> is 4px; the exact number matters far less than that there is one —
+    /// see <see cref="OnPointerMoved"/> for what starting the move on the press itself costs.
+    /// </summary>
+    private const double DragThreshold = 4;
 
     /// <summary>The document's name — the file name alone (e.g. <c>Budget.ods</c>), never a path.</summary>
     public static readonly StyledProperty<string> DocumentNameProperty =
@@ -85,6 +97,16 @@ public sealed class DocumentTitleBar : UserControl
 
     private readonly Border _border;
     private readonly StackPanel _row;
+
+    /// <summary>
+    /// The press that armed a window move, held until the pointer travels <see cref="DragThreshold"/> —
+    /// null whenever no gesture is in flight. The platform's move needs the <em>press</em>, not the move
+    /// that triggers it, so the original event args are what we keep.
+    /// </summary>
+    private PointerPressedEventArgs? _armedDrag;
+
+    /// <summary>Where <see cref="_armedDrag"/> was pressed, in this control's coordinates.</summary>
+    private Point _pressOrigin;
 
     public DocumentTitleBar()
     {
@@ -156,6 +178,24 @@ public sealed class DocumentTitleBar : UserControl
     internal Control NameBlockForTest => _name;
 
     /// <summary>
+    /// How many platform window-moves this bar has begun (test seam). The move itself is the window
+    /// manager's, and headless has no window manager, so "did we ask for one, and only when we should
+    /// have" is the part a test can hold us to.
+    /// </summary>
+    internal int MoveDragsBegunForTest { get; private set; }
+
+    /// <summary>
+    /// The window this bar is chrome for, or null while it is unparented.
+    /// </summary>
+    /// <remarks>
+    /// Not <c>VisualRoot as Window</c>: as of Avalonia 12 a window's visual root is the host that draws its
+    /// frame and shadow, and the <see cref="Window"/> hangs beneath it. That cast therefore quietly yields
+    /// null for every control in every window — which is precisely how the gestures below came to be dead
+    /// code. <see cref="TopLevel.GetTopLevel"/> is the supported way to ask, and it walks the real tree.
+    /// </remarks>
+    private Window? HostWindow => TopLevel.GetTopLevel(this) as Window;
+
+    /// <summary>
     /// Merge the bar with the window's own title bar, so the two read as one surface. <b>macOS only</b>:
     /// there, extending the client area keeps the system's traffic lights and drops only the title text,
     /// which is exactly the trade we want. On Windows and Linux the same hint hands us the caption buttons
@@ -215,26 +255,123 @@ public sealed class DocumentTitleBar : UserControl
     /// Dragging the bar moves the window and double-clicking it zooms, because with the client area
     /// extended this strip <em>is</em> the title bar and has to behave like one.
     /// </summary>
+    /// <remarks>
+    /// Avalonia 12 can hand a region of an extended client area to the platform as real non-client area
+    /// (<c>WindowDecorationProperties.ElementRole</c>), which would buy these gestures natively — but as of
+    /// 12.0.4 only the Windows and X11 backends implement that hit-test, and those are exactly the platforms
+    /// where <see cref="Extend"/> declines to extend the client area at all. On macOS, the one platform where
+    /// this bar really is the title bar, the gestures have to be ours.
+    /// </remarks>
     protected override void OnPointerPressed(PointerPressedEventArgs e)
     {
         base.OnPointerPressed(e);
-        if (!e.GetCurrentPoint(this).Properties.IsLeftButtonPressed || VisualRoot is not Window window)
+        CancelArmedDrag();
+        if (!e.GetCurrentPoint(this).Properties.IsLeftButtonPressed || HostWindow is not { } window)
         {
             return;
         }
 
-        if (e.ClickCount == 2)
+        // Every *even* click is the second half of a double-click, so holding the mouse still and clicking
+        // away keeps toggling — which is what a native title bar does, rather than acting on click 2 and
+        // then ignoring 3 and 4.
+        if (e.ClickCount % 2 == 0)
         {
-            window.WindowState = window.WindowState == WindowState.Maximized
-                ? WindowState.Normal
-                : WindowState.Maximized;
+            Zoom(window);
         }
-        else
+        else if (window.WindowState != WindowState.FullScreen)
         {
-            window.BeginMoveDrag(e);
+            // Arm the move; don't start it (OnPointerMoved). A full-screen window has nowhere to be moved
+            // to, and asking the platform to move one is undefined at best.
+            _pressOrigin = e.GetPosition(this);
+            _armedDrag = e;
+            e.Pointer.Capture(this);
         }
 
         e.Handled = true;
+    }
+
+    /// <summary>
+    /// Start the platform's window move once the pointer has actually travelled — never on the press.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Moving on the press is what breaks double-click: every platform's move is a <em>modal loop</em> that
+    /// owns the mouse until the button comes up (<c>performWindowDragWithEvent:</c> on macOS,
+    /// <c>WM_NCLBUTTONDOWN</c>/<c>HTCAPTION</c> on Windows, <c>_NET_WM_MOVERESIZE</c> on X11), so the first
+    /// click of a double-click swallows the second and the window never zooms. Waiting for
+    /// <see cref="DragThreshold"/> costs a gesture nothing — a click that means "move" travels, a click
+    /// that means "zoom" does not — and the delay is invisible.
+    /// </para>
+    /// <para>
+    /// Deferring is safe on all three: none of them read the pointer's position out of the event we pass.
+    /// Avalonia's macOS backend replays the <c>NSEvent</c> it stored at mouse-down, and Windows and X11
+    /// hand the window manager the live cursor position. Which is also why nothing here un-maximises a
+    /// maximised window first: dragging one is the window manager's own gesture, and it already restores
+    /// it under the cursor — and snaps to screen edges, and honours modifier keys — for free.
+    /// </para>
+    /// </remarks>
+    protected override void OnPointerMoved(PointerEventArgs e)
+    {
+        base.OnPointerMoved(e);
+        if (_armedDrag is not { } press || HostWindow is not { } window)
+        {
+            return;
+        }
+
+        var travelled = e.GetPosition(this) - _pressOrigin;
+        if (Math.Abs(travelled.X) < DragThreshold && Math.Abs(travelled.Y) < DragThreshold)
+        {
+            return;
+        }
+
+        CancelArmedDrag(); // the platform loop owns the pointer from here; we must not also hold it
+        MoveDragsBegunForTest++;
+        window.BeginMoveDrag(press);
+    }
+
+    protected override void OnPointerReleased(PointerReleasedEventArgs e)
+    {
+        base.OnPointerReleased(e);
+        CancelArmedDrag();
+    }
+
+    protected override void OnPointerCaptureLost(PointerCaptureLostEventArgs e)
+    {
+        base.OnPointerCaptureLost(e);
+        _armedDrag = null; // the capture is already gone; releasing it again would recurse
+    }
+
+    /// <summary>
+    /// What a double-click on a title bar does: maximise the window, or put an already-maximised one back
+    /// to the size and place it had before. The platform remembers those bounds — restoring is
+    /// <see cref="WindowState.Normal"/>, not a size we compute — so the window lands exactly where the
+    /// user last left it.
+    /// </summary>
+    private static void Zoom(Window window)
+    {
+        // A window that can't be resized can't be zoomed either: its zoom button is disabled on every
+        // desktop and double-clicking its title bar does nothing. Full screen is the window manager's
+        // mode, entered and left through its own affordances, so a double-click must not drop out of it.
+        if (!window.CanResize || window.WindowState == WindowState.FullScreen)
+        {
+            return;
+        }
+
+        window.WindowState = window.WindowState == WindowState.Maximized
+            ? WindowState.Normal
+            : WindowState.Maximized;
+    }
+
+    /// <summary>Disarm a pending move and give the pointer back, in that order (see OnPointerCaptureLost).</summary>
+    private void CancelArmedDrag()
+    {
+        if (_armedDrag is not { } press)
+        {
+            return;
+        }
+
+        _armedDrag = null;
+        press.Pointer.Capture(null);
     }
 
     private void UpdateText()

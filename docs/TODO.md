@@ -43,6 +43,31 @@
     seen. Windows and Linux keep their native title bar with this one below it; taking those over means
     owning the caption buttons too, which is its own piece of work.
 
+- [x] Across all apps, the custom title bar should carry the OS title bar's click behaviours — double-click
+  to maximise, double-click again to return to the previous size and position, click and drag to move the
+  window.
+    - [x] Cellestra
+    - [x] Puffinote
+    - [x] Typage
+    - [x] Plaintain
+    - [x] Pivotask
+
+    All five mount the one `DocumentTitleBar`, so this is one control's job. It already had a drag/zoom
+    handler and **none of it ever ran**: the handler asked for `VisualRoot as Window`, and as of Avalonia 12
+    a window's visual root is the host that draws its frame, with the `Window` beneath it — so the cast
+    yielded null on every press and the bar silently did nothing. `TopLevel.GetTopLevel` is the supported
+    way to ask. On top of that fix: the move is now armed on the press and only begun once the pointer
+    travels 4px, because every platform's window move is a modal loop that owns the mouse until the button
+    comes up — starting it on the press would have swallowed the second click of every double-click. A
+    window that can't be resized doesn't zoom (its zoom button is disabled everywhere), full screen is left
+    to the window manager, and a maximised window being dragged is left alone too: restoring it under the
+    cursor, snapping to screen edges and honouring modifiers are all the window manager's own gestures, and
+    it performs them for free once `BeginMoveDrag` hands over. Covered by `DocumentTitleBarGestureTests`.
+    **Still not verified on a real Mac** for the same reason as the item above — the container is headless.
+    Not done: right-click for the system window menu (Avalonia exposes no API for it), and macOS's
+    "double-click a window's title bar to Minimize" preference, which we can't read without new interop —
+    both would be worth a look on a Mac.
+
 - [x] If not present, implement zooming in/out across all apps (puffinote and typage)(cmd + zooms in, cmd - zooms out)
     - [x] Cellestra
     - [x] Puffinote
