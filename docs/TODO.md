@@ -15,6 +15,40 @@
 - [x] Typage: bug fix for unexpected behavior that adds extra newlines unexpectedly
 - [x] Plaintain: Create a new plaintext editor (use the plan file)
 - [x] Pivotask: Create a new todos editor (use the plan file)
+
+
+- [ ] Across all apps, add a settings menu to be able to configure the options present in the configuration file.
+    - [ ] Cellestra
+    - [ ] Puffinote
+    - [ ] Typage
+    - [ ] Plaintain
+    - [ ] Pivotask
+
+- [ ] Across all apps, Center-align the document name in the title bar
+    - [ ] Cellestra
+    - [ ] Puffinote
+    - [ ] Typage
+    - [ ] Plaintain
+    - [ ] Pivotask
+
+- [ ] If not present, implement zooming in/out across all apps (puffinote and typage)(cmd + zooms in, cmd - zooms out)
+    - [ ] Cellestra
+    - [ ] Puffinote
+    - [ ] Typage
+    - [ ] Plaintain
+    - [ ] Pivotask
+
+- [ ] Cellestra: editing text in a column that has word wrapped should word wrap the popup text editor as well (the textbox popup should contain similar contents and the cursor behavior should be expected)
+- [ ] Cellestra: If text is autocompleted while entering, It should also not autocomplete the title of a table, only the distinct value of one of its preceding rows in that column.
+
+- [ ] Cellestra: shift+return to enter newline in editing textbox has unexpected UI behavior in the top formula textbox, it should only extend the height of the specific textbox editor my cursor is in. There are two textbox editors, one inline, and one in the formula bar. 
+
+
+- [ ] Pivotask: The UI significantly drifts from the prototype. Launch the prototype and compare its UI to the current implementation. The prototype is a reference for the intended design, and the current implementation should be updated to match it.
+
+- [ ] Plaintain: The cursor is slightly offset from the text in the editor.
+- [ ] Plaintain: Add the ability to zoom to expand the text size in the editor. Respond to both [⌘+ and ⌘-] and [⌘0] to reset, and gestures for pinch-to-zoom.
+
 - [ ] Plaintain: ⌥⌘W (Word Wrap) collides with Puffinote's ⌥⌘W (Close All Tabs) — inside a Plaintain tab one of them wins and the other silently doesn't. Move one; the shell's is the older claim.
 - [ ] Pivotask: the board has no way to rename a group, delete a group, delete a task, fold completed tasks, or create a label. `BoardCommands` has all five, tested, with no caller outside the tests — the commands are done and the affordances aren't.
 - [ ] Puffinote: an external edit (a `git pull`, an edit in another app) refreshes the file tree and the search index but never reloads an open tab, so the pane keeps showing stale content and can overwrite the change on save. Proposal 0004 Phase 4 asks for this and it applies to every pane type, not just boards.
