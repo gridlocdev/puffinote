@@ -111,7 +111,7 @@ public partial class MainWindow : Window
         Height = 700;
         Title = "Puffinote";
 
-        var palette = Tokens.Dark;
+        var palette = Tokens.Active;
 
         _tabHost.ConfirmClose = PromptCloseAsync;
 

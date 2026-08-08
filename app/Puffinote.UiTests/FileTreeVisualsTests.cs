@@ -127,10 +127,10 @@ public sealed class FileTreeVisualsTests : IDisposable
         var (_, window) = Open();
         var runs = Label(window, "cover.png").Inlines!.OfType<Run>().ToList();
 
-        Assert.Equal(Tokens.Dark.Text, Label(window, "cover.png").Foreground);
-        Assert.Equal(Tokens.Dark.Text, runs[0].Foreground); // the stem, inheriting the label's ink
-        Assert.Equal(Tokens.Dark.MutedText, runs[1].Foreground);
-        Assert.NotEqual(Tokens.Dark.Text, Tokens.Dark.MutedText); // ...and they are genuinely two levels
+        Assert.Equal(Tokens.Active.Text, Label(window, "cover.png").Foreground);
+        Assert.Equal(Tokens.Active.Text, runs[0].Foreground); // the stem, inheriting the label's ink
+        Assert.Equal(Tokens.Active.MutedText, runs[1].Foreground);
+        Assert.NotEqual(Tokens.Active.Text, Tokens.Active.MutedText); // ...and they are genuinely two levels
     }
 
     [AvaloniaFact]
@@ -202,7 +202,7 @@ public sealed class FileTreeVisualsTests : IDisposable
         var folder = In<LucideIcon>(Row(window, "Projects")).First(i => i.IconKey is "folder" or "folder-open");
 
         Assert.Equal(FileGlyph.Folder, folder.Foreground);
-        Assert.NotEqual(Tokens.Dark.Accent, folder.Foreground); // folders never wear the "current thing" hue
+        Assert.NotEqual(Tokens.Active.Accent, folder.Foreground); // folders never wear the "current thing" hue
     }
 
     [AvaloniaFact]
@@ -236,10 +236,10 @@ public sealed class FileTreeVisualsTests : IDisposable
         Assert.Equal(Ink(window, "cover.png"), Ink(window, "Projects"));
 
         // ...and it is the bright level they meet at, not the muted one.
-        Assert.Equal(Tokens.Dark.Text, Ink(window, "Projects"));
+        Assert.Equal(Tokens.Active.Text, Ink(window, "Projects"));
 
         // Every row, the open one included: what marks it is the wash behind it, not its ink.
-        Assert.Equal(Tokens.Dark.Text, Ink(window, "Inbox.md"));
+        Assert.Equal(Tokens.Active.Text, Ink(window, "Inbox.md"));
     }
 
     /// <summary>The wash painted behind a row, which is what "highlighted" means here.</summary>
@@ -255,7 +255,7 @@ public sealed class FileTreeVisualsTests : IDisposable
         tree.SetActiveDocument(Path("Inbox.md"));
         Settle(window);
 
-        Assert.Equal(Tokens.Dark.AccentSubtle, Wash(window, "Inbox.md"));
+        Assert.Equal(Tokens.Active.AccentSubtle, Wash(window, "Inbox.md"));
         Assert.Equal(FontWeight.Normal, Weight(window, "Inbox.md"));
 
         // Nothing is bold anywhere, so no row's width depends on which note is open.
@@ -266,7 +266,7 @@ public sealed class FileTreeVisualsTests : IDisposable
         tree.SetActiveDocument(Path("cover.png"));
         Settle(window);
 
-        Assert.Equal(Tokens.Dark.AccentSubtle, Wash(window, "cover.png"));
+        Assert.Equal(Tokens.Active.AccentSubtle, Wash(window, "cover.png"));
         Assert.Equal(Brushes.Transparent, Wash(window, "Inbox.md"));
 
         // Close the last tab and nothing is being read, so nothing is highlighted.
@@ -289,7 +289,7 @@ public sealed class FileTreeVisualsTests : IDisposable
         tree.SelectPath(Path("Projects"));
         Settle(window);
 
-        Assert.Equal(Tokens.Dark.AccentSubtle, Wash(window, "Inbox.md"));
+        Assert.Equal(Tokens.Active.AccentSubtle, Wash(window, "Inbox.md"));
     }
 
     /// <summary>What the <see cref="ListBoxItem"/> itself paints — the selection's channel, behind the row.</summary>
@@ -311,15 +311,15 @@ public sealed class FileTreeVisualsTests : IDisposable
         tree.SetActiveDocument(Path("Inbox.md"));
         Settle(window);
 
-        Assert.Equal(Tokens.Dark.AccentSubtle, Wash(window, "Inbox.md"));
+        Assert.Equal(Tokens.Active.AccentSubtle, Wash(window, "Inbox.md"));
 
         var selected = Selection(window, "cover.png");
         Assert.Equal(Brushes.Transparent, selected.Wash); // no second highlight...
-        Assert.Equal(Tokens.Dark.Accent, selected.Bar);   // ...but you can still see where the keyboard is
+        Assert.Equal(Tokens.Active.Accent, selected.Bar);   // ...but you can still see where the keyboard is
 
         // And nothing else in the tree — the ListBox's own selected row included — wears the open document's wash.
         var washed = window.GetVisualDescendants().OfType<ListBoxItem>()
-            .Count(row => Equals(In<DockPanel>(row).First().Background, Tokens.Dark.AccentSubtle));
+            .Count(row => Equals(In<DockPanel>(row).First().Background, Tokens.Active.AccentSubtle));
         Assert.Equal(1, washed);
     }
 
@@ -351,7 +351,7 @@ public sealed class FileTreeVisualsTests : IDisposable
         Settle(window);
 
         Assert.Contains("Attention.md", tree.VisibleNamesForTest);
-        Assert.Equal(Tokens.Dark.AccentSubtle, Wash(window, "Attention.md"));
+        Assert.Equal(Tokens.Active.AccentSubtle, Wash(window, "Attention.md"));
         Assert.Equal(Path("Inbox.md"), tree.SelectedNode?.Path); // the reveal did not hijack the selection
     }
 
@@ -390,7 +390,7 @@ public sealed class FileTreeVisualsTests : IDisposable
 
         var scroller = In<ScrollViewer>(window).First();
         Assert.Equal(0, scroller.Offset.Y);
-        Assert.Equal(Tokens.Dark.AccentSubtle, Wash(window, "note-01.md")); // and it is on screen, highlighted
+        Assert.Equal(Tokens.Active.AccentSubtle, Wash(window, "note-01.md")); // and it is on screen, highlighted
     }
 
     /// <summary>How far the row named <paramref name="name"/> sits from the vertical middle of the panel, in px.</summary>
@@ -434,7 +434,7 @@ public sealed class FileTreeVisualsTests : IDisposable
 
         Assert.Equal(Path("cover.png"), tree.SelectedNode?.Path);
         Assert.Equal(FontWeight.Normal, Weight(window, "cover.png")); // selected, but not open
-        Assert.Equal(Tokens.Dark.AccentSubtle, Wash(window, "Inbox.md")); // open, though not selected
+        Assert.Equal(Tokens.Active.AccentSubtle, Wash(window, "Inbox.md")); // open, though not selected
     }
 
     [AvaloniaFact]
@@ -442,7 +442,7 @@ public sealed class FileTreeVisualsTests : IDisposable
     {
         // The trace is the accent *hue*, dimmed (a full-strength bar at every level of a deep selection
         // shouts down the names), so this compares colour rather than brush identity.
-        var accent = ((ISolidColorBrush)Tokens.Dark.Accent).Color;
+        var accent = ((ISolidColorBrush)Tokens.Active.Accent).Color;
         static Color? Hue(Border guide) => (guide.BorderBrush as ISolidColorBrush)?.Color;
 
         var (tree, window) = Open();

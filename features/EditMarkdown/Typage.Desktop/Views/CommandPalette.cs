@@ -27,7 +27,7 @@ public sealed class CommandPalette : Panel
     public CommandPalette()
     {
         IsVisible = false;
-        Background = Tokens.Dark.Scrim; // dim backdrop (Typage's shell is dark)
+        Background = Tokens.Active.Scrim; // dim backdrop (Typage's shell is dark)
 
         var card = new Border
         {
@@ -37,8 +37,8 @@ public sealed class CommandPalette : Panel
             Margin = new Thickness(0, 90, 0, 0),
             Padding = new Thickness(12),
             CornerRadius = new CornerRadius(10),
-            Background = Tokens.Dark.Surface,
-            BorderBrush = Tokens.Dark.SurfaceBorder,
+            Background = Tokens.Active.Surface,
+            BorderBrush = Tokens.Active.SurfaceBorder,
             BorderThickness = new Thickness(1),
             Child = _palette, // the shared list view traps Tab inside itself
         };

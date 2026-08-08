@@ -77,7 +77,7 @@ internal sealed class SidebarView : UserControl
         _files.RevealRequested += node => RevealRequested?.Invoke(node);
         _files.OpenExternallyRequested += node => OpenExternallyRequested?.Invoke(node);
 
-        var palette = Tokens.Dark;
+        var palette = Tokens.Active;
 
         // The notebook's name is content, not a label for something else, so it is written in the primary ink
         // like the file names below it. Muted, the one line naming what you have open sat at the same level as
@@ -435,7 +435,7 @@ internal sealed class SidebarView : UserControl
     /// </summary>
     private void RefreshSwitcher()
     {
-        var palette = Tokens.Dark;
+        var palette = Tokens.Active;
         foreach (var button in _switcher.Children.OfType<Button>())
         {
             bool active = (string?)button.Tag == _active.Id;

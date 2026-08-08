@@ -188,7 +188,7 @@ public sealed partial class MainWindow : Window
 
     private Border BuildStatusBar()
     {
-        var palette = Tokens.Dark;
+        var palette = Tokens.Active;
         _status.Foreground = palette.MutedText;
         _status.FontSize = 11;
         _status.VerticalAlignment = VerticalAlignment.Center;

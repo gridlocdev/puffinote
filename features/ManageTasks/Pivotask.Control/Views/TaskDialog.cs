@@ -34,7 +34,7 @@ internal sealed class TaskDialog : ModalDialog<bool>
         _task = task;
         Title = "Task";
 
-        var palette = Tokens.Dark;
+        var palette = Tokens.Active;
 
         var title = new TextBox { Text = task.Title, AcceptsReturn = false };
         title.LostFocus += (_, _) =>
@@ -106,7 +106,7 @@ internal sealed class TaskDialog : ModalDialog<bool>
         Spacing = 4,
         Children =
         {
-            new TextBlock { Text = heading, FontSize = 11, Foreground = Tokens.Dark.MutedText },
+            new TextBlock { Text = heading, FontSize = 11, Foreground = Tokens.Active.MutedText },
             body,
         },
     };
@@ -135,7 +135,7 @@ internal sealed class TaskDialog : ModalDialog<bool>
 
         if (_document.Board.Labels.Count == 0)
         {
-            panel.Children.Add(new TextBlock { Text = "This board has no labels yet.", Foreground = Tokens.Dark.MutedText });
+            panel.Children.Add(new TextBlock { Text = "This board has no labels yet.", Foreground = Tokens.Active.MutedText });
         }
 
         return panel;

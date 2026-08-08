@@ -26,7 +26,7 @@ internal sealed class SearchPanel : ISidebarPanel
 
     public SearchPanel()
     {
-        var palette = Tokens.Dark;
+        var palette = Tokens.Active;
 
         // Coalesce keystrokes: the scan is O(total notebook text), so re-running it on every character (and on
         // the UI thread) janks a large notebook. Debounce, then run the scan off-thread (P1).

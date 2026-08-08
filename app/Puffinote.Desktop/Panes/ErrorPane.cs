@@ -27,7 +27,7 @@ internal sealed class ErrorPane : IEditorPane
             VerticalAlignment = VerticalAlignment.Center,
             MaxWidth = 460,
             Margin = new Thickness(24),
-            Foreground = Tokens.Dark.MutedText,
+            Foreground = Tokens.Active.MutedText,
         };
     }
 

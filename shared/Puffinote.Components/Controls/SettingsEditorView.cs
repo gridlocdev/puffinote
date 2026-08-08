@@ -246,7 +246,7 @@ public sealed class SettingsEditorView : UserControl
         Text = text,
         Margin = new Thickness(0, first ? 0 : 14, 0, 2),
         FontWeight = FontWeight.SemiBold,
-        Foreground = Tokens.Dark.MutedText,
+        Foreground = Tokens.Active.MutedText,
     };
 
     private static Control Row(SettingsField field)
@@ -294,7 +294,7 @@ public sealed class SettingsEditorView : UserControl
                 {
                     Text = hint,
                     FontSize = 11,
-                    Foreground = Tokens.Dark.MutedText,
+                    Foreground = Tokens.Active.MutedText,
                     TextWrapping = TextWrapping.Wrap,
                     Margin = new Thickness(0, 2, 0, 0),
                 },

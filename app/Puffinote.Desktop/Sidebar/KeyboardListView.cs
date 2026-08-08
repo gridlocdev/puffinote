@@ -33,7 +33,7 @@ internal sealed class KeyboardListView : UserControl
 
         _empty = new TextBlock
         {
-            Foreground = Tokens.Dark.MutedText,
+            Foreground = Tokens.Active.MutedText,
             Margin = new Thickness(12, 8),
             IsVisible = false,
         };

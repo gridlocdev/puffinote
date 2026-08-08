@@ -19,7 +19,7 @@ internal sealed class TaskCard : Border
     public TaskCard(Board board, TaskItem task, DateOnly today)
     {
         Task = task;
-        var palette = Tokens.Dark;
+        var palette = Tokens.Active;
 
         Background = palette.Surface;
         BorderBrush = palette.SurfaceBorder;
@@ -123,7 +123,7 @@ internal sealed class TaskCard : Border
     /// they are both "one fact about this task", and inventing a second shape would imply otherwise.</summary>
     internal static Border Chip(string text, Color? accent)
     {
-        var palette = Tokens.Dark;
+        var palette = Tokens.Active;
         return new Border
         {
             Background = accent is { } color ? new SolidColorBrush(color, 0.22) : palette.SurfaceInset,

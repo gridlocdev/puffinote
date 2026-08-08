@@ -535,7 +535,7 @@ internal sealed class FileTreeView : UserControl
     /// </summary>
     private static void StyleRows(ListBox list)
     {
-        var palette = Tokens.Dark;
+        var palette = Tokens.Active;
 
         static Style Item(Func<Selector?, Selector> selector, params Setter[] setters)
         {
@@ -603,7 +603,7 @@ internal sealed class FileTreeView : UserControl
             return new Control();
         }
 
-        var palette = Tokens.Dark;
+        var palette = Tokens.Active;
         var expanded = _expanded.Contains(row.Node.Path);
 
         // A disclosure chevron, ahead of the folder glyph. The folder/folder-open icon swap alone was too weak
@@ -796,7 +796,7 @@ internal sealed class FileTreeView : UserControl
     /// </summary>
     private void RefreshGuides()
     {
-        var palette = Tokens.Dark;
+        var palette = Tokens.Active;
 
         // Ask the list for the rows it has actually realized rather than probing every index: this runs on every
         // arrow-key press, and a held Down key through a 10,000-note notebook would otherwise do 10,000

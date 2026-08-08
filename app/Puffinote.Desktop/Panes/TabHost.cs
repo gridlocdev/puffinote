@@ -58,7 +58,7 @@ internal sealed class TabHost : UserControl
 
     public TabHost()
     {
-        var palette = Tokens.Dark;
+        var palette = Tokens.Active;
         _placeholder = new TextBlock
         {
             Text = "Open a file from the sidebar to start.\nNotes and sheets can be open in tabs together.",
@@ -469,7 +469,7 @@ internal sealed class TabHost : UserControl
 
     private Control BuildTab(TabItem tab)
     {
-        var palette = Tokens.Dark;
+        var palette = Tokens.Active;
         bool active = ReferenceEquals(tab, ActiveTab);
 
         var label = new Button

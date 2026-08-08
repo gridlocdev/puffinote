@@ -78,12 +78,12 @@ public sealed class ShortcutsEditorView : UserControl
         Text = text,
         Margin = new Thickness(4, 10, 4, 4),
         FontWeight = FontWeight.SemiBold,
-        Foreground = Tokens.Dark.MutedText,
+        Foreground = Tokens.Active.MutedText,
     };
 
     private Control Row(ShortcutBinding binding)
     {
-        var palette = Tokens.Dark;
+        var palette = Tokens.Active;
         var title = new TextBlock { Text = binding.Title, VerticalAlignment = VerticalAlignment.Center };
 
         var trailing = new StackPanel

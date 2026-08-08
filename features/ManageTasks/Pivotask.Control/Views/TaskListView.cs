@@ -68,7 +68,7 @@ public sealed class TaskListView : UserControl
     private void Rebuild()
     {
         _rows.Children.Clear();
-        var palette = Tokens.Dark;
+        var palette = Tokens.Active;
         bool any = false;
 
         foreach (var group in Document.Board.Groups)
@@ -109,7 +109,7 @@ public sealed class TaskListView : UserControl
 
     private DockPanel BuildRow(TaskItem task)
     {
-        var palette = Tokens.Dark;
+        var palette = Tokens.Active;
         var check = new CheckBox { IsChecked = task.Done, VerticalAlignment = VerticalAlignment.Center };
         check.IsCheckedChanged += (_, _) =>
         {

@@ -28,10 +28,10 @@ public sealed partial class RadialSettingsDialog : ModalDialog<RadialMenuConfig>
     private static readonly Cursor RowDragCursor = new(StandardCursorType.SizeNorthSouth);
     private static readonly Cursor RadialDragCursor = new(StandardCursorType.DragMove);
     // This dialog and its sub-overlays are dark chrome, so they read the dark token palette.
-    private static readonly IBrush SelectedRowBrush = Tokens.Dark.AccentSubtle;
-    private static readonly IBrush PickerMuted = Tokens.Dark.MutedText;
-    private static readonly IBrush PickerCardBrush = Tokens.Dark.Surface;
-    private static readonly IBrush ScrimBrush = Tokens.Dark.Scrim;
+    private static readonly IBrush SelectedRowBrush = Tokens.Active.AccentSubtle;
+    private static readonly IBrush PickerMuted = Tokens.Active.MutedText;
+    private static readonly IBrush PickerCardBrush = Tokens.Active.Surface;
+    private static readonly IBrush ScrimBrush = Tokens.Active.Scrim;
 
     private readonly NumericUpDown _countField;
     private readonly StackPanel _bindingRows = new() { Spacing = 6 };

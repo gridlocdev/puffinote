@@ -80,6 +80,6 @@ public sealed class FileGlyphTests
     {
         // "this is a folder" and "this is the current thing" must not be said in the same hue, or the tree's two
         // most common signals collide. Guarding the intent, not the specific blue.
-        Assert.NotEqual(Puffinote.Components.Theming.Tokens.Dark.Accent, FileGlyph.Folder);
+        Assert.NotEqual(Puffinote.Components.Theming.Tokens.Active.Accent, FileGlyph.Folder);
     }
 }

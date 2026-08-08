@@ -94,10 +94,10 @@ public sealed class ActiveStateSignifiersTests
             .ToList();
 
         // The bar down the leading edge — selection's whole signal.
-        Assert.Contains(Tokens.Dark.Accent, brushes);
+        Assert.Contains(Tokens.Active.Accent, brushes);
 
         // And not the wash: that one marks the file behind the active tab (FileTreeView.BuildRow), so a row the
         // ListBox merely has selected must not borrow it and light the sidebar in two places at once.
-        Assert.DoesNotContain(Tokens.Dark.AccentSubtle, brushes);
+        Assert.DoesNotContain(Tokens.Active.AccentSubtle, brushes);
     }
 }

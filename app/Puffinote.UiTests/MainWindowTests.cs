@@ -188,14 +188,14 @@ public sealed class MainWindowTests
             await window.OpenFileAsync(one);
             await window.OpenFileAsync(two); // two.md is now the active tab
 
-            Assert.Equal(Tokens.Dark.AccentSubtle, TreeWash(window, "two.md"));
+            Assert.Equal(Tokens.Active.AccentSubtle, TreeWash(window, "two.md"));
             Assert.Equal(Brushes.Transparent, TreeWash(window, "one.md"));
 
             // ⌘/Ctrl+Tab — a route into a document that never touches the tree at all.
             window.InvokeShellForTest("shell.nextTab");
 
             Assert.Equal(one, window.ActiveTabPathForTest);
-            Assert.Equal(Tokens.Dark.AccentSubtle, TreeWash(window, "one.md"));
+            Assert.Equal(Tokens.Active.AccentSubtle, TreeWash(window, "one.md"));
             Assert.Equal(Brushes.Transparent, TreeWash(window, "two.md"));
         }
         finally

@@ -26,7 +26,7 @@ public sealed class FindBar : Border
 
     public FindBar()
     {
-        var palette = Tokens.Dark;
+        var palette = Tokens.Active;
         Background = palette.Surface;
         BorderBrush = palette.SurfaceBorder;
         BorderThickness = new Thickness(0, 0, 0, 1);
@@ -101,7 +101,7 @@ public sealed class FindBar : Border
         _count.Text = Query.Length == 0 ? string.Empty
             : total == 0 ? "No results"
             : $"{current + 1} of {total}";
-        _count.Foreground = total == 0 && Query.Length > 0 ? Brushes.IndianRed : Tokens.Dark.MutedText;
+        _count.Foreground = total == 0 && Query.Length > 0 ? Brushes.IndianRed : Tokens.Active.MutedText;
     }
 
     private void OnQueryKeyDown(object? sender, KeyEventArgs e)

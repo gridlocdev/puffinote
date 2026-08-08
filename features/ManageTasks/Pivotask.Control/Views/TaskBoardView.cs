@@ -202,7 +202,7 @@ public sealed class TaskBoardView : UserControl
                 // The active filter carries the accent underline the family uses for "this is the
                 // current one" — the same mark Cellestra's active sheet tab wears.
                 BorderThickness = new Thickness(0, 0, 0, 2),
-                BorderBrush = Filter == filter ? Tokens.Dark.Accent : Brushes.Transparent,
+                BorderBrush = Filter == filter ? Tokens.Active.Accent : Brushes.Transparent,
                 Background = Brushes.Transparent,
             };
 

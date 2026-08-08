@@ -114,7 +114,7 @@ public partial class MainWindow
         var card = new Border
         {
             Width = 560,
-            Background = Tokens.Dark.Surface,
+            Background = Tokens.Active.Surface,
             CornerRadius = new CornerRadius(8),
             Padding = new Thickness(12),
             Margin = new Thickness(0, 60, 0, 0),

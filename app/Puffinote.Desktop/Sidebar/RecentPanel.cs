@@ -20,7 +20,7 @@ internal sealed class RecentPanel : ISidebarPanel
 
     public RecentPanel()
     {
-        var palette = Tokens.Dark;
+        var palette = Tokens.Active;
         _list = new KeyboardListView(new FuncDataTemplate<Entry>((entry, _) => BuildRow(entry, palette), supportsRecycling: true))
         {
             EmptyText = "No recent files yet.",

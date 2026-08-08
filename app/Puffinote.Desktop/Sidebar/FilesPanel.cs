@@ -56,7 +56,7 @@ internal sealed class FilesPanel : ISidebarPanel
         _tree.RevealRequested += node => RevealRequested?.Invoke(node);
         _tree.OpenExternallyRequested += node => OpenExternallyRequested?.Invoke(node);
 
-        var palette = Tokens.Dark;
+        var palette = Tokens.Active;
 
         // "In Folder: Projects" rather than a bare "Projects": the tree below is showing a folder's contents the
         // same way it otherwise shows a notebook's, so the row has to say *why* the rest of the notebook is
@@ -224,7 +224,7 @@ internal sealed class FilesPanel : ISidebarPanel
             return;
         }
 
-        var palette = Tokens.Dark;
+        var palette = Tokens.Active;
         _folderLabel.Inlines =
         [
             new Run("In Folder: ") { Foreground = palette.MutedText },

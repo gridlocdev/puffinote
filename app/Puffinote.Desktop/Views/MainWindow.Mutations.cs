@@ -111,7 +111,7 @@ public partial class MainWindow
                     FontSize = 11,
                     MaxWidth = 240,
                     TextWrapping = TextWrapping.Wrap,
-                    Foreground = Tokens.Dark.MutedText,
+                    Foreground = Tokens.Active.MutedText,
                 },
             },
         };
@@ -168,7 +168,7 @@ public partial class MainWindow
                 {
                     Text = extension,
                     VerticalAlignment = VerticalAlignment.Center,
-                    Foreground = Tokens.Dark.MutedText, // the extension is fixed by the command, not editable
+                    Foreground = Tokens.Active.MutedText, // the extension is fixed by the command, not editable
                 },
             },
         };

@@ -106,7 +106,7 @@ public sealed class BoardView : UserControl
 
     private Border BuildColumn(TaskGroup group)
     {
-        var palette = Tokens.Dark;
+        var palette = Tokens.Active;
         var body = new StackPanel { Spacing = 0 };
 
         var header = new DockPanel { LastChildFill = true, Margin = new Thickness(0, 0, 0, 8) };

@@ -94,7 +94,7 @@ public sealed class TabbedSettingsView : UserControl
 
     private void RebuildStrip()
     {
-        var palette = Tokens.Dark;
+        var palette = Tokens.Active;
         _strip.Children.Clear();
 
         for (var index = 0; index < Tabs.Count; index++)
@@ -149,7 +149,7 @@ public sealed class TabbedSettingsView : UserControl
                 tab.Form,
                 new Border
                 {
-                    BorderBrush = Tokens.Dark.SurfaceBorder,
+                    BorderBrush = Tokens.Active.SurfaceBorder,
                     BorderThickness = new Thickness(0, 1, 0, 0),
                     Margin = new Thickness(0, 8, 0, 0),
                     Padding = new Thickness(0, 10, 0, 0),
@@ -164,7 +164,7 @@ public sealed class TabbedSettingsView : UserControl
                                 Text = $"Opens {path} in your default editor — every setting is in there, "
                                     + "including the ones this dialog doesn't show.",
                                 FontSize = 11,
-                                Foreground = Tokens.Dark.MutedText,
+                                Foreground = Tokens.Active.MutedText,
                                 TextWrapping = TextWrapping.Wrap,
                             },
                         },
