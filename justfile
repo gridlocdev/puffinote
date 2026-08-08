@@ -13,6 +13,8 @@
 #   just test             test every area
 #   just format           auto-format every area
 #   just check            format-verify + build + test all areas (CI gate / definition of done)
+#   just check-nodisplay  ...the same, in a container/sandbox with no display or GPU  ← use this here
+#   just test-nodisplay   test every area with no display or GPU
 #   just test-typage      one area's suite (recipes read verb-first: test-puffinote, publish-cellestra-app)
 #   just test-filter SomeTest typage    run a subset while iterating
 #   just publish          self-contained Release builds of every app into artifacts/
@@ -35,6 +37,13 @@
 # concurrent `dotnet build`/`dotnet test` invocations deadlock on the MSBuild-node locks.
 #
 # Warnings are errors here (TreatWarningsAsErrors=true), so "build" means "no warnings".
+#
+# Cellestra's headless UI tests draw with real Skia, which HANGS where there is no display or GPU —
+# silently, before the first test reports, so it reads as "slow" rather than "broken". The plain
+# `test`/`check` recipes leave the drawing backend alone so CI and a real desktop keep real Skia and
+# its render-capture assertions; the `-nodisplay` variants set CELLESTRA_HEADLESS_NULL_DRAWING=1 for
+# the run instead. The devcontainer exports that var, but a shell it did not start (agent sandbox,
+# docker exec) does not have it — if `just test` sits there with no output, you want `-nodisplay`.
 
 # ---- Solutions ----------------------------------------------------------------
 PUFFINOTE_SLN := "app/Puffinote.slnx"
@@ -137,6 +146,14 @@ clean: clean-puffinote clean-typage clean-cellestra clean-plaintain clean-pivota
 # Definition of done: formatting verified, all areas build clean and green
 [group('all areas')]
 check: format-check build test
+
+# Test every area where there is no display/GPU (container, agent sandbox, plain ssh)
+[group('all areas')]
+test-nodisplay: test-puffinote test-typage test-cellestra-nodisplay test-plaintain test-pivotask
+
+# `just check` where there is no display/GPU — the definition of done in a container
+[group('all areas')]
+check-nodisplay: format-check build test-nodisplay
 
 # Publish every app (CLI + desktop, self-contained) to artifacts/
 [group('all areas')]
@@ -382,6 +399,11 @@ build-cellestra:
 [group('cellestra')]
 test-cellestra:
     {{ DOTNET }} test {{ CELLESTRA_SLN }}
+
+# Test Cellestra where there is no display/GPU — its UI tests hang on real Skia without one
+[group('cellestra')]
+test-cellestra-nodisplay:
+    CELLESTRA_HEADLESS_NULL_DRAWING=1 {{ DOTNET }} test {{ CELLESTRA_SLN }}
 
 # Auto-format the Cellestra editor
 [group('cellestra')]

@@ -69,6 +69,15 @@ just check                                # format-verify + build + test, every 
 
 Every recipe is a thin wrapper over `dotnet build|test|format <area>.slnx` (e.g. `features/EditMarkdown/Typage.slnx`) — **if `just` isn't on `PATH`, run those directly**; they're equivalent, and some agent sandboxes aren't the devcontainer. (`just --dry-run <recipe>` prints the exact commands a recipe would run.) Likewise, if `dotnet` isn't on `PATH`, `export PATH="$PATH:/root/.dotnet"` (and `libicu` must be installed).
 
+**Before running any test, export `CELLESTRA_HEADLESS_NULL_DRAWING=1` unless you are on CI or a real desktop.** Cellestra's headless UI tests draw with real Skia, which **hangs** where there is no display/GPU — and it hangs *silently*, before the first test reports, so it reads as "the tests are slow" rather than as an error. `.devcontainer/devcontainer.json` sets the variable via `containerEnv`, but **a shell that didn't come from the devcontainer does not get it** — which is most agent sandboxes and any `docker exec`. Check it, don't assume it:
+
+```bash
+echo "${CELLESTRA_HEADLESS_NULL_DRAWING:-<UNSET>}"   # <UNSET> ⇒ export it before testing
+export CELLESTRA_HEADLESS_NULL_DRAWING=1
+```
+
+`just` does **not** set it either, so `just test`/`just check` hang the same way without it. Only Cellestra reads it — Typage, Plaintain, Pivotask, and Puffinote always use null drawing. Details and the `AssertRenders()` rule for render-capture tests: [`features/EditSpreadsheets/AGENTS.md`](features/EditSpreadsheets/AGENTS.md). Whole-suite timings with it set, as a sanity check: Cellestra ~10s, Typage ~4s, Puffinote ~4s — if a suite runs for minutes, it is hung, not busy.
+
 **Shipping.** The same front door publishes and installs each app; all of it is macOS-first, and only the
 `.app` targets require a Mac (the container can still publish):
 
