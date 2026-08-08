@@ -5,9 +5,11 @@ using Avalonia.Input;
 using Avalonia.LogicalTree;
 using Avalonia.Styling;
 using Avalonia.Threading;
+using Avalonia.VisualTree;
 using Cellestra.Desktop.Views;
 using Cellestra.Editor;
 using Puffinote.Components.Commands;
+using Puffinote.Components.Controls;
 using Puffinote.Components.Theming;
 using Xunit;
 
@@ -45,6 +47,30 @@ public class PreferencesTests : IDisposable
         // explicitly (the test host is Linux).
         Assert.Equal(new KeyGesture(Key.OemComma, KeyModifiers.Meta), command.Shortcut!.Value.ToGesture(mac: true));
         Assert.Equal("⌘,", ShortcutFormatter.Format(command.Shortcut!.Value, mac: true));
+    }
+
+    /// <summary>
+    /// ⌘K's list is where someone looks for a command they haven't memorised, so Preferences has to be
+    /// <em>in</em> it — and to carry its chord, which is how the palette teaches ⌘, rather than only
+    /// answering to it. It is filed under "App": as the one <c>app.</c> command it used to fall through
+    /// to the "Other" bin at the end of the list.
+    /// </summary>
+    [AvaloniaFact]
+    public void Preferences_is_offered_by_the_command_menu_with_its_chord()
+    {
+        var window = ScratchWindow();
+        window.Show();
+        Dispatcher.UIThread.RunJobs();
+
+        window.Editor.ShowCommandPalette(); // what ⌘K (view.commandPalette) runs
+        Dispatcher.UIThread.RunJobs();
+
+        var palette = window.Editor.OverlayHost.GetVisualDescendants().OfType<PaletteListView>().Single();
+        var entry = Assert.Single(palette.ListedEntries, e => e.Title == "Preferences…");
+
+        // Cellestra is macOS-only, so the palette renders ⌘ regardless of the host running the tests.
+        Assert.Equal("⌘,", entry.Shortcut);
+        Assert.Contains("App", palette.ListedTitles);
     }
 
     [AvaloniaFact]

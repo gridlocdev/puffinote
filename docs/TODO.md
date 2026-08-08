@@ -197,7 +197,21 @@
     earlier — the one thing "for this session" must not do. Answering the question in the dialog clears
     the session override, so the setting you just picked actually takes.
 
-- [ ] All Apps: All applications that use the command menu (all of them except Plaintain) should have a command for opening the settings menu, with the existing keyboard shortcut listed.
+- [x] All Apps: All applications that use the command menu (all of them except Plaintain) should have a command for opening the settings menu, with the existing keyboard shortcut listed.
+
+    Three apps have a command menu, not four. Puffinote (`shell.preferences`), Typage, and Cellestra
+    (`app.preferences`) each already offered **Preferences…** on ⌘, from ⌘K, and a palette row renders the
+    chord beside the title — so the menu *teaches* the shortcut rather than only answering to it. Pivotask
+    is the fourth non-Plaintain app but has no ⌘K of its own by design (`features/ManageTasks/docs/PRD.md`
+    §7: ⌘K belongs to the *host's* palette; the standalone window offers Preferences… on ⌘, from its File
+    menu), so like Plaintain it has no command menu to add a row to.
+
+    What was actually wrong was where Cellestra filed it: `app.` was the one id prefix `PaletteCatalog`
+    never mapped, so Preferences fell through to the "Other" bin at the end of the list — which reads as
+    leftovers, exactly where nobody looks for settings. It has its own "App" section now. All three apps
+    gained a test that pins the row *and* its chord in the palette itself rather than only in the catalog,
+    reading the new `PaletteListView.ListedEntries` — the twin of `ListedTitles`, for when what a row
+    advertises is the point.
 
 - [x] All Apps: All applications should have an auto-save feature that saves the current document automatically after a certain period of inactivity (e.g., 30 seconds). This prevents data loss in case of unexpected application crashes or power outages. The auto-save interval should be configurable in the settings menu.
     - [x] Cellestra

@@ -7,9 +7,11 @@ using Avalonia.LogicalTree;
 using Avalonia.Styling;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
+using Puffinote.Components.Commands;
 using Puffinote.Components.Controls;
 using Puffinote.Components.Overlays;
 using Puffinote.Components.Theming;
+using Puffinote.Desktop.Commands;
 using Puffinote.Desktop.Panes;
 using Puffinote.Desktop.Shell;
 using Puffinote.Desktop.Views;
@@ -115,6 +117,30 @@ public sealed class PreferencesTests
         // Bound as an ordinary (rebindable, non-reserved) key, so the shortcuts editor can move it.
         Assert.False(ShellCommandCatalog.IsReserved("shell.preferences"));
         Assert.Contains(window.KeyBindings, b => b.Gesture is { } g && g.Key == Key.OemComma);
+    }
+
+    /// <summary>
+    /// ⌘K's list is where someone looks for a command they haven't memorised, so Preferences has to be
+    /// <em>in</em> it — and to carry its chord, which is how the palette teaches ⌘, rather than only
+    /// answering to it. With no tab open the merged palette is the shell's catalog alone, so the one row
+    /// here is Puffinote's own; an active Cellestra tab adds the editor's under "Editor", which is the
+    /// point of the merge rather than a duplicate.
+    /// </summary>
+    [AvaloniaFact]
+    public void Preferences_is_offered_by_the_command_menu_with_its_chord()
+    {
+        var window = new MainWindow(new NotebookService());
+        window.Show();
+
+        window.ShellCommandsForTest.Single(c => c.Id == "shell.commandPalette").Execute();
+        Dispatcher.UIThread.RunJobs();
+
+        var overlay = window.GetVisualDescendants().OfType<OverlayHost>().Single(h => h.IsOpen);
+        var palette = overlay.GetVisualDescendants().OfType<PaletteListView>().Single();
+        var entry = Assert.Single(palette.ListedEntries, e => e.Title == "Preferences…");
+
+        Assert.Equal(ShortcutFormatter.Format(Shortcut.Cmd(Key.OemComma)), entry.Shortcut);
+        Assert.Equal(CommandMerge.ShellCategory, entry.Category);
     }
 
     [AvaloniaFact]

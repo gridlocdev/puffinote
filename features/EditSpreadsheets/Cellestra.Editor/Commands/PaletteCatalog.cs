@@ -38,6 +38,11 @@ internal static class PaletteCatalog
             "formula" => "Formulas",
             "view" => "View",
             "help" => "Help",
+
+            // Preferences is the one "app." command, and a section of its own is the honest place for it:
+            // it configures the app rather than the workbook, and it used to fall through to "Other" —
+            // which reads as a leftovers bin, exactly where you don't look for settings.
+            "app" => "App",
             _ => "Other",
         };
     }

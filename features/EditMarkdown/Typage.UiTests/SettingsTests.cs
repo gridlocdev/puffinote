@@ -1,10 +1,14 @@
 using Avalonia;
 using Avalonia.Controls;
+using Avalonia.Headless;
 using Avalonia.Headless.XUnit;
 using Avalonia.Input;
 using Avalonia.LogicalTree;
 using Avalonia.Styling;
 using Avalonia.Threading;
+using Avalonia.VisualTree;
+using Puffinote.Components.Commands;
+using Puffinote.Components.Controls;
 using Puffinote.Components.Theming;
 using Typage.Control.Controls;
 using Typage.Desktop.Services;
@@ -49,6 +53,25 @@ public class SettingsTests
         Assert.Contains(
             window.KeyBindings,
             b => b.Gesture is { } g && g.Key == Key.OemComma && g.KeyModifiers == TestShell.Command);
+    }
+
+    /// <summary>
+    /// ⌘K's list is where someone looks for a command they haven't memorised, so Preferences has to be
+    /// <em>in</em> it — and to carry its chord, which is how the palette teaches ⌘, rather than only
+    /// answering to it.
+    /// </summary>
+    [AvaloniaFact]
+    public void Preferences_is_offered_by_the_command_menu_with_its_chord()
+    {
+        var window = TestShell.NewWindow();
+        window.Show();
+
+        window.KeyPressQwerty(PhysicalKey.K, TestShell.RawCommand);
+        Dispatcher.UIThread.RunJobs();
+
+        var palette = window.GetVisualDescendants().OfType<PaletteListView>().Single();
+        var entry = Assert.Single(palette.ListedEntries, e => e.Title == "Preferences…");
+        Assert.Equal(ShortcutFormatter.Format(Shortcut.Cmd(Key.OemComma)), entry.Shortcut);
     }
 
     [AvaloniaFact]

@@ -99,6 +99,15 @@ public sealed class PaletteListView : StackPanel
     public IReadOnlyList<string> ListedTitles =>
         _list.ItemsSource is IEnumerable<Row> rows ? [.. rows.Select(r => r.Title)] : [];
 
+    /// <summary>
+    /// The runnable rows currently listed, in display order — section headers dropped. The twin of
+    /// <see cref="ListedTitles"/> for anything that needs more of a row than its name: what a row
+    /// <em>shows</em> (its shortcut, description, icon) comes from the entry, so this is how a caller
+    /// asks whether the palette is really advertising a command's chord and not just its title.
+    /// </summary>
+    public IReadOnlyList<PaletteEntry> ListedEntries =>
+        _list.ItemsSource is IEnumerable<Row> rows ? [.. rows.Select(r => r.Entry).OfType<PaletteEntry>()] : [];
+
     /// <summary>Raised when a row is chosen (Enter or click). The host typically closes, then runs it.</summary>
     public event Action<PaletteEntry>? Chosen;
 
