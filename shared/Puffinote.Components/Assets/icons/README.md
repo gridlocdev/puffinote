@@ -15,5 +15,4 @@ for `.md` notes — Puffinote's primary file type, which had to be distinguishab
 plain text.
 
 A glyph whose outline is a single closed path (e.g. `star`) can also be drawn solid, via
-`LucideIcon.IsFilled` — that is how the file tree says "this folder is pinned" without relying on
-colour alone.
+`LucideIcon.IsFilled` — a second, non-colour channel for a two-state control.

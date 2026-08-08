@@ -2,9 +2,7 @@ using Avalonia;
 using Avalonia.Automation;
 using Avalonia.Controls;
 using Avalonia.Controls.Presenters;
-using Avalonia.Headless;
 using Avalonia.Headless.XUnit;
-using Avalonia.Interactivity;
 using Avalonia.Media;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
@@ -17,8 +15,8 @@ using Xunit;
 namespace Puffinote.UiTests;
 
 /// <summary>
-/// What a file tree row actually says at a glance: its type (glyph + extension pill), where it sits (indent
-/// guides tracing the branch you are in), and whether its folder is pinned (the star).
+/// What a file tree row actually says at a glance: its type (glyph + extension pill) and where it sits (indent
+/// guides tracing the branch you are in).
 /// </summary>
 public sealed class FileTreeVisualsTests : IDisposable
 {
@@ -75,9 +73,7 @@ public sealed class FileTreeVisualsTests : IDisposable
         string[] chrome =
         [
             "chevron-down", "chevron-right", // the disclosure twisty — the one that was missing
-            "star",                          // pin a folder
-            "x",                             // unpin a chip
-            "layers",                        // the "All notes" chip
+            "arrow-left",                    // the "In Folder" bar's back arrow
             "plus",                          // the header's New menu
             "chevrons-up",                   // the header's Collapse all
         ];
@@ -392,70 +388,6 @@ public sealed class FileTreeVisualsTests : IDisposable
         var after = In<Border>(Row(window, "Attention.md")).Where(b => b.Name == "PART_TreeGuide").ToList();
         Assert.NotEmpty(after);
         Assert.All(after, g => Assert.NotEqual(accent, Hue(g)));
-    }
-
-    [AvaloniaFact]
-    public void A_folders_star_pins_it_and_then_reads_as_pinned_without_relying_on_colour()
-    {
-        var (tree, window) = Open();
-        NotebookNode? pinned = null;
-        tree.PinRequested += node => pinned = node;
-
-        var star = In<Button>(Row(window, "Projects")).Single();
-        Assert.False(In<LucideIcon>(star).Single().IsFilled); // unpinned: a hollow star
-        star.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
-
-        Assert.Equal(Path("Projects"), pinned?.Path);
-
-        // Once the shell reports it back as pinned, the star fills in — a solid shape, not merely a warmer
-        // colour, so the state survives a reader who cannot see the accent (WCAG 2.2 §1.4.1).
-        tree.SetPinnedPaths(new HashSet<string>([Path("Projects")], StringComparer.OrdinalIgnoreCase));
-        Settle(window);
-
-        var after = In<LucideIcon>(In<Button>(Row(window, "Projects")).Single()).Single();
-        Assert.True(after.IsFilled);
-        Assert.Equal(1, In<Button>(Row(window, "Projects")).Single().Opacity); // and it stays visible unhovered
-    }
-
-    [AvaloniaFact]
-    public void The_star_appears_on_hover_and_survives_the_pointer_reaching_it()
-    {
-        // The star is revealed by the *row's* PointerEntered/Exited. If those routed up from the star itself,
-        // moving onto the star would fire the row's Exited and hide the very control under the cursor — a target
-        // you can see but never quite reach.
-        var (_, window) = Open();
-        var row = Row(window, "Projects");
-        var star = In<Button>(row).Single();
-        Assert.Equal(0, star.Opacity); // at rest, an unpinned folder shows no star
-
-        Point Centre(Visual v) => v.TranslatePoint(new Point(v.Bounds.Width / 2, v.Bounds.Height / 2), window)!.Value;
-
-        window.MouseMove(Centre(row));
-        Settle(window);
-        Assert.Equal(1, star.Opacity); // hovering the row reveals it
-
-        window.MouseMove(Centre(star));
-        Settle(window);
-        Assert.Equal(1, star.Opacity); // ...and it is still there when the pointer arrives
-
-        window.MouseMove(new Point(1, window.Height - 1)); // leave the row entirely
-        Settle(window);
-        Assert.Equal(0, star.Opacity);
-    }
-
-    [AvaloniaFact]
-    public void Clicking_the_star_does_not_also_open_the_folder()
-    {
-        // The star sits inside the row. Without a guard the same press would toggle the folder underneath it.
-        var (tree, window) = Open();
-        tree.SelectPath(Path("Projects/Neural Nets/Attention.md"));
-        Settle(window);
-        var before = tree.VisibleNamesForTest.ToList();
-
-        In<Button>(Row(window, "Projects")).Single().RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
-        Settle(window);
-
-        Assert.Equal(before, tree.VisibleNamesForTest);
     }
 
     [AvaloniaFact]

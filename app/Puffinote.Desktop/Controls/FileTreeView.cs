@@ -42,7 +42,7 @@ namespace Puffinote.Desktop.Controls;
 ///   <item>A <b>single click</b> opens a file / toggles a folder. The reason to click a note is almost always to
 ///   read it, so charging two clicks for it taxes every navigation in the app.</item>
 ///   <item><b>⌘+click</b> (macOS) / <b>Ctrl+click</b> (elsewhere) selects without opening — how you target a file
-///   to rename, pin, or delete it without disturbing what you're reading.</item>
+///   to rename or delete it without disturbing what you're reading.</item>
 ///   <item>A <b>right click</b> selects the row under the pointer, so the context menu targets what was clicked
 ///   — and lands on a <em>folder</em>, a <em>file</em>, or the empty space below the rows, each of which gets its
 ///   own menu (see <see cref="BuildContextMenu"/>).</item>
@@ -71,7 +71,6 @@ internal sealed class FileTreeView : UserControl
     private readonly ListBox _list;
     private NotebookNode? _root;
     private readonly HashSet<string> _expanded = new(StringComparer.OrdinalIgnoreCase);
-    private IReadOnlySet<string> _pinned = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
     private string? _activePath;
     private string _typeahead = string.Empty;
     private DateTime _lastKeystroke = DateTime.MinValue;
@@ -107,7 +106,7 @@ internal sealed class FileTreeView : UserControl
             SelectionChanged?.Invoke(SelectedNode);
         };
         _list.ContextMenu = BuildContextMenu();
-        // A right-click selects the row under the pointer first, so the context menu (Pin, Rename, …) always
+        // A right-click selects the row under the pointer first, so the context menu (Enter Folder, Rename, …) always
         // targets what was clicked rather than whatever happened to be selected before. The same handler decides
         // whether the click that follows should also *activate* the row (see OnListPointerPressed).
         _list.AddHandler(PointerPressedEvent, OnListPointerPressed, RoutingStrategies.Tunnel);
@@ -153,11 +152,8 @@ internal sealed class FileTreeView : UserControl
     /// <summary>Raised to create a new folder; the argument is the selected node (the shell picks the folder).</summary>
     public event Action<NotebookNode?>? NewFolderRequested;
 
-    /// <summary>Raised to pin a folder to the sidebar's chips (context menu). Always a directory.</summary>
-    public event Action<NotebookNode>? PinRequested;
-
-    /// <summary>Raised to unpin an already-pinned folder from the sidebar's chips (context menu).</summary>
-    public event Action<NotebookNode>? UnpinRequested;
+    /// <summary>Raised to narrow the sidebar to a folder's contents (context menu, PRD §7.2). Always a directory.</summary>
+    public event Action<NotebookNode>? EnterFolderRequested;
 
     /// <summary>Raised to show a file or folder in the host OS's file manager (context menu, PRD §7.2).</summary>
     public event Action<NotebookNode>? RevealRequested;
@@ -246,8 +242,8 @@ internal sealed class FileTreeView : UserControl
     }
 
     /// <summary>
-    /// Re-root the visible tree at <paramref name="displayRoot"/> — the notebook root for "All notes", or a
-    /// pinned sub-folder when a chip scopes the tree (PRD §7.2). Expansion resets to just the new root.
+    /// Re-root the visible tree at <paramref name="displayRoot"/> — the notebook root for the whole notebook, or a
+    /// sub-folder once the user enters it (PRD §7.2). Expansion resets to just the new root.
     /// </summary>
     public void SetScope(NotebookNode displayRoot)
     {
@@ -255,22 +251,6 @@ internal sealed class FileTreeView : UserControl
         _expanded.Clear();
         _expanded.Add(displayRoot.Path); // show the scoped level immediately
         Rebuild(selectPath: displayRoot.Path);
-    }
-
-    /// <summary>
-    /// The paths currently pinned to the sidebar, so the context menu can offer Pin vs. Unpin — and so each
-    /// folder row's star knows whether to draw solid or hollow. A changed set repaints the rows; an unchanged one
-    /// is a no-op, because this is re-asserted on every chip render, including ones that changed nothing.
-    /// </summary>
-    public void SetPinnedPaths(IReadOnlySet<string> pinned)
-    {
-        if (_pinned.SetEquals(pinned))
-        {
-            return;
-        }
-
-        _pinned = pinned;
-        Rebuild(selectPath: SelectedNode?.Path);
     }
 
     /// <summary>
@@ -411,7 +391,7 @@ internal sealed class FileTreeView : UserControl
         var index = rows.FindIndex(r => string.Equals(r.Node.Path, fullPath, StringComparison.OrdinalIgnoreCase));
         if (index < 0)
         {
-            return; // not a row here — e.g. a chip has the tree scoped to a folder the document doesn't live in
+            return; // not a row here — e.g. the tree is inside a folder the document doesn't live in
         }
 
         _list.ScrollIntoView(index); // realizes the container, so the posted pass below has something to measure
@@ -512,7 +492,7 @@ internal sealed class FileTreeView : UserControl
     ///
     /// <para>This list never styled its own <see cref="ListBoxItem"/>s, so its selected row fell through to
     /// FluentTheme's default system accent — <b>blue</b> — while every hand-built surface in the shell (the
-    /// active tab, the nav item, the pinned chips) reads the orange accent from <see cref="Tokens"/>. The same
+    /// active tab, the nav item, the entered-folder bar) reads the orange accent from <see cref="Tokens"/>. The same
     /// state, "this is the current thing", was being said in two colours at once: the selected file showed blue
     /// in the tree and orange in its tab. That reads as an accident, not a system.</para>
     ///
@@ -667,9 +647,9 @@ internal sealed class FileTreeView : UserControl
             // moment you clicked a folder, which is exactly when you still want to see where you were.
             //
             // Transparent otherwise, never null: a panel with no background is not hit-testable in Avalonia, so
-            // the pointer would sail straight through this row and the PointerEntered/Exited below would never
-            // fire — leaving the pin star invisible forever on an unpinned folder. Transparent still paints
-            // nothing, so the ListBoxItem's own hover wash (drawn behind it) shows through unchanged.
+            // the pointer would sail straight through this row and the hover wash would never follow it.
+            // Transparent still paints nothing, so the ListBoxItem's own hover wash (drawn behind it) shows
+            // through unchanged.
             Background = isActive ? palette.AccentSubtle : Brushes.Transparent,
         };
         content.Children.Add(Dock(BuildGuides(row, palette), Avalonia.Controls.Dock.Left));
@@ -677,12 +657,8 @@ internal sealed class FileTreeView : UserControl
         content.Children.Add(Dock(glyph, Avalonia.Controls.Dock.Left));
 
         // Docked right, before the name, so the name is what gives way (ellipsizes) when the sidebar narrows —
-        // never the type or the pin, which are fixed-width and carry the row's whole meaning at a glance.
-        if (row.Node.IsDirectory)
-        {
-            content.Children.Add(Dock(BuildPinStar(row, palette), Avalonia.Controls.Dock.Right));
-        }
-        else if (extension.Length > 0)
+        // never the type, which is fixed-width and carries the row's kind at a glance.
+        if (!row.Node.IsDirectory && extension.Length > 0)
         {
             content.Children.Add(Dock(BuildTypePill(extension, palette), Avalonia.Controls.Dock.Right));
         }
@@ -703,14 +679,6 @@ internal sealed class FileTreeView : UserControl
             // too — a screen reader would otherwise get an ordinary row (WCAG 2.2 §1.4.1). Folders are never
             // active, so this can't collide with the disclosure state above.
             AutomationProperties.SetHelpText(content, "open");
-        }
-
-        // The pin star is revealed by hovering the row (it is always visible once the folder *is* pinned).
-        if (row.Node.IsDirectory)
-        {
-            var star = content.Children.OfType<Button>().First();
-            content.PointerEntered += (_, _) => star.Opacity = 1;
-            content.PointerExited += (_, _) => star.Opacity = _pinned.Contains(row.Node.Path) ? 1 : 0;
         }
 
         return content;
@@ -827,58 +795,6 @@ internal sealed class FileTreeView : UserControl
         Margin = new Thickness(6, 0, 2, 0),
         VerticalAlignment = VerticalAlignment.Center,
     };
-
-    /// <summary>
-    /// Pin a folder to the sidebar's chips straight from its row. Pinning was previously reachable only through
-    /// the context menu — discoverable if you already knew, invisible if you didn't.
-    ///
-    /// <para>A pinned folder's star is <b>solid</b>, an unpinned one's is an outline, so the state is not carried
-    /// by the accent colour alone (WCAG 2.2 §1.4.1). It is kept out of the tab order: the tree owns its key map,
-    /// and the context menu is the keyboard route to the same two commands.</para>
-    /// </summary>
-    private Button BuildPinStar(Row row, ThemePalette palette)
-    {
-        bool pinned = _pinned.Contains(row.Node.Path);
-        var star = new Button
-        {
-            Content = new LucideIcon
-            {
-                IconKey = "star",
-                Size = 13,
-                IsFilled = pinned,
-                Foreground = pinned ? palette.Accent : palette.MutedText,
-            },
-            Width = 24, // WCAG 2.2 §2.5.8's floor; the row is 26px, so the full target fits
-            Height = 24,
-            Padding = new Thickness(0),
-            Margin = new Thickness(4, 0, 2, 0),
-            Background = Brushes.Transparent,
-            BorderThickness = new Thickness(0),
-            CornerRadius = new CornerRadius(5),
-            HorizontalContentAlignment = HorizontalAlignment.Center,
-            VerticalContentAlignment = VerticalAlignment.Center,
-            VerticalAlignment = VerticalAlignment.Center,
-            IsTabStop = false,
-            Opacity = pinned ? 1 : 0, // revealed on row hover; see BuildRow
-            Cursor = new Cursor(StandardCursorType.Hand),
-        };
-
-        star.Click += (_, _) =>
-        {
-            if (pinned)
-            {
-                UnpinRequested?.Invoke(row.Node);
-            }
-            else
-            {
-                PinRequested?.Invoke(row.Node);
-            }
-        };
-
-        ToolTip.SetTip(star, pinned ? "Unpin from sidebar" : "Pin to sidebar");
-        AutomationProperties.SetName(star, pinned ? $"Unpin {row.Node.Name}" : $"Pin {row.Node.Name}");
-        return star;
-    }
 
     private static T Dock<T>(T control, Dock dock) where T : Control
     {
@@ -1024,9 +940,9 @@ internal sealed class FileTreeView : UserControl
     ///
     /// <para>So each kind gets the commands that make sense <em>for that kind</em>, and nothing else:</para>
     /// <list type="bullet">
-    ///   <item><b>Folder</b> — expand/collapse it, create inside it, pin it to the sidebar, reveal it, rename or
-    ///   delete it. A folder is a <em>container</em>, so it is the only row where "New …" appears: what you get is
-    ///   what the header says, an entry inside the folder you clicked.</item>
+    ///   <item><b>Folder</b> — expand/collapse it, enter it (narrowing the sidebar to its contents), create inside
+    ///   it, reveal it, rename or delete it. A folder is a <em>container</em>, so it is the only row where "New …"
+    ///   appears: what you get is what the header says, an entry inside the folder you clicked.</item>
     ///   <item><b>File</b> — open it (in a tab, or in the host's default app when Puffinote has no editor for its
     ///   type — PRD §7.2), reveal it, rename or delete it. A file contains nothing, so it creates nothing.</item>
     ///   <item><b>Empty space</b> — the current scope's own menu: create at the top level of what the tree is
@@ -1074,17 +990,18 @@ internal sealed class FileTreeView : UserControl
         {
             bool expanded = _expanded.Contains(folder.Path);
             items.Add(Item(expanded ? "Collapse" : "Expand", () => Toggle(folder)));
-            items.Add(new Separator());
         }
+
+        // Expanding shows a folder's contents *in place*; entering makes them the whole sidebar. Same
+        // destination, different amount of context — so the two sit together, above everything that edits.
+        items.Add(Item("Enter Folder", () => EnterFolderRequested?.Invoke(folder)));
+        items.Add(new Separator());
 
         // The same five, in the same order, as the sidebar header's New button — one list of what a notebook
         // can hold, wherever you ask for it.
         items.AddRange(NewItems(folder));
         items.Add(new Separator());
 
-        items.Add(_pinned.Contains(folder.Path)
-            ? Item("Unpin from Sidebar", () => UnpinRequested?.Invoke(folder))
-            : Item("Pin to Sidebar", () => PinRequested?.Invoke(folder)));
         items.Add(Item(SystemFileManager.RevealLabel, () => RevealRequested?.Invoke(folder)));
         items.Add(new Separator());
 
@@ -1133,7 +1050,7 @@ internal sealed class FileTreeView : UserControl
     /// because in a notes sidebar the overwhelmingly common reason to click a note is to read it, and making that
     /// cost two clicks taxes every single navigation. Holding the platform's command modifier
     /// (<b>⌘</b> on macOS, <b>Ctrl</b> elsewhere — see <see cref="UseMacKeymap"/>) selects without activating: the
-    /// escape hatch for targeting a file to rename, pin, or delete without opening it first.</para>
+    /// escape hatch for targeting a file to rename or delete without opening it first.</para>
     ///
     /// <para>The modifier is captured here rather than in the tap handler because Avalonia's tap events don't
     /// carry the keyboard state.</para>
@@ -1158,13 +1075,6 @@ internal sealed class FileTreeView : UserControl
         }
 
         if (!properties.IsLeftButtonPressed || row is not { DataContext: Row clicked })
-        {
-            return;
-        }
-
-        // The pin star is a button living inside the row. Its own Click does the work, and the row must not
-        // *also* open the file / toggle the folder underneath it.
-        if ((e.Source as Visual)?.FindAncestorOfType<Button>() is not null)
         {
             return;
         }

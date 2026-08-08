@@ -11,9 +11,6 @@ internal sealed record NotebookSession
 {
     public IReadOnlyList<string> Recent { get; init; } = [];
 
-    /// <summary>The sidebar's pinned folders (PRD §7.2), in the user's chosen chip order; absolute paths here.</summary>
-    public IReadOnlyList<string> Pinned { get; init; } = [];
-
     /// <summary>The open editor tabs (PRD §7.3), in strip (left-to-right) order; absolute paths here.</summary>
     public IReadOnlyList<string> OpenTabs { get; init; } = [];
 
@@ -39,10 +36,12 @@ internal static class SessionStore
 
     private const int CurrentVersion = 1;
 
-    // Pinned/OpenTabs/ActiveTab are nullable so a session written before those fields existed still loads at
-    // Version 1 rather than being discarded — an absent list simply means "nothing remembered here yet".
+    // OpenTabs/ActiveTab are nullable so a session written before those fields existed still loads at Version 1
+    // rather than being discarded — an absent list simply means "nothing remembered here yet". A file written
+    // while the sidebar still had pinned folders carries a "Pinned" member that maps to nothing now; an
+    // unmatched member is ignored by the deserializer, so those sessions keep loading too.
     private sealed record SessionDocument(
-        int Version, List<string> Recent, bool SidebarCollapsed, double SidebarWidth, List<string>? Pinned = null,
+        int Version, List<string> Recent, bool SidebarCollapsed, double SidebarWidth,
         List<string>? OpenTabs = null, string? ActiveTab = null);
 
     private static string SessionPath(string root) =>
@@ -71,7 +70,6 @@ internal static class SessionStore
             return new NotebookSession
             {
                 Recent = ToAbsolute(document.Recent),
-                Pinned = ToAbsolute(document.Pinned),
                 OpenTabs = ToAbsolute(document.OpenTabs),
                 ActiveTab = document.ActiveTab is { } active ? System.IO.Path.GetFullPath(System.IO.Path.Combine(root, active)) : null,
                 SidebarCollapsed = document.SidebarCollapsed,
@@ -98,7 +96,6 @@ internal static class SessionStore
                 [.. session.Recent.Select(p => System.IO.Path.GetRelativePath(root, p))],
                 session.SidebarCollapsed,
                 session.SidebarWidth,
-                [.. session.Pinned.Select(p => System.IO.Path.GetRelativePath(root, p))],
                 [.. session.OpenTabs.Select(p => System.IO.Path.GetRelativePath(root, p))],
                 session.ActiveTab is { } active ? System.IO.Path.GetRelativePath(root, active) : null);
             File.WriteAllText(SessionPath(root), JsonSerializer.Serialize(document, new JsonSerializerOptions { WriteIndented = true }));

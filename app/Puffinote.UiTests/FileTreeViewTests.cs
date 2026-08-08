@@ -213,20 +213,26 @@ public sealed class FileTreeViewTests : IDisposable
     // ---- Context menus (folder vs. file vs. the empty space) -------------------------------------
 
     [AvaloniaFact]
-    public void A_folders_menu_creates_inside_it_pins_it_and_toggles_it()
+    public void A_folders_menu_enters_it_creates_inside_it_and_toggles_it()
     {
         var (tree, _) = Open();
         Assert.Equal("sub", tree.SelectedNameForTest); // the folder, selected on focus
 
         Assert.Equal(
             [
-                "Expand", "—",                                     // "sub" holds child.md, so it can be opened
+                "Expand", "Enter Folder", "—",                     // "sub" holds child.md, so it can be opened
                 // A folder is the only row that creates — and it offers every type the header's New button does.
                 "New Folder…", "New Note…", "New Spreadsheet…", "New Taskboard…", "New File…", "—",
-                "Pin to Sidebar", SystemFileManager.RevealLabel, "—",
+                SystemFileManager.RevealLabel, "—",
                 "Rename…", "Delete",
             ],
             tree.ContextMenuHeadersForTest);
+
+        // "Enter Folder" hands the folder to the panel above, which re-roots the sidebar at it.
+        NotebookNode? entered = null;
+        tree.EnterFolderRequested += node => entered = node;
+        tree.InvokeContextMenuItemForTest("Enter Folder");
+        Assert.Equal("sub", entered?.Name);
 
         // The creation commands target the folder itself (the shell puts the new entry inside it).
         NotebookNode? noteContext = null;
@@ -252,20 +258,20 @@ public sealed class FileTreeViewTests : IDisposable
     }
 
     [AvaloniaFact]
-    public void An_empty_folder_is_offered_no_expand_and_a_pinned_one_is_offered_unpin()
+    public void An_empty_folder_is_offered_no_expand_but_can_still_be_entered()
     {
         var (tree, _) = Open();
         Directory.CreateDirectory(Path.Combine(_notebook.FullName, "empty"));
         tree.Refresh();
-        tree.SetPinnedPaths(new HashSet<string>(StringComparer.OrdinalIgnoreCase) { Path.Combine(_notebook.FullName, "empty") });
         tree.SelectPath(Path.Combine(_notebook.FullName, "empty"));
         Assert.Equal("empty", tree.SelectedNameForTest);
 
         var headers = tree.ContextMenuHeadersForTest;
-        Assert.DoesNotContain("Expand", headers);           // nothing inside it to open — as the row's missing chevron says
+        Assert.DoesNotContain("Expand", headers);   // nothing inside it to open — as the row's missing chevron says
         Assert.DoesNotContain("Collapse", headers);
-        Assert.Contains("Unpin from Sidebar", headers);     // already pinned → the command is the opposite one
-        Assert.DoesNotContain("Pin to Sidebar", headers);
+        // ...but entering it is still offered: an empty folder is where you go *to* put something in it, and the
+        // scope's own menu ("New Note…" on the empty space) is how you do that.
+        Assert.Contains("Enter Folder", headers);
     }
 
     [AvaloniaFact]

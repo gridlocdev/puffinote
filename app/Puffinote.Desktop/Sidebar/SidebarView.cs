@@ -76,7 +76,6 @@ internal sealed class SidebarView : UserControl
         _files.NewFolderRequested += node => NewFolderRequested?.Invoke(node);
         _files.RevealRequested += node => RevealRequested?.Invoke(node);
         _files.OpenExternallyRequested += node => OpenExternallyRequested?.Invoke(node);
-        _files.PinnedChanged += () => PinnedChanged?.Invoke();
 
         var palette = Tokens.Dark;
         _header.Foreground = palette.MutedText;
@@ -125,9 +124,6 @@ internal sealed class SidebarView : UserControl
 
     /// <summary>Raised by the switcher row's Settings button; the shell owns Preferences, so it opens it.</summary>
     public event Action? SettingsRequested;
-
-    /// <summary>Raised when the file tree's pinned folders change, so the shell persists them to the session.</summary>
-    public event Action? PinnedChanged;
 
     /// <summary>Tree mutation requests (F2 / Delete / context menu), fulfilled by the shell.</summary>
     public event Action<NotebookNode>? RenameRequested;
@@ -193,12 +189,6 @@ internal sealed class SidebarView : UserControl
 
     /// <summary>Update the recent-files panel with <paramref name="paths"/> (most-recent first).</summary>
     public void SetRecent(string? notebookRoot, IReadOnlyList<string> paths) => _recent.SetItems(notebookRoot, paths);
-
-    /// <summary>Restore the file tree's pinned folders for the opened notebook.</summary>
-    public void SetPinnedFolders(IReadOnlyList<string> paths) => _files.SetPinned(paths);
-
-    /// <summary>The file tree's pinned folders, in chip order (for session persistence).</summary>
-    public IReadOnlyList<string> PinnedFolders => _files.PinnedPaths;
 
     /// <summary>Update the outline panel with the active document's structure (or empty).</summary>
     public void SetOutline(IReadOnlyList<Panes.OutlineItem> items) => _outline.SetItems(items);

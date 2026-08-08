@@ -1,12 +1,13 @@
 using Avalonia.Controls;
 using Avalonia.Headless.XUnit;
+using Puffinote.Components.Controls.Icons;
 using Puffinote.Desktop.Shell;
 using Puffinote.Desktop.Sidebar;
 using Xunit;
 
 namespace Puffinote.UiTests;
 
-/// <summary>Pinned-folder chips and the scoped file tree (PRD §7.2 — the prototype behaviour).</summary>
+/// <summary>Entering a folder, the "In Folder" bar, and the scoped file tree (PRD §7.2).</summary>
 public sealed class FilesPanelTests : IDisposable
 {
     private readonly DirectoryInfo _notebook = Directory.CreateTempSubdirectory("puffinote-files");
@@ -37,111 +38,128 @@ public sealed class FilesPanelTests : IDisposable
     }
 
     [AvaloniaFact]
-    public void A_fresh_panel_shows_only_All_notes_and_no_scope()
+    public void A_fresh_panel_shows_the_whole_notebook_and_no_folder_bar()
     {
         var panel = Open();
 
-        Assert.Equal(["All notes"], panel.ChipLabelsForTest);
         Assert.Null(panel.ScopePathForTest);
-        Assert.False(panel.BreadcrumbVisibleForTest);
+        Assert.False(panel.FolderBarVisibleForTest); // nothing to name, and nowhere to go back to
         // The notebook's contents are shown, but the root itself is not a row (the sidebar header names it).
         Assert.DoesNotContain(_notebook.Name, panel.TreeVisibleNamesForTest);
         Assert.Contains("Inbox.md", panel.TreeVisibleNamesForTest);
     }
 
     [AvaloniaFact]
-    public void Pinning_a_folder_adds_a_chip_and_notifies()
+    public void Entering_a_folder_re_roots_the_tree_and_names_it_in_the_bar()
     {
         var panel = Open();
-        var changed = 0;
-        panel.PinnedChanged += () => changed++;
 
-        panel.PinForTest(Path("Projects"));
+        panel.EnterFolderForTest(Path("Projects/Neural Nets"));
 
-        Assert.Equal(["All notes", "Projects"], panel.ChipLabelsForTest);
-        Assert.Equal([Path("Projects")], panel.PinnedPaths);
-        Assert.Equal(1, changed);
-
-        panel.PinForTest(Path("Projects")); // already pinned → no chip, no notification
-        Assert.Equal(["All notes", "Projects"], panel.ChipLabelsForTest);
-        Assert.Equal(1, changed);
+        Assert.Equal(Path("Projects/Neural Nets"), panel.ScopePathForTest);
+        Assert.True(panel.FolderBarVisibleForTest);
+        Assert.Equal("In Folder: Neural Nets", panel.FolderLabelTextForTest);
+        // The folder you entered is named by the bar, not shown as a row — only its contents appear.
+        Assert.Equal(["Attention.md"], panel.TreeVisibleNamesForTest);
     }
 
     [AvaloniaFact]
-    public void Scoping_to_a_chip_re_roots_the_tree_and_shows_the_breadcrumb()
+    public void The_back_arrow_returns_to_the_whole_notebook()
     {
         var panel = Open();
-        panel.PinForTest(Path("Projects/Neural Nets"));
+        panel.EnterFolderForTest(Path("Projects"));
+        Assert.Equal("Back to all notes", panel.BackTooltipForTest);
 
-        panel.ScopeToForTest(Path("Projects/Neural Nets"));
+        panel.ClickBackForTest();
 
-        Assert.Equal(Path("Projects/Neural Nets"), panel.ScopePathForTest);
-        Assert.True(panel.BreadcrumbVisibleForTest);
-        // The scoped folder is named by the breadcrumb, not shown as a row — only its contents appear.
-        Assert.Equal(["Attention.md"], panel.TreeVisibleNamesForTest);
-
-        panel.ScopeToForTest(null); // "All notes" returns to the whole notebook
         Assert.Null(panel.ScopePathForTest);
-        Assert.False(panel.BreadcrumbVisibleForTest);
-        Assert.DoesNotContain(_notebook.Name, panel.TreeVisibleNamesForTest);
+        Assert.False(panel.FolderBarVisibleForTest);
+        Assert.Contains("Inbox.md", panel.TreeVisibleNamesForTest); // the rest of the notebook is back
+    }
+
+    [AvaloniaFact]
+    public void Back_out_of_a_nested_folder_lands_in_the_one_it_was_entered_from()
+    {
+        var panel = Open();
+        panel.EnterFolderForTest(Path("Projects"));
+        panel.EnterFolderForTest(Path("Projects/Neural Nets"));
+
+        // The arrow says where it goes, because from here that is no longer the notebook.
+        Assert.Equal("Back to Projects", panel.BackTooltipForTest);
+        panel.ClickBackForTest();
+
+        Assert.Equal(Path("Projects"), panel.ScopePathForTest);
+        Assert.Equal("In Folder: Projects", panel.FolderLabelTextForTest);
+        Assert.Contains("Roadmap.md", panel.TreeVisibleNamesForTest);
+
+        panel.ClickBackForTest(); // ...and one more step is the whole notebook
+        Assert.Null(panel.ScopePathForTest);
+        Assert.False(panel.FolderBarVisibleForTest);
+    }
+
+    [AvaloniaFact]
+    public void Entering_the_folder_you_are_already_in_does_not_stack_another_step()
+    {
+        var panel = Open();
+        panel.EnterFolderForTest(Path("Projects"));
+
+        panel.EnterFolderForTest(Path("Projects"));
+
+        panel.ClickBackForTest();
+        Assert.Null(panel.ScopePathForTest); // one back, not two
+    }
+
+    [AvaloniaFact]
+    public void Selecting_a_path_outside_the_entered_folder_leaves_it()
+    {
+        var panel = Open();
+        panel.EnterFolderForTest(Path("Projects/Neural Nets"));
+
+        panel.SelectPath(Path("Inbox.md")); // e.g. Quick Open landing on a file elsewhere in the notebook
+
+        Assert.Null(panel.ScopePathForTest);
+        Assert.False(panel.FolderBarVisibleForTest);
         Assert.Contains("Inbox.md", panel.TreeVisibleNamesForTest);
     }
 
     [AvaloniaFact]
-    public void The_breadcrumb_keeps_the_destination_and_drops_the_notebook_name()
+    public void A_refresh_leaves_a_folder_that_no_longer_exists()
     {
         var panel = Open();
-        panel.ScopeToForTest(Path("Projects/Neural Nets"));
+        panel.EnterFolderForTest(Path("Projects"));
+        panel.EnterFolderForTest(Path("Projects/Neural Nets"));
 
-        var trail = panel.BreadcrumbTextForTest;
+        Directory.Delete(Path("Projects/Neural Nets"), recursive: true);
+        panel.Refresh();
 
-        // The folder you scoped to is the whole point of the trail — it must survive.
-        Assert.Contains("Neural Nets", trail, StringComparison.Ordinal);
-        Assert.Contains("Projects", trail, StringComparison.Ordinal); // ...and the route to it
-        // ...but not the notebook's own name, which the sidebar header already shows and which — being a folder
-        // name, often a long one — used to crowd the destination right off the end of the line.
-        Assert.DoesNotContain(_notebook.Name, trail, StringComparison.Ordinal);
-    }
-
-    [AvaloniaFact]
-    public void Unpinning_the_scoped_folder_falls_back_to_All_notes()
-    {
-        var panel = Open();
-        panel.PinForTest(Path("Projects"));
-        panel.ScopeToForTest(Path("Projects"));
+        // The folder is gone, so the sidebar falls back to the nearest one on the way in that is still there.
         Assert.Equal(Path("Projects"), panel.ScopePathForTest);
-
-        panel.UnpinForTest(Path("Projects"));
-
-        Assert.Equal(["All notes"], panel.ChipLabelsForTest);
-        Assert.Null(panel.ScopePathForTest); // scoped into the unpinned folder → back to All notes
-        Assert.False(panel.BreadcrumbVisibleForTest);
+        Assert.Equal("In Folder: Projects", panel.FolderLabelTextForTest);
+        Assert.Contains("Roadmap.md", panel.TreeVisibleNamesForTest);
     }
 
     [AvaloniaFact]
-    public void Reordering_chips_changes_their_order_and_notifies()
+    public void The_back_arrow_draws_a_real_glyph()
     {
+        // The arrow is the only thing that says the button goes *back*, and a key with no vendored SVG behind it
+        // fails silently — an empty 24px button that still clicks.
         var panel = Open();
-        panel.PinForTest(Path("Projects"));
-        panel.PinForTest(Path("Inbox.md")); // (any folder path works for the ordering test)
-        var changed = 0;
-        panel.PinnedChanged += () => changed++;
+        panel.EnterFolderForTest(Path("Projects"));
 
-        panel.ReorderForTest(Path("Inbox.md"), Path("Projects"), before: true);
-
-        Assert.Equal([Path("Inbox.md"), Path("Projects")], panel.PinnedPaths);
-        Assert.Equal(["All notes", "Inbox.md", "Projects"], panel.ChipLabelsForTest);
-        Assert.Equal(1, changed);
+        var geometry = LucideIcons.Get(panel.BackIconKeyForTest);
+        Assert.NotNull(geometry);
+        Assert.True(geometry.Bounds.Width > 0);
     }
 
     [AvaloniaFact]
-    public void SetPinned_drops_folders_that_no_longer_exist()
+    public void Opening_a_notebook_never_lands_inside_a_folder()
     {
         var panel = Open();
+        panel.EnterFolderForTest(Path("Projects"));
 
-        panel.SetPinned([Path("Projects"), Path("Ghost")]);
+        panel.SetRoot(new NotebookNode(_notebook.FullName, isDirectory: true));
 
-        Assert.Equal([Path("Projects")], panel.PinnedPaths);
-        Assert.Equal(["All notes", "Projects"], panel.ChipLabelsForTest);
+        Assert.Null(panel.ScopePathForTest);
+        Assert.False(panel.FolderBarVisibleForTest);
     }
 }

@@ -98,7 +98,6 @@ public partial class MainWindow : Window
         SidebarForTest.DeleteRequested += node => _ = PromptDeleteAsync(node);
         SidebarForTest.RevealRequested += node => _ = RevealAsync(node);
         SidebarForTest.OpenExternallyRequested += node => _ = OpenExternallyAsync(node);
-        SidebarForTest.PinnedChanged += PersistSession;
         SidebarForTest.ToggleRequested += ToggleSidebar;
         SidebarForTest.SettingsRequested += ShowSettings; // the same Preferences dialog ⌘, and the View menu open
 

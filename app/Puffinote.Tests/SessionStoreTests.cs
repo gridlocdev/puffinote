@@ -35,18 +35,6 @@ public sealed class SessionStoreTests : IDisposable
     }
 
     [Fact]
-    public void Save_then_load_round_trips_pinned_folders_in_order()
-    {
-        SessionStore.Save(_root.FullName, new NotebookSession
-        {
-            Pinned = [At("Projects"), At(System.IO.Path.Combine("Projects", "Neural Nets"))],
-        });
-
-        var loaded = SessionStore.Load(_root.FullName);
-        Assert.Equal([At("Projects"), At(System.IO.Path.Combine("Projects", "Neural Nets"))], loaded.Pinned);
-    }
-
-    [Fact]
     public void Save_then_load_round_trips_open_tabs_in_order_and_the_active_tab()
     {
         SessionStore.Save(_root.FullName, new NotebookSession
@@ -90,17 +78,19 @@ public sealed class SessionStoreTests : IDisposable
     }
 
     [Fact]
-    public void A_session_written_before_pinned_folders_existed_still_loads()
+    public void A_session_written_by_an_older_sidebar_still_loads()
     {
-        // A v1 file with no "Pinned" field must load (as no pins), not be discarded as unreadable.
+        // Two shapes at once: a v1 file with no "OpenTabs" (written before tabs were remembered) and with a
+        // leftover "Pinned" (written while the sidebar still had pinned folders). A missing member means
+        // "nothing remembered here yet" and an unknown one is ignored — neither may discard the file.
         var stateDir = Directory.CreateDirectory(System.IO.Path.Combine(_root.FullName, NotebookNode.StateDirectoryName));
         File.WriteAllText(
             System.IO.Path.Combine(stateDir.FullName, "session.json"),
-            """{ "Version": 1, "Recent": ["note.md"], "SidebarCollapsed": false, "SidebarWidth": 260 }""");
+            """{ "Version": 1, "Recent": ["note.md"], "SidebarCollapsed": false, "SidebarWidth": 260, "Pinned": ["Projects"] }""");
 
         var loaded = SessionStore.Load(_root.FullName);
         Assert.Equal([At("note.md")], loaded.Recent);
-        Assert.Empty(loaded.Pinned);
+        Assert.Empty(loaded.OpenTabs);
     }
 
     [Fact]

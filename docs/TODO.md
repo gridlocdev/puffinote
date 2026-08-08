@@ -145,7 +145,19 @@
 - [x] Puffinote: Use icon buttons for the top bar's "Files", "Outline", "Search", and "Recent" buttons. Add an icon button next to them for "Settings".
 - [x] Puffinote: The "Settings" menu should show a list of tabs for settings for each of the apps from their corresponding configuration directories. The tabs shouldn't be named with their app names, it should be named with the app's purpose, for example "General" for Puffinote's settings, "Notes" for Typage, "Spreadsheets" for Cellestra, "Tasks" for Pivotask. Each tab should show the settings for that app, and allow the user to change them. The settings should be saved to the corresponding configuration file for that app. In each UI, provide a clickable button to open the configuration file in the default text editor for that file type, so that users can edit the configuration file directly if they wish. This allows for advanced users to make changes that may not be exposed in the UI.
 
-- [ ] Puffinote: Change the "Show Only" feature such that it is "Enter Folder" instead. Instead of showing a list of pills corresponding to pinned folders, it should not show the pills but instead it should show an option "Enter Folder" in the right click context menu of a folder in the sidebar. When clicked, it should, similar to how it does now, make the sidebar only show the contents within that folder. At the top, above the files, a new label showing the folder name like "In Folder: <FolderName>" followed by a back arrow icon button pinned to the right of that row that when clicked changes the sidebar UI back to the previous view of everything.
+- [x] Puffinote: Change the "Show Only" feature such that it is "Enter Folder" instead. Instead of showing a list of pills corresponding to pinned folders, it should not show the pills but instead it should show an option "Enter Folder" in the right click context menu of a folder in the sidebar. When clicked, it should, similar to how it does now, make the sidebar only show the contents within that folder. At the top, above the files, a new label showing the folder name like "In Folder: <FolderName>" followed by a back arrow icon button pinned to the right of that row that when clicked changes the sidebar UI back to the previous view of everything.
+
+    Pinning went with the pills. It only ever existed to fill that row — a pinned folder with no chip to
+    show for it is state the user can neither see nor undo — so the pin list, its drag-to-reorder, the
+    folder row's pin star, and the session's `Pinned` field are gone too. (An old `session.json` still
+    carrying `Pinned` loads fine; an unmatched JSON member is ignored.)
+
+    The bar remembers the route in, not just the folder: enter `Projects`, then `Neural Nets` inside it,
+    and the arrow steps back to `Projects` rather than all the way out — it is a back arrow, and the
+    tooltip names where it lands ("Back to Projects" / "Back to all notes"). Deleting the folder you are
+    in falls back to the nearest ancestor on that route that still exists, and anything that reveals a
+    file elsewhere in the notebook (Quick Open, Search) leaves the folder outright, since the destination
+    may be nowhere near it.
 
 - [x] Puffinote: For files with the `.pivotask.json` combined file extension, use lucide's square-check icon. This makes it visually different from the regular JSON icon and helps users quickly identify Pivotask files in the file tree.
 - [x] Puffinote: Add an option to set whether the tab bar is visible or hidden in the settings menu. This allows users to customize their workspace according to their preferences, either by keeping the tab bar visible for easy navigation or hiding it for a cleaner interface. Also provide the same command in the command bar for quick access to toggle the tab bar visibility temporarily during the current session.

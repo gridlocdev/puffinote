@@ -78,7 +78,6 @@ public partial class MainWindow
         var session = _notebook.RootPath is { } root ? SessionStore.Load(root) : new NotebookSession();
         _recent.Load(session.Recent);
         SidebarForTest.SetRecent(_notebook.RootPath, _recent.Paths);
-        SidebarForTest.SetPinnedFolders(session.Pinned);
         _sidebarLayout.Apply(session.SidebarCollapsed, session.SidebarWidth);
 
         StartSearchIndex();
@@ -124,7 +123,6 @@ public partial class MainWindow
         SessionStore.Save(root, new NotebookSession
         {
             Recent = _recent.Paths,
-            Pinned = SidebarForTest.PinnedFolders,
             OpenTabs = [.. _tabHost.Tabs.Select(t => t.Path)],
             ActiveTab = _tabHost.ActivePane?.Path,
             SidebarCollapsed = _sidebarLayout.IsCollapsed,
