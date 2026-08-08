@@ -1,6 +1,7 @@
 using Avalonia;
 using Avalonia.Automation;
 using Avalonia.Controls;
+using Avalonia.Controls.Documents;
 using Avalonia.Controls.Presenters;
 using Avalonia.Controls.Templates;
 using Avalonia.Input;
@@ -89,6 +90,31 @@ internal sealed class FileTreeView : UserControl
     /// a test seam so either map can be exercised on the headless Linux CI.
     /// </summary>
     internal bool UseMacKeymap { get; set; } = OperatingSystem.IsMacOS();
+
+    /// <summary>
+    /// Whether a file row spells its extension out after its name (see <see cref="BuildRow"/>). On, the tree reads
+    /// as a folder of files — <c>Roadmap.md</c>, the whole name, the way it is everywhere else in the OS. Off, it
+    /// reads as a list of notes, and the glyph is left to say what each one is.
+    ///
+    /// <para>Which of those you want is a matter of taste rather than a right answer, so it is a preference — and
+    /// a session-only command besides, for the moment you need to see the suffixes on a notebook you normally read
+    /// without them. Assigning an unchanged value is a no-op: this is re-asserted whenever settings resolve, which
+    /// includes opening a notebook, and a repaint there would drop the tree's scroll position for nothing.</para>
+    /// </summary>
+    public bool ShowExtensions
+    {
+        get;
+        set
+        {
+            if (field == value)
+            {
+                return;
+            }
+
+            field = value;
+            Rebuild(selectPath: SelectedNode?.Path);
+        }
+    } = true;
 
     public FileTreeView()
     {
@@ -608,29 +634,43 @@ internal sealed class FileTreeView : UserControl
             Margin = new Thickness(5, 0, 7, 0),
         };
 
-        // A file shows its stem; its extension moves into the pill on the right, where the eye can scan a whole
-        // column of types at once instead of hunting for a suffix at the ragged end of each name.
+        // A file's name is written whole — the stem in the primary ink, the extension trailing it in the muted
+        // one, as one continuous label. The extension used to sit in a pill pinned to the row's right edge, which
+        // aligned the types into a scannable column but at a real cost: it broke a file's name in two and put the
+        // halves at opposite ends of the row, so nothing on screen was ever called what the file is called.
+        // Muting the suffix in place keeps type legible at a glance and gives the name back.
         var (stem, extension) = row.Node.IsDirectory
             ? (row.Node.Name, string.Empty)
             : FileGlyph.Split(row.Node.Name);
 
         // Colour alone marks the document you are reading. Every row keeps the same weight: bold changes a
         // row's width, so the one signal that moves as you switch notes was also the one that nudged its
-        // neighbours sideways. Folders read at the muted level too — the chevron and folder glyph already say
-        // "folder", and giving them the brighter brush spent the tree's loudest ink on its most numerous rows,
-        // where it competed with the only row that answers "which note am I in?".
+        // neighbours sideways. Folders and files read at the same level — the chevron and folder glyph already
+        // say "folder", so a folder needs no extra ink to be told apart from a note.
         bool isActive = !row.Node.IsDirectory && string.Equals(row.Node.Path, _activePath, StringComparison.OrdinalIgnoreCase);
         var name = new TextBlock
         {
-            Text = stem,
             VerticalAlignment = VerticalAlignment.Center,
             TextTrimming = TextTrimming.CharacterEllipsis,
             FontWeight = FontWeight.Normal,
 
-            // Every row, folders included, reads at the same level. Assigning `null` to mean "inherit the
-            // default" would instead set a local null brush — and paint nothing.
-            Foreground = palette.MutedText,
+            // The primary ink, which is the point: a panel whose whole job is to list names wrote every one of
+            // them in the brush meant for secondary text, so the tree's own content was the dimmest thing in the
+            // window. Assigning `null` to mean "inherit the default" would instead set a local null brush — and
+            // paint nothing.
+            Foreground = palette.Text,
         };
+
+        // Two runs rather than two controls: trimming has to act on the name and its suffix as one string, or a
+        // narrow sidebar would ellipsize the name against a suffix that never gives way. The extension is dropped
+        // entirely — not merely dimmed — when the preference is off, so the row is the bare name.
+        var inlines = new InlineCollection { new Run(stem) };
+        if (ShowExtensions && extension.Length > 0)
+        {
+            inlines.Add(new Run("." + extension) { Foreground = palette.MutedText });
+        }
+
+        name.Inlines = inlines;
 
         var content = new DockPanel
         {
@@ -656,18 +696,12 @@ internal sealed class FileTreeView : UserControl
         content.Children.Add(Dock(disclosure, Avalonia.Controls.Dock.Left));
         content.Children.Add(Dock(glyph, Avalonia.Controls.Dock.Left));
 
-        // Docked right, before the name, so the name is what gives way (ellipsizes) when the sidebar narrows —
-        // never the type, which is fixed-width and carries the row's kind at a glance.
-        if (!row.Node.IsDirectory && extension.Length > 0)
-        {
-            content.Children.Add(Dock(BuildTypePill(extension, palette), Avalonia.Controls.Dock.Right));
-        }
-
         content.Children.Add(name);
 
         // Say the disclosure state out loud, not only in the chevron: a screen reader gets "collapsed"/"expanded"
-        // rather than an unannotated row. The name is announced whole (with its extension) even though the row
-        // splits it in two visually — "Roadmap, md" is not what a file is called.
+        // rather than an unannotated row. The name is announced whole, extension included, however the row is
+        // currently drawing it — hiding the suffix is a visual preference, and a file is still called what it is
+        // called.
         AutomationProperties.SetName(content, row.Node.Name);
         if (expandable)
         {
@@ -775,26 +809,6 @@ internal sealed class FileTreeView : UserControl
             }
         }
     }
-
-    /// <summary>The file's type, spelled out — the channel that survives a reader who cannot tell the glyph colours apart.</summary>
-    private static Control BuildTypePill(string extension, ThemePalette palette) => new Border
-    {
-        Child = new TextBlock
-        {
-            Text = extension.ToUpperInvariant(),
-            FontSize = 9,
-            LetterSpacing = 0.5,
-            FontWeight = FontWeight.Medium,
-            Foreground = palette.MutedText,
-        },
-        Background = palette.SurfaceInset,
-        BorderBrush = palette.SurfaceBorder,
-        BorderThickness = new Thickness(1),
-        CornerRadius = new CornerRadius(4),
-        Padding = new Thickness(5, 1, 5, 2),
-        Margin = new Thickness(6, 0, 2, 0),
-        VerticalAlignment = VerticalAlignment.Center,
-    };
 
     private static T Dock<T>(T control, Dock dock) where T : Control
     {

@@ -102,6 +102,12 @@ public partial class MainWindow
                 Bound("shell.toggleTabBar", null), ToggleTabBar),
             new("shell.toggleEditorToolbar", "Toggle Editor Toolbar", "Show or hide the formatting toolbar over a note",
                 Bound("shell.toggleEditorToolbar", null), ToggleEditorToolbar, () => _tabHost.ActivePane is MarkdownPane, icon: "type"),
+
+            // The session-only twin of the Preferences toggle (see ShowSettings): flips the tree's extensions now,
+            // saves nothing. No default gesture — there is no convention for it, and it stays rebindable.
+            new("shell.toggleFileExtensions", "Toggle File Extensions",
+                "Show or hide file extensions in the sidebar's file tree, for this session",
+                Bound("shell.toggleFileExtensions", null), ToggleFileExtensions, icon: "eye"),
             new("shell.focusTree", "Focus Sidebar", "Move keyboard focus to the sidebar's file tree",
                 Bound("shell.focusTree", Shortcut.Cmd(Key.S, KeyModifiers.Alt)), () => SidebarForTest.FocusTree(), icon: "panel-left"),
             new("shell.focusEditor", "Focus Editor", "Move keyboard focus back into the active document",
@@ -223,7 +229,7 @@ public partial class MainWindow
                 Items =
                 {
                     new NativeMenuItem { Header = "File", Menu = BuildNativeMenu("shell.openNotebook", "shell.quickOpen", "shell.newFolder", "shell.newNote", "shell.newSpreadsheet", "shell.newTaskboard", "shell.newFile", "shell.save", "shell.closeTab", "shell.closeOtherTabs", "shell.closeAllTabs") },
-                    new NativeMenuItem { Header = "View", Menu = BuildNativeMenu("shell.commandPalette", "shell.toggleSidebar", "shell.toggleTabBar", "shell.focusTree", "shell.focusEditor", "shell.toggleEditorToolbar", "shell.nextTab", "shell.prevTab", "shell.preferences") },
+                    new NativeMenuItem { Header = "View", Menu = BuildNativeMenu("shell.commandPalette", "shell.toggleSidebar", "shell.toggleTabBar", "shell.focusTree", "shell.focusEditor", "shell.toggleEditorToolbar", "shell.toggleFileExtensions", "shell.nextTab", "shell.prevTab", "shell.preferences") },
                     new NativeMenuItem { Header = "Help", Menu = BuildNativeMenu("shell.shortcuts", "shell.about") },
                 },
             });
@@ -240,7 +246,7 @@ public partial class MainWindow
             Items =
             {
                 new MenuItem { Header = "_File", ItemsSource = BuildMenuItems("shell.openNotebook", "shell.quickOpen", "shell.newFolder", "shell.newNote", "shell.newSpreadsheet", "shell.newTaskboard", "shell.newFile", "shell.save", "shell.closeTab", "shell.closeOtherTabs", "shell.closeAllTabs") },
-                new MenuItem { Header = "_View", ItemsSource = BuildMenuItems("shell.commandPalette", "shell.toggleSidebar", "shell.toggleTabBar", "shell.focusTree", "shell.focusEditor", "shell.toggleEditorToolbar", "shell.nextTab", "shell.prevTab", "shell.preferences") },
+                new MenuItem { Header = "_View", ItemsSource = BuildMenuItems("shell.commandPalette", "shell.toggleSidebar", "shell.toggleTabBar", "shell.focusTree", "shell.focusEditor", "shell.toggleEditorToolbar", "shell.toggleFileExtensions", "shell.nextTab", "shell.prevTab", "shell.preferences") },
                 new MenuItem { Header = "_Help", ItemsSource = BuildMenuItems("shell.shortcuts", "shell.about") },
             },
         };

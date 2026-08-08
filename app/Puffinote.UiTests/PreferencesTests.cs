@@ -84,6 +84,9 @@ public sealed class PreferencesTests
     private static CheckBox Toggle(SettingsEditorView form, string label) =>
         form.GetLogicalDescendants().OfType<CheckBox>().First(box => (string?)box.Content == label);
 
+    private const string TabWidthOverride = "Override the note editor's tab width";
+    private const string ShowExtensions = "Show file extensions in the file tree";
+
     [AvaloniaFact]
     public void Preferences_is_a_shell_command_on_the_platform_chord()
     {
@@ -121,7 +124,7 @@ public sealed class PreferencesTests
             var overlay = Overlay(window);
 
             var general = Tab(overlay, "General");
-            Toggle(general, "Override the note editor's tab width").IsChecked = true;
+            Toggle(general, TabWidthOverride).IsChecked = true;
             Row<NumericUpDown>(general, "Tab width").Value = 8m;
             Assert.Equal(4, view.Editor.IndentWidth); // nothing applied while the dialog is open
 
@@ -157,7 +160,7 @@ public sealed class PreferencesTests
             var overlay = Overlay(window);
 
             var general = Tab(overlay, "General");
-            Toggle(general, "Override the note editor's tab width").IsChecked = true;
+            Toggle(general, TabWidthOverride).IsChecked = true;
             Row<NumericUpDown>(general, "Tab width").Value = 8m;
             overlay.TryCancel(); // Esc / backdrop
             Dispatcher.UIThread.RunJobs();
@@ -425,5 +428,74 @@ public sealed class PreferencesTests
         var command = window.ShellCommandsForTest.Single(c => c.Id == "shell.toggleTabBar");
 
         Assert.True(command.IsEnabled);
+    }
+
+    // ---- The tree's file extensions -------------------------------------------------------------------
+
+    [AvaloniaFact]
+    public void Turning_the_trees_extensions_off_reaches_the_sidebar_and_is_remembered()
+    {
+        var window = new MainWindow(new NotebookService());
+        window.Show();
+        Assert.True(window.SidebarForTest.ShowFileExtensions); // shown until someone says otherwise
+
+        window.InvokeShellForTest("shell.preferences");
+        Dispatcher.UIThread.RunJobs();
+        var overlay = Overlay(window);
+
+        // The tree is Puffinote's own chrome, so the option lives on the General tab.
+        Toggle(Tab(overlay, "General"), ShowExtensions).IsChecked = false;
+        Assert.True(window.SidebarForTest.ShowFileExtensions); // nothing applied while the dialog is open
+
+        ClickOk(overlay);
+        Dispatcher.UIThread.RunJobs();
+
+        Assert.False(window.SidebarForTest.ShowFileExtensions);
+
+        // ...and it is a preference, so it outlives the run: the next launch reads it back off disk.
+        Assert.False(PuffinoteSettings.LoadUser().ShowFileExtensions);
+    }
+
+    [AvaloniaFact]
+    public void The_extensions_command_flips_them_for_this_session_only()
+    {
+        // The palette/menu twin of the preference: it is the "let me see the suffixes for a minute" gesture, so
+        // it changes what is on screen and writes nothing — a saved setting would make it a change of mind.
+        var window = new MainWindow(new NotebookService());
+        window.Show();
+
+        window.InvokeShellForTest("shell.toggleFileExtensions");
+        Dispatcher.UIThread.RunJobs();
+        Assert.False(window.SidebarForTest.ShowFileExtensions);
+
+        window.InvokeShellForTest("shell.toggleFileExtensions");
+        Dispatcher.UIThread.RunJobs();
+        Assert.True(window.SidebarForTest.ShowFileExtensions);
+
+        Assert.Null(PuffinoteSettings.LoadUser().ShowFileExtensions); // nothing was saved either way
+    }
+
+    [AvaloniaFact]
+    public void A_session_flip_survives_opening_a_notebook()
+    {
+        // Opening a notebook re-resolves the settings (the notebook's own file can differ), which would
+        // otherwise quietly undo a toggle made moments earlier — the one thing "for this session" must not do.
+        var dir = Directory.CreateTempSubdirectory("puffinote-prefs-session");
+        try
+        {
+            var window = new MainWindow(new NotebookService());
+            window.Show();
+            window.InvokeShellForTest("shell.toggleFileExtensions");
+            Dispatcher.UIThread.RunJobs();
+
+            window.OpenNotebook(dir.FullName);
+            Dispatcher.UIThread.RunJobs();
+
+            Assert.False(window.SidebarForTest.ShowFileExtensions);
+        }
+        finally
+        {
+            dir.Delete(recursive: true);
+        }
     }
 }

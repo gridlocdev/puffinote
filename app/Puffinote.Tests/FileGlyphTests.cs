@@ -4,8 +4,8 @@ using Xunit;
 namespace Puffinote.Tests;
 
 /// <summary>
-/// The file tree's type map: which glyph a file gets, and how its name splits into the stem the tree shows and
-/// the extension its pill shows.
+/// The file tree's type map: which glyph a file gets, and how its name splits into the stem the tree writes in
+/// its primary ink and the extension it writes after it in the muted one.
 /// </summary>
 public sealed class FileGlyphTests
 {
@@ -18,6 +18,11 @@ public sealed class FileGlyphTests
     [InlineData("Work.pivotask.json", "Work", "pivotask.json")] // ...boards included: this is a board called "Work"
     [InlineData("types.d.ts", "types", "d.ts")]
     [InlineData("app.min.js", "app", "min.js")]
+    // ...the family's own included: a board is a ".pivotask.json", not a JSON file called "tasks.pivotask".
+    // Split on the last dot, the tree wrote ".pivotask" into the name in the bright ink, reading as part of
+    // what the board is called — the same whole-suffix rule EditorPaneFactory routes a board on.
+    [InlineData("tasks.pivotask.json", "tasks", "pivotask.json")]
+    [InlineData("pivotask.json", "pivotask", "json")] // ...but the suffix alone is just a JSON file
     [InlineData("notes.", "notes.", "")] // a trailing dot is not an extension
     public void Split_separates_the_stem_from_the_extension(string fileName, string stem, string extension)
     {

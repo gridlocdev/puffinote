@@ -149,6 +149,13 @@ internal sealed class FilesPanel : ISidebarPanel
     /// <summary>Mark <paramref name="path"/> (the active tab's document, or null) as the bold row in the tree.</summary>
     public void SetActiveDocument(string? path) => _tree.SetActiveDocument(path);
 
+    /// <summary>Whether the tree spells each file's extension out after its name (PRD §7.5 preference).</summary>
+    public bool ShowExtensions
+    {
+        get => _tree.ShowExtensions;
+        set => _tree.ShowExtensions = value;
+    }
+
     /// <summary>Reveal and select <paramref name="path"/> in the tree, leaving the entered folder if it's outside it.</summary>
     public void SelectPath(string path)
     {

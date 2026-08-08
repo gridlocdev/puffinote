@@ -69,8 +69,9 @@ public partial class MainWindow
         }
 
         // Resolve Puffinote's overrides for this notebook (per-user + the notebook's own .puffinote/settings.json)
-        // before any file opens, so panes inherit the editor's config with these layered on top (PRD §7.5).
-        _tabHost.Settings = PuffinoteSettings.Resolve(_settings, _notebook.RootPath);
+        // before any file opens, so panes inherit the editor's config with these layered on top (PRD §7.5) — and
+        // so the sidebar's own chrome settings follow the notebook you just opened.
+        ApplySettings();
 
         // Restore the per-notebook session (PRD §7.1): recent files + sidebar layout. Recency is per-notebook, so
         // a switch loads the new notebook's list (empty when it has none); drop recent entries whose file is

@@ -19,6 +19,11 @@ namespace Puffinote.Components.Theming;
 /// surface means the badge's text keeps its contrast ratio no matter what the row behind it is doing (hovered,
 /// selected, accent-washed), which a translucent or lighter chip cannot promise.</param>
 /// <param name="SurfaceBorder">The hairline border around a <see cref="Surface"/>.</param>
+/// <param name="Text">Primary text on a <see cref="Surface"/> — the ink a name, a title, or a row's own
+/// content is written in. It exists so chrome that lists <em>content</em> (the file tree's names, the sidebar's
+/// notebook header) can be as legible as the document it points at, instead of borrowing
+/// <see cref="MutedText"/> for want of a brighter token — which is how every file name in the tree ended up
+/// written at the level meant for the hint underneath it.</param>
 /// <param name="MutedText">Secondary / description text.</param>
 /// <param name="Scrim">The dim backdrop behind a modal overlay.</param>
 public sealed record ThemePalette(
@@ -28,5 +33,6 @@ public sealed record ThemePalette(
     IBrush SurfaceHover,
     IBrush SurfaceInset,
     IBrush SurfaceBorder,
+    IBrush Text,
     IBrush MutedText,
     IBrush Scrim);

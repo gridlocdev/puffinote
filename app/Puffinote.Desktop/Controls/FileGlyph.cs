@@ -10,9 +10,10 @@ namespace Puffinote.Desktop.Controls;
 /// <para>The tree used to give every file a blank 15px spacer where a folder got a glyph, which made a notebook
 /// read as an undifferentiated list of names: a note, an attached PDF and a spreadsheet looked identical until
 /// you read the extension off the end of the name. Type is the first thing you scan a file list for, so it gets
-/// the strongest channel available — shape — with colour as reinforcement and the extension pill (see
-/// <see cref="Split"/>) as the literal, colour-independent statement of what the file is. That triple is
-/// deliberate: shape and text both survive a reader who cannot distinguish the hues.</para>
+/// the strongest channel available — shape — with colour as reinforcement and the extension itself (see
+/// <see cref="Split"/>), written after the name in the muted ink, as the literal, colour-independent statement
+/// of what the file is. That triple is deliberate: shape and text both survive a reader who cannot distinguish
+/// the hues.</para>
 ///
 /// <para>Puffinote's own native types lead the map: <c>.md</c> (Typage) gets the first-party
 /// <c>markdown</c> glyph, <c>.ods</c> (Cellestra) the <c>table</c> glyph, and <c>.pivotask.json</c>
@@ -172,12 +173,14 @@ internal static class FileGlyph
     /// <summary>
     /// Extensions that are really two segments and must stay whole. <c>archive.tar.gz</c> is a gzipped tarball,
     /// not a "gz" file called <c>archive.tar</c>, and <c>types.d.ts</c> is a declaration file — splitting on the
-    /// last dot would name them wrongly in the pill. Longest first, so <c>tar.gz</c> wins over <c>gz</c>.
+    /// last dot would name them wrongly. Longest first, so <c>tar.gz</c> wins over <c>gz</c>.
     ///
-    /// <para><c>pivotask.json</c> is here for the same reason it is a compound extension at all: a board named
-    /// <c>Work.pivotask.json</c> is a board called <c>Work</c>, not a JSON file called <c>Work.pivotask</c>.
-    /// Splitting it on the last dot would put "pivotask" in the tree's name column and hand the row the generic
-    /// JSON glyph — the two things this map exists to prevent.</para>
+    /// <para><c>pivotask.json</c> leads the list because it is the family's own: a board is
+    /// <c>tasks.pivotask.json</c>, not a JSON file called <c>tasks.pivotask</c> — which is exactly what the tree
+    /// used to show, splitting the suffix in half and leaving <c>.pivotask</c> stranded in the name. Splitting it
+    /// on the last dot would also hand the row the generic JSON glyph rather than a board's own — the two things
+    /// this map exists to prevent. It is the same rule <see cref="Panes.EditorPaneFactory"/> routes on: the whole
+    /// of <c>.pivotask.json</c> is the type.</para>
     /// </summary>
     private static readonly string[] Compound =
     [
@@ -187,10 +190,11 @@ internal static class FileGlyph
     ];
 
     /// <summary>
-    /// Split a file name into the stem the tree shows and the extension its pill shows — <c>("Roadmap", "md")</c>
-    /// for <c>Roadmap.md</c>, <c>("archive", "tar.gz")</c> for <c>archive.tar.gz</c>. A name with no extension
-    /// (or a leading dot and nothing else) keeps its whole name and gets an empty extension, so it renders with
-    /// no pill rather than an empty one.
+    /// Split a file name into the stem the tree writes in its primary ink and the extension it writes after it in
+    /// the muted one — <c>("Roadmap", "md")</c> for <c>Roadmap.md</c>, <c>("archive", "tar.gz")</c> for
+    /// <c>archive.tar.gz</c>, <c>("tasks", "pivotask.json")</c> for a board. A name with no extension (or a
+    /// leading dot and nothing else) keeps its whole name and gets an empty extension, so it renders as a bare
+    /// name rather than trailing a lone dot.
     /// </summary>
     public static (string Stem, string Extension) Split(string fileName)
     {

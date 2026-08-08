@@ -29,6 +29,12 @@ public partial class MainWindow : Window
     // editor's own config when a note/sheet pane opens.
     private PuffinoteSettings _settings = PuffinoteSettings.LoadUser();
 
+    // The session-only answer to "show the file tree's extensions?", set by the palette/menu command and null
+    // until someone uses it — at which point it outranks the saved preference for the rest of the run. Kept here
+    // rather than left in the sidebar so re-resolving the settings (which every notebook open does) doesn't
+    // silently revert it. Changing the preference in the dialog clears it (see ShowSettings).
+    private bool? _extensionsThisSession;
+
     // The user's custom shell shortcuts (PRD §7.6), edited in the shortcuts editor. BuildShellCommands
     // resolves each non-reserved command's gesture through this, so a rebound key reaches menu + palette +
     // key bindings alike. Reserved global keys are fixed and never routed through it.
@@ -128,6 +134,10 @@ public partial class MainWindow : Window
 
         InstallMenu(root);
         root.Children.Add(BuildBody(palette));
+
+        // The saved preferences, before a notebook is open: with no notebook there is no second layer to
+        // resolve against, but the sidebar still has to start out drawn the way the user left it.
+        ApplySettings();
         InstallSwipeGestures();
 
         // Stack the shared overlay host above the content so dialogs (dirty-close prompt, messages) render

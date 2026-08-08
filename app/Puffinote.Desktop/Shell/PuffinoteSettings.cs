@@ -25,6 +25,22 @@ internal sealed record PuffinoteSettings
     /// </summary>
     public bool? ShowTabBar { get; init; }
 
+    /// <summary>
+    /// Whether the sidebar's file tree spells each file's extension out after its name; null means the default,
+    /// <see cref="ShowFileExtensionsDefault"/>. Unlike <see cref="TabWidth"/> this overrides nothing in an
+    /// embedded editor — it is the shell's own chrome — but it is nullable for the same reason every field here
+    /// is: a notebook's <c>.puffinote/settings.json</c> has to be able to say "leave this alone", which a plain
+    /// <c>bool</c> cannot express (an unset one deserializes as <c>false</c> and would silently hide the
+    /// extensions of every notebook that never mentioned them).
+    /// </summary>
+    public bool? ShowFileExtensions { get; init; }
+
+    /// <summary>Extensions are shown until someone turns them off: it is what the file is called.</summary>
+    public const bool ShowFileExtensionsDefault = true;
+
+    /// <summary>The effective setting — the resolved value, or the default when nothing set one.</summary>
+    public bool ShowFileExtensionsOrDefault => ShowFileExtensions ?? ShowFileExtensionsDefault;
+
     private static readonly JsonSerializerOptions Options = new() { WriteIndented = true };
 
     /// <summary>Puffinote's own per-user config file — the one the General tab of Preferences writes.</summary>
@@ -62,5 +78,6 @@ internal sealed record PuffinoteSettings
         {
             TabWidth = over.TabWidth ?? TabWidth,
             ShowTabBar = over.ShowTabBar ?? ShowTabBar,
+            ShowFileExtensions = over.ShowFileExtensions ?? ShowFileExtensions,
         };
 }

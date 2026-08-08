@@ -46,6 +46,7 @@ public partial class MainWindow
         // or inherit" is two controls over one nullable field, which only reads back as a pair.
         var overrideTabWidth = _settings.TabWidth is not null;
         double tabWidth = _settings.TabWidth ?? new NoteConfig().TabWidth;
+        var showExtensions = _settings.ShowFileExtensionsOrDefault;
 
         // Not an override, so no paired "override it?" checkbox: the tab strip is Puffinote's own chrome and
         // there is no editor setting underneath it to inherit. Unset simply means shown.
@@ -72,6 +73,12 @@ public partial class MainWindow
                     new ToggleSetting("Show the tab bar",
                         () => showTabBar, v => showTabBar = v,
                         "Off hides the strip of open documents. They stay open — switch with ⌘⇧[ / ⌘⇧] or ⌘O."),
+                ]),
+                new SettingsSection("Sidebar",
+                [
+                    new ToggleSetting("Show file extensions in the file tree",
+                        () => showExtensions, v => showExtensions = v,
+                        "Off writes each file by its name alone, leaving its glyph to say what it is."),
                 ]),
                 new SettingsSection("Notes",
                 [
@@ -118,12 +125,43 @@ public partial class MainWindow
         {
             TabWidth = overrideTabWidth ? (int)tabWidth : null,
             ShowTabBar = showTabBar,
+            ShowFileExtensions = showExtensions,
         };
         _settings.SaveUser();
 
-        // Re-resolve against the open notebook's own file and push the result at the tab host, so open
-        // panes pick every one of those changes up without a restart (PRD §7.5 precedence, applied live).
-        _tabHost.Settings = PuffinoteSettings.Resolve(_settings, _notebook.RootPath);
+        // Settling the preference outranks whatever the session's own toggle last said: someone who has just
+        // answered the question in the dialog means it, and leaving the override in place would make the
+        // setting they picked appear not to take.
+        _extensionsThisSession = null;
+
+        // Re-resolve against the open notebook's own file and push the result at everything that reads it, so
+        // open panes pick every one of those changes up without a restart (PRD §7.5 precedence, applied live).
+        ApplySettings();
+    }
+
+    /// <summary>
+    /// Push the effective settings — the per-user file resolved against the open notebook's own
+    /// <c>.puffinote/settings.json</c> (PRD §7.5) — at everything that reads them, so a change lands without a
+    /// restart. Called at startup, on every notebook open (the notebook layer can differ), and after the dialog.
+    /// </summary>
+    private void ApplySettings()
+    {
+        var resolved = PuffinoteSettings.Resolve(_settings, _notebook.RootPath);
+        _tabHost.Settings = resolved;
+        SidebarForTest.ShowFileExtensions = _extensionsThisSession ?? resolved.ShowFileExtensionsOrDefault;
+    }
+
+    /// <summary>
+    /// Show or hide the tree's file extensions <em>for this run only</em> (the command palette / View menu twin of
+    /// the preference above). It writes nothing to disk: this is the "let me see the suffixes for a minute" gesture,
+    /// not a change of mind, so quitting forgets it — while the preference, once set, outlives it (see the dialog).
+    /// The override is remembered rather than merely poked into the sidebar so that opening another notebook, which
+    /// re-resolves the settings, doesn't quietly undo it mid-session.
+    /// </summary>
+    private void ToggleFileExtensions()
+    {
+        _extensionsThisSession = !SidebarForTest.ShowFileExtensions;
+        SidebarForTest.ShowFileExtensions = _extensionsThisSession.Value;
     }
 
     /// <summary>

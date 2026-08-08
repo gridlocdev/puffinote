@@ -22,8 +22,13 @@ public sealed class PuffinoteTheme : IAppTheme
         IBrush accentBrush = new ImmutableSolidColorBrush(accent);
         IBrush accentSubtle = new ImmutableSolidColorBrush(Color.FromArgb(0x33, accent.R, accent.G, accent.B));
 
-        // MutedText carries real information — inactive tab titles, file names in the tree, the sidebar header —
-        // so it has to clear WCAG 1.4.3's 4.5:1 for body text, not merely look secondary. The old #888888 sat at
+        // Text is the primary ink — a file's name in the tree, the notebook's name in the sidebar header. It was
+        // missing, and the things that needed it reached for MutedText instead, so a panel whose whole job is to
+        // list names wrote every one of them at the level meant for the hint beside it. #E6E9ED is ~13:1 on the
+        // dark Surface below and stays a clear step above MutedText, which is what keeps "secondary" meaningful.
+        //
+        // MutedText carries real information — inactive tab titles, a file's extension, the recent list's folder
+        // line — so it has to clear WCAG 1.4.3's 4.5:1 for body text, not merely look secondary. The old #888888 sat at
         // ~4.7:1 on the #252526 chrome: passing on paper, but with no margin, and it fell *below* threshold
         // anywhere the surface lightened. #9BA1A6 lifts it to ~6.5:1 while still reading a clear step back from
         // the primary text. SurfaceBorder likewise has to clear 3:1 as a UI boundary (1.4.11), not just be visible.
@@ -42,6 +47,7 @@ public sealed class PuffinoteTheme : IAppTheme
             SurfaceHover: new ImmutableSolidColorBrush(Color.FromRgb(0x34, 0x37, 0x3E)),
             SurfaceInset: new ImmutableSolidColorBrush(Color.FromRgb(0x20, 0x22, 0x28)),
             SurfaceBorder: new ImmutableSolidColorBrush(Color.FromRgb(0x4C, 0x4F, 0x55)),
+            Text: new ImmutableSolidColorBrush(Color.FromRgb(0xE6, 0xE9, 0xED)),
             MutedText: new ImmutableSolidColorBrush(Color.FromRgb(0x9B, 0xA1, 0xA6)),
             Scrim: ScrimBrush);
 
@@ -52,6 +58,7 @@ public sealed class PuffinoteTheme : IAppTheme
             SurfaceHover: new ImmutableSolidColorBrush(Color.FromRgb(0xEF, 0xF1, 0xF4)),
             SurfaceInset: new ImmutableSolidColorBrush(Color.FromRgb(0xEC, 0xEE, 0xF1)),
             SurfaceBorder: new ImmutableSolidColorBrush(Color.FromRgb(0xBF, 0xC3, 0xC9)),
+            Text: new ImmutableSolidColorBrush(Color.FromRgb(0x1F, 0x23, 0x28)),
             MutedText: new ImmutableSolidColorBrush(Color.FromRgb(0x5C, 0x63, 0x6B)),
             Scrim: ScrimBrush);
     }

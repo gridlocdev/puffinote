@@ -1,6 +1,7 @@
 using Avalonia;
 using Avalonia.Automation;
 using Avalonia.Controls;
+using Avalonia.Controls.Documents;
 using Avalonia.Controls.Presenters;
 using Avalonia.Headless.XUnit;
 using Avalonia.Media;
@@ -15,8 +16,9 @@ using Xunit;
 namespace Puffinote.UiTests;
 
 /// <summary>
-/// What a file tree row actually says at a glance: its type (glyph + extension pill) and where it sits (indent
-/// guides tracing the branch you are in).
+/// What a file tree row actually says at a glance: what it is called (its name in the primary ink, its
+/// extension trailing it in the muted one), its type (the glyph), and where it sits (indent guides tracing
+/// the branch you are in).
 /// </summary>
 public sealed class FileTreeVisualsTests : IDisposable
 {
@@ -63,6 +65,21 @@ public sealed class FileTreeVisualsTests : IDisposable
 
     private static IEnumerable<T> In<T>(Visual row) where T : Visual => row.GetVisualDescendants().OfType<T>();
 
+    /// <summary>
+    /// The name label of a row, and its runs. A row's name is one <see cref="TextBlock"/> built from inlines —
+    /// the stem, then the extension in its own run — so that trimming acts on the whole label; reading
+    /// <c>TextBlock.Text</c> would come back null.
+    /// </summary>
+    private static TextBlock Label(Window window, string name) =>
+        In<TextBlock>(Row(window, name)).Single(t => t.Inlines is { Count: > 0 });
+
+    /// <summary>Everything a row's name label actually says, run by run.</summary>
+    private static IReadOnlyList<string> Runs(Window window, string name) =>
+        [.. Label(window, name).Inlines!.OfType<Run>().Select(r => r.Text ?? string.Empty)];
+
+    /// <summary>The whole of what a row's name label reads as, on screen.</summary>
+    private static string Written(Window window, string name) => string.Concat(Runs(window, name));
+
     [AvaloniaFact]
     public void Every_glyph_the_sidebar_asks_for_is_vendored()
     {
@@ -86,24 +103,80 @@ public sealed class FileTreeVisualsTests : IDisposable
     }
 
     [AvaloniaFact]
-    public void A_file_row_shows_its_type_glyph_and_its_extension_in_a_pill()
+    public void A_file_row_shows_its_type_glyph_and_writes_its_extension_after_its_name()
     {
         var (_, window) = Open();
-        var row = Row(window, "cover.png");
 
         // The glyph follows the type...
-        var glyph = In<LucideIcon>(row).Single();
+        var glyph = In<LucideIcon>(Row(window, "cover.png")).Single();
         Assert.Equal(FileGlyph.ForFile("cover.png").IconKey, glyph.IconKey);
         Assert.Equal(FileGlyph.ForFile("cover.png").Color, glyph.Foreground);
 
-        // ...the name sheds its extension...
-        var texts = In<TextBlock>(row).Select(t => t.Text).ToList();
-        Assert.Contains("cover", texts);
-        Assert.DoesNotContain("cover.png", texts);
+        // ...and the row says what the file is *called*, whole. The extension used to be cut off the name and
+        // parked in a pill against the row's right edge, so nothing on screen ever read "cover.png".
+        Assert.Equal(["cover", ".png"], Runs(window, "cover.png"));
+        Assert.Equal("cover.png", Written(window, "cover.png"));
+    }
 
-        // ...and the extension is spelled out in the pill, which is the channel that survives a reader who
-        // cannot tell the glyph colours apart.
-        Assert.Contains("PNG", texts);
+    [AvaloniaFact]
+    public void The_extension_is_written_in_the_muted_ink_and_the_name_in_the_bright_one()
+    {
+        // The whole point of writing them in one label: two levels of ink, one string. The suffix is a fact
+        // about the file's type, the name is what you are scanning for — so the type steps back rather than
+        // being taken away.
+        var (_, window) = Open();
+        var runs = Label(window, "cover.png").Inlines!.OfType<Run>().ToList();
+
+        Assert.Equal(Tokens.Dark.Text, Label(window, "cover.png").Foreground);
+        Assert.Equal(Tokens.Dark.Text, runs[0].Foreground); // the stem, inheriting the label's ink
+        Assert.Equal(Tokens.Dark.MutedText, runs[1].Foreground);
+        Assert.NotEqual(Tokens.Dark.Text, Tokens.Dark.MutedText); // ...and they are genuinely two levels
+    }
+
+    [AvaloniaFact]
+    public void A_boards_compound_suffix_stays_whole()
+    {
+        // ".pivotask.json" is one type, not a JSON file called "tasks.pivotask" — the same rule
+        // EditorPaneFactory routes a board on. Split on the last dot, the tree left ".pivotask" stranded in
+        // the middle of the name, in the bright ink, reading as part of what the board is called.
+        Touch("tasks.pivotask.json");
+        var tree = new FileTreeView();
+        var window = new Window { Width = 320, Height = 500, Content = tree };
+        window.Show();
+        tree.SetRoot(new NotebookNode(_notebook.FullName, isDirectory: true));
+        Settle(window);
+
+        Assert.Equal(["tasks", ".pivotask.json"], Runs(window, "tasks.pivotask.json"));
+    }
+
+    [AvaloniaFact]
+    public void Hiding_the_extensions_leaves_the_names_and_nothing_dangling()
+    {
+        var (tree, window) = Open();
+        Assert.Equal("cover.png", Written(window, "cover.png"));
+
+        tree.ShowExtensions = false;
+        Settle(window);
+
+        // The suffix goes entirely — not merely dim, and not a trailing dot where it used to be.
+        Assert.Equal(["cover"], Runs(window, "cover.png"));
+        Assert.Equal(["Projects"], Runs(window, "Projects")); // a folder has none either way
+
+        tree.ShowExtensions = true;
+        Settle(window);
+        Assert.Equal("cover.png", Written(window, "cover.png"));
+    }
+
+    [AvaloniaFact]
+    public void A_row_announces_the_file_by_its_real_name_even_with_the_extensions_hidden()
+    {
+        // Hiding the suffix is a visual preference. A screen reader is still told what the file is called —
+        // "cover" is not a file name, and Rename/Reveal act on "cover.png" regardless.
+        var (tree, window) = Open();
+        tree.ShowExtensions = false;
+        Settle(window);
+
+        Assert.Equal("cover.png", AutomationProperties.GetName(In<DockPanel>(Row(window, "cover.png")).First()));
     }
 
     [AvaloniaFact]
@@ -115,10 +188,10 @@ public sealed class FileTreeVisualsTests : IDisposable
         // because the model still knew the name; only a rendered frame showed it missing.
         var (_, window) = Open();
 
-        foreach (var (row, text) in new[] { ("Projects", "Projects"), ("Inbox.md", "Inbox"), ("cover.png", "cover") })
+        foreach (var (row, written) in new[] { ("Projects", "Projects"), ("Inbox.md", "Inbox.md"), ("cover.png", "cover.png") })
         {
-            var name = In<TextBlock>(Row(window, row)).Single(t => t.Text == text);
-            Assert.NotNull(name.Foreground); // a null brush paints nothing
+            Assert.Equal(written, Written(window, row));
+            Assert.NotNull(Label(window, row).Foreground); // a null brush paints nothing
         }
     }
 
@@ -145,28 +218,28 @@ public sealed class FileTreeVisualsTests : IDisposable
     }
 
     /// <summary>The weight of the row named <paramref name="name"/>'s own name text.</summary>
-    private static FontWeight Weight(Window window, string name, string stem) =>
-        In<TextBlock>(Row(window, name)).Single(t => t.Text == stem).FontWeight;
+    private static FontWeight Weight(Window window, string name) => Label(window, name).FontWeight;
 
-    private static IBrush? Ink(Window window, string name, string stem) =>
-        In<TextBlock>(Row(window, name)).Single(t => t.Text == stem).Foreground;
+    private static IBrush? Ink(Window window, string name) => Label(window, name).Foreground;
 
     [AvaloniaFact]
-    public void Unselected_folders_and_files_are_written_in_the_same_ink()
+    public void Every_name_in_the_tree_is_written_in_the_same_bright_ink()
     {
-        // Folders used to keep the brighter inherited brush while files were muted, so a list of folders read
-        // as a wall of highlights — the loudest thing on screen was the scaffolding, not the note being read.
+        // The tree wrote every name — folders, files, the note you had open — in MutedText, the brush meant for
+        // secondary text, so the panel whose whole job is to list names was the dimmest surface in the window.
+        // Names are the content here, so they get the primary ink, and "muted" goes back to meaning the things
+        // that really are secondary: a file's extension, the recent list's folder line.
         var (tree, window) = Open();
         tree.SetActiveDocument(Path("Inbox.md"));
         Settle(window);
 
-        Assert.Equal(Ink(window, "cover.png", "cover"), Ink(window, "Projects", "Projects"));
+        Assert.Equal(Ink(window, "cover.png"), Ink(window, "Projects"));
 
-        // ...and muted is the level they meet at, not the bright one.
-        Assert.Equal(Tokens.Dark.MutedText, Ink(window, "Projects", "Projects"));
+        // ...and it is the bright level they meet at, not the muted one.
+        Assert.Equal(Tokens.Dark.Text, Ink(window, "Projects"));
 
         // Every row, the open one included: what marks it is the wash behind it, not its ink.
-        Assert.Equal(Tokens.Dark.MutedText, Ink(window, "Inbox.md", "Inbox"));
+        Assert.Equal(Tokens.Dark.Text, Ink(window, "Inbox.md"));
     }
 
     /// <summary>The wash painted behind a row, which is what "highlighted" means here.</summary>
@@ -183,11 +256,11 @@ public sealed class FileTreeVisualsTests : IDisposable
         Settle(window);
 
         Assert.Equal(Tokens.Dark.AccentSubtle, Wash(window, "Inbox.md"));
-        Assert.Equal(FontWeight.Normal, Weight(window, "Inbox.md", "Inbox"));
+        Assert.Equal(FontWeight.Normal, Weight(window, "Inbox.md"));
 
         // Nothing is bold anywhere, so no row's width depends on which note is open.
-        Assert.Equal(FontWeight.Normal, Weight(window, "Projects", "Projects"));
-        Assert.Equal(FontWeight.Normal, Weight(window, "cover.png", "cover"));
+        Assert.Equal(FontWeight.Normal, Weight(window, "Projects"));
+        Assert.Equal(FontWeight.Normal, Weight(window, "cover.png"));
 
         // The highlight follows the tab you switch to; it never smears across two rows.
         tree.SetActiveDocument(Path("cover.png"));
@@ -360,7 +433,7 @@ public sealed class FileTreeVisualsTests : IDisposable
         Settle(window);
 
         Assert.Equal(Path("cover.png"), tree.SelectedNode?.Path);
-        Assert.Equal(FontWeight.Normal, Weight(window, "cover.png", "cover")); // selected, but not open
+        Assert.Equal(FontWeight.Normal, Weight(window, "cover.png")); // selected, but not open
         Assert.Equal(Tokens.Dark.AccentSubtle, Wash(window, "Inbox.md")); // open, though not selected
     }
 

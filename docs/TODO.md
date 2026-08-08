@@ -161,9 +161,41 @@
 
 - [x] Puffinote: For files with the `.pivotask.json` combined file extension, use lucide's square-check icon. This makes it visually different from the regular JSON icon and helps users quickly identify Pivotask files in the file tree.
 - [x] Puffinote: Add an option to set whether the tab bar is visible or hidden in the settings menu. This allows users to customize their workspace according to their preferences, either by keeping the tab bar visible for easy navigation or hiding it for a cleaner interface. Also provide the same command in the command bar for quick access to toggle the tab bar visibility temporarily during the current session.
-- [ ] Puffinote: The text on the sidebar should be brighter and more readable. The current text color is too dim, making it difficult to read, especially in low-light conditions. Adjust the text color to a brighter shade that improves readability while maintaining the overall aesthetic of the application.
-- [ ] Puffinote: Instead of the pill with the file extension pinned to the right, ![alt text](sidebar-extension-mockup.png) show the file extension after the first part in muted text color. The combined file extension for `.pivotask.json` should be muted.
-- [ ] Puffinote: Add an option to set whether the muted file extension in the file tree is visible or hidden by default in the settings menu. This allows users to customize their workspace according to their preferences, either by keeping the tab bar visible for easy navigation or hiding it for a cleaner interface. Also provide the same command in the command bar for quick access to toggle the visibility temporarily during the current session.
+- [x] Puffinote: The text on the sidebar should be brighter and more readable. The current text color is too dim, making it difficult to read, especially in low-light conditions. Adjust the text color to a brighter shade that improves readability while maintaining the overall aesthetic of the application.
+
+    The palette had no primary-text token at all, so the two places that list *content* — the file tree's
+    names and the sidebar header's notebook name — reached for `MutedText`, the brush meant for the hint
+    underneath them. The panel whose entire job is to list names was writing every one of them at the
+    dimmest level in the window. `ThemePalette.Text` fills the gap (`#E6E9ED` dark, ~13:1 on the sidebar's
+    surface; `#1F2328` light) and those two move onto it. Genuinely secondary text is deliberately left
+    muted — the "Show only" label, "drag to reorder", the breadcrumb's route crumbs, the recent list's
+    folder line, and now the file extensions — because a brighter primary is only legible as primary if
+    something still sits below it.
+
+- [x] Puffinote: Instead of the pill with the file extension pinned to the right, ![alt text](sidebar-extension-mockup.png) show the file extension after the first part in muted text color. The combined file extension for `.pivotask.json` should be muted.
+
+    The pill aligned the types into a scannable column, but at the cost of cutting each file's name in
+    half and putting the halves at opposite ends of the row — nothing on screen was ever called what the
+    file is called. The row now writes the whole name as one label: stem in `Text`, `.ext` trailing it in
+    `MutedText`. Two `Run`s in **one** `TextBlock`, not two controls, so `TextTrimming` acts on the whole
+    string — two controls in a stack would ellipsize the name against a suffix that never gives way.
+    `.pivotask.json` needed `FileGlyph.Compound` to learn it: split on the last dot the tree showed
+    `tasks.pivotask` + a `JSON` pill, stranding `.pivotask` in the bright ink as if it were part of the
+    board's name. It is the same whole-suffix rule `EditorPaneFactory` already routes a board on.
+    The glyph is untouched (a board still draws the JSON mark — `docs/TODO.md` has a separate item for
+    giving it `square-check`).
+
+- [x] Puffinote: Add an option to set whether the muted file extension in the file tree is visible or hidden by default in the settings menu. This allows users to customize their workspace according to their preferences, either by keeping the tab bar visible for easy navigation or hiding it for a cleaner interface. Also provide the same command in the command bar for quick access to toggle the visibility temporarily during the current session.
+
+    `PuffinoteSettings.ShowFileExtensions` (Preferences → Sidebar) is the durable answer; the
+    `shell.toggleFileExtensions` command — palette, View menu, rebindable, no default chord — is the
+    session-only one, and writes nothing. It is nullable like every other field in that record so a
+    notebook's own `.puffinote/settings.json` can leave it alone: a plain `bool` deserializes to `false`
+    when absent and would have silently hidden the extensions of every notebook that never mentioned them.
+    The session flip is remembered on the window rather than poked straight into the sidebar, because
+    opening a notebook re-resolves the settings and would otherwise quietly undo a toggle made seconds
+    earlier — the one thing "for this session" must not do. Answering the question in the dialog clears
+    the session override, so the setting you just picked actually takes.
 
 - [ ] Puffinote: Add a "Filter" button, which when clicked, shows a text box that allows the user to filter the files in the file tree by name. The filter should be applied in real-time as the user types, and should be case-insensitive. This provides a quick and easy way for users to find specific files in large projects.
 

@@ -78,7 +78,11 @@ internal sealed class SidebarView : UserControl
         _files.OpenExternallyRequested += node => OpenExternallyRequested?.Invoke(node);
 
         var palette = Tokens.Dark;
-        _header.Foreground = palette.MutedText;
+
+        // The notebook's name is content, not a label for something else, so it is written in the primary ink
+        // like the file names below it. Muted, the one line naming what you have open sat at the same level as
+        // the "drag to reorder" hint.
+        _header.Foreground = palette.Text;
 
         BuildSwitcher();
         FoldersToggle = BuildActions(palette);
@@ -146,6 +150,16 @@ internal sealed class SidebarView : UserControl
 
     /// <summary>Tell the file tree which document is open in the active tab, so it alone is drawn in bold.</summary>
     public void SetActiveDocument(string? path) => _files.SetActiveDocument(path);
+
+    /// <summary>
+    /// Whether the file tree writes each file's extension after its name (the preference, and the session-only
+    /// command that flips it). The shell owns the value; the sidebar only passes it down.
+    /// </summary>
+    public bool ShowFileExtensions
+    {
+        get => _files.ShowExtensions;
+        set => _files.ShowExtensions = value;
+    }
 
     /// <summary>Reveal and select <paramref name="path"/> in the file tree (switching to the Files panel).</summary>
     public void RevealInTree(string path)
