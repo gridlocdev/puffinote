@@ -20,7 +20,11 @@ public sealed partial class PlainTextEditor
             Text: Brush(dark ? 0xFFE6E6E6 : 0xFF1A1A1A),
             GutterFill: Brush(dark ? 0xFF232323 : 0xFFF6F6F6),
             GutterText: tokens.MutedText,
-            CurrentRow: Brush(dark ? 0x22FFFFFFu : 0x11000000u),
+            // The caret's row is a locator, not a highlight. It runs the full width of the viewport on
+            // every row the caret rests on, so an alpha that reads as "tinted" on a short line reads as a
+            // bar across the window on a log — hence deliberately fainter than Typage's, which is bounded
+            // by the content column. Just enough to find the caret with, not enough to look at.
+            CurrentRow: Brush(dark ? 0x14FFFFFFu : 0x0A000000u),
             Selection: tokens.AccentSubtle,
             Caret: tokens.Accent,
             Match: Brush(dark ? 0x553FB084u : 0x5515734Fu));
@@ -304,6 +308,14 @@ public sealed partial class PlainTextEditor
     /// to wait on, so this is how it observes the caret going dark and coming back.
     /// </summary>
     internal void AdvanceCaretBlinkForTest() => _caretBlink.Advance();
+
+    /// <summary>
+    /// Test seam: the tint the caret's row is filled with, for <paramref name="variant"/>. Exposed so the
+    /// "muted, not distracting" intent above is pinned by a test rather than left to whoever next edits
+    /// the palette literal.
+    /// </summary>
+    internal static Color CurrentRowTintForTest(ThemeVariant variant) =>
+        ((ISolidColorBrush)PaletteFor(variant).CurrentRow).Color;
 
     /// <summary>Test seam: whether the blink is currently on its lit phase.</summary>
     internal bool IsCaretLitForTest => _caretBlink.IsCaretVisible;
