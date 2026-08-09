@@ -372,12 +372,14 @@ public class RadialMenuTests
             new RadialSegment(null, null, string.Empty, false),
         ]);
 
-        overlay.SetActiveSegment(0); // top wedge — tip anchored above its outer edge
+        overlay.SetActiveSegment(0); // top wedge — tip anchored above its outer edge, once dwelt on
+        overlay.ElapseTooltipDwellForTest();
         Assert.True(overlay.TooltipOpenForTest);
         Assert.Equal("edit.copy", overlay.ActiveTooltipCommandIdForTest);
         Assert.Equal(Avalonia.Controls.PlacementMode.Top, Avalonia.Controls.ToolTip.GetPlacement(overlay));
 
         overlay.SetActiveSegment(1); // wedge pointing lower-right — tip anchored to its right
+        overlay.ElapseTooltipDwellForTest();
         Assert.Equal(Avalonia.Controls.PlacementMode.Right, Avalonia.Controls.ToolTip.GetPlacement(overlay));
 
         overlay.SetActiveSegment(2); // an unbound wedge has no command — the tip closes
@@ -404,9 +406,12 @@ public class RadialMenuTests
 
         overlay.SetActiveSegment(0, showTooltip: false); // e.g. a keyboard selection on the settings list
         Assert.Equal(0, overlay.ActiveSegment);          // the wedge still highlights...
-        Assert.False(overlay.TooltipOpenForTest);        // ...but no tip pops where the mouse isn't
+        Assert.False(overlay.TooltipDwellRunningForTest); // ...and nothing is even counting down
+        Assert.False(overlay.TooltipOpenForTest);        // ...so no tip pops where the mouse isn't
 
         overlay.SetActiveSegment(0, showTooltip: true);  // now an actual hover over that wedge
+        Assert.True(overlay.TooltipDwellRunningForTest);
+        overlay.ElapseTooltipDwellForTest();
         Assert.True(overlay.TooltipOpenForTest);
 
         overlay.SetActiveSegment(0, showTooltip: false); // hover leaves while it stays selected — tip closes
@@ -421,9 +426,73 @@ public class RadialMenuTests
         window.Show();
         overlay.Open(new Avalonia.Point(140, 140), [new RadialSegment("edit.copy", "copy", "Copy", true)]);
         overlay.SetActiveSegment(0);
+        overlay.ElapseTooltipDwellForTest();
         Assert.True(overlay.TooltipOpenForTest);
 
         window.Content = null; // detaching the overlay must take its tooltip down with it
         Assert.False(overlay.TooltipOpenForTest);
+    }
+
+    /// <summary>
+    /// The name of the thing you are about to run belongs inside the ring, immediately. A gesture that is
+    /// over in a few hundred milliseconds cannot be steered by a tip that takes two seconds to appear.
+    /// </summary>
+    [AvaloniaFact]
+    public void The_hub_names_the_highlighted_wedge_the_moment_it_lights_up()
+    {
+        var overlay = new RadialMenuOverlay { FitToBounds = true };
+        var window = new Window { Width = 280, Height = 280, Content = overlay };
+        window.Show();
+        overlay.Open(new Avalonia.Point(140, 140),
+        [
+            new RadialSegment("edit.copy", "copy", "Copy", true),
+            new RadialSegment("edit.paste", "clipboard", "Paste", true),
+            new RadialSegment(null, null, string.Empty, false),
+        ]);
+
+        Assert.Equal(string.Empty, overlay.HubLabelForTest); // nothing highlighted yet
+
+        overlay.SetActiveSegment(0);
+        Assert.Equal("Copy", overlay.HubLabelForTest);      // no dwell elapsed — the name is already there
+        Assert.False(overlay.TooltipOpenForTest);           // and the fuller card still is not
+
+        overlay.SetActiveSegment(1);
+        Assert.Equal("Paste", overlay.HubLabelForTest);
+
+        overlay.SetActiveSegment(2);                        // an unbound wedge names nothing
+        Assert.Equal(string.Empty, overlay.HubLabelForTest);
+
+        overlay.SetActiveSegment(-1);                       // dead zone — the hub is a cancel target again
+        Assert.Equal(string.Empty, overlay.HubLabelForTest);
+
+        overlay.SetActiveSegment(0);
+        window.AssertRenders(); // the wrapped hub text draws
+    }
+
+    /// <summary>
+    /// Sweeping across the ring passes over wedges on the way; none of them should throw a card up. Only
+    /// stopping on one does, and moving on restarts the wait rather than carrying it over.
+    /// </summary>
+    [AvaloniaFact]
+    public void Sweeping_across_wedges_never_opens_a_tooltip()
+    {
+        var overlay = new RadialMenuOverlay { FitToBounds = true };
+        var window = new Window { Width = 280, Height = 280, Content = overlay };
+        window.Show();
+        overlay.Open(new Avalonia.Point(140, 140),
+        [
+            new RadialSegment("edit.copy", "copy", "Copy", true),
+            new RadialSegment("edit.paste", "clipboard", "Paste", true),
+            new RadialSegment("edit.cut", "scissors", "Cut", true),
+        ]);
+
+        overlay.SetActiveSegment(0);
+        overlay.SetActiveSegment(1);
+        overlay.SetActiveSegment(2); // straight past both — nothing had time to open
+        Assert.False(overlay.TooltipOpenForTest);
+        Assert.True(overlay.TooltipDwellRunningForTest); // but the wedge we stopped on is counting
+
+        overlay.ElapseTooltipDwellForTest();
+        Assert.Equal("edit.cut", overlay.ActiveTooltipCommandIdForTest);
     }
 }

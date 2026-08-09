@@ -1,7 +1,9 @@
+using System.Globalization;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Media;
 using Avalonia.Media.Immutable;
+using Avalonia.Threading;
 using Cellestra.Desktop.Commands;
 using Puffinote.Components.Commands;
 using Puffinote.Components.Controls;
@@ -23,8 +25,17 @@ public readonly record struct RadialSegment(string? CommandId, string? IconKey, 
 public sealed class RadialMenuOverlay : Control
 {
     private const double OuterRadius = 104;
-    private const double InnerRadius = 40;
+    private const double InnerRadius = 44;
     private const double IconSize = 22;
+    private const double HubFontSize = 11;
+
+    /// <summary>
+    /// How long the cursor has to stay on one wedge before the full command card appears. The wedge's
+    /// name is in the hub the instant it lights up, so this tip is the second question ("what does it
+    /// do, and what is its shortcut?") — it should answer someone who paused to ask it, and stay out of
+    /// the way of someone sweeping across the ring to the wedge they already knew they wanted.
+    /// </summary>
+    internal static readonly TimeSpan TooltipDwell = TimeSpan.FromSeconds(2);
 
     private static readonly IBrush GlassFill = new ImmutableSolidColorBrush(Color.FromArgb(0xE6, 0x24, 0x26, 0x2B));
     private static readonly IBrush ActiveFill = new ImmutableSolidColorBrush(Color.FromArgb(0xFF, 0x2A, 0x7D, 0xE1));
@@ -39,11 +50,14 @@ public sealed class RadialMenuOverlay : Control
     private IReadOnlyList<RadialSegment> _segments = [];
     private Point _drawCenter;
     private double _drawScale = 1;
+    private readonly DispatcherTimer _tooltipDwell;
 
     public RadialMenuOverlay()
     {
         // Always part of the layout (so it is measured/arranged); it simply draws nothing until opened.
         IsHitTestVisible = false;
+        _tooltipDwell = new DispatcherTimer { Interval = TooltipDwell };
+        _tooltipDwell.Tick += (_, _) => ShowTooltipNow();
     }
 
     /// <summary>
@@ -88,7 +102,7 @@ public sealed class RadialMenuOverlay : Control
         _center = center;
         _segments = segments;
         ActiveSegment = -1;
-        UpdateTooltip(show: false);
+        ArmTooltip(show: false);
         InvalidateVisual();
     }
 
@@ -111,9 +125,28 @@ public sealed class RadialMenuOverlay : Control
     /// <summary>Test seam: whether the floating command tooltip is currently open.</summary>
     internal bool TooltipOpenForTest => ToolTip.GetIsOpen(this);
 
+    /// <summary>Test seam: whether the dwell that will open the tip is counting down.</summary>
+    internal bool TooltipDwellRunningForTest => _tooltipDwell.IsEnabled;
+
+    /// <summary>Test seam: let the dwell elapse now, as two seconds on one wedge would.</summary>
+    internal void ElapseTooltipDwellForTest()
+    {
+        if (_tooltipDwell.IsEnabled)
+        {
+            _tooltipDwell.Stop();
+            ShowTooltipNow();
+        }
+    }
+
+    /// <summary>
+    /// Test seam: the name drawn in the hub — what the radial says the highlighted wedge does, without
+    /// waiting for anything. Empty in the dead zone and on an unbound wedge.
+    /// </summary>
+    internal string HubLabelForTest => HubLabel();
+
     /// <summary>
     /// Highlight the segment the cursor now points at (-1 for none); repaints if it changed. The floating
-    /// tooltip is shown only when <paramref name="showTooltip"/> — i.e. the highlight came from a genuine
+    /// tooltip is armed only when <paramref name="showTooltip"/> — i.e. the highlight came from a genuine
     /// pointer hover over the radial, not from a programmatic highlight (a keyboard selection on the
     /// settings list), so the tip never appears while the mouse is elsewhere.
     /// </summary>
@@ -122,17 +155,17 @@ public sealed class RadialMenuOverlay : Control
         if (segment != ActiveSegment)
         {
             ActiveSegment = segment;
-            InvalidateVisual();
+            InvalidateVisual(); // the hub renames itself in the same frame the wedge lights up
         }
 
-        UpdateTooltip(showTooltip);
+        ArmTooltip(showTooltip);
     }
 
     public void Hide()
     {
         _segments = [];
         ActiveSegment = -1;
-        UpdateTooltip(show: false);
+        ArmTooltip(show: false);
         InvalidateVisual();
     }
 
@@ -158,19 +191,25 @@ public sealed class RadialMenuOverlay : Control
         base.OnDetachedFromVisualTree(e);
     }
 
-    private void OnWindowDeactivated(object? sender, EventArgs e) => ToolTip.SetIsOpen(this, false);
+    private void OnWindowDeactivated(object? sender, EventArgs e)
+    {
+        _tooltipDwell.Stop();
+        ToolTip.SetIsOpen(this, false);
+    }
 
     /// <summary>The full command the highlighted wedge runs (from the catalog), or null when unresolved.</summary>
     private AppCommand? ActiveCommand() =>
         ActiveSegmentCommandId is { } id ? Commands?.ById(id) : null;
 
     /// <summary>
-    /// Float a real tooltip over the highlighted wedge — the same name + shortcut + description card the
-    /// command bar shows (<see cref="CommandBarControl.BuildTip"/>) — rather than drawing a label inside
-    /// the ring. Reopened on each change so it repositions on the new wedge; closed when nothing is active.
+    /// Take any open tip down and — when the highlight came from a real hover over a describable wedge —
+    /// start the dwell that will float the full card. Every call restarts the countdown, so sweeping
+    /// across the ring never pops a tip: only stopping on one wedge does.
     /// </summary>
-    private void UpdateTooltip(bool show)
+    private void ArmTooltip(bool show)
     {
+        _tooltipDwell.Stop();
+
         // Only drive the popup once shown; merely constructing the overlay (e.g. in a test) opens nothing.
         if (TopLevel.GetTopLevel(this) is null)
         {
@@ -181,6 +220,23 @@ public sealed class RadialMenuOverlay : Control
         if (!show || ActiveSegmentCommandId is null)
         {
             return; // dead zone or an unbound wedge — nothing to describe
+        }
+
+        _tooltipDwell.Start();
+    }
+
+    /// <summary>
+    /// Float a real tooltip over the highlighted wedge — the same name + shortcut + description card the
+    /// command bar shows (<see cref="CommandBarControl.BuildTip"/>). It repeats the name the hub already
+    /// draws because it is the same card the command bar floats, and one card with two spellings is worse
+    /// than one repeated word.
+    /// </summary>
+    private void ShowTooltipNow()
+    {
+        _tooltipDwell.Stop();
+        if (TopLevel.GetTopLevel(this) is null || ActiveSegmentCommandId is null)
+        {
+            return;
         }
 
         // Prefer the catalog's rich card (name + shortcut + description); with no catalog wired, fall back
@@ -259,17 +315,60 @@ public sealed class RadialMenuOverlay : Control
             context.DrawGeometry(fill, Divider, wedge);
         }
 
-        // The hollow centre is a clear "release here to cancel" target.
+        // The hollow centre is a clear "release here to cancel" target — and, once a wedge is lit, the
+        // place its name is written.
         double innerR = InnerRadius * _drawScale;
         context.DrawEllipse(InnerFill, RimPen, _drawCenter, innerR, innerR);
+        DrawHubLabel(context, innerR);
 
         for (int i = 0; i < count; i++)
         {
             DrawSegmentContent(context, i, count);
         }
 
-        // The active wedge's command title floats as a real tooltip popup (see UpdateTooltip), not drawn
-        // into the ring — so it matches the command bar's hover card and can spill outside the radial.
+        // The fuller card — shortcut and description — floats as a real tooltip once the cursor has
+        // dwelt on one wedge (see ArmTooltip); the name itself never waits.
+    }
+
+    /// <summary>The name of the highlighted wedge, or empty in the dead zone / on an unbound wedge.</summary>
+    private string HubLabel()
+    {
+        if (ActiveSegment < 0 || ActiveSegment >= _segments.Count)
+        {
+            return string.Empty;
+        }
+
+        var segment = _segments[ActiveSegment];
+        return string.IsNullOrEmpty(segment.Label) ? ActiveCommand()?.Title ?? string.Empty : segment.Label;
+    }
+
+    /// <summary>
+    /// Write the highlighted wedge's name into the hub, wrapped and centred. This is the radial's answer
+    /// to "what am I about to run?", and it has to be there the instant the wedge lights up — the icons
+    /// alone are a guessing game, and a two-second tooltip answers too late to steer a gesture that is
+    /// over in a fraction of that.
+    /// </summary>
+    private void DrawHubLabel(DrawingContext context, double innerR)
+    {
+        string label = HubLabel();
+        if (label.Length == 0)
+        {
+            return;
+        }
+
+        bool enabled = _segments[ActiveSegment].Enabled;
+        var text = new FormattedText(label, CultureInfo.CurrentCulture, FlowDirection.LeftToRight,
+            Typeface.Default, HubFontSize * _drawScale, enabled ? GlyphBrush : DisabledGlyphBrush)
+        {
+            // Inscribe the text box in the hub circle rather than filling its bounding square, so a long
+            // name wraps instead of running out over the wedges.
+            MaxTextWidth = innerR * 1.5,
+            MaxTextHeight = innerR * 1.5,
+            TextAlignment = TextAlignment.Center,
+            Trimming = TextTrimming.CharacterEllipsis,
+        };
+
+        context.DrawText(text, new Point(_drawCenter.X - (text.Width / 2), _drawCenter.Y - (text.Height / 2)));
     }
 
     private Geometry BuildWedge(double fromAngle, double toAngle)
