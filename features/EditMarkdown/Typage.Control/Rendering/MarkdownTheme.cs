@@ -87,6 +87,7 @@ public record MarkdownTheme
         SearchMatch = new SolidColorBrush(Color.FromArgb(0x66, 0xF5, 0xC2, 0x11)),
         SearchMatchCurrent = new SolidColorBrush(Color.FromArgb(0xAA, 0xF0, 0xA8, 0x00)),
         Background = new SolidColorBrush(Color.FromRgb(0xFD, 0xFD, 0xFD)),
+        CurrentLineBackground = new SolidColorBrush(Color.FromArgb(0x0F, 0x00, 0x00, 0x00)),
         PropertiesBackground = new SolidColorBrush(Color.FromArgb(0x0E, 0x00, 0x00, 0x00)),
         BulletForeground = new SolidColorBrush(Color.FromRgb(0x6B, 0x72, 0x7B)),
         QuoteBar = new SolidColorBrush(Color.FromRgb(0xD0, 0xD7, 0xDE)),
@@ -132,6 +133,10 @@ public record MarkdownTheme
         SearchMatch = new SolidColorBrush(Color.FromArgb(0x77, 0xFF, 0xD4, 0x00)),
         SearchMatchCurrent = new SolidColorBrush(Color.FromArgb(0xCC, 0xFF, 0xD4, 0x00)),
         Background = new SolidColorBrush(Colors.Black),
+
+        // Stronger than the other two palettes': a tint a high-contrast reader cannot see is a feature they
+        // switched on and did not get. Still well below the selection, which has to stay the louder of the two.
+        CurrentLineBackground = new SolidColorBrush(Color.FromArgb(0x38, 0xFF, 0xFF, 0xFF)),
         PropertiesBackground = new SolidColorBrush(Color.FromArgb(0x33, 0xFF, 0xFF, 0xFF)),
         BulletForeground = new SolidColorBrush(Color.FromRgb(0xFF, 0xD4, 0x00)),
         QuoteBar = new SolidColorBrush(Color.FromRgb(0xFF, 0xD4, 0x00)),
@@ -235,6 +240,14 @@ public record MarkdownTheme
     public IBrush SearchMatchCurrent { get; init; } = new SolidColorBrush(Color.FromArgb(0x99, 0xE3, 0xA8, 0x2B));
 
     public IBrush Background { get; init; } = new SolidColorBrush(Color.FromRgb(0x1E, 0x1E, 0x1E));
+
+    /// <summary>
+    /// The wash across the row the caret is on, when that highlight is switched on (it is off by default).
+    /// Deliberately the faintest tint in the palette: it is drawn under every glyph on the line, so anything
+    /// stronger would change how the text itself reads — and it has to stay clearly weaker than
+    /// <see cref="SelectionBackground"/>, which means something you did rather than somewhere you are.
+    /// </summary>
+    public IBrush CurrentLineBackground { get; init; } = new SolidColorBrush(Color.FromArgb(0x1A, 0xFF, 0xFF, 0xFF));
 
     /// <summary>The panel tint behind the leading front-matter "Properties" block (PRD §7.4).</summary>
     public IBrush PropertiesBackground { get; init; } = new SolidColorBrush(Color.FromArgb(0x16, 0x6E, 0x76, 0x81));

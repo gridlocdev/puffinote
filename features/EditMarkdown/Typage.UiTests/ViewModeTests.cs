@@ -78,16 +78,16 @@ public class ViewModeTests
         var window = TestShell.NewWindow(settings);
 
         window.SetToolbarForTest(CommandBarVisibility.Collapsed);
-        Assert.Equal(CommandBarVisibility.Collapsed, settings.Settings.Toolbar);
+        Assert.Equal(CommandBarVisibility.Collapsed, settings.Settings.CommandBar);
 
         // Focus mode borrows the toolbar's row; that is not the reader choosing to hide it, so the
         // preference must survive the round trip and come back as the slim handle, not the full bar.
         window.ToggleFocusModeForTest();
         Assert.Equal(CommandBarVisibility.Hidden, window.ToolbarStateForTest);
-        Assert.Equal(CommandBarVisibility.Collapsed, settings.Settings.Toolbar);
+        Assert.Equal(CommandBarVisibility.Collapsed, settings.Settings.CommandBar);
 
         window.ToggleFocusModeForTest();
         Assert.Equal(CommandBarVisibility.Collapsed, window.ToolbarStateForTest);
-        Assert.Equal(CommandBarVisibility.Collapsed, settings.Settings.Toolbar);
+        Assert.Equal(CommandBarVisibility.Collapsed, settings.Settings.CommandBar);
     }
 }

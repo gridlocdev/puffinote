@@ -87,11 +87,11 @@ Three constraints drive the architecture:
 | 3 | **User control and freedom** | Undo/redo, **Revert to saved**, Cancel on every dialog, **Paste as plain text**, **three-way conflict choice**, easy exit from raw-source mode and block-source editing. (§7.1, §7.2, §7.6) |
 | 4 | **Consistency and standards** | Platform-native menus, shortcuts, and dialogs per OS; consistent command behavior across the app. (§7.5, §9.5) |
 | 5 | **Error prevention** | Confirm on unsaved close/open/new; **save-before-asset-insert**; read-only detection; **encoding guard**; atomic saves; watcher **self-save suppression**. (§7.1, §7.6) |
-| 6 | **Recognition over recall** | Visible (toggleable) **formatting toolbar** + menus; right-click spell suggestions; tooltips showing shortcuts; offline syntax/shortcut reference. (§7.5, §7.7, §7.8) |
+| 6 | **Recognition over recall** | Visible (toggleable) **Command Bar** + menus; right-click spell suggestions; tooltips showing shortcuts; offline syntax/shortcut reference. (§7.5, §7.7, §7.8) |
 | 7 | **Flexibility and efficiency** | Full keyboard shortcuts, **smart paste**, **list continuation & auto-pairing**, recent files, hideable chrome / **focus mode**, configurable settings. (§7.2, §7.6, §7.9) |
-| 8 | **Aesthetic and minimalist design** | Single-file focus, slim hideable toolbar, clean live-preview default, optional distraction-free **focus mode**. (§7.5) |
+| 8 | **Aesthetic and minimalist design** | Single-file focus, slim hideable Command Bar, clean live-preview default, optional distraction-free **focus mode**. (§7.5) |
 | 9 | **Recognize, diagnose, recover from errors** | Error dialogs state the **OS reason + a suggested action** (e.g., "permission denied → Save As"); encoding fallback flow; no dead-ends. (§7.1) |
-| 10 | **Help and documentation** | **Help menu** with a built-in, **offline** Markdown syntax + keyboard-shortcut reference; toolbar tooltips. (§7.5) |
+| 10 | **Help and documentation** | **Help menu** with a built-in, **offline** Markdown syntax + keyboard-shortcut reference; Command Bar tooltips. (§7.5) |
 
 ---
 
@@ -153,10 +153,10 @@ A custom Avalonia `Control` built **on top of `Avalonia.Media.TextFormatting`** 
 ### 7.5 Commands, UI chrome, and status
 
 - **Menu bar** (platform-native): File, Edit, Format, View, Help.
-- **Formatting toolbar:** slim, toggleable, default on; hideable for focus. Buttons: bold, italic, code, link, headings, lists, quote, table.
+- **Command Bar:** slim, toggleable, default on; hideable for focus. (Called a "formatting toolbar" before the family settled on one name for the strip Typage and Cellestra share — see the repo AGENTS.md vocabulary note.) Buttons: bold, italic, code, link, headings, lists, quote, table.
 - **Keyboard commands:** Ctrl/Cmd+B bold, +I italic, +E inline code, +K link, +Shift+K code block, Ctrl/Cmd+1…6 headings, list/quote toggles, indent/outdent.
 - **Status bar:** modified/saved state, word & character count, reading-time estimate, cursor line:col, selection count, encoding, line-ending style, read-only flag, large-file tokenization-progress indicator.
-- **Focus / distraction-free mode:** hides toolbar and chrome, centers the text column.
+- **Focus / distraction-free mode:** hides the Command Bar and chrome, centers the text column.
 - **Help menu:** built-in **offline** Markdown syntax reference and keyboard-shortcut sheet.
 
 ### 7.6 Smart paste and asset management
@@ -176,7 +176,7 @@ Uses **OS-native spell services** (Windows Spell Checking API, macOS `NSSpellChe
 
 ### 7.9 Settings and preferences
 
-A local JSON preferences store with a Settings UI: theme mode; toolbar visibility; focus-mode defaults; tab width and tabs-vs-spaces; new-document line-ending and encoding defaults; auto-save interval and recovery-snapshot interval (§9.4 — two separate settings); attachments folder name; copy-vs-link default; spell-check enable + language; dialect flags (wiki-links / embeds on-off; off by default in standalone); raw-source default; selection-reveal behavior; recent-files list.
+A local JSON preferences store with a Settings UI: theme mode; Command Bar visibility; focus-mode defaults; tab width and tabs-vs-spaces; new-document line-ending and encoding defaults; auto-save interval and recovery-snapshot interval (§9.4 — two separate settings); attachments folder name; copy-vs-link default; spell-check enable + language; dialect flags (wiki-links / embeds on-off; off by default in standalone); raw-source default; selection-reveal behavior; recent-files list.
 
 ---
 
@@ -442,7 +442,7 @@ Dependency direction is strictly **shell → control → engine**; no upward ref
 4. **Phase 3 — Surface (static) + a11y foundation:** custom control over `TextFormatting` with caret, selection, scrolling, virtualization, input, IME — and the automation peer / offset exposure.
 5. **Phase 4 — Live preview / concealment:** reveal scopes, caret traversal, selection-forces-reveal, offset↔visual mapping.
 6. **Phase 5 — Blocks, embeds & assets:** images, table rendering, code styling, `IEmbedResolver`, inline control hosting, asset/attachments model.
-7. **Phase 6 — Editing power & input UX:** smart paste, HTML→MD converter, editing assists, find/replace, formatting commands, toolbar, status bar, focus mode.
+7. **Phase 6 — Editing power & input UX:** smart paste, HTML→MD converter, editing assists, find/replace, formatting commands, Command Bar, status bar, focus mode.
 8. **Phase 7 — Shell & data safety:** open/save/save-as/revert, recent files, watcher + self-save suppression, conflict three-way, encoding flow, autosave/recovery, file association.
 9. **Phase 8 — Services & export:** OS spell check, HTML export, OS print/PDF path, Help reference.
 10. **Phase 9 — Hardening:** performance tuning, accessibility validation, packaging/installers per OS.

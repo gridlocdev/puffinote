@@ -184,6 +184,33 @@ public partial class MarkdownEditor : Avalonia.Controls.Control, ILogicalScrolla
     public int IndentWidth { get; set; } = 4;
 
     /// <summary>
+    /// Whether the row the caret is on is washed with a faint tint, in every view mode.
+    /// <b>Off by default</b>: Typage's surface is a page of prose, and a band running the full width of the
+    /// reading column is a strong mark to put under someone's writing without being asked. It is worth
+    /// offering because the same surface is also used for long structured documents, where losing the caret
+    /// costs a scroll and a re-read.
+    /// <para>
+    /// It is drawn on the caret's <em>row</em>, not its block: a wrapped paragraph is one block and several
+    /// rows, and tinting all of them would mark a paragraph rather than a line. It also yields to a range
+    /// selection — while text is selected, the selection is the answer to "where am I", and two washes over
+    /// each other read as neither.
+    /// </para>
+    /// </summary>
+    public bool HighlightCurrentLine
+    {
+        get; set
+        {
+            if (field == value)
+            {
+                return;
+            }
+
+            field = value;
+            InvalidateVisual(); // a repaint; nothing about a tint changes a measurement
+        }
+    }
+
+    /// <summary>
     /// When true the surface shows the raw Markdown source: syntax markers are always revealed at full
     /// strength instead of dimming away from the caret (PRD §7.4 raw-source view). A per-document
     /// session toggle whose default comes from Settings.

@@ -129,9 +129,9 @@ public partial class MainWindow
                     ViewModeLabel(MarkdownEditor.ViewMode.Formatted),
                     ViewModeLabel(MarkdownEditor.ViewMode.RawText),
                 ]),
-            ChoiceSetting.ForEnum<CommandBarVisibility>("Formatting toolbar", () => s.Toolbar, v => s.Toolbar = v,
+            ChoiceSetting.ForEnum<CommandBarVisibility>("Command bar", () => s.CommandBar, v => s.CommandBar = v,
                 ["Visible", "Collapsed", "Hidden"],
-                "Visible shows the full toolbar; Collapsed folds it to its slim handle; Hidden gives the whole row back to the text."),
+                "Visible shows the full command bar; Collapsed folds it to its slim handle; Hidden gives the whole row back to the text."),
         ]),
         new SettingsSection("Editor",
         [
@@ -140,6 +140,9 @@ public partial class MainWindow
             new NumberSetting("Vertical padding", () => s.EditorPaddingVertical, v => s.EditorPaddingVertical = (int)v, 0, 200, step: 4, hint: "Pixels of inset above and below the text."),
             new NumberSetting("Reading width", () => s.EditorMaxContentWidth, v => s.EditorMaxContentWidth = (int)v, 0, 4000, step: 20,
                 hint: "The widest the text column may grow, in pixels. 0 uses the full window width."),
+            new ToggleSetting("Highlight the current line", () => s.HighlightCurrentLine, v => s.HighlightCurrentLine = v,
+                "A faint tint across the row the caret is on, in every view. This is what a document opens with; "
+                + "View ▸ Highlight Current Line turns it on or off for the session."),
         ]),
         new SettingsSection("Editing",
         [
@@ -162,15 +165,19 @@ public partial class MainWindow
         EditorView.Editor.VerticalPadding = s.EditorPaddingVertical;
         EditorView.Editor.MaxContentWidth = s.EditorMaxContentWidth;
 
+        // Through the view, not the surface, so the toggle's own menu item and command re-light with it —
+        // Preferences and the View menu must never disagree about whether the tint is on.
+        EditorView.HighlightCurrentLine = s.HighlightCurrentLine;
+
         // Focus mode has the toolbar's row on loan; leave it be and let exiting focus mode restore the new
         // choice. The radio group syncs either way, so the menu always shows what Preferences just set.
         if (_focusMode)
         {
-            SyncToolbarMenu(s.Toolbar);
+            SyncToolbarMenu(s.CommandBar);
         }
         else
         {
-            ApplyToolbar(s.Toolbar, persist: false); // the form's own Commit already wrote it to settings
+            ApplyToolbar(s.CommandBar, persist: false); // the form's own Commit already wrote it to settings
         }
 
         SetupRecoverySnapshots(); // pick up the new interval (or disable when 0)

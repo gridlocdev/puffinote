@@ -56,7 +56,7 @@ Exact dependency versions are pinned at the repo root in `Directory.Packages.pro
 ```
    ┌──────────────────────────────┐   ┌──────────────────────────────┐
    │        Typage.Desktop         │   │          Typage.Cli           │
-   │  window · menu · toolbar ·    │   │  html · tokens · stats ·      │
+   │  window · menu · command bar ·│   │  html · tokens · stats ·      │
    │  status bar · file dialogs    │   │  outline · cat                │
    └───────────────┬──────────────┘   └───────────────┬──────────────┘
                    │ hosts                             │ calls into
@@ -111,7 +111,7 @@ and the HTML renderer all pass a green suite, and the `typage` CLI exercises the
 The **UI is an early surface**: it renders the token stream with the theme, handles
 caret/selection/keyboard/mouse, dims markers near the caret, re-tokenizes **incrementally** from the
 first changed line, and is **line-virtualized** (only the visible slice is drawn). The shell adds
-Cellestra-style touches — a **Command Palette** (⌘⇧P) over one command catalog, **Find/Replace**
+Cellestra-style touches — a **Command Menu** (⌘K) over one command catalog, **Find/Replace**
 (plain + regex), a recent-files menu, and a dark theme. It still keeps document offsets 1:1 with the
 visual model rather than truly collapsing concealed glyphs. The PRD's
 full live-preview behavior (glyph-hiding with a bidirectional offset map), IME, accessibility peer,

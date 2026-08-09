@@ -268,6 +268,15 @@ public partial class MarkdownEditor
             context.FillRectangle(EditorTheme.SelectionBackground, new Rect(-8, BlockTop(block), ContentRight() + 16, BlockHeight(block)));
         }
 
+        // The line being edited (off by default — see HighlightCurrentLine). First of everything drawn on
+        // this block, so the search matches, the selection and the glyphs all sit on top of it.
+        if (HighlightCurrentLine && caretBlock == block && IsFocused && sel.Length == 0)
+        {
+            var caretCol = Math.Clamp(sel.Caret - blockStart, 0, visual.RawLength);
+            var lineTop = rowsTop + (visual.RowOf(caretCol) * lineH);
+            context.FillRectangle(EditorTheme.CurrentLineBackground, new Rect(-8, lineTop, ContentRight() + 16, lineH));
+        }
+
         // Search-match highlights (under the text), then the selection on top.
         if (_searchMatches.Count > 0)
         {

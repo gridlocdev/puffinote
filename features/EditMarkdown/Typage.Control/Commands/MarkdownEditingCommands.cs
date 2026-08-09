@@ -116,6 +116,13 @@ public static class MarkdownEditingCommands
                 () => view.ViewMode = MarkdownEditor.ViewMode.RawText,
                 isActive: () => view.ViewMode == MarkdownEditor.ViewMode.RawText, icon: "file-text"),
 
+            // For this session only: the host writes the default in Preferences and pushes it in on open, so
+            // this flips what is in front of you without deciding what the next document opens as. No default
+            // chord — every free one-letter ⌘ chord in this app already means something.
+            new("view.highlightCurrentLine", "Highlight Current Line", "Tint the line the caret is on.", null,
+                () => view.HighlightCurrentLine = !view.HighlightCurrentLine,
+                isActive: () => view.HighlightCurrentLine, icon: "pen-line"),
+
             .. ZoomCommands.Build(() => view.Zoom, zoom => view.Zoom = zoom),
 
             new("file.exportHtml", "Export HTML…", "Render the document to a self-contained HTML file.", null,

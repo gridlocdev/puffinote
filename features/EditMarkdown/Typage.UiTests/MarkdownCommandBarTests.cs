@@ -100,14 +100,15 @@ public class MarkdownCommandBarTests
     public void Search_pill_is_worded_like_the_spreadsheets()
     {
         // Same affordance, same corner of the same shared bar — so it reads the same, chord and all. Typage's
-        // used to say "Search commands…" with no chord beside it while Cellestra's said "Find a tool… ⌘K".
+        // once said "Search commands…" with no chord beside it while Cellestra's said "Find a tool… ⌘K"; both
+        // now name what they open, the Command Menu (repo AGENTS.md, vocabulary).
         var bar = new MarkdownCommandBar(new MarkdownEditorView().EditingCommands);
         var host = new Window { Content = bar, Width = 900, Height = 120 };
         host.Show();
         Pump();
 
         var labels = bar.GetVisualDescendants().OfType<TextBlock>().Select(t => t.Text).ToList();
-        Assert.Contains("Find a tool…", labels);
+        Assert.Contains("Search commands…", labels);
 
         // The palette's chord, per platform (Ctrl+K on this Linux test host, ⌘K on macOS).
         Assert.Contains(ShortcutFormatter.Format(Shortcut.Cmd(Key.K)), labels);

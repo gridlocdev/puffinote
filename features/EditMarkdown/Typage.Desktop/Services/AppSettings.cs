@@ -73,10 +73,17 @@ public sealed class AppSettings
     public int EditorMaxContentWidth { get; set; } = 760;
 
     /// <summary>
-    /// How much of the formatting toolbar a window opens with — the full bar, its slim collapse handle, or
-    /// nothing at all (PRD §7.5). Default: the full bar.
+    /// How much of the Command Bar a window opens with — the full bar, its slim collapse handle, or nothing
+    /// at all (PRD §7.5). Default: the full bar.
+    /// <para>
+    /// The key in the file is the name the app uses out loud, and the same one Cellestra's file already
+    /// carries for the same strip. It was <c>Toolbar</c>: a settings file is a surface a person reads and
+    /// hand-edits, so a key named after a word the UI no longer uses is a third name for an element that is
+    /// supposed to have one. An older file's <c>Toolbar</c> is simply not read — the bar comes up at its
+    /// default, which is the state it ships in.
+    /// </para>
     /// </summary>
-    public CommandBarVisibility Toolbar { get; set; }
+    public CommandBarVisibility CommandBar { get; set; }
 
     /// <summary>
     /// The reading zoom, on the family's shared ladder (1.0 = 100%). Remembered because someone who needs
@@ -89,6 +96,13 @@ public sealed class AppSettings
     /// with markers revealed, or the plain raw-text source (PRD §7.4).
     /// </summary>
     public MarkdownEditor.ViewMode View { get; set; } = MarkdownEditor.ViewMode.Rich;
+
+    /// <summary>
+    /// Whether a document opens with the caret's line tinted (PRD §7.4). <b>Off</b> — a band under someone's
+    /// prose is a strong mark to draw uninvited, so it is offered rather than assumed. View ▸ Highlight
+    /// Current Line flips it for the session; this is what the next document opens as.
+    /// </summary>
+    public bool HighlightCurrentLine { get; set; }
 
     /// <summary>
     /// Seconds of no editing before the document is written back to its own file; 0 turns auto-save off.

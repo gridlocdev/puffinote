@@ -91,12 +91,19 @@ public partial class MainWindow
         }
     }
 
-    /// <summary>The menu/command label for a toolbar state (also used for the Preferences default; PRD §7.5).</summary>
+    /// <summary>
+    /// The menu/command label for a command-bar state (also used for the Preferences default; PRD §7.5).
+    /// <para>
+    /// "Command Bar", not "Toolbar": it is the same strip in the same place doing the same job as Cellestra's,
+    /// which has always been called that, and one element with two names in two apps of one family is one
+    /// element the reader has to learn twice. See the vocabulary note in the repo's AGENTS.md.
+    /// </para>
+    /// </summary>
     private static string ToolbarLabel(CommandBarVisibility state) => state switch
     {
-        CommandBarVisibility.Visible => "Show Toolbar",
-        CommandBarVisibility.Collapsed => "Collapse Toolbar",
-        _ => "Hide Toolbar",
+        CommandBarVisibility.Visible => "Show Command Bar",
+        CommandBarVisibility.Collapsed => "Collapse Command Bar",
+        _ => "Hide Command Bar",
     };
 
     /// <summary>
@@ -119,7 +126,7 @@ public partial class MainWindow
 
         if (persist)
         {
-            _settings.Settings.Toolbar = state;
+            _settings.Settings.CommandBar = state;
             _settings.Save();
         }
 
@@ -137,7 +144,7 @@ public partial class MainWindow
             return; // our own restore, or focus mode's session-only hide — neither is a new preference
         }
 
-        _settings.Settings.Toolbar = EditorView.CommandBarVisibility;
+        _settings.Settings.CommandBar = EditorView.CommandBarVisibility;
         _settings.Save();
         SyncToolbarMenu(EditorView.CommandBarVisibility);
     }
@@ -187,7 +194,7 @@ public partial class MainWindow
         _focusMode = !_focusMode;
         // In focus mode the toolbar is hidden; otherwise restore the user's toolbar preference — neither
         // half of which is itself a preference, so the borrowed row is never written back over their choice.
-        ApplyToolbar(_focusMode ? CommandBarVisibility.Hidden : _settings.Settings.Toolbar, persist: false);
+        ApplyToolbar(_focusMode ? CommandBarVisibility.Hidden : _settings.Settings.CommandBar, persist: false);
 
         _statusBar?.IsVisible = !_focusMode;
 

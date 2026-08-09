@@ -200,7 +200,7 @@ is worse than none, because it's what the next agent plans against.
 | HTML renderer · `typage` CLI · `DocumentStats` | **Built** |
 | Live preview / concealment (§7.4) · word wrap + paragraph flow (§7.3) | **Built** — full WYSIWYG; see the invariants below |
 | Editing assists (§7.2) · three-state task boxes (§8.3.2) · the caret-nav suite · raw-source toggle · focus mode | **Built** |
-| One command catalog (`Typage.Control/Commands`) + palette (⌘K) · find/replace · platform-native menu (§7.5) · themes · preferences · recent files | **Built** — hosts merge the catalog in; they don't define commands |
+| One command catalog (`Typage.Control/Commands`) + Command Menu (⌘K) · find/replace · platform-native menu (§7.5) · themes · preferences · recent files | **Built** — hosts merge the catalog in; they don't define commands |
 | File safety: atomic save, watcher + three-way conflict, autosave/recovery (§9.4), dependency-allowlist gate (§5/§9.3) | **Built** |
 | Image **insert** + staging for unsaved docs (`ImageStaging`) | **Built** — picking and inserting only; *pasting* an image is not |
 | Whole-line block **folding** — collapsing a code/front-matter fence row, a real table grid, a true front-matter "Properties" fold | **Not built** — those rows still render as rows |

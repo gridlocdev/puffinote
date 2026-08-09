@@ -14,7 +14,7 @@ Typage is a **pure brain with a control and two faces**:
    into a live-preview editing surface, with the presentation seams (theme, embed resolver) the notes
    app will re-point.
 3. **A graphical face (`Typage.Desktop`)** — the standalone Avalonia app that hosts the control in a
-   window with a menu, toolbar, status bar, and file dialogs.
+   window with a menu, Command Bar, status bar, and file dialogs.
 4. **A command-line face (`Typage.Cli`)** — the `typage` binary for scripts and CI. No Avalonia, no
    network. Because it reuses the same brain, `html` shares the renderer and `tokens` shares the exact
    tokenizer the editor styles — so CLI output and GUI behavior can't drift apart.
@@ -55,7 +55,7 @@ xUnit/test packages already pinned there. That zero-additions fact *is* the supp
   Markdown is read. No Avalonia. Most tests point here.
 - **`Typage.Control`** — depends on Avalonia + engine. The custom surface and the two presentation
   seams. Embeddable into a host app unchanged.
-- **`Typage.Desktop`** — the Avalonia executable (assembly `Typage`): window, menu, toolbar, dialogs,
+- **`Typage.Desktop`** — the Avalonia executable (assembly `Typage`): window, menu, Command Bar, dialogs,
   settings. A thin host.
 - **`Typage.Cli`** — the `typage` console executable. References only the engine + `System.CommandLine`;
   no Avalonia, no network. One static method per command, composed in `CliApplication` so tests drive
@@ -164,21 +164,21 @@ later phases (PRD §11). The public API and engine seam are stable so that work 
 ## 6. The shell (`Typage.Desktop`)
 
 - **`App`** — built in code; adds the Fluent theme and creates the single `MainWindow`.
-- **`MainWindow`** — a thin host: menu (File/Edit/Format/View/Help), a formatting toolbar, the editor
+- **`MainWindow`** — a thin host: menu (File/Edit/Format/View/Help), the Command Bar, the editor
   view, and a status bar (modified state, line:col, counts, encoding, line-ending, selection). Owns file
   operations (open/save/save-as/revert with `StorageProvider` dialogs and **atomic temp-then-rename
   writes**, encoding/BOM round-trip via `TextFileCodec`), the unsaved-changes guard, recent files, HTML
   export, modal error dialogs, and a Markdown help reference.
 - **`Commands/`** — `AppCommand` + a single `BuildCommands()` catalog (Cellestra's golden rule #4): the
-  menu/toolbar and the **`CommandPalette`** (⌘⇧P, fuzzy-filtered via `FuzzyMatcher`) invoke the same
+  menu/Command Bar and the **`CommandPalette`** (the Command Menu) (⌘⇧P, fuzzy-filtered via `FuzzyMatcher`) invoke the same
   actions.
 - **`FindBar`** — plain/regex Find & Replace over the engine's `DocumentSearch`, highlighting matches in
   the editor (`SetSearchMatches`) and selecting each hit.
 - **Theme & Preferences** — `MarkdownTheme.{Dark,Light,HighContrast}` variants; `ApplyTheme` sets the
   Fluent variant for the chrome and the editor palette, re-tinting the shared chrome brushes (System
-  follows the OS). A code-built Preferences dialog edits theme, tab width, and toolbar visibility.
+  follows the OS). A code-built Preferences dialog edits theme, tab width, and Command Bar visibility.
 - **`Services/`** — `AppSettings` + `SettingsService` persist preferences (theme, recent files, tab
-  width, toolbar visibility) as JSON in the OS app-config location; failures are non-fatal.
+  width, Command Bar visibility) as JSON in the OS app-config location; failures are non-fatal.
 
 ## 7. The CLI (`Typage.Cli`)
 

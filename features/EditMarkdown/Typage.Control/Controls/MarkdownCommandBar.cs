@@ -72,10 +72,11 @@ internal sealed class MarkdownCommandBar : UserControl
         };
 
         // Worded exactly as the spreadsheet's pill, down to the chord beside it — it is the same affordance in
-        // the same corner of the same bar, so it should read the same. The chord is the palette's: ⌘K opens
-        // the host's merged palette, which is a superset of the flyout this pill drops (see PaletteShortcut).
+        // the same corner of the same bar, so it should read the same. The chord is the Command Menu's: ⌘K
+        // opens the host's merged one, a superset of the flyout this pill drops (see PaletteShortcut).
         var search = new AdaptiveCommandBar.SearchPill(
-            "Find a tool…", PaletteShortcut, "Search and run any command", Flyout: BuildSearchFlyout(commands));
+            "Search commands…", PaletteShortcut, "Open the Command Menu — search and run any command",
+            Flyout: BuildSearchFlyout(commands));
         _bar = new AdaptiveCommandBar(sections, search);
         _bar.VisibilityChanged += (_, _) => VisibilityChanged?.Invoke(this, EventArgs.Empty);
         Content = _bar;

@@ -1,5 +1,4 @@
 using System.Text.Json;
-using Puffinote.Components.Controls.CommandBar;
 using Puffinote.Components.Shell;
 
 namespace Typage.Desktop.Services;
@@ -28,13 +27,6 @@ public sealed class SettingsService
     {
         _path = path ?? SettingsStore.AppConfigPath("Typage", "settings.json");
         Settings = SettingsStore.Load(_path, static () => new AppSettings(), Options);
-
-        // The toolbar was a shown/hidden boolean before it grew its third state; carry a file written by that
-        // build over rather than putting a bar back over the text of someone who had turned it off (PRD §7.5).
-        if (SettingsStore.MigratedBool(_path, nameof(AppSettings.Toolbar), "ShowToolbar") is { } shown)
-        {
-            Settings.Toolbar = shown ? CommandBarVisibility.Visible : CommandBarVisibility.Hidden;
-        }
     }
 
     public AppSettings Settings { get; private set; }

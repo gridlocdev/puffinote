@@ -24,7 +24,7 @@ public class ChromeResourcesTests
     public void Command_bar_paints_the_familys_chrome_background(AppTheme theme, int r, int g, int b)
     {
         var settings = TestShell.NewSettings();
-        settings.Settings.Toolbar = CommandBarVisibility.Visible;
+        settings.Settings.CommandBar = CommandBarVisibility.Visible;
 
         // Pin the appearance. The default is AppTheme.System, which resolves to whatever the host machine
         // is set to — so asserting one palette's value passed in a dark container and failed on a light

@@ -47,6 +47,9 @@ public partial class MainWindow : Window
     private readonly List<(CommandBarVisibility State, CheckItem Item)> _toolbarItems = [];
     private CheckItem? _toggleFocusItem;
 
+    // View ▸ Highlight Current Line, on whichever menu bar this platform got.
+    private CheckItem? _highlightLineItem;
+
     // Set while the shell itself moves the toolbar for a reason that is not a preference — restoring the
     // saved state at startup, or focus mode borrowing the row — so the surface's change event doesn't write
     // that back over what the user actually chose.
@@ -151,7 +154,7 @@ public partial class MainWindow : Window
         // The formatting toolbar and the find bar are the editor's own, docked inside it — this shell just
         // says whether the toolbar shows. It used to ship a second, hand-rolled bar of Unicode glyphs beside
         // the control's; there is now one icon-driven bar, and Puffinote renders the very same one.
-        ApplyToolbar(_settings.Settings.Toolbar, persist: false);
+        ApplyToolbar(_settings.Settings.CommandBar, persist: false);
         _statusBar = BuildStatusBar();
         root.Children.Add(_statusBar);
         root.Children.Add(EditorView);
@@ -185,6 +188,11 @@ public partial class MainWindow : Window
         // The shell still owns what a shell owns: persisting the choice and syncing the View ▸ radio group.
         EditorView.ViewModeChanged += (_, _) => OnViewModeChanged();
 
+        // Session-only, so nothing is written: the toggle changes the document in front of you, and
+        // Preferences ▸ Editor is where the answer for the *next* one is set. All the shell does is keep
+        // the View ▸ tick in step, wherever the flip came from — the menu, the palette, or Preferences.
+        EditorView.HighlightCurrentLineChanged += (_, _) => _highlightLineItem?.IsChecked = EditorView.HighlightCurrentLine;
+
         // The bar's own collapse/expand chevron is as much a choice as the menu's — remember it too.
         EditorView.CommandBarVisibilityChanged += (_, _) => OnToolbarVisibilityChanged();
         EditorView.ZoomChanged += (_, _) => OnZoomChanged();
@@ -217,6 +225,7 @@ public partial class MainWindow : Window
         EditorView.Editor.MaxContentWidth = _settings.Settings.EditorMaxContentWidth; // and the reading-column cap
         EditorView.Editor.VerticalPadding = _settings.Settings.EditorPaddingVertical;
         EditorView.Zoom = _settings.Settings.Zoom; // and the zoom the reader left it at
+        EditorView.HighlightCurrentLine = _settings.Settings.HighlightCurrentLine; // and whether the caret's line is tinted
 
         SetupRecoverySnapshots();
         _autoSave.IntervalSeconds = _settings.Settings.AutoSaveSeconds;

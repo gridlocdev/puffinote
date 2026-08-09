@@ -138,6 +138,30 @@ public class MarkdownEditorView : UserControl
         }
     }
 
+    /// <summary>
+    /// Whether the row the caret is on is tinted, in every view mode (off by default — see
+    /// <see cref="MarkdownEditor.HighlightCurrentLine"/>). The command toggles it for the session; a host
+    /// hears <see cref="HighlightCurrentLineChanged"/> and decides whether that becomes the new default.
+    /// </summary>
+    public bool HighlightCurrentLine
+    {
+        get => Editor.HighlightCurrentLine;
+        set
+        {
+            if (Editor.HighlightCurrentLine == value)
+            {
+                return;
+            }
+
+            Editor.HighlightCurrentLine = value;
+            CommandBar.RefreshState(); // the command is a toggle; re-light it
+            HighlightCurrentLineChanged?.Invoke(this, EventArgs.Empty);
+        }
+    }
+
+    /// <summary>Raised after <see cref="HighlightCurrentLine"/> changes, so a host can reflect or persist it.</summary>
+    public event EventHandler? HighlightCurrentLineChanged;
+
     /// <summary>True while the surface is showing one of its own modals (link, image error, reference), so a
     /// host can stand its shortcuts down rather than firing a command behind the dialog.</summary>
     public bool IsOverlayOpen => Overlays.IsOpen;
