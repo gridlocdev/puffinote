@@ -38,6 +38,13 @@ public static class PlainTextEditingCommands
             new("edit.paste", "Paste", "Paste from the clipboard.", Shortcut.Cmd(Key.V),
                 () => _ = editor.PasteAsync(), icon: "clipboard-paste"),
             new("edit.selectAll", "Select All", "Select the whole document.", Shortcut.Cmd(Key.A), editor.SelectAll),
+
+            // ⌘D, as VS Code spells it. The first press takes the word under the caret, which is what makes
+            // the second one mean anything; each one after that adds the next occurrence. A rename across a
+            // file becomes one gesture repeated, instead of a Find-and-Replace you have to get right in one
+            // go and cannot see the effect of until it is done.
+            new("edit.addNextOccurrence", "Add Next Occurrence", "Select the word under the caret, then each next occurrence of it.",
+                Shortcut.Cmd(Key.D), editor.AddNextOccurrence, icon: "square-dashed"),
             new("edit.find", "Find…", "Find text in the document.", Shortcut.Cmd(Key.F),
                 view.ShowFind, icon: "search"),
 

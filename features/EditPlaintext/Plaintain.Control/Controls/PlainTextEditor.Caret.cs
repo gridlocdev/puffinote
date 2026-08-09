@@ -48,6 +48,11 @@ public sealed partial class PlainTextEditor
     /// <summary>Move the caret, extending the selection when <paramref name="extend"/> (a Shift chord).</summary>
     internal void MoveCaret(int offset, bool extend)
     {
+        // Moving the caret ends a multi-selection, as it does everywhere this gesture exists: the extra
+        // carets belong to the occurrences ⌘D found, and once you have gone somewhere else they are no
+        // longer about anything. (Escape takes them down deliberately; this is the accidental way out.)
+        ClearExtraSelections();
+
         int clamped = Math.Clamp(offset, 0, Buffer.Document.Length);
         Buffer.Selection = extend
             ? Buffer.Selection with { Caret = clamped }

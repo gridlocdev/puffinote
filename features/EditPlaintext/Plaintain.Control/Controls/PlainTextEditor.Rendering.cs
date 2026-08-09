@@ -3,6 +3,7 @@ using Avalonia;
 using Avalonia.Media;
 using Avalonia.Styling;
 using Puffinote.Components.Theming;
+using Puffinote.Text.Document;
 
 namespace Plaintain.Control.Controls;
 
@@ -191,9 +192,27 @@ public sealed partial class PlainTextEditor
         return column;
     }
 
+    /// <summary>
+    /// Fill this row's share of every selection. Usually there is one; after ⌘D there are several, and
+    /// they are drawn the same — they are the same kind of thing, and marking the primary differently
+    /// would suggest the others were less real when the next keystroke reaches all of them equally.
+    /// </summary>
     private void DrawRowSelection(DrawingContext context, Palette palette, int row, int line, int segment, int startColumn, double y, Rect bounds)
     {
-        var sel = Buffer.Selection;
+        if (!HasMultipleSelections)
+        {
+            DrawOneSelection(context, palette, Buffer.Selection, row, line, segment, startColumn, y, bounds);
+            return;
+        }
+
+        foreach (var selection in AllSelections())
+        {
+            DrawOneSelection(context, palette, selection, row, line, segment, startColumn, y, bounds);
+        }
+    }
+
+    private void DrawOneSelection(DrawingContext context, Palette palette, Selection sel, int row, int line, int segment, int startColumn, double y, Rect bounds)
+    {
         if (sel.IsEmpty)
         {
             return;
@@ -284,6 +303,19 @@ public sealed partial class PlainTextEditor
             return;
         }
 
+        // Every selection has a caret, and after ⌘D they all blink together — one rhythm, because they
+        // are one cursor in several places rather than several cursors.
+        foreach (var extra in _extraSelections)
+        {
+            var (extraRow, extraColumn) = RowColumnOf(extra.Caret);
+            DrawOneCaret(context, palette, extraRow, extraColumn, bounds);
+        }
+
+        DrawOneCaret(context, palette, row, column, bounds);
+    }
+
+    private void DrawOneCaret(DrawingContext context, Palette palette, int row, int column, Rect bounds)
+    {
         double x = TextLeft - _offset.X + (column * _charWidth);
         double y = (row * _rowHeight) - _offset.Y;
         if (x < GutterWidth || x > bounds.Width || y + _rowHeight < 0 || y > bounds.Height)

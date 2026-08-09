@@ -14,7 +14,11 @@ public sealed partial class PlainTextEditor
         if (!command && !string.IsNullOrEmpty(e.Text) && !char.IsControl(e.Text[0]))
         {
             ClearGoalColumn();
-            Buffer.Insert(e.Text);
+            if (!ReplaceEverySelection(e.Text))
+            {
+                Buffer.Insert(e.Text);
+            }
+
             BringCaretIntoView();
         }
 
@@ -48,16 +52,28 @@ public sealed partial class PlainTextEditor
                 DeleteWord(1);
                 break;
             case Key.Back:
-                Buffer.Backspace();
+                if (!BackspaceEverySelection())
+                {
+                    Buffer.Backspace();
+                }
+
                 BringCaretIntoView();
                 break;
             case Key.Delete:
-                Buffer.Delete();
+                if (!DeleteEverySelection())
+                {
+                    Buffer.Delete();
+                }
+
                 BringCaretIntoView();
                 break;
 
             case Key.Enter:
-                Buffer.Insert(NewlineOf(doc));
+                if (!ReplaceEverySelection(NewlineOf(doc)))
+                {
+                    Buffer.Insert(NewlineOf(doc));
+                }
+
                 BringCaretIntoView();
                 break;
             case Key.Tab when shift:
@@ -118,12 +134,20 @@ public sealed partial class PlainTextEditor
                 MoveCaret(RowEndOffset(), shift);
                 break;
 
+            // Escape unwinds one layer at a time: the extra selections first, then the primary one down to
+            // a caret. Taking both at once would throw away a multi-selection someone was still building.
+            case Key.Escape when HasMultipleSelections:
+                ClearExtraSelections();
+                break;
             case Key.Escape when !Buffer.Selection.IsEmpty:
                 MoveCaret(Buffer.Selection.Caret, extend: false);
                 break;
 
             case Key.A when ctrl:
                 SelectAll();
+                break;
+            case Key.D when ctrl:
+                AddNextOccurrence();
                 break;
             case Key.C when ctrl:
                 _ = CopyAsync();

@@ -85,6 +85,17 @@ and writes it back byte for byte.
 
 ## 5. Editing
 
+**Multiple selections (⌘D)** — as VS Code spells it. With nothing selected, the first press takes the word
+under the caret; each press after that adds the next occurrence of what is selected, wrapping past the end
+of the file so the gesture keeps working when you started in the middle. Typing, Backspace, Delete and
+Return then reach every selection at once, **as one undoable step** — several selections is one thing the
+user did once, and an undo that gave the word back one occurrence at a time would be five presses to get
+out of one. Escape unwinds one layer at a time (the extras, then the primary selection down to a caret);
+moving the caret ends the gesture, because the extra carets belonged to the occurrences ⌘D found and once
+you have gone somewhere else they are no longer about anything. Cut, copy and paste stay on the primary
+selection. The primary selection is the ordinary one, so an editor with a single selection behaves exactly
+as it did.
+
 Caret and selection operate on grapheme clusters (shared with Typage, so they cannot diverge). Undo and
 redo are session-only. Home is "smart": the first non-whitespace character, then the row's true start.
 Word-wise movement and deletion, page up/down, document ends. Tab indents to the next tab stop; with

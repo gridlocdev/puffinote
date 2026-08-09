@@ -233,6 +233,7 @@ public sealed partial class MainWindow : Window
         edit.Items.Add(Item("_Copy", "edit.copy"));
         edit.Items.Add(Item("_Paste", "edit.paste"));
         edit.Items.Add(Item("Select _All", "edit.selectAll"));
+        edit.Items.Add(Item("Add _Next Occurrence", "edit.addNextOccurrence"));
         edit.Items.Add(new Separator());
         edit.Items.Add(Item("_Find…", "edit.find"));
         edit.Items.Add(Item("_Go to Line…", "view.goToLine"));
@@ -297,7 +298,7 @@ public sealed partial class MainWindow : Window
         file.Menu.Items.Add(Action("Preferences…", ShowSettings, PreferencesGesture));
 
         var edit = Submenu("Edit");
-        foreach (var id in new[] { "edit.undo", "edit.redo", null, "edit.cut", "edit.copy", "edit.paste", "edit.selectAll", null, "edit.find", "view.goToLine", null, "edit.normalizeLineEndings" })
+        foreach (var id in new[] { "edit.undo", "edit.redo", null, "edit.cut", "edit.copy", "edit.paste", "edit.selectAll", "edit.addNextOccurrence", null, "edit.find", "view.goToLine", null, "edit.normalizeLineEndings" })
         {
             edit.Menu!.Items.Add(id is null ? new NativeMenuItemSeparator() : Item(_commands[id].Title, id));
         }
