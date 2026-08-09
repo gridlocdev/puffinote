@@ -48,12 +48,32 @@ internal sealed class TaskDialog : ModalDialog<bool>
         var palette = Tokens.Active;
 
         var title = new TextBox { Text = task.Title, AcceptsReturn = false, FontSize = 18, FontWeight = FontWeight.SemiBold };
-        title.LostFocus += (_, _) =>
+
+        void CommitTitle()
         {
             if ((title.Text ?? string.Empty) != task.Title)
             {
                 _document.Execute(BoardCommands.SetTitle(task, title.Text ?? string.Empty));
             }
+        }
+
+        title.LostFocus += (_, _) => CommitTitle();
+
+        // Enter names the task; it does not answer the dialog. Without this the keystroke reached the
+        // footer's default button and shut the whole thing — you typed a title, pressed the key that
+        // means "done with this line", and the task you were still working on went away. The prototype
+        // blurs on Enter here for the same reason, and a step's Enter already does.
+        title.KeyDown += (_, e) =>
+        {
+            if (e.Key != Key.Enter)
+            {
+                return;
+            }
+
+            var back = _focusBefore;
+            CommitTitle();
+            ReturnFocus(back, title);
+            e.Handled = true;
         };
 
         // The title row is the task in miniature: tick it, name it, and reach the rest of what it could

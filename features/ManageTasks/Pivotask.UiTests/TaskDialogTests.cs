@@ -423,6 +423,36 @@ public class TaskDialogTests
         Assert.Equal("Book the room", task.Steps[0].Text); // unchanged, and still there
     }
 
+    /// <summary>
+    /// Enter names the task; it does not answer the dialog. The keystroke used to reach the footer's
+    /// default button and shut the whole thing — you typed a title, pressed the key that means "done with
+    /// this line", and the task you were still working on went away.
+    /// </summary>
+    [AvaloniaFact]
+    public void Enter_on_the_title_names_the_task_without_closing_the_dialog()
+    {
+        var (view, document, task) = Open();
+        var dialog = Dialog(view);
+
+        var title = dialog.GetLogicalDescendants().OfType<TextBox>()
+            .First(b => b.Text == "Draft the retro agenda");
+        title.Focus();
+        Dispatcher.UIThread.RunJobs();
+        title.Text = "Draft the Q3 retro agenda";
+
+        title.RaiseEvent(new Avalonia.Input.KeyEventArgs
+        {
+            RoutedEvent = Avalonia.Input.InputElement.KeyDownEvent,
+            Key = Avalonia.Input.Key.Enter,
+        });
+        Dispatcher.UIThread.RunJobs();
+
+        Assert.Equal("Draft the Q3 retro agenda", task.Title);
+        Assert.Equal("Rename Task", document.UndoLabel);
+        Assert.True(view.IsModalOpen, "Enter closed the dialog");
+        Assert.False(title.IsFocused); // …and the caret came out of the line, as on a step
+    }
+
     /// <summary>Open the "+" menu and return its rows.</summary>
     private static IReadOnlyList<Button> MenuRows(TaskDialog dialog)
     {
