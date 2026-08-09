@@ -1,5 +1,6 @@
 using Avalonia.Input;
 using Puffinote.Components.Commands;
+using Puffinote.Components.Core.Documents;
 using Typage.Desktop.Services;
 using Typage.Desktop.Views;
 
@@ -48,5 +49,5 @@ internal static class TestShell
     /// </summary>
     internal static MainWindow NewWindow(SettingsService? settings = null) =>
         new(settings ?? NewSettings(),
-            new RecoveryService(Path.Combine(ProfileRoot, $"recovery-{Guid.NewGuid():N}")));
+            new RecoveryService("Typage", Path.Combine(ProfileRoot, $"recovery-{Guid.NewGuid():N}")));
 }

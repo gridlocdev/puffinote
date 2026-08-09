@@ -43,7 +43,7 @@ public class AutoSaveTests : IDisposable
             settings.Settings.AutoSaveSeconds = seconds;
         }
 
-        return new MainWindow(settings);
+        return TestShell.NewWindow(settings);
     }
 
     /// <summary>Replace the buffer's whole text <i>as an edit</i>, so the document comes out dirty —

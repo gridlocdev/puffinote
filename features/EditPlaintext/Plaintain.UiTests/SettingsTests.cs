@@ -25,7 +25,7 @@ public class SettingsTests : IDisposable
 
     private MainWindow Open()
     {
-        var window = new MainWindow(new SettingsService(_path));
+        var window = TestShell.NewWindow(new SettingsService(_path));
         window.Show();
         Dispatcher.UIThread.RunJobs();
         return window;
@@ -55,7 +55,7 @@ public class SettingsTests : IDisposable
         var form = MainWindow.BuildSettingsForm(settings);
 
         Assert.Equal(
-            ["Theme", "Wrap long lines at words", "Show line numbers", "Highlight the current line", "Font size", "Auto-save"],
+            ["Theme", "Wrap long lines at words", "Show line numbers", "Highlight the current line", "Font size", "Auto-save", "Recovery snapshots"],
             form.Fields.Select(f => f.Label));
     }
 
@@ -73,7 +73,7 @@ public class SettingsTests : IDisposable
         service.Settings.HighlightCurrentLine = false;
         service.Save();
 
-        var window = new MainWindow(new SettingsService(_path)); // i.e. the next launch
+        var window = TestShell.NewWindow(new SettingsService(_path)); // i.e. the next launch
         window.Show();
         Dispatcher.UIThread.RunJobs();
         Assert.False(window.EditorView.Editor.HighlightCurrentLine);

@@ -183,6 +183,8 @@ public sealed partial class MainWindow
         {
             AtomicWrite(path, TextFileCodec.Encode(EditorView.Text, _format));
             EditorView.MarkSaved();
+            _diskStamp = FileStamp.For(path);
+            _recovery.Clear(); // the text is durable in its own file now; the snapshot has nothing to rescue
             UpdateChrome();
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
@@ -214,6 +216,7 @@ public sealed partial class MainWindow
             // this save back to us as somebody else's change and reloading the document under the caret.
             _diskStamp = FileStamp.For(path);
             DiskChangedUnderEdits = false;
+            _recovery.Clear(); // the text is durable in its own file now; the snapshot has nothing to rescue
 
             // The document is on disk, so a countdown aimed at it has nothing left to write — and a manual
             // save that succeeded is the answer to whatever made auto-save stand itself down.

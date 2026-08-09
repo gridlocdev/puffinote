@@ -58,6 +58,15 @@ and writes it back byte for byte.
   regenerates — and a modal that interrupts typing because a background process touched a file is worse
   than the problem it reports. Repeat events do not stack prompts: one recorded conflict covers everything
   that has landed since.
+- **Crash-recovery snapshots.** Every 30s (configurable; 0 turns them off) an edited buffer is copied to a
+  sidecar in the app-data directory, cleared on a save or a clean exit, and offered back on the next launch
+  if one survived. This exists because Plaintain's auto-save is the narrowest in the family *by design*: it
+  refuses an untitled buffer, and it refuses a file whose encoding is only a guess, because writing that
+  guess back is the step that damages the file. Both refusals are right, and both left the text with
+  nowhere to go — an unsaved 50 MB log is exactly where losing the buffer hurts most. A snapshot has no
+  such problem: it is our file, in our directory, in UTF-8, and it is not the document. Recovery re-opens
+  the original first (adopting its encoding) and lays the recovered text over it as unsaved work, so a
+  recovered Latin-1 file is not silently rewritten as UTF-8. Shares `RecoveryService` with Typage.
 - **Recent files**, MRU, persisted.
 
 ## 5. Editing

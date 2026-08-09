@@ -1,5 +1,5 @@
 using Avalonia.Headless.XUnit;
-using Typage.Desktop.Services;
+using Puffinote.Components.Core.Documents;
 using Xunit;
 
 namespace Typage.UiTests;
@@ -20,7 +20,7 @@ public class RecoveryTests
         var dir = TempDir();
         try
         {
-            var recovery = new RecoveryService(dir);
+            var recovery = new RecoveryService("Typage", dir);
             Assert.Null(recovery.TryLoad());
 
             recovery.Save("/notes/todo.md", "unsaved body");
@@ -44,7 +44,7 @@ public class RecoveryTests
         var dir = TempDir();
         try
         {
-            var recovery = new RecoveryService(dir);
+            var recovery = new RecoveryService("Typage", dir);
             recovery.Save(null, "draft");
             Assert.Null(recovery.TryLoad()!.Path);
         }

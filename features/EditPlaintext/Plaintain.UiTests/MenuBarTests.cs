@@ -26,7 +26,7 @@ public class MenuBarTests : IDisposable
 
     private MainWindow Open()
     {
-        var window = new MainWindow(new SettingsService(_path));
+        var window = TestShell.NewWindow(new SettingsService(_path));
         window.Show();
         Dispatcher.UIThread.RunJobs();
         return window;

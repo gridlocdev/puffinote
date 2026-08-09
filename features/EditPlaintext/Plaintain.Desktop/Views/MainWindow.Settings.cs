@@ -52,6 +52,8 @@ public sealed partial class MainWindow
         new SettingsSection("Saving",
         [
             AutoSave.IntervalField(() => s.AutoSaveSeconds, v => s.AutoSaveSeconds = v),
+            new NumberSetting("Recovery snapshots", () => s.RecoverySnapshotSeconds, v => s.RecoverySnapshotSeconds = (int)v, 0, 600, step: 5,
+                hint: "Seconds between sidecar copies of an edited buffer, offered back if Plaintain closes without saving. 0 turns them off. Unlike auto-save, this covers an untitled buffer and a file whose encoding is only a guess — the two it refuses to write."),
         ]),
     ]);
 
@@ -67,6 +69,7 @@ public sealed partial class MainWindow
         EditorView.Editor.HighlightCurrentLine = s.HighlightCurrentLine;
         EditorView.Editor.FontSize = s.FontSize;
         _autoSave.IntervalSeconds = s.AutoSaveSeconds; // takes effect on the document already open
+        SetupRecoverySnapshots(); // pick up the new interval (or stop, when it is 0)
     }
 
     /// <summary>

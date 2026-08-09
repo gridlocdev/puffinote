@@ -8,6 +8,7 @@ using Plaintain.Control.Controls;
 using Plaintain.Control.Views;
 using Plaintain.Desktop.Services;
 using Puffinote.Components.Commands;
+using Puffinote.Components.Core.Documents;
 using Puffinote.Components.Overlays;
 using Puffinote.Components.Shell;
 using Puffinote.Components.Theming;
@@ -55,13 +56,24 @@ public sealed partial class MainWindow : Window
     private readonly OpenFileWatcher _watcher;
 
     public MainWindow()
-        : this(new SettingsService())
+        : this(new SettingsService(), new RecoveryService("Plaintain"))
     {
     }
 
     public MainWindow(SettingsService settings)
+        : this(settings, new RecoveryService("Plaintain"))
+    {
+    }
+
+    /// <summary>
+    /// Test seam: point crash recovery at a scratch directory instead of the user's profile. A snapshot
+    /// left there by any unclean shutdown would otherwise greet every headless window with the "recover?"
+    /// modal — the same trap Typage's window documents, for the same reason.
+    /// </summary>
+    internal MainWindow(SettingsService settings, RecoveryService recovery)
     {
         _settings = settings;
+        _recovery = recovery;
         _watcher = new OpenFileWatcher(HandleExternalChange);
         Title = "Untitled";
         Width = 900;
@@ -132,6 +144,7 @@ public sealed partial class MainWindow : Window
         Content = new Panel { Children = { root, _overlay } };
         BindShortcuts();
         RefreshRecentMenu();
+        SetupRecoverySnapshots();
         UpdateChrome();
         Closing += OnWindowClosing;
     }
@@ -144,6 +157,7 @@ public sealed partial class MainWindow : Window
         base.OnOpened(e);
         Activate();
         EditorView.FocusEditor();
+        _ = CheckForRecoveryAsync(); // a snapshot that survived means the last session didn't end cleanly
     }
 
     protected override void OnClosed(EventArgs e)
@@ -151,6 +165,8 @@ public sealed partial class MainWindow : Window
         base.OnClosed(e);
         _autoSave.Dispose();
         _watcher.Dispose();
+        _snapshotTimer?.Stop();
+        _recovery.Clear(); // a clean exit means there is nothing to recover next launch
         PlainTextEditingCommands.GoToLineRequested -= OnGoToLineRequested;
     }
 

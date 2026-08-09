@@ -5,6 +5,7 @@ using Avalonia.Platform.Storage;
 using Avalonia.Threading;
 using Puffinote.Components.Commands;
 using Puffinote.Components.Controls.CommandBar;
+using Puffinote.Components.Core.Documents;
 using Puffinote.Components.Overlays;
 using Puffinote.Components.Shell;
 using Puffinote.Text.Document;
@@ -115,7 +116,7 @@ public partial class MainWindow : Window
     };
 
     public MainWindow(SettingsService settings)
-        : this(settings, new RecoveryService())
+        : this(settings, new RecoveryService("Typage"))
     {
     }
 

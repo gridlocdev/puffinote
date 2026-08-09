@@ -39,6 +39,15 @@ public sealed class AppSettings
     /// </summary>
     public int AutoSaveSeconds { get; set; } = AutoSave.DefaultSeconds;
 
+    /// <summary>
+    /// Seconds between crash-recovery snapshots of an edited buffer; 0 turns them off. Distinct from
+    /// <see cref="AutoSaveSeconds"/>: that writes the <i>document</i> and can only run for a named file
+    /// whose encoding is confirmed, this writes a sidecar copy of the buffer and runs for anything —
+    /// including the untitled scratch buffer and the file auto-save is refusing to touch, which is
+    /// precisely where losing the text would hurt most.
+    /// </summary>
+    public int RecoverySnapshotSeconds { get; set; } = 30;
+
     /// <summary>Most-recently-used files, newest first.</summary>
     public List<string> RecentFiles { get; init; } = [];
 

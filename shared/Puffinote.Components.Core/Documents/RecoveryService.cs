@@ -1,8 +1,8 @@
 using System.Text.Json;
 
-namespace Typage.Desktop.Services;
+namespace Puffinote.Components.Core.Documents;
 
-/// <summary>An unsaved-work snapshot written by the autosave timer (PRD §9.4).</summary>
+/// <summary>An unsaved-work snapshot written by a shell's snapshot timer.</summary>
 public sealed class RecoverySnapshot
 {
     /// <summary>The document's file path, or null if it was never saved (an Untitled buffer).</summary>
@@ -16,20 +16,32 @@ public sealed class RecoverySnapshot
 }
 
 /// <summary>
-/// Persists a single crash-recovery snapshot of unsaved work to the app-config location (PRD §9.4).
-/// The shell autosaves the buffer here while it is dirty and clears it on a clean save or exit, so a
-/// surviving snapshot at startup means the app didn't shut down cleanly — and the user is offered the
-/// chance to recover. All operations are best-effort: a failure never interrupts editing.
+/// Persists a single crash-recovery snapshot of unsaved work to the app-config location. A shell
+/// snapshots the buffer here while it is dirty and clears it on a clean save or exit, so a surviving
+/// snapshot at startup means the app didn't shut down cleanly — and the user is offered the chance to
+/// recover. All operations are best-effort: a failure never interrupts editing.
+/// <para>
+/// Shared because the two text editors want exactly this and nothing app-specific is left once the app
+/// name is a parameter — the alternative was a second copy, and a second copy is two answers to the
+/// question of where unsaved work goes. It stays text-shaped on purpose: a workbook or a board is not a
+/// string, and pretending otherwise here would be the wrong generalisation.
+/// </para>
 /// </summary>
 public sealed class RecoveryService
 {
     private static readonly JsonSerializerOptions Options = new() { WriteIndented = false };
     private readonly string _path;
 
-    public RecoveryService(string? directory = null)
+    /// <param name="appName">
+    /// The app's folder under the platform's application-data directory ("Typage", "Plaintain"). Each app
+    /// keeps its own snapshot: recovering someone's log into a Markdown editor would be worse than not
+    /// recovering it at all.
+    /// </param>
+    /// <param name="directory">An explicit directory, overriding <paramref name="appName"/> (tests).</param>
+    public RecoveryService(string appName, string? directory = null)
     {
         var dir = directory ?? Path.Combine(
-            Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "Typage");
+            Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), appName);
         _path = Path.Combine(dir, "recovery.json");
     }
 
@@ -44,7 +56,7 @@ public sealed class RecoveryService
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
-            // Best-effort: a failed autosave must never disrupt editing.
+            // Best-effort: a failed snapshot must never disrupt editing.
         }
     }
 

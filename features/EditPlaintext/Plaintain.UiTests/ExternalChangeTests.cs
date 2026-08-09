@@ -35,7 +35,7 @@ public class ExternalChangeTests : IDisposable
     private MainWindow Open()
     {
         var settings = new SettingsService(Path.Combine(_dir, $"settings-{Guid.NewGuid():N}.json"));
-        var window = new MainWindow(settings);
+        var window = TestShell.NewWindow(settings);
         window.Show();
         return window;
     }
