@@ -606,6 +606,72 @@ public class BoardViewTests
         }
     }
 
+    /// <summary>
+    /// The checkbox, the title, and the star sit on one line.
+    ///
+    /// <para>They did not: a stock CheckBox and Button are 32px tall and centre their glyph in that,
+    /// while a line of the card's text is 16px and sat at the top of the row — so the title rode six
+    /// pixels above the two things beside it. The star was a "★" typed into a button, which is whatever
+    /// size the font decides and came out visibly smaller than everything around it.</para>
+    /// </summary>
+    [AvaloniaFact]
+    public void The_checkbox_the_title_and_the_star_share_one_line()
+    {
+        var (view, document) = Open();
+
+        // A title long enough to wrap in a 280px column, so the rule is checked on a two-line card too.
+        document.Execute(BoardCommands.AddTask(
+            document.Board.Groups[0],
+            new TaskItem { Id = "t4", Title = "Rewrite the onboarding empty states before the review" }));
+
+        var window = (Window)TopLevel.GetTopLevel(view)!;
+
+        static void AssertAligned(IReadOnlyList<TaskCard> cards)
+        {
+            Assert.NotEmpty(cards);
+            foreach (var card in cards)
+            {
+                double Top(Visual part) => part.TranslatePoint(new Point(0, 0), card)!.Value.Y;
+
+                var check = card.GetLogicalDescendants().OfType<CheckBox>().First();
+                var title = card.GetLogicalDescendants().OfType<TextBlock>().First(t => t.Text == card.Task.Title);
+
+                // By name, not by type: CheckBox derives from Button, so "the first Button on the card"
+                // is the tick box, and every assertion below it would have been comparing it to itself.
+                var star = card.GetLogicalDescendants().OfType<Button>().First(b =>
+                    Avalonia.Automation.AutomationProperties.GetName(b) is "Add star" or "Remove star");
+
+                // Against the title's *first line*, not the middle of the block: a title that wraps grows
+                // downward and leaves the checkbox where it was, rather than dragging it into the middle
+                // of a paragraph. That is the prototype's rule, and why the line box is pinned at all.
+                double line = Top(title) + (title.LineHeight / 2);
+                Assert.True(title.Bounds.Height > 0, $"{card.Task.Id} was never laid out");
+
+                Assert.Equal(line, Top(check) + (check.Bounds.Height / 2), precision: 0);
+                Assert.Equal(line, Top(star) + (star.Bounds.Height / 2), precision: 0);
+
+                // …and the star is drawn at a stated size rather than at whatever the font felt like.
+                var glyph = star.GetLogicalDescendants().OfType<Puffinote.Components.Controls.Icons.LucideIcon>().Single();
+                Assert.Equal(StarGlyphSize, glyph.Size);
+                Assert.Equal(card.Task.Important, glyph.IsFilled); // solid means starred, not just gold
+            }
+        }
+
+        // Each view measured while it is the one on screen: the other is detached, and a detached card
+        // reports stale bounds that would let this pass on numbers nobody can see.
+        window.UpdateLayout();
+        Dispatcher.UIThread.RunJobs();
+        AssertAligned(view.BoardForTest.CardsForTest);
+
+        view.Layout = BoardLayout.List;
+        Dispatcher.UIThread.RunJobs();
+        window.UpdateLayout();
+        AssertAligned(view.ListForTest.CardsForTest);
+    }
+
+    /// <summary>The star's drawn size, shared by the card and the task dialog's header.</summary>
+    private const double StarGlyphSize = 18;
+
     /// <summary>A real click, through the window, so the guard inside the card is actually exercised.</summary>
     private static void Click(Visual target)
     {

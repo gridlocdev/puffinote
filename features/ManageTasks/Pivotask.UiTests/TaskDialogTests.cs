@@ -267,6 +267,26 @@ public class TaskDialogTests
             dialog.GetLogicalDescendants().OfType<TextBlock>().Select(t => t.Text));
     }
 
+    /// <summary>
+    /// The dialog's star is the card's star — one control, so there is one answer to what starred looks
+    /// like rather than a drawn glyph in one place and a "★" character in the other.
+    /// </summary>
+    [AvaloniaFact]
+    public void The_dialog_and_the_card_draw_the_same_star()
+    {
+        var (view, _, task) = Open(board => board.Groups[0].Tasks[0].Important = true);
+
+        var inDialog = Named(Dialog(view), "Remove star").Single()
+            .GetLogicalDescendants().OfType<Puffinote.Components.Controls.Icons.LucideIcon>().Single();
+        var onCard = view.BoardForTest.CardsForTest.Single(c => c.Task.Id == task.Id)
+            .GetLogicalDescendants().OfType<Puffinote.Components.Controls.Icons.LucideIcon>()
+            .Single(i => i.IconKey == "star");
+
+        Assert.Equal(onCard.IconKey, inDialog.IconKey);
+        Assert.Equal(onCard.Size, inDialog.Size);
+        Assert.Equal(onCard.IsFilled, inDialog.IsFilled);
+    }
+
     /// <summary>Open the "+" menu and return its rows.</summary>
     private static IReadOnlyList<Button> MenuRows(TaskDialog dialog)
     {

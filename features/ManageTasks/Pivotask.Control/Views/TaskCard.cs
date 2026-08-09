@@ -17,6 +17,18 @@ namespace Pivotask.Control.Views;
 /// </summary>
 internal sealed class TaskCard : Border
 {
+    /// <summary>
+    /// The height of the card's first line, and the box the checkbox and the star are each drawn in.
+    ///
+    /// <para>It is one number for all three on purpose. A stock <see cref="CheckBox"/> and a stock
+    /// <see cref="Button"/> are 32px tall by default and centre their glyph in that, while a line of
+    /// 13.5pt text is 16px — so top-aligning the row put the title six pixels above the two things
+    /// beside it. Pinning all three to the same line box is what makes them agree, and it keeps the
+    /// prototype's rule that a wrapped title grows <em>downward</em> away from a checkbox that stays on
+    /// the first line, rather than dragging the checkbox to the middle of a paragraph.</para>
+    /// </summary>
+    private const double LineHeight = 20;
+
     public TaskCard(Board board, TaskItem task, DateOnly today)
     {
         Task = task;
@@ -34,7 +46,11 @@ internal sealed class TaskCard : Border
         {
             IsChecked = task.Done,
             VerticalAlignment = VerticalAlignment.Top,
-            Margin = new Thickness(0, -2, 6, 0),
+            VerticalContentAlignment = VerticalAlignment.Center,
+            MinHeight = 0,
+            Height = LineHeight,
+            Padding = new Thickness(0),
+            Margin = new Thickness(0, 0, 9, 0),
         };
         done.IsCheckedChanged += (_, _) =>
         {
@@ -48,6 +64,9 @@ internal sealed class TaskCard : Border
         {
             Text = task.Title,
             TextWrapping = TextWrapping.Wrap,
+            FontSize = 13.5,
+            LineHeight = LineHeight,
+            VerticalAlignment = VerticalAlignment.Top,
 
             // A completed task keeps its words — you should still be able to read what you finished —
             // but stops competing for attention with the ones that aren't done.
@@ -99,16 +118,12 @@ internal sealed class TaskCard : Border
             stack.Children.Add(meta);
         }
 
-        var star = new Button
-        {
-            Content = task.Important ? "★" : "☆",
-            Background = Brushes.Transparent,
-            BorderThickness = new Thickness(0),
-            Padding = new Thickness(4, 0),
-            VerticalAlignment = VerticalAlignment.Top,
-            Foreground = task.Important ? Brushes.Goldenrod : palette.MutedText,
-        };
-        star.Click += (_, _) => StarToggled?.Invoke(this, !task.Important);
+        // The same star the task dialog puts in its header — one control, so there is one answer to what
+        // starred looks like rather than a drawn glyph in one place and a "★" character in the other.
+        var star = StarButton.Build(task.Important, () => StarToggled?.Invoke(this, !task.Important));
+        star.Height = LineHeight;
+        star.Margin = new Thickness(6, 0, 0, 0);
+        star.VerticalAlignment = VerticalAlignment.Top;
 
         var row = new DockPanel { LastChildFill = true };
         DockPanel.SetDock(done, Dock.Left);

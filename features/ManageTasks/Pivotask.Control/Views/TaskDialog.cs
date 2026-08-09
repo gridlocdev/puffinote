@@ -203,18 +203,13 @@ internal sealed class TaskDialog : ModalDialog<bool>
         DockPanel.SetDock(close, Dock.Right);
         _head.Children.Add(close);
 
-        var star = IconButton(
-            "star", _task.Important ? "Remove star" : "Add star", palette, filled: _task.Important);
-        if (_task.Important)
-        {
-            star.Foreground = Brushes.Goldenrod;
-        }
-
-        star.Click += (_, _) =>
+        // The card's star, not a second one that happens to look similar.
+        var star = StarButton.Build(_task.Important, () =>
         {
             _document.Execute(BoardCommands.SetImportant(_task, !_task.Important));
             RebuildHead();
-        };
+        });
+        star.VerticalAlignment = VerticalAlignment.Center;
         DockPanel.SetDock(star, Dock.Right);
         _head.Children.Add(star);
 
