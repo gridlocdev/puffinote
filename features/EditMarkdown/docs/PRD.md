@@ -117,6 +117,13 @@ Three constraints drive the architecture:
 - **Bidirectional / RTL text** supported using Avalonia's bidi; caret movement is visual-order aware.
 - **Undo/redo** with sensible grouping: typing runs coalesce (bounded by a short idle timeout and by caret jumps); structural edits and command operations are discrete. Revert and external reload clear the redo stack and reset the undo baseline.
 - **Editing assists:** list continuation; blockquote/indent continuation on Enter; auto-pairing of `*` `_` `` ` `` `[` `(` with wrap-selection; Tab/Shift+Tab indent/outdent; auto-indent.
+- **Enter and the paragraph break:** plain Enter writes a real Markdown paragraph break (`\n\n`), because a
+  single newline is a soft break the tokenizer flows back together. In the two formatted views the blank it
+  leaves is collapsed to regular paragraph spacing, so one press shows one new line. **In Raw Text it
+  writes one newline instead**: that view ungroups paragraphs and collapses nothing — it draws the source
+  as it is — so the same two newlines showed up as what they literally are, a blank line, and one press
+  added two lines. The rule being kept in all three is the same one: one press, one new line. Nothing else
+  about Enter differs by view.
 - **Leaving a list:** Enter on an empty top-level item (bullet, ordered, task, or blockquote) leaves the **block**, writing the blank line that terminates it and landing the caret on a visible row. Dropping the marker alone left the caret inside the list on a collapsed separator — invisible, and a lazy continuation, so the next paragraph typed rejoined the item. An item that is nested, or inside a quote, drops one level instead and keeps its indent / `> `.
 - **Tabs and indentation:** default inserts **spaces, width 4** (configurable), interpreted on 4-space tab stops. Literal tabs typed inside code blocks are preserved.
 - **Find / Replace:** plain and **regex** (.NET BCL `Regex`); matches highlight; Replace/Replace All operate on source offsets even where markers are concealed.

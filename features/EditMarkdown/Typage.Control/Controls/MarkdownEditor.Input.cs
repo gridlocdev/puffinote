@@ -245,8 +245,20 @@ public partial class MarkdownEditor
         // A newline already following the break point — '\n', or the '\r' of a CRLF pair — means the
         // paragraph break exists, so add just one line ending rather than opening a double gap.
         var afterNewline = sel.End < doc.Length && doc[sel.End] is '\n' or '\r';
-        var paraBreak = beforeContent && !afterNewline ? nl + nl : nl;
-        var paraCaret = sel.Start + (beforeContent ? 2 : 1) * nl.Length; // past the break, skipping a collapsed first blank
+
+        // …except in the raw-text view, where every one of the assumptions above is off. That view shows
+        // the source as it is: paragraphs are ungrouped and blank lines are not collapsed (see the View
+        // setter), so the "\n\n" that reads as one paragraph gap in the two formatted views reads as an
+        // actual blank line here — Enter visibly added two. The rule the whole thing is trying to keep is
+        // "one press, one new line"; in a view that draws the source literally, that means one newline.
+        // Nothing else about Enter changes: list continuation, exiting a list and the rest are the same in
+        // all three views.
+        var rawSource = View == ViewMode.RawText;
+        var paraBreak = !rawSource && beforeContent && !afterNewline ? nl + nl : nl;
+
+        // Past the break — skipping the collapsed first blank, which in raw text is not collapsed and so
+        // must not be skipped either.
+        var paraCaret = sel.Start + (!rawSource && beforeContent ? 2 : 1) * nl.Length;
 
         void PlaceParaCaret() => Buffer.Selection = Selection.At(Math.Clamp(paraCaret, 0, Buffer.Document.Length));
 
