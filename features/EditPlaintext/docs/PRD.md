@@ -48,6 +48,16 @@ and writes it back byte for byte.
   has been *saved* wrong cannot.
 - **Save** is atomic: a temp file in the target's own directory, then a rename. Same directory because a
   rename across filesystems is a copy, and a copy is not atomic.
+- **External changes** to the open file are watched for (`OpenFileWatcher` + a `FileStamp` baseline, both
+  from `shared/`). With nothing unsaved, the file is re-read — showing what is actually there is the only
+  useful behaviour. With unsaved edits, the buffer is left exactly as it is and the conflict is *recorded*:
+  the status bar says "changed on disk — Save will ask", ⌘S then offers Reload / Save As… / Keep Mine, and
+  auto-save stands down entirely rather than deciding whose bytes survive on a timer.
+  **No dialog appears at the moment of the change**, unlike Typage. Plaintain is the app most likely to
+  have a file open that something else is actively writing — a log being appended to, a config a tool
+  regenerates — and a modal that interrupts typing because a background process touched a file is worse
+  than the problem it reports. Repeat events do not stack prompts: one recorded conflict covers everything
+  that has landed since.
 - **Recent files**, MRU, persisted.
 
 ## 5. Editing

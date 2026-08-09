@@ -50,6 +50,10 @@ public sealed partial class MainWindow : Window
     // can be written at all).
     private readonly AutoSave _autoSave;
 
+    // External-change detection: the open file, watched, so an edit made elsewhere is noticed rather than
+    // silently overwritten by the next save (MainWindow.External.cs).
+    private readonly OpenFileWatcher _watcher;
+
     public MainWindow()
         : this(new SettingsService())
     {
@@ -58,6 +62,7 @@ public sealed partial class MainWindow : Window
     public MainWindow(SettingsService settings)
     {
         _settings = settings;
+        _watcher = new OpenFileWatcher(HandleExternalChange);
         Title = "Untitled";
         Width = 900;
         Height = 640;
@@ -145,6 +150,7 @@ public sealed partial class MainWindow : Window
     {
         base.OnClosed(e);
         _autoSave.Dispose();
+        _watcher.Dispose();
         PlainTextEditingCommands.GoToLineRequested -= OnGoToLineRequested;
     }
 
@@ -361,9 +367,13 @@ public sealed partial class MainWindow : Window
 
         // The encoding is not decoration here: it is the one fact that decides whether this file can be
         // written back at all, so it says so rather than leaving the greyed-out Save to be discovered.
-        _statusEncoding.Text = EncodingUnconfirmed
-            ? $"{_format.DisplayName} (unconfirmed — read-only)"
-            : $"{_format.DisplayName} · {stats.NewlineLabel}";
+        // An unresolved external write outranks it: until that is settled there is a second copy of this
+        // document on disk, and knowing which encoding it would be written in is the smaller question.
+        _statusEncoding.Text = DiskChangedUnderEdits
+            ? "changed on disk — Save will ask"
+            : EncodingUnconfirmed
+                ? $"{_format.DisplayName} (unconfirmed — read-only)"
+                : $"{_format.DisplayName} · {stats.NewlineLabel}";
 
         _statusZoom.Text = ZoomScale.Format(EditorView.Zoom);
         _statusZoom.IsVisible = EditorView.Zoom != ZoomScale.Default;

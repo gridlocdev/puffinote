@@ -2,6 +2,7 @@ using Avalonia.Controls;
 using Avalonia.Platform.Storage;
 using Avalonia.Threading;
 using Puffinote.Components.Commands;
+using Puffinote.Components.Core.Documents;
 using Puffinote.Components.Overlays;
 using Puffinote.Text.Document;
 
@@ -33,6 +34,7 @@ public sealed partial class MainWindow
             EditorView.Editor.IsReadOnlyEncoding = read.IsReadOnly;
             EditorView.LoadText(read.Text);
             CurrentPath = path;
+            TrackOnDisk(path); // this read is the new baseline, and this file is the one to watch
             _autoSave.Cancel(); // any countdown was aimed at the document this one just replaced
             _settings.Settings.PushRecent(path);
             _settings.Save();
@@ -65,6 +67,7 @@ public sealed partial class MainWindow
 
         EditorView.LoadText(string.Empty);
         CurrentPath = null;
+        TrackOnDisk(null); // an untitled buffer has no file to watch
         _autoSave.Cancel(); // ditto: the previous document is gone
         _format = TextFileFormat.Utf8NoBom;
         EncodingUnconfirmed = false;
@@ -100,7 +103,9 @@ public sealed partial class MainWindow
             return await SaveAsAsync();
         }
 
-        return await ConfirmEncodingAsync() && WriteToPath(CurrentPath);
+        // Two questions, in the order that matters: has somebody else's version of this file appeared
+        // under the edits (whose bytes win?), and is the encoding we would write it back in a guess?
+        return await ResolveConflictAsync() && await ConfirmEncodingAsync() && WriteToPath(CurrentPath);
     }
 
     private async Task<bool> SaveAsAsync()
@@ -123,6 +128,7 @@ public sealed partial class MainWindow
         }
 
         CurrentPath = path;
+        TrackOnDisk(path); // the document lives somewhere else now — watch there, not where it came from
         _settings.Settings.PushRecent(path);
         _settings.Save();
         RefreshRecentMenu();
@@ -164,7 +170,11 @@ public sealed partial class MainWindow
     /// </summary>
     private void AutoSaveTick()
     {
-        if (CurrentPath is not { } path || !EditorView.IsDirty || EncodingUnconfirmed || _overlay.IsOpen)
+        // The last of these is the newest: somebody else wrote this file while it was being edited, and
+        // choosing whose bytes survive is not a decision to make on a timer with nobody watching. The tab
+        // stays dirty and waits for a ⌘S, where the question gets asked.
+        if (CurrentPath is not { } path || !EditorView.IsDirty || EncodingUnconfirmed || _overlay.IsOpen
+            || DiskChangedUnderEdits)
         {
             return;
         }
@@ -199,6 +209,11 @@ public sealed partial class MainWindow
         {
             AtomicWrite(path, TextFileCodec.Encode(EditorView.Text, _format));
             EditorView.MarkSaved();
+
+            // Our own write moved the file's stamp; adopting it here is what stops the watcher reporting
+            // this save back to us as somebody else's change and reloading the document under the caret.
+            _diskStamp = FileStamp.For(path);
+            DiskChangedUnderEdits = false;
 
             // The document is on disk, so a countdown aimed at it has nothing left to write — and a manual
             // save that succeeded is the answer to whatever made auto-save stand itself down.
