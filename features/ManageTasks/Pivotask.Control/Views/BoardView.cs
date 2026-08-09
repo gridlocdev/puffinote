@@ -77,6 +77,12 @@ public sealed class BoardView : UserControl
     /// <summary>Raised when a card asks to be opened — the host shows the task dialog.</summary>
     public event EventHandler<TaskItem>? TaskOpened;
 
+    /// <summary>
+    /// Raised when a group's × is pressed. The view doesn't delete it: throwing away a column of work
+    /// wants a question first, and the overlay that asks it belongs to the host.
+    /// </summary>
+    public event EventHandler<TaskGroup>? DeleteGroupRequested;
+
     /// <summary>Today, injectable so a test can pin what "due soon" means rather than racing the clock.</summary>
     internal DateOnly Today { get; set; } = DateOnly.FromDateTime(DateTime.Now);
 
@@ -97,10 +103,10 @@ public sealed class BoardView : UserControl
             _columns.Children.Add(BuildColumn(group));
         }
 
-        // A trailing "add a group" so a board can grow without a menu — the same affordance the
-        // prototype has, and the reason a new board's three columns are a starting point, not a cage.
-        var add = new Button { Content = "+ Group", Margin = new Thickness(0, 0, 0, 0), VerticalAlignment = VerticalAlignment.Top };
-        add.Click += (_, _) => Document.Execute(BoardCommands.AddGroup("New group"));
+        // A trailing "add a list" so a board can grow without a menu — the same affordance, and the same
+        // words, the prototype uses, and the reason a new board's columns are a starting point not a cage.
+        var add = new Button { Content = "＋ Add a list", VerticalAlignment = VerticalAlignment.Top };
+        add.Click += (_, _) => Document.Execute(BoardCommands.AddGroup("New list"));
         _columns.Children.Add(add);
     }
 
@@ -109,53 +115,28 @@ public sealed class BoardView : UserControl
         var palette = Tokens.Active;
         var body = new StackPanel { Spacing = 0 };
 
-        var header = new DockPanel { LastChildFill = true, Margin = new Thickness(0, 0, 0, 8) };
-        var name = new TextBlock
-        {
-            Text = group.Name,
-            FontWeight = FontWeight.SemiBold,
-            VerticalAlignment = VerticalAlignment.Center,
-        };
-
         var visible = Visible(group).ToList();
-        var count = new TextBlock
+
+        // No collapse caret here: a board column is not something the prototype folds — that affordance
+        // belongs to the list, where sections stack vertically and folding buys back a screen.
+        body.Children.Add(GroupHeader.Build(
+            Document, group, visible.Count, caret: false, () => DeleteGroupRequested?.Invoke(this, group)));
+
+        foreach (var task in visible)
         {
-            Text = visible.Count.ToString(System.Globalization.CultureInfo.CurrentCulture),
-            Foreground = palette.MutedText,
-            FontSize = 11,
-            VerticalAlignment = VerticalAlignment.Center,
-            Margin = new Thickness(6, 0, 0, 0),
-        };
-
-        var collapse = new Button
-        {
-            Content = group.Collapsed ? "▸" : "▾",
-            Background = Brushes.Transparent,
-            BorderThickness = new Thickness(0),
-            Padding = new Thickness(4, 0),
-        };
-        collapse.Click += (_, _) => Document.Execute(BoardCommands.SetCollapsed(group, !group.Collapsed));
-
-        DockPanel.SetDock(collapse, Dock.Left);
-        DockPanel.SetDock(count, Dock.Right);
-        header.Children.Add(collapse);
-        header.Children.Add(count);
-        header.Children.Add(name);
-        body.Children.Add(header);
-
-        if (!group.Collapsed)
-        {
-            foreach (var task in visible)
-            {
-                body.Children.Add(BuildCard(group, task));
-            }
-
-            body.Children.Add(BuildAddRow(group));
+            body.Children.Add(BuildCard(group, task));
         }
+
+        if (visible.Count == 0)
+        {
+            body.Children.Add(EmptyNote(group));
+        }
+
+        body.Children.Add(BuildAddRow(group));
 
         var column = new Border
         {
-            Width = group.Collapsed ? 180 : 280,
+            Width = 280,
             Background = palette.SurfaceInset,
             BorderBrush = palette.SurfaceBorder,
             BorderThickness = new Thickness(1),
@@ -225,6 +206,21 @@ public sealed class BoardView : UserControl
             Document.Execute(BoardCommands.MoveTask(Document.Board, task, target, before));
         }
     }
+
+    /// <summary>
+    /// What an empty column says. Two sentences, because they are two situations: a group with nothing in
+    /// it is waiting for you, and a group whose tasks are all filtered out is telling you why it looks
+    /// empty. Saying nothing at all — which is what this did — leaves the reader to guess which it is.
+    /// </summary>
+    private static TextBlock EmptyNote(TaskGroup group) => new()
+    {
+        Text = group.Tasks.Count > 0 ? "Nothing here matches the filter." : "Empty. Add the first task below.",
+        Foreground = Tokens.Active.MutedText,
+        FontStyle = FontStyle.Italic,
+        FontSize = 13,
+        TextWrapping = TextWrapping.Wrap,
+        Margin = new Thickness(2, 4, 2, 6),
+    };
 
     private Avalonia.Controls.Control BuildAddRow(TaskGroup group)
     {

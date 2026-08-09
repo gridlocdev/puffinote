@@ -4,6 +4,7 @@ using Avalonia.Layout;
 using Avalonia.Media;
 using Pivotask.Control.Commands;
 using Pivotask.Core;
+using Pivotask.Core.Editing;
 using Pivotask.Core.Model;
 using Pivotask.Core.Query;
 using Puffinote.Components.Commands;
@@ -36,6 +37,8 @@ public sealed class TaskBoardView : UserControl
     {
         BoardForTest.TaskOpened += (_, task) => _ = OpenTaskAsync(task);
         ListForTest.TaskOpened += (_, task) => _ = OpenTaskAsync(task);
+        BoardForTest.DeleteGroupRequested += (_, group) => _ = DeleteGroupAsync(group);
+        ListForTest.DeleteGroupRequested += (_, group) => _ = DeleteGroupAsync(group);
 
         _search.TextChanged += (_, _) =>
         {
@@ -177,6 +180,35 @@ public sealed class TaskBoardView : UserControl
 
     /// <summary>Open the task dialog on <paramref name="task"/>.</summary>
     public Task OpenTaskAsync(TaskItem task) => OverlayForTest.ShowModalAsync(new TaskDialog(Document, task));
+
+    /// <summary>
+    /// Delete a group, asking first when it still holds tasks — the prototype's rule, and the right one:
+    /// an empty column is a click to remake, a full one is work. Deleting the last group leaves a fresh
+    /// empty one behind rather than a board with nowhere to put anything, which is also what it does.
+    /// </summary>
+    internal async Task DeleteGroupAsync(TaskGroup group)
+    {
+        if (group.Tasks.Count > 0)
+        {
+            bool go = await OverlayForTest.ShowModalAsync(new ConfirmDialog(
+                "Delete list",
+                $"Delete “{group.Name}” and its {group.Tasks.Count} task{(group.Tasks.Count == 1 ? string.Empty : "s")}?",
+                confirmLabel: "Delete",
+                denyLabel: "Cancel",
+                confirmIsDefault: false));
+
+            if (!go)
+            {
+                return;
+            }
+        }
+
+        Document.Execute(BoardCommands.DeleteGroup(Document.Board, group));
+        if (Document.Board.Groups.Count == 0)
+        {
+            Document.Execute(BoardCommands.AddGroup("Tasks"));
+        }
+    }
 
     private void ApplyLayout()
     {

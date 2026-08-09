@@ -1,6 +1,7 @@
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Layout;
+using Avalonia.LogicalTree;
 using Avalonia.Media;
 using Pivotask.Core;
 using Pivotask.Core.Editing;
@@ -59,101 +60,146 @@ public sealed class TaskListView : UserControl
 
     public event EventHandler<TaskItem>? TaskOpened;
 
+    /// <summary>Raised when a section's × is pressed; the host asks before throwing the work away.</summary>
+    public event EventHandler<TaskGroup>? DeleteGroupRequested;
+
     internal DateOnly Today { get; set; } = DateOnly.FromDateTime(DateTime.Now);
 
-    internal int RowCountForTest => _rows.Children.OfType<DockPanel>().Count();
+    /// <summary>Every card the list is showing, across all its sections (test seam).</summary>
+    internal IReadOnlyList<TaskCard> CardsForTest =>
+        [.. _rows.Children.OfType<Border>().SelectMany(s => s.GetLogicalDescendants().OfType<TaskCard>())];
+
+    internal int RowCountForTest => CardsForTest.Count;
 
     private void OnChanged(object? sender, EventArgs e) => Rebuild();
 
+    /// <summary>
+    /// Rebuild every section. The prototype renders the <em>same</em> task markup here as on the board, so
+    /// this builds the same <see cref="TaskCard"/> — a task that shows a label, a due pill and a step count
+    /// in one view and a bare title in the other reads as two different tasks, and the reader has no way to
+    /// know which one is lying.
+    /// </summary>
     private void Rebuild()
     {
         _rows.Children.Clear();
-        var palette = Tokens.Active;
-        bool any = false;
 
         foreach (var group in Document.Board.Groups)
         {
-            var matches = group.Tasks
-                .Where(task => BoardQuery.Matches(task, Filter, Today) && BoardQuery.Matches(task, Query))
-                .ToList();
-
-            if (matches.Count == 0)
-            {
-                continue; // an empty group is a column on the board, but noise in a list
-            }
-
-            any = true;
-            _rows.Children.Add(new TextBlock
-            {
-                Text = group.Name,
-                FontWeight = FontWeight.SemiBold,
-                Foreground = palette.MutedText,
-                Margin = new Thickness(0, 10, 0, 4),
-            });
-
-            foreach (var task in matches)
-            {
-                _rows.Children.Add(BuildRow(task));
-            }
+            _rows.Children.Add(BuildSection(group));
         }
 
-        if (!any)
-        {
-            _rows.Children.Add(new TextBlock
-            {
-                Text = Query.Length > 0 ? $"Nothing matches “{Query}”." : "Nothing here.",
-                Foreground = palette.MutedText,
-            });
-        }
+        // The list's own trailing "add a group", full width — the prototype's `.ghost` button.
+        var add = new Button { Content = "＋ Add a group", HorizontalAlignment = HorizontalAlignment.Stretch };
+        add.Click += (_, _) => Document.Execute(BoardCommands.AddGroup("New list"));
+        _rows.Children.Add(add);
     }
 
-    private DockPanel BuildRow(TaskItem task)
+    private Avalonia.Controls.Control BuildSection(TaskGroup group)
+    {
+        var body = new StackPanel { Spacing = 0 };
+        var visible = group.Tasks
+            .Where(task => BoardQuery.Matches(task, Filter, Today) && BoardQuery.Matches(task, Query))
+            .ToList();
+
+        // Unlike the board, a section always appears even when it is empty: the list is the view that
+        // shows you the shape of the whole board, and a group that silently vanished from it would be a
+        // group you forget you have.
+        body.Children.Add(GroupHeader.Build(
+            Document, group, visible.Count, caret: true, () => DeleteGroupRequested?.Invoke(this, group)));
+
+        if (!group.Collapsed)
+        {
+            body.Children.Add(BuildBody(group, visible));
+        }
+
+        return new Border { Margin = new Thickness(0, 0, 0, 14), Child = body };
+    }
+
+    private Avalonia.Controls.Control BuildBody(TaskGroup group, IReadOnlyList<TaskItem> visible)
     {
         var palette = Tokens.Active;
-        var check = new CheckBox { IsChecked = task.Done, VerticalAlignment = VerticalAlignment.Center };
-        check.IsCheckedChanged += (_, _) =>
+        var stack = new StackPanel { Spacing = 0 };
+
+        // Finished tasks sink below a fold of their own rather than sitting among the open ones. That is
+        // the list's answer to the board's per-column "hide completed": same state (TaskGroup.FoldDone),
+        // shown as a subhead you can open, because in a single column the finished ones would otherwise
+        // push the work you still have off the screen.
+        var open = visible.Where(task => !task.Done).ToList();
+        var finished = visible.Where(task => task.Done).ToList();
+
+        foreach (var task in open)
         {
-            if ((check.IsChecked == true) != task.Done)
+            stack.Children.Add(BuildCard(group, task));
+        }
+
+        if (open.Count == 0 && finished.Count == 0)
+        {
+            stack.Children.Add(new TextBlock
             {
-                Document.Execute(BoardCommands.SetDone(task, check.IsChecked == true));
+                Text = group.Tasks.Count > 0 ? "Nothing here matches the filter." : "Empty. Add the first task below.",
+                Foreground = palette.MutedText,
+                FontStyle = FontStyle.Italic,
+                FontSize = 13,
+                Margin = new Thickness(2, 4, 2, 6),
+            });
+        }
+
+        if (finished.Count > 0)
+        {
+            var subhead = new Button
+            {
+                Content = $"{(group.FoldDone ? "▸" : "▾")}  finished · {finished.Count}",
+                Background = Brushes.Transparent,
+                BorderThickness = new Thickness(0, 1, 0, 0),
+                BorderBrush = palette.SurfaceBorder,
+                Foreground = palette.MutedText,
+                FontSize = 11,
+                HorizontalAlignment = HorizontalAlignment.Stretch,
+                HorizontalContentAlignment = HorizontalAlignment.Left,
+                Padding = new Thickness(2, 7, 2, 5),
+            };
+            subhead.Click += (_, _) => Document.Execute(BoardCommands.SetFoldDone(group, !group.FoldDone));
+            stack.Children.Add(subhead);
+
+            if (!group.FoldDone)
+            {
+                foreach (var task in finished)
+                {
+                    stack.Children.Add(BuildCard(group, task));
+                }
             }
-        };
-
-        var title = new TextBlock
-        {
-            Text = task.Title,
-            VerticalAlignment = VerticalAlignment.Center,
-            TextDecorations = task.Done ? Avalonia.Media.TextDecorations.Strikethrough : null,
-            Foreground = task.Done ? palette.MutedText : null,
-        };
-
-        var trailing = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center };
-        if (task.Important)
-        {
-            trailing.Children.Add(new TextBlock { Text = "★", Foreground = Brushes.Goldenrod, Margin = new Thickness(0, 0, 6, 0) });
         }
 
-        if (task.Due is { } due)
-        {
-            bool late = !task.Done && due < Today;
-            trailing.Children.Add(TaskCard.Chip(
-                BoardQuery.DescribeDue(due, Today),
-                late ? Color.FromRgb(0xBE, 0x12, 0x3C) : null));
-        }
+        stack.Children.Add(BuildAddRow(group));
+        return stack;
+    }
 
-        var row = new DockPanel { LastChildFill = true, Margin = new Thickness(0, 1) };
-        DockPanel.SetDock(check, Dock.Left);
-        DockPanel.SetDock(trailing, Dock.Right);
-        row.Children.Add(check);
-        row.Children.Add(trailing);
-        row.Children.Add(title);
+    private TaskCard BuildCard(TaskGroup group, TaskItem task)
+    {
+        var card = new TaskCard(Document.Board, task, Today);
+        card.DoneToggled += (_, done) => Document.Execute(BoardCommands.SetDone(task, done));
+        card.StarToggled += (_, important) => Document.Execute(BoardCommands.SetImportant(task, important));
+        card.Opened += (_, _) => TaskOpened?.Invoke(this, task);
+        _ = group;
+        return card;
+    }
 
-        row.Tapped += (_, e) =>
+    private Avalonia.Controls.Control BuildAddRow(TaskGroup group)
+    {
+        var box = new TextBox { PlaceholderText = "Add a task", Margin = new Thickness(0, 4, 0, 0) };
+        box.KeyDown += (_, e) =>
         {
-            TaskOpened?.Invoke(this, task);
+            if (e.Key != Avalonia.Input.Key.Enter || string.IsNullOrWhiteSpace(box.Text))
+            {
+                return;
+            }
+
+            Document.Execute(BoardCommands.AddTask(group, new TaskItem { Id = Ids.New(), Title = box.Text.Trim() }));
+            box.Text = string.Empty;
             e.Handled = true;
         };
 
-        return row;
+        return box;
     }
 }
+

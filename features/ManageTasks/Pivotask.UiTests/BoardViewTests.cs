@@ -116,15 +116,27 @@ public class BoardViewTests
         Assert.Equal(2, view.ListForTest.RowCountForTest);
     }
 
+    /// <summary>
+    /// Collapsing is the <em>list's</em> affordance, as in the prototype: a section folds away, a board
+    /// column does not. Columns already sit side by side, so folding one buys nothing and costs the
+    /// glanceable shape of the board.
+    /// </summary>
     [AvaloniaFact]
-    public void A_collapsed_group_shows_no_cards_but_keeps_its_column()
+    public void A_collapsed_group_folds_in_the_list_and_is_ignored_on_the_board()
     {
         var (view, document) = Open();
         document.Execute(BoardCommands.SetCollapsed(document.Board.Groups[0], true));
         Dispatcher.UIThread.RunJobs();
 
+        // The board keeps every column and every card.
         Assert.Equal(2, view.BoardForTest.ColumnCountForTest);
-        Assert.Equal(["t3"], view.BoardForTest.CardsForTest.Select(c => c.Task.Id));
+        Assert.Equal(["t1", "t2", "t3"], view.BoardForTest.CardsForTest.Select(c => c.Task.Id));
+
+        view.Layout = BoardLayout.List;
+        Dispatcher.UIThread.RunJobs();
+
+        // The list drops the folded section's cards but keeps its heading, so you can unfold it again.
+        Assert.Equal(["t3"], view.ListForTest.CardsForTest.Select(c => c.Task.Id));
     }
 
     [AvaloniaFact]
@@ -215,6 +227,137 @@ public class BoardViewTests
 
         Assert.Contains(view.BoardForTest.CardsForTest, c => c.Task is { Id: "t1", Done: true }); // it ticked…
         Assert.False(view.IsModalOpen);                                                          // …and only that
+    }
+
+    /// <summary>
+    /// The list renders the same card the board does, so a task carries the same facts in both views.
+    /// It used to render a thinner row of its own — checkbox, title, star, due — so a task with labels and
+    /// steps read as two different tasks depending on which view you were in.
+    /// </summary>
+    [AvaloniaFact]
+    public void A_task_carries_the_same_facts_in_the_list_as_on_the_board()
+    {
+        var board = new Board();
+        board.Labels.Add(new Pivotask.Core.Model.Label { Id = "ops", Name = "ops", Color = "#4d7c0f" });
+        var group = new TaskGroup { Id = "g1", Name = "Inbox" };
+        var task = new TaskItem { Id = "t1", Title = "Draft the retro", Notes = "with the team" };
+        task.Labels.Add("ops");
+        task.Steps.Add(new TaskStep { Id = "s1", Text = "outline", Done = true });
+        task.Steps.Add(new TaskStep { Id = "s2", Text = "send" });
+        group.Tasks.Add(task);
+        board.Groups.Add(group);
+
+        var view = new TaskBoardView { Document = new BoardDocument(board), Today = Today };
+        var window = new Window { Width = 900, Height = 600, Content = view };
+        window.Show();
+        window.UpdateLayout();
+        Dispatcher.UIThread.RunJobs();
+
+        static List<string?> Facts(TaskCard card) =>
+            [.. card.GetLogicalDescendants().OfType<TextBlock>().Select(t => t.Text)];
+
+        var onBoard = Facts(view.BoardForTest.CardsForTest.Single());
+
+        view.Layout = BoardLayout.List;
+        Dispatcher.UIThread.RunJobs();
+        var inList = Facts(view.ListForTest.CardsForTest.Single());
+
+        Assert.Equal(onBoard, inList);
+        Assert.Contains("ops", inList);
+        Assert.Contains("1/2 steps", inList);
+        Assert.Contains("note", inList);
+    }
+
+    /// <summary>
+    /// Finished tasks sink under a fold of their own in the list. In one column they would otherwise push
+    /// the work you still have off the screen.
+    /// </summary>
+    [AvaloniaFact]
+    public void The_list_folds_finished_tasks_under_a_subhead()
+    {
+        var (view, document) = Open();
+        view.Layout = BoardLayout.List;
+        Dispatcher.UIThread.RunJobs();
+
+        Assert.Contains(view.ListForTest.CardsForTest, c => c.Task.Id == "t3"); // done, but shown
+
+        document.Execute(BoardCommands.SetFoldDone(document.Board.Groups[1], true));
+        Dispatcher.UIThread.RunJobs();
+
+        Assert.DoesNotContain(view.ListForTest.CardsForTest, c => c.Task.Id == "t3");
+        Assert.Contains(
+            view.ListForTest.GetLogicalDescendants().OfType<Button>(),
+            b => (b.Content as string)?.Contains("finished · 1", StringComparison.Ordinal) == true);
+    }
+
+    /// <summary>A group can be renamed where it sits — the prototype's editable heading.</summary>
+    [AvaloniaFact]
+    public void Clicking_a_group_name_renames_it_in_place()
+    {
+        var (view, document) = Open();
+        var heading = view.BoardForTest.GetLogicalDescendants().OfType<TextBlock>()
+            .First(t => t.Text == "INBOX");
+
+        heading.RaiseEvent(new Avalonia.Input.PointerPressedEventArgs(
+            heading, new Avalonia.Input.Pointer(0, Avalonia.Input.PointerType.Mouse, true),
+            heading, default, 0, new Avalonia.Input.PointerPointProperties(default, Avalonia.Input.PointerUpdateKind.LeftButtonPressed),
+            Avalonia.Input.KeyModifiers.None));
+        Dispatcher.UIThread.RunJobs();
+
+        var box = view.BoardForTest.GetLogicalDescendants().OfType<TextBox>()
+            .First(b => b.Text == "Inbox");
+        box.Text = "Triage";
+        box.RaiseEvent(new Avalonia.Input.KeyEventArgs
+        {
+            RoutedEvent = InputElement.KeyDownEvent,
+            Key = Avalonia.Input.Key.Enter,
+        });
+        Dispatcher.UIThread.RunJobs();
+
+        Assert.Equal("Triage", document.Board.Groups[0].Name);
+        Assert.True(document.CanUndo); // renaming is an edit like any other
+    }
+
+    /// <summary>
+    /// Deleting a group with work in it asks first, and the last group is never simply removed — a board
+    /// with no groups has nowhere to put anything.
+    /// </summary>
+    [AvaloniaFact]
+    public void Deleting_a_group_that_holds_tasks_asks_first()
+    {
+        var (view, document) = Open();
+
+        // Not awaited: the answer arrives from the overlay, and what is being asserted is that the
+        // question was put at all rather than two tasks quietly disappearing.
+        _ = view.DeleteGroupAsync(document.Board.Groups[0]);
+        Dispatcher.UIThread.RunJobs();
+
+        Assert.True(view.IsModalOpen);
+        Assert.Equal(2, document.Board.Groups.Count); // nothing gone while the question is open
+    }
+
+    /// <summary>
+    /// An empty group goes without a question — it is a click to remake — and emptying the board leaves
+    /// one fresh group behind rather than nothing at all, which would be a board with nowhere to put a task.
+    /// </summary>
+    [AvaloniaFact]
+    public async Task An_empty_group_deletes_without_asking_and_the_last_one_is_replaced()
+    {
+        var (view, document) = Open();
+        document.Execute(BoardCommands.AddGroup("Scratch", "g3"));
+
+        await view.DeleteGroupAsync(document.Board.Groups.Single(g => g.Id == "g3"));
+        Assert.False(view.IsModalOpen);
+        Assert.Equal(2, document.Board.Groups.Count);
+
+        foreach (var group in document.Board.Groups.ToList())
+        {
+            group.Tasks.Clear();
+            await view.DeleteGroupAsync(group);
+        }
+
+        Assert.Single(document.Board.Groups);
+        Assert.Empty(document.Board.Groups[0].Tasks);
     }
 
     /// <summary>A real click, through the window, so the guard inside the card is actually exercised.</summary>
