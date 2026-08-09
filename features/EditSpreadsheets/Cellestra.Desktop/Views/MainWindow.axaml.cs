@@ -29,6 +29,10 @@ public partial class MainWindow : Window, IEditorHost
     private bool _fileBusy;
     private readonly AutoSave _autoSave;
 
+    // External-change detection: the open workbook, watched, so an edit made elsewhere is noticed rather
+    // than silently overwritten by the next save (MainWindow.External.cs).
+    private readonly OpenFileWatcher _watcher;
+
     // The native-menu items gate on the editor's modal/text-input state; held so opening/closing an
     // overlay (which the editor signals via CommandStateChanged) can re-publish their CanExecute.
     private readonly List<RelayCommand> _menuGatedCommands = [];
@@ -48,6 +52,7 @@ public partial class MainWindow : Window, IEditorHost
         InitializeComponent();
 
         _settingsService = settingsService ?? new SettingsService();
+        _watcher = new OpenFileWatcher(HandleExternalChange);
         _settings = _settingsService.Load();
         Width = _settings.WindowWidth;
         Height = _settings.WindowHeight;
@@ -197,6 +202,7 @@ public partial class MainWindow : Window, IEditorHost
 
         PersistSettings();
         _autoSave.Dispose();
+        _watcher.Dispose();
         ReleaseFileLock();
     }
 
@@ -251,7 +257,11 @@ public partial class MainWindow : Window, IEditorHost
     /// </summary>
     private async Task AutoSaveTickAsync()
     {
-        if (Editor.Session.FilePath is not { } filePath || !Editor.Session.IsModified || _fileBusy)
+        // The last of these is the newest: somebody else wrote this file while it was being edited, and
+        // choosing whose bytes survive is not a decision to make on a timer with nobody watching. The
+        // workbook stays dirty and waits for a ⌘S, where the question gets asked.
+        if (Editor.Session.FilePath is not { } filePath || !Editor.Session.IsModified || _fileBusy
+            || DiskChangedUnderEdits)
         {
             return;
         }
@@ -262,6 +272,7 @@ public partial class MainWindow : Window, IEditorHost
             byte[] image = Editor.Session.SerializeToBytes();
             await Task.Run(() => WorkbookSession.WriteBytesAtomically(filePath, image));
             Editor.Session.MarkSaved(filePath);
+            RestampFromDisk(filePath); // our own write; the watcher must not report it back to us
             Editor.MarkSavedNow();
             FlashSavedInTitle();
 
@@ -492,6 +503,7 @@ public partial class MainWindow : Window, IEditorHost
         }
 
         ReleaseFileLock();
+        TrackOnDisk(null); // a new workbook has no file to be changed underneath it
         _autoSave.Cancel(); // any countdown was aimed at the workbook this one replaces
         Editor.ReplaceSession(WorkbookSession.NewBlank());
     }
@@ -542,6 +554,7 @@ public partial class MainWindow : Window, IEditorHost
                 });
 
                 Editor.AdoptLoaded(loaded, path);
+                TrackOnDisk(path); // this read is the new baseline, and this file is the one to watch
                 _autoSave.Cancel(); // any countdown was aimed at the workbook this one replaces
 
                 ReleaseFileLock();
@@ -582,6 +595,13 @@ public partial class MainWindow : Window, IEditorHost
             return;
         }
 
+        // Somebody else's version of this file may have appeared under the edits. Ask before writing over
+        // it — the one moment where "whose bytes win?" has to be answered.
+        if (!await ResolveConflictAsync())
+        {
+            return;
+        }
+
         if (BeginFileOperation($"Saving {DocumentDisplayName()}…") is not { } busy)
         {
             return; // another file operation is already running
@@ -597,6 +617,7 @@ public partial class MainWindow : Window, IEditorHost
                 byte[] image = Editor.Session.SerializeToBytes();
                 await Task.Run(() => WorkbookSession.WriteBytesAtomically(filePath, image));
                 Editor.Session.MarkSaved(filePath);
+                RestampFromDisk(filePath); // our own write; the watcher must not report it back to us
             }
             catch (Exception ex)
             {
@@ -645,6 +666,7 @@ public partial class MainWindow : Window, IEditorHost
                 byte[] image = Editor.Session.SerializeToBytes();
                 await Task.Run(() => WorkbookSession.WriteBytesAtomically(path, image));
                 Editor.Session.MarkSaved(path);
+                TrackOnDisk(path); // the workbook lives here now — watch this file, from this baseline
             }
             catch (Exception ex)
             {
@@ -691,6 +713,7 @@ public partial class MainWindow : Window, IEditorHost
         string text = await File.ReadAllTextAsync(files[0].Path.LocalPath);
         var workbook = Cellestra.Core.Serialization.Csv.CsvReader.ReadToWorkbook(text);
         ReleaseFileLock();
+        TrackOnDisk(null); // an imported CSV is a new, unsaved workbook — nothing to watch
         _autoSave.Cancel(); // any countdown was aimed at the workbook this one replaces
         Editor.ReplaceSession(new WorkbookSession(workbook));
     }
