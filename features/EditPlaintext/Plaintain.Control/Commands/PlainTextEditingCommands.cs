@@ -41,8 +41,17 @@ public static class PlainTextEditingCommands
             new("edit.find", "Find…", "Find text in the document.", Shortcut.Cmd(Key.F),
                 view.ShowFind, icon: "search"),
 
+            // ⌥⌘R, not the ⌥⌘W this used to be: Puffinote binds ⌥⌘W to Close All Tabs, and inside a
+            // Plaintain tab both bindings sit on the same window — so one of them silently did nothing, with
+            // no warning, because the shell's conflict scanner only watches its *reserved* keys and Close
+            // All Tabs is not one. The shell's is the older claim, so this moved.
+            //
+            // It stays in the ⌥⌘ family that Line Numbers below is already in — these are the view toggles —
+            // and it keeps ⌘ rather than dropping to a bare ⌥Z the way VS Code spells this: on macOS ⌥ plus a
+            // letter *types a character* (⌥Z is Ω), and a plaintext editor is the last place to bind a chord
+            // that might insert one. R for "wRap" is a weaker mnemonic than W; a chord that works is worth more.
             new("view.wordWrap", "Word Wrap", "Fold long lines at the window's edge.",
-                Shortcut.Cmd(Key.W, KeyModifiers.Alt), view.ToggleWordWrap,
+                Shortcut.Cmd(Key.R, KeyModifiers.Alt), view.ToggleWordWrap,
                 isActive: () => editor.WordWrap, icon: "wrap-text"),
             new("view.lineNumbers", "Line Numbers", "Show the line-number gutter.",
                 Shortcut.Cmd(Key.L, KeyModifiers.Alt), view.ToggleLineNumbers,

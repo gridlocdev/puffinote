@@ -1,6 +1,5 @@
 - [ ] Pivotask: The UI significantly drifts from the prototype. Launch the prototype and compare its UI to the current implementation. The prototype is a reference for the intended design, and the current implementation should be updated to match it.
 
-- [ ] Plaintain: ⌥⌘W (Word Wrap) collides with Puffinote's ⌥⌘W (Close All Tabs) — inside a Plaintain tab one of them wins and the other silently doesn't. Move one; the shell's is the older claim.
 - [ ] Pivotask: the board has no way to rename a group, delete a group, delete a task, fold completed tasks, or create a label. `BoardCommands` has all five, tested, with no caller outside the tests — the commands are done and the affordances aren't.
 - [ ] Puffinote: an external edit (a `git pull`, an edit in another app) refreshes the file tree and the search index but never reloads an open tab, so the pane keeps showing stale content and can overwrite the change on save. Proposal 0004 Phase 4 asks for this and it applies to every pane type, not just boards.
 - [ ] Pivotask: verify the `.pivotask.json` compound-extension claim on a real Mac. The plist ships the exported `com.pivotask.board` UTI; if Launch Services won't honour a two-part extension tag, proposal 0004 §10.3 says strip the document-type claim entirely rather than fall back to claiming bare `json`.

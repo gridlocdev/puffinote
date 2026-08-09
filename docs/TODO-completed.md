@@ -476,3 +476,21 @@
     the Name Box, the status bar and the selection-gated commands all went on describing the selection Esc
     had just thrown away. Invisible while the box only tracked the active cell; obvious the moment it
     tracked the range. Fixed in the grid's Esc branch.
+
+- [x] Plaintain: ⌥⌘W (Word Wrap) collided with Puffinote's ⌥⌘W (Close All Tabs).
+
+    Word Wrap moved to **⌥⌘R**; the shell's claim on ⌥⌘W is the older one, and Close All Tabs is a thing
+    only the shell can do. It stays in the ⌥⌘ family Line Numbers (⌥⌘L) is already in — those two are the
+    view toggles — and it keeps the ⌘, rather than dropping to the bare ⌥Z that VS Code spells this with:
+    on macOS ⌥ plus a letter *types a character* (⌥Z is Ω), and a plaintext editor is the last place to
+    bind a chord that might insert one. "wRap" is a weaker mnemonic than W, and a chord that works is worth
+    more than one that reads well and doesn't.
+
+    **Why nothing caught it.** `ShortcutConflictScanner` only compares an editor's catalog against the
+    shell's *reserved* keys, and Close All Tabs isn't reserved — so two live bindings sat on one window and
+    whichever lost did so in silence, in both directions. `ShellOnlyChordTests` is the guard that would
+    have: for the four shell capabilities no editor has an equivalent of (close all tabs, focus editor,
+    focus sidebar, toggle sidebar), no pane's catalog may claim the chord. It deliberately ignores ⌘K, ⌘O,
+    ⌘S and ⌘, — those are shared with the editors *by design*, since the merged Command Menu is a superset
+    of an editor's own, quick-open is the shell's file-open, and the shell owns saving. Checked against the
+    old chord: it fails, naming the command and the shell id it takes.

@@ -90,7 +90,7 @@ Puffinote tab offer the same set under the same chords.
 | Cut / Copy / Paste / Select All | ⌘X / ⌘C / ⌘V / ⌘A |
 | Find | ⌘F |
 | Go to Line | ⌘G |
-| Word Wrap | ⌥⌘W |
+| Word Wrap | ⌥⌘R |
 | Line Numbers | ⌥⌘L |
 
 ⌘K is **not** Plaintain's: it opens the host's Command Menu, as in the sibling editors.
