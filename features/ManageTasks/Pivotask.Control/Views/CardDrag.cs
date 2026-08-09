@@ -45,13 +45,41 @@ internal sealed class CardDrag(Visual root, Func<BoardDocument> document)
     private TaskGroup? _origin;
     private Point _start;
     private bool _armed;
-    private bool _live;
 
     private Border? _marker;
     private DropZone? _lit;
     private (IBrush? Brush, Thickness Width) _litWas;
     private DropZone? _target;
     private TaskItem? _before;
+
+    /// <summary>Whether a drag is in flight — past the threshold, with a card lifted and a line drawn.</summary>
+    public bool IsDragging { get; private set; }
+
+    /// <summary>
+    /// Abandon a drag in flight and leave the board exactly as it was: the marker goes, the column stops
+    /// glowing, the card comes back to full opacity, and nothing is executed. Returns whether there was a
+    /// drag to abandon.
+    /// <para>
+    /// A drag you have started and thought better of otherwise had only one way out — drop it back exactly
+    /// where it came from and hope the no-op check catches it. That is a guess, not an escape hatch, and it
+    /// is not available at all once you have moved the pointer to another column.
+    /// </para>
+    /// <para>
+    /// <see cref="TaskCard.Dragging"/> is deliberately left set, as after a drop: the button is still down,
+    /// and the release that ends this gesture must not be read as a click that opens the task.
+    /// </para>
+    /// </summary>
+    public bool Cancel()
+    {
+        if (!IsDragging)
+        {
+            return false;
+        }
+
+        Clear();
+        Reset();
+        return true;
+    }
 
     /// <summary>Make <paramref name="card"/> draggable out of <paramref name="group"/>.</summary>
     public void Attach(TaskCard card, TaskGroup group)
@@ -75,7 +103,7 @@ internal sealed class CardDrag(Visual root, Func<BoardDocument> document)
             _origin = group;
             _start = e.GetPosition(root);
             _armed = true;
-            _live = false;
+            IsDragging = false;
         };
 
         card.PointerMoved += (_, e) =>
@@ -86,7 +114,7 @@ internal sealed class CardDrag(Visual root, Func<BoardDocument> document)
             }
 
             var at = e.GetPosition(root);
-            if (!_live)
+            if (!IsDragging)
             {
                 if (Math.Abs(at.X - _start.X) < Threshold && Math.Abs(at.Y - _start.Y) < Threshold)
                 {
@@ -106,7 +134,7 @@ internal sealed class CardDrag(Visual root, Func<BoardDocument> document)
                 return;
             }
 
-            if (_live)
+            if (IsDragging)
             {
                 Finish();
                 e.Handled = true;
@@ -129,7 +157,7 @@ internal sealed class CardDrag(Visual root, Func<BoardDocument> document)
 
     private void Begin(TaskCard card, IPointer pointer)
     {
-        _live = true;
+        IsDragging = true;
         pointer.Capture(card);
 
         // Dimmed rather than hidden: the gap it leaves is the answer to "where does it go back to if I
@@ -300,6 +328,6 @@ internal sealed class CardDrag(Visual root, Func<BoardDocument> document)
         _target = null;
         _before = null;
         _armed = false;
-        _live = false;
+        IsDragging = false;
     }
 }

@@ -1,8 +1,10 @@
 using Avalonia;
 using Avalonia.Controls;
+using Avalonia.Input;
 using Avalonia.Layout;
 using Avalonia.LogicalTree;
 using Avalonia.Media;
+using Avalonia.Threading;
 using Pivotask.Core;
 using Pivotask.Core.Editing;
 using Pivotask.Core.Model;
@@ -21,6 +23,7 @@ public sealed class TaskListView : UserControl
     private readonly StackPanel _rows = new() { Spacing = 2 };
     private readonly AddTaskState _add;
     private readonly CardDrag _drag;
+    private readonly CardKeyboard _keyboard;
     private readonly GestureGate _gate;
 
     public TaskListView()
@@ -28,6 +31,7 @@ public sealed class TaskListView : UserControl
         _add = new AddTaskState { Rebuild = Rebuild };
         _gate = new GestureGate(this, Rebuild);
         _drag = new CardDrag(this, () => Document);
+        _keyboard = new CardKeyboard(() => Document, _drag.Zones, sideBySide: false);
         // Margin on the rows rather than padding on the scroller, for the reason the board has it there:
         // padding shrinks the viewport without joining the extent, so the last row is clipped by it.
         _rows.Margin = new Thickness(12);
@@ -71,6 +75,9 @@ public sealed class TaskListView : UserControl
 
     /// <summary>Raised when a section's × is pressed; the host asks before throwing the work away.</summary>
     public event EventHandler<TaskGroup>? DeleteGroupRequested;
+
+    /// <summary>Abandon a drag in flight, leaving the board as it was; false when there was none.</summary>
+    public bool CancelDrag() => _drag.Cancel();
 
     internal DateOnly Today { get; set; } = DateOnly.FromDateTime(DateTime.Now);
 
@@ -198,6 +205,35 @@ public sealed class TaskListView : UserControl
         return stack;
     }
 
+    /// <summary>
+    /// Arrows walk the cards, ⌥⇧-arrows move one. Handled here rather than on the card so the whole set
+    /// of zones is in scope: which card is "to the right" is a question only the view can answer.
+    /// </summary>
+    private void OnCardKey(object? sender, KeyEventArgs e)
+    {
+        if (sender is not TaskCard card)
+        {
+            return;
+        }
+
+        var outcome = _keyboard.Handle(e, card);
+        if (outcome == CardKeyboard.Outcome.Ignored)
+        {
+            return;
+        }
+
+        e.Handled = true;
+        if (outcome != CardKeyboard.Outcome.Moved)
+        {
+            return; // navigation already put the focus where it belongs
+        }
+
+        // A move rebuilds the view, which throws away the card that had focus. Put it back on the task
+        // that moved — otherwise the second ⌥⇧-arrow of a two-step move has nothing to act on, and the
+        // focus ring lands wherever the rebuild happened to leave it.
+        Dispatcher.UIThread.Post(() => _keyboard.CardFor(card.Task)?.Focus(NavigationMethod.Directional));
+    }
+
     private TaskCard BuildCard(TaskGroup group, TaskItem task)
     {
         var card = new TaskCard(Document.Board, task, Today);
@@ -208,6 +244,7 @@ public sealed class TaskListView : UserControl
         // The list drags too. The prototype makes both views drop targets for the same reason it renders
         // the same card in both: they are two readings of one board, not a board and a report of it.
         _drag.Attach(card, group);
+        card.KeyDown += OnCardKey;
         return card;
     }
 }

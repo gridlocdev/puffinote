@@ -56,8 +56,18 @@ what keeps a column of plain one-line tasks from looking like a form.
 
 - **Add a task** inline at the foot of any column; **add a group** at the end of the board.
 - **Collapse** a column, or **fold** its completed tasks away.
-- **Drag** a card between columns or within one. There is always a keyboard/menu path to the same move
-  (`ptask move`, and the Move command), so the feature is never blocked on drag-and-drop feeling right.
+- **Drag** a card between columns or within one: a line shows exactly where it would land, the column it
+  would join lights up, and **Escape puts it back** — a drag you have thought better of should not have to
+  be dropped somewhere and undone.
+- **The keyboard reaches everything the drag does.** Arrows walk the cards (←/→ across columns, ↑/↓ within
+  one; on the list, ↑/↓ run the whole thing as one list); **⌥⇧ and an arrow move the task itself** —
+  vertically it changes places with its neighbour, horizontally it joins the column beside it at the same
+  height. Both go through the same undoable `MoveTask` a drop does, so ⌘Z reverses either identically.
+  ⌥⇧-arrow is the family's existing idiom, not a new one: it is what Cellestra's grid does to a cell's
+  contents and what the radial settings list does to a segment. This is the path the design has always
+  said must exist (`ptask move`, and the Move command), so the feature is never blocked on drag-and-drop
+  feeling right — and a board that can only be rearranged by dragging is a board somebody cannot rearrange
+  at all.
 - **Overdue** is the one card state that gets a colour of its own. Everything else stays chrome-muted,
   because a board where three things shout is a board where nothing does.
 

@@ -180,6 +180,13 @@ public sealed class TaskBoardView : UserControl
     /// <summary>True while the task dialog is up, so a host stands its shortcuts down.</summary>
     public bool IsModalOpen => OverlayForTest.IsOpen;
 
+    /// <summary>
+    /// Abandon a drag in flight in whichever view is showing. Public because the gesture belongs to the
+    /// board and the key that ends it arrives at the window — and because a host may want to end a drag
+    /// for its own reasons (a tab switching out from under one).
+    /// </summary>
+    public bool CancelDrag() => BoardForTest.CancelDrag() || ListForTest.CancelDrag();
+
     internal BoardView BoardForTest { get; } = new();
 
     internal TaskListView ListForTest { get; } = new();
@@ -264,6 +271,16 @@ public sealed class TaskBoardView : UserControl
     {
         if (e.KeyModifiers != KeyModifiers.None || IsModalOpen || IsTyping() || !FocusIsOurs())
         {
+            return;
+        }
+
+        // Escape puts a card back. A drag you have started and thought better of otherwise had only one
+        // way out — drop it exactly where it came from and hope the no-op check catches it — and no way
+        // out at all once the pointer had reached another column. Checked first: while a card is in the
+        // air, Escape means this and nothing else.
+        if (e.Key == Key.Escape)
+        {
+            e.Handled = CancelDrag();
             return;
         }
 

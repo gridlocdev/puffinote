@@ -1,9 +1,11 @@
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Controls.Primitives;
+using Avalonia.Input;
 using Avalonia.Layout;
 using Avalonia.LogicalTree;
 using Avalonia.Media;
+using Avalonia.Threading;
 using Pivotask.Core;
 using Pivotask.Core.Editing;
 using Pivotask.Core.Model;
@@ -25,6 +27,7 @@ public sealed class BoardView : UserControl
     private readonly StackPanel _columns = new() { Orientation = Orientation.Horizontal, Spacing = 12 };
     private readonly AddTaskState _add;
     private readonly CardDrag _drag;
+    private readonly CardKeyboard _keyboard;
     private readonly GestureGate _gate;
 
     public BoardView()
@@ -32,6 +35,7 @@ public sealed class BoardView : UserControl
         _add = new AddTaskState { Rebuild = Rebuild };
         _gate = new GestureGate(this, Rebuild);
         _drag = new CardDrag(this, () => Document);
+        _keyboard = new CardKeyboard(() => Document, _drag.Zones, sideBySide: true);
         // The inset is the columns' own margin, not the scroller's padding. A ScrollViewer's padding
         // shrinks the viewport without being counted in the extent, so the far edge of the content is
         // clipped by exactly that much however far you scroll — which is why the trailing "add a list"
@@ -90,6 +94,9 @@ public sealed class BoardView : UserControl
     /// wants a question first, and the overlay that asks it belongs to the host.
     /// </summary>
     public event EventHandler<TaskGroup>? DeleteGroupRequested;
+
+    /// <summary>Abandon a drag in flight, leaving the board as it was; false when there was none.</summary>
+    public bool CancelDrag() => _drag.Cancel();
 
     /// <summary>Today, injectable so a test can pin what "due soon" means rather than racing the clock.</summary>
     internal DateOnly Today { get; set; } = DateOnly.FromDateTime(DateTime.Now);
@@ -195,6 +202,35 @@ public sealed class BoardView : UserControl
             .Where(task => !(group.FoldDone && task.Done))
             .Where(task => BoardQuery.Matches(task, Filter, Today) && BoardQuery.Matches(task, Query));
 
+    /// <summary>
+    /// Arrows walk the cards, ⌥⇧-arrows move one. Handled here rather than on the card so the whole set
+    /// of zones is in scope: which card is "to the right" is a question only the view can answer.
+    /// </summary>
+    private void OnCardKey(object? sender, KeyEventArgs e)
+    {
+        if (sender is not TaskCard card)
+        {
+            return;
+        }
+
+        var outcome = _keyboard.Handle(e, card);
+        if (outcome == CardKeyboard.Outcome.Ignored)
+        {
+            return;
+        }
+
+        e.Handled = true;
+        if (outcome != CardKeyboard.Outcome.Moved)
+        {
+            return; // navigation already put the focus where it belongs
+        }
+
+        // A move rebuilds the view, which throws away the card that had focus. Put it back on the task
+        // that moved — otherwise the second ⌥⇧-arrow of a two-step move has nothing to act on, and the
+        // focus ring lands wherever the rebuild happened to leave it.
+        Dispatcher.UIThread.Post(() => _keyboard.CardFor(card.Task)?.Focus(NavigationMethod.Directional));
+    }
+
     private TaskCard BuildCard(TaskGroup group, TaskItem task)
     {
         var card = new TaskCard(Document.Board, task, Today);
@@ -202,6 +238,7 @@ public sealed class BoardView : UserControl
         card.StarToggled += (_, important) => Document.Execute(BoardCommands.SetImportant(task, important));
         card.Opened += (_, _) => TaskOpened?.Invoke(this, task);
         _drag.Attach(card, group);
+        card.KeyDown += OnCardKey;
         return card;
     }
 
