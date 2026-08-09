@@ -81,7 +81,7 @@ be added later without reworking the board.
 |---|---|
 | All | everything |
 | Starred | `important` |
-| Due soon | due within 3 days — **or overdue, however late**. A task three weeks late is the most "due soon" thing there is. |
+| Due soon | due today or tomorrow — **or overdue, however late**. A task three weeks late is the most "due soon" thing there is. The window is deliberately one day: this filter answers "what do I have to deal with now", and it is only useful while the answer is short enough to act on. Three days quietly made it "this week", which a board column already says. |
 | Unfinished | not done |
 
 **Search** matches the title, the notes, **and the step text**. A checklist item is where the specific
@@ -145,6 +145,15 @@ app, assembly, bundle, and justfile recipes stay `Pivotask`.
 No assignees or multi-user anything. No recurring tasks. No due *times* or timezones. No task
 dependencies, no nesting beyond the one `steps[]` level, no Gantt or calendar views. No sync, no server,
 no notifications. No attachments. No plugin system. No new NuGet above the trusted base.
+
+**No app branding inside the editor.** The prototype opens with a brand block — the mark, "Pivot", and
+"same tasks, turned 90°" — and that block is the one part of it that is a web page rather than an app. The
+editor here is an embeddable control: it is the whole window in standalone Pivotask and one tab among
+several in Puffinote, and in both the document is already named directly above it by the shared
+`DocumentTitleBar`. A band underneath repeating the app's own name would say nothing the reader needs in
+the first case and something actively wrong in the second, where the tab is a board and the window is a
+notebook. Everything else in the prototype's header strip — the search, the filters, the view switch — is
+about the tasks, and is kept.
 
 And three boundaries worth stating as such: **task notes are plain text**; **one board per file**; and
 **Puffinote does not aggregate tasks across the notebook** — a `.pivotask.json` opens in a tab like any

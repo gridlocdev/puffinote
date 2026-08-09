@@ -15,10 +15,6 @@
       picker, the `+` add-to-task menu (Labels / Due date / Steps, with an on/off state), the steps
       progress bar and its percentage, "Delete all", and the "Delete task" / "Done" footer. This is the
       one surface where the gap is still unmeasured rather than merely unclosed.
-    - [ ] The prototype has a brand block at the far left of its strip (mark + "Pivot" / "same tasks,
-      turned 90°"). Deliberately not copied: these apps name the open document in the shared
-      `DocumentTitleBar` above, and a second app-name band under it would be the one piece of the
-      prototype that is a web page rather than an app. Worth a decision rather than a silent omission.
 
 - [ ] Pivotask: two of the five command-without-an-affordance gaps are still open. Renaming a group,
   deleting a group, and folding completed tasks now have affordances (the group heading, and the list's

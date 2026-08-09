@@ -10,7 +10,7 @@ public enum TaskFilter
     /// <summary>Starred.</summary>
     Starred,
 
-    /// <summary>Due today or earlier, or within the next few days — see <see cref="BoardQuery.DueSoonWindow"/>.</summary>
+    /// <summary>Due today or tomorrow, or already late — see <see cref="BoardQuery.DueSoonWindow"/>.</summary>
     DueSoon,
 
     /// <summary>Not yet done.</summary>
@@ -27,8 +27,6 @@ public enum TaskFilter
 /// </summary>
 public static class BoardQuery
 {
-    /// <summary>How far ahead "due soon" reaches. Three days: far enough to be a warning, near enough
-    /// that it doesn't quietly become "everything".</summary>
     /// <summary>
     /// How many days ahead "due soon" reaches: <b>one</b> — today and tomorrow, plus everything already
     /// late. This is the prototype's window (<c>dayDiff(t.due) &lt;= 1</c>), and the number matters: a
