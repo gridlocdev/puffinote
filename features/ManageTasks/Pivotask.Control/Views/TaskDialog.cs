@@ -175,9 +175,14 @@ internal sealed class TaskDialog : ModalDialog<bool>
         // which down a checklist means every row lights up as the pointer crosses it — the rows are a list
         // to read, not a menu to pick from, and the row that matters already says so by holding the caret.
         // Setting Background on the box cannot express this: the theme puts the hover fill on the
-        // template's own border, which outranks a local value on the control around it. Focus still fills
-        // the box, because that one is worth seeing.
+        // template's own border, which outranks a local value on the control around it.
+        //
+        // Not while it has the caret, though. Hover and focus are separate states in the theme but not on
+        // a person's desk — the field you are typing into is nearly always the one under the pointer — so
+        // an override that only said ":pointerover" cancelled the focused fill as well, and the line being
+        // edited lost the one bit of chrome that said so.
         Styles.Add(new Style(x => x.OfType<TextBox>().Class(StepFieldClass).Class(":pointerover")
+                .Not(y => y.Class(":focus"))
                 .Template().OfType<Border>().Name("PART_BorderElement"))
         {
             Setters = { new Setter(Border.BackgroundProperty, Brushes.Transparent) },

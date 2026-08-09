@@ -456,12 +456,14 @@ public class TaskDialogTests
     }
 
     /// <summary>
-    /// A step keeps the same background whether or not the pointer is over it. The stock TextBox paints a
-    /// wash on hover, which down a checklist meant every row lit up as the pointer crossed it — the rows
-    /// are a list to read, not a menu to pick from.
+    /// A step keeps its resting background under the pointer but fills while it holds the caret. The
+    /// stock TextBox washes on hover, which down a checklist meant every row lit up as the pointer
+    /// crossed it — the rows are a list to read, not a menu to pick from. The field being <em>edited</em>
+    /// is the one that should stand out, and hover must not cancel that: on a real desk the field you are
+    /// typing into is nearly always the one under the pointer too.
     /// </summary>
     [AvaloniaFact]
-    public void A_step_does_not_light_up_under_the_pointer()
+    public void A_step_fills_while_being_edited_but_not_merely_under_the_pointer()
     {
         var (view, _, _) = Open(board =>
             board.Groups[0].Tasks[0].Steps.Add(new TaskStep { Id = "s1", Text = "Book the room" }));
@@ -471,15 +473,33 @@ public class TaskDialogTests
         // The fill lives on the template's own border, not on the box — that is why setting Background
         // on the TextBox could not turn it off.
         var fill = text.GetVisualDescendants().OfType<Border>().First(b => b.Name == "PART_BorderElement");
-        var resting = fill.Background;
-
         var window = (Window)TopLevel.GetTopLevel(view)!;
-        window.MouseMove(text.TranslatePoint(new Point(text.Bounds.Width / 2, text.Bounds.Height / 2), window)!.Value);
-        Dispatcher.UIThread.RunJobs();
-        window.UpdateLayout();
+        var over = text.TranslatePoint(new Point(text.Bounds.Width / 2, text.Bounds.Height / 2), window)!.Value;
+        var away = new Point(4, 4);
 
+        string StateAt(Point pointer, bool editing)
+        {
+            if (editing)
+            {
+                text.Focus();
+            }
+
+            window.MouseMove(pointer);
+            Dispatcher.UIThread.RunJobs();
+            window.UpdateLayout();
+            return Describe(fill.Background);
+        }
+
+        string resting = StateAt(away, editing: false);
+        Assert.Equal(resting, StateAt(over, editing: false));
         Assert.True(text.IsPointerOver, "the pointer never reached the step");
-        Assert.Equal(Describe(resting), Describe(fill.Background));
+
+        string editingAway = StateAt(away, editing: true);
+        Assert.NotEqual(resting, editingAway);
+
+        // …and being hovered as well as edited does not undo it, which is the case a ":pointerover"
+        // override on its own quietly broke.
+        Assert.Equal(editingAway, StateAt(over, editing: true));
     }
 
     /// <summary>A brush as a comparable string — two Transparent brushes are not the same object.</summary>
