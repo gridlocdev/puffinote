@@ -1,3 +1,4 @@
+using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Headless.XUnit;
 using Avalonia.LogicalTree;
@@ -305,6 +306,37 @@ public class TaskDialogTests
         foreach (var text in dialog.GetLogicalDescendants().OfType<TextBlock>())
         {
             Assert.DoesNotContain("🗑", text.Text ?? string.Empty, StringComparison.Ordinal);
+        }
+    }
+
+    /// <summary>
+    /// The dialog's fields keep clear of the card's edge, as the prototype's 24px body inset does. The
+    /// note ran flush to the right edge with the scrollbar drawn over it, which is what made the whole
+    /// dialog read as cramped next to the mockup.
+    /// </summary>
+    [AvaloniaFact]
+    public void The_fields_keep_clear_of_the_cards_edge()
+    {
+        var (view, _, _) = Open(board =>
+        {
+            board.Groups[0].Tasks[0].Due = new DateOnly(2026, 8, 12);
+            board.Groups[0].Tasks[0].Steps.Add(new TaskStep { Id = "s1", Text = "hello" });
+        });
+
+        var dialog = Dialog(view);
+
+        // The floating card the overlay wraps a dialog in — the edge a reader actually sees.
+        var card = view.OverlayForTest.GetLogicalDescendants().OfType<Border>()
+            .First(b => b.GetLogicalDescendants().OfType<TaskDialog>().Any());
+
+        const double gutter = 24;
+        foreach (var box in dialog.GetLogicalDescendants().OfType<TextBox>())
+        {
+            double left = box.TranslatePoint(new Point(0, 0), card)!.Value.X;
+            double right = card.Bounds.Width - left - box.Bounds.Width;
+
+            Assert.True(left >= gutter, $"“{box.PlaceholderText ?? box.Text}” sits {left} from the left edge");
+            Assert.True(right >= gutter, $"“{box.PlaceholderText ?? box.Text}” sits {right} from the right edge");
         }
     }
 

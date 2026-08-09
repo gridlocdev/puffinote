@@ -112,15 +112,15 @@ internal sealed class TaskDialog : ModalDialog<bool>
 
         // Head and foot are pinned; only the task's own fields scroll. A checklist of twenty steps must
         // not push "Delete task" — or the way out of the dialog — off the bottom of the card.
-        var root = new DockPanel { LastChildFill = true, Width = 480 };
+        var root = new DockPanel { LastChildFill = true, Width = 512 };
         Avalonia.Automation.AutomationProperties.SetName(root, "Task details");
 
         var head = new Border
         {
             BorderBrush = palette.SurfaceBorder,
             BorderThickness = new Thickness(0, 0, 0, 1),
-            Padding = new Thickness(0, 0, 0, 10),
-            Margin = new Thickness(0, 0, 0, 14),
+            Padding = new Thickness(0, 0, 0, 12),
+            Margin = new Thickness(0, 0, 0, 18),
             Child = _head,
         };
         DockPanel.SetDock(head, Dock.Top);
@@ -130,13 +130,17 @@ internal sealed class TaskDialog : ModalDialog<bool>
         {
             BorderBrush = palette.SurfaceBorder,
             BorderThickness = new Thickness(0, 1, 0, 0),
-            Padding = new Thickness(0, 12, 0, 0),
-            Margin = new Thickness(0, 14, 0, 0),
+            Padding = new Thickness(0, 14, 0, 0),
+            Margin = new Thickness(0, 20, 0, 0),
             Child = BuildFoot(),
         };
         DockPanel.SetDock(foot, Dock.Bottom);
         root.Children.Add(foot);
 
+        // The gutter is the fields' own margin, not the scroller's padding — so it belongs to the scrollable
+        // extent (the board learned this the hard way) and the scrollbar rides outside the text rather than
+        // over it. Eight on top of the card's own sixteen is the prototype's 24px body inset.
+        _body.Margin = new Thickness(8, 4, 8, 8);
         root.Children.Add(new ScrollViewer
         {
             HorizontalScrollBarVisibility = Avalonia.Controls.Primitives.ScrollBarVisibility.Disabled,
