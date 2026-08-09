@@ -1,7 +1,10 @@
 using Avalonia;
 using Avalonia.Controls;
+using Avalonia.Input;
+using Avalonia.Interactivity;
 using Avalonia.Layout;
 using Avalonia.Media;
+using Avalonia.VisualTree;
 using Pivotask.Control.Commands;
 using Pivotask.Core;
 using Pivotask.Core.Editing;
@@ -30,8 +33,11 @@ public sealed class TaskBoardView : UserControl
 {
     private readonly ContentControl _surface = new();
     private readonly LayoutTransformControl _zoomHost = new();
-    private readonly TextBox _search = new() { PlaceholderText = "Search", Width = 200 };
+    /// <summary>"Search tasks", the prototype's words — "Search" alone leaves open what it searches.</summary>
+    private readonly TextBox _search = new() { PlaceholderText = "Search tasks", Width = 260 };
     private readonly StackPanel _filters = new() { Orientation = Orientation.Horizontal, Spacing = 4 };
+    private readonly ContentControl _switcher = new();
+    private TopLevel? _keyHost;
 
     public TaskBoardView()
     {
@@ -46,12 +52,19 @@ public sealed class TaskBoardView : UserControl
             ListForTest.Query = _search.Text ?? string.Empty;
         };
 
-        var strip = new DockPanel { LastChildFill = false, Margin = new Thickness(12, 8) };
-        DockPanel.SetDock(_filters, Dock.Left);
-        DockPanel.SetDock(_search, Dock.Right);
-        strip.Children.Add(_filters);
+        // The prototype's order, left to right: the search, then the filters, then the view switch at the
+        // far right. Search leads because it is the widest target and the one you reach for without
+        // looking; the switch is last because it is the only control here that changes the *shape* of
+        // what is below rather than what is in it.
+        var strip = new DockPanel { LastChildFill = true, Margin = new Thickness(12, 8) };
+        DockPanel.SetDock(_search, Dock.Left);
+        var switcher = BuildLayoutSwitch();
+        DockPanel.SetDock(switcher, Dock.Right);
+        _filters.HorizontalAlignment = HorizontalAlignment.Right;
+        _filters.Margin = new Thickness(12, 0);
         strip.Children.Add(_search);
-        strip.Children.Add(BuildLayoutSwitch());
+        strip.Children.Add(switcher);
+        strip.Children.Add(_filters);
 
         // The board is scaled, the strip above it is not: zoom magnifies the tasks, and a filter row that
         // grew with them would eat the room the reader zoomed out to get. A LayoutTransformControl (rather
@@ -210,6 +223,69 @@ public sealed class TaskBoardView : UserControl
         }
     }
 
+    /// <summary>
+    /// A bare key has no owner until something is focused, so the two unmodified shortcuts are watched at
+    /// the window rather than on this control — the prototype watches the document for the same reason.
+    /// The guard in <see cref="OnBareKey"/> is what keeps that from reaching across a host: in a Puffinote
+    /// tab, another editor's keystrokes are not ours to read.
+    /// </summary>
+    protected override void OnAttachedToVisualTree(VisualTreeAttachmentEventArgs e)
+    {
+        base.OnAttachedToVisualTree(e);
+        _keyHost = TopLevel.GetTopLevel(this);
+        _keyHost?.AddHandler(KeyDownEvent, OnBareKey, RoutingStrategies.Tunnel);
+    }
+
+    protected override void OnDetachedFromVisualTree(VisualTreeAttachmentEventArgs e)
+    {
+        base.OnDetachedFromVisualTree(e);
+        _keyHost?.RemoveHandler(KeyDownEvent, OnBareKey);
+        _keyHost = null;
+    }
+
+    /// <summary>
+    /// The two unmodified keys the prototype binds: <c>/</c> jumps to the search box and selects what is
+    /// in it, and <c>V</c> flips between board and list.
+    /// <para>
+    /// Both are suppressed while you are typing — into the search box, a card's add-a-task field, a group
+    /// name, or anything else that takes text — and while the task dialog is up, because a bare letter has
+    /// to be a letter wherever a letter is expected. A modifier held means the chord belongs to the host's
+    /// catalog, so those are left alone too.
+    /// </para>
+    /// </summary>
+    private void OnBareKey(object? sender, KeyEventArgs e)
+    {
+        if (e.KeyModifiers != KeyModifiers.None || IsModalOpen || IsTyping() || !FocusIsOurs())
+        {
+            return;
+        }
+
+        if (e.Key == Key.Oem2 || e.Key == Key.Divide)
+        {
+            _search.Focus();
+            _search.SelectAll();
+            e.Handled = true;
+        }
+        else if (e.Key == Key.V)
+        {
+            Layout = Layout == BoardLayout.Board ? BoardLayout.List : BoardLayout.Board;
+            e.Handled = true;
+        }
+    }
+
+    /// <summary>Whether the keyboard currently belongs to a text field somewhere inside this view.</summary>
+    private bool IsTyping() =>
+        TopLevel.GetTopLevel(this)?.FocusManager?.GetFocusedElement() is TextBox;
+
+    /// <summary>
+    /// Whether this board is the thing the keyboard is pointed at. Nothing focused counts as ours — that
+    /// is a freshly-opened window with the board the only thing in it — but focus sitting in somebody
+    /// else's control does not, so a board in a Puffinote tab can't answer a key meant for the sidebar.
+    /// </summary>
+    private bool FocusIsOurs() =>
+        TopLevel.GetTopLevel(this)?.FocusManager?.GetFocusedElement() is not Visual focused
+        || this.IsVisualAncestorOf(focused);
+
     private void ApplyLayout()
     {
         _surface.Content = Layout == BoardLayout.Board ? BoardForTest : ListForTest;
@@ -218,6 +294,8 @@ public sealed class TaskBoardView : UserControl
 
     private void BuildFilters()
     {
+        var palette = Tokens.Active;
+        BuildLayoutSwitch(); // the switch lights the view in force, so it is rebuilt whenever that changes
         _filters.Children.Clear();
         foreach (var (filter, label) in new[]
                  {
@@ -227,16 +305,22 @@ public sealed class TaskBoardView : UserControl
                      (TaskFilter.Unfinished, "Unfinished"),
                  })
         {
+            // A pill, filled when it is the one in force — the prototype's shape, and the right one here:
+            // these four are one choice with four answers, and a filled pill says "this is the answer"
+            // where an underline reads as a tab you could be on several of.
+            bool active = Filter == filter;
             var button = new Button
             {
                 Content = label,
-
-                // The active filter carries the accent underline the family uses for "this is the
-                // current one" — the same mark Cellestra's active sheet tab wears.
-                BorderThickness = new Thickness(0, 0, 0, 2),
-                BorderBrush = Filter == filter ? Tokens.Active.Accent : Brushes.Transparent,
-                Background = Brushes.Transparent,
+                Padding = new Thickness(12, 5),
+                CornerRadius = new CornerRadius(999),
+                BorderThickness = new Thickness(0),
+                Background = active ? palette.SurfaceInset : Brushes.Transparent,
+                Foreground = active ? palette.Text : palette.MutedText,
+                FontWeight = active ? FontWeight.SemiBold : FontWeight.Normal,
             };
+            Avalonia.Automation.AutomationProperties.SetName(button, label);
+            Avalonia.Automation.AutomationProperties.SetHelpText(button, active ? "selected" : null);
 
             var captured = filter;
             button.Click += (_, _) => Filter = captured;
@@ -244,11 +328,42 @@ public sealed class TaskBoardView : UserControl
         }
     }
 
+    /// <summary>
+    /// The view switch as a segmented pair — Board and List side by side with the current one lit, not one
+    /// button that says "Board / List" and leaves you to work out which you are in. A control that shows
+    /// the state and the way to change it in the same glance is the whole point of a segmented switch,
+    /// and it is what the prototype has.
+    /// </summary>
     private Avalonia.Controls.Control BuildLayoutSwitch()
     {
-        var toggle = new Button { Content = "Board / List", Margin = new Thickness(12, 0, 0, 0) };
-        DockPanel.SetDock(toggle, Dock.Left);
-        toggle.Click += (_, _) => Layout = Layout == BoardLayout.Board ? BoardLayout.List : BoardLayout.Board;
-        return toggle;
+        var palette = Tokens.Active;
+        var group = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 2 };
+        Avalonia.Automation.AutomationProperties.SetName(group, "Choose a view");
+
+        foreach (var (layout, label) in new[] { (BoardLayout.Board, "Board"), (BoardLayout.List, "List") })
+        {
+            bool active = Layout == layout;
+            var button = new Button
+            {
+                Content = label,
+                Padding = new Thickness(12, 5),
+                CornerRadius = new CornerRadius(6),
+                BorderThickness = new Thickness(1),
+                BorderBrush = active ? palette.Accent : Brushes.Transparent,
+                Background = active ? palette.SurfaceInset : Brushes.Transparent,
+                Foreground = active ? palette.Accent : palette.MutedText,
+                FontWeight = active ? FontWeight.SemiBold : FontWeight.Normal,
+            };
+            ToolTip.SetTip(button, $"{label} view (V)"); // the chord the prototype advertises here too
+            Avalonia.Automation.AutomationProperties.SetName(button, $"{label} view");
+            Avalonia.Automation.AutomationProperties.SetHelpText(button, active ? "selected" : null);
+
+            var captured = layout;
+            button.Click += (_, _) => Layout = captured;
+            group.Children.Add(button);
+        }
+
+        _switcher.Content = group;
+        return _switcher;
     }
 }

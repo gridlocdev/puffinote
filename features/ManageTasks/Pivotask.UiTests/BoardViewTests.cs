@@ -360,6 +360,54 @@ public class BoardViewTests
         Assert.Empty(document.Board.Groups[0].Tasks);
     }
 
+    /// <summary>
+    /// V flips the view and / jumps to the search box — the prototype's two unmodified keys. Both are
+    /// suppressed while you are typing, because a bare letter has to stay a letter where one is expected.
+    /// </summary>
+    [AvaloniaFact]
+    public void V_flips_the_view_and_slash_jumps_to_search_unless_you_are_typing()
+    {
+        var (view, _) = Open();
+        var window = (Window)TopLevel.GetTopLevel(view)!;
+
+        window.KeyPressQwerty(PhysicalKey.V, RawInputModifiers.None);
+        Dispatcher.UIThread.RunJobs();
+        Assert.Equal(BoardLayout.List, view.Layout);
+
+        window.KeyPressQwerty(PhysicalKey.Slash, RawInputModifiers.None);
+        Dispatcher.UIThread.RunJobs();
+        var search = view.GetLogicalDescendants().OfType<TextBox>().First(b => b.PlaceholderText == "Search tasks");
+        Assert.True(search.IsFocused);
+
+        // Now that the caret is in the search box, "v" is a letter someone is typing.
+        window.KeyPressQwerty(PhysicalKey.V, RawInputModifiers.None);
+        Dispatcher.UIThread.RunJobs();
+        Assert.Equal(BoardLayout.List, view.Layout);
+    }
+
+    /// <summary>
+    /// The view switch is a segmented pair with the current one lit, not one button that leaves you to
+    /// work out which view you are in.
+    /// </summary>
+    [AvaloniaFact]
+    public void The_view_switch_offers_both_views_and_lights_the_one_in_force()
+    {
+        var (view, _) = Open();
+
+        static Button Named(TaskBoardView v, string name) =>
+            v.GetLogicalDescendants().OfType<Button>()
+                .First(b => Avalonia.Automation.AutomationProperties.GetName(b) == name);
+
+        Assert.Equal("selected", Avalonia.Automation.AutomationProperties.GetHelpText(Named(view, "Board view")));
+        Assert.Null(Avalonia.Automation.AutomationProperties.GetHelpText(Named(view, "List view")));
+
+        Named(view, "List view").RaiseEvent(new Avalonia.Interactivity.RoutedEventArgs(Button.ClickEvent));
+        Dispatcher.UIThread.RunJobs();
+
+        Assert.Equal(BoardLayout.List, view.Layout);
+        Assert.Equal("selected", Avalonia.Automation.AutomationProperties.GetHelpText(Named(view, "List view")));
+    }
+
     /// <summary>A real click, through the window, so the guard inside the card is actually exercised.</summary>
     private static void Click(Visual target)
     {
