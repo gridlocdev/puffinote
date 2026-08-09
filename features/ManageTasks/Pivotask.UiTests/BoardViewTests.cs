@@ -572,6 +572,55 @@ public class BoardViewTests
         window.UpdateLayout();
     }
 
+    /// <summary>
+    /// Pressing on the board outside the field you were typing in takes the caret out of it and commits
+    /// what you typed. Avalonia only moves focus when the press lands on something that takes focus, and
+    /// most of a board doesn't — so the caret used to sit blinking in a field the reader had visibly
+    /// finished with, its edit uncommitted.
+    /// </summary>
+    [AvaloniaFact]
+    public void Pressing_outside_a_field_takes_the_caret_out_of_it()
+    {
+        var (view, document) = Open();
+        var window = (Window)TopLevel.GetTopLevel(view)!;
+
+        AddRow(view).RaiseEvent(new Avalonia.Interactivity.RoutedEventArgs(Button.ClickEvent));
+        Dispatcher.UIThread.RunJobs();
+
+        var field = (TextBox)AddRow(view);
+        field.Text = "Buy milk";
+        Assert.True(field.IsFocused);
+
+        // The board's own background, well below the columns — nothing there takes focus.
+        window.MouseDown(new Point(450, 560), MouseButton.Left);
+        window.MouseUp(new Point(450, 560), MouseButton.Left);
+        Dispatcher.UIThread.RunJobs();
+
+        Assert.Contains(document.Board.Groups[0].Tasks, t => t.Title == "Buy milk");
+        Assert.IsType<Button>(AddRow(view)); // …and the field closed behind it
+    }
+
+    /// <summary>
+    /// …and the click still does whatever it was going to do. Settling the field happens on the way back
+    /// up, so the target acts first: doing it on the way down would let the commit's rebuild tear down the
+    /// control the press was headed for, which trades one bug for another.
+    /// </summary>
+    [AvaloniaFact]
+    public void The_click_that_closes_a_field_still_does_its_own_job()
+    {
+        var (view, document) = Open();
+
+        AddRow(view).RaiseEvent(new Avalonia.Interactivity.RoutedEventArgs(Button.ClickEvent));
+        Dispatcher.UIThread.RunJobs();
+        ((TextBox)AddRow(view)).Text = "Buy milk";
+
+        // A card is focusable, so this is the case Avalonia already handled — but it must still open.
+        Click(view.BoardForTest.CardsForTest.First(c => c.Task.Id == "t3"));
+
+        Assert.Contains(document.Board.Groups[0].Tasks, t => t.Title == "Buy milk");
+        Assert.True(view.IsModalOpen);
+    }
+
     /// <summary>The first group's add row, whichever of its two forms it is currently in.</summary>
     private static Avalonia.Controls.Control AddRow(TaskBoardView view) =>
         view.BoardForTest.GetLogicalDescendants().OfType<Avalonia.Controls.Control>()

@@ -79,6 +79,12 @@ public sealed class TaskBoardView : UserControl
 
         Content = new Panel { Children = { root, OverlayForTest } };
 
+        // Two halves of one gesture: the way down notes which field had the caret before anything reacted
+        // to the press, the way back up takes it out if the press landed elsewhere. handledEventsToo on
+        // both, because a press the target already dealt with still means the reader has moved on.
+        AddHandler(PointerPressedEvent, OnPressStarted, RoutingStrategies.Tunnel, handledEventsToo: true);
+        AddHandler(PointerPressedEvent, OnPressedAnywhere, RoutingStrategies.Bubble, handledEventsToo: true);
+
         // The trackpad half of zoom, over the same seam the ⌘= / ⌘− catalog uses (see PinchZoom).
         PinchZoom.Attach(this, () => Zoom, zoom => Zoom = zoom);
         BuildFilters();
@@ -273,6 +279,51 @@ public sealed class TaskBoardView : UserControl
             e.Handled = true;
         }
     }
+
+    /// <summary>
+    /// A press anywhere outside the field you were typing in takes the caret out of it — which commits
+    /// what you typed, closes the add-a-task field, or settles a group's new name, exactly as tabbing
+    /// away would.
+    ///
+    /// <para>Avalonia only moves focus when the press lands on something that <em>takes</em> focus, and
+    /// most of a board doesn't: the space beside the columns, a column's own background, the "empty" note,
+    /// a group heading. Clicking any of those left the caret blinking in a field the reader had visibly
+    /// finished with, and its edit uncommitted.</para>
+    ///
+    /// <para>Handled on the way back up, and never marked handled: whatever the click was going to do
+    /// happens first, and then the field settles. Doing it on the way down would have the commit's rebuild
+    /// tear down the control the press was headed for, so the click would be swallowed — which is a
+    /// second bug, not a fix for this one.</para>
+    /// </summary>
+    private void OnPressStarted(object? sender, PointerPressedEventArgs e) =>
+        _caretAtPress = TopLevel.GetTopLevel(this)?.FocusManager?.GetFocusedElement() as TextBox;
+
+    private void OnPressedAnywhere(object? sender, PointerPressedEventArgs e)
+    {
+        var box = _caretAtPress;
+        _caretAtPress = null;
+
+        // Only a field that already had the caret when the press began. Without that this would take the
+        // caret straight back out of a field the very same press had just opened — pressing a group
+        // heading turns it into a text box on the way down, and this runs on the way up.
+        if (box is null
+            || TopLevel.GetTopLevel(this)?.FocusManager is not { } focus
+            || !ReferenceEquals(focus.GetFocusedElement(), box))
+        {
+            return;
+        }
+
+        // Inside the field itself — its own scrollbar, its clear button — is not outside it.
+        if (e.Source is Visual source && (ReferenceEquals(source, box) || box.IsVisualAncestorOf(source)))
+        {
+            return;
+        }
+
+        focus.Focus(null);
+    }
+
+    /// <summary>Which field held the caret when the current press began (see <see cref="OnPressedAnywhere"/>).</summary>
+    private TextBox? _caretAtPress;
 
     /// <summary>Whether the keyboard currently belongs to a text field somewhere inside this view.</summary>
     private bool IsTyping() =>
