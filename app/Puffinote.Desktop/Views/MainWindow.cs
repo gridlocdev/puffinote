@@ -267,6 +267,19 @@ public partial class MainWindow : Window
     /// <summary>The open tabs' file paths, in strip (left-to-right) order (test seam).</summary>
     internal IReadOnlyList<string> OpenTabPathsForTest => [.. _tabHost.Tabs.Select(t => t.Path)];
 
+    /// <summary>The zoom the tab on <paramref name="path"/> is showing, or null when no such tab (test seam).</summary>
+    internal double? TabZoomForTest(string path) =>
+        _tabHost.Tabs.FirstOrDefault(t => string.Equals(t.Path, path, StringComparison.OrdinalIgnoreCase))?.Pane.Zoom;
+
+    /// <summary>Zoom the tab on <paramref name="path"/>, as its own ⌘= would (test seam).</summary>
+    internal void SetTabZoomForTest(string path, double zoom)
+    {
+        if (_tabHost.Tabs.FirstOrDefault(t => string.Equals(t.Path, path, StringComparison.OrdinalIgnoreCase)) is { } tab)
+        {
+            tab.Pane.Zoom = zoom;
+        }
+    }
+
     /// <summary>The active tab's file path, or null when no tab is open (test seam).</summary>
     internal string? ActiveTabPathForTest => _tabHost.ActivePane?.Path;
 

@@ -511,3 +511,26 @@
 
     Added a short note on why there is no `StatusBar.cs` or `ShortcutsEditorView.cs` here: both come from
     `Puffinote.Components`, and a shell-only copy of either would be exactly the fork §4 exists to prevent.
+
+- [x] Puffinote: zoom was per-pane and per-session — nothing persisted the factor.
+
+    **Decided: per tab, in `SessionStore`** — the first of the two options the item offered — with the
+    editor's own config as the fallback underneath it.
+
+    One factor for the window (the other option) has to be wrong for somebody in a notebook of mixed types:
+    the size that suits a page of prose is rarely the size that suits a grid of numbers, and Puffinote's
+    whole premise is holding both at once. Per tab, it can be right for both, and it rides along with the
+    tab list that session.json already remembers.
+
+    The fallback is what makes it cheap. Only tabs away from 100% are written, so a notebook nobody has
+    zoomed writes nothing at all; a document with no entry opens at whatever its *editor's* config gives it,
+    which is how a sheet was already inheriting Cellestra's remembered zoom before any of this. So the new
+    layer records the reader's per-document departures and nothing else, and the durable answer for a whole
+    file type stays where the four standalone apps keep it — that editor's own Preferences.
+
+    Closing a tab forgets its zoom. That is what "restored with the tab" means, and it is what stops the map
+    growing without bound over a notebook's life; anyone who wants a lasting answer has the editor's setting.
+
+    `IEditorPane.Zoom` is the seam — every editor already had a zoom and its own ⌘= / ⌘− commands, so this
+    only lets the shell *see* the value. It defaults to a no-op pair, so `ErrorPane` (nothing to scale)
+    reads 100% and ignores a write rather than needing a special case at the call site.

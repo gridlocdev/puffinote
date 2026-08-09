@@ -76,6 +76,13 @@ internal sealed class MarkdownPane : IEditorPane, IConfigurablePane
         set => _view.CommandBarVisibility = value;
     }
 
+    /// <summary>The editor's own reading zoom — the seam the shell remembers a tab's zoom through.</summary>
+    public double Zoom
+    {
+        get => _view.Zoom;
+        set => _view.Zoom = value;
+    }
+
     public Control View => _view;
 
     /// <summary>Put the caret back in the note's text area (delegates to Typage's editor).</summary>

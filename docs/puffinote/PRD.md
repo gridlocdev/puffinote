@@ -254,6 +254,13 @@ navigation PKM users expect. (The Command Menu stays commands-only; file navigat
   than fit, the strip **scrolls the active tab into view** whenever it changes — by the shortest scroll
   that does it, so a tab already on screen never moves. Otherwise opening a document from the sidebar can
   leave the one mark of *which* document you are in off the end of the strip.
+- **Zoom is remembered per tab**, in the notebook's session alongside the tab list, and restored with the
+  tab. The alternative — one zoom for the window — has to be wrong for somebody in a notebook of mixed
+  types, because the size that suits a page of prose is rarely the size that suits a grid of numbers.
+  A document nobody has zoomed carries no entry at all and opens at whatever its **editor's own** config
+  says, which is how a sheet already inherits Cellestra's remembered zoom; this layer records only the
+  reader's per-document departures from that. Closing a tab forgets its zoom, which is what "restored with
+  the tab" means — the durable answer for a whole type is that editor's own setting, in Preferences.
 - **Embedding contract:** Puffinote hosts the **existing** embeddable controls — `Typage.Control`'s
   `MarkdownEditor`/`MarkdownEditorView` for `.md`, and `Cellestra.Editor`'s `SpreadsheetEditorView` for
   `.ods` — **unchanged**. A small shell-side **pane abstraction** (`IEditorPane`: *view to mount*,

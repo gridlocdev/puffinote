@@ -116,4 +116,53 @@ public sealed class SessionStoreTests : IDisposable
         File.WriteAllText(System.IO.Path.Combine(stateDir.FullName, "session.json"), "{ not valid json");
         Assert.Empty(SessionStore.Load(_root.FullName).Recent); // corrupt → default, not a throw
     }
+
+    /// <summary>
+    /// The zoom a tab was left at travels with the tab list, keyed by path and stored relative to the
+    /// notebook root like everything else here — so a notebook that is moved or renamed still resolves it.
+    /// </summary>
+    [Fact]
+    public void Save_then_load_round_trips_each_tabs_zoom()
+    {
+        SessionStore.Save(_root.FullName, new NotebookSession
+        {
+            OpenTabs = [At("note.md"), At(System.IO.Path.Combine("sub", "budget.ods"))],
+            TabZoom = new Dictionary<string, double>
+            {
+                [At("note.md")] = 1.25,
+                [At(System.IO.Path.Combine("sub", "budget.ods"))] = 2.0,
+            },
+        });
+
+        var loaded = SessionStore.Load(_root.FullName);
+        Assert.Equal(1.25, loaded.TabZoom[At("note.md")]);
+        Assert.Equal(2.0, loaded.TabZoom[At(System.IO.Path.Combine("sub", "budget.ods"))]);
+    }
+
+    /// <summary>
+    /// A session written before tab zoom existed still loads — an absent map means "nothing remembered",
+    /// not a session to throw away — and a factor a hand-edit put outside the ladder is clamped onto it
+    /// rather than handed to an editor that would have to clamp it anyway.
+    /// </summary>
+    [Fact]
+    public void An_older_session_loads_and_a_wild_zoom_is_clamped_onto_the_ladder()
+    {
+        var stateDir = Directory.CreateDirectory(System.IO.Path.Combine(_root.FullName, NotebookNode.StateDirectoryName));
+        File.WriteAllText(
+            System.IO.Path.Combine(stateDir.FullName, "session.json"),
+            """
+            { "Version": 1, "Recent": [], "SidebarCollapsed": false, "SidebarWidth": 260,
+              "OpenTabs": ["note.md"], "ActiveTab": "note.md" }
+            """);
+
+        var older = SessionStore.Load(_root.FullName);
+        Assert.Equal([At("note.md")], older.OpenTabs);
+        Assert.Empty(older.TabZoom);
+
+        SessionStore.Save(_root.FullName, new NotebookSession
+        {
+            TabZoom = new Dictionary<string, double> { [At("note.md")] = 99 },
+        });
+        Assert.Equal(Puffinote.Components.Theming.ZoomScale.Max, SessionStore.Load(_root.FullName).TabZoom[At("note.md")]);
+    }
 }

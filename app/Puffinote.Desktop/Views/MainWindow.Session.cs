@@ -104,6 +104,15 @@ public partial class MainWindow
             if (File.Exists(path))
             {
                 await _tabHost.OpenAsync(path); // no-ops on an unsupported type; each open activates its own tab
+
+                // Put the tab back at the zoom it was left at (PRD §7.3). After the open, not before: the
+                // pane applies its editor's config as it loads, and that config is the fallback this
+                // deliberately overrides for a document the reader has since zoomed by hand.
+                if (session.TabZoom.TryGetValue(path, out double zoom)
+                    && _tabHost.Tabs.FirstOrDefault(t => string.Equals(t.Path, path, StringComparison.OrdinalIgnoreCase)) is { } opened)
+                {
+                    opened.Pane.Zoom = zoom;
+                }
             }
         }
 
@@ -129,9 +138,39 @@ public partial class MainWindow
             Recent = _recent.Paths,
             OpenTabs = [.. _tabHost.Tabs.Select(t => t.Path)],
             ActiveTab = _tabHost.ActivePane?.Path,
+            TabZoom = CurrentTabZoom(),
             SidebarCollapsed = _sidebarLayout.IsCollapsed,
             SidebarWidth = width > 0 ? width : SessionStore.DefaultSidebarWidth,
         });
+    }
+
+    /// <summary>
+    /// What each open tab is zoomed to, for the session file — <b>per tab</b>, which is the answer this shell
+    /// gives to a question the four standalone apps each answer for themselves.
+    /// <para>
+    /// A notebook holds mixed types, and the zoom that suits a page of prose is rarely the one that suits a
+    /// grid of numbers: one window-wide factor would have to be wrong for one of them. Per tab it can be right
+    /// for both, and it rides along with the tab list that is already remembered here.
+    /// </para>
+    /// <para>
+    /// Only tabs away from 100% are written. That keeps the file quiet for the overwhelmingly common case, and
+    /// it makes the fallback meaningful rather than merely absent: a document with no entry opens at whatever
+    /// its <em>editor's</em> config says — which is how a sheet already inherits Cellestra's remembered zoom —
+    /// so this layer records the reader's per-document departures from that, and nothing else.
+    /// </para>
+    /// </summary>
+    private Dictionary<string, double> CurrentTabZoom()
+    {
+        var zooms = new Dictionary<string, double>(StringComparer.OrdinalIgnoreCase);
+        foreach (var tab in _tabHost.Tabs)
+        {
+            if (tab.Pane.Zoom != Puffinote.Components.Theming.ZoomScale.Default)
+            {
+                zooms[tab.Path] = tab.Pane.Zoom;
+            }
+        }
+
+        return zooms;
     }
 
     /// <summary>Watch the notebook for external changes, refreshing the tree + search index when they land.</summary>

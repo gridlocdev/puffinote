@@ -17,6 +17,13 @@ internal sealed record NotebookSession
     /// <summary>The path of the tab that was active, so it can be re-focused after the tabs are reopened; null when none.</summary>
     public string? ActiveTab { get; init; }
 
+    /// <summary>
+    /// The zoom each tab was left at, keyed by absolute path; a document not in here opens at whatever its
+    /// editor's own config gives it. Only entries away from 100% are kept, so the common case writes nothing.
+    /// </summary>
+    public IReadOnlyDictionary<string, double> TabZoom { get; init; } =
+        new Dictionary<string, double>(StringComparer.OrdinalIgnoreCase);
+
     public bool SidebarCollapsed { get; init; }
 
     public double SidebarWidth { get; init; } = SessionStore.DefaultSidebarWidth;
@@ -42,7 +49,8 @@ internal static class SessionStore
     // unmatched member is ignored by the deserializer, so those sessions keep loading too.
     private sealed record SessionDocument(
         int Version, List<string> Recent, bool SidebarCollapsed, double SidebarWidth,
-        List<string>? OpenTabs = null, string? ActiveTab = null);
+        List<string>? OpenTabs = null, string? ActiveTab = null,
+        Dictionary<string, double>? TabZoom = null);
 
     private static string SessionPath(string root) =>
         System.IO.Path.Combine(root, NotebookNode.StateDirectoryName, "session.json");
@@ -72,6 +80,10 @@ internal static class SessionStore
                 Recent = ToAbsolute(document.Recent),
                 OpenTabs = ToAbsolute(document.OpenTabs),
                 ActiveTab = document.ActiveTab is { } active ? System.IO.Path.GetFullPath(System.IO.Path.Combine(root, active)) : null,
+                TabZoom = (document.TabZoom ?? []).ToDictionary(
+                    pair => System.IO.Path.GetFullPath(System.IO.Path.Combine(root, pair.Key)),
+                    pair => Puffinote.Components.Theming.ZoomScale.Clamp(pair.Value),
+                    StringComparer.OrdinalIgnoreCase),
                 SidebarCollapsed = document.SidebarCollapsed,
                 SidebarWidth = document.SidebarWidth > 0 ? document.SidebarWidth : DefaultSidebarWidth,
             };
@@ -97,7 +109,9 @@ internal static class SessionStore
                 session.SidebarCollapsed,
                 session.SidebarWidth,
                 [.. session.OpenTabs.Select(p => System.IO.Path.GetRelativePath(root, p))],
-                session.ActiveTab is { } active ? System.IO.Path.GetRelativePath(root, active) : null);
+                session.ActiveTab is { } active ? System.IO.Path.GetRelativePath(root, active) : null,
+                session.TabZoom.ToDictionary(
+                    pair => System.IO.Path.GetRelativePath(root, pair.Key), pair => pair.Value));
             File.WriteAllText(SessionPath(root), JsonSerializer.Serialize(document, new JsonSerializerOptions { WriteIndented = true }));
         }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException)

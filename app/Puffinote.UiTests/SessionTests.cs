@@ -1,4 +1,5 @@
 using Avalonia.Headless.XUnit;
+using Puffinote.Components.Theming;
 using Puffinote.Desktop.Shell;
 using Puffinote.Desktop.Views;
 using Xunit;
@@ -69,6 +70,73 @@ public sealed class SessionTests
 
             Assert.Equal([first, second], reopened.OpenTabPathsForTest);
             Assert.Equal(first, reopened.ActiveTabPathForTest);
+        }
+        finally
+        {
+            dir.Delete(recursive: true);
+        }
+    }
+
+    /// <summary>
+    /// A tab comes back at the zoom it was left at, and each tab keeps its own — which is the whole reason
+    /// this is per tab rather than one factor for the window. A notebook holds mixed types, and the zoom that
+    /// suits a page of prose is rarely the one that suits a grid of numbers.
+    /// </summary>
+    [AvaloniaFact]
+    public async Task Each_tab_reopens_at_the_zoom_it_was_left_at()
+    {
+        var dir = Directory.CreateTempSubdirectory("puffinote-tabzoom");
+        try
+        {
+            var note = Path.Combine(dir.FullName, "note.md");
+            var log = Path.Combine(dir.FullName, "app.log");
+            File.WriteAllText(note, "# note");
+            File.WriteAllText(log, "a line");
+
+            var window = new MainWindow(new NotebookService());
+            window.Show();
+            window.OpenNotebook(dir.FullName);
+            await window.OpenFileAsync(note);
+            await window.OpenFileAsync(log);
+
+            window.SetTabZoomForTest(note, 1.5);
+            window.SetTabZoomForTest(log, 0.75);
+            await window.OpenFileAsync(note); // any tab change writes the session
+
+            var reopened = new MainWindow(new NotebookService());
+            reopened.Show();
+            reopened.OpenNotebook(dir.FullName);
+            await reopened.RestoreOpenTabsForTest;
+
+            Assert.Equal(1.5, reopened.TabZoomForTest(note));
+            Assert.Equal(0.75, reopened.TabZoomForTest(log)); // its own, not the other tab's
+        }
+        finally
+        {
+            dir.Delete(recursive: true);
+        }
+    }
+
+    /// <summary>
+    /// A tab never zoomed opens at whatever its editor's own config gives it, and nothing is written for it —
+    /// so the session file stays quiet for the overwhelmingly common case of a notebook nobody has zoomed.
+    /// </summary>
+    [AvaloniaFact]
+    public async Task An_unzoomed_tab_writes_no_entry_and_reopens_at_the_editors_own_default()
+    {
+        var dir = Directory.CreateTempSubdirectory("puffinote-tabzoom-none");
+        try
+        {
+            var note = Path.Combine(dir.FullName, "note.md");
+            File.WriteAllText(note, "# note");
+
+            var window = new MainWindow(new NotebookService());
+            window.Show();
+            window.OpenNotebook(dir.FullName);
+            await window.OpenFileAsync(note);
+
+            Assert.Empty(SessionStore.Load(dir.FullName).TabZoom);
+            Assert.Equal(ZoomScale.Default, window.TabZoomForTest(note));
         }
         finally
         {

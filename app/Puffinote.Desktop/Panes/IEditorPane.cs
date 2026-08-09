@@ -67,6 +67,22 @@ internal interface IEditorPane : IDisposable
     bool IsModalOpen => false;
 
     /// <summary>
+    /// The reading zoom on the family's shared ladder (<see cref="Puffinote.Components.Theming.ZoomScale"/>).
+    /// The shell reads it to remember what a tab was left at and writes it to put the tab back there.
+    /// <para>
+    /// Every editor already has a zoom of its own and its own ⌘= / ⌘− commands, which the shell binds through
+    /// <see cref="Commands"/> — this is not a second mechanism, only the seam that lets the shell <em>see</em>
+    /// the value. The default is the no-op pair, for a pane with nothing to scale (<see cref="ErrorPane"/>):
+    /// reading gives 100% and writing is ignored, so a remembered zoom lands harmlessly on it.
+    /// </para>
+    /// </summary>
+    double Zoom
+    {
+        get => Puffinote.Components.Theming.ZoomScale.Default;
+        set { }
+    }
+
+    /// <summary>
     /// The document's outline for the sidebar's Outline panel (PRD §7.2.3): Markdown headings for a note,
     /// the sheet/chart list for a workbook. Computed on demand from the current document; empty when there
     /// is no structure. Each item can <see cref="OutlineItem.Reveal"/> its location in the editor.

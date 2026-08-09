@@ -33,6 +33,13 @@ internal sealed class SheetPane : IEditorPane, IEditorHost, IConfigurablePane
         _view.CommandBarVisibility = config.Sheets.CommandBar;
     }
 
+    /// <summary>The editor's own reading zoom — the seam the shell remembers a tab's zoom through.</summary>
+    public double Zoom
+    {
+        get => _view.Zoom;
+        set => _view.Zoom = value;
+    }
+
     public Control View => _view;
 
     /// <summary>Put keyboard focus back on the sheet grid (delegates to Cellestra's editor).</summary>

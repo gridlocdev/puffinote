@@ -30,6 +30,13 @@ internal sealed class TaskBoardPane : IEditorPane, IConfigurablePane
         _view.Filter = config.Tasks.Filter;
     }
 
+    /// <summary>The editor's own reading zoom — the seam the shell remembers a tab's zoom through.</summary>
+    public double Zoom
+    {
+        get => _view.Zoom;
+        set => _view.Zoom = value;
+    }
+
     public Control View => _view;
 
     public void Focus() => _view.Focus();
