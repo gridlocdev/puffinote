@@ -59,7 +59,7 @@ public partial class MainWindow : Window
 
     // External-change detection (PRD §7.1): watch the open file, and remember the exact text last
     // read-from / written-to disk so our own atomic saves are recognised and don't self-trigger.
-    private FileSystemWatcher? _watcher;
+    private readonly OpenFileWatcher _watcher;
     private string? _lastKnownDiskText;
     private bool _conflictPromptOpen;
 
@@ -129,6 +129,7 @@ public partial class MainWindow : Window
     {
         _settings = settings;
         _recovery = recovery;
+        _watcher = new OpenFileWatcher(HandleExternalChange);
         Width = 900;
         Height = 680;
         Title = "Typage";
@@ -203,7 +204,7 @@ public partial class MainWindow : Window
             _autoSave.Dispose();
             _statsTimer?.Stop();
             _recovery.Clear(); // a clean exit means there is nothing to recover next launch
-            _watcher?.Dispose();
+            _watcher.Dispose();
         };
 
         if (Application.Current is { } app)

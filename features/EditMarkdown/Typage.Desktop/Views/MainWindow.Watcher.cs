@@ -166,38 +166,7 @@ public partial class MainWindow
         return EditorView.IsDirty ? DiskChange.Conflict : DiskChange.ReloadClean;
     }
 
-    private void WatchCurrentFile()
-    {
-        _watcher?.Dispose();
-        _watcher = null;
-        if (_currentPath is null)
-        {
-            return;
-        }
-
-        try
-        {
-            var dir = Path.GetDirectoryName(Path.GetFullPath(_currentPath));
-            if (dir is null)
-            {
-                return;
-            }
-
-            _watcher = new FileSystemWatcher(dir, Path.GetFileName(_currentPath))
-            {
-                NotifyFilter = NotifyFilters.LastWrite | NotifyFilters.FileName | NotifyFilters.Size,
-                EnableRaisingEvents = true,
-            };
-            // Events arrive on a thread-pool thread; marshal the handling to the UI thread.
-            _watcher.Changed += (_, _) => Dispatcher.UIThread.Post(HandleExternalChange);
-            _watcher.Created += (_, _) => Dispatcher.UIThread.Post(HandleExternalChange);
-            _watcher.Renamed += (_, _) => Dispatcher.UIThread.Post(HandleExternalChange);
-        }
-        catch (Exception)
-        {
-            _watcher = null; // watching is best-effort; never let it break editing
-        }
-    }
+    private void WatchCurrentFile() => _watcher.Watch(_currentPath);
 
     private async void HandleExternalChange()
     {

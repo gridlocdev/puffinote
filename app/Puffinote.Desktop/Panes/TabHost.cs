@@ -4,6 +4,7 @@ using Avalonia.Controls;
 using Avalonia.Layout;
 using Avalonia.Media;
 using Avalonia.Threading;
+using Puffinote.Components.Core.Documents;
 using Puffinote.Components.Theming;
 using Puffinote.Desktop.Shell;
 
@@ -15,28 +16,6 @@ internal enum CloseDecision
     Save,
     Discard,
     Cancel,
-}
-
-/// <summary>
-/// What a file looked like the last time this shell read or wrote it. Two cheap facts rather than a hash:
-/// a length and a write time answer "did somebody else touch this?" without reading the bytes of a
-/// document that may be tens of megabytes, and every write that matters here changes at least one of them.
-/// </summary>
-internal readonly record struct FileStamp(long Length, DateTime LastWriteUtc)
-{
-    /// <summary>The stamp of <paramref name="path"/> right now, or null when it is missing or unreadable.</summary>
-    public static FileStamp? For(string path)
-    {
-        try
-        {
-            var info = new FileInfo(path);
-            return info.Exists ? new FileStamp(info.Length, info.LastWriteTimeUtc) : null;
-        }
-        catch (Exception e) when (e is IOException or UnauthorizedAccessException or ArgumentException)
-        {
-            return null;
-        }
-    }
 }
 
 /// <summary>One open document in the <see cref="TabHost"/>: its pane, its path, and its dirty handler.</summary>
