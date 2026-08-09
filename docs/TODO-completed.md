@@ -559,3 +559,18 @@
   outside their tests** — the prototype's drawer has a "Delete task" button in its footer and creates
   labels from its `+` menu, and `TaskDialog` has neither: it says "This board has no labels yet." with no
   way to make one.
+- [x] Puffinote, Pivotask, Plaintain (and Typage): copy the way Cellestra does its menu bar being native on macOS — the app name, an About screen, the separate File/Edit/… sections. (`MacAppMenu` + `AboutDialog` in `shared/`; Pivotask gained the native bar itself.)
+- [x] Cellestra: in the radial menu display the name of the action immediately in the middle circle, and move the tooltip to a couple of seconds' dwell
+- [x] Cellestra: in the radial menu settings, a pencil "Edit" button instead of "Select…", a drag grip on each row, and the command's name alone instead of "Segment N — "
+- [x] Cellestra: research how other spreadsheet apps handle ⌘A. (They hold it as a *rectangle*, as Cellestra already did — the rendering was fine. What was broken were the operations behind it: copy and paste-fill materialised 17 billion cells. Fixed, and recorded in PRD §10.1.)
+- [x] Plaintain: add multiple selection with ⌘D like VS Code
+- [x] Plaintain: mute the current-line highlight
+- [x] Puffinote: an external edit refreshes the tree and the index but never reloads an open tab (proposal 0004 Phase 4) — and the same for all four standalone apps
+- [x] Pivotask: drag-and-drop refinement — the drop indicator and precise placement already existed; Escape to cancel a drag in flight did not
+- [x] Pivotask: no keyboard path around the board — arrows walk the cards, ⌥⇧-arrows move a task
+- [x] Plaintain: measure the 50 MB load path before optimising it (proposal 0003 §9.5). `Plaintain.Benchmarks`; numbers in ARCHITECTURE §3.3.
+- [x] Plaintain: converting a file's encoding on save (File ▸ Convert Encoding…, explicit and never implicit)
+- [x] Plaintain: detect mixed line endings and offer to normalise them
+- [x] Plaintain: crash-recovery snapshot, and external-change detection
+- [x] Shared: the rule-of-three check both proposals defer to Phase 5. (Find bars and the label chip: **not** promoted, with reasons. The find bars' match wording: promoted. Verdicts recorded in the root AGENTS.md.)
+- [x] Puffinote: decide whether the shell's title bar should flash "— Saved" the way Cellestra's does. (It should, for every pane type and for auto-save too.)
