@@ -19,9 +19,11 @@ namespace Pivotask.Control.Views;
 public sealed class TaskListView : UserControl
 {
     private readonly StackPanel _rows = new() { Spacing = 2 };
+    private readonly AddTaskState _add;
 
     public TaskListView()
     {
+        _add = new AddTaskState { Rebuild = Rebuild };
         Content = new ScrollViewer { Padding = new Thickness(12), Content = _rows };
         Rebuild();
     }
@@ -170,7 +172,7 @@ public sealed class TaskListView : UserControl
             }
         }
 
-        stack.Children.Add(BuildAddRow(group));
+        stack.Children.Add(AddTaskRow.Build(Document, group, _add));
         return stack;
     }
 
@@ -182,24 +184,6 @@ public sealed class TaskListView : UserControl
         card.Opened += (_, _) => TaskOpened?.Invoke(this, task);
         _ = group;
         return card;
-    }
-
-    private Avalonia.Controls.Control BuildAddRow(TaskGroup group)
-    {
-        var box = new TextBox { PlaceholderText = "Add a task", Margin = new Thickness(0, 4, 0, 0) };
-        box.KeyDown += (_, e) =>
-        {
-            if (e.Key != Avalonia.Input.Key.Enter || string.IsNullOrWhiteSpace(box.Text))
-            {
-                return;
-            }
-
-            Document.Execute(BoardCommands.AddTask(group, new TaskItem { Id = Ids.New(), Title = box.Text.Trim() }));
-            box.Text = string.Empty;
-            e.Handled = true;
-        };
-
-        return box;
     }
 }
 

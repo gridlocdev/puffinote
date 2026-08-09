@@ -438,11 +438,62 @@ public class BoardViewTests
             $"the column is {column.Bounds.Height} tall inside a {view.BoardForTest.Bounds.Height} board");
 
         // …and the row you type the next task into is still on the screen.
-        var add = view.BoardForTest.GetLogicalDescendants().OfType<Avalonia.Controls.Control>()
-            .First(c => Avalonia.Automation.AutomationProperties.GetName(c) == "Add a task");
-        double y = add.TranslatePoint(new Point(0, 0), window)!.Value.Y;
+        double y = AddRow(view).TranslatePoint(new Point(0, 0), window)!.Value.Y;
         Assert.InRange(y, 0, 600);
     }
+
+    /// <summary>
+    /// The add row keeps the keyboard after every Enter, so a run of five tasks is five titles and five
+    /// Enters. It used to be a permanent box that surrendered focus on the first one, which made each of
+    /// the other four a trip back to the pointer.
+    /// </summary>
+    [AvaloniaFact]
+    public void Adding_a_task_leaves_the_field_open_and_focused_for_the_next_one()
+    {
+        var (view, document) = Open();
+        var group = document.Board.Groups[0];
+
+        AddRow(view).RaiseEvent(new Avalonia.Interactivity.RoutedEventArgs(Button.ClickEvent));
+        Dispatcher.UIThread.RunJobs();
+
+        foreach (string title in new[] { "Buy milk", "Call the bank" })
+        {
+            var field = (TextBox)AddRow(view);
+            Assert.True(field.IsFocused);
+            field.Text = title;
+            field.RaiseEvent(new KeyEventArgs { RoutedEvent = InputElement.KeyDownEvent, Key = Key.Enter });
+            Dispatcher.UIThread.RunJobs();
+        }
+
+        Assert.Equal(
+            ["Rewrite the empty states", "Chase invoice 2231", "Buy milk", "Call the bank"],
+            group.Tasks.Select(t => t.Title));
+        Assert.Equal(string.Empty, ((TextBox)AddRow(view)).Text ?? string.Empty);
+    }
+
+    /// <summary>Escape throws away what is half-typed; it is the only thing that does.</summary>
+    [AvaloniaFact]
+    public void Escape_closes_the_add_field_without_keeping_what_was_typed()
+    {
+        var (view, document) = Open();
+
+        AddRow(view).RaiseEvent(new Avalonia.Interactivity.RoutedEventArgs(Button.ClickEvent));
+        Dispatcher.UIThread.RunJobs();
+
+        var field = (TextBox)AddRow(view);
+        field.Text = "never mind";
+        field.RaiseEvent(new KeyEventArgs { RoutedEvent = InputElement.KeyDownEvent, Key = Key.Escape });
+        Dispatcher.UIThread.RunJobs();
+
+        Assert.IsType<Button>(AddRow(view));
+        Assert.Equal(2, document.Board.Groups[0].Tasks.Count);
+        Assert.False(document.CanUndo);
+    }
+
+    /// <summary>The first group's add row, whichever of its two forms it is currently in.</summary>
+    private static Avalonia.Controls.Control AddRow(TaskBoardView view) =>
+        view.BoardForTest.GetLogicalDescendants().OfType<Avalonia.Controls.Control>()
+            .First(c => Avalonia.Automation.AutomationProperties.GetName(c) == "Add a task");
 
     /// <summary>A real click, through the window, so the guard inside the card is actually exercised.</summary>
     private static void Click(Visual target)

@@ -1,7 +1,6 @@
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Controls.Primitives;
-using Avalonia.Input;
 using Avalonia.Layout;
 using Avalonia.LogicalTree;
 using Avalonia.Media;
@@ -24,10 +23,12 @@ namespace Pivotask.Control.Views;
 public sealed class BoardView : UserControl
 {
     private readonly StackPanel _columns = new() { Orientation = Orientation.Horizontal, Spacing = 12 };
+    private readonly AddTaskState _add;
     private TaskItem? _dragging;
 
     public BoardView()
     {
+        _add = new AddTaskState { Rebuild = Rebuild };
         Content = new ScrollViewer
         {
             HorizontalScrollBarVisibility = ScrollBarVisibility.Auto,
@@ -139,7 +140,7 @@ public sealed class BoardView : UserControl
         DockPanel.SetDock(head, Dock.Top);
         layout.Children.Add(head);
 
-        var foot = BuildAddRow(group);
+        var foot = AddTaskRow.Build(Document, group, _add);
         DockPanel.SetDock(foot, Dock.Bottom);
         layout.Children.Add(foot);
 
@@ -242,22 +243,4 @@ public sealed class BoardView : UserControl
         TextWrapping = TextWrapping.Wrap,
         Margin = new Thickness(2, 4, 2, 6),
     };
-
-    private Avalonia.Controls.Control BuildAddRow(TaskGroup group)
-    {
-        var box = new TextBox { PlaceholderText = "Add a task", Margin = new Thickness(0, 4, 0, 0) };
-        Avalonia.Automation.AutomationProperties.SetName(box, "Add a task");
-        box.KeyDown += (_, e) =>
-        {
-            if (e.Key != Key.Enter || string.IsNullOrWhiteSpace(box.Text))
-            {
-                return;
-            }
-
-            Document.Execute(BoardCommands.AddTask(group, new TaskItem { Id = Ids.New(), Title = box.Text.Trim() }));
-            e.Handled = true;
-        };
-
-        return box;
-    }
 }
