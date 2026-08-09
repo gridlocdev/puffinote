@@ -159,7 +159,9 @@ internal static class GroupHeader
                     e.Handled = true;
                 }
             };
-            box.LostFocus += (_, _) => Commit(keep: true);
+            // Posted, for the reason AddTaskRow's is: committing a rename repaints the whole surface, and
+            // doing that mid-click destroys whatever the click was headed for.
+            box.LostFocus += (_, _) => Avalonia.Threading.Dispatcher.UIThread.Post(() => Commit(keep: true));
 
             host.Content = box;
             box.Focus();

@@ -25,10 +25,12 @@ public sealed class BoardView : UserControl
     private readonly StackPanel _columns = new() { Orientation = Orientation.Horizontal, Spacing = 12 };
     private readonly AddTaskState _add;
     private readonly CardDrag _drag;
+    private readonly GestureGate _gate;
 
     public BoardView()
     {
         _add = new AddTaskState { Rebuild = Rebuild };
+        _gate = new GestureGate(this, Rebuild);
         _drag = new CardDrag(this, () => Document);
         // The inset is the columns' own margin, not the scroller's padding. A ScrollViewer's padding
         // shrinks the viewport without being counted in the extent, so the far edge of the content is
@@ -103,6 +105,12 @@ public sealed class BoardView : UserControl
     /// <summary>Rebuild every column from the document.</summary>
     public void Rebuild()
     {
+        // Not while a click is still being delivered — see GestureGate. The repaint is owed, not dropped.
+        if (_gate.Defer())
+        {
+            return;
+        }
+
         _columns.Children.Clear();
         _drag.Zones.Clear();
         foreach (var group in Document.Board.Groups)

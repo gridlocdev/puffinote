@@ -21,10 +21,12 @@ public sealed class TaskListView : UserControl
     private readonly StackPanel _rows = new() { Spacing = 2 };
     private readonly AddTaskState _add;
     private readonly CardDrag _drag;
+    private readonly GestureGate _gate;
 
     public TaskListView()
     {
         _add = new AddTaskState { Rebuild = Rebuild };
+        _gate = new GestureGate(this, Rebuild);
         _drag = new CardDrag(this, () => Document);
         // Margin on the rows rather than padding on the scroller, for the reason the board has it there:
         // padding shrinks the viewport without joining the extent, so the last row is clipped by it.
@@ -88,6 +90,12 @@ public sealed class TaskListView : UserControl
     /// </summary>
     private void Rebuild()
     {
+        // Not while a click is still being delivered — see GestureGate. The repaint is owed, not dropped.
+        if (_gate.Defer())
+        {
+            return;
+        }
+
         _rows.Children.Clear();
         _drag.Zones.Clear();
 

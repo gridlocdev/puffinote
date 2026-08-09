@@ -90,7 +90,11 @@ internal static class AddTaskRow
             }
         };
 
-        box.LostFocus += (_, _) => Settle(keep: true, stayOpen: false);
+        // Posted, not immediate. Settling adds the task, which repaints the whole surface — and if that
+        // happens while the click that moved the focus is still being routed, it tears down the control
+        // that click was on its way to, so the card never opens and the button never fires. Letting the
+        // gesture finish first is what makes "click away" both commit the task and do the other thing.
+        box.LostFocus += (_, _) => Dispatcher.UIThread.Post(() => Settle(keep: true, stayOpen: false));
 
         // Posted, not immediate: the field is built during a rebuild and is not in the tree yet.
         box.AttachedToVisualTree += (_, _) => Dispatcher.UIThread.Post(() => box.Focus());
