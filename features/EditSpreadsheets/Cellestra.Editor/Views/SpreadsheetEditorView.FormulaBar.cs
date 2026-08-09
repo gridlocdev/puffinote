@@ -261,17 +261,31 @@ public partial class SpreadsheetEditorView
         }
 
         string text = NameBox.Text ?? string.Empty;
-        if (CellAddress.TryParse(text, out var address))
+
+        // One parse for both shapes: CellRange.TryParse reads a bare "A1" as a one-cell range, so a single
+        // address and a rectangle take the same road. The box reads ranges as well as it writes them —
+        // it shows "A1:B2" for a dragged selection, so typing that back has to select the same rectangle,
+        // or the box's own output would be invalid as its input.
+        if (CellRange.TryParse(text, out var reference))
         {
-            Selection.MoveTo(address.Row, address.Column);
-            JumpFromNameBox();
-        }
-        else if (CellRange.TryParse(text, out var typed))
-        {
-            // The box reads ranges as well as it writes them: it shows "A1:B2" for a dragged selection, so
-            // typing "A1:B2" back into it has to select that same rectangle. Anything else would make the
-            // box's own output invalid as its input.
-            Selection.SetRange(typed.Top, typed.Left, typed.Bottom, typed.Right);
+            // A reference may name a sheet ("Reports.A1:B2"), and the one thing we must not do with that is
+            // apply it to whichever sheet happens to be in front — that silently selects, and then edits,
+            // the wrong cells. Honour it, or say the sheet doesn't exist.
+            if (reference.Sheet is { } sheetName)
+            {
+                if (Session.Workbook.FindSheet(sheetName) is not { } target)
+                {
+                    Narrate($"No sheet named “{sheetName}”");
+                    SyncFormulaBar();
+                    e.Handled = true;
+                    return;
+                }
+
+                // SetActiveSheet raises StructureChanged, which rebuilds the tabs and refreshes the grid.
+                Session.SetActiveSheet(target);
+            }
+
+            Selection.SetRange(reference.Top, reference.Left, reference.Bottom, reference.Right);
             JumpFromNameBox();
         }
         else if (Session.Workbook.FindNamedRange(text) is { } named)

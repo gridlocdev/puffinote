@@ -131,6 +131,47 @@ public class NameBoxRangeTests : IDisposable
         Assert.Equal("B2:C4", NameBox(window).Text); // and it reads back as what was typed
     }
 
+    /// <summary>
+    /// A reference may name a sheet. The one thing the box must never do with that is apply it to whichever
+    /// sheet is in front — that silently selects, and then edits, the wrong cells. It used to: the range
+    /// branch dropped the qualifier and set the rectangle on the active sheet.
+    /// </summary>
+    [AvaloniaFact]
+    public void A_reference_that_names_another_sheet_goes_there()
+    {
+        var window = Open();
+        window.Editor.Session.AddSheet(); // Sheet2, and AddSheet activates it
+        window.Editor.Session.SetActiveSheet(window.Editor.Session.Workbook.Worksheets[0]);
+        Dispatcher.UIThread.RunJobs();
+
+        var second = window.Editor.Session.Workbook.Worksheets[1];
+        var box = NameBox(window);
+        box.Text = $"{second.Name}.B2:C4";
+        box.RaiseEvent(new KeyEventArgs { RoutedEvent = InputElement.KeyDownEvent, Key = Key.Return });
+        Dispatcher.UIThread.RunJobs();
+
+        Assert.Same(second, window.Editor.Session.ActiveSheet); // the named sheet, not the one we were on
+        Assert.Equal(1, window.Editor.Selection.Top);
+        Assert.Equal(3, window.Editor.Selection.Bottom);
+    }
+
+    [AvaloniaFact]
+    public void A_reference_naming_a_sheet_that_isnt_there_is_reported()
+    {
+        var window = Open();
+        var before = window.Editor.Session.ActiveSheet;
+        window.Editor.Selection.MoveTo(0, 0);
+        var box = NameBox(window);
+
+        box.Text = "Nowhere.B2:C4";
+        box.RaiseEvent(new KeyEventArgs { RoutedEvent = InputElement.KeyDownEvent, Key = Key.Return });
+        Dispatcher.UIThread.RunJobs();
+
+        Assert.Same(before, window.Editor.Session.ActiveSheet);
+        Assert.True(window.Editor.Selection.IsSingleCell); // nothing selected on the sheet we are on
+        Assert.Equal("A1", NameBox(window).Text);
+    }
+
     [AvaloniaFact]
     public void A_range_that_isnt_one_is_reported_rather_than_swallowed()
     {

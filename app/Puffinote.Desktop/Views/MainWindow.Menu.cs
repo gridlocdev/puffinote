@@ -101,9 +101,11 @@ public partial class MainWindow
             // it isn't reserved, so anyone who wants a key can bind one in the shortcuts editor.
             new("shell.toggleTabBar", "Toggle Tab Bar", "Show or hide the tab strip for this session",
                 Bound("shell.toggleTabBar", null), ToggleTabBar),
-            // The toolbar has three states now (visible, collapsed, hidden), so the one command steps through
-            // them rather than flipping a switch. The id is unchanged: a shortcut someone remapped to it still
-            // reaches the same control (see Bound).
+            // The command bar has three states (visible, collapsed, hidden), so the one command steps through
+            // them rather than flipping a switch. The id moved with the rename (shell.toggleEditorToolbar →
+            // shell.toggleEditorCommandBar) and nothing migrates shortcuts.json, so a gesture someone bound
+            // to the old id stops resolving — deliberately, per the vocabulary note in the repo's AGENTS.md.
+            // This command ships with no default chord, so a rebind is the only key it ever had.
             new("shell.toggleEditorCommandBar", "Cycle Editor Command Bar", "Step the command bar over a note through visible, collapsed, and hidden",
                 Bound("shell.toggleEditorCommandBar", null), CycleEditorCommandBar, () => _tabHost.ActivePane is MarkdownPane, icon: "type"),
 
