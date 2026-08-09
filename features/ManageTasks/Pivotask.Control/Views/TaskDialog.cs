@@ -228,7 +228,15 @@ internal sealed class TaskDialog : ModalDialog<bool>
     {
         var row = new DockPanel { LastChildFill = true };
 
-        var delete = new Button { Content = "🗑  Delete task" };
+        // A drawn glyph, not "🗑". An emoji is a colour bitmap the platform picks: it ignores the button's
+        // foreground, sits at whatever size and baseline the font decided, and on this dark chrome renders
+        // as a pale grey bin that matches nothing else on screen. Every other icon in the family is a
+        // stroked Lucide path that inherits its ink, and this is not the place to be the exception.
+        var trash = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8 };
+        trash.Children.Add(new LucideIcon { IconKey = "trash-2", Size = 14, VerticalAlignment = VerticalAlignment.Center });
+        trash.Children.Add(new TextBlock { Text = "Delete task", VerticalAlignment = VerticalAlignment.Center });
+
+        var delete = new Button { Content = trash };
         Avalonia.Automation.AutomationProperties.SetName(delete, "Delete task");
         delete.Click += (_, _) =>
         {

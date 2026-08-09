@@ -287,6 +287,27 @@ public class TaskDialogTests
         Assert.Equal(onCard.IsFilled, inDialog.IsFilled);
     }
 
+    /// <summary>
+    /// Nothing in the dialog is an emoji. An emoji is a colour bitmap the platform picks: it ignores the
+    /// button's foreground, so it can't follow the theme, and it matches nothing else on screen.
+    /// </summary>
+    [AvaloniaFact]
+    public void Delete_task_wears_a_drawn_icon_rather_than_an_emoji()
+    {
+        var (view, _, _) = Open();
+        var dialog = Dialog(view);
+
+        Assert.Contains(
+            Named(dialog, "Delete task").Single()
+                .GetLogicalDescendants().OfType<Puffinote.Components.Controls.Icons.LucideIcon>(),
+            i => i.IconKey == "trash-2");
+
+        foreach (var text in dialog.GetLogicalDescendants().OfType<TextBlock>())
+        {
+            Assert.DoesNotContain("🗑", text.Text ?? string.Empty, StringComparison.Ordinal);
+        }
+    }
+
     /// <summary>Open the "+" menu and return its rows.</summary>
     private static IReadOnlyList<Button> MenuRows(TaskDialog dialog)
     {
