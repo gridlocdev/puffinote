@@ -17,6 +17,14 @@ namespace Puffinote.Desktop.Sidebar;
 /// </summary>
 internal sealed class SidebarView : UserControl
 {
+    /// <summary>
+    /// The gap above the sidebar's collapse control, and above the collapsed-state handle that stands in for
+    /// it — one number, read by both, because the button is meant to be the <em>same</em> button in both
+    /// states. It is the button's own breathing room, not a row's padding: the handle has no header row to
+    /// take padding from, so anything the header added on its own account moved the control on collapse.
+    /// </summary>
+    internal const double ChromeTopInset = 2;
+
     private readonly FilesPanel _files = new();
     private readonly SearchPanel _search = new();
     private readonly OutlinePanel _outline = new();
@@ -93,8 +101,13 @@ internal sealed class SidebarView : UserControl
         // The collapse control leads the row, in the window's top-left corner — the same spot the handle takes
         // over once the sidebar is hidden, so the affordance never moves. It sits outside `_actions` because it
         // is meaningful with no notebook open (the other two aren't), and so it never hides itself away.
+        //
+        // Pinned to the top at ChromeTopInset rather than centred in the header row, because the handle that
+        // replaces it has no header row to be centred in. Two different rules put the same button at two
+        // different heights, and the difference showed as a hop every time the sidebar was hidden or shown.
         var collapse = IconButton("panel-left", "Hide sidebar", palette, () => ToggleRequested?.Invoke());
-        collapse.Margin = new Thickness(6, 0, 0, 0);
+        collapse.VerticalAlignment = Avalonia.Layout.VerticalAlignment.Top;
+        collapse.Margin = new Thickness(6, ChromeTopInset, 0, 0);
         CollapseButtonForTest = collapse;
 
         // The notebook name takes the row; the actions sit at its right edge, where a title bar's controls go.

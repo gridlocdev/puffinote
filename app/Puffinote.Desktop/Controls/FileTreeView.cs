@@ -996,7 +996,12 @@ internal sealed class FileTreeView : UserControl
 
     private List<Control> FolderMenu(NotebookNode folder)
     {
-        var items = new List<Control>();
+        // Enter Folder leads. Expanding shows a folder's contents *in place*; entering makes them the whole
+        // sidebar — same destination, different amount of context, so the two sit together above everything
+        // that edits. Entering is first of the pair because expanding has a row of its own to do it (the
+        // disclosure chevron, and a click on the row) while this menu is the only place entering is offered
+        // at all.
+        List<Control> items = [Item("Enter Folder", () => EnterFolderRequested?.Invoke(folder))];
 
         // An empty folder has nothing to open, so it is offered no toggle — the same rule the row's disclosure
         // chevron follows (see BuildRow), said in words.
@@ -1006,9 +1011,6 @@ internal sealed class FileTreeView : UserControl
             items.Add(Item(expanded ? "Collapse" : "Expand", () => Toggle(folder)));
         }
 
-        // Expanding shows a folder's contents *in place*; entering makes them the whole sidebar. Same
-        // destination, different amount of context — so the two sit together, above everything that edits.
-        items.Add(Item("Enter Folder", () => EnterFolderRequested?.Invoke(folder)));
         items.Add(new Separator());
 
         // The same five, in the same order, as the sidebar header's New button — one list of what a notebook

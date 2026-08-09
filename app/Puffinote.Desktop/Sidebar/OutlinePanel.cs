@@ -10,7 +10,7 @@ namespace Puffinote.Desktop.Sidebar;
 /// <summary>
 /// The document-outline panel (PRD §7.2.3): a keyboard-navigable, indented view of the <em>active</em>
 /// document's structure — Markdown headings for a note, the sheet/chart list for a workbook. Selecting an
-/// entry (Enter / double-click) navigates the editor to it. The shell refreshes the items from the active
+/// entry (Enter / a single click) navigates the editor to it. The shell refreshes the items from the active
 /// pane; this panel only presents them.
 /// </summary>
 internal sealed class OutlinePanel : ISidebarPanel

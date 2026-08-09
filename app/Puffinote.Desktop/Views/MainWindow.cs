@@ -312,7 +312,11 @@ public partial class MainWindow : Window
         // it's this strip, sitting where the sidebar's own header button was so the affordance doesn't move.
         var handleButton = Sidebar.SidebarView.IconButton("panel-left", "Show sidebar", palette, ToggleSidebar);
         handleButton.VerticalAlignment = Avalonia.Layout.VerticalAlignment.Top;
-        handleButton.Margin = new Thickness(2, 8, 2, 0); // level with the sidebar header's own copy of it
+
+        // Level with the sidebar header's own copy of it — from the same constant, not from a number that
+        // looked right. The two are one control as far as the user is concerned, so a difference of a few
+        // pixels reads as the button hopping each time the sidebar is hidden or shown.
+        handleButton.Margin = new Thickness(2, Sidebar.SidebarView.ChromeTopInset, 2, 0);
         _sidebarHandle = new Border
         {
             Background = palette.Surface,

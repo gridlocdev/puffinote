@@ -68,7 +68,7 @@ internal sealed class SearchPanel : ISidebarPanel
 
     public Control View { get; }
 
-    /// <summary>Raised when a result is activated (Enter / double-click), to open it in a tab.</summary>
+    /// <summary>Raised when a result is activated (Enter / a single click), to open it in a tab.</summary>
     public event Action<string>? FileActivated;
 
     /// <summary>The shell's search function (queries the background index).</summary>

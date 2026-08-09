@@ -38,6 +38,39 @@ public sealed class SidebarToggleTests
         Assert.False(window.IsSidebarHandleVisibleForTest);
     }
 
+    /// <summary>
+    /// The toggle is one button as far as the eye is concerned, so it must not move when the sidebar it
+    /// hides goes away. It used to: the header centred it in a row sized by the notebook's name, while the
+    /// handle pinned it to the top under a margin of its own, and the difference showed as a hop on every
+    /// collapse. Measured in window coordinates, which is where a hop would be seen.
+    /// </summary>
+    [AvaloniaFact]
+    public void The_toggle_button_stays_put_when_the_sidebar_collapses()
+    {
+        var window = new MainWindow(new NotebookService()) { Width = 1000, Height = 700 };
+        window.Show();
+        Settle(window);
+
+        var expandedTop = TopInWindow(window, window.SidebarForTest.CollapseButtonForTest);
+
+        Click(window.SidebarForTest.CollapseButtonForTest);
+        Settle(window);
+        Assert.True(window.IsSidebarCollapsedForTest);
+
+        var collapsedTop = TopInWindow(window, window.SidebarHandleButtonForTest);
+        Assert.Equal(expandedTop, collapsedTop, precision: 3);
+    }
+
+    private static double TopInWindow(Window window, Visual control) =>
+        control.TranslatePoint(new Point(0, 0), window)!.Value.Y;
+
+    private static void Settle(Window window)
+    {
+        Avalonia.Threading.Dispatcher.UIThread.RunJobs();
+        window.UpdateLayout();
+        Avalonia.Threading.Dispatcher.UIThread.RunJobs();
+    }
+
     [AvaloniaFact]
     public void A_two_finger_swipe_right_collapses_the_sidebar()
     {

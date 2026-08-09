@@ -4,6 +4,7 @@ using Avalonia.Controls.Templates;
 using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.Media;
+using Avalonia.VisualTree;
 using Puffinote.Components.Theming;
 
 namespace Puffinote.Desktop.Sidebar;
@@ -14,6 +15,12 @@ namespace Puffinote.Desktop.Sidebar;
 /// inner <see cref="ListBox"/> is pointer-only (<c>Focusable=false</c>) — so navigation is deterministic and
 /// doesn't depend on which item container holds focus (which is also what makes it drivable under headless
 /// tests). Shows <see cref="EmptyText"/> when there are no items.
+/// <para>
+/// A <em>single</em> click activates a row. These panels are navigation, not selection: every row is a
+/// place to go, and there is nothing you can usefully do to a selected one first — so asking for a second
+/// click only delayed the one thing the row is for. Selecting without navigating is still available from
+/// the keyboard (Up/Down move, Enter goes).
+/// </para>
 /// </summary>
 internal sealed class KeyboardListView : UserControl
 {
@@ -29,7 +36,7 @@ internal sealed class KeyboardListView : UserControl
             BorderThickness = new Thickness(0),
             ItemTemplate = itemTemplate,
         };
-        _list.DoubleTapped += (_, _) => ActivateSelected();
+        _list.Tapped += OnListTapped;
 
         _empty = new TextBlock
         {
@@ -43,7 +50,7 @@ internal sealed class KeyboardListView : UserControl
         Content = new Panel { Children = { _list, _empty } };
     }
 
-    /// <summary>Raised when the selected item is activated (Enter / double-click).</summary>
+    /// <summary>Raised when an item is activated (Enter / click).</summary>
     public event Action<object>? Activated;
 
     /// <summary>The placeholder shown when the list is empty.</summary>
@@ -115,6 +122,23 @@ internal sealed class KeyboardListView : UserControl
         {
             _list.SelectedIndex = index;
             _list.ScrollIntoView(index);
+        }
+    }
+
+    private void OnListTapped(object? sender, TappedEventArgs e)
+    {
+        // Resolve the row that was clicked rather than trusting the selection: a tap on the list's empty
+        // space below the last item reaches the ListBox too, and would otherwise re-open whatever row
+        // happened to be selected — a click on nothing that navigates somewhere.
+        if ((e.Source as Visual)?.FindAncestorOfType<ListBoxItem>(includeSelf: true) is not { } row)
+        {
+            return;
+        }
+
+        if (row.DataContext is { } item)
+        {
+            _list.SelectedItem = item; // the press has already selected it; this keeps Up/Down in step
+            Activated?.Invoke(item);
         }
     }
 

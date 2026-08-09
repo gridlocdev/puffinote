@@ -220,7 +220,9 @@ public sealed class FileTreeViewTests : IDisposable
 
         Assert.Equal(
             [
-                "Expand", "Enter Folder", "—",                     // "sub" holds child.md, so it can be opened
+                // Enter Folder leads: it is the only place the sidebar can be re-rooted, where expanding
+                // also has the row's own chevron. "sub" holds child.md, so it can be expanded at all.
+                "Enter Folder", "Expand", "—",
                 // A folder is the only row that creates — and it offers every type the header's New button does.
                 "New Folder…", "New Note…", "New Spreadsheet…", "New Taskboard…", "New File…", "—",
                 SystemFileManager.RevealLabel, "—",

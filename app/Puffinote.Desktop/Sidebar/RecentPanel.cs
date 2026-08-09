@@ -8,7 +8,7 @@ namespace Puffinote.Desktop.Sidebar;
 
 /// <summary>
 /// The recent-files panel (PRD §7.2.3): a keyboard-navigable list of the notebook's recently opened documents,
-/// most-recent first. Selecting one (Enter / double-click) opens it into a tab. The shell owns the recency
+/// most-recent first. Selecting one (Enter / a single click) opens it into a tab. The shell owns the recency
 /// list (via the shared <c>RecentFiles</c> rule); this panel only presents it.
 /// </summary>
 internal sealed class RecentPanel : ISidebarPanel
@@ -36,7 +36,7 @@ internal sealed class RecentPanel : ISidebarPanel
 
     public Control View => _list;
 
-    /// <summary>Raised when a recent entry is activated (double-click / Enter), to open it in a tab.</summary>
+    /// <summary>Raised when a recent entry is activated (a single click / Enter), to open it in a tab.</summary>
     public event Action<string>? FileActivated;
 
     public void Focus() => _list.FocusList();
