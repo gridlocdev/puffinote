@@ -176,11 +176,16 @@ public sealed class AdaptiveCommandBar : UserControl
             return;
         }
 
-        double available = _strip.Bounds.Width;
-        if (available <= 0 || _inline.Count == 0)
+        if (_inline.Count == 0)
         {
             return;
         }
+
+        // A window narrow enough that the right-hand cluster (the pill, the chevrons) takes the whole row
+        // leaves the strip nothing at all. That is not a reason to skip the reflow — it is the case where
+        // *everything* belongs in the drawer. Bailing out here instead left the last-computed split in
+        // place: a strip of tools clipped off at the pill, with no drawer button to reach the rest by.
+        double available = Math.Max(0, _strip.Bounds.Width);
 
         int fit = 0;
         double sum = 0;
