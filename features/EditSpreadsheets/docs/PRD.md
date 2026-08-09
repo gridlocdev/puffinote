@@ -145,10 +145,10 @@ If I open a Cellestra-saved file in LibreOffice and notice nothing wrong, the ba
 Cellestra keeps its chrome **compact and contextual**. It opens to the grid, the formula bar, the status bar, and a single **adaptive command bar** — one row of icon tools, not a multi-tab ribbon. Commands are reached through three surfaces that complement each other:
 
 - The **native macOS menu bar** (top of the screen) — the *complete* list of commands, the way every good Mac app works.
-- A **Command Palette** (⌘K) — a keyboard-first, type-to-find launcher for *any* command, modeled on VS Code's. The command bar's "Find a tool…" affordance opens it (§6.7).
+- A **Command Menu** (⌘K) — a keyboard-first, type-to-find launcher for *any* command, modeled on VS Code's. The command bar's "Search commands…" affordance opens it (§6.7).
 - The in-window **adaptive command bar** — one task-grouped row (Edit · Text · Align · Numbers · Insert · Data). Each group shows its 2–3 most-used tools as icons and tucks the rest into a **drawer** behind a chevron (progressive disclosure). Tools are **context-aware** — disabled when they don't apply, lit when their toggle is on — and the whole bar **collapses to a slim handle** to give the grid more room (its state is remembered between sessions).
 
-Everything reachable in the command bar is also reachable in the menu bar, the Command Palette, and by keyboard. No surface is the only path to anything.
+Everything reachable in the command bar is also reachable in the menu bar, the Command Menu, and by keyboard. No surface is the only path to anything.
 
 > **On the command bar vs. the "minimalist by default" principle (heuristic #8):** the bar earns its always-present row by being Google-compact at rest and Excel-rich on demand — one row of context-relevant icons, with depth in the drawers rather than in extra tabs or vertical chrome. It's flat, monochrome line icons, generous spacing, and no 2007-era ribbon. Charts (a v1 non-goal, §9) will later get their own context — a workbook object that takes the place of a sheet tab — without the bar growing tabs.
 
@@ -174,7 +174,7 @@ Everything reachable in the command bar is also reachable in the menu bar, the C
 | **Insert** | Rows Above · Rows Below · Columns Left · Columns Right · Sheet · Table (⌘T) · Function… (⌃⌥F) · Named Range… · Hyperlink… |
 | **Format** | Cells… (⌘1) · Number → … · Bold (⌘B), Italic (⌘I), Underline (⌘U), Strikethrough (⌘⇧X) · Alignment → … · Borders → … · Merge Cells · Rows → Height…, Hide (⌃9), Unhide (⌃⇧9) · Columns → Width…, Hide (⌃0), Unhide (⌃⇧0) |
 | **Data** | Sort… · Sort & Filter… (⇧⌘F) · Filter · Clear Filter · Remove Duplicates… · Text to Columns… · Data Validation… · Recalculate (F9) · Calculation → Automatic / Manual · Named Ranges… · Import CSV… · Export CSV… |
-| **View** | Command Palette… (⌘K) · Go to Sheet… (⌘⇧P) · Zoom In (⌘=) · Zoom Out (⌘−) · Actual Size (⌥⌘0) · Gridlines · Headers · Formula Bar · Status Bar · Freeze Panes |
+| **View** | Command Menu… (⌘K) · Go to Sheet… (⌘⇧P) · Zoom In (⌘=) · Zoom Out (⌘−) · Actual Size (⌥⌘0) · Gridlines · Headers · Formula Bar · Status Bar · Freeze Panes |
 | **Window** | Minimize (⌘M) · Zoom · (standard macOS window items) |
 | **Help** | Cellestra Help · Function Reference… |
 
@@ -195,7 +195,7 @@ One row, grouped by task. Each **group** shows its 2–3 most-used tools as icon
 | **Insert** | Rows Above · Columns Left | Sheet · Table (⌘T) | — |
 | **Data** | Sort Ascending · Sort & Filter… (⇧⌘F) | Sort Descending · Sort… · Filter · Clear Filter · Remove Duplicates… · Text to Columns… · Data Validation… | Filter lights up while a filter is active |
 
-On the right of the bar sit a **Find a tool…** affordance (opens the Command Palette, §6.7) and a **collapse** chevron.
+On the right of the bar sit a **Search commands…** affordance (opens the Command Menu, §6.7) and a **collapse** chevron.
 
 **Behaviours that make it adaptive:**
 - **Progressive disclosure** — primary tools are always one click away; the drawer holds each group's full set, labelled and described, so depth costs no extra vertical chrome until asked for.
@@ -269,7 +269,7 @@ Shortcuts use macOS modifiers (⌘ Command, ⇧ Shift, ⌥ Option, ⌃ Control).
 **Formulas & view**
 | Action | Shortcut |
 |---|---|
-| Command Palette | ⌘K |
+| Command Menu | ⌘K |
 | Go to Sheet | ⌘⇧P |
 | Insert Function | ⌃⌥F |
 | AutoSum | ⌥⌘= |
@@ -291,19 +291,19 @@ The **window title** is the document's file name (`Budget.ods`, or `Untitled`), 
 - **Set:** Cellestra uses **Lucide** (ISC license, MIT-compatible) bundled as **local SVG assets** under `Assets/icons` — never fetched at runtime. Each is parsed into a stroked geometry and rendered at the right size and colour by `Controls/Icons`. On macOS a small number of menu-bar items map to **SF Symbols** where it improves native feel. No third-party brand or proprietary icons ship with the app.
 - **Consistency:** every command that appears in both the command bar and a menu uses the same icon and label.
 
-### 6.7 Command Palette and sheet switcher
+### 6.7 Command Menu and sheet switcher
 
 Two keyboard-summoned overlays are the fast path to "do a thing" and "go somewhere" — both modeled on VS Code's palettes. Each appears as a floating, centered input with a filtered result list below it; ↑/↓ move the highlight, Return activates it, Esc dismisses without changing anything.
 
-**Command Palette — ⌘K (run any command).**
-- Opens an input over the grid; typing **fuzzy-filters every command in the `AppCommands` catalog** by name (see `ARCHITECTURE.md`). The command bar's "Find a tool…" affordance opens the same palette.
+**Command Menu — ⌘K (run any command).**
+- Opens an input over the grid; typing **fuzzy-filters every command in the `AppCommands` catalog** by name (see `ARCHITECTURE.md`). The command bar's "Search commands…" affordance opens the same palette.
 - Each row shows the command's **icon**, its **label**, a one-line **description**, and its **current keyboard shortcut** — so the palette doubles as searchable, in-context documentation.
 - Return runs the highlighted command against the current selection, then closes the palette. Because it reads the one command catalog, it can never drift out of sync with the menu bar or command bar.
 
 **Sheet switcher — ⌘⇧P (go to a sheet).**
 - Opens a similar input whose list is the **worksheets in the current workbook**, in tab order, active sheet first.
 - Typing **fuzzy-filters the sheet names**; Return switches to the highlighted sheet (Esc leaves the active sheet unchanged). With an empty query it behaves like a most-recently-used sheet switcher.
-- The Command Palette takes **⌘K** (the same shortcut as the command bar's "Find a tool…" box, so the two feel like one feature); the sheet switcher sits on ⌘⇧P. Both palette shortcuts are remappable in Settings (§6.4).
+- The Command Menu takes **⌘K** (the same shortcut as the command bar's "Search commands…" box, so the two feel like one feature); the sheet switcher sits on ⌘⇧P. Both palette shortcuts are remappable in Settings (§6.4).
 
 Neither palette is the *only* way to do anything: every command is still in the menu bar and the command bar, and sheets are still switchable from the tab strip (§6.1).
 
@@ -316,8 +316,8 @@ I use Nielsen's heuristics as a checklist to keep the design honest. Each below 
 3. **User control and freedom** — multi-level **undo/redo** (§8.5); **Esc** cancels an in-progress edit; every dialog has an obvious Cancel; long open/save operations can be cancelled.
 4. **Consistency and standards** — macOS conventions (⌘S, ⌘Z, menu bar) *and* spreadsheet conventions (Tab/Enter, fill handle, `=`); identical icons/labels across command bar and menus.
 5. **Error prevention** — destructive-action confirmations per §8.7; number-format tools disabled on text cells; formula validated before commit so a typo doesn't silently become text.
-6. **Recognition rather than recall** — the command bar's drawers pair every icon with a label and description; the Command Palette surfaces all commands by name; **function autocomplete and argument hints**; browsable Name Manager and Function Reference; disabled (not hidden) controls.
-7. **Flexibility and efficiency of use** — every command reachable by mouse/menu *and* keyboard; the **Command Palette (⌘K)** and **sheet switcher (⌘⇧P)** as accelerators; remappable shortcuts; fill handle, AutoSum, keyboard-only editing; a collapsible command bar.
+6. **Recognition rather than recall** — the command bar's drawers pair every icon with a label and description; the Command Menu surfaces all commands by name; **function autocomplete and argument hints**; browsable Name Manager and Function Reference; disabled (not hidden) controls.
+7. **Flexibility and efficiency of use** — every command reachable by mouse/menu *and* keyboard; the **Command Menu (⌘K)** and **sheet switcher (⌘⇧P)** as accelerators; remappable shortcuts; fill handle, AutoSum, keyboard-only editing; a collapsible command bar.
 8. **Aesthetic and minimalist design** — clean, flat, uncluttered; one compact, context-aware command bar instead of a multi-tab ribbon; depth behind progressive disclosure (drawers and dialogs); the bar collapses to a slim handle when the grid needs the room.
 9. **Help users recognize, diagnose, and recover from errors** — formula errors point at *what* and *where*; error cells show a readable reason on hover, not just `#VALUE!`.
 10. **Help and documentation** — tooltips on commands, an in-app Function Reference (purpose + arguments per function), and a reachable Help link.
@@ -498,7 +498,7 @@ Intentional exclusions, not oversights.
 | Locale / number-format behavior | Document locale when specified, else system locale (§8.3). |
 | Icon set / SF Symbols | Lucide (local SVGs); map a few menu items to SF Symbols on macOS (§6.6). |
 | Undo depth & persistence | Session-only, 1,000 steps, not saved in the file (§8.5). |
-| Default UI / discovery surface | One compact, context-aware **adaptive command bar** (collapsible, §6.3) plus the **Command Palette (⌘K)** and **sheet switcher (⌘⇧P)** as the keyboard-first surfaces (§6, §6.7). |
+| Default UI / discovery surface | One compact, context-aware **adaptive command bar** (collapsible, §6.3) plus the **Command Menu (⌘K)** and **sheet switcher (⌘⇧P)** as the keyboard-first surfaces (§6, §6.7). |
 | Sort, filter, and tables | **In v1** (§8.10–§8.12) — everyday features. Previously deferred; now core. |
 | How tables map to `.ods` | Tables are native **database ranges** (`table:database-range`) with banded styling and filters; **no Excel structured references** (§8.10, §9), to protect the LibreOffice round-trip. |
 | Data validation, hide/unhide, hyperlinks, remove-duplicates, text-to-columns | **In v1** (§4 Data, §8.13–§8.14). |

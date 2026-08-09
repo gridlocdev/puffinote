@@ -63,7 +63,7 @@ public class PreferencesTests : IDisposable
         window.Show();
         Dispatcher.UIThread.RunJobs();
 
-        window.Editor.ShowCommandPalette(); // what ⌘K (view.commandPalette) runs
+        window.Editor.ShowCommandPalette(); // what ⌘K (view.commandMenu) runs
         Dispatcher.UIThread.RunJobs();
 
         var palette = window.Editor.OverlayHost.GetVisualDescendants().OfType<PaletteListView>().Single();

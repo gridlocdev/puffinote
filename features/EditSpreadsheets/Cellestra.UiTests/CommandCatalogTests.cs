@@ -29,13 +29,13 @@ public class CommandCatalogTests
     {
         Assert.NotNull(Commands.ById("file.save"));
         Assert.NotNull(Commands.ById("edit.undo"));
-        Assert.NotNull(Commands.ById("view.commandPalette"));
+        Assert.NotNull(Commands.ById("view.commandMenu"));
 
         // The palette doubles as a way to learn shortcuts (PRD §6.7). The Command Palette takes ⌘K
-        // (the bar's "Find a tool…" affordance); the sheet switcher sits on ⇧⌘P. Cellestra is macOS-only,
+        // (the bar's "Search commands…" pill); the sheet switcher sits on ⇧⌘P. Cellestra is macOS-only,
         // so assert the macOS rendering explicitly (the test host is Linux).
         Assert.Equal("⌘S", ShortcutFormatter.Format(Commands.ById("file.save")!.Shortcut!.Value, mac: true));
-        Assert.Equal("⌘K", ShortcutFormatter.Format(Commands.ById("view.commandPalette")!.Shortcut!.Value, mac: true));
+        Assert.Equal("⌘K", ShortcutFormatter.Format(Commands.ById("view.commandMenu")!.Shortcut!.Value, mac: true));
         Assert.Equal("⇧⌘P", ShortcutFormatter.Format(Commands.ById("view.goToSheet")!.Shortcut!.Value, mac: true));
     }
 

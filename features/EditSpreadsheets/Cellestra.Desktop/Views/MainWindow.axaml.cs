@@ -334,7 +334,7 @@ public partial class MainWindow : Window, IEditorHost
         menu.Items.Add(Submenu("Data", "data.sortAsc", "data.sortDesc", "data.customSort", "data.sortAndFilter", null,
             "data.toggleFilter", "data.clearFilter", null, "data.createTable", "data.autofitColumns", "data.removeDuplicates",
             "data.textToColumns", "data.validation", null, "formula.recalc"));
-        menu.Items.Add(Submenu("View", "view.commandPalette", "view.goToSheet", null, "view.zoomIn", "view.zoomOut", "view.actualSize", null,
+        menu.Items.Add(Submenu("View", "view.commandMenu", "view.goToSheet", null, "view.zoomIn", "view.zoomOut", "view.actualSize", null,
             "view.commandBarVisible", "view.commandBarCollapsed", "view.commandBarHidden", null, "view.freezePanes", null, "view.radialSettings", "app.preferences"));
         menu.Items.Add(Submenu("Help", "help.shortcuts", null, "help.about"));
         NativeMenu.SetMenu(this, menu);

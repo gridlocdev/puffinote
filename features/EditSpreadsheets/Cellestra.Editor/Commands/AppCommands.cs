@@ -59,7 +59,7 @@ public sealed class AppCommands
     {
         // The surfaces that only *offer* commands are not commands you ran. Recording ⌘K would put
         // "Command Palette…" at the top of its own Recent list every single time it opened.
-        if (id is "view.commandPalette" or "view.goToSheet")
+        if (id is "view.commandMenu" or "view.goToSheet")
         {
             return;
         }
@@ -221,7 +221,7 @@ public sealed class AppCommands
         new("formula.recalc", "Recalculate", "Recompute every formula now.", Shortcut.Bare(Key.F9), () => e.Session.RecalculateAll(), icon: "refresh-cw"),
 
         // View
-        new("view.commandPalette", "Command Palette…", "Search and run any command.", Shortcut.Cmd(Key.K), () => e.ShowCommandPalette(), icon: "command"),
+        new("view.commandMenu", "Command Menu…", "Search and run any command.", Shortcut.Cmd(Key.K), () => e.ShowCommandPalette(), icon: "command"),
         new("view.goToSheet", "Go to Sheet…", "Jump to another worksheet.", Shortcut.Cmd(Key.P, KeyModifiers.Shift), () => e.ShowSheetSwitcher(), icon: "list"),
         .. ZoomCommands.Build(() => e.Zoom, zoom => e.Zoom = zoom),
 

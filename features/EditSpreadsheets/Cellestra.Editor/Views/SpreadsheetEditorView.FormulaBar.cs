@@ -12,9 +12,9 @@ public partial class SpreadsheetEditorView
     /// <summary>Mirror the active cell into the Name Box and formula input (its value/formula may have changed).</summary>
     private void SyncFormulaBar()
     {
-        // Grid.ActiveCellName reports a selected merge as its whole span (e.g. B2:C3); fall back to the
-        // single active address for ordinary cells.
-        NameBox.Text = Grid.ActiveCellName;
+        // Grid.SelectionName is the whole selection — A1:B2 for a range, a merge's span, or a bare address —
+        // so the box answers "what have I got selected?" rather than only "where is the caret?".
+        NameBox.Text = Grid.SelectionName;
         var cell = Session.ActiveSheet.Find(Selection.ActiveRow, Selection.ActiveColumn);
         _syncingFormulaBar = true; // a programmatic refresh, not the user typing — don't echo into the cell
         FormulaInput.Text = cell is null ? string.Empty : (cell.IsFormula ? "=" + cell.Formula : cell.Value.ToInvariantString());
@@ -266,6 +266,14 @@ public partial class SpreadsheetEditorView
             Selection.MoveTo(address.Row, address.Column);
             JumpFromNameBox();
         }
+        else if (CellRange.TryParse(text, out var typed))
+        {
+            // The box reads ranges as well as it writes them: it shows "A1:B2" for a dragged selection, so
+            // typing "A1:B2" back into it has to select that same rectangle. Anything else would make the
+            // box's own output invalid as its input.
+            Selection.SetRange(typed.Top, typed.Left, typed.Bottom, typed.Right);
+            JumpFromNameBox();
+        }
         else if (Session.Workbook.FindNamedRange(text) is { } named)
         {
             Selection.SetRange(named.Target.Top, named.Target.Left, named.Target.Bottom, named.Target.Right);
@@ -274,8 +282,8 @@ public partial class SpreadsheetEditorView
         else
         {
             // Unrecognized input: don't silently swallow it — tell the user, and restore the box to the
-            // current address so it doesn't keep showing the bad text.
-            Narrate($"No cell or named range “{text.Trim()}”");
+            // current selection so it doesn't keep showing the bad text.
+            Narrate($"No cell, range, or named range “{text.Trim()}”");
             SyncFormulaBar();
         }
 

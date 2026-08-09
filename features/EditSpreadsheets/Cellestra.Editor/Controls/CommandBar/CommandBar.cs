@@ -42,15 +42,18 @@ public sealed class CommandBar : UserControl
             sections.Add(new AdaptiveCommandBar.Section(group.Name, BuildGroup(group), BuildOverflowGroup(group), rank));
         }
 
-        // The pill drops its palette from itself rather than opening the centred overlay: a click starts with the
-        // eye already in the top-right corner, on the pointer, so that is where the results should appear. The
-        // chord beside it still opens the centred palette (see IAppEnvironment.ShowCommandPalette) — a keystroke
-        // comes from a neutral, centred gaze, and the two distances are the point.
-        string shortcut = _env.Commands.ById("view.commandPalette")?.MacShortcut() ?? string.Empty;
+        // The pill drops the Command Menu from itself rather than opening the centred overlay: a click starts
+        // with the eye already in the top-right corner, on the pointer, so that is where the results should
+        // appear. The chord beside it still opens the centred one (see IAppEnvironment.ShowCommandPalette) —
+        // a keystroke comes from a neutral, centred gaze, and the two distances are the point.
+        //
+        // Labelled for what it opens. "Find a tool…" named a thing with no name anywhere else in the app;
+        // this is the Command Menu, and the button that opens it should say so (repo AGENTS.md, vocabulary).
+        string shortcut = _env.Commands.ById("view.commandMenu")?.MacShortcut() ?? string.Empty;
         var search = new AdaptiveCommandBar.SearchPill(
-            "Find a tool…",
+            "Search commands…",
             shortcut,
-            "Search and run any command",
+            "Open the Command Menu — search and run any command",
             Flyout: PaletteFlyout.Anchored(
                 () => PaletteCatalog.Entries(_env.Commands),
                 PaletteCatalog.Placeholder,

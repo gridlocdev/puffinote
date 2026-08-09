@@ -213,6 +213,24 @@ public sealed partial class SpreadsheetGrid : Panel
     }
 
     /// <summary>
+    /// What the Name Box shows: the whole selection, not only the cell the caret is in — <c>A1:B2</c> while
+    /// a rectangle is selected, and <see cref="ActiveCellName"/> (a merge's span, or a bare address) when it
+    /// is one cell.
+    /// <para>
+    /// A selection is a thing you can act on — sum it, format it, name it — and its size and shape are what
+    /// you need to know before you do, especially when it runs off the bottom of the window and cannot be
+    /// counted by eye. The active cell is still readable: it is the one drawn without the wash, and it is
+    /// what the formula input beside this box is showing.
+    /// </para>
+    /// <para>
+    /// A discontiguous selection (⌘-click) names its <em>live</em> rectangle — the one still being dragged —
+    /// rather than trying to spell every piece into a box this wide.
+    /// </para>
+    /// </summary>
+    public string SelectionName =>
+        Selection.IsSingleCell ? ActiveCellName : Selection.Range.ToString();
+
+    /// <summary>
     /// When true (a modal overlay is open above the grid), the grid ignores keyboard and text input so
     /// navigation, typing and editing don't leak to the hidden grid behind the modal. The event is left
     /// unhandled so it still reaches the overlay. Set by the window when it shows/hides an overlay.

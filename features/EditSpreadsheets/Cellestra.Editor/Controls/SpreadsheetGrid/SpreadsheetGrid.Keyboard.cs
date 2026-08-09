@@ -118,6 +118,11 @@ public sealed partial class SpreadsheetGrid
                 else if (!Selection.IsSingleCell || Selection.IsDiscontiguous)
                 {
                     Selection.CollapseToOrigin();
+
+                    // Esc moves the selection like any other navigation key, so the host has to hear about
+                    // it: without this the Name Box and the status bar kept describing the selection Esc
+                    // just threw away, and the commands gated on one stayed enabled.
+                    RaiseSelectionChanged();
                 }
 
                 break;

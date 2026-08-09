@@ -146,6 +146,7 @@ public partial class SpreadsheetEditorView : UserControl, IAppEnvironment
         FxButton.Click += (_, _) => ShowFunctionPicker();
         FormulaExpandButton.Content = _formulaExpandIcon;
         FormulaExpandButton.Click += (_, _) => ToggleFormulaBarExpanded();
+        BuildZoomMenu(); // the status bar's percentage is also the zoom picker
 
         RegisterKeyBindings();
         BuildSheetTabs();
@@ -283,7 +284,7 @@ public partial class SpreadsheetEditorView : UserControl, IAppEnvironment
                     hint: "Percent. ⌘+ and ⌘− change it while you work; this is where it starts."),
                 ChoiceSetting.ForEnum<CommandBarVisibility>("Command bar", () => CommandBarVisibility, v => CommandBarVisibility = v,
                     ["Visible", "Collapsed", "Hidden"],
-                    "Visible shows the full toolbar; Collapsed folds it to its slim handle; Hidden gives the whole row back to the grid."),
+                    "Visible shows the full command bar; Collapsed folds it to its slim handle; Hidden gives the whole row back to the grid."),
             ]),
             new SettingsSection("Saving",
             [
@@ -485,13 +486,16 @@ public partial class SpreadsheetEditorView : UserControl, IAppEnvironment
     {
         SyncFormulaBar();
         UpdateStatus();
-        Narrate($"Selected {new CellAddress(Selection.ActiveColumn, Selection.ActiveRow)}");
+        // The same string the Name Box shows, so a screen reader hears "Selected A1:B2" for a range rather
+        // than only the corner the caret happens to be in.
+        Narrate($"Selected {Grid.SelectionName}");
         _commandBar?.RefreshState();
     }
 
     private void UpdateChrome()
     {
         StatusZoom.Text = ZoomScale.Format(Grid.Zoom);
+        SyncZoomMenu(); // ⌘=, a pinch and the picker all move the same thumb
         StatusCalc.Text = Session.Workbook.Settings.CalculationMode == CalculationMode.Manual ? "Manual" : "Auto";
         StatusSaved.Text = Session.IsModified ? "Edited"
             : _lastSavedAt is { } saved ? $"Saved {saved:HH:mm}" : "Not saved";

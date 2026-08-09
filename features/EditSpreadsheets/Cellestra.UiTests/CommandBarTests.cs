@@ -283,6 +283,24 @@ public class CommandBarTests : IDisposable
         Assert.Equal(expected, headers);
     }
 
+    /// <summary>
+    /// A window so narrow the search pill and the chevrons take the whole row folds <em>everything</em>.
+    /// The reflow used to give up when the strip measured zero and leave the previous split standing — a
+    /// row of tools clipped off behind the pill, and no drawer button to reach the rest by.
+    /// </summary>
+    [AvaloniaFact]
+    public void A_bar_with_no_room_at_all_folds_every_group_into_the_drawer()
+    {
+        var window = ScratchWindow();
+        var bar = new CommandBar(window.Editor);
+        var host = new Window { Content = bar, Width = 160, Height = 120 };
+        host.Show();
+        Pump();
+
+        Assert.True(bar.IsOverflowing, "the drawer button is the only way to any tool at this width");
+        Assert.Equal(CommandBarModel.For(CommandContext.Cell).Count, bar.OverflowDrawerPanels.Count);
+    }
+
     // The reflow runs off the strip's SizeChanged and reparents groups, which queues another layout
     // pass; flush the dispatcher (twice, for the cascade) so the split settles before asserting.
     private static void Pump()

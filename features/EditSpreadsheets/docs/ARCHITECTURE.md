@@ -141,8 +141,8 @@ MVVM stays for the chrome; the grid's hot path is deliberate direct code.
 
 ## 7. The chrome: menu bar, command bar, formula bar, status bar
 
-- **One command catalog.** Every user command is defined once in `AppCommands` (label + description + icon key + default shortcut, plus optional enabled/active predicates). The **native macOS menu bar** (`NativeMenu`), the **adaptive command bar**, the **Command Palette**, and **keybindings** all bind to it — so they cannot drift apart (heuristic #4). Shortcut remaps from Settings override the defaults at this layer.
-- **Command Palette** (`PRD.md` §6.7) — a `CommandPalette` overlay that fuzzy-matches the `AppCommands` catalog (⌘K) and runs the chosen command against the current selection. Since it reads the same catalog, its rows automatically carry the right icon, label, description, shortcut, and enabled/disabled state.
+- **One command catalog.** Every user command is defined once in `AppCommands` (label + description + icon key + default shortcut, plus optional enabled/active predicates). The **native macOS menu bar** (`NativeMenu`), the **adaptive command bar**, the **Command Menu**, and **keybindings** all bind to it — so they cannot drift apart (heuristic #4). Shortcut remaps from Settings override the defaults at this layer.
+- **Command Menu** (`PRD.md` §6.7) — a `CommandPalette` overlay that fuzzy-matches the `AppCommands` catalog (⌘K) and runs the chosen command against the current selection. Since it reads the same catalog, its rows automatically carry the right icon, label, description, shortcut, and enabled/disabled state.
 - **Sheet switcher** (`PRD.md` §6.7) — a similar overlay that fuzzy-matches the open workbook's worksheet list (⌘⇧P) and activates the chosen sheet, data-backed by the `Workbook`, not the command catalog.
 - **Adaptive command bar** — a `CommandBar` control (`Controls/CommandBar`) laid out by `CommandBarModel` per `PRD.md` §6.3: one always-present row of task groups, each with primary icon tools and an overflow `CommandBarDrawer` (labelled rows plus the Text group's font-size stepper and colour swatches with live preview). Context-aware (disabled/lit per the catalog's predicates) and collapsible (collapsed state persisted in settings). Icons render via `Controls/Icons` from local Lucide SVGs.
 - **Formula bar** — Name Box (jump-to-cell/named range), accept/cancel/`fx`, and the formula input, bound to `FormulaBarViewModel` + current selection.
@@ -170,7 +170,7 @@ Recalculation and file I/O run off the UI thread; results are marshaled back. On
 - **Consistency** → the single `AppCommands` catalog feeding menu, command bar, and keys.
 - **Error prevention** → dialog-service confirmations (§8.7 thresholds); number-format tools disabled on text cells; parser validates before an edit commits.
 - **Recognition over recall** → command-bar drawers pair each icon with a label + description; the palette surfaces all commands by name; autocomplete, picker, and Reference all read one `FunctionRegistry`; disabled-not-hidden controls.
-- **Flexibility & efficiency** → every command in menu + command bar + **Command Palette (⌘K)** + remappable key; **sheet switcher (⌘⇧P)**; full keyboard operation; a collapsible command bar.
+- **Flexibility & efficiency** → every command in menu + command bar + **Command Menu (⌘K)** + remappable key; **sheet switcher (⌘⇧P)**; full keyboard operation; a collapsible command bar.
 - **Minimalist design** → one compact, context-aware command bar instead of a multi-tab ribbon; the palette stands in for always-on discovery chrome; depth behind progressive disclosure (drawers + dialogs); a small flat style set.
 - **Diagnose/recover** → `ParseError` carries position + reason; error cells expose their reason on hover.
 - **Help** → tooltips from the catalog; Function Reference generated from `FunctionRegistry` metadata.
@@ -187,7 +187,7 @@ Most UX guarantees are **backed by structure** (one command catalog → three su
 | C# + Avalonia 12 over JS/Rust/raylib | Familiar, lean deps, native feel | Not the absolute leanest binary |
 | MVVM for chrome, direct code for grid | Right tool per job | Two styles in one codebase (documented) |
 | One `AppCommands` catalog → menu+command bar+palette+keys | Consistency | Commands carry metadata |
-| Adaptive command bar (collapsible) + Command Palette (⌘K) + sheet switcher (⌘⇧P) | Compact, contextual, keyboard-first | Context-driven tools can shift as the selection changes |
+| Adaptive command bar (collapsible) + Command Menu (⌘K) + sheet switcher (⌘⇧P) | Compact, contextual, keyboard-first | Context-driven tools can shift as the selection changes |
 | One `FunctionRegistry` → eval+autocomplete+help | Consistency, less drift | Registry carries metadata |
 | Preserve unknown `.ods` content verbatim | Don't destroy user data | More work in the serializer |
 | Tables as ODF database ranges, no structured refs | Clean LibreOffice round-trip | No `Table[Column]` formula syntax |

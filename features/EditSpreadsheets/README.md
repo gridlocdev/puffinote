@@ -22,14 +22,14 @@ Full reasoning is in **[docs/PRD.md](docs/PRD.md)**.
 - Direct, fully keyboard-driven editing: copy/paste, fill handle, undo/redo, find & replace.
 - **Sort, filter, and tables**: a unified **Sort & Filter** dialog that chains multiple sort and filter steps, per-column AutoFilter dropdowns (with active-filter management), and auto-expanding tables (⌘T) with banded styling and an optional header column — plus data validation, hyperlinks, remove-duplicates, and text-to-columns.
 - **Chart sheets** (Insert ▸ Chart Sheet): bar/line/pie/area and more, custom-drawn with no third-party charting library, round-tripped as ODF `chart:chart`.
-- A VS Code–style **Command Palette** (⌘K) to run any command and a **quick sheet switcher** (⌘⇧P), so the window stays uncluttered.
+- A VS Code–style **Command Menu** (⌘K) to run any command and a **quick sheet switcher** (⌘⇧P), so the window stays uncluttered.
 - Everyday formulas (math, logic, text, lookup, date/time) with cross-sheet and named references, plus automatic recalculation. The formula editor has **point mode** — click or drag in the grid to insert references while typing a formula.
 - A custom-drawn grid with freeze panes, smooth sub-cell wheel/trackpad scrolling, overlay scroll bars, the fill handle, and clipped-text indicators.
 - Number formats, fonts, colors, borders, and alignment.
 
 Not in v1 (on purpose): pivot tables, macros, cloud sync, and `.xlsx`/Google Sheets as first-class formats. See the [PRD](docs/PRD.md#7-non-goals-deliberately-not-in-v1) for the full list.
 
-The interface is **compact and contextual**: the window opens to the grid, a formula bar with a Name Box, a status bar with live selection stats, and a single **adaptive command bar** — one row of task-grouped icon tools (Edit · Text · Align · Numbers · Insert · Data) with overflow drawers, context-aware enabling, and a collapse handle. The **native macOS menu bar** holds the complete command list, and a **Command Palette** (⌘K) runs any command by name. It's all specified, down to keybindings and iconography, in the [PRD](docs/PRD.md#6-user-interface).
+The interface is **compact and contextual**: the window opens to the grid, a formula bar with a Name Box, a status bar with live selection stats, and a single **adaptive command bar** — one row of task-grouped icon tools (Edit · Text · Align · Numbers · Insert · Data) with overflow drawers, context-aware enabling, and a collapse handle. The **native macOS menu bar** holds the complete command list, and a **Command Menu** (⌘K) runs any command by name. It's all specified, down to keybindings and iconography, in the [PRD](docs/PRD.md#6-user-interface).
 
 The design is checked against Jakob Nielsen's 10 usability heuristics, and accessibility (VoiceOver, full keyboard operation) is a first-class requirement (see the [PRD](docs/PRD.md#7-user-experience-principles-jakob-nielsens-10-heuristics)).
 

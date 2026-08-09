@@ -58,7 +58,15 @@
                 </StackPanel>
                 <TextBlock x:Name="StatusCell" DockPanel.Dock="Left" Width="72" VerticalAlignment="Center" Foreground="{DynamicResource ChromeBorder}" />
                 <TextBlock x:Name="StatusSaved" DockPanel.Dock="Right" Margin="16,0,0,0" VerticalAlignment="Center" />
-                <TextBlock x:Name="StatusZoom" DockPanel.Dock="Right" VerticalAlignment="Center" />
+                <!-- The zoom readout is also the zoom control: clicking it drops a slider over the ladder
+                     (BuildZoomMenu). Chromeless so the status bar still reads as a row of facts, with the
+                     pointer cursor and the tooltip saying it can be pressed. -->
+                <Button x:Name="ZoomButton" DockPanel.Dock="Right" Padding="6,0" Margin="0" MinWidth="0"
+                        Background="Transparent" BorderThickness="0" Cursor="Hand"
+                        VerticalAlignment="Stretch" VerticalContentAlignment="Center"
+                        ToolTip.Tip="Zoom">
+                    <TextBlock x:Name="StatusZoom" VerticalAlignment="Center" />
+                </Button>
                 <TextBlock x:Name="StatusCalc" DockPanel.Dock="Right" Margin="0,0,16,0" VerticalAlignment="Center" />
                 <TextBlock x:Name="StatusStats" VerticalAlignment="Center" />
             </DockPanel>

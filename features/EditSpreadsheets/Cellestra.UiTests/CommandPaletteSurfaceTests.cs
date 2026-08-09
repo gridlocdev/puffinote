@@ -32,7 +32,7 @@ public class CommandPaletteSurfaceTests
 
     private static Button SearchPill(MainWindow window) =>
         window.GetVisualDescendants().OfType<Button>()
-            .First(b => b.GetVisualDescendants().OfType<TextBlock>().Any(t => t.Text == "Find a tool…"));
+            .First(b => b.GetVisualDescendants().OfType<TextBlock>().Any(t => t.Text == "Search commands…"));
 
     private static OverlayHost Overlay(MainWindow window) =>
         window.GetVisualDescendants().OfType<OverlayHost>().First();
@@ -70,7 +70,7 @@ public class CommandPaletteSurfaceTests
         var window = ShownWindow();
         IAppEnvironment env = window.Editor;
 
-        env.ShowCommandPalette(); // what ⌘K (view.commandPalette) runs
+        env.ShowCommandPalette(); // what ⌘K (view.commandMenu) runs
         Dispatcher.UIThread.RunJobs();
 
         var overlay = Overlay(window);
