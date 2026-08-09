@@ -132,6 +132,31 @@ public class NameBoxRangeTests : IDisposable
     }
 
     /// <summary>
+    /// The active cell lands on the range's <em>first</em> corner. "B2:C4" is a way of saying "take me to B2
+    /// and bring its block with me", so the formula bar beside the box shows B2's contents and the scroll
+    /// lands on B2 — not on the far corner, which may be a screen away. A dragged selection is the opposite
+    /// case and keeps its active cell under the pointer; that is why this doesn't go through SetRange.
+    /// </summary>
+    [AvaloniaFact]
+    public void A_typed_range_leaves_the_active_cell_on_its_first_corner()
+    {
+        var window = Open();
+        window.Editor.Session.ActiveSheet.SetValue(1, 1, Cellestra.Core.Values.CellValue.Text("top-left"));
+        window.Editor.Session.ActiveSheet.SetValue(3, 2, Cellestra.Core.Values.CellValue.Text("bottom-right"));
+
+        var box = NameBox(window);
+        box.Text = "B2:C4";
+        box.RaiseEvent(new KeyEventArgs { RoutedEvent = InputElement.KeyDownEvent, Key = Key.Return });
+        Dispatcher.UIThread.RunJobs();
+
+        Assert.Equal(1, window.Editor.Selection.ActiveRow);    // B2, not C4
+        Assert.Equal(1, window.Editor.Selection.ActiveColumn);
+
+        var formula = window.GetVisualDescendants().OfType<TextBox>().First(b => b.Name == "FormulaInput");
+        Assert.Equal("top-left", formula.Text);
+    }
+
+    /// <summary>
     /// A reference may name a sheet. The one thing the box must never do with that is apply it to whichever
     /// sheet is in front — that silently selects, and then edits, the wrong cells. It used to: the range
     /// branch dropped the qualifier and set the rectangle on the active sheet.

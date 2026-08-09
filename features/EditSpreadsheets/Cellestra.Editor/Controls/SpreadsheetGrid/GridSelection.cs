@@ -112,7 +112,15 @@ public sealed class GridSelection
         Changed?.Invoke(this, EventArgs.Empty);
     }
 
-    /// <summary>Select an explicit rectangle, leaving the active cell at its top-left.</summary>
+    /// <summary>
+    /// Select an explicit rectangle, anchored at its top-left and leaving the active cell at its
+    /// <b>bottom-right</b> — as though the rectangle had just been dragged out from its first corner.
+    /// <para>
+    /// This comment used to say "top-left", which is not what the code below does and never was. Where the
+    /// active cell has to be the <em>first</em> corner instead — a reference someone typed into the Name Box,
+    /// say, where B2:C4 means "take me to B2" — use <see cref="Restore"/> and name the corner.
+    /// </para>
+    /// </summary>
     public void SetRange(int top, int left, int bottom, int right)
     {
         _committed.Clear();
@@ -124,8 +132,9 @@ public sealed class GridSelection
     }
 
     /// <summary>
-    /// Restore a single rectangle with its active cell at the given corner (used by undo, #33).
-    /// Clears any disjoint ranges.
+    /// Select a single rectangle with its active cell at the named corner, anchoring at the opposite one.
+    /// Clears any disjoint ranges. Undo restores a remembered selection through this (#33), a merge puts the
+    /// active cell on the merge's own origin, and the Name Box puts it on the corner the reference names.
     /// </summary>
     public void Restore(int top, int left, int bottom, int right, int activeRow, int activeColumn)
     {

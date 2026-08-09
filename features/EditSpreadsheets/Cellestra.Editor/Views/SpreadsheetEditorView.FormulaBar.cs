@@ -285,12 +285,12 @@ public partial class SpreadsheetEditorView
                 Session.SetActiveSheet(target);
             }
 
-            Selection.SetRange(reference.Top, reference.Left, reference.Bottom, reference.Right);
+            SelectFromNameBox(reference.Top, reference.Left, reference.Bottom, reference.Right);
             JumpFromNameBox();
         }
         else if (Session.Workbook.FindNamedRange(text) is { } named)
         {
-            Selection.SetRange(named.Target.Top, named.Target.Left, named.Target.Bottom, named.Target.Right);
+            SelectFromNameBox(named.Target.Top, named.Target.Left, named.Target.Bottom, named.Target.Right);
             JumpFromNameBox();
         }
         else
@@ -303,6 +303,20 @@ public partial class SpreadsheetEditorView
 
         e.Handled = true;
     }
+
+    /// <summary>
+    /// Select a rectangle named in the Name Box, with the active cell at its <b>top-left</b>.
+    /// <para>
+    /// That corner is the point of the distinction. Typing <c>B2:C4</c> is a way of saying "take me to B2
+    /// and bring its block with me": the formula bar beside the box then shows B2's contents, and the scroll
+    /// lands on B2 rather than on the far corner of a range that may be a screen away. <see cref="GridSelection.SetRange"/>
+    /// leaves the active cell at the bottom-right instead, which is right for a drag (the active cell
+    /// follows the pointer) and wrong for a reference someone typed, where the first corner is the one they
+    /// wrote down.
+    /// </para>
+    /// </summary>
+    private void SelectFromNameBox(int top, int left, int bottom, int right) =>
+        Selection.Restore(top, left, bottom, right, activeRow: top, activeColumn: left);
 
     /// <summary>Finish a Name Box jump: scroll the new selection into view, refresh the chrome, focus the grid.</summary>
     private void JumpFromNameBox()
