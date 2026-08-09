@@ -35,6 +35,7 @@ Four rules, and they are the format's real design, because this file lives in gi
 | **Unknown fields preserved** | A file written by a newer Pivotask, opened and saved by an older one, must not lose data. Every object round-trips what it didn't recognise. |
 | **`"version": 1`, and a version ahead of ours is refused** | Reading half of a format we don't know and writing our half back is how a file gets quietly destroyed. |
 | **Atomic save** — temp file in the target's own directory, then rename | Same directory because a rename across filesystems is a copy, and a copy is not atomic. |
+| **External changes are noticed** — the open board is watched against a `FileStamp` baseline | This file lives in git, so the most likely way it changes is a `git pull` arriving while it is open. A clean board reloads. A board with unsaved edits keeps them, records the conflict (the status line says so), and asks at the save: Overwrite / Reload and Lose My Edits / Cancel, with Cancel the default. Auto-save stands down until it is settled — deciding whose version of a pulled file survives is not a decision to make on a timer with nobody watching. |
 
 **Dates are dates.** `YYYY-MM-DD`, no times, no timezones, no recurrence. "Thursday" is what people mean
 by a due date, and the moment a time is stored, the question of *whose* Thursday arrives with it.

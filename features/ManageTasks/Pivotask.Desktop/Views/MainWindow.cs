@@ -45,6 +45,10 @@ public sealed partial class MainWindow : Window
     // it can be written at all).
     private readonly AutoSave _autoSave;
 
+    // External-change detection: the open board, watched, so a pull is noticed rather than silently
+    // overwritten by the next save (MainWindow.External.cs).
+    private readonly OpenFileWatcher _watcher;
+
     public MainWindow()
         : this(new SettingsService())
     {
@@ -54,6 +58,7 @@ public sealed partial class MainWindow : Window
     {
         _view = BoardView;
         _settings = settings;
+        _watcher = new OpenFileWatcher(HandleExternalChange);
         Title = "Untitled board";
         Width = 1000;
         Height = 680;
@@ -109,6 +114,7 @@ public sealed partial class MainWindow : Window
     {
         base.OnClosed(e);
         _autoSave.Dispose();
+        _watcher.Dispose();
         TaskEditingCommands.SearchRequested -= OnSearchRequested;
     }
 
@@ -118,6 +124,7 @@ public sealed partial class MainWindow : Window
         try
         {
             _view.Document = BoardDocument.Open(path);
+            TrackOnDisk(path); // this read is the new baseline, and this file is the one to watch
             _autoSave.Cancel(); // any countdown was aimed at the board this one just replaced
             UpdateChrome();
         }
@@ -234,7 +241,11 @@ public sealed partial class MainWindow : Window
 
         int tasks = document.Board.Groups.Sum(g => g.Tasks.Count);
         int open = document.Board.Groups.Sum(g => g.Tasks.Count(t => !t.Done));
-        _status.Text = $"{document.Board.Groups.Count} groups · {open} of {tasks} open";
+        string counts = $"{document.Board.Groups.Count} groups · {open} of {tasks} open";
+
+        // An unresolved external write outranks the counts: until it is settled there is a second version
+        // of this board on disk, which is a more urgent fact than how many tasks are open.
+        _status.Text = DiskChangedUnderEdits ? $"{counts} · changed on disk — Save will ask" : counts;
     }
 
     private void OnSearchRequested(TaskBoardView view)
@@ -253,6 +264,7 @@ public sealed partial class MainWindow : Window
         if (await EnsureCanDiscardAsync())
         {
             _view.Document = new BoardDocument();
+            TrackOnDisk(null); // a new board has no file to be changed underneath it
             _autoSave.Cancel(); // ditto: the previous board is gone
             UpdateChrome();
         }
@@ -285,7 +297,9 @@ public sealed partial class MainWindow : Window
             return await SaveAsAsync();
         }
 
-        return Write(_view.Document.Path);
+        // Somebody else's version of this board may have arrived under the edits — most likely a pull.
+        // Ask before writing over it; this is the one moment where "whose bytes win?" has to be answered.
+        return await ResolveConflictAsync() && Write(_view.Document.Path);
     }
 
     private async Task<bool> SaveAsAsync()
@@ -308,7 +322,11 @@ public sealed partial class MainWindow : Window
     /// </summary>
     private void AutoSaveTick()
     {
-        if (_view.Document.Path is not { } path || !_view.Document.IsDirty || _overlay.IsOpen)
+        // The last of these is the newest: something else wrote this board while it was being edited, and
+        // choosing whose version survives is not a decision to make on a timer with nobody watching. The
+        // board stays dirty and waits for a ⌘S, where the question gets asked.
+        if (_view.Document.Path is not { } path || !_view.Document.IsDirty || _overlay.IsOpen
+            || DiskChangedUnderEdits)
         {
             return;
         }
@@ -341,6 +359,7 @@ public sealed partial class MainWindow : Window
         try
         {
             _view.Document.Save(path);
+            TrackOnDisk(path); // our own write; the watcher must not report it back to us
 
             // The board is on disk, so a countdown aimed at it has nothing left to write — and a manual
             // save that succeeded is the answer to whatever made auto-save stand itself down.
