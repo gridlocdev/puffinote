@@ -104,9 +104,9 @@ public sealed class TaskListView : UserControl
             _rows.Children.Add(BuildSection(group));
         }
 
-        // The list's own trailing "add a group", full width — the prototype's `.ghost` button.
-        var add = new Button { Content = "＋ Add a group", HorizontalAlignment = HorizontalAlignment.Stretch };
-        add.Click += (_, _) => Document.Execute(BoardCommands.AddGroup("New list"));
+        // The list's own trailing "add a group" — the same ghost, stretched, as the prototype's is.
+        var add = GhostButton.Build("Add a group", () => Document.Execute(BoardCommands.AddGroup("New list")));
+        add.HorizontalAlignment = HorizontalAlignment.Stretch;
         _rows.Children.Add(add);
     }
 

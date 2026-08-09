@@ -120,8 +120,11 @@ public sealed class BoardView : UserControl
 
         // A trailing "add a list" so a board can grow without a menu — the same affordance, and the same
         // words, the prototype uses, and the reason a new board's columns are a starting point not a cage.
-        var add = new Button { Content = "＋ Add a list", VerticalAlignment = VerticalAlignment.Top };
-        add.Click += (_, _) => Document.Execute(BoardCommands.AddGroup("New list"));
+        // A column-stub's width, not its label's: it marks the next slot along, not a control that
+        // wandered in at the end of the row.
+        var add = GhostButton.Build("Add a list", () => Document.Execute(BoardCommands.AddGroup("New list")));
+        add.Width = GhostButton.Width;
+        add.VerticalAlignment = VerticalAlignment.Top;
         _columns.Children.Add(add);
     }
 

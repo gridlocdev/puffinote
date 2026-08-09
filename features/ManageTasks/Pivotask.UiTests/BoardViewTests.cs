@@ -621,6 +621,29 @@ public class BoardViewTests
         Assert.True(view.IsModalOpen);
     }
 
+    /// <summary>
+    /// The board's trailing "add a list" is a column stub, not a shrink-wrapped label. It used to be a
+    /// filled button the width of its own two words, which read as a control that had wandered in at the
+    /// end of the row rather than as the next slot along.
+    /// </summary>
+    [AvaloniaFact]
+    public void The_add_a_list_ghost_is_as_wide_as_a_column_stub()
+    {
+        var (view, _) = Open();
+        var add = AddListButton(view);
+
+        Assert.Equal(200, add.Bounds.Width);
+
+        // A ghost, not a filled button: the dashes are how a placeholder says it marks empty space.
+        Assert.Contains(
+            add.GetLogicalDescendants().OfType<Avalonia.Controls.Shapes.Rectangle>(),
+            r => r.StrokeDashArray is { Count: > 0 });
+    }
+
+    private static Button AddListButton(TaskBoardView view) =>
+        view.BoardForTest.GetLogicalDescendants().OfType<Button>()
+            .First(b => Avalonia.Automation.AutomationProperties.GetName(b) == "Add a list");
+
     /// <summary>The first group's add row, whichever of its two forms it is currently in.</summary>
     private static Avalonia.Controls.Control AddRow(TaskBoardView view) =>
         view.BoardForTest.GetLogicalDescendants().OfType<Avalonia.Controls.Control>()
@@ -783,8 +806,7 @@ public class BoardViewTests
         window.UpdateLayout();
         Dispatcher.UIThread.RunJobs();
 
-        var add = view.BoardForTest.GetLogicalDescendants().OfType<Button>()
-            .First(b => (b.Content as string)?.Contains("Add a list", StringComparison.Ordinal) == true);
+        var add = AddListButton(view);
         double right = add.TranslatePoint(new Point(0, 0), scroll)!.Value.X + add.Bounds.Width;
 
         Assert.True(
