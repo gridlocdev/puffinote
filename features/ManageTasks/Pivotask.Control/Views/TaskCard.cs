@@ -52,7 +52,12 @@ internal sealed class TaskCard : Border
             // A completed task keeps its words — you should still be able to read what you finished —
             // but stops competing for attention with the ones that aren't done.
             TextDecorations = task.Done ? Avalonia.Media.TextDecorations.Strikethrough : null,
-            Foreground = task.Done ? palette.MutedText : null,
+
+            // Never null for the unfinished case. Foreground is an inherited property, and assigning null
+            // is not "leave it alone" — it is a local value that stops the inheritance and hands the text
+            // layout no brush at all, so the title drew nothing. Every card on the board was a checkbox
+            // and a star with a blank between them.
+            Foreground = task.Done ? palette.MutedText : palette.Text,
         };
 
         var meta = new WrapPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 6, 0, 0) };

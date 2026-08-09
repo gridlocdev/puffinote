@@ -577,6 +577,35 @@ public class BoardViewTests
         view.BoardForTest.GetLogicalDescendants().OfType<Avalonia.Controls.Control>()
             .First(c => Avalonia.Automation.AutomationProperties.GetName(c) == "Add a task");
 
+    /// <summary>
+    /// Every word on a card has a brush to draw it with.
+    ///
+    /// <para>The title used to set <c>Foreground</c> to null for a task that wasn't done, meaning "leave
+    /// it alone". Foreground is an inherited property, so null is not that — it is a local value that
+    /// stops the inheritance and leaves the text layout with no brush, and the title drew nothing. Every
+    /// card on the board was a checkbox and a star with a blank between them, which is invisible to a
+    /// test that only reads <c>TextBlock.Text</c>.</para>
+    /// </summary>
+    [AvaloniaFact]
+    public void Nothing_on_a_card_is_drawn_with_no_brush()
+    {
+        var (view, document) = Open();
+        document.Execute(BoardCommands.SetDone(document.Board.Groups[0].Tasks[0], true));
+
+        view.Layout = BoardLayout.List;
+        Dispatcher.UIThread.RunJobs();
+        var cards = view.BoardForTest.CardsForTest.Concat(view.ListForTest.CardsForTest).ToList();
+        Assert.NotEmpty(cards);
+
+        foreach (var card in cards)
+        {
+            foreach (var text in card.GetLogicalDescendants().OfType<TextBlock>())
+            {
+                Assert.True(text.Foreground is not null, $"“{text.Text}” on {card.Task.Id} has no brush");
+            }
+        }
+    }
+
     /// <summary>A real click, through the window, so the guard inside the card is actually exercised.</summary>
     private static void Click(Visual target)
     {
