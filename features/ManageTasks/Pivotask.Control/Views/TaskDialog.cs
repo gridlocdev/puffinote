@@ -3,6 +3,7 @@ using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Layout;
 using Avalonia.Media;
+using Avalonia.Styling;
 using Pivotask.Core;
 using Pivotask.Core.Editing;
 using Pivotask.Core.Model;
@@ -170,6 +171,18 @@ internal sealed class TaskDialog : ModalDialog<bool>
             Content = _body,
         });
 
+        // A step's field is text until you are in it. The stock TextBox paints a wash under the pointer,
+        // which down a checklist means every row lights up as the pointer crosses it — the rows are a list
+        // to read, not a menu to pick from, and the row that matters already says so by holding the caret.
+        // Setting Background on the box cannot express this: the theme puts the hover fill on the
+        // template's own border, which outranks a local value on the control around it. Focus still fills
+        // the box, because that one is worth seeing.
+        Styles.Add(new Style(x => x.OfType<TextBox>().Class(StepFieldClass).Class(":pointerover")
+                .Template().OfType<Border>().Name("PART_BorderElement"))
+        {
+            Setters = { new Setter(Border.BackgroundProperty, Brushes.Transparent) },
+        });
+
         // Every focus move inside the dialog, so a step's Enter knows where the caret came from.
         AddHandler(GotFocusEvent, OnFocusMoved, Avalonia.Interactivity.RoutingStrategies.Bubble, handledEventsToo: true);
 
@@ -179,6 +192,10 @@ internal sealed class TaskDialog : ModalDialog<bool>
     }
 
     private readonly CheckBox _tick;
+
+    /// <summary>Marks a step row's text field, so its hover fill can be turned off without reaching
+    /// every other TextBox in the dialog.</summary>
+    private const string StepFieldClass = "step-field";
 
     /// <summary>The field with the caret, and the one that had it before — see <see cref="ReturnFocus"/>.</summary>
     private Avalonia.Controls.Control? _focusNow;
@@ -686,6 +703,7 @@ internal sealed class TaskDialog : ModalDialog<bool>
             VerticalContentAlignment = VerticalAlignment.Center,
             Foreground = step.Done ? palette.MutedText : palette.Text,
         };
+        text.Classes.Add(StepFieldClass);
         Avalonia.Automation.AutomationProperties.SetName(text, "Step");
 
         void Commit()

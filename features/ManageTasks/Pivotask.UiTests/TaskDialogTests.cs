@@ -1,7 +1,9 @@
 using Avalonia;
 using Avalonia.Controls;
+using Avalonia.Headless;
 using Avalonia.Headless.XUnit;
 using Avalonia.LogicalTree;
+using Avalonia.Media;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
 using Pivotask.Control.Views;
@@ -452,6 +454,41 @@ public class TaskDialogTests
         Assert.True(view.IsModalOpen, "Enter closed the dialog");
         Assert.False(title.IsFocused); // …and the caret came out of the line, as on a step
     }
+
+    /// <summary>
+    /// A step keeps the same background whether or not the pointer is over it. The stock TextBox paints a
+    /// wash on hover, which down a checklist meant every row lit up as the pointer crossed it — the rows
+    /// are a list to read, not a menu to pick from.
+    /// </summary>
+    [AvaloniaFact]
+    public void A_step_does_not_light_up_under_the_pointer()
+    {
+        var (view, _, _) = Open(board =>
+            board.Groups[0].Tasks[0].Steps.Add(new TaskStep { Id = "s1", Text = "Book the room" }));
+
+        var text = Dialog(view).GetLogicalDescendants().OfType<TextBox>().First(b => b.Text == "Book the room");
+
+        // The fill lives on the template's own border, not on the box — that is why setting Background
+        // on the TextBox could not turn it off.
+        var fill = text.GetVisualDescendants().OfType<Border>().First(b => b.Name == "PART_BorderElement");
+        var resting = fill.Background;
+
+        var window = (Window)TopLevel.GetTopLevel(view)!;
+        window.MouseMove(text.TranslatePoint(new Point(text.Bounds.Width / 2, text.Bounds.Height / 2), window)!.Value);
+        Dispatcher.UIThread.RunJobs();
+        window.UpdateLayout();
+
+        Assert.True(text.IsPointerOver, "the pointer never reached the step");
+        Assert.Equal(Describe(resting), Describe(fill.Background));
+    }
+
+    /// <summary>A brush as a comparable string — two Transparent brushes are not the same object.</summary>
+    private static string Describe(IBrush? brush) => brush switch
+    {
+        null => "none",
+        ISolidColorBrush solid => solid.Color.ToString(),
+        _ => brush.GetType().Name,
+    };
 
     /// <summary>Open the "+" menu and return its rows.</summary>
     private static IReadOnlyList<Button> MenuRows(TaskDialog dialog)
