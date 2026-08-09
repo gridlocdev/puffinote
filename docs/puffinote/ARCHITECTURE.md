@@ -273,64 +273,67 @@ state across editors — panes are isolated.
 
 ## 13. Folder structure
 
-Puffinote lives under a **new top-level `app/`** directory (PRD §9), signaling the composite *product*
-distinct from the two `features/` editors. It inherits the repo-root tooling automatically, exactly as
+Puffinote lives under a top-level `app/` directory (PRD §9), signaling the composite *product* distinct
+from the four `features/` editors it embeds. It inherits the repo-root tooling automatically, exactly as
 `shared/` and `features/` do.
 
 ```
 app/                                     # the composite product
-├── Puffinote.slnx                       # the solution (references the two features + shared)
+├── Puffinote.slnx                       # the solution (references all four features + shared)
 ├── README.md   AGENTS.md
 │
 ├── Puffinote.Desktop/                   # the Avalonia 12 app — assembly "Puffinote", macOS-first
-│   ├── Puffinote.Desktop.csproj         # refs Typage.Control, Cellestra.Editor, Puffinote.Components
-│   ├── Program.cs  App.axaml (+ .cs)
-│   ├── Info.plist                       # bundle id; .md + .ods associations
-│   ├── Menu/ (NativeMenu.axaml)         # macOS menu bar → merged catalog
-│   ├── Commands/ (PuffinoteCommands.cs, MergedCatalog.cs)
+│   ├── Puffinote.Desktop.csproj         # refs Typage.Control, Cellestra.Editor, Plaintain.Control,
+│   │                                    #   Pivotask.Control, Puffinote.Components
+│   ├── Program.cs  App.cs               # no XAML: the app object is built in code, like its siblings
+│   ├── Info.plist                       # bundle id; claims `public.folder` as Alternate — a notebook
+│   │                                    #   is a folder, and the per-type claims stay with the editors
+│   ├── Commands/
+│   │   ├── CommandMerge.cs              # shell catalog ⊕ the active pane's catalog (§7)
+│   │   └── ShortcutConflictScanner.cs   # editor bindings shadowed by a reserved key (§8)
 │   ├── Shell/
-│   │   ├── NotebookService.cs  NotebookState.cs        # single-notebook model + .puffinote/ state
-│   │   ├── PuffinoteSettings.cs                  # via shared SettingsStore
-│   │   └── ShortcutRouter.cs  ShortcutConflictScanner.cs
+│   │   ├── NotebookService.cs  NotebookNode.cs  NotebookPaths.cs  PathScope.cs
+│   │   ├── NotebookMutations.cs  NotebookWatcher.cs  SystemFileManager.cs
+│   │   ├── PuffinoteSettings.cs  AppState.cs  SessionStore.cs   # per-notebook + per-user state
+│   │   ├── RecentFilesList.cs
+│   │   └── ShellCommandCatalog.cs  ShortcutRouter.cs  ShortcutKeymap.cs
 │   ├── Panes/
-│   │   ├── IEditorPane.cs  IEditorPaneFactory.cs  IOutline.cs
-│   │   ├── MarkdownPane.cs               # wraps Typage.Control (+ new Typage file-host seam)
-│   │   ├── SheetPane.cs                  # wraps Cellestra.Editor (impl IEditorHost + IAppEnvironment)
+│   │   ├── IEditorPane.cs  IConfigurablePane.cs  OutlineItem.cs
+│   │   ├── EditorPaneFactory.cs  DocumentTypes.cs   # what opens a file, and what a name may not be
+│   │   ├── MarkdownPane.cs  SheetPane.cs  PlainTextPane.cs  TaskBoardPane.cs  ErrorPane.cs
 │   │   ├── EditorConfig.cs               # + NoteConfig / SheetConfig / PlainTextConfig / BoardConfig:
-│   │   │                                 #   mirrors of each editor's OWN settings file (§7.5), read and
+│   │   │                                 #   mirrors of each editor's OWN settings file (§9), read and
 │   │   │                                 #   merge-written so unmodelled keys survive; never a ref into
 │   │   │                                 #   an editor's desktop shell
-│   │   └── PreviewPane.cs                # images / open-externally
-│   ├── Controls/
-│   │   ├── FileTree/ (FileTree, FileTreeNode, FileTreeAutomationPeer)
-│   │   ├── TabStrip/ (TabStrip, TabHost)
-│   │   ├── Sidebar/ (Sidebar, PanelSwitcher)
-│   │   └── QuickOpen/ (QuickOpenOverlay)
-│   ├── Panels/ (SearchPanel, OutlinePanel, RecentPanel)
-│   ├── Search/ (NotebookIndex, IndexWorker)
-│   ├── Views/ (MainWindow, StatusBar, ShortcutsEditorView)
-│   └── Services/ (DialogService via Puffinote.Components OverlayHost, RecentNotebooks)
+│   │   └── TabHost.cs  TabStripScroll.cs # the tab strip and the panes it mounts (§6)
+│   ├── Controls/ (FileTreeView.cs, FileGlyph.cs)
+│   ├── Sidebar/                          # the panel host and its four panels (§10)
+│   │   ├── SidebarView.cs  SidebarLayout.cs  SidebarSwipe.cs  ISidebarPanel.cs
+│   │   ├── FilesPanel.cs  SearchPanel.cs  OutlinePanel.cs  RecentPanel.cs
+│   │   └── KeyboardListView.cs  QuickOpen.cs
+│   ├── Search/ (NotebookSearchService.cs, SearchIndexCache.cs, SearchQuery.cs)
+│   └── Views/                            # MainWindow, split by concern across partials
+│       └── MainWindow.cs + .Menu / .Mutations / .Session / .Settings / .Shortcuts / .Gestures
 │
 ├── Puffinote.Cli/                       # the `puffinote` router — no Avalonia
-│   ├── Puffinote.Cli.csproj             # refs Puffinote.Components.Core + both sub-CLIs + engines
-│   ├── Program.cs  CliApplication.cs     # composes md/sheet/notebook command trees
-│   └── Commands/ (NotebookCommands.cs, RouteMarkdown.cs, RouteSheet.cs)
+│   ├── Puffinote.Cli.csproj             # refs Puffinote.Components.Core + the sub-CLIs + engines
+│   ├── Program.cs  CliApplication.cs    # composes md/sheet/notebook command trees
+│   ├── Commands/ (NotebookCommands.cs, Router.cs)
+│   └── Infrastructure/ (Notebook.cs)
 │
 ├── Puffinote.Tests/                     # shell logic, xUnit v3 (pure/headless helpers)
-│   └── (NotebookServiceTests, TabHostTests, MergedCatalogTests,
-│        ShortcutRouterTests, ConflictScannerTests, ConfigPrecedenceTests)
-│
-├── Puffinote.UiTests/                   # headless Avalonia, xUnit v3
-│   └── (FileTreeKeyboardTests, TabHostMountTests, TestAppBuilder.cs)
-│
-├── Puffinote.Cli.Tests/                 # end-to-end CLI, in-process (routing + notebook cmds)
-│
-└── docs/ (PRD.md, ARCHITECTURE.md)      # ← this file
+├── Puffinote.UiTests/                   # headless Avalonia, xUnit v3 (TestAppBuilder.cs, TestKeys.cs)
+└── Puffinote.Cli.Tests/                 # end-to-end CLI, in-process (routing + notebook cmds)
 ```
 
+The shell owns no window chrome of its own beyond `MainWindow`: the title bar, overlays, settings form,
+shortcuts editor, icons and theming all come from `Puffinote.Components`, which is also where the four
+standalone apps get them. That is why there is no `Views/StatusBar.cs` or `Views/ShortcutsEditorView.cs`
+here — a shell-only copy of either would be the fork this design exists to avoid (§4).
+
 *(Landed in `features/EditMarkdown/`: the extracted Typage file-host seam `MarkdownDocumentSession` in
-`Typage.Control` (§4). Cellestra needs no structural change — `Cellestra.Editor` already exposes the
-seams.)*
+`Typage.Control` (§4). The other three editors needed no structural change — `Cellestra.Editor`,
+`Plaintain.Control` and `Pivotask.Control` already expose the seams.)*
 
 ---
 

@@ -494,3 +494,20 @@
     ⌘S and ⌘, — those are shared with the editors *by design*, since the merged Command Menu is a superset
     of an editor's own, quick-open is the shell's file-open, and the shell owns saving. Checked against the
     old chord: it fails, naming the command and the shell id it takes.
+
+- [x] Puffinote: `docs/puffinote/ARCHITECTURE.md` §13's folder tree was two panes out of date.
+
+    It named an `IOutline.cs`, an `IEditorPaneFactory.cs`, a `PreviewPane.cs`, a `Menu/NativeMenu.axaml`,
+    an `App.axaml`, a `Controls/TabStrip/`, a `Panels/`, a `Services/`, and `Views/StatusBar.cs` +
+    `Views/ShortcutsEditorView.cs` — none of which exist — while omitting `PlainTextPane`, `TaskBoardPane`,
+    `ErrorPane`, `EditorPaneFactory`, `DocumentTypes`, `SessionStore`, `AppState`, `ShortcutKeymap`, the
+    whole `Sidebar/` folder, and the six `MainWindow` partials. Rewritten against what is actually on disk,
+    then verified path by path: every file the tree names now exists, and `App.axaml` is confirmed absent
+    (the app object is built in code, like its siblings).
+
+    Two claims in it were wrong rather than merely stale and are now right: the solution references **four**
+    features, not two; and `Info.plist` claims `public.folder` as an Alternate handler — a notebook is a
+    folder — where the doc said it carried `.md` and `.ods` associations, which live with the editors.
+
+    Added a short note on why there is no `StatusBar.cs` or `ShortcutsEditorView.cs` here: both come from
+    `Puffinote.Components`, and a shell-only copy of either would be exactly the fork §4 exists to prevent.
