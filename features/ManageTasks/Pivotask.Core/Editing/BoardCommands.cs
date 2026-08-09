@@ -157,12 +157,43 @@ public static class BoardCommands
             _ => group.Tasks.Insert(Math.Clamp(index, 0, group.Tasks.Count), task));
     }
 
+    /// <summary>
+    /// Tick or untick the task. <b>Completing it ticks every step with it</b> — the prototype does this,
+    /// and it is the honest reading: a task you have called finished cannot still have half its checklist
+    /// outstanding, and leaving them would show "1/3 steps" on a card with a line through its title.
+    /// <para>
+    /// Reopening does <em>not</em> untick them, because that would throw away work: the steps were
+    /// genuinely done. Undo restores exactly which steps were ticked before, so the cascade is never a
+    /// one-way door.
+    /// </para>
+    /// </summary>
     public static IBoardCommand SetDone(TaskItem task, bool done)
     {
         ArgumentNullException.ThrowIfNull(task);
         bool before = task.Done;
-        return new Action(done ? "Complete Task" : "Reopen Task",
-            _ => task.Done = done, _ => task.Done = before);
+        var stepsBefore = task.Steps.Select(step => step.Done).ToArray();
+
+        return new Action(
+            done ? "Complete Task" : "Reopen Task",
+            _ =>
+            {
+                task.Done = done;
+                if (done)
+                {
+                    foreach (var step in task.Steps)
+                    {
+                        step.Done = true;
+                    }
+                }
+            },
+            _ =>
+            {
+                task.Done = before;
+                for (int i = 0; i < task.Steps.Count && i < stepsBefore.Length; i++)
+                {
+                    task.Steps[i].Done = stepsBefore[i];
+                }
+            });
     }
 
     public static IBoardCommand SetImportant(TaskItem task, bool important)

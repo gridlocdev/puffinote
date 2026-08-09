@@ -193,4 +193,48 @@ public class BoardCommandTests
         Assert.Throws<ArgumentException>(
             () => BoardCommands.MoveTask(doc.Board, stranger, doc.Board.Groups[0]));
     }
+
+    /// <summary>
+    /// Completing a task ticks every step with it, as the prototype does. A task called finished cannot
+    /// still have half its checklist outstanding — the card would show "1/3 steps" under a struck-through
+    /// title and mean nothing by it.
+    /// </summary>
+    [Fact]
+    public void Completing_a_task_ticks_its_steps_and_undo_puts_them_back_as_they_were()
+    {
+        var doc = new BoardDocument();
+        var task = new TaskItem { Id = Ids.New(), Title = "Ship it" };
+        task.Steps.Add(new TaskStep { Id = Ids.New(), Text = "draft", Done = true });
+        task.Steps.Add(new TaskStep { Id = Ids.New(), Text = "review" });
+        task.Steps.Add(new TaskStep { Id = Ids.New(), Text = "publish" });
+        doc.Execute(BoardCommands.AddTask(doc.Board.Groups[0], task));
+
+        doc.Execute(BoardCommands.SetDone(task, done: true));
+        Assert.All(task.Steps, step => Assert.True(step.Done));
+        Assert.Equal((3, 3), task.StepProgress);
+
+        // Undo restores exactly which ones were ticked, so the cascade is never a one-way door.
+        doc.Undo();
+        Assert.False(task.Done);
+        Assert.Equal([true, false, false], task.Steps.Select(s => s.Done));
+    }
+
+    /// <summary>
+    /// Reopening does not untick them: those steps were genuinely done, and clearing them would throw
+    /// away work to tidy up a number.
+    /// </summary>
+    [Fact]
+    public void Reopening_a_task_leaves_its_finished_steps_finished()
+    {
+        var doc = new BoardDocument();
+        var task = new TaskItem { Id = Ids.New(), Title = "Ship it" };
+        task.Steps.Add(new TaskStep { Id = Ids.New(), Text = "draft" });
+        doc.Execute(BoardCommands.AddTask(doc.Board.Groups[0], task));
+
+        doc.Execute(BoardCommands.SetDone(task, done: true));
+        doc.Execute(BoardCommands.SetDone(task, done: false));
+
+        Assert.False(task.Done);
+        Assert.True(task.Steps[0].Done);
+    }
 }

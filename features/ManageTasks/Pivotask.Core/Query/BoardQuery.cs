@@ -29,7 +29,14 @@ public static class BoardQuery
 {
     /// <summary>How far ahead "due soon" reaches. Three days: far enough to be a warning, near enough
     /// that it doesn't quietly become "everything".</summary>
-    public static readonly int DueSoonWindow = 3;
+    /// <summary>
+    /// How many days ahead "due soon" reaches: <b>one</b> — today and tomorrow, plus everything already
+    /// late. This is the prototype's window (<c>dayDiff(t.due) &lt;= 1</c>), and the number matters: a
+    /// filter that answers "what do I have to deal with now" is only useful while its answer is short
+    /// enough to act on. Three days quietly turned it into "this week", which the board's own "This week"
+    /// column already is.
+    /// </summary>
+    public static readonly int DueSoonWindow = 1;
 
     /// <summary>Whether <paramref name="task"/> passes <paramref name="filter"/> on <paramref name="today"/>.</summary>
     public static bool Matches(TaskItem task, TaskFilter filter, DateOnly today)
@@ -78,9 +85,14 @@ public static class BoardQuery
     }
 
     /// <summary>
-    /// A due date as a person would say it: "Today", "Tomorrow", "2 days late", or a short date.
-    /// Relative only inside the window where relative is clearer — past a week, "Thu, 30 Jul" is what
-    /// you actually want, because "in 23 days" is a number you have to do arithmetic on.
+    /// A due date as a person would say it: "Today", "Tomorrow", "2 days late", or else a short weekday
+    /// date — "Tue, Jul 28".
+    /// <para>
+    /// Relative wording stops at tomorrow, which is where the prototype stops it. Anything further out is
+    /// a date, because "In 4 days" is a sum the reader has to do to find out which day that is, and the
+    /// card has room to just say. The three relative forms earn their place by being the ones nobody has
+    /// to convert.
+    /// </para>
     /// </summary>
     public static string DescribeDue(DateOnly due, DateOnly today)
     {
@@ -91,8 +103,22 @@ public static class BoardQuery
             1 => "Tomorrow",
             -1 => "1 day late",
             < -1 => $"{-days} days late",
-            <= 6 => $"In {days} days",
-            _ => due.ToString("ddd, d MMM", System.Globalization.CultureInfo.CurrentCulture),
+            _ => ShortDate(due),
         };
+    }
+
+    /// <summary>
+    /// A weekday and a day-month, ordered the way the reader's own locale orders them — "Tue, Jul 28" in
+    /// the US, "Tue, 28 Jul" where the day comes first. Built from the culture's own month/day pattern
+    /// rather than a hardcoded one, because the prototype leaves the ordering to the browser's locale and
+    /// a fixed <c>"ddd, d MMM"</c> would be quietly wrong for half its readers.
+    /// </summary>
+    private static string ShortDate(DateOnly due)
+    {
+        var culture = System.Globalization.CultureInfo.CurrentCulture;
+
+        // MonthDayPattern spells the full month ("MMMM d"); the card wants the abbreviation.
+        string monthDay = culture.DateTimeFormat.MonthDayPattern.Replace("MMMM", "MMM", StringComparison.Ordinal);
+        return due.ToString($"ddd, {monthDay}", culture);
     }
 }

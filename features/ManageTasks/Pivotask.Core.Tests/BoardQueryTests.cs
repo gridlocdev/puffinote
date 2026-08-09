@@ -26,9 +26,9 @@ public class BoardQueryTests
     [Theory]
     [InlineData(-14, true)] // three weeks late is the most "due soon" thing there is
     [InlineData(0, true)]   // today
-    [InlineData(3, true)]   // the edge of the window
-    [InlineData(4, false)]  // past it
-    public void Due_soon_reaches_forward_a_few_days_and_backward_without_limit(int days, bool expected) =>
+    [InlineData(1, true)]   // tomorrow — the edge of the window (the prototype's dayDiff <= 1)
+    [InlineData(2, false)]  // past it: that is "this week", which the board already has a column for
+    public void Due_soon_reaches_to_tomorrow_and_backward_without_limit(int days, bool expected) =>
         Assert.Equal(expected, BoardQuery.Matches(Task("x", days), TaskFilter.DueSoon, Today));
 
     [Fact]
@@ -100,17 +100,47 @@ public class BoardQueryTests
     [InlineData(1, "Tomorrow")]
     [InlineData(-1, "1 day late")]
     [InlineData(-5, "5 days late")]
-    [InlineData(4, "In 4 days")]
     public void A_due_date_reads_the_way_a_person_would_say_it(int days, string expected) =>
         Assert.Equal(expected, BoardQuery.DescribeDue(Today.AddDays(days), Today));
 
-    [Fact]
-    public void Past_a_week_a_date_is_a_date_again()
+    /// <summary>
+    /// Relative wording stops at tomorrow, where the prototype stops it. "In 4 days" is a sum the reader
+    /// has to do to find out which day that is, and the card has room to just say.
+    /// </summary>
+    [Theory]
+    [InlineData(2)]
+    [InlineData(4)]
+    [InlineData(23)]
+    public void Past_tomorrow_a_date_is_a_date_again(int days)
     {
-        // "In 23 days" is a number you have to do arithmetic on; a date is not.
-        string far = BoardQuery.DescribeDue(Today.AddDays(23), Today);
+        var due = Today.AddDays(days);
+        string text = BoardQuery.DescribeDue(due, Today);
 
-        Assert.DoesNotContain("days", far, StringComparison.Ordinal);
-        Assert.Contains("30", far, StringComparison.Ordinal);
+        Assert.DoesNotContain("days", text, StringComparison.Ordinal);
+        Assert.StartsWith(due.ToString("ddd", System.Globalization.CultureInfo.CurrentCulture), text, StringComparison.Ordinal);
+        Assert.Contains(due.Day.ToString(System.Globalization.CultureInfo.CurrentCulture), text, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// The weekday and the day-month, ordered the way the reader's own locale orders them — the browser
+    /// behaviour the prototype gets for free from toLocaleDateString.
+    /// </summary>
+    [Fact]
+    public void A_short_date_follows_the_cultures_own_day_month_order()
+    {
+        var due = new DateOnly(2025, 7, 28);
+        var prior = System.Globalization.CultureInfo.CurrentCulture;
+        try
+        {
+            System.Globalization.CultureInfo.CurrentCulture = new System.Globalization.CultureInfo("en-US");
+            Assert.Equal("Mon, Jul 28", BoardQuery.DescribeDue(due, due.AddDays(-30)));
+
+            System.Globalization.CultureInfo.CurrentCulture = new System.Globalization.CultureInfo("en-GB");
+            Assert.Equal("Mon, 28 Jul", BoardQuery.DescribeDue(due, due.AddDays(-30)));
+        }
+        finally
+        {
+            System.Globalization.CultureInfo.CurrentCulture = prior;
+        }
     }
 }
