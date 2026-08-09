@@ -408,6 +408,42 @@ public class BoardViewTests
         Assert.Equal("selected", Avalonia.Automation.AutomationProperties.GetHelpText(Named(view, "List view")));
     }
 
+    /// <summary>
+    /// A column taller than the board scrolls inside itself instead of running off the bottom edge. It
+    /// used to simply grow: a group of thirty tasks put its later cards — and the "add a task" row under
+    /// them — hundreds of pixels below the window, so a task you added was filed somewhere you could not
+    /// look at, which reads as the task never having been added at all.
+    /// </summary>
+    [AvaloniaFact]
+    public void A_column_taller_than_the_board_scrolls_instead_of_running_off_the_bottom()
+    {
+        var board = new Board();
+        var group = new TaskGroup { Id = "g1", Name = "Inbox" };
+        for (int i = 0; i < 30; i++)
+        {
+            group.Tasks.Add(new TaskItem { Id = $"t{i}", Title = $"Task number {i}" });
+        }
+
+        board.Groups.Add(group);
+
+        var view = new TaskBoardView { Document = new BoardDocument(board), Today = Today };
+        var window = new Window { Width = 900, Height = 600, Content = view };
+        window.Show();
+        window.UpdateLayout();
+        Dispatcher.UIThread.RunJobs();
+
+        var column = view.BoardForTest.GetLogicalDescendants().OfType<Border>().First(b => b.Width == 280);
+        Assert.True(
+            column.Bounds.Height <= view.BoardForTest.Bounds.Height,
+            $"the column is {column.Bounds.Height} tall inside a {view.BoardForTest.Bounds.Height} board");
+
+        // …and the row you type the next task into is still on the screen.
+        var add = view.BoardForTest.GetLogicalDescendants().OfType<Avalonia.Controls.Control>()
+            .First(c => Avalonia.Automation.AutomationProperties.GetName(c) == "Add a task");
+        double y = add.TranslatePoint(new Point(0, 0), window)!.Value.Y;
+        Assert.InRange(y, 0, 600);
+    }
+
     /// <summary>A real click, through the window, so the guard inside the card is actually exercised.</summary>
     private static void Click(Visual target)
     {

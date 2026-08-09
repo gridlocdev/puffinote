@@ -113,26 +113,42 @@ public sealed class BoardView : UserControl
     private Border BuildColumn(TaskGroup group)
     {
         var palette = Tokens.Active;
-        var body = new StackPanel { Spacing = 0 };
-
         var visible = Visible(group).ToList();
 
-        // No collapse caret here: a board column is not something the prototype folds — that affordance
-        // belongs to the list, where sections stack vertically and folding buys back a screen.
-        body.Children.Add(GroupHeader.Build(
-            Document, group, visible.Count, caret: false, () => DeleteGroupRequested?.Invoke(this, group)));
-
+        var cards = new StackPanel { Spacing = 0 };
         foreach (var task in visible)
         {
-            body.Children.Add(BuildCard(group, task));
+            cards.Children.Add(BuildCard(group, task));
         }
 
         if (visible.Count == 0)
         {
-            body.Children.Add(EmptyNote(group));
+            cards.Children.Add(EmptyNote(group));
         }
 
-        body.Children.Add(BuildAddRow(group));
+        // Head, scrolling body, pinned foot — the prototype's three parts, and the reason it has them:
+        // a column of thirty tasks is taller than any window, and a board that simply grew past the
+        // bottom edge put both the tasks below the fold and the "add a task" row out of reach. The head
+        // stays because a column you have scrolled into is a column you still need the name of.
+        var layout = new DockPanel { LastChildFill = true };
+
+        // No collapse caret here: a board column is not something the prototype folds — that affordance
+        // belongs to the list, where sections stack vertically and folding buys back a screen.
+        var head = GroupHeader.Build(
+            Document, group, visible.Count, caret: false, () => DeleteGroupRequested?.Invoke(this, group));
+        DockPanel.SetDock(head, Dock.Top);
+        layout.Children.Add(head);
+
+        var foot = BuildAddRow(group);
+        DockPanel.SetDock(foot, Dock.Bottom);
+        layout.Children.Add(foot);
+
+        layout.Children.Add(new ScrollViewer
+        {
+            HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled,
+            VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
+            Content = cards,
+        });
 
         var column = new Border
         {
@@ -142,8 +158,13 @@ public sealed class BoardView : UserControl
             BorderThickness = new Thickness(1),
             CornerRadius = new CornerRadius(8),
             Padding = new Thickness(10),
+
+            // Top, not Stretch: a column is as tall as its tasks, and only a column that would outgrow the
+            // board is clipped back to it — a board of short columns should not be a board of tall empty
+            // boxes. The cap comes from the height the board hands down, which is why its own scroller
+            // below scrolls sideways only.
             VerticalAlignment = VerticalAlignment.Top,
-            Child = body,
+            Child = layout,
         };
 
         // Drop target: the column accepts whatever card is being dragged, appending it. Precise
@@ -225,6 +246,7 @@ public sealed class BoardView : UserControl
     private Avalonia.Controls.Control BuildAddRow(TaskGroup group)
     {
         var box = new TextBox { PlaceholderText = "Add a task", Margin = new Thickness(0, 4, 0, 0) };
+        Avalonia.Automation.AutomationProperties.SetName(box, "Add a task");
         box.KeyDown += (_, e) =>
         {
             if (e.Key != Key.Enter || string.IsNullOrWhiteSpace(box.Text))
