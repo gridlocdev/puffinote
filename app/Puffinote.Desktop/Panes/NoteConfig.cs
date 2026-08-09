@@ -10,7 +10,7 @@ namespace Puffinote.Desktop.Panes;
 /// The note-editor settings Puffinote inherits from Typage's <em>own</em> config file (PRD §7.5), read into
 /// a small local mirror so Puffinote never references Typage's desktop shell (one-way layering, PRD §9;
 /// <see cref="EditorConfig"/> explains the pattern). A note opened in Puffinote therefore behaves as it does
-/// in standalone Typage — same indent width, insets, view mode and toolbar — unless a Puffinote override
+/// in standalone Typage — same indent width, insets, view mode and Command Bar — unless a Puffinote override
 /// wins (<see cref="WithOverrides"/>).
 /// <para>
 /// The mirror covers what Puffinote can act on. Settings that only mean something to Typage's own window
@@ -32,8 +32,8 @@ internal sealed record NoteConfig
     /// <summary>The widest the reading column may grow, in pixels; 0 means the full pane width.</summary>
     public int EditorMaxContentWidth { get; set; } = 760;
 
-    /// <summary>How much of Typage's formatting toolbar sits above the note: full, slim handle, or nothing.</summary>
-    public CommandBarVisibility Toolbar { get; set; }
+    /// <summary>How much of Typage's Command Bar sits above the note: full, slim handle, or nothing.</summary>
+    public CommandBarVisibility CommandBar { get; set; }
 
     /// <summary>The presentation the note opens in: rich, formatted-with-markers, or raw source.</summary>
     public MarkdownEditor.ViewMode View { get; set; } = MarkdownEditor.ViewMode.Rich;
@@ -41,24 +41,15 @@ internal sealed record NoteConfig
     /// <summary>Whether ticking a task re-orders its sibling group.</summary>
     public MarkdownEditor.CompletedTaskSortMode CompletedTaskSort { get; set; } = MarkdownEditor.CompletedTaskSortMode.None;
 
+    /// <summary>Whether a note opens with the caret's line tinted. Off, as Typage's own default is.</summary>
+    public bool HighlightCurrentLine { get; set; }
+
     /// <summary>Typage's own settings file — the same path standalone Typage reads and writes.</summary>
     public static string DefaultPath => SettingsStore.AppConfigPath("Typage", "settings.json");
 
     /// <summary>Load Typage's own note settings (tolerant — absent/corrupt yields Typage's defaults).</summary>
-    public static NoteConfig Load(string? path = null)
-    {
-        path ??= DefaultPath;
-        var config = SettingsStore.Load(path, static () => new NoteConfig(), EditorConfig.Json);
-
-        // Mirror Typage's own migration of its pre-three-state boolean, so a file that build wrote reads the
-        // same here as it does there — a mirror that skipped it would show a toolbar Typage doesn't.
-        if (SettingsStore.MigratedBool(path, nameof(Toolbar), "ShowToolbar") is { } shown)
-        {
-            config.Toolbar = shown ? CommandBarVisibility.Visible : CommandBarVisibility.Hidden;
-        }
-
-        return config;
-    }
+    public static NoteConfig Load(string? path = null) =>
+        SettingsStore.Load(path ?? DefaultPath, static () => new NoteConfig(), EditorConfig.Json);
 
     /// <summary>
     /// Write these settings back into Typage's own file, merging rather than replacing so the keys this
@@ -74,9 +65,9 @@ internal sealed record NoteConfig
         [
             ChoiceSetting.ForEnum<MarkdownEditor.ViewMode>("Default view", () => View, v => View = v,
                 ["Rich", "Formatted", "Raw text"]),
-            ChoiceSetting.ForEnum<CommandBarVisibility>("Formatting toolbar", () => Toolbar, v => Toolbar = v,
+            ChoiceSetting.ForEnum<CommandBarVisibility>("Command bar", () => CommandBar, v => CommandBar = v,
                 ["Visible", "Collapsed", "Hidden"],
-                "Visible shows the full toolbar; Collapsed folds it to its slim handle; Hidden gives the whole row back to the text."),
+                "Visible shows the full command bar; Collapsed folds it to its slim handle; Hidden gives the whole row back to the text."),
         ]),
         new SettingsSection("Editor",
         [
@@ -87,6 +78,9 @@ internal sealed record NoteConfig
                 hint: "Pixels of inset above and below the text."),
             new NumberSetting("Reading width", () => EditorMaxContentWidth, v => EditorMaxContentWidth = (int)v, 0, 4000, step: 20,
                 hint: "The widest the text column may grow, in pixels. 0 uses the full width."),
+            new ToggleSetting("Highlight the current line", () => HighlightCurrentLine, v => HighlightCurrentLine = v,
+                "A faint tint across the row the caret is on, in every view. This is what a note opens with; "
+                + "View ▸ Highlight Current Line turns it on or off for the session."),
         ]),
         new SettingsSection("Editing",
         [

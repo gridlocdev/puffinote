@@ -61,15 +61,16 @@ internal sealed class MarkdownPane : IEditorPane, IConfigurablePane
         _view.Editor.VerticalPadding = notes.EditorPaddingVertical;
         _view.Editor.MaxContentWidth = notes.EditorMaxContentWidth;
         _view.Editor.CompletedTaskSorting = notes.CompletedTaskSort;
-        _view.CommandBarVisibility = notes.Toolbar;
+        _view.CommandBarVisibility = notes.CommandBar;
         _view.ViewMode = notes.View;
+        _view.HighlightCurrentLine = notes.HighlightCurrentLine;
     }
 
     /// <summary>
-    /// How much of the formatting toolbar shows over the note — full, slim handle, or nothing (shell
-    /// View ▸ Editor Toolbar command). Session-only: the persisted default is Typage's own setting.
+    /// How much of the note's Command Bar shows — full, slim handle, or nothing (shell
+    /// View ▸ Cycle Editor Command Bar). Session-only: the persisted default is Typage's own setting.
     /// </summary>
-    public CommandBarVisibility ToolbarState
+    public CommandBarVisibility CommandBarState
     {
         get => _view.CommandBarVisibility;
         set => _view.CommandBarVisibility = value;

@@ -15,16 +15,16 @@ public sealed class PaneCommandsTests
         var pane = new MarkdownPane();
         var view = Assert.IsType<MarkdownEditorView>(pane.View);
 
-        Assert.Equal(CommandBarVisibility.Visible, pane.ToolbarState); // the full bar by default
+        Assert.Equal(CommandBarVisibility.Visible, pane.CommandBarState); // the full bar by default
         Assert.Equal(CommandBarVisibility.Visible, view.CommandBarVisibility);
 
         // The pane's state is the surface's state — it reads and writes straight through, so each of the
         // three reaches the editor rather than only the two a boolean could express.
-        pane.ToolbarState = CommandBarVisibility.Collapsed;
+        pane.CommandBarState = CommandBarVisibility.Collapsed;
         Assert.Equal(CommandBarVisibility.Collapsed, view.CommandBarVisibility);
-        pane.ToolbarState = CommandBarVisibility.Hidden;
+        pane.CommandBarState = CommandBarVisibility.Hidden;
         Assert.Equal(CommandBarVisibility.Hidden, view.CommandBarVisibility);
-        pane.ToolbarState = CommandBarVisibility.Visible;
+        pane.CommandBarState = CommandBarVisibility.Visible;
         Assert.Equal(CommandBarVisibility.Visible, view.CommandBarVisibility);
     }
 

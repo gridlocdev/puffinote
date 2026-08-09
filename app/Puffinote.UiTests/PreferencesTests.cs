@@ -132,7 +132,7 @@ public sealed class PreferencesTests
         var window = new MainWindow(new NotebookService());
         window.Show();
 
-        window.ShellCommandsForTest.Single(c => c.Id == "shell.commandPalette").Execute();
+        window.ShellCommandsForTest.Single(c => c.Id == "shell.commandMenu").Execute();
         Dispatcher.UIThread.RunJobs();
 
         var overlay = window.GetVisualDescendants().OfType<OverlayHost>().Single(h => h.IsOpen);

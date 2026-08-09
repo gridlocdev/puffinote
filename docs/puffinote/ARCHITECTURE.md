@@ -16,7 +16,7 @@ hard, bug-prone document logic already lives (and is tested) in `Typage.Engine` 
 the two editing *surfaces* already exist as embeddable Avalonia control libraries (`Typage.Control`,
 `Cellestra.Editor`); and the shared shell/design-system already exists as `Puffinote.Components`
 (Proposal 0001). Puffinote is the **fourth consumer** of that stack: a window with a notebook-rooted file
-tree, tabs, a merged command palette, a shortcuts editor, and a routing CLI.
+tree, tabs, a merged Command Menu, a shortcuts editor, and a routing CLI.
 
 ```
    ┌──────────────────────────────────────────────────────────────┐

@@ -15,7 +15,7 @@ public sealed class ShortcutConflictScannerTests
     {
         var reserved = new[]
         {
-            Cmd("shell.commandPalette", "Command Palette", Shortcut.Cmd(Key.K)),
+            Cmd("shell.commandMenu", "Command Palette", Shortcut.Cmd(Key.K)),
             Cmd("shell.closeTab", "Close Tab", Shortcut.Cmd(Key.W)),
         };
         var editor = new[]
@@ -34,7 +34,7 @@ public sealed class ShortcutConflictScannerTests
     [Fact]
     public void No_conflict_when_gestures_differ_or_the_editor_command_has_none()
     {
-        var reserved = new[] { Cmd("shell.commandPalette", "Command Palette", Shortcut.Cmd(Key.K)) };
+        var reserved = new[] { Cmd("shell.commandMenu", "Command Palette", Shortcut.Cmd(Key.K)) };
         var editor = new[]
         {
             Cmd("sheet.bold", "Bold", Shortcut.Cmd(Key.B)),

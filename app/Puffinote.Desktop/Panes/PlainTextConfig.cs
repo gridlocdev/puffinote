@@ -16,6 +16,9 @@ internal sealed record PlainTextConfig
 
     public bool ShowLineNumbers { get; set; } = true;
 
+    /// <summary>Whether the caret's row is washed with a faint tint. On, as Plaintain draws it.</summary>
+    public bool HighlightCurrentLine { get; set; } = true;
+
     public double FontSize { get; set; } = 13;
 
     /// <summary>Plaintain's own settings file — the same path standalone Plaintain reads and writes.</summary>
@@ -37,6 +40,8 @@ internal sealed record PlainTextConfig
             new ToggleSetting("Wrap long lines", () => WordWrap, v => WordWrap = v,
                 "Off is the Notepad default: a long line runs off the right edge instead of folding."),
             new ToggleSetting("Show line numbers", () => ShowLineNumbers, v => ShowLineNumbers = v),
+            new ToggleSetting("Highlight the current line", () => HighlightCurrentLine, v => HighlightCurrentLine = v,
+                "A faint tint across the row the caret is on. On a log or an aligned table it lands on the data rather than on the caret, so it can be turned off; the gutter still marks the line either way."),
             new NumberSetting("Font size", () => FontSize, v => FontSize = v, 8, 48, step: 1, decimals: 1,
                 hint: "Point size of the editor text."),
         ]),

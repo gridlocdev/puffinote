@@ -29,6 +29,7 @@ internal sealed class PlainTextPane : IEditorPane, IConfigurablePane
     {
         _view.Editor.WordWrap = config.PlainText.WordWrap;
         _view.Editor.ShowLineNumbers = config.PlainText.ShowLineNumbers;
+        _view.Editor.HighlightCurrentLine = config.PlainText.HighlightCurrentLine;
         _view.Editor.FontSize = config.PlainText.FontSize;
     }
 

@@ -23,7 +23,7 @@ public sealed class ShortcutsEditorTests
     private static ShortcutBinding[] Sample() =>
     [
         new ShortcutBinding("shell.save", "Save", "Puffinote", Shortcut.Cmd(Key.S), false, true, false),
-        new ShortcutBinding("shell.commandPalette", "Command Palette", "Puffinote", Shortcut.Cmd(Key.K), true, false, false),
+        new ShortcutBinding("shell.commandMenu", "Command Palette", "Puffinote", Shortcut.Cmd(Key.K), true, false, false),
     ];
 
     // ---- The shared control ------------------------------------------------------------------------
@@ -189,9 +189,9 @@ public sealed class ShortcutsEditorTests
             window.UseKeymapForTest(ShortcutKeymap.Load(Path.Combine(dir.FullName, "keymap.json")));
             window.Show();
 
-            window.RebindShellForTest("shell.commandPalette", Shortcut.Cmd(Key.J));
+            window.RebindShellForTest("shell.commandMenu", Shortcut.Cmd(Key.J));
 
-            Assert.Equal(Shortcut.Cmd(Key.K), window.ShellShortcutForTest("shell.commandPalette")); // fixed
+            Assert.Equal(Shortcut.Cmd(Key.K), window.ShellShortcutForTest("shell.commandMenu")); // fixed
         }
         finally
         {

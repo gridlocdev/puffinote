@@ -24,7 +24,7 @@ public sealed class ConfigInheritanceTests : IDisposable
         var path = At("typage.json");
         // Shaped like Typage's AppSettings — extra fields Puffinote doesn't apply are ignored.
         File.WriteAllText(path, """
-            { "TabWidth": 2, "EditorPadding": 40, "EditorPaddingVertical": 8, "View": "Source", "ShowToolbar": false }
+            { "TabWidth": 2, "EditorPadding": 40, "EditorPaddingVertical": 8, "View": "Source", "Theme": "Dark" }
             """);
 
         var cfg = NoteConfig.Load(path);

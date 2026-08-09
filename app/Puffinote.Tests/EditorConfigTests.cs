@@ -31,7 +31,7 @@ public sealed class EditorConfigTests : IDisposable
         var notes = NoteConfig.Load(At("nope.json"));
         Assert.Equal(4, notes.TabWidth);              // Typage's AppSettings defaults
         Assert.Equal(760, notes.EditorMaxContentWidth);
-        Assert.Equal(CommandBarVisibility.Visible, notes.Toolbar);
+        Assert.Equal(CommandBarVisibility.Visible, notes.CommandBar);
 
         var sheets = SheetConfig.Load(At("nope.json"));
         Assert.Equal(1.0, sheets.Zoom);               // Cellestra's AppSettings defaults
@@ -162,7 +162,7 @@ public sealed class EditorConfigTests : IDisposable
 
         // What the Preferences form does: build the fields over the mirror, edit, commit, save.
         var form = new Puffinote.Components.Controls.SettingsEditorView(plainText.Fields());
-        Assert.Equal(3, form.Fields.Count);
+        Assert.Equal(4, form.Fields.Count);
         form.Commit(); // committing an untouched form must not change anything
         Assert.Equal(new PlainTextConfig(), plainText);
 

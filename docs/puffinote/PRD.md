@@ -41,7 +41,7 @@ evaluated against **Nielsen's 10 usability heuristics** (§6).
 - A **collapsible sidebar** that is fully **focusable, navigable, and operable by keyboard**.
 - **Tabs:** multiple documents open at once, freely mixing notes and sheets, each with its own
   dirty/undo state.
-- **One merged Command Palette** that fuses Puffinote's shell commands with the active editor's commands.
+- **One merged Command Menu** that fuses Puffinote's shell commands with the active editor's commands.
 - A **unified CLI** (`puffinote`) that routes to the sub-app command lists plus notebook-level commands, so
   terminal users and AI agents drive the whole notebook from one entry point.
 - A **shared keyboard-shortcuts editor** whose bindings work identically in Puffinote *and* in each
@@ -114,7 +114,7 @@ CLI harness `CliHost`/`CliException`). Both editors already run their palette an
 |---|---|
 | Note-takers / "second brain" users | Keep a notebook of Markdown notes; jump between them from the tree; write with formatting visible inline. |
 | Analysts / planners | Keep budgets, trackers, and tables as `.ods` alongside notes; open a sheet in a tab next to a note. |
-| Keyboard-first / power users | Never touch the mouse: command palette, sidebar keyboard nav, custom shortcuts. |
+| Keyboard-first / power users | Never touch the mouse: Command Menu, sidebar keyboard nav, custom shortcuts. |
 | Terminal users & AI agents | Drive notebook contents from the `puffinote` CLI (list, search, read, edit notes and sheets). |
 | Existing Typage / Cellestra users | Keep using the standalone apps; Puffinote is additive, not a replacement. |
 
@@ -156,7 +156,7 @@ CLI harness `CliHost`/`CliException`). Both editors already run their palette an
 | 3 | **User control & freedom** | Undo/redo delegated to the focused editor; collapsible sidebar; close/reopen tabs; Cancel on every dialog; the shortcut-conflict warning tells you exactly how to fix it (§7.6). |
 | 4 | **Consistency & standards** | One design system (`Puffinote.Components` tokens); shortcuts render as ⌘ on macOS via the shared `ShortcutFormatter`; the same command runs identically from menu, palette, and keybinding. |
 | 5 | **Error prevention** | Prompt on unsaved tab/notebook close; the launch **conflict-warning modal** prevents silently-shadowed shortcuts; sub-app save-safety (encoding guard, atomic write, `.ods` unmodeled-content preservation) is untouched. |
-| 6 | **Recognition over recall** | Merged command palette exposes *every* action; sidebar panels (tree, search, outline, recent); tooltips show shortcuts; the shortcuts editor lists all bindings in one place. |
+| 6 | **Recognition over recall** | Merged Command Menu exposes *every* action; sidebar panels (tree, search, outline, recent); tooltips show shortcuts; the shortcuts editor lists all bindings in one place. |
 | 7 | **Flexibility & efficiency** | Full keyboard operation; customizable shortcuts; recent-files quick-open; collapsible chrome; the `puffinote` CLI for scripted/agent workflows. |
 | 8 | **Aesthetic & minimalist design** | Calm single-notebook focus; collapsible sidebar; the editor is the hero; chrome reads one design language across notes and sheets. |
 | 9 | **Recognize, diagnose, recover** | Errors state OS reason + suggested action (inherited from the sub-apps); a sub-app that fails to load a file surfaces its own error dialog through the shared `MessageDialog`. |
@@ -240,10 +240,10 @@ Alongside the file tree, 1.0 ships three panels (switchable, each keyboard-focus
 
 #### 7.2.5 Quick-open (⌘O)
 
-A dedicated **fuzzy quick-open** (⌘O), separate from the command palette, jumps to any file in the notebook
+A dedicated **fuzzy quick-open** (⌘O), separate from the Command Menu, jumps to any file in the notebook
 by typing part of its name. It reuses the shared `FuzzyMatcher` and the `PaletteListView` presentation,
 ranks by name match + recency, and opens the chosen file into a tab (Enter) — the signature keyboard-first
-navigation PKM users expect. (The command palette stays commands-only; file navigation lives here.)
+navigation PKM users expect. (The Command Menu stays commands-only; file navigation lives here.)
 
 ### 7.3 The editor host (tabs + embedding)
 
@@ -276,7 +276,7 @@ navigation PKM users expect. (The command palette stays commands-only; file navi
 - **The active tab drives context:** the active editor supplies the merged palette commands (§7.4), the
   outline panel (§7.2.4), the status bar, and which shortcut set is layered (§7.6).
 
-### 7.4 Command palette (merged)
+### 7.4 Command Menu (merged)
 
 - Puffinote has its **own** shell command catalog (open notebook, toggle sidebar, focus tree, new file,
   next/previous tab, open shortcuts editor, switch panel, …), built on the shared `AppCommand` and run
@@ -342,7 +342,7 @@ over the **merged** set. A binding customized in a sub-app is honored when that 
 Puffinote (per the config-inheritance rule, §7.5).
 
 **Runtime resolution — context-dependent by focus.** Puffinote defines a **moderate reserved set** of
-global shortcuts that the shell always wins: **command palette (⌘K), quick-open (⌘O), toggle/focus
+global shortcuts that the shell always wins: **Command Menu (⌘K), quick-open (⌘O), toggle/focus
 sidebar, focus editor, next/previous/close tab, new file, and open notebook.** (This is the "minimal" shell
 essentials plus tab navigation, new-file, and quick-open — chosen for predictable chrome while leaving
 editors most of the keyspace.) Resolution:
@@ -389,7 +389,7 @@ Each sub-application must **remain independently compilable and runnable**, and 
 
 - its **own build/run** (`dotnet run --project Typage.Desktop`, `dotnet run --project Cellestra.Desktop`),
 - its **own persisted configuration** (own type + path; §7.5),
-- its **own Command Palette catalog** (defined once in the app),
+- its **own Command Menu catalog** (defined once in the app),
 - its **own CLI command list** (`typage`, `cellestra`) — which the `puffinote` CLI *routes to*, not
   *replaces*,
 - its **own shortcuts** working when exported separately (§7.6).
@@ -559,7 +559,7 @@ any phase that delivers value.
   `ChoiceDialog` (Save/Don't-Save/Cancel), resolving the Phase 1 deferral. 11 headless + 9 pure tests
   green; both sub-apps still build.
 - **Phase 3 — Merged palette + shortcuts. ✅ Landed.** A single shell `AppCommand` catalog drives the
-  menu, key bindings, and a **Command Palette (⌘K)** that merges Puffinote's commands with the active
+  menu, key bindings, and a **Command Menu (⌘K)** that merges Puffinote's commands with the active
   editor's catalog (`IEditorPane.Commands` — Cellestra's full self-hosted catalog; a minimal Typage set
   until its catalog is extracted). The **moderate reserved set** (⌘K, ⌘⇧O, ⌘\, ⌘W, ⌘⇧[ / ⌘⇧]) wins over
   the focused editor via a tunnelling handler; everything else is focus-dispatched. A **conflict scanner**

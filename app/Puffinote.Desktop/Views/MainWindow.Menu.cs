@@ -31,7 +31,7 @@ public partial class MainWindow
 
         _shellCommands =
         [
-            new("shell.commandPalette", "Command Palette", "Search and run any command", Bound("shell.commandPalette", Shortcut.Cmd(Key.K)),
+            new("shell.commandMenu", "Command Menu", "Search and run any command", Bound("shell.commandMenu", Shortcut.Cmd(Key.K)),
                 ShowCommandPalette, icon: "command"),
             new("shell.quickOpen", "Quick Open…", "Jump to any file in the notebook", Bound("shell.quickOpen", Shortcut.Cmd(Key.O)),
                 ShowQuickOpen, () => _notebook.Root is not null, icon: "search"),
@@ -104,8 +104,8 @@ public partial class MainWindow
             // The toolbar has three states now (visible, collapsed, hidden), so the one command steps through
             // them rather than flipping a switch. The id is unchanged: a shortcut someone remapped to it still
             // reaches the same control (see Bound).
-            new("shell.toggleEditorToolbar", "Cycle Editor Toolbar", "Step the formatting toolbar over a note through visible, collapsed, and hidden",
-                Bound("shell.toggleEditorToolbar", null), CycleEditorToolbar, () => _tabHost.ActivePane is MarkdownPane, icon: "type"),
+            new("shell.toggleEditorCommandBar", "Cycle Editor Command Bar", "Step the command bar over a note through visible, collapsed, and hidden",
+                Bound("shell.toggleEditorCommandBar", null), CycleEditorCommandBar, () => _tabHost.ActivePane is MarkdownPane, icon: "type"),
 
             // The session-only twin of the Preferences toggle (see ShowSettings): flips the tree's extensions now,
             // saves nothing. No default gesture — there is no convention for it, and it stays rebindable.
@@ -233,7 +233,7 @@ public partial class MainWindow
                 Items =
                 {
                     new NativeMenuItem { Header = "File", Menu = BuildNativeMenu("shell.openNotebook", "shell.quickOpen", "shell.newFolder", "shell.newNote", "shell.newSpreadsheet", "shell.newTaskboard", "shell.newFile", "shell.save", "shell.closeTab", "shell.closeOtherTabs", "shell.closeAllTabs") },
-                    new NativeMenuItem { Header = "View", Menu = BuildNativeMenu("shell.commandPalette", "shell.toggleSidebar", "shell.toggleTabBar", "shell.focusTree", "shell.focusEditor", "shell.toggleEditorToolbar", "shell.toggleFileExtensions", "shell.nextTab", "shell.prevTab", "shell.preferences") },
+                    new NativeMenuItem { Header = "View", Menu = BuildNativeMenu("shell.commandMenu", "shell.toggleSidebar", "shell.toggleTabBar", "shell.focusTree", "shell.focusEditor", "shell.toggleEditorCommandBar", "shell.toggleFileExtensions", "shell.nextTab", "shell.prevTab", "shell.preferences") },
                     new NativeMenuItem { Header = "Help", Menu = BuildNativeMenu("shell.shortcuts", "shell.about") },
                 },
             });
@@ -250,7 +250,7 @@ public partial class MainWindow
             Items =
             {
                 new MenuItem { Header = "_File", ItemsSource = BuildMenuItems("shell.openNotebook", "shell.quickOpen", "shell.newFolder", "shell.newNote", "shell.newSpreadsheet", "shell.newTaskboard", "shell.newFile", "shell.save", "shell.closeTab", "shell.closeOtherTabs", "shell.closeAllTabs") },
-                new MenuItem { Header = "_View", ItemsSource = BuildMenuItems("shell.commandPalette", "shell.toggleSidebar", "shell.toggleTabBar", "shell.focusTree", "shell.focusEditor", "shell.toggleEditorToolbar", "shell.toggleFileExtensions", "shell.nextTab", "shell.prevTab", "shell.preferences") },
+                new MenuItem { Header = "_View", ItemsSource = BuildMenuItems("shell.commandMenu", "shell.toggleSidebar", "shell.toggleTabBar", "shell.focusTree", "shell.focusEditor", "shell.toggleEditorCommandBar", "shell.toggleFileExtensions", "shell.nextTab", "shell.prevTab", "shell.preferences") },
                 new MenuItem { Header = "_Help", ItemsSource = BuildMenuItems("shell.shortcuts", "shell.about") },
             },
         };
@@ -405,12 +405,12 @@ public partial class MainWindow
     /// Step the active note's toolbar to its next state, wrapping visible → collapsed → hidden → visible.
     /// No-op for other panes.
     /// </summary>
-    private void CycleEditorToolbar()
+    private void CycleEditorCommandBar()
     {
         if (_tabHost.ActivePane is MarkdownPane note)
         {
             var states = Enum.GetValues<CommandBarVisibility>();
-            note.ToolbarState = states[(Array.IndexOf(states, note.ToolbarState) + 1) % states.Length];
+            note.CommandBarState = states[(Array.IndexOf(states, note.CommandBarState) + 1) % states.Length];
         }
     }
 

@@ -19,7 +19,7 @@ internal static class ShellCommandCatalog
     /// </summary>
     public static readonly IReadOnlySet<string> ReservedIds = new HashSet<string>
     {
-        "shell.commandPalette", "shell.quickOpen", "shell.openNotebook", "shell.toggleSidebar",
+        "shell.commandMenu", "shell.quickOpen", "shell.openNotebook", "shell.toggleSidebar",
         "shell.closeTab", "shell.nextTab", "shell.prevTab",
     };
 
@@ -30,7 +30,7 @@ internal static class ShellCommandCatalog
     /// </summary>
     public static readonly IReadOnlySet<string> ShellSupersedesEditor = new HashSet<string>
     {
-        "shell.commandPalette", "shell.quickOpen",
+        "shell.commandMenu", "shell.quickOpen",
     };
 
     /// <summary>Whether <paramref name="id"/> is a reserved global key (its gesture is fixed, PRD §7.6).</summary>

@@ -68,7 +68,7 @@ internal sealed record SheetConfig
                 hint: "Percent. ⌘+ and ⌘− change it while you work; this is where a sheet starts."),
             ChoiceSetting.ForEnum<CommandBarVisibility>("Command bar", () => CommandBar, v => CommandBar = v,
                 ["Visible", "Collapsed", "Hidden"],
-                "Visible shows the full toolbar; Collapsed folds it to its slim handle; Hidden gives the whole row back to the grid."),
+                "Visible shows the full command bar; Collapsed folds it to its slim handle; Hidden gives the whole row back to the grid."),
         ]),
     ];
 }

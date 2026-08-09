@@ -42,10 +42,10 @@ public sealed class ShellCommandCatalogTests : IDisposable
     public void A_reserved_command_keeps_its_fixed_default_even_when_the_keymap_rebinds_it()
     {
         var keymap = Keymap();
-        keymap.Set("shell.commandPalette", Shortcut.Cmd(Key.P)); // a stray custom binding on a reserved id
+        keymap.Set("shell.commandMenu", Shortcut.Cmd(Key.P)); // a stray custom binding on a reserved id
 
         // Reserved keys are fixed (PRD §7.6): resolution ignores the keymap and returns the default gesture.
         var def = Shortcut.Cmd(Key.K);
-        Assert.Equal(def, ShellCommandCatalog.ResolveGesture(keymap, "shell.commandPalette", def));
+        Assert.Equal(def, ShellCommandCatalog.ResolveGesture(keymap, "shell.commandMenu", def));
     }
 }

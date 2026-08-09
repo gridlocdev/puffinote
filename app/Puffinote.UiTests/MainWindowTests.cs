@@ -38,13 +38,13 @@ public sealed class MainWindowTests
             Assert.Equal(CommandBarVisibility.Visible, view.CommandBarVisibility); // the full bar by default
 
             // The command is a ladder, not a toggle: each invocation steps one rung and the last wraps.
-            window.InvokeShellForTest("shell.toggleEditorToolbar");
+            window.InvokeShellForTest("shell.toggleEditorCommandBar");
             Assert.Equal(CommandBarVisibility.Collapsed, view.CommandBarVisibility);
 
-            window.InvokeShellForTest("shell.toggleEditorToolbar");
+            window.InvokeShellForTest("shell.toggleEditorCommandBar");
             Assert.Equal(CommandBarVisibility.Hidden, view.CommandBarVisibility);
 
-            window.InvokeShellForTest("shell.toggleEditorToolbar");
+            window.InvokeShellForTest("shell.toggleEditorCommandBar");
             Assert.Equal(CommandBarVisibility.Visible, view.CommandBarVisibility);
         }
         finally
@@ -155,7 +155,7 @@ public sealed class MainWindowTests
             window.InvokeShellForTest("shell.focusEditor"); // caret is in the grid
             Assert.True(FocusIsWithin(window, window.ActiveEditorViewForTest));
 
-            window.InvokeShellForTest("shell.commandPalette");
+            window.InvokeShellForTest("shell.commandMenu");
             Dispatcher.UIThread.RunJobs(); // the palette's search box takes focus
             Assert.True(window.IsOverlayOpenForTest);
             Assert.False(FocusIsWithin(window, window.ActiveEditorViewForTest)); // focus moved to the palette
