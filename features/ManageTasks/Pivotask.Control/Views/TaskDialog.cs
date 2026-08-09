@@ -1,11 +1,11 @@
 using Avalonia;
 using Avalonia.Controls;
-using Avalonia.Controls.Primitives;
 using Avalonia.Layout;
 using Avalonia.Media;
 using Pivotask.Core;
 using Pivotask.Core.Editing;
 using Pivotask.Core.Model;
+using Pivotask.Core.Query;
 using Puffinote.Components.Controls.Icons;
 using Puffinote.Components.Overlays;
 using Puffinote.Components.Theming;
@@ -26,14 +26,18 @@ internal sealed class TaskDialog : ModalDialog<bool>
 {
     private readonly BoardDocument _document;
     private readonly TaskItem _task;
-    private readonly StackPanel _body = new() { Spacing = 12 };
-    private readonly StackPanel _optional = new() { Spacing = 12 };
+    private readonly StackPanel _body = new() { Spacing = 22 };
+    private readonly StackPanel _upper = new() { Spacing = 22 };
+    private readonly StackPanel _lower = new() { Spacing = 22 };
     private readonly DockPanel _head = new() { LastChildFill = true };
+    private readonly DateOnly _today;
+    private bool _focusStepAdd;
 
-    public TaskDialog(BoardDocument document, TaskItem task)
+    public TaskDialog(BoardDocument document, TaskItem task, DateOnly today)
     {
         _document = document;
         _task = task;
+        _today = today;
 
         // No "Task" heading over the header strip: the strip already says which list this is in, and the
         // dialog's own subject is the title in 21pt underneath it. A band repeating the word "Task" would
@@ -85,11 +89,11 @@ internal sealed class TaskDialog : ModalDialog<bool>
             Text = task.Notes,
             AcceptsReturn = true,
             TextWrapping = TextWrapping.Wrap,
-            MinHeight = 70,
+            MinHeight = 86,
 
             // Plain text, deliberately (proposal 0004 §10.4). A note attached to a task is a sentence or
             // two; if it genuinely wants to be a document, that document is a .md file.
-            PlaceholderText = "Notes",
+            PlaceholderText = "Add a more detailed note…",
         };
         notes.LostFocus += (_, _) =>
         {
@@ -98,9 +102,13 @@ internal sealed class TaskDialog : ModalDialog<bool>
                 _document.Execute(BoardCommands.SetNotes(task, notes.Text ?? string.Empty));
             }
         };
-        _body.Children.Add(notes);
 
-        _body.Children.Add(_optional);
+        // Labels and the due date above the note, the checklist below it — the prototype's order, and the
+        // order a task is written in: what it is, when it is wanted, what it is about, what it takes. The
+        // note keeps a panel of its own between the two so it is never rebuilt out from under a caret.
+        _body.Children.Add(_upper);
+        _body.Children.Add(Section("align-left", "Notes", null, null, notes));
+        _body.Children.Add(_lower);
 
         // Head and foot are pinned; only the task's own fields scroll. A checklist of twenty steps must
         // not push "Delete task" — or the way out of the dialog — off the bottom of the card.
@@ -267,148 +275,370 @@ internal sealed class TaskDialog : ModalDialog<bool>
 
     private void RebuildOptional()
     {
-        _optional.Children.Clear();
+        _upper.Children.Clear();
+        _lower.Children.Clear();
 
         if (IsShown("labels"))
         {
-            _optional.Children.Add(Section("Labels", BuildLabels()));
+            _upper.Children.Add(Section("tag", "Labels", null, null, BuildLabels()));
         }
 
         if (IsShown("due"))
         {
-            _optional.Children.Add(Section("Due", BuildDue()));
+            _upper.Children.Add(BuildDueSection());
         }
 
         if (IsShown("steps"))
         {
-            _optional.Children.Add(Section("Steps", BuildSteps()));
+            _lower.Children.Add(BuildStepsSection());
         }
     }
 
-    private static Avalonia.Controls.Control Section(string heading, Avalonia.Controls.Control body) => new StackPanel
+    /// <summary>
+    /// One section: a glyph out in the left margin, an upper-case heading, and the field itself.
+    ///
+    /// <para>The heading carries two optional passengers, because the prototype's do and they earn it:
+    /// a <paramref name="note"/> that states the section's answer at a glance ("Tomorrow", "1 of 3"),
+    /// and a <paramref name="link"/> that empties it. Putting "Clear" beside the heading rather than
+    /// under the field keeps the destructive control away from the one you are typing into.</para>
+    /// </summary>
+    private static Avalonia.Controls.Control Section(
+        string icon,
+        string heading,
+        Avalonia.Controls.Control? note,
+        Button? link,
+        Avalonia.Controls.Control body)
     {
-        Spacing = 4,
-        Children =
-        {
-            new TextBlock { Text = heading, FontSize = 11, Foreground = Tokens.Active.MutedText },
-            body,
-        },
-    };
+        var palette = Tokens.Active;
 
+        var headRow = new DockPanel { LastChildFill = true, Margin = new Thickness(0, 0, 0, 9) };
+        var title = new TextBlock
+        {
+            Text = heading.ToUpper(System.Globalization.CultureInfo.CurrentCulture),
+            FontSize = 11,
+            FontWeight = FontWeight.SemiBold,
+            LetterSpacing = 0.9,
+            Foreground = palette.MutedText,
+            VerticalAlignment = VerticalAlignment.Center,
+        };
+        DockPanel.SetDock(title, Dock.Left);
+        headRow.Children.Add(title);
+
+        if (note is not null)
+        {
+            note.Margin = new Thickness(10, 0, 0, 0);
+            note.VerticalAlignment = VerticalAlignment.Center;
+            DockPanel.SetDock(note, Dock.Left);
+            headRow.Children.Add(note);
+        }
+
+        if (link is not null)
+        {
+            DockPanel.SetDock(link, Dock.Right);
+            headRow.Children.Add(link);
+        }
+
+        headRow.Children.Add(new Panel());
+
+        var stack = new StackPanel { Children = { headRow, body } };
+
+        var row = new DockPanel { LastChildFill = true };
+        var glyph = new LucideIcon
+        {
+            IconKey = icon,
+            Size = 15,
+            Foreground = palette.MutedText,
+            VerticalAlignment = VerticalAlignment.Top,
+            Margin = new Thickness(0, 3, 12, 0),
+        };
+        DockPanel.SetDock(glyph, Dock.Left);
+        row.Children.Add(glyph);
+        row.Children.Add(stack);
+        return row;
+    }
+
+    /// <summary>A quiet text button — the prototype's <c>.link</c>: "Clear", "Delete all".</summary>
+    private static Button LinkButton(string text, Action run)
+    {
+        var button = new Button
+        {
+            Content = text,
+            FontSize = 12,
+            Background = Brushes.Transparent,
+            BorderThickness = new Thickness(0),
+            Padding = new Thickness(7, 2),
+            Foreground = Tokens.Active.MutedText,
+            VerticalAlignment = VerticalAlignment.Center,
+        };
+        Avalonia.Automation.AutomationProperties.SetName(button, text);
+        button.Click += (_, _) => run();
+        return button;
+    }
+
+    /// <summary>
+    /// The board's labels as chips you turn on and off, coloured as they are on the card. They were plain
+    /// toggle buttons, which meant the one place you <em>choose</em> a label was the one place its colour
+    /// wasn't — so picking "design" told you nothing about which chip would appear.
+    /// </summary>
     private Avalonia.Controls.Control BuildLabels()
     {
+        var palette = Tokens.Active;
         var panel = new WrapPanel();
+
         foreach (var label in _document.Board.Labels)
         {
             bool on = _task.Labels.Contains(label.Id, StringComparer.Ordinal);
-            var toggle = new ToggleButton
+            var color = Color.TryParse(label.Color, out var parsed) ? parsed : Color.FromRgb(0x64, 0x74, 0x8B);
+
+            var chip = new Button
             {
                 Content = label.Name,
-                IsChecked = on,
-                Margin = new Thickness(0, 0, 4, 4),
+                FontSize = 11,
+                Padding = new Thickness(9, 4),
+                Margin = new Thickness(0, 0, 6, 6),
+                CornerRadius = new CornerRadius(6),
+                BorderThickness = new Thickness(1),
+                Background = on ? new SolidColorBrush(color) : Brushes.Transparent,
+                BorderBrush = on ? Brushes.Transparent : palette.SurfaceBorder,
+                Foreground = on ? Brushes.White : palette.MutedText,
             };
-            toggle.IsCheckedChanged += (_, _) =>
+            Avalonia.Automation.AutomationProperties.SetName(chip, label.Name);
+            Avalonia.Automation.AutomationProperties.SetHelpText(chip, on ? "on" : null);
+
+            chip.Click += (_, _) =>
             {
-                if ((toggle.IsChecked == true) != _task.Labels.Contains(label.Id, StringComparer.Ordinal))
-                {
-                    _document.Execute(BoardCommands.ToggleLabel(_task, label.Id));
-                }
+                _document.Execute(BoardCommands.ToggleLabel(_task, label.Id));
+
+                // Keep the section open even when that was the last label: you are mid-decision, and a
+                // section that vanished under the pointer would take the way back with it.
+                _revealed.Add("labels");
+                RebuildOptional();
             };
-            panel.Children.Add(toggle);
+            panel.Children.Add(chip);
         }
 
         if (_document.Board.Labels.Count == 0)
         {
-            panel.Children.Add(new TextBlock { Text = "This board has no labels yet.", Foreground = Tokens.Active.MutedText });
+            panel.Children.Add(new TextBlock { Text = "This board has no labels yet.", Foreground = palette.MutedText });
         }
 
         return panel;
     }
 
-    private Avalonia.Controls.Control BuildDue()
+    /// <summary>
+    /// The due date, with what it means spelled out beside the heading — "Tomorrow", "2 days late" — in
+    /// the same words the card uses, so the pill you are about to create is legible before it exists.
+    /// </summary>
+    private Avalonia.Controls.Control BuildDueSection()
     {
-        var box = new TextBox
+        // A date, not a date and a time. CalendarDatePicker is the stock control for exactly this, and it
+        // reads and writes the reader's own date order rather than making them type YYYY-MM-DD.
+        var picker = new CalendarDatePicker
         {
-            Text = _task.Due is { } due ? Ids.Format(due) : string.Empty,
-            PlaceholderText = "YYYY-MM-DD",
-            Width = 140,
+            SelectedDate = _task.Due is { } due ? due.ToDateTime(TimeOnly.MinValue) : null,
+            Width = 210,
             HorizontalAlignment = HorizontalAlignment.Left,
         };
+        Avalonia.Automation.AutomationProperties.SetName(picker, "Due date");
 
-        box.LostFocus += (_, _) =>
+        picker.SelectedDateChanged += (_, _) =>
         {
-            // A date or nothing. No parsing of "next tuesday": this format has no times and no
-            // timezones, and a guess that lands a day out is worse than a box that says no.
-            var parsed = Ids.ParseDate(box.Text);
-            if (string.IsNullOrWhiteSpace(box.Text))
+            DateOnly? chosen = picker.SelectedDate is { } date ? DateOnly.FromDateTime(date) : null;
+            if (chosen == _task.Due)
             {
-                if (_task.Due is not null)
-                {
-                    _document.Execute(BoardCommands.SetDue(_task, null));
-                }
+                return; // the rebuild that set the box, not a person changing their mind
             }
-            else if (parsed is { } date && date != _task.Due)
-            {
-                _document.Execute(BoardCommands.SetDue(_task, date));
-            }
-            else if (parsed is null)
-            {
-                box.Text = _task.Due is { } current ? Ids.Format(current) : string.Empty;
-            }
+
+            _document.Execute(BoardCommands.SetDue(_task, chosen));
+            _revealed.Add("due");
+            RebuildOptional();
         };
 
-        return box;
+        TextBlock? note = null;
+        Button? clear = null;
+        if (_task.Due is { } current)
+        {
+            bool late = !_task.Done && current < _today;
+            note = new TextBlock
+            {
+                Text = BoardQuery.DescribeDue(current, _today),
+                FontSize = 11,
+                Foreground = late ? new SolidColorBrush(Color.FromRgb(0xE0, 0x5A, 0x66)) : Tokens.Active.MutedText,
+            };
+
+            clear = LinkButton("Clear", () =>
+            {
+                _document.Execute(BoardCommands.SetDue(_task, null));
+
+                // Clearing a date is asking for the section to go away, not for an empty one to sit there.
+                _revealed.Remove("due");
+                RebuildOptional();
+            });
+        }
+
+        return Section("calendar", "Due date", note, clear, picker);
     }
 
-    private Avalonia.Controls.Control BuildSteps()
+    /// <summary>
+    /// The checklist: how far through it you are, then a row per step you can tick, reword, or throw
+    /// away, then the field that adds the next one.
+    ///
+    /// <para>All three of those verbs were missing. A step could be ticked and nothing else — no way to
+    /// fix a typo in one, no way to remove one, which for a list written in a hurry is most of what you
+    /// do to it. "Delete all" is one command and therefore one undo, because clearing a checklist by
+    /// mistake should cost one press to put right, not one per item.</para>
+    /// </summary>
+    private Avalonia.Controls.Control BuildStepsSection()
     {
-        var panel = new StackPanel { Spacing = 4 };
-
+        var palette = Tokens.Active;
+        var panel = new StackPanel { Spacing = 2 };
         var (done, total) = _task.StepProgress;
+
         if (total > 0)
         {
-            panel.Children.Add(new ProgressBar { Minimum = 0, Maximum = total, Value = done, Height = 4 });
+            int percent = (int)Math.Round(done * 100.0 / total);
+            var progress = new DockPanel { LastChildFill = true, Margin = new Thickness(0, 0, 0, 8) };
+            var reading = new TextBlock
+            {
+                Text = $"{percent}%",
+                FontSize = 11,
+                Width = 32,
+                Foreground = palette.MutedText,
+                VerticalAlignment = VerticalAlignment.Center,
+            };
+            DockPanel.SetDock(reading, Dock.Left);
+            progress.Children.Add(reading);
+            progress.Children.Add(new ProgressBar
+            {
+                Minimum = 0,
+                Maximum = total,
+                Value = done,
+                Height = 4,
+                VerticalAlignment = VerticalAlignment.Center,
+            });
+            panel.Children.Add(progress);
         }
 
         foreach (var step in _task.Steps)
         {
-            var check = new CheckBox { Content = step.Text, IsChecked = step.Done };
-            check.IsCheckedChanged += (_, _) =>
-            {
-                if ((check.IsChecked == true) != step.Done)
-                {
-                    _document.Execute(BoardCommands.SetStepDone(step, check.IsChecked == true));
-                    RebuildOptional(); // the progress bar moved
-                }
-            };
-            panel.Children.Add(check);
+            panel.Children.Add(BuildStepRow(step));
         }
 
-        var add = new TextBox { PlaceholderText = "Add a step" };
+        var add = new TextBox { PlaceholderText = "Add an item", Margin = new Thickness(0, 8, 0, 0) };
+        Avalonia.Automation.AutomationProperties.SetName(add, "Add a step");
         add.KeyDown += (_, e) =>
         {
-            if (e.Key == Avalonia.Input.Key.Enter && !string.IsNullOrWhiteSpace(add.Text))
+            if (e.Key != Avalonia.Input.Key.Enter || string.IsNullOrWhiteSpace(add.Text))
             {
-                _document.Execute(BoardCommands.AddStep(_task, add.Text.Trim()));
-                RebuildOptional();
-                e.Handled = true;
+                return;
             }
+
+            // Same rule as the board's add row: a checklist is written in a run, so the field keeps the
+            // keyboard rather than handing it back after each item.
+            _focusStepAdd = true;
+            _document.Execute(BoardCommands.AddStep(_task, add.Text.Trim()));
+            RebuildOptional();
+            e.Handled = true;
         };
+
+        if (_focusStepAdd)
+        {
+            _focusStepAdd = false;
+            add.AttachedToVisualTree += (_, _) => Avalonia.Threading.Dispatcher.UIThread.Post(() => add.Focus());
+        }
+
         panel.Children.Add(add);
 
-        if (_task.Steps.Count > 0)
-        {
-            var clear = new Button { Content = "Clear steps", HorizontalAlignment = HorizontalAlignment.Left };
-            clear.Click += (_, _) =>
+        var note = total > 0
+            ? new TextBlock { Text = $"{done} of {total}", FontSize = 11, Foreground = palette.MutedText }
+            : null;
+
+        var clear = total > 0
+            ? LinkButton("Delete all", () =>
             {
                 // One command, so one undo puts the whole checklist back.
                 _document.Execute(BoardCommands.ClearSteps(_task));
+                _revealed.Remove("steps");
                 RebuildOptional();
-            };
-            panel.Children.Add(clear);
+            })
+            : null;
+
+        return Section("square-check", "Steps", note, clear, panel);
+    }
+
+    private Avalonia.Controls.Control BuildStepRow(TaskStep step)
+    {
+        var palette = Tokens.Active;
+        var row = new DockPanel { LastChildFill = true };
+
+        var check = new CheckBox { IsChecked = step.Done, VerticalAlignment = VerticalAlignment.Center };
+        Avalonia.Automation.AutomationProperties.SetName(check, $"Toggle step: {step.Text}");
+        check.IsCheckedChanged += (_, _) =>
+        {
+            if ((check.IsChecked == true) != step.Done)
+            {
+                _document.Execute(BoardCommands.SetStepDone(step, check.IsChecked == true));
+                RebuildOptional(); // the progress reading moved
+            }
+        };
+        DockPanel.SetDock(check, Dock.Left);
+        row.Children.Add(check);
+
+        var kill = IconButton("x", $"Delete step: {step.Text}", palette);
+        kill.Click += (_, _) =>
+        {
+            _document.Execute(BoardCommands.DeleteStep(_task, step));
+
+            // Deleting the last step is not a request to close the section — you are editing the list.
+            _revealed.Add("steps");
+            RebuildOptional();
+        };
+        DockPanel.SetDock(kill, Dock.Right);
+        row.Children.Add(kill);
+
+        // A text box that looks like text until you are in it. A checklist item is read far more often
+        // than it is rewritten, so a row of framed fields would draw the eye to the wrong thing.
+        var text = new TextBox
+        {
+            Text = step.Text,
+            AcceptsReturn = false,
+            Background = Brushes.Transparent,
+            BorderThickness = new Thickness(0),
+            Padding = new Thickness(4, 2),
+            VerticalAlignment = VerticalAlignment.Center,
+            Foreground = step.Done ? palette.MutedText : palette.Text,
+        };
+        Avalonia.Automation.AutomationProperties.SetName(text, "Step");
+
+        void Commit()
+        {
+            string typed = (text.Text ?? string.Empty).Trim();
+
+            // An empty step is a slip rather than a rename — the same rule a group heading follows.
+            if (typed.Length == 0)
+            {
+                text.Text = step.Text;
+                return;
+            }
+
+            if (!string.Equals(typed, step.Text, StringComparison.Ordinal))
+            {
+                _document.Execute(BoardCommands.SetStepText(step, typed));
+            }
         }
 
-        return panel;
+        text.LostFocus += (_, _) => Commit();
+        text.KeyDown += (_, e) =>
+        {
+            if (e.Key == Avalonia.Input.Key.Enter)
+            {
+                Commit();
+                e.Handled = true;
+            }
+        };
+        row.Children.Add(text);
+
+        return row;
     }
 
     /// <summary>The three sections a task can grow, in the order the prototype's menu lists them.</summary>

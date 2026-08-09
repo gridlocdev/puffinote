@@ -15,6 +15,8 @@ namespace Pivotask.UiTests;
 /// </summary>
 public class TaskDialogTests
 {
+    private static readonly DateOnly Today = new(2026, 8, 7);
+
     private static (TaskBoardView View, BoardDocument Document, TaskItem Task) Open(Action<Board>? arrange = null)
     {
         var board = new Board();
@@ -28,7 +30,7 @@ public class TaskDialogTests
         arrange?.Invoke(board);
 
         var document = new BoardDocument(board);
-        var view = new TaskBoardView { Document = document };
+        var view = new TaskBoardView { Document = document, Today = Today };
         var window = new Window { Width = 900, Height = 700, Content = view };
         window.Show();
         window.UpdateLayout();
@@ -50,9 +52,10 @@ public class TaskDialogTests
         var headings = Dialog(view).GetLogicalDescendants().OfType<TextBlock>()
             .Select(t => t.Text).ToList();
 
-        Assert.DoesNotContain("Labels", headings);
-        Assert.DoesNotContain("Due", headings);
-        Assert.DoesNotContain("Steps", headings);
+        Assert.DoesNotContain("LABELS", headings);
+        Assert.DoesNotContain("DUE DATE", headings);
+        Assert.DoesNotContain("STEPS", headings);
+        Assert.Contains("NOTES", headings); // …but the note is on by default
     }
 
     /// <summary>
@@ -75,7 +78,7 @@ public class TaskDialogTests
         Click(rows.Single(r => Name(r) == "Steps"));
 
         Assert.Contains(
-            "Steps",
+            "STEPS",
             dialog.GetLogicalDescendants().OfType<TextBlock>().Select(t => t.Text));
     }
 
@@ -152,6 +155,116 @@ public class TaskDialogTests
 
         document.Undo();
         Assert.Equal("g1", document.Board.Locate(task.Id)!.Value.Group.Id);
+    }
+
+    /// <summary>
+    /// A step can be ticked, reworded, and thrown away. Only the first of those existed: a checklist is
+    /// written in a hurry, so fixing and pruning it is most of what you do to one.
+    /// </summary>
+    [AvaloniaFact]
+    public void A_step_can_be_reworded_and_deleted()
+    {
+        var (view, document, task) = Open(board =>
+        {
+            board.Groups[0].Tasks[0].Steps.Add(new TaskStep { Id = "s1", Text = "Book the room" });
+            board.Groups[0].Tasks[0].Steps.Add(new TaskStep { Id = "s2", Text = "Send the invite" });
+        });
+        var dialog = Dialog(view);
+
+        var text = dialog.GetLogicalDescendants().OfType<TextBox>().First(b => b.Text == "Book the room");
+        text.Text = "Book the big room";
+        text.RaiseEvent(new Avalonia.Input.KeyEventArgs
+        {
+            RoutedEvent = Avalonia.Input.InputElement.KeyDownEvent,
+            Key = Avalonia.Input.Key.Enter,
+        });
+        Dispatcher.UIThread.RunJobs();
+        Assert.Equal("Book the big room", task.Steps[0].Text);
+        Assert.Equal("Edit Step", document.UndoLabel);
+
+        Click(Named(Dialog(view), "Delete step: Send the invite").Single());
+        Dispatcher.UIThread.RunJobs();
+
+        Assert.Equal(["Book the big room"], task.Steps.Select(s => s.Text));
+    }
+
+    /// <summary>An empty step is a slip rather than a rename, so the old text comes back.</summary>
+    [AvaloniaFact]
+    public void Emptying_a_step_puts_its_words_back()
+    {
+        var (view, document, task) = Open(board =>
+            board.Groups[0].Tasks[0].Steps.Add(new TaskStep { Id = "s1", Text = "Book the room" }));
+
+        var text = Dialog(view).GetLogicalDescendants().OfType<TextBox>().First(b => b.Text == "Book the room");
+        text.Text = "   ";
+        text.RaiseEvent(new Avalonia.Input.KeyEventArgs
+        {
+            RoutedEvent = Avalonia.Input.InputElement.KeyDownEvent,
+            Key = Avalonia.Input.Key.Enter,
+        });
+        Dispatcher.UIThread.RunJobs();
+
+        Assert.Equal("Book the room", task.Steps[0].Text);
+        Assert.False(document.CanUndo);
+    }
+
+    /// <summary>How far through the checklist you are, as a reading and as a bar.</summary>
+    [AvaloniaFact]
+    public void The_checklist_says_how_far_through_it_is()
+    {
+        var (view, _, _) = Open(board =>
+        {
+            var steps = board.Groups[0].Tasks[0].Steps;
+            steps.Add(new TaskStep { Id = "s1", Text = "one", Done = true });
+            steps.Add(new TaskStep { Id = "s2", Text = "two" });
+            steps.Add(new TaskStep { Id = "s3", Text = "three" });
+        });
+
+        var text = Dialog(view).GetLogicalDescendants().OfType<TextBlock>().Select(t => t.Text).ToList();
+        Assert.Contains("1 of 3", text);
+        Assert.Contains("33%", text);
+    }
+
+    /// <summary>"Delete all" is one command, so one undo puts the whole checklist back.</summary>
+    [AvaloniaFact]
+    public void Delete_all_clears_the_checklist_in_one_undoable_step()
+    {
+        var (view, document, task) = Open(board =>
+        {
+            var steps = board.Groups[0].Tasks[0].Steps;
+            steps.Add(new TaskStep { Id = "s1", Text = "one" });
+            steps.Add(new TaskStep { Id = "s2", Text = "two" });
+        });
+
+        Click(Named(Dialog(view), "Delete all").Single());
+        Dispatcher.UIThread.RunJobs();
+
+        Assert.Empty(task.Steps);
+        document.Undo();
+        Assert.Equal(2, task.Steps.Count);
+    }
+
+    /// <summary>
+    /// The due section says what its date means in the card's own words, and offers the one thing a date
+    /// field otherwise makes awkward: taking the date off again.
+    /// </summary>
+    [AvaloniaFact]
+    public void The_due_section_reads_the_date_back_and_can_clear_it()
+    {
+        var (view, _, task) = Open(board => board.Groups[0].Tasks[0].Due = new DateOnly(2026, 8, 5));
+        var dialog = Dialog(view);
+
+        Assert.Contains(
+            "2 days late",
+            dialog.GetLogicalDescendants().OfType<TextBlock>().Select(t => t.Text));
+
+        Click(Named(dialog, "Clear").Single());
+        Dispatcher.UIThread.RunJobs();
+
+        Assert.Null(task.Due);
+        Assert.DoesNotContain(
+            "DUE DATE",
+            dialog.GetLogicalDescendants().OfType<TextBlock>().Select(t => t.Text));
     }
 
     /// <summary>Open the "+" menu and return its rows.</summary>

@@ -192,7 +192,7 @@ public sealed class TaskBoardView : UserControl
     }
 
     /// <summary>Open the task dialog on <paramref name="task"/>.</summary>
-    public Task OpenTaskAsync(TaskItem task) => OverlayForTest.ShowModalAsync(new TaskDialog(Document, task));
+    public Task OpenTaskAsync(TaskItem task) => OverlayForTest.ShowModalAsync(new TaskDialog(Document, task, Today));
 
     /// <summary>
     /// Delete a group, asking first when it still holds tasks — the prototype's rule, and the right one:

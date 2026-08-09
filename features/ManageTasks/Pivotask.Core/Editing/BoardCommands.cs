@@ -263,6 +263,15 @@ public static class BoardCommands
         return new Action("Add Step", _ => task.Steps.Add(step), _ => task.Steps.Remove(step));
     }
 
+    /// <summary>Reword a step. A checklist item is written in a hurry and read later, so it has to be
+    /// fixable in place — and, like every other edit here, fixable back.</summary>
+    public static IBoardCommand SetStepText(TaskStep step, string text)
+    {
+        ArgumentNullException.ThrowIfNull(step);
+        string before = step.Text;
+        return new Action("Edit Step", _ => step.Text = text, _ => step.Text = before);
+    }
+
     public static IBoardCommand SetStepDone(TaskStep step, bool done)
     {
         ArgumentNullException.ThrowIfNull(step);
