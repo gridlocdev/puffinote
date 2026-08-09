@@ -81,6 +81,12 @@ public sealed partial class PlainTextEditor : Avalonia.Controls.Control, IScroll
             InvalidateVisual();
             SelectionChanged?.Invoke(this, EventArgs.Empty);
         };
+
+        // Any change to the text that is not our own multi-selection edit invalidates the extra
+        // selections — an undo, a reload from disk, Find-and-Replace, Normalise Line Endings. Their
+        // offsets are into the document as it was, and a document that has since got shorter turns the
+        // next keystroke into an out-of-range read. See ClearExtraSelectionsOnForeignEdit.
+        Buffer.TextChanged += (_, _) => ClearExtraSelectionsOnForeignEdit();
     }
 
     /// <summary>The document being edited, its undo history, and the caret.</summary>

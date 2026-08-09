@@ -52,8 +52,15 @@ public sealed class ExternalEditReloadTests : IDisposable
 
         public event EventHandler? DirtyChanged;
 
+        public Exception? LoadThrows { get; init; }
+
         public Task LoadAsync(string path)
         {
+            if (LoadThrows is { } ex)
+            {
+                throw ex;
+            }
+
             Text = File.ReadAllText(path);
             Path = path;
             Loads++;
@@ -196,6 +203,32 @@ public sealed class ExternalEditReloadTests : IDisposable
 
         Assert.Single(host.Tabs);
         Assert.Equal("before", pane.Text);
+    }
+
+    /// <summary>
+    /// A pulled file that will not parse must not take the pass down with it. A board with a syntax error,
+    /// a truncated .ods — the panes raise their own format exceptions, not IO ones, and this runs
+    /// fire-and-forget from the watcher, so one bad file silently skipped every tab after it and left the
+    /// exception unobserved.
+    /// </summary>
+    [AvaloniaFact]
+    public async Task A_file_that_will_not_parse_does_not_stop_the_other_tabs_reloading()
+    {
+        var host = new TabHost();
+        var bad = Write("bad.md", "fine for now");
+        var good = Write("good.md", "fine for now");
+        var paneA = new ReadingPane(bad) { LoadThrows = new InvalidDataException("not a board") };
+        var paneB = new ReadingPane(good);
+        host.OpenForTest(paneA, bad);
+        host.OpenForTest(paneB, good);
+        await paneB.LoadAsync(good);
+
+        WriteExternally(bad, "garbage");
+        WriteExternally(good, "pulled");
+
+        await host.RefreshFromDiskAsync(); // must not throw
+
+        Assert.Equal("pulled", paneB.Text); // the tab after the bad one still reloaded
     }
 
     /// <summary>Every pane type goes through the same pass — the shell knows paths, not document formats.</summary>

@@ -23,6 +23,28 @@ public sealed partial class PlainTextEditor
     /// <summary>The secondary selections, ascending. The primary is not in here.</summary>
     private readonly List<Selection> _extraSelections = [];
 
+    /// <summary>True while <see cref="ReplaceRanges"/> is the one doing the editing.</summary>
+    private bool _editingEverySelection;
+
+    /// <summary>
+    /// Drop the extras when the document changed underneath them. They are offsets into the document as
+    /// it was, so anything that rewrites it behind our back — an undo, a reload after an external edit,
+    /// Find-and-Replace, Normalise Line Endings — leaves them pointing at the wrong text, or past the end
+    /// of a document that has since got shorter, where the next keystroke reads out of range and throws.
+    /// <para>
+    /// Invalidating rather than trying to remap is the honest answer: after somebody else's edit these
+    /// carets are no longer on the occurrences ⌘D found, and a multi-selection that has quietly moved to
+    /// the wrong places is worse than one that has gone.
+    /// </para>
+    /// </summary>
+    private void ClearExtraSelectionsOnForeignEdit()
+    {
+        if (!_editingEverySelection)
+        {
+            ClearExtraSelections();
+        }
+    }
+
     /// <summary>True when there is more than one selection — the state ⌘D builds and Esc takes down.</summary>
     public bool HasMultipleSelections => _extraSelections.Count > 0;
 
@@ -105,21 +127,73 @@ public sealed partial class PlainTextEditor
     /// </summary>
     private static int IndexOfFrom(TextDocument doc, string needle, int from, IReadOnlyList<Selection> taken)
     {
-        // One pass forward from `from`, then one from the start up to it. Searched over the document's
-        // text rather than incrementally, which is the same thing the find bar does.
-        string text = doc.GetText();
-        for (int at = text.IndexOf(needle, Math.Min(from, text.Length), StringComparison.Ordinal);
-             at >= 0;
-             at = at + 1 <= text.Length ? text.IndexOf(needle, at + 1, StringComparison.Ordinal) : -1)
+        // Line by line, and never the whole document at once. Materialising the text to search it would
+        // allocate ~2 bytes per byte of file on every press — 95 MB for a 50 MB log, straight onto the
+        // large-object heap, for a search that usually finds its answer a few lines away. Scanning by line
+        // also stops at the first hit instead of after the whole file.
+        int hit = ScanLines(doc, needle, from, doc.Length, taken);
+        return hit >= 0 ? hit : ScanLines(doc, needle, 0, from, taken);
+    }
+
+    /// <summary>
+    /// The first occurrence of <paramref name="needle"/> starting in <c>[from, limit)</c> that is not
+    /// already <paramref name="taken"/>, or -1.
+    /// <para>
+    /// A needle containing a newline spans lines, so it cannot be found within one; those fall back to
+    /// searching the joined text, which is rare enough (a ⌘D needle is nearly always a word) to be worth
+    /// the allocation when it happens rather than paying it every time.
+    /// </para>
+    /// </summary>
+    private static int ScanLines(TextDocument doc, string needle, int from, int limit, IReadOnlyList<Selection> taken)
+    {
+        if (needle.Contains('\n', StringComparison.Ordinal))
         {
-            if (!IsTaken(taken, at, needle.Length))
+            return ScanJoined(doc, needle, from, limit, taken);
+        }
+
+        int line = doc.GetPosition(Math.Clamp(from, 0, doc.Length)).Line;
+        for (; line < doc.LineCount; line++)
+        {
+            int lineStart = doc.GetLineStart(line);
+            if (lineStart >= limit)
             {
-                return at;
+                return -1;
+            }
+
+            string text = doc.GetLineText(line);
+            int search = Math.Max(0, from - lineStart);
+            while (search <= text.Length)
+            {
+                int at = text.IndexOf(needle, search, StringComparison.Ordinal);
+                if (at < 0)
+                {
+                    break;
+                }
+
+                int offset = lineStart + at;
+                if (offset >= limit)
+                {
+                    return -1;
+                }
+
+                if (!IsTaken(taken, offset, needle.Length))
+                {
+                    return offset;
+                }
+
+                search = at + 1;
             }
         }
 
-        for (int at = text.IndexOf(needle, 0, StringComparison.Ordinal);
-             at >= 0 && at < from;
+        return -1;
+    }
+
+    /// <summary>The fallback for a multi-line needle: the same scan over the joined text.</summary>
+    private static int ScanJoined(TextDocument doc, string needle, int from, int limit, IReadOnlyList<Selection> taken)
+    {
+        string text = doc.GetText();
+        for (int at = text.IndexOf(needle, Math.Clamp(from, 0, text.Length), StringComparison.Ordinal);
+             at >= 0 && at < limit;
              at = at + 1 <= text.Length ? text.IndexOf(needle, at + 1, StringComparison.Ordinal) : -1)
         {
             if (!IsTaken(taken, at, needle.Length))
@@ -233,7 +307,15 @@ public sealed partial class PlainTextEditor
         rebuilt.Append(doc.GetText(cursor, spanEnd - cursor));
 
         var last = after[^1];
-        Buffer.ReplaceRange(spanStart, spanEnd - spanStart, rebuilt.ToString(), caretAfter: last.Caret);
+        _editingEverySelection = true;
+        try
+        {
+            Buffer.ReplaceRange(spanStart, spanEnd - spanStart, rebuilt.ToString(), caretAfter: last.Caret);
+        }
+        finally
+        {
+            _editingEverySelection = false;
+        }
 
         _extraSelections.Clear();
         for (int i = 0; i < after.Count - 1; i++)

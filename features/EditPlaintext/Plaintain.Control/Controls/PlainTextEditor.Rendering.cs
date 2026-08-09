@@ -199,13 +199,12 @@ public sealed partial class PlainTextEditor
     /// </summary>
     private void DrawRowSelection(DrawingContext context, Palette palette, int row, int line, int segment, int startColumn, double y, Rect bounds)
     {
-        if (!HasMultipleSelections)
-        {
-            DrawOneSelection(context, palette, Buffer.Selection, row, line, segment, startColumn, y, bounds);
-            return;
-        }
+        DrawOneSelection(context, palette, Buffer.Selection, row, line, segment, startColumn, y, bounds);
 
-        foreach (var selection in AllSelections())
+        // The extras are read straight from the list rather than through AllSelections(), which sorts a
+        // fresh List — this runs once per visible row, on every frame, and a per-row allocation in the
+        // paint path is the kind of thing that only shows up as a stutter while scrolling.
+        foreach (var selection in _extraSelections)
         {
             DrawOneSelection(context, palette, selection, row, line, segment, startColumn, y, bounds);
         }

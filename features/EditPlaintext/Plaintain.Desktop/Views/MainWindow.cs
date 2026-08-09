@@ -3,6 +3,7 @@ using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Layout;
 using Avalonia.Media;
+using Avalonia.Threading;
 using Plaintain.Control.Commands;
 using Plaintain.Control.Controls;
 using Plaintain.Control.Views;
@@ -86,7 +87,9 @@ public sealed partial class MainWindow : Window
         EditorView.Editor.HighlightCurrentLine = _settings.Settings.HighlightCurrentLine;
         EditorView.Editor.FontSize = _settings.Settings.FontSize;
         EditorView.Zoom = _settings.Settings.Zoom;
-        EditorView.SelectionChanged += (_, _) => UpdateChrome();
+        // Every keystroke and every caret move comes through here, so it takes the debounced path — the
+        // counts scan the whole document (UpdateDocumentStatus).
+        EditorView.SelectionChanged += (_, _) => UpdateChromeWhileEditing();
 
         // Push the auto-save countdown back on every edit, so a save lands in the pause after a burst of
         // typing rather than in the middle of one. The buffer's own TextChanged, not the selection's:
@@ -167,6 +170,7 @@ public sealed partial class MainWindow : Window
         _autoSave.Dispose();
         _watcher.Dispose();
         _snapshotTimer?.Stop();
+        _statsTimer?.Stop();
         _recovery.Clear(); // a clean exit means there is nothing to recover next launch
         PlainTextEditingCommands.GoToLineRequested -= OnGoToLineRequested;
         PlainTextEditingCommands.NormalizeLineEndingsRequested -= OnNormalizeLineEndingsRequested;
@@ -404,6 +408,16 @@ public sealed partial class MainWindow : Window
     /// <summary>Refresh the title and status bar from the editor's current state.</summary>
     private void UpdateChrome()
     {
+        UpdateCheapChrome();
+        UpdateDocumentStatus();
+    }
+
+    /// <summary>
+    /// The parts that cost nothing to work out: the title, the dirty mark, the caret's position, the zoom.
+    /// Safe to run on every keystroke, which is what separates them from the counts below.
+    /// </summary>
+    private void UpdateCheapChrome()
+    {
         string name = CurrentPath is null ? "Untitled" : Path.GetFileName(CurrentPath);
         Title = $"{(EditorView.IsDirty ? "● " : string.Empty)}{name}";
         _titleBar.DocumentName = name;
@@ -411,6 +425,21 @@ public sealed partial class MainWindow : Window
 
         var caret = EditorView.CaretPosition;
         _statusPosition.Text = $"Ln {caret.DisplayLine}, Col {caret.DisplayColumn}";
+
+        _statusZoom.Text = ZoomScale.Format(EditorView.Zoom);
+        _statusZoom.IsVisible = EditorView.Zoom != ZoomScale.Default;
+    }
+
+    /// <summary>
+    /// The parts that scan the document: the character count (graphemes, so it cannot be arithmetic) and
+    /// the line-ending style. <see cref="DocumentBuffer.Stats"/> caches its answer only until the next
+    /// change, so asking for it per keystroke means a full pass over the file per keystroke — measured at
+    /// <b>494 ms and 392 MB for one character typed into a 50 MB log</b>, against 23 ms for the edit
+    /// itself. Debounced for exactly the reason Typage debounces the same scan, and to the same 200 ms.
+    /// </summary>
+    private void UpdateDocumentStatus()
+    {
+        _statsTimer?.Stop(); // a synchronous refresh supersedes any pending debounced one
 
         var stats = EditorView.Stats;
         _statusCounts.Text = $"{stats.Lines} lines · {stats.Characters} chars";
@@ -424,10 +453,40 @@ public sealed partial class MainWindow : Window
             : EncodingUnconfirmed
                 ? $"{_format.DisplayName} (unconfirmed — read-only)"
                 : $"{_format.DisplayName} · {stats.NewlineLabel}";
-
-        _statusZoom.Text = ZoomScale.Format(EditorView.Zoom);
-        _statusZoom.IsVisible = EditorView.Zoom != ZoomScale.Default;
     }
+
+    private DispatcherTimer? _statsTimer;
+
+    /// <summary>Cheap chrome now, the document scan once the typing pauses.</summary>
+    private void UpdateChromeWhileEditing()
+    {
+        UpdateCheapChrome();
+
+        _statsTimer ??= BuildStatsTimer();
+        _statsTimer.Stop();
+        _statsTimer.Start();
+    }
+
+    private DispatcherTimer BuildStatsTimer()
+    {
+        var timer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(200) };
+        timer.Tick += (_, _) =>
+        {
+            timer.Stop();
+            UpdateDocumentStatus();
+        };
+
+        return timer;
+    }
+
+    /// <summary>Test seam: run the debounced document scan now, rather than waiting out the pause.</summary>
+    internal void FlushStatusForTest() => UpdateDocumentStatus();
+
+    /// <summary>Test seam: the status bar's caret line, which must stay immediate.</summary>
+    internal string StatusPositionForTest => _statusPosition.Text ?? string.Empty;
+
+    /// <summary>Test seam: the status bar's counts, which are the debounced part.</summary>
+    internal string StatusCountsForTest => _statusCounts.Text ?? string.Empty;
 
     /// <summary>
     /// Ask which convention to keep, and rewrite the file that way. Both answers are offered plainly with

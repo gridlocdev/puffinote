@@ -227,6 +227,23 @@ public class MultiSelectionTests
         Assert.False(editor.HasMultipleSelections);
     }
 
+    /// <summary>
+    /// A selection that spans a line break cannot be found inside one line, so it takes the joined-text
+    /// fallback. Rare — a ⌘D needle is nearly always a word — which is exactly why the common path does not
+    /// pay for it, and why this branch needs a test of its own.
+    /// </summary>
+    [AvaloniaFact]
+    public void A_selection_spanning_a_line_break_still_finds_its_next_occurrence()
+    {
+        var editor = Open("one\ntwo\nmiddle\none\ntwo\n");
+        editor.Buffer.Selection = new Puffinote.Text.Document.Selection(0, 7); // "one\ntwo"
+
+        editor.AddNextOccurrence();
+
+        Assert.True(editor.HasMultipleSelections);
+        Assert.Equal([(0, 7), (15, 22)], editor.AllSelections().Select(s => (s.Start, s.End)));
+    }
+
     /// <summary>An editor with one selection behaves exactly as it did — the extras are the new part.</summary>
     [AvaloniaFact]
     public void One_selection_still_types_the_ordinary_way()
@@ -238,6 +255,46 @@ public class MultiSelectionTests
 
         Assert.Equal("xalpha", editor.Text);
         Assert.False(editor.HasMultipleSelections);
+    }
+
+    /// <summary>
+    /// An undo does not restore the selections, so the extras it leaves behind are offsets into a document
+    /// that no longer exists. Typing against them read past the end of a shorter document and threw.
+    /// </summary>
+    [AvaloniaFact]
+    public void An_undo_takes_the_extra_selections_with_it()
+    {
+        var editor = Open("alpha beta alpha");
+        editor.MoveCaret(2, extend: false);
+        editor.AddNextOccurrence();
+        editor.AddNextOccurrence();
+        Type(editor, "a much longer replacement");
+
+        editor.Undo();
+
+        Assert.False(editor.HasMultipleSelections);
+        Type(editor, "z"); // must not throw against stale offsets
+        Assert.Contains("z", editor.Text, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// Same hazard from the other direction: a reload after an external edit replaces the whole document.
+    /// Anything that rewrites the text behind the gesture invalidates it — the carets are no longer on the
+    /// occurrences ⌘D found, and a multi-selection that has quietly moved is worse than one that has gone.
+    /// </summary>
+    [AvaloniaFact]
+    public void A_reload_takes_the_extra_selections_with_it()
+    {
+        var editor = Open("alpha beta alpha");
+        editor.MoveCaret(2, extend: false);
+        editor.AddNextOccurrence();
+        editor.AddNextOccurrence();
+
+        editor.Load("hi", markSaved: true);
+
+        Assert.False(editor.HasMultipleSelections);
+        Type(editor, "z");
+        Assert.Equal("zhi", editor.Text);
     }
 
     /// <summary>The chord is bound in the catalog, so the menu, the key binding and a host palette agree.</summary>

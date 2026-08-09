@@ -90,6 +90,31 @@ A surprise worth recording: a file that is *not* valid UTF-8 decodes **faster** 
 either end of the file, because the Latin-1 fallback is a byte-widening where a UTF-8 read is a
 transcode. The strict-validation pass that gets thrown away costs less than the transcode it avoids.
 
+### 3.4 Typing is not the edit — it is the status bar (open)
+
+The same harness, on the same file, measuring one keystroke:
+
+| | 1 MB | 50 MB |
+|---|---|---|
+| The edit alone (`Insert`) | 0.6 ms | 23 ms |
+| The edit **plus reading `Stats`** for the status bar | 9.3 ms | **491 ms** |
+| Allocated | 7.8 MB | 392 MB |
+
+`DocumentBuffer.Stats` caches its answer only until the next change, so a status bar that reads it per
+keystroke pays a full pass over the document per keystroke: `GetText()` materialises the whole file as one
+string, and the word, grapheme and line-ending counts each walk it. On a 50 MB log that is **21× the cost
+of the edit it is reporting**, in the editor whose entire design brief is files that size.
+
+The window now **debounces** it, exactly as Typage does and to the same 200 ms: the caret's position (which
+is what someone watches while typing) stays immediate, and the counts settle once the typing pauses. That
+takes the cost off every keystroke — but it is a mitigation, not a fix. **One pause still costs ~490 ms at
+50 MB**, and the numbers above are unchanged by it.
+
+The actual fix is in `Puffinote.Text` and is not done: `DocumentStats.Compute` should not materialise the
+document to count it, and the counts should be maintained incrementally against `LastChangedLine` the way
+the line index already is. That is a shared change — Typage pays the same cost through the same type — and
+it wants its own measurement first, which is now possible.
+
 ## 4. The command catalog
 
 `PlainTextEditingCommands.Build(view)` returns shared `AppCommand`s closed over the view. The view

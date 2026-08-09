@@ -429,6 +429,13 @@ internal sealed class TabHost : UserControl
     /// Returns false when the file could not be read — a writer may still have it open half-written, and
     /// the next watcher tick will find it settled, so a failure here leaves the tab alone rather than
     /// replacing a readable document with an error.
+    /// <para>
+    /// Catching broadly, for the reason <see cref="OpenAsync"/> does: a pane raises its own format
+    /// exception for a file it cannot parse (a board with a syntax error, a truncated <c>.ods</c>), and a
+    /// pull is exactly how a half-written or conflict-marked file arrives. This runs fire-and-forget from
+    /// the watcher, so a parse error escaping here took down the rest of the pass — every tab after the
+    /// bad one silently kept its stale content — and went unobserved.
+    /// </para>
     /// </summary>
     public async Task<bool> ReloadAsync(TabItem tab)
     {
@@ -437,7 +444,7 @@ internal sealed class TabHost : UserControl
         {
             await tab.Pane.LoadAsync(tab.Path);
         }
-        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+        catch (Exception)
         {
             return false;
         }
