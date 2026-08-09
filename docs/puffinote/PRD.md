@@ -260,6 +260,14 @@ navigation PKM users expect. (The Command Menu stays commands-only; file navigat
   than fit, the strip **scrolls the active tab into view** whenever it changes — by the shortest scroll
   that does it, so a tab already on screen never moves. Otherwise opening a document from the sidebar can
   leave the one mark of *which* document you are in off the end of the strip.
+- **Saving flashes "— Saved" in the title bar** for a few seconds, whichever editor is behind the tab, and
+  whether the save came from ⌘S or from auto-save. ⌘S is the one command in the shell whose entire point is
+  that nothing happens: no dialog, no visible change, and the only acknowledgement was the tab's dirty dot
+  going away — which you had to be watching the tab strip to see. Cellestra's standalone window settled
+  this for itself; a notebook tab wants the same answer, and it belongs to the shell rather than to any
+  one editor because ⌘S in the shell means the same thing behind all of them. The dot and the badge never
+  appear together: an edit after the save brings the dot back and takes the badge with it, because by then
+  the save it refers to is out of date.
 - **Zoom is remembered per tab**, in the notebook's session alongside the tab list, and restored with the
   tab. The alternative — one zoom for the window — has to be wrong for somebody in a notebook of mixed
   types, because the size that suits a page of prose is rarely the size that suits a grid of numbers.

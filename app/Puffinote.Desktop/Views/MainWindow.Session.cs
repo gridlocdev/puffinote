@@ -288,5 +288,43 @@ public partial class MainWindow
         // there is no document to name, so it falls back to the notebook, then to the app.
         TitleBarForTest.DocumentName = _tabHost.ActivePane?.Title ?? notebookName ?? "Puffinote";
         TitleBarForTest.IsDirty = _tabHost.ActivePane?.IsDirty ?? false;
+
+        // A ● and a "Saved" say opposite things, so they can never appear together: the dot wins, because
+        // by then the save the badge refers to is out of date.
+        TitleBarForTest.Badge = _savedBadge is not null && !TitleBarForTest.IsDirty ? "Saved" : null;
+    }
+
+    /// <summary>How long the title bar says "Saved" — the same few seconds Cellestra's standalone window uses.</summary>
+    private static readonly TimeSpan SavedBadgeDuration = TimeSpan.FromSeconds(3);
+
+    private Avalonia.Threading.DispatcherTimer? _savedBadge;
+
+    /// <summary>
+    /// Flash "Saved" in the title bar. ⌘S is the one command in the shell whose whole point is that
+    /// nothing happens: no dialog, no visible change, and the only acknowledgement was the tab's dirty dot
+    /// going away — which you have to have been looking at the tab strip to see. Cellestra's standalone
+    /// window answered this a while ago; a notebook tab deserves the same answer, and for every pane type,
+    /// because ⌘S in the shell means the same thing whichever editor is behind it.
+    /// </summary>
+    private void FlashSavedInTitle()
+    {
+        _savedBadge?.Stop();
+        _savedBadge = new Avalonia.Threading.DispatcherTimer { Interval = SavedBadgeDuration };
+        _savedBadge.Tick += (_, _) =>
+        {
+            _savedBadge?.Stop();
+            _savedBadge = null;
+            UpdatePaneChrome();
+        };
+        _savedBadge.Start();
+        UpdatePaneChrome();
+    }
+
+    /// <summary>Test seam: end the badge's few seconds now, rather than making a test wait them out.</summary>
+    internal void ExpireSavedBadgeForTest()
+    {
+        _savedBadge?.Stop();
+        _savedBadge = null;
+        UpdatePaneChrome();
     }
 }

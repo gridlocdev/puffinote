@@ -185,6 +185,7 @@ public partial class MainWindow : Window
             return;
         }
 
+        bool wrote = false;
         foreach (var tab in _tabHost.Tabs.ToList())
         {
             if (!tab.Pane.IsDirty || tab.Pane.Path is null)
@@ -203,6 +204,7 @@ public partial class MainWindow : Window
             try
             {
                 await tab.Pane.SaveAsync();
+                wrote = true;
             }
             catch (Exception e) when (e is IOException or UnauthorizedAccessException)
             {
@@ -213,6 +215,14 @@ public partial class MainWindow : Window
                     "Auto-save is paused until you save successfully yourself (⌘S)."));
                 return;
             }
+        }
+
+        // An auto-save that wrote something says so, the same way ⌘S does. Nobody asked for this save, so
+        // the badge is the only sign it happened — and "was that written?" is exactly the question an
+        // interval nobody set out to trigger leaves behind.
+        if (wrote)
+        {
+            FlashSavedInTitle();
         }
 
         // Saving a pane raises its DirtyChanged — that is how the tab strip drops the dot — and that
@@ -317,6 +327,9 @@ public partial class MainWindow : Window
 
     /// <summary>Open a file into a tab, as clicking it in the tree would (test seam).</summary>
     internal Task OpenFileForTest(string path) => OpenFileAsync(path);
+
+    /// <summary>Test seam: ⌘S on the active tab, prompts and all.</summary>
+    internal Task SaveCurrentForTest() => SaveCurrentAsync();
 
     private Control BuildBody(ThemePalette palette)
     {

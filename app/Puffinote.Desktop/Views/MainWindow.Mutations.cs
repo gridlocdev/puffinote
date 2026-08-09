@@ -384,6 +384,7 @@ public partial class MainWindow
         try
         {
             await pane.SaveAsync();
+            FlashSavedInTitle();
         }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException)
         {
