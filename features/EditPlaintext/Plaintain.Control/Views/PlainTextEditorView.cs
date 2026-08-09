@@ -96,6 +96,24 @@ public sealed class PlainTextEditorView : UserControl
     public void Redo() => Editor.Redo();
 
     /// <summary>
+    /// Rewrite every line ending as <paramref name="style"/>, as one undoable edit. A no-op when the
+    /// document already uses only that convention — a command that dirtied a file it did not change would
+    /// be the worst kind of "did that do anything?".
+    /// </summary>
+    public void NormalizeLineEndings(NewlineStyle style)
+    {
+        var buffer = Editor.Buffer;
+        string text = buffer.Document.GetText();
+        string normalized = LineEndings.Normalize(text, style);
+        if (ReferenceEquals(text, normalized) || string.Equals(text, normalized, StringComparison.Ordinal))
+        {
+            return;
+        }
+
+        buffer.ReplaceRange(0, text.Length, normalized);
+    }
+
+    /// <summary>
     /// The reading zoom, on the family's shared ladder. Delegates to the editor, which multiplies the
     /// configured font size by it; the host persists whatever it lands on.
     /// </summary>

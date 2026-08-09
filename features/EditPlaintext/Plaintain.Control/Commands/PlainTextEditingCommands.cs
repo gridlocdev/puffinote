@@ -59,6 +59,17 @@ public static class PlainTextEditingCommands
             new("view.goToLine", "Go to Line…", "Jump to a line by number.", Shortcut.Cmd(Key.G),
                 () => GoToLineRequested?.Invoke(view), icon: "list"),
 
+            // Offered, never applied on its own. A file with both conventions in it is usually a merge
+            // artefact — and sometimes it is exactly what someone meant, which is why nothing here rewrites
+            // a file for looking untidy. Enabled only when there is genuinely a mixture to resolve, so the
+            // menu answers "does this file have that problem?" without anyone opening the dialog.
+            new("edit.normalizeLineEndings", "Normalise Line Endings…",
+                "Rewrite every line ending in this file the same way. Available when the file has both CRLF and LF.",
+                shortcut: null,
+                () => NormalizeLineEndingsRequested?.Invoke(view),
+                () => view.Stats.HasMixedNewlines,
+                icon: "pilcrow"),
+
             .. ZoomCommands.Build(() => view.Zoom, zoom => view.Zoom = zoom),
         ];
     }
@@ -69,4 +80,11 @@ public static class PlainTextEditingCommands
     /// prompt belongs to whoever owns the window.
     /// </summary>
     public static event Action<PlainTextEditorView>? GoToLineRequested;
+
+    /// <summary>
+    /// Raised by "Normalise Line Endings…" so a host can ask <em>which</em> convention in its own idiom.
+    /// Which one to keep is the whole decision, and it is not one the editor can make for anyone: the
+    /// majority is a reasonable default, not an answer.
+    /// </summary>
+    public static event Action<PlainTextEditorView>? NormalizeLineEndingsRequested;
 }

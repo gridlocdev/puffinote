@@ -125,6 +125,7 @@ public sealed partial class MainWindow : Window
 
         _commands = EditorView.EditingCommands.ToDictionary(c => c.Id, StringComparer.Ordinal);
         PlainTextEditingCommands.GoToLineRequested += OnGoToLineRequested;
+        PlainTextEditingCommands.NormalizeLineEndingsRequested += OnNormalizeLineEndingsRequested;
 
         var root = new DockPanel { LastChildFill = true };
 
@@ -168,6 +169,7 @@ public sealed partial class MainWindow : Window
         _snapshotTimer?.Stop();
         _recovery.Clear(); // a clean exit means there is nothing to recover next launch
         PlainTextEditingCommands.GoToLineRequested -= OnGoToLineRequested;
+        PlainTextEditingCommands.NormalizeLineEndingsRequested -= OnNormalizeLineEndingsRequested;
     }
 
     /// <summary>
@@ -233,6 +235,8 @@ public sealed partial class MainWindow : Window
         edit.Items.Add(new Separator());
         edit.Items.Add(Item("_Find…", "edit.find"));
         edit.Items.Add(Item("_Go to Line…", "view.goToLine"));
+        edit.Items.Add(new Separator());
+        edit.Items.Add(Item("_Normalise Line Endings…", "edit.normalizeLineEndings"));
 
         var view = new MenuItem { Header = "_View" };
         view.Items.Add(Item("_Word Wrap", "view.wordWrap"));
@@ -286,7 +290,7 @@ public sealed partial class MainWindow : Window
         file.Menu.Items.Add(Action("Preferences…", ShowSettings, PreferencesGesture));
 
         var edit = Submenu("Edit");
-        foreach (var id in new[] { "edit.undo", "edit.redo", null, "edit.cut", "edit.copy", "edit.paste", "edit.selectAll", null, "edit.find", "view.goToLine" })
+        foreach (var id in new[] { "edit.undo", "edit.redo", null, "edit.cut", "edit.copy", "edit.paste", "edit.selectAll", null, "edit.find", "view.goToLine", null, "edit.normalizeLineEndings" })
         {
             edit.Menu!.Items.Add(id is null ? new NativeMenuItemSeparator() : Item(_commands[id].Title, id));
         }
@@ -393,6 +397,37 @@ public sealed partial class MainWindow : Window
 
         _statusZoom.Text = ZoomScale.Format(EditorView.Zoom);
         _statusZoom.IsVisible = EditorView.Zoom != ZoomScale.Default;
+    }
+
+    /// <summary>
+    /// Ask which convention to keep, and rewrite the file that way. Both answers are offered plainly with
+    /// their counts, because the interesting case is a file that is 900 lines of LF and 3 of CRLF — the
+    /// numbers are what tell you which one is the accident. Cancel is the dismiss value: a file with both
+    /// is sometimes deliberate, and nothing here rewrites a file for looking untidy.
+    /// </summary>
+    private async void OnNormalizeLineEndingsRequested(PlainTextEditorView view)
+    {
+        if (!ReferenceEquals(view, EditorView))
+        {
+            return; // another window's editor asked; not ours to answer
+        }
+
+        var counts = EditorView.Stats.NewlineCounts;
+        var choice = await _overlay.ShowModalAsync(new ChoiceDialog<NewlineStyle?>(
+            heading: "Mixed line endings",
+            message: $"This file has {counts.CrLf} Windows (CRLF) and {counts.Lf} Unix (LF) line endings. " +
+                     "Rewriting them all one way changes every line the other convention was on.",
+            dismiss: null,
+            new Choice<NewlineStyle?>("Use CRLF", NewlineStyle.CrLf, IsDefault: counts.Dominant == NewlineStyle.CrLf),
+            new Choice<NewlineStyle?>("Use LF", NewlineStyle.Lf, IsDefault: counts.Dominant == NewlineStyle.Lf),
+            new Choice<NewlineStyle?>("Leave As Is", null, IsCancel: true)));
+
+        if (choice is { } style)
+        {
+            EditorView.NormalizeLineEndings(style);
+            UpdateChrome();
+            EditorView.FocusEditor();
+        }
     }
 
     private async void OnGoToLineRequested(PlainTextEditorView view)

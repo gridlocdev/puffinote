@@ -48,6 +48,12 @@ and writes it back byte for byte.
   has been *saved* wrong cannot.
 - **Save** is atomic: a temp file in the target's own directory, then a rename. Same directory because a
   rename across filesystems is a copy, and a copy is not atomic.
+- **Mixed line endings are reported, never silently fixed.** A file with both CRLF and LF reads
+  `CRLF (mixed)` in the status bar, and Edit ▸ **Normalise Line Endings…** — enabled only when there is a
+  mixture — asks which convention to keep, with both counts in front of the person deciding, and rewrites
+  the file that way as one undoable edit. It is an *offer*: a file with both is usually a merge artefact,
+  and sometimes it is deliberate, so nothing rewrites a file for looking untidy. Opening a mixed file
+  changes nothing about it.
 - **External changes** to the open file are watched for (`OpenFileWatcher` + a `FileStamp` baseline, both
   from `shared/`). With nothing unsaved, the file is re-read — showing what is actually there is the only
   useful behaviour. With unsaved edits, the buffer is left exactly as it is and the conflict is *recorded*:
