@@ -12,6 +12,7 @@ rationale is [proposal 0003](../../../docs/proposals/0003-plaintain.md).
 | `Plaintain.Cli` | `pltn` — a launcher plus one read-only verb. No Avalonia. |
 | `Plaintain.UiTests` | Headless Avalonia. The gate, since the devcontainer can't launch a GUI. |
 | `Plaintain.Cli.Tests` | End-to-end, in-process, over the same `CliApplication.Run`. |
+| `Plaintain.Benchmarks` | BenchmarkDotNet over the 50 MB load path and the geometry claim (§3.3). References only `Puffinote.Text`, so it runs without a display. `just bench-plaintain`. |
 
 Dependency direction is strictly **shell → control → shared**. Nothing references Puffinote; removing
 Puffinote leaves Plaintain fully working.
@@ -62,6 +63,32 @@ large file freezes.
 The horizontal extent grows from what has been *seen*, not from measuring every line: finding the
 longest line in a 50 MB file would undo the point of never touching an off-screen row, and a log reader
 expects the bar to settle as they scroll anyway.
+
+### 3.3 What 50 MB actually costs
+
+Proposal 0003 §9.5 said to measure before optimising, and until `Plaintain.Benchmarks` existed nobody
+had — the geometry was designed against 50 MB and had never been run against it. Measured on the Linux
+devcontainer (arm64, Release, BenchmarkDotNet short job), on a log-shaped file of many short lines:
+
+| | 1 MB | 50 MB |
+|---|---|---|
+| Decode (validating UTF-8) | 0.45 ms | 18.6 ms |
+| Build the buffer (the line-start index) | 0.7 ms | 22.7 ms |
+| **Open, end to end** | **1.4 ms** | **41 ms** |
+| Allocated to open | 5.9 MB | **297 MB** |
+| Caret position lookup, start / end of file | 5 / 6 ns | 9 / 11 ns |
+| One screenful (60 lines) from the middle | 1.24 µs | 1.24 µs |
+
+Two things to take from it. **The geometry claim holds**: a screenful from the middle of a 50 MB file
+costs exactly what it costs at 1 MB, and a position lookup is nanoseconds at either end — the arithmetic
+really is arithmetic, and nothing scales with document size. **Opening allocates about six times the file
+size** (a UTF-16 string, plus the piece table and index over it), which is the number to know before
+anyone reaches for a bigger target: 41 ms is imperceptible, 300 MB of managed heap for one document is
+not nothing.
+
+A surprise worth recording: a file that is *not* valid UTF-8 decodes **faster** than one that is, at
+either end of the file, because the Latin-1 fallback is a byte-widening where a UTF-8 read is a
+transcode. The strict-validation pass that gets thrown away costs less than the transcode it avoids.
 
 ## 4. The command catalog
 

@@ -5,6 +5,7 @@
     <Project Path="Plaintain.Cli/Plaintain.Cli.csproj" />
     <Project Path="Plaintain.Cli.Tests/Plaintain.Cli.Tests.csproj" />
     <Project Path="Plaintain.UiTests/Plaintain.UiTests.csproj" />
+    <Project Path="Plaintain.Benchmarks/Plaintain.Benchmarks.csproj" />
   </Folder>
   <Folder Name="/shared/">
     <Project Path="../../shared/Puffinote.Components/Puffinote.Components.csproj" />

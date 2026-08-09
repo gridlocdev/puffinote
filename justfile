@@ -66,6 +66,11 @@ CELLESTRA_DESKTOP := "features/EditSpreadsheets/Cellestra.Desktop"
 PLAINTAIN_DESKTOP := "features/EditPlaintext/Plaintain.Desktop"
 PIVOTASK_DESKTOP  := "features/ManageTasks/Pivotask.Desktop"
 
+# ---- BenchmarkDotNet harnesses (development-time; Release, and they take minutes) ----
+TYPAGE_BENCH    := "features/EditMarkdown/Typage.Benchmarks"
+CELLESTRA_BENCH := "features/EditSpreadsheets/Cellestra.Benchmarks"
+PLAINTAIN_BENCH := "features/EditPlaintext/Plaintain.Benchmarks"
+
 DOTNET := "dotnet"
 
 # ---- Packaging: where publish writes, and where install puts things -----------
@@ -326,6 +331,11 @@ run-typage:
 run-typage-cli *ARGS:
     {{ DOTNET }} run --project {{ TYPAGE_CLI }} -- {{ ARGS }}
 
+# Measure the engine hot paths behind caret/scroll latency (Release; minutes)
+[group('typage')]
+bench-typage *ARGS:
+    {{ DOTNET }} run -c Release --project {{ TYPAGE_BENCH }} -- {{ ARGS }}
+
 # Publish the Typage CLI + editor to artifacts/typage/<rid>/
 [group('typage')]
 publish-typage: publish-typage-cli publish-typage-desktop
@@ -430,6 +440,11 @@ run-cellestra:
 run-cellestra-cli *ARGS:
     {{ DOTNET }} run --project {{ CELLESTRA_CLI }} -- {{ ARGS }}
 
+# Measure the recalculation and serialization hot paths (Release; minutes)
+[group('cellestra')]
+bench-cellestra *ARGS:
+    {{ DOTNET }} run -c Release --project {{ CELLESTRA_BENCH }} -- {{ ARGS }}
+
 # Publish the Cellestra CLI + editor to artifacts/cellestra/<rid>/
 [group('cellestra')]
 publish-cellestra: publish-cellestra-cli publish-cellestra-desktop
@@ -529,6 +544,12 @@ run-plaintain:
 [group('plaintain')]
 run-plaintain-cli *ARGS:
     {{ DOTNET }} run --project {{ PLAINTAIN_CLI }} -- {{ ARGS }}
+
+# Measure the 50 MB load path and the geometry claim (Release; minutes). Pass BenchmarkDotNet args:
+#   just bench-plaintain --filter "*Load*" --job short
+[group('plaintain')]
+bench-plaintain *ARGS:
+    {{ DOTNET }} run -c Release --project {{ PLAINTAIN_BENCH }} -- {{ ARGS }}
 
 # Publish the pltn CLI + Plaintain shell to artifacts/plaintain/<rid>/
 [group('plaintain')]

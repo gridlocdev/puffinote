@@ -18,6 +18,13 @@
     <AllowedPackage Include="xunit.v3" />
     <AllowedPackage Include="xunit.runner.visualstudio" />
     <AllowedPackage Include="Microsoft.NET.Test.Sdk" />
+
+    <!--
+      BenchmarkDotNet: the harness for the 50 MB load path (proposal 0003 §9.5 — measure before
+      optimising). Development-time only, referenced by Plaintain.Benchmarks alone and by nothing that
+      ships; the same allowance Typage and Cellestra already make for their harnesses.
+    -->
+    <AllowedPackage Include="BenchmarkDotNet" />
   </ItemGroup>
 
   <Target Name="CheckDependencyAllowlist" BeforeTargets="CollectPackageReferences;Build">

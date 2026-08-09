@@ -1,0 +1,28 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    BenchmarkDotNet harness for the 50 MB load path (proposal 0003 §9.5). That number is the one
+    Plaintain's whole geometry was designed around — uniform rows, so a line's row count is arithmetic
+    rather than a measurement — and until now nothing had ever been run against it. "Measure before
+    optimising" needs somewhere to measure.
+
+    References only Puffinote.Text (pure), like Typage's harness, so it runs without a display. The
+    surface's own drawing needs the Avalonia headless host to measure and is deliberately not here: what
+    a load costs is decided before a single row is painted.
+  -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <IsPackable>false</IsPackable>
+    <RootNamespace>Plaintain.Benchmarks</RootNamespace>
+    <Optimize>true</Optimize>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="BenchmarkDotNet" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\..\shared\Puffinote.Text\Puffinote.Text.csproj" />
+  </ItemGroup>
+
+</Project>
