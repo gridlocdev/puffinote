@@ -366,6 +366,63 @@ public class TaskDialogTests
         Assert.Equal(Centre(check, text), Centre(presenter, text), precision: 0);
     }
 
+    /// <summary>
+    /// Enter on a step means "that's what it says", not "and now keep typing into it" — it commits and
+    /// hands the keyboard back to whatever had it before, because editing a checklist item is nearly
+    /// always an interruption of something else.
+    /// </summary>
+    [AvaloniaFact]
+    public void Enter_on_a_step_commits_it_and_gives_the_keyboard_back()
+    {
+        var (view, document, task) = Open(board =>
+            board.Groups[0].Tasks[0].Steps.Add(new TaskStep { Id = "s1", Text = "Book the room" }));
+        var dialog = Dialog(view);
+
+        // Typing in "add an item", then breaking off to fix the line above.
+        var adder = dialog.GetLogicalDescendants().OfType<TextBox>().First(b => Name(b) == "Add a step");
+        adder.Focus();
+        Dispatcher.UIThread.RunJobs();
+
+        var text = dialog.GetLogicalDescendants().OfType<TextBox>().First(b => b.Text == "Book the room");
+        text.Focus();
+        Dispatcher.UIThread.RunJobs();
+        text.Text = "Book the big room";
+
+        text.RaiseEvent(new Avalonia.Input.KeyEventArgs
+        {
+            RoutedEvent = Avalonia.Input.InputElement.KeyDownEvent,
+            Key = Avalonia.Input.Key.Enter,
+        });
+        Dispatcher.UIThread.RunJobs();
+
+        Assert.Equal("Book the big room", task.Steps[0].Text);
+        Assert.Equal("Edit Step", document.UndoLabel);
+        Assert.True(adder.IsFocused, "the caret did not go back to the field it came from");
+    }
+
+    /// <summary>With nowhere to go back to, Enter still takes the caret out of the line — a committed
+    /// field that keeps it looks like one that is still being edited.</summary>
+    [AvaloniaFact]
+    public void Enter_on_a_step_leaves_the_field_even_with_nowhere_to_return_to()
+    {
+        var (view, _, task) = Open(board =>
+            board.Groups[0].Tasks[0].Steps.Add(new TaskStep { Id = "s1", Text = "Book the room" }));
+
+        var text = Dialog(view).GetLogicalDescendants().OfType<TextBox>().First(b => b.Text == "Book the room");
+        text.Focus();
+        Dispatcher.UIThread.RunJobs();
+
+        text.RaiseEvent(new Avalonia.Input.KeyEventArgs
+        {
+            RoutedEvent = Avalonia.Input.InputElement.KeyDownEvent,
+            Key = Avalonia.Input.Key.Enter,
+        });
+        Dispatcher.UIThread.RunJobs();
+
+        Assert.False(text.IsFocused);
+        Assert.Equal("Book the room", task.Steps[0].Text); // unchanged, and still there
+    }
+
     /// <summary>Open the "+" menu and return its rows.</summary>
     private static IReadOnlyList<Button> MenuRows(TaskDialog dialog)
     {

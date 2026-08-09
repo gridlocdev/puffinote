@@ -1,5 +1,6 @@
 using Avalonia;
 using Avalonia.Controls;
+using Avalonia.Input;
 using Avalonia.Layout;
 using Avalonia.Media;
 using Pivotask.Core;
@@ -149,12 +150,57 @@ internal sealed class TaskDialog : ModalDialog<bool>
             Content = _body,
         });
 
+        // Every focus move inside the dialog, so a step's Enter knows where the caret came from.
+        AddHandler(GotFocusEvent, OnFocusMoved, Avalonia.Interactivity.RoutingStrategies.Bubble, handledEventsToo: true);
+
         DialogContent = root;
         RebuildHead();
         RebuildOptional();
     }
 
     private readonly CheckBox _tick;
+
+    /// <summary>The field with the caret, and the one that had it before — see <see cref="ReturnFocus"/>.</summary>
+    private Avalonia.Controls.Control? _focusNow;
+    private Avalonia.Controls.Control? _focusBefore;
+
+    private void OnFocusMoved(object? sender, FocusChangedEventArgs e)
+    {
+        if (e.Source is not Avalonia.Controls.Control control || ReferenceEquals(control, _focusNow))
+        {
+            return;
+        }
+
+        _focusBefore = _focusNow;
+        _focusNow = control;
+    }
+
+    /// <summary>
+    /// Put the caret back where it was before <paramref name="leaving"/> took it.
+    ///
+    /// <para>Enter on a step means "that's what it says", not "and now keep typing into it". Editing a
+    /// checklist item is nearly always an interruption of something else — usually the "add an item" field
+    /// two rows down — so finishing the edit should hand the keyboard back rather than leave it parked on
+    /// a line you are done with.</para>
+    ///
+    /// <para>With nowhere to go back to, the caret comes out of the field onto the dialog itself, which is
+    /// what the prototype's bare <c>blur()</c> does. Not simply left where it is: a committed field that
+    /// still holds the caret looks like a field that is still being edited.</para>
+    /// </summary>
+    private void ReturnFocus(Avalonia.Controls.Control? previous, Avalonia.Controls.Control leaving)
+    {
+        if (previous is not null
+            && !ReferenceEquals(previous, leaving)
+            && previous.Focusable
+            && previous.IsEffectivelyVisible
+            && TopLevel.GetTopLevel(previous) is not null)
+        {
+            previous.Focus();
+            return;
+        }
+
+        Focus();
+    }
 
     /// <summary>Which optional sections the user has asked for, on top of the ones the task already has.</summary>
     private readonly HashSet<string> _revealed = [];
@@ -644,7 +690,11 @@ internal sealed class TaskDialog : ModalDialog<bool>
         {
             if (e.Key == Avalonia.Input.Key.Enter)
             {
+                // Read where the caret came from before committing: the commit is an edit like any other
+                // and could move focus on its own.
+                var back = _focusBefore;
                 Commit();
+                ReturnFocus(back, text);
                 e.Handled = true;
             }
         };
