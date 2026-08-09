@@ -96,8 +96,9 @@ public class PlainTextEditorTests
     [AvaloniaFact]
     public void The_wrap_row_count_is_arithmetic_not_measurement()
     {
-        // The claim the whole geometry rests on: a line's row count is ceil(columns / columnsPerRow),
-        // so a document's height is known without measuring — or even reading — a single row.
+        // The claim the whole geometry rests on: a line's rows are counted in columns, so a document's
+        // height is known without laying out or measuring a single row. With nothing to break at, an
+        // unbroken run of text still folds exactly at the edge — ceil(columns / columnsPerRow).
         var (editor, _) = Open(string.Join('\n', Enumerable.Range(0, 20).Select(i => new string('x', i * 40))), wrap: true);
 
         int expected = 0;
@@ -107,6 +108,108 @@ public class PlainTextEditorTests
         }
 
         Assert.Equal(expected, editor.TotalRows);
+    }
+
+    /// <summary>
+    /// The point of word wrap: a fold lands between words, so no word is cut in half by the window's edge.
+    /// </summary>
+    [AvaloniaFact]
+    public void Wrapping_breaks_between_words_not_inside_them()
+    {
+        var (editor, _) = Open("", wrap: true);
+        int perRow = editor.ColumnsPerRow;
+
+        // A line of five-letter words, long enough that the first row cannot hold a whole number of them:
+        // the fold has to give up the columns between the last word that fits and the edge.
+        string word = "abcde";
+        var words = Enumerable.Repeat(word, (perRow / (word.Length + 1)) + 4).ToList();
+        editor.Text = string.Join(' ', words);
+
+        Assert.True(editor.TotalRows > 1);
+        var (_, secondRowStart) = SplitAtSecondRow(editor);
+
+        Assert.Equal(0, secondRowStart % (word.Length + 1)); // a word's first letter, never its middle
+        Assert.True(secondRowStart <= perRow, $"the second row starts at {secondRowStart}, past the fold");
+    }
+
+    /// <summary>A word with nowhere to break still has to fit somewhere — it breaks at the edge.</summary>
+    [AvaloniaFact]
+    public void A_word_longer_than_a_row_still_breaks_at_the_edge()
+    {
+        var (editor, _) = Open("", wrap: true);
+        int perRow = editor.ColumnsPerRow;
+        editor.Text = new string('x', perRow * 2);
+
+        Assert.Equal(2, editor.TotalRows);
+        Assert.Equal(perRow, SplitAtSecondRow(editor).SecondRowStart);
+    }
+
+    /// <summary>
+    /// Blanks are allowed to hang past the right edge rather than pushing the next word down a row: a run
+    /// of spaces at a fold draws nothing, and moving it would leave the row before it ending early.
+    /// </summary>
+    [AvaloniaFact]
+    public void Trailing_blanks_hang_past_the_edge_instead_of_forcing_a_fold()
+    {
+        var (editor, _) = Open("", wrap: true);
+        int perRow = editor.ColumnsPerRow;
+        editor.Text = new string('x', perRow - 2) + "    y"; // the spaces cross the edge; "y" is past it
+
+        Assert.Equal(2, editor.TotalRows);
+        Assert.Equal(perRow + 2, SplitAtSecondRow(editor).SecondRowStart); // the row starts at "y"
+    }
+
+    /// <summary>
+    /// A few hanging blanks are invisible; a whole row of them is a place the caret could hide, and
+    /// wrapping has no sideways scroll to go and find it. So the hang is capped at one row's width.
+    /// </summary>
+    [AvaloniaFact]
+    public void A_blank_run_wider_than_the_window_folds_rather_than_hanging_forever()
+    {
+        var (editor, _) = Open("", wrap: true);
+        int perRow = editor.ColumnsPerRow;
+        editor.Text = new string(' ', perRow * 4) + "tail";
+
+        Assert.True(editor.TotalRows >= 4, $"the blank run should fold, got {editor.TotalRows} row(s)");
+
+        // Every column of the line is reachable within a row's width of that row's start — which is the
+        // whole claim: nothing sits past an edge you cannot scroll to.
+        for (int offset = 0; offset <= editor.Text.Length; offset++)
+        {
+            editor.MoveCaret(offset, extend: false);
+            Assert.InRange(editor.CaretRowColumn.Column, 0, perRow);
+        }
+    }
+
+    /// <summary>The caret's row/column and the offsets a row spans agree about where the fold is.</summary>
+    [AvaloniaFact]
+    public void The_caret_lands_on_the_row_the_fold_put_its_word_on()
+    {
+        var (editor, _) = Open("", wrap: true);
+        int perRow = editor.ColumnsPerRow;
+        editor.Text = new string('a', perRow - 3) + " bcdef";
+
+        int wordStart = perRow - 2; // the offset of "b" — folded onto the second row
+        editor.MoveCaret(wordStart + 2, extend: false);
+
+        var (row, column) = editor.CaretRowColumn;
+        Assert.Equal(1, row);
+        Assert.Equal(2, column);
+        Assert.Equal(wordStart, editor.RowStartOffset());
+        Assert.Equal(editor.Text.Length, editor.RowEndOffset());
+    }
+
+    /// <summary>The offset the second visual row begins at, found through the row/offset map itself.</summary>
+    private static (int Rows, int SecondRowStart) SplitAtSecondRow(PlainTextEditor editor)
+    {
+        editor.MoveCaret(editor.Text.Length, extend: false); // anywhere on the last row
+        while (editor.CaretRowColumn.Row > 1)
+        {
+            editor.MoveByRow(-1, extend: false);
+        }
+
+        editor.MoveCaret(editor.RowStartOffset(), extend: false);
+        return (editor.TotalRows, editor.Buffer.Selection.Caret);
     }
 
     [AvaloniaFact]

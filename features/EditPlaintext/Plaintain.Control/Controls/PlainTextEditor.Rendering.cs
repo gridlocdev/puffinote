@@ -82,7 +82,7 @@ public sealed partial class PlainTextEditor
                 }
 
                 string lineText = doc.GetLineText(line).TrimEnd('\r');
-                string rowText = SegmentOf(lineText, segment, out int segmentStartColumn);
+                string rowText = SegmentOf(line, lineText, segment, out int segmentStartColumn);
                 widest = Math.Max(widest, ExpandedLength(lineText));
 
                 if (row == caretRow && HighlightCurrentLine)
@@ -111,7 +111,7 @@ public sealed partial class PlainTextEditor
     }
 
     /// <summary>The slice of <paramref name="lineText"/> that row <paramref name="segment"/> shows.</summary>
-    private string SegmentOf(string lineText, int segment, out int startColumn)
+    private string SegmentOf(int line, string lineText, int segment, out int startColumn)
     {
         startColumn = 0;
         if (!WordWrap)
@@ -119,8 +119,7 @@ public sealed partial class PlainTextEditor
             return lineText;
         }
 
-        int perRow = ColumnsPerRow;
-        startColumn = segment * perRow;
+        (startColumn, int endColumn) = SegmentColumns(line, segment);
 
         // Walk by expanded column so a tab is counted as the width it draws, not as one character.
         int column = 0, from = -1;
@@ -131,7 +130,7 @@ public sealed partial class PlainTextEditor
                 from = i;
             }
 
-            if (from >= 0 && column >= startColumn + perRow)
+            if (from >= 0 && column >= endColumn)
             {
                 return lineText[from..i];
             }
@@ -217,17 +216,6 @@ public sealed partial class PlainTextEditor
 
         context.FillRectangle(palette.Selection, new Rect(x1, y, Math.Max(1, x2 - x1), _rowHeight));
         _ = bounds;
-    }
-
-    private int RowEndOffsetFor(int line, int segment)
-    {
-        if (!WordWrap)
-        {
-            return Buffer.Document.GetLineEnd(line);
-        }
-
-        int end = Math.Min(LineColumns(line), (segment + 1) * ColumnsPerRow);
-        return OffsetAtColumn(line, end);
     }
 
     private void DrawRowMatches(DrawingContext context, Palette palette, int line, int segment, int startColumn, double y)

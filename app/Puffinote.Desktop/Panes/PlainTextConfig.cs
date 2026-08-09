@@ -11,7 +11,7 @@ namespace Puffinote.Desktop.Panes;
 /// </summary>
 internal sealed record PlainTextConfig
 {
-    /// <summary>Whether long lines fold. Off is the Notepad default.</summary>
+    /// <summary>Whether long lines fold, breaking between words. Off is the Notepad default.</summary>
     public bool WordWrap { get; set; }
 
     public bool ShowLineNumbers { get; set; } = true;
@@ -37,8 +37,8 @@ internal sealed record PlainTextConfig
     [
         new SettingsSection("Editor",
         [
-            new ToggleSetting("Wrap long lines", () => WordWrap, v => WordWrap = v,
-                "Off is the Notepad default: a long line runs off the right edge instead of folding."),
+            new ToggleSetting("Wrap long lines at words", () => WordWrap, v => WordWrap = v,
+                "Off is the Notepad default: a long line runs off the right edge instead of folding. On, it folds at the window's edge between words, so only a word too long for a whole row is ever split."),
             new ToggleSetting("Show line numbers", () => ShowLineNumbers, v => ShowLineNumbers = v),
             new ToggleSetting("Highlight the current line", () => HighlightCurrentLine, v => HighlightCurrentLine = v,
                 "A faint tint across the row the caret is on. On a log or an aligned table it lands on the data rather than on the caret, so it can be turned off; the gutter still marks the line either way."),

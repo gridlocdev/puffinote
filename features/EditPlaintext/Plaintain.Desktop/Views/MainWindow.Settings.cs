@@ -41,8 +41,8 @@ public sealed partial class MainWindow
         ]),
         new SettingsSection("Editor",
         [
-            new ToggleSetting("Wrap long lines", () => s.WordWrap, v => s.WordWrap = v,
-                "Off is the Notepad default: a long line runs off the right edge instead of folding."),
+            new ToggleSetting("Wrap long lines at words", () => s.WordWrap, v => s.WordWrap = v,
+                "Off is the Notepad default: a long line runs off the right edge instead of folding. On, it folds at the window's edge between words, so only a word too long for a whole row is ever split."),
             new ToggleSetting("Show line numbers", () => s.ShowLineNumbers, v => s.ShowLineNumbers = v),
             new ToggleSetting("Highlight the current line", () => s.HighlightCurrentLine, v => s.HighlightCurrentLine = v,
                 "A faint tint across the row the caret is on. On a log or an aligned table it lands on the data rather than on the caret, so it can be turned off; the gutter still marks the line either way."),

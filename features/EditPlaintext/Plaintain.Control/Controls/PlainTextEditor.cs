@@ -16,8 +16,8 @@ namespace Plaintain.Control.Controls;
 /// exactly <see cref="CharWidth"/> wide, because the font is monospace by design (PRD §3). That single
 /// decision turns all of this editor's geometry into arithmetic: the row a pixel is in is a division,
 /// the pixel a row starts at is a multiplication, and — the part that matters for a 50 MB log — the
-/// number of rows a line wraps into is <c>ceil(columns / columnsPerRow)</c>, computed without
-/// measuring anything. Typage's surface cannot do any of that (its blocks have varying heights and
+/// rows a line folds into are found by counting columns (see <see cref="ComputeWrap"/>), never by
+/// laying text out or measuring a glyph. Typage's surface cannot do any of that (its blocks have varying heights and
 /// collapsing margins, so it carries a pixel prefix sum), which is exactly why the two surfaces are
 /// separate and only their semantics are shared (proposal 0003 §5).</para>
 ///
@@ -112,8 +112,10 @@ public sealed partial class PlainTextEditor : Avalonia.Controls.Control, IScroll
         AvaloniaProperty.Register<PlainTextEditor, bool>(nameof(WordWrap));
 
     /// <summary>
-    /// Whether long lines fold at the viewport's edge. <b>Off by default</b> — the Notepad expectation
-    /// for a log, where a wrapped line hides the column structure that makes the log readable (PRD §3).
+    /// Whether long lines fold at the viewport's edge, <b>between words</b> rather than mid-word — a word
+    /// only ever splits when it is longer than the row itself. <b>Off by default</b> — the Notepad
+    /// expectation for a log, where a wrapped line hides the column structure that makes it readable
+    /// (PRD §3). See <see cref="ComputeWrap"/> for where the break points come from.
     /// </summary>
     public bool WordWrap
     {
@@ -258,11 +260,12 @@ public sealed partial class PlainTextEditor : Avalonia.Controls.Control, IScroll
         _rowHeight = Math.Ceiling(probe.Height > 0 ? probe.Height * 1.25 : size * 1.5);
     }
 
-    /// <summary>Forget the row map and the widest-line cache; both are rebuilt on the next layout.</summary>
+    /// <summary>Forget the row map, the fold points and the widest-line cache; all are rebuilt on demand.</summary>
     private void InvalidateMetrics()
     {
         _rowStarts = null;
         _widestColumns = 0;
+        InvalidateWrap();
         InvalidateMeasure();
     }
 
@@ -305,10 +308,6 @@ public sealed partial class PlainTextEditor : Avalonia.Controls.Control, IScroll
 
     /// <summary>Expanded width of a whole line, in columns.</summary>
     internal int LineColumns(int line) => ColumnOf(line, Buffer.Document.GetLineEnd(line));
-
-    /// <summary>Visual rows a line occupies: one, unless wrapping folds it.</summary>
-    internal int RowsInLine(int line) =>
-        !WordWrap ? 1 : Math.Max(1, (LineColumns(line) + ColumnsPerRow - 1) / ColumnsPerRow);
 
     /// <summary>
     /// Build (or reuse) the line → first-row map. Only wrapping needs one; with wrap off the map is the
@@ -428,6 +427,7 @@ public sealed partial class PlainTextEditor : Avalonia.Controls.Control, IScroll
     {
         Viewport = finalSize;
         _rowStarts = null; // the wrap width may have changed with the viewport
+        InvalidateWrap();  // …and with it every fold point measured against the old width
         Offset = _offset;  // re-clamp against the new extent
         return finalSize;
     }

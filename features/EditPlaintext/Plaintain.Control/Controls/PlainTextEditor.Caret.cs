@@ -25,8 +25,8 @@ public sealed partial class PlainTextEditor
             return (line, column);
         }
 
-        int perRow = ColumnsPerRow;
-        return (FirstRowOf(line) + (column / perRow), column % perRow);
+        int segment = SegmentAtColumn(line, column);
+        return (FirstRowOf(line) + segment, column - SegmentColumns(line, segment).Start);
     }
 
     /// <summary>The document offset at a visual row and expanded column (clamped into the row).</summary>
@@ -35,17 +35,14 @@ public sealed partial class PlainTextEditor
         int rows = Math.Max(1, TotalRows);
         row = Math.Clamp(row, 0, rows - 1);
         var (line, segment) = LineAtRow(row);
-        int target = WordWrap ? (segment * ColumnsPerRow) + column : column;
-
-        // On a wrapped row, never run past the fold — the next column belongs to the row below.
-        if (WordWrap)
+        if (!WordWrap)
         {
-            int lineEnd = LineColumns(line);
-            int segmentEnd = Math.Min(lineEnd, (segment + 1) * ColumnsPerRow);
-            target = Math.Min(target, segmentEnd);
+            return OffsetAtColumn(line, column);
         }
 
-        return OffsetAtColumn(line, target);
+        // On a folded row, never run past the break — the next column belongs to the row below.
+        var (start, end) = SegmentColumns(line, segment);
+        return OffsetAtColumn(line, Math.Min(start + column, end));
     }
 
     /// <summary>Move the caret, extending the selection when <paramref name="extend"/> (a Shift chord).</summary>
@@ -84,13 +81,7 @@ public sealed partial class PlainTextEditor
     {
         var (row, _) = CaretRowColumn;
         var (line, segment) = LineAtRow(row);
-        if (!WordWrap)
-        {
-            return Buffer.Document.GetLineEnd(line);
-        }
-
-        int end = Math.Min(LineColumns(line), (segment + 1) * ColumnsPerRow);
-        return OffsetAtColumn(line, end);
+        return RowEndOffsetFor(line, segment);
     }
 
     /// <summary>

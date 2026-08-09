@@ -55,7 +55,7 @@ public class SettingsTests : IDisposable
         var form = MainWindow.BuildSettingsForm(settings);
 
         Assert.Equal(
-            ["Theme", "Wrap long lines", "Show line numbers", "Highlight the current line", "Font size", "Auto-save"],
+            ["Theme", "Wrap long lines at words", "Show line numbers", "Highlight the current line", "Font size", "Auto-save"],
             form.Fields.Select(f => f.Label));
     }
 

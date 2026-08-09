@@ -416,7 +416,7 @@ public sealed class PreferencesTests
             Dispatcher.UIThread.RunJobs();
             var overlay = Overlay(window);
 
-            Toggle(Tab(overlay, "Plain Text"), "Wrap long lines").IsChecked = true;
+            Toggle(Tab(overlay, "Plain Text"), "Wrap long lines at words").IsChecked = true;
             ClickOk(overlay);
             Dispatcher.UIThread.RunJobs();
 
@@ -438,7 +438,7 @@ public sealed class PreferencesTests
         Dispatcher.UIThread.RunJobs();
         var overlay = Overlay(window);
 
-        Toggle(Tab(overlay, "Plain Text"), "Wrap long lines").IsChecked = true;
+        Toggle(Tab(overlay, "Plain Text"), "Wrap long lines at words").IsChecked = true;
         Row<NumericUpDown>(Tab(overlay, "Notes"), "Tab width").Value = 7m;
         overlay.TryCancel();
         Dispatcher.UIThread.RunJobs();

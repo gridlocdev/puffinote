@@ -29,7 +29,7 @@ and writes it back byte for byte.
 | Trait | Decision |
 |---|---|
 | Font | **Monospace**, uniform row height. Not a preference — the whole layout is arithmetic over a fixed advance (§6). |
-| Word wrap | **Off by default**, toggleable and remembered. The Notepad expectation for a log, where wrapping destroys the column structure that makes it readable. |
+| Word wrap | **Off by default**, toggleable and remembered. The Notepad expectation for a log, where wrapping destroys the column structure that makes it readable. When on, a line folds **between words**; only a word too long for a whole row is split. |
 | Line numbers | **Yes**, in a gutter, toggleable. Typage has none and shouldn't; this is one of the two visible differences. |
 | Tabs | Rendered to 4-column tab stops. Preserved in the file exactly as typed. |
 | Large files | **50 MB** is the held target. The load path is written against that number rather than retrofitted. |
@@ -68,7 +68,9 @@ find where you are reading doesn't throw you back to line 1 of a 50,000-line log
 Every row is `RowHeight` tall and every character `CharWidth` wide, so:
 
 - the row a pixel is in is a division, and the pixel a row starts at is a multiplication;
-- a line's wrapped row count is `ceil(columns / columnsPerRow)` — no measurement, no text layout;
+- a line's fold points come from counting its columns and breaking at the last word boundary that fits —
+  a scan, never a measurement or a text layout (a line with no boundary to use folds at
+  `ceil(columns / columnsPerRow)`, exactly where the edge is);
 - with wrap **off**, a line *is* a row, so a million-line file's height is known in O(1) and nothing is
   measured at all.
 

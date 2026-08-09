@@ -46,9 +46,11 @@ Three spaces, and confusing them is the easiest bug to write here:
 - **Offset** — a character index into the document. What `Selection` and every edit speak.
 - **Column** — an *expanded* column on a line: a tab advances to the next 4-stop, so a column is not a
   string index. `ColumnOf` / `OffsetAtColumn` convert.
-- **Row** — a visual row. With wrap off, row == line. With wrap on, a line occupies
-  `ceil(columns / columnsPerRow)` rows and `_rowStarts` (a cumulative map, built only while wrapping)
-  converts between them by binary search.
+- **Row** — a visual row. With wrap off, row == line. With wrap on, `ComputeWrap` walks the line and
+  returns the columns its rows begin at — greedily filling a row and breaking at the last word boundary
+  that fits, or at the edge when a word is longer than a row. Those starts **partition** the line's
+  columns, so every column still belongs to exactly one row; `_rowStarts` (a cumulative map, built only
+  while wrapping) converts line ↔ row by binary search.
 
 ### 3.2 Virtualization
 

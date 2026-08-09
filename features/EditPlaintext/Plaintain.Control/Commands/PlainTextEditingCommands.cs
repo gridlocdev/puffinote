@@ -50,7 +50,7 @@ public static class PlainTextEditingCommands
             // and it keeps ⌘ rather than dropping to a bare ⌥Z the way VS Code spells this: on macOS ⌥ plus a
             // letter *types a character* (⌥Z is Ω), and a plaintext editor is the last place to bind a chord
             // that might insert one. R for "wRap" is a weaker mnemonic than W; a chord that works is worth more.
-            new("view.wordWrap", "Word Wrap", "Fold long lines at the window's edge.",
+            new("view.wordWrap", "Word Wrap", "Fold long lines at the window's edge, breaking between words.",
                 Shortcut.Cmd(Key.R, KeyModifiers.Alt), view.ToggleWordWrap,
                 isActive: () => editor.WordWrap, icon: "wrap-text"),
             new("view.lineNumbers", "Line Numbers", "Show the line-number gutter.",
