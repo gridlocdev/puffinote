@@ -3,6 +3,7 @@ using Avalonia.Controls;
 using Avalonia.Headless.XUnit;
 using Avalonia.LogicalTree;
 using Avalonia.Threading;
+using Avalonia.VisualTree;
 using Pivotask.Control.Views;
 using Pivotask.Core;
 using Pivotask.Core.Model;
@@ -338,6 +339,31 @@ public class TaskDialogTests
             Assert.True(left >= gutter, $"“{box.PlaceholderText ?? box.Text}” sits {left} from the left edge");
             Assert.True(right >= gutter, $"“{box.PlaceholderText ?? box.Text}” sits {right} from the right edge");
         }
+    }
+
+    /// <summary>
+    /// A step's words sit on the same line as the tick that labels them. The box was already centred in
+    /// the row; its text was not — a TextBox stretches its presenter by default, so in a box as tall as
+    /// the checkbox beside it a single line rides along the top.
+    /// </summary>
+    [AvaloniaFact]
+    public void A_steps_words_are_centred_against_its_tick()
+    {
+        var (view, _, _) = Open(board =>
+            board.Groups[0].Tasks[0].Steps.Add(new TaskStep { Id = "s1", Text = "Book the room" }));
+
+        var text = Dialog(view).GetLogicalDescendants().OfType<TextBox>().First(b => b.Text == "Book the room");
+        Assert.Equal(Avalonia.Layout.VerticalAlignment.Center, text.VerticalContentAlignment);
+
+        // The line the reader sees, not just the box around it.
+        var presenter = text.GetVisualDescendants()
+            .First(v => v.GetType().Name.Contains("TextPresenter", StringComparison.Ordinal));
+        var check = ((Avalonia.Controls.Control)text.Parent!).GetLogicalDescendants().OfType<CheckBox>().First();
+
+        static double Centre(Visual part, Visual root) =>
+            part.TranslatePoint(new Point(0, 0), root)!.Value.Y + (part.Bounds.Height / 2);
+
+        Assert.Equal(Centre(check, text), Centre(presenter, text), precision: 0);
     }
 
     /// <summary>Open the "+" menu and return its rows.</summary>

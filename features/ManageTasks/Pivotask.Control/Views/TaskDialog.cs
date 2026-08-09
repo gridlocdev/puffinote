@@ -613,6 +613,11 @@ internal sealed class TaskDialog : ModalDialog<bool>
             BorderThickness = new Thickness(0),
             Padding = new Thickness(4, 2),
             VerticalAlignment = VerticalAlignment.Center,
+
+            // The box was already centred in the row; its *text* was not. A TextBox stretches its
+            // presenter by default, which for a single-line field means the line sits at the top of a box
+            // as tall as the checkbox beside it — six pixels above the tick it is supposed to label.
+            VerticalContentAlignment = VerticalAlignment.Center,
             Foreground = step.Done ? palette.MutedText : palette.Text,
         };
         Avalonia.Automation.AutomationProperties.SetName(text, "Step");
