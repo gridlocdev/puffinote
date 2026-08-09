@@ -1,42 +1,31 @@
-- [ ] Pivotask: the UI still drifts from `pivotask-prototype/pivotask-prototype.html` (read it and the four
-  screenshots beside it — the prototype needs no launching, its whole behaviour is in that one file).
-  Landed so far: the due-date and completion rules, single-click-to-open, and the card's step/note facts.
-  What is still different, verified against the prototype source and screenshots:
-    - [ ] **List rows are a different, thinner control than board cards.** The prototype renders *the same*
-      `taskHTML` in both views, so a list row shows labels, the due pill, the step count and the note
-      marker. `TaskListView.BuildRow` shows only checkbox + title + star + due, so the same task reads as
-      two different tasks depending on the view. Fixing this by using `TaskCard` in both is also the
-      rule-of-three answer, since the two row builders already duplicate each other.
-    - [ ] **The list has no per-group chrome.** The prototype gives each section a collapse caret, an
-      editable name, a dotted leader, a count, a delete button, an "add a task" foot, and — the one with
-      real behaviour — a `finished · N` subhead that folds the completed tasks. Puffinote's list has a bold
-      group label and nothing else, and it *skips* empty groups where the prototype shows them with a
-      message.
-    - [ ] **Column headers cannot rename or delete a group.** The prototype makes the name
-      `contenteditable` and puts an × beside the count; deleting a non-empty group confirms first, and
-      deleting the last one seeds a replacement rather than leaving no groups. This is the same gap the
-      "BoardCommands has five commands with no caller" item below names.
-    - [ ] **The board column has a collapse caret the prototype does not have.** Collapse is a list-view
-      affordance there (`.sect-head` has the caret, `.col-head` does not).
-    - [ ] **"Add a task" is always an open text box.** The prototype shows a `+ Add a task` button that
-      becomes an input on click (placeholder "Task name, then Enter"), keeps focus for the next one after
-      Enter, cancels on Escape, and commits a non-empty value on blur.
-    - [ ] **An empty column says nothing.** The prototype writes "Empty. Add the first task below." or
-      "Nothing here matches the filter." — two different sentences, because they are two different
-      situations.
-    - [ ] **The header strip is not the prototype's.** It has the brand block (mark + "Pivot" / "same
-      tasks, turned 90°"), a search field with a magnifier and the placeholder "Search tasks", filters as
-      pills with the active one filled, and a segmented BOARD | LIST switch with icons. Ours has
-      underline-style filter buttons, one "Board / List" toggle, and a bare "Search" box on the right.
-    - [ ] **No `/` or `V` keys.** `/` focuses the search box and selects it; `V` toggles board/list. Both
-      are suppressed while typing or while the drawer is open.
-    - [ ] **The trailing button is worded "+ Group".** The prototype says "Add a list" on the board and
-      "Add a group" in the list, and focuses the new group's name for renaming straight away.
-    - [ ] Compare `TaskDialog` against the drawer screenshot in detail — group picker, the `+` add-to-task
-      menu (Labels / Due date / Steps with an on/off state), the steps progress bar and percentage, "Delete
-      all", "Delete task" — this one has not been audited line by line yet.
+- [ ] Pivotask: a few differences from `pivotask-prototype/pivotask-prototype.html` remain (read it and the
+  four screenshots beside it — the prototype needs no launching, its whole behaviour is in that one file).
+  Closed so far: the due-date and completion rules, single-click-to-open, the card's step/note facts, the
+  list rendering the same card as the board, the list's section chrome and finished-tasks fold, rename and
+  delete on a group heading, the board losing the collapse caret it should not have had, the empty-column
+  sentences, the header strip (search / filter pills / segmented view switch), and the `/` and `V` keys.
+  Still different:
+    - [ ] **"Add a task" is a permanent text box.** The prototype shows a `+ Add a task` *button* that
+      becomes an input when clicked (placeholder "Task name, then Enter"), keeps focus for the next one
+      after Enter, cancels on Escape, and commits a non-empty value on blur. Ours is always an open box,
+      so every column carries an empty field whether or not you are adding anything.
+    - [ ] **A new group is not put straight into rename.** The prototype focuses the new name and selects
+      it, so "Add a list" is one gesture rather than two.
+    - [ ] **`TaskDialog` has never been audited against the drawer screenshot line by line** — the group
+      picker, the `+` add-to-task menu (Labels / Due date / Steps, with an on/off state), the steps
+      progress bar and its percentage, "Delete all", and the "Delete task" / "Done" footer. This is the
+      one surface where the gap is still unmeasured rather than merely unclosed.
+    - [ ] The prototype has a brand block at the far left of its strip (mark + "Pivot" / "same tasks,
+      turned 90°"). Deliberately not copied: these apps name the open document in the shared
+      `DocumentTitleBar` above, and a second app-name band under it would be the one piece of the
+      prototype that is a web page rather than an app. Worth a decision rather than a silent omission.
 
-- [ ] Pivotask: the board has no way to rename a group, delete a group, delete a task, fold completed tasks, or create a label. `BoardCommands` has all five, tested, with no caller outside the tests — the commands are done and the affordances aren't.
+- [ ] Pivotask: two of the five command-without-an-affordance gaps are still open. Renaming a group,
+  deleting a group, and folding completed tasks now have affordances (the group heading, and the list's
+  `finished · N` subhead). **`BoardCommands.DeleteTask` and `BoardCommands.AddLabel` still have no caller
+  outside their tests** — the prototype's drawer has a "Delete task" button in its footer and creates
+  labels from its `+` menu, and `TaskDialog` has neither: it says "This board has no labels yet." with no
+  way to make one.
 - [ ] Puffinote: an external edit (a `git pull`, an edit in another app) refreshes the file tree and the search index but never reloads an open tab, so the pane keeps showing stale content and can overwrite the change on save. Proposal 0004 Phase 4 asks for this and it applies to every pane type, not just boards.
 - [ ] Pivotask: verify the `.pivotask.json` compound-extension claim on a real Mac. The plist ships the exported `com.pivotask.board` UTI; if Launch Services won't honour a two-part extension tag, proposal 0004 §10.3 says strip the document-type claim entirely rather than fall back to claiming bare `json`.
 - [ ] Pivotask: drag-and-drop is the simple press-and-release version. Phase 5's refinement is still open — a drop indicator, precise placement between cards, and a way to cancel a drag in flight.
