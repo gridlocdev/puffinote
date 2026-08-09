@@ -223,7 +223,10 @@ public partial class SpreadsheetEditorView
     private async void CopyToClipboard(bool cut)
     {
         var sheet = Session.ActiveSheet;
-        var range = Selection.Range;
+
+        // What the selection covers, not what it says: an expanding ⌘A ends at the whole sheet, and the
+        // text below would otherwise walk 16384 × 1048576 cells appending a tab to each.
+        var range = ClipboardBlock.CopyRange(sheet, Selection.Range);
         var culture = Session.Workbook.Settings.EffectiveLocale;
         var sb = new StringBuilder();
 

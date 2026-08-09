@@ -22,16 +22,18 @@ public static class EditCommands
     }
 
     /// <summary>
-    /// A small range is iterated verbatim (so styling still reaches empty cells the user picked);
-    /// an oversized range — a whole-sheet or near-whole-sheet selection — is clamped to the used
-    /// range so styling can't iterate billions of cells.
+    /// The point past which a range is treated as "the user meant the sheet, not these cells". A small
+    /// range is iterated verbatim (so styling still reaches empty cells the user picked); an oversized one
+    /// — a whole-sheet or near-whole-sheet selection — is clamped to the used range so an operation can't
+    /// iterate billions of cells. Shared with the clipboard, which has the same problem for the same reason
+    /// (<see cref="ClipboardBlock.CopyRange"/>).
     /// </summary>
-    private const int InPlaceCellCap = 1 << 20; // 1,048,576 — one full column's worth
+    internal const int OversizedCellCap = 1 << 20; // 1,048,576 — one full column's worth
 
     private static CellRange StyleRange(Worksheet sheet, CellRange range)
     {
         long cells = (long)range.RowCount * range.ColumnCount;
-        if (cells <= InPlaceCellCap)
+        if (cells <= OversizedCellCap)
         {
             return range;
         }

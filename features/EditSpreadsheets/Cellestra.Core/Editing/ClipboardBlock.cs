@@ -35,8 +35,26 @@ public sealed class ClipboardBlock
 
     public int Columns => Cells.GetLength(1);
 
+    /// <summary>
+    /// The rectangle a copy of <paramref name="range"/> actually captures. An expanding ⌘A ends at the whole
+    /// sheet — 16384 × 1048576 cells — and a rectangle that size is not a big copy, it is 17 billion array
+    /// slots and a hang. Excel and Calc do not materialise it either: both hold a selection as a rectangle
+    /// (Calc's <c>ScMarkData::aMarkRange</c>) and a copy takes the sheet's used cells, which is what this
+    /// clamps to. Anything at or under the cap is taken verbatim, so a deliberately-selected block of blank
+    /// cells still copies as blanks.
+    /// </summary>
+    public static CellRange CopyRange(Worksheet sheet, CellRange range)
+    {
+        ArgumentNullException.ThrowIfNull(sheet);
+        long cells = (long)range.RowCount * range.ColumnCount;
+        return cells <= EditCommands.OversizedCellCap
+            ? range
+            : EditCommands.ClampToUsed(sheet, range) ?? new CellRange(range.TopLeft);
+    }
+
     public static ClipboardBlock Capture(Worksheet sheet, CellRange range, bool isCut)
     {
+        range = CopyRange(sheet, range);
         var cells = new ClipboardCell?[range.RowCount, range.ColumnCount];
         for (int r = 0; r < range.RowCount; r++)
         {
