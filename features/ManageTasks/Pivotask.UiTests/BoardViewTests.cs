@@ -673,6 +673,42 @@ public class BoardViewTests
     private const double StarGlyphSize = 18;
 
     /// <summary>
+    /// The tick box is drawn whole.
+    ///
+    /// <para>Putting the checkbox on the title's line by setting its Height to the line height did not
+    /// move it — it clipped it. The Fluent template centres a 20px box inside a 32px row and clips to its
+    /// own bounds, so the box kept its offset and lost its bottom edge. Wrapping it in a fixed-height
+    /// panel does the same thing, because an explicit Height is passed down as a measure constraint; the
+    /// child has to be measured against infinity and then placed.</para>
+    /// </summary>
+    [AvaloniaFact]
+    public void The_tick_box_is_given_the_room_it_asks_for()
+    {
+        var (view, _) = Open();
+
+        // What an untouched CheckBox wants, from this theme rather than from a number written down here.
+        var reference = new CheckBox();
+        var probe = new Window { Width = 200, Height = 100, Content = reference };
+        probe.Show();
+        probe.UpdateLayout();
+        Dispatcher.UIThread.RunJobs();
+
+        foreach (var card in view.BoardForTest.CardsForTest)
+        {
+            var check = card.GetLogicalDescendants().OfType<CheckBox>().First();
+            Assert.True(
+                check.Bounds.Height >= reference.Bounds.Height,
+                $"the tick box on {card.Task.Id} is {check.Bounds.Height} tall but wants {reference.Bounds.Height}");
+
+            var star = card.GetLogicalDescendants().OfType<Button>().First(b =>
+                Avalonia.Automation.AutomationProperties.GetName(b) is "Add star" or "Remove star");
+            Assert.True(
+                star.Bounds.Height >= StarGlyphSize,
+                $"the star on {card.Task.Id} is {star.Bounds.Height} tall around an {StarGlyphSize} glyph");
+        }
+    }
+
+    /// <summary>
     /// Scrolled to the end, the trailing "add a list" is fully on screen. It used to be clipped however
     /// far you scrolled: the inset was the scroller's Padding, which shrinks the viewport without joining
     /// the extent, so the far edge of the content was permanently out of reach by exactly that much.

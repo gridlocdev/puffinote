@@ -45,12 +45,19 @@ internal sealed class TaskCard : Border
         var done = new CheckBox
         {
             IsChecked = task.Done,
-            VerticalAlignment = VerticalAlignment.Top,
-            VerticalContentAlignment = VerticalAlignment.Center,
             MinHeight = 0,
-            Height = LineHeight,
+            MinWidth = 0,
             Padding = new Thickness(0),
+            VerticalAlignment = VerticalAlignment.Center,
+        };
+
+        // Top, or the DockPanel stretches the slot to the whole row and a card with a footline centres
+        // its tick box against the block rather than against the title's first line.
+        var tick = new LineSlot
+        {
+            VerticalAlignment = VerticalAlignment.Top,
             Margin = new Thickness(0, 0, 9, 0),
+            Children = { done },
         };
         done.IsCheckedChanged += (_, _) =>
         {
@@ -121,15 +128,18 @@ internal sealed class TaskCard : Border
         // The same star the task dialog puts in its header — one control, so there is one answer to what
         // starred looks like rather than a drawn glyph in one place and a "★" character in the other.
         var star = StarButton.Build(task.Important, () => StarToggled?.Invoke(this, !task.Important));
-        star.Height = LineHeight;
-        star.Margin = new Thickness(6, 0, 0, 0);
-        star.VerticalAlignment = VerticalAlignment.Top;
+        var starSlot = new LineSlot
+        {
+            VerticalAlignment = VerticalAlignment.Top,
+            Margin = new Thickness(6, 0, 0, 0),
+            Children = { star },
+        };
 
         var row = new DockPanel { LastChildFill = true };
-        DockPanel.SetDock(done, Dock.Left);
-        DockPanel.SetDock(star, Dock.Right);
-        row.Children.Add(done);
-        row.Children.Add(star);
+        DockPanel.SetDock(tick, Dock.Left);
+        DockPanel.SetDock(starSlot, Dock.Right);
+        row.Children.Add(tick);
+        row.Children.Add(starSlot);
         row.Children.Add(stack);
         Child = row;
 
@@ -202,6 +212,44 @@ internal sealed class TaskCard : Border
                 Foreground = accent is { } ink ? new SolidColorBrush(Lighten(ink)) : palette.MutedText,
             },
         };
+    }
+
+    /// <summary>
+    /// Holds one control on a single line of text: measured and drawn at the size it asks for, but taking
+    /// only <see cref="LineHeight"/> of the row, centred.
+    ///
+    /// <para>This exists because you cannot simply set a stock control's Height to the line height. The
+    /// Fluent CheckBox centres a 20px box inside a 32px row and clips to its own bounds, so a Height of 20
+    /// cut the bottom off the box rather than moving it up — and wrapping it in a fixed-height panel does
+    /// the same thing, because an explicit Height is passed down as a <em>measure constraint</em>. The
+    /// child has to be measured against infinity and then placed, which is what this does. No arithmetic
+    /// on the theme's numbers, so it keeps working if they change.</para>
+    /// </summary>
+    private sealed class LineSlot : Panel
+    {
+        protected override Size MeasureOverride(Size availableSize)
+        {
+            if (Children.Count == 0)
+            {
+                return new Size(0, LineHeight);
+            }
+
+            var child = Children[0];
+            child.Measure(Size.Infinity);
+            return new Size(child.DesiredSize.Width, LineHeight);
+        }
+
+        protected override Size ArrangeOverride(Size finalSize)
+        {
+            if (Children.Count > 0)
+            {
+                var child = Children[0];
+                var wanted = child.DesiredSize;
+                child.Arrange(new Rect(0, (finalSize.Height - wanted.Height) / 2, wanted.Width, wanted.Height));
+            }
+
+            return finalSize;
+        }
     }
 
     /// <summary>Parse an <c>#RRGGBB</c> label colour, falling back to a neutral rather than throwing —
