@@ -1,5 +1,8 @@
+using Avalonia;
 using Avalonia.Controls;
+using Avalonia.Headless;
 using Avalonia.Headless.XUnit;
+using Avalonia.Input;
 using Avalonia.LogicalTree;
 using Avalonia.Threading;
 using Pivotask.Control.Views;
@@ -180,5 +183,75 @@ public class BoardViewTests
         var (view, _) = Open();
 
         Assert.Equal(["Inbox", "This week"], view.Groups.Select(g => g.Name));
+    }
+
+    /// <summary>
+    /// A single click opens the task, as it does in the prototype. The card is a summary of something
+    /// there is more of, and opening it is the only thing a plain click on one could mean.
+    /// </summary>
+    [AvaloniaFact]
+    public void A_single_click_on_a_card_opens_the_task()
+    {
+        var (view, _) = Open();
+        var card = view.BoardForTest.CardsForTest.First(c => c.Task.Id == "t1");
+
+        Click(card);
+
+        Assert.True(view.IsModalOpen);
+    }
+
+    /// <summary>
+    /// …but a click that landed on the checkbox or the star has already meant something. Those are their
+    /// own targets inside the card, and letting the card also act on them would tick a task *and* open it.
+    /// </summary>
+    [AvaloniaFact]
+    public void A_click_on_the_checkbox_does_not_also_open_the_task()
+    {
+        var (view, _) = Open();
+        var card = view.BoardForTest.CardsForTest.First(c => c.Task.Id == "t1");
+        var check = card.GetLogicalDescendants().OfType<CheckBox>().First();
+
+        Click(check);
+
+        Assert.Contains(view.BoardForTest.CardsForTest, c => c.Task is { Id: "t1", Done: true }); // it ticked…
+        Assert.False(view.IsModalOpen);                                                          // …and only that
+    }
+
+    /// <summary>A real click, through the window, so the guard inside the card is actually exercised.</summary>
+    private static void Click(Visual target)
+    {
+        var window = (Window)TopLevel.GetTopLevel(target)!;
+        var centre = target.TranslatePoint(new Point(target.Bounds.Width / 2, target.Bounds.Height / 2), window)!.Value;
+        window.MouseDown(centre, MouseButton.Left);
+        window.MouseUp(centre, MouseButton.Left);
+        Dispatcher.UIThread.RunJobs();
+    }
+
+    /// <summary>
+    /// The card's facts read as facts: a step count says what it counts, and a task with a note says so,
+    /// since the note is the one thing on a task the card cannot show.
+    /// </summary>
+    [AvaloniaFact]
+    public void A_card_spells_out_its_step_count_and_says_when_there_is_a_note()
+    {
+        var board = new Board();
+        var group = new TaskGroup { Id = "g1", Name = "Inbox" };
+        var task = new TaskItem { Id = "t1", Title = "Ship it", Notes = "the tricky part" };
+        task.Steps.Add(new TaskStep { Id = "s1", Text = "draft", Done = true });
+        task.Steps.Add(new TaskStep { Id = "s2", Text = "review" });
+        group.Tasks.Add(task);
+        board.Groups.Add(group);
+
+        var view = new TaskBoardView { Document = new BoardDocument(board), Today = Today };
+        var window = new Window { Width = 900, Height = 600, Content = view };
+        window.Show();
+        window.UpdateLayout();
+        Dispatcher.UIThread.RunJobs();
+
+        var card = view.BoardForTest.CardsForTest.Single();
+        var chips = card.GetLogicalDescendants().OfType<TextBlock>().Select(t => t.Text).ToList();
+
+        Assert.Contains("1/2 steps", chips);
+        Assert.Contains("note", chips);
     }
 }

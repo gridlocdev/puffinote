@@ -3,6 +3,7 @@ using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Layout;
 using Avalonia.Media;
+using Avalonia.VisualTree;
 using Pivotask.Core.Model;
 using Pivotask.Core.Query;
 using Puffinote.Components.Theming;
@@ -74,7 +75,16 @@ internal sealed class TaskCard : Border
         var (stepsDone, stepsTotal) = task.StepProgress;
         if (stepsTotal > 0)
         {
-            meta.Children.Add(Chip($"{stepsDone}/{stepsTotal}", null));
+            // "1/3 steps", not a bare "1/3": the card's other facts are self-describing (a label says its
+            // own name, a due pill says a date) and a lone fraction beside them is a riddle.
+            meta.Children.Add(Chip($"{stepsDone}/{stepsTotal} steps", null));
+        }
+
+        // A note is a fact about the task like any other, and the one the card cannot show: it says the
+        // note exists so you know there is something behind the title worth opening.
+        if (!string.IsNullOrWhiteSpace(task.Notes))
+        {
+            meta.Children.Add(Chip("note", null));
         }
 
         var stack = new StackPanel { Spacing = 0 };
@@ -103,10 +113,30 @@ internal sealed class TaskCard : Border
         row.Children.Add(stack);
         Child = row;
 
-        DoubleTapped += (_, e) =>
+        // A single click opens the task, as it does in the prototype. The card is a summary of something
+        // there is more of — opening it is the only reason to click one, and the checkbox and star are
+        // separate targets that handle their own clicks, so there is nothing a plain click could mean
+        // instead. Focusable so the same thing is reachable from the keyboard.
+        Focusable = true;
+        Tapped += (_, e) =>
         {
+            // The checkbox and the star are their own targets sitting inside the card. A tap that landed
+            // on one of those has already meant something, and must not also open the task.
+            if ((e.Source as Visual)?.FindAncestorOfType<Button>(includeSelf: true) is not null)
+            {
+                return;
+            }
+
             Opened?.Invoke(this, EventArgs.Empty);
             e.Handled = true;
+        };
+        KeyDown += (_, e) =>
+        {
+            if (e.Key is Key.Enter or Key.Space)
+            {
+                Opened?.Invoke(this, EventArgs.Empty);
+                e.Handled = true;
+            }
         };
     }
 
@@ -116,7 +146,7 @@ internal sealed class TaskCard : Border
 
     public event EventHandler<bool>? StarToggled;
 
-    /// <summary>Raised on a double-click — the card's "tell me everything" gesture.</summary>
+    /// <summary>Raised on a click, or Enter/Space — the card's "tell me everything" gesture.</summary>
     public event EventHandler? Opened;
 
     /// <summary>A small rounded pill. The label chip and the due pill are the same shape on purpose:

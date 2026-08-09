@@ -148,7 +148,7 @@ public sealed class TaskListView : UserControl
         row.Children.Add(trailing);
         row.Children.Add(title);
 
-        row.DoubleTapped += (_, e) =>
+        row.Tapped += (_, e) =>
         {
             TaskOpened?.Invoke(this, task);
             e.Handled = true;
