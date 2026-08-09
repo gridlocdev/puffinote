@@ -5,6 +5,7 @@ using Avalonia.Themes.Fluent;
 using Pivotask.Desktop.Views;
 using Puffinote.Components.Core.Documents;
 using Puffinote.Components.Input;
+using Puffinote.Components.Shell;
 using Puffinote.Components.Theming;
 
 namespace Pivotask.Desktop;
@@ -25,6 +26,22 @@ public class App : Application
         // Theme) as it opens, and that setting defaults to following the system — which is what leaving
         // RequestedThemeVariant unset already does, so nothing flashes dark on the way to a light desktop.
         Tokens.Follow(this);
+
+        // The macOS application menu, as Cellestra has had it: the app's own name in the menu bar and its
+        // own About screen, rather than Avalonia's. Has to be here, in Initialize — see MacAppMenu.
+        MacAppMenu.Install(this, "Pivotask", ShowAbout);
+    }
+
+    /// <summary>
+    /// The About screen, resolved through the live window so it lands on that window's overlay. Nothing
+    /// exists yet when the menu is built, which is why this is a callback rather than a reference.
+    /// </summary>
+    private void ShowAbout()
+    {
+        if (ApplicationLifetime is IClassicDesktopStyleApplicationLifetime { MainWindow: MainWindow window })
+        {
+            window.ShowAbout();
+        }
     }
 
     public override void OnFrameworkInitializationCompleted()

@@ -3,7 +3,6 @@ using Avalonia.Headless.XUnit;
 using Avalonia.Input;
 using Cellestra.Desktop.Commands;
 using Cellestra.Desktop.Views;
-using Cellestra.Desktop.Views.Dialogs;
 using Puffinote.Components.Overlays;
 using Xunit;
 
@@ -49,7 +48,7 @@ public class InternalModalTests
     [AvaloniaFact]
     public void About_dialog_constructs_with_the_expected_title()
     {
-        var about = new AboutDialog();
+        var about = new AboutDialog("Cellestra", "A spreadsheet editor.", subtitle: "cell + orchestra");
         Assert.Equal("About Cellestra", about.Title);
     }
 

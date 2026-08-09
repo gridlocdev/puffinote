@@ -247,7 +247,12 @@ public sealed partial class MainWindow : Window
         view.Items.Add(Item("Zoom _Out", ZoomCommands.ZoomOutId));
         view.Items.Add(Item("_Actual Size", ZoomCommands.ActualSizeId));
 
-        return new Menu { Items = { file, edit, view } };
+        // Off macOS there is no application menu to hold About, so Help carries it — the same place
+        // Cellestra keeps it, and the place someone looks for it on Windows and Linux.
+        var help = new MenuItem { Header = "_Help" };
+        help.Items.Add(Action("_About Plaintain", ShowAbout));
+
+        return new Menu { Items = { file, edit, view, help } };
     }
 
     // ----- macOS native menu bar -----
@@ -303,10 +308,16 @@ public sealed partial class MainWindow : Window
             view.Menu!.Items.Add(id is null ? new NativeMenuItemSeparator() : Item(_commands[id].Title, id));
         }
 
+        // Help carries About here too, even though the application menu has one: that is where macOS apps
+        // put it, and the two items are the same screen.
+        var help = Submenu("Help");
+        help.Menu!.Items.Add(Action("About Plaintain", ShowAbout));
+
         var menu = new NativeMenu();
         menu.Items.Add(file);
         menu.Items.Add(edit);
         menu.Items.Add(view);
+        menu.Items.Add(help);
         NativeMenu.SetMenu(this, menu);
     }
 
@@ -340,6 +351,22 @@ public sealed partial class MainWindow : Window
 
     /// <summary>⌘, (Ctrl+, off macOS) — the platform's Preferences chord, and the same one in every app here.</summary>
     private static KeyGesture PreferencesGesture => Shortcut.Cmd(Key.OemComma).ToGesture();
+
+    /// <summary>
+    /// The About screen. Public because the macOS application menu's About item is built on the
+    /// <c>Application</c>, before this window exists, and reaches it back through the desktop lifetime.
+    /// </summary>
+    public void ShowAbout()
+    {
+        if (!_overlay.IsOpen)
+        {
+            _ = _overlay.ShowModalAsync(new AboutDialog(
+                "Plaintain",
+                "A Notepad-class plaintext editor: the tool for a file that is just text, which opens anything "
+                + "decodable and never pretends to understand its format.",
+                subtitle: "from plain + plantain"));
+        }
+    }
 
     private Border BuildStatusBar()
     {

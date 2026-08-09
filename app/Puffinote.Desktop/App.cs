@@ -7,6 +7,7 @@ using Avalonia.Styling;
 using Avalonia.Themes.Fluent;
 using Puffinote.Components.Core.Documents;
 using Puffinote.Components.Input;
+using Puffinote.Components.Shell;
 using Puffinote.Components.Theming;
 using Puffinote.Desktop.Shell;
 using Puffinote.Desktop.Views;
@@ -63,6 +64,22 @@ public class App : Application
             ["ChromeAltBackground"] = new SolidColorBrush(Color.Parse("#F4F4F4")),
             ["ChromeBorder"] = new SolidColorBrush(Color.Parse("#E0E0E0")),
         };
+
+        // The macOS application menu, as Cellestra has had it: the app's own name in the menu bar and its
+        // own About screen, rather than Avalonia's. Has to be here, in Initialize — see MacAppMenu.
+        MacAppMenu.Install(this, "Puffinote", ShowAbout);
+    }
+
+    /// <summary>
+    /// The About screen, resolved through the live window so it lands on that window's overlay. Nothing
+    /// exists yet when the menu is built, which is why this is a callback rather than a reference.
+    /// </summary>
+    private void ShowAbout()
+    {
+        if (ApplicationLifetime is IClassicDesktopStyleApplicationLifetime { MainWindow: MainWindow window })
+        {
+            window.ShowAbout();
+        }
     }
 
     public override void OnFrameworkInitializationCompleted()

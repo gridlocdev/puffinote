@@ -47,13 +47,13 @@ public class MenuBarTests : IDisposable
             Assert.Empty(inWindow);
             var native = NativeMenu.GetMenu(window);
             Assert.NotNull(native);
-            Assert.Equal(["File", "Edit", "View"], native.Items.OfType<NativeMenuItem>().Select(i => i.Header));
+            Assert.Equal(["File", "Edit", "View", "Help"], native.Items.OfType<NativeMenuItem>().Select(i => i.Header));
         }
         else
         {
             Assert.Null(NativeMenu.GetMenu(window));
             var menu = Assert.Single(inWindow);
-            Assert.Equal(["_File", "_Edit", "_View"], menu.Items.OfType<MenuItem>().Select(i => (string?)i.Header));
+            Assert.Equal(["_File", "_Edit", "_View", "_Help"], menu.Items.OfType<MenuItem>().Select(i => (string?)i.Header));
         }
     }
 

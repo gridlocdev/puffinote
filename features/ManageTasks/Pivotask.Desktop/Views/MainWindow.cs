@@ -92,9 +92,7 @@ public sealed partial class MainWindow : Window
         root.Children.Add(_titleBar);
         DocumentTitleBar.Extend(this);
 
-        var menu = BuildMenu();
-        DockPanel.SetDock(menu, Dock.Top);
-        root.Children.Add(menu);
+        InstallMenu(root);
 
         var status = BuildStatusBar();
         DockPanel.SetDock(status, Dock.Bottom);
@@ -133,6 +131,107 @@ public sealed partial class MainWindow : Window
             _ = _overlay.ShowModalAsync(new MessageDialog(
                 heading: $"Couldn't open “{Path.GetFileName(path)}”.",
                 message: ex.Message));
+        }
+    }
+
+    /// <summary>
+    /// Put the menu where the platform keeps menus: the system bar at the top of the screen on macOS, an
+    /// in-window bar below the title bar everywhere else. The two are built from the same commands in the
+    /// same order — the only thing that differs is which widget carries them. Pivotask was the last of the
+    /// five to keep its menus inside the window on a Mac, and a task board has no reason to be the odd one.
+    /// </summary>
+    private void InstallMenu(DockPanel root)
+    {
+        if (OperatingSystem.IsMacOS())
+        {
+            BuildNativeMenu();
+            return;
+        }
+
+        var menu = BuildMenu();
+        DockPanel.SetDock(menu, Dock.Top);
+        root.Children.Add(menu);
+    }
+
+    /// <summary>
+    /// The same menus, in the system bar. Headers lose their <c>_</c> mnemonics: macOS has no Alt-letter
+    /// menu access, and the underscore would be drawn literally.
+    /// </summary>
+    private void BuildNativeMenu()
+    {
+        NativeMenuItem Item(string header, string id)
+        {
+            var command = _commands[id];
+            var item = new NativeMenuItem(header) { Command = new RelayCommand(() => command.Execute()) };
+
+            // No key-equivalent for a chord that text input needs: macOS routes a menu key-equivalent
+            // before the focused view sees the key, so ⌘Z on the menu would be taken away from whatever
+            // field is being typed in. They still work — the window's key bindings carry them.
+            if (command.Shortcut is { } shortcut && !shortcut.YieldsToTextInput)
+            {
+                item.Gesture = shortcut.ToGesture(mac: true);
+            }
+
+            return item;
+        }
+
+        static NativeMenuItem Run(string header, Action action, KeyGesture? gesture = null) =>
+            new(header) { Command = new RelayCommand(action), Gesture = gesture };
+
+        static NativeMenuItem Submenu(string header) => new(header) { Menu = [] };
+
+        var file = Submenu("File");
+        file.Menu!.Items.Add(Run("New Board", () => _ = NewAsync(), Shortcut.Cmd(Key.N).ToGesture(mac: true)));
+        file.Menu.Items.Add(Run("Open…", () => _ = OpenAsync(), Shortcut.Cmd(Key.O).ToGesture(mac: true)));
+        file.Menu.Items.Add(new NativeMenuItemSeparator());
+        file.Menu.Items.Add(Run("Save", () => _ = SaveAsync(), Shortcut.Cmd(Key.S).ToGesture(mac: true)));
+        file.Menu.Items.Add(Run("Save As…", () => _ = SaveAsAsync(), Shortcut.Cmd(Key.S, KeyModifiers.Shift).ToGesture(mac: true)));
+        file.Menu.Items.Add(new NativeMenuItemSeparator());
+        file.Menu.Items.Add(Run("Preferences…", ShowSettings, PreferencesGesture));
+
+        var edit = Submenu("Edit");
+        foreach (var id in new[] { "edit.undo", "edit.redo", null, "task.add", "task.addGroup", "edit.find" })
+        {
+            edit.Menu!.Items.Add(id is null ? new NativeMenuItemSeparator() : Item(_commands[id].Title, id));
+        }
+
+        var view = Submenu("View");
+        foreach (var id in new[]
+                 {
+                     "view.board", "view.list", null,
+                     "filter.all", "filter.starred", "filter.dueSoon", "filter.unfinished", null,
+                     ZoomCommands.ZoomInId, ZoomCommands.ZoomOutId, ZoomCommands.ActualSizeId,
+                 })
+        {
+            view.Menu!.Items.Add(id is null ? new NativeMenuItemSeparator() : Item(_commands[id].Title, id));
+        }
+
+        // Help carries About here too, even though the application menu has one: that is where macOS apps
+        // put it, and the two items are the same screen.
+        var help = Submenu("Help");
+        help.Menu!.Items.Add(Run("About Pivotask", ShowAbout));
+
+        var menu = new NativeMenu();
+        menu.Items.Add(file);
+        menu.Items.Add(edit);
+        menu.Items.Add(view);
+        menu.Items.Add(help);
+        NativeMenu.SetMenu(this, menu);
+    }
+
+    /// <summary>
+    /// The About screen. Public because the macOS application menu's About item is built on the
+    /// <c>Application</c>, before this window exists, and reaches it back through the desktop lifetime.
+    /// </summary>
+    public void ShowAbout()
+    {
+        if (!_overlay.IsOpen)
+        {
+            _ = _overlay.ShowModalAsync(new AboutDialog(
+                "Pivotask",
+                "A task board whose file is plain, deterministic JSON — small enough to hand-edit and made to "
+                + "live in git next to the work it describes.",
+                subtitle: "from pivot + task"));
         }
     }
 
@@ -182,7 +281,12 @@ public sealed partial class MainWindow : Window
         view.Items.Add(Item("Zoom _Out", ZoomCommands.ZoomOutId));
         view.Items.Add(Item("Actual Si_ze", ZoomCommands.ActualSizeId));
 
-        return new Menu { Items = { file, edit, view } };
+        // Off macOS there is no application menu to hold About, so Help carries it — the same place
+        // Cellestra keeps it, and the place someone looks for it on Windows and Linux.
+        var help = new MenuItem { Header = "_Help" };
+        help.Items.Add(Run("_About Pivotask", ShowAbout));
+
+        return new Menu { Items = { file, edit, view, help } };
     }
 
     /// <summary>Bind the catalog's chords. The catalog is the only list of them, so the menu, the key

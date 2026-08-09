@@ -279,7 +279,10 @@ public partial class SpreadsheetEditorView
 
     public void ShowKeyboardShortcuts() => _ = ShowModalAsync(new KeyboardShortcutsDialog(Commands));
 
-    public void ShowAbout() => _ = ShowModalAsync(new AboutDialog());
+    public void ShowAbout() => _ = ShowModalAsync(new AboutDialog(
+        "Cellestra",
+        "A clean, fast, native spreadsheet editor for macOS whose home format is OpenDocument Spreadsheet (.ods).",
+        subtitle: "from cell + orchestra · pronounced “cel-LES-trah”"));
 
     public void ShowMessage(string heading, string message) => _ = ShowModalAsync(new MessageDialog(heading, message));
 

@@ -4,6 +4,7 @@ using Avalonia.Media;
 using Avalonia.Themes.Fluent;
 using Puffinote.Components.Core.Documents;
 using Puffinote.Components.Input;
+using Puffinote.Components.Shell;
 using Puffinote.Components.Theming;
 using Typage.Desktop.Services;
 using Typage.Desktop.Views;
@@ -27,6 +28,22 @@ public class App : Application
         // unset RequestedThemeVariant already means, so the split second before the window exists is spent
         // in the OS's appearance rather than in a dark one we would then have to switch away from.
         Tokens.Follow(this);
+
+        // The macOS application menu, as Cellestra has had it: the app's own name in the menu bar and its
+        // own About screen, rather than Avalonia's. Has to be here, in Initialize — see MacAppMenu.
+        MacAppMenu.Install(this, "Typage", ShowAbout);
+    }
+
+    /// <summary>
+    /// The About screen, resolved through the live window so it lands on that window's overlay. Nothing
+    /// exists yet when the menu is built, which is why this is a callback rather than a reference.
+    /// </summary>
+    private void ShowAbout()
+    {
+        if (ApplicationLifetime is IClassicDesktopStyleApplicationLifetime { MainWindow: MainWindow window })
+        {
+            window.ShowAbout();
+        }
     }
 
     public override void OnFrameworkInitializationCompleted()

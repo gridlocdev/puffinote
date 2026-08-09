@@ -213,6 +213,10 @@ public partial class MainWindow
         var help = new MenuItem { Header = "_Help" };
         help.Items.Add(InWindowItem("help.reference"));
 
+        // Off macOS there is no application menu to hold About, so Help carries it — the same place
+        // Cellestra keeps it, and the place someone looks for it on Windows and Linux.
+        help.Items.Add(new MenuItem { Header = "_About Typage", Command = new RelayCommand(ShowAbout) });
+
         var menu = new Menu();
         menu.Items.Add(file);
         menu.Items.Add(edit);
@@ -386,6 +390,10 @@ public partial class MainWindow
 
         var help = NativeSubmenu("Help");
         help.Menu!.Items.Add(NativeItem("help.reference"));
+
+        // Help carries About here too, even though the application menu has one: that is where macOS apps
+        // put it, and the two items are the same screen.
+        help.Menu.Items.Add(new NativeMenuItem("About Typage") { Command = new RelayCommand(ShowAbout) });
         menu.Items.Add(help);
 
         NativeMenu.SetMenu(this, menu);

@@ -187,4 +187,20 @@ public partial class MainWindow
         // Applies the mode; the surface's ViewModeChanged then syncs the View ▸ radio and persists it.
         EditorView.ViewMode = s.View;
     }
+
+    /// <summary>
+    /// The About screen. Public because the macOS application menu's About item is built on the
+    /// <c>Application</c>, before this window exists, and reaches it back through the desktop lifetime.
+    /// </summary>
+    public void ShowAbout()
+    {
+        if (!_overlayHost.IsOpen)
+        {
+            _ = _overlayHost.ShowModalAsync(new AboutDialog(
+                "Typage",
+                "A Markdown editor that shows the formatting while you type, and whose file is the "
+                + "Markdown you wrote — no proprietary document, no export step.",
+                subtitle: "from type + page"));
+        }
+    }
 }

@@ -416,16 +416,23 @@ public partial class MainWindow
         }
     }
 
-    private void ShowAbout()
+    /// <summary>
+    /// The About screen — the family's shared card rather than a bare message box, and public because the
+    /// macOS application menu's About item is built on the <c>Application</c>, before this window exists,
+    /// and reaches it back through the desktop lifetime.
+    /// </summary>
+    public void ShowAbout()
     {
         if (_overlayHost.IsOpen)
         {
             return;
         }
 
-        _ = _overlayHost.ShowModalAsync(new MessageDialog(
+        _ = _overlayHost.ShowModalAsync(new AboutDialog(
             "Puffinote",
-            "A second-brain notes app — composes Typage (Markdown) and Cellestra (spreadsheets)."));
+            "A notebook-style workspace that composes four from-scratch native editors — Markdown, "
+            + "spreadsheets, plaintext, and task boards — into one window over one folder.",
+            subtitle: "from puffin + note"));
     }
 
     /// <summary>Re-query every shell command's enabled state (Save/Close need a tab; rename/delete a selection).</summary>
