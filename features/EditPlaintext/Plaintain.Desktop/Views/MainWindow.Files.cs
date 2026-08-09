@@ -246,8 +246,29 @@ public sealed partial class MainWindow
 
     private void RefreshRecentMenu()
     {
-        _recentMenu.Items.Clear();
         var recent = _settings.Settings.RecentFiles;
+
+        // macOS: refill the mounted submenu's items in place. Re-setting the whole NativeMenu while it is
+        // already installed throws there, so the submenu is built once and only its contents change.
+        if (_nativeRecentMenu?.Menu is { } native)
+        {
+            native.Items.Clear();
+            if (recent.Count == 0)
+            {
+                native.Items.Add(new NativeMenuItem("(no recent files)") { IsEnabled = false });
+                return;
+            }
+
+            foreach (string entry in recent)
+            {
+                string path = entry;
+                native.Items.Add(new NativeMenuItem(path) { Command = new RelayCommand(() => _ = OpenRecentAsync(path)) });
+            }
+
+            return;
+        }
+
+        _recentMenu.Items.Clear();
         if (recent.Count == 0)
         {
             _recentMenu.Items.Add(new MenuItem { Header = "(no recent files)", IsEnabled = false });

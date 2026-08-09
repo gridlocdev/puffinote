@@ -85,7 +85,7 @@ public sealed partial class PlainTextEditor
                 string rowText = SegmentOf(lineText, segment, out int segmentStartColumn);
                 widest = Math.Max(widest, ExpandedLength(lineText));
 
-                if (row == caretRow)
+                if (row == caretRow && HighlightCurrentLine)
                 {
                     context.FillRectangle(palette.CurrentRow, new Rect(gutter, y, Math.Max(0, bounds.Width - gutter), _rowHeight));
                 }

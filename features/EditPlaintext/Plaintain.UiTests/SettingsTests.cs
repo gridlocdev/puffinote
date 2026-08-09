@@ -35,10 +35,16 @@ public class SettingsTests : IDisposable
     public void The_File_menu_offers_Preferences_on_the_platform_chord()
     {
         var window = Open();
-        var file = window.GetLogicalDescendants().OfType<MenuItem>().First(m => (string?)m.Header == "_File");
-        var preferences = file.Items.OfType<MenuItem>().Single(m => (string?)m.Header == "_Preferences…");
 
-        Assert.Equal(Key.OemComma, preferences.InputGesture!.Key);
+        // On macOS the File menu lives in the system bar, which a headless test cannot walk; the chord is
+        // the part that holds either way, and MenuBarTests covers where the menu ended up.
+        if (!OperatingSystem.IsMacOS())
+        {
+            var file = window.GetLogicalDescendants().OfType<MenuItem>().First(m => (string?)m.Header == "_File");
+            var preferences = file.Items.OfType<MenuItem>().Single(m => (string?)m.Header == "_Preferences…");
+            Assert.Equal(Key.OemComma, preferences.InputGesture!.Key);
+        }
+
         Assert.Contains(window.KeyBindings, b => b.Gesture.Key == Key.OemComma);
     }
 
@@ -49,8 +55,28 @@ public class SettingsTests : IDisposable
         var form = MainWindow.BuildSettingsForm(settings);
 
         Assert.Equal(
-            ["Theme", "Wrap long lines", "Show line numbers", "Font size", "Auto-save"],
+            ["Theme", "Wrap long lines", "Show line numbers", "Highlight the current line", "Font size", "Auto-save"],
             form.Fields.Select(f => f.Label));
+    }
+
+    /// <summary>
+    /// The current-line tint is on until someone says otherwise — this setting exists so it can be turned
+    /// off, not to change what the editor does by default — and the answer reaches the open document.
+    /// </summary>
+    [AvaloniaFact]
+    public void The_current_line_highlight_is_on_by_default_and_can_be_turned_off()
+    {
+        Assert.True(new AppSettings().HighlightCurrentLine);
+        Assert.True(Open().EditorView.Editor.HighlightCurrentLine);
+
+        var service = new SettingsService(_path);
+        service.Settings.HighlightCurrentLine = false;
+        service.Save();
+
+        var window = new MainWindow(new SettingsService(_path)); // i.e. the next launch
+        window.Show();
+        Dispatcher.UIThread.RunJobs();
+        Assert.False(window.EditorView.Editor.HighlightCurrentLine);
     }
 
     /// <summary>

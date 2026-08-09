@@ -32,6 +32,11 @@ public sealed partial class MainWindow : Window
     // "100%" would just be furniture.
     private readonly TextBlock _statusZoom = new() { IsVisible = false };
     private readonly MenuItem _recentMenu = new() { Header = "Open _Recent" };
+
+    // The macOS "Open Recent" submenu — the native counterpart of _recentMenu, and null off macOS (and on
+    // macOS until InstallMenu runs). Which of the two RefreshRecentMenu fills is how it knows which bar
+    // the window ended up with.
+    private NativeMenuItem? _nativeRecentMenu;
     private readonly OverlayHost _overlay = new() { Background = new SolidColorBrush(Color.FromArgb(0x40, 0, 0, 0)) };
     private readonly Dictionary<string, AppCommand> _commands;
     // The family's unified title bar: the document's name, centred, in the app's own chrome.
@@ -61,6 +66,7 @@ public sealed partial class MainWindow : Window
         ApplyTheme(_settings.Settings.Theme); // the saved appearance, before the first paint
         EditorView.Editor.WordWrap = _settings.Settings.WordWrap;
         EditorView.Editor.ShowLineNumbers = _settings.Settings.ShowLineNumbers;
+        EditorView.Editor.HighlightCurrentLine = _settings.Settings.HighlightCurrentLine;
         EditorView.Editor.FontSize = _settings.Settings.FontSize;
         EditorView.Zoom = _settings.Settings.Zoom;
         EditorView.SelectionChanged += (_, _) => UpdateChrome();
@@ -111,9 +117,7 @@ public sealed partial class MainWindow : Window
         root.Children.Add(_titleBar);
         DocumentTitleBar.Extend(this);
 
-        var menu = BuildMenu();
-        DockPanel.SetDock(menu, Dock.Top);
-        root.Children.Add(menu);
+        InstallMenu(root);
 
         var status = BuildStatusBar();
         DockPanel.SetDock(status, Dock.Bottom);
@@ -144,7 +148,29 @@ public sealed partial class MainWindow : Window
         PlainTextEditingCommands.GoToLineRequested -= OnGoToLineRequested;
     }
 
-    private Menu BuildMenu()
+    /// <summary>
+    /// Put the menu where the platform keeps menus: the system bar at the top of the screen on macOS, an
+    /// in-window bar below the title bar everywhere else. The two are built from the same commands in the
+    /// same order — the only thing that differs is which widget carries them.
+    ///
+    /// <para>This is the last of the four windowed apps to take the native bar; Typage, Cellestra and
+    /// Puffinote already did, and a Mac user has no reason to expect the plaintext editor to be the one
+    /// that keeps its menus inside the window.</para>
+    /// </summary>
+    private void InstallMenu(DockPanel root)
+    {
+        if (OperatingSystem.IsMacOS())
+        {
+            BuildNativeMenu();
+            return;
+        }
+
+        var menu = BuildInWindowMenu();
+        DockPanel.SetDock(menu, Dock.Top);
+        root.Children.Add(menu);
+    }
+
+    private Menu BuildInWindowMenu()
     {
         MenuItem Item(string header, string commandId)
         {
@@ -195,6 +221,65 @@ public sealed partial class MainWindow : Window
         view.Items.Add(Item("_Actual Size", ZoomCommands.ActualSizeId));
 
         return new Menu { Items = { file, edit, view } };
+    }
+
+    // ----- macOS native menu bar -----
+
+    /// <summary>
+    /// The same three menus, in the system bar. Headers lose their <c>_</c> mnemonics: macOS has no
+    /// Alt-letter menu access, and the underscore would be drawn literally.
+    /// </summary>
+    private void BuildNativeMenu()
+    {
+        NativeMenuItem Item(string header, string commandId)
+        {
+            var command = _commands[commandId];
+            var item = new NativeMenuItem(header) { Command = new RelayCommand(() => command.Execute()) };
+
+            // No key-equivalent for the standard editing chords: macOS routes a menu key-equivalent before
+            // the focused view sees the key, so ⌘C/⌘A/⌘Z on the menu would be taken away from whatever text
+            // field is being typed in. They still work — the window's key bindings carry them.
+            if (command.Shortcut is { } shortcut && !shortcut.YieldsToTextInput)
+            {
+                item.Gesture = shortcut.ToGesture(mac: true);
+            }
+
+            return item;
+        }
+
+        static NativeMenuItem Action(string header, Action run, KeyGesture? gesture = null) =>
+            new(header) { Command = new RelayCommand(run), Gesture = gesture };
+
+        static NativeMenuItem Submenu(string header) => new(header) { Menu = [] };
+
+        var file = Submenu("File");
+        file.Menu!.Items.Add(Action("New", () => _ = NewDocumentAsync(), Shortcut.Cmd(Key.N).ToGesture(mac: true)));
+        file.Menu.Items.Add(Action("Open…", () => _ = OpenAsync(), Shortcut.Cmd(Key.O).ToGesture(mac: true)));
+        _nativeRecentMenu = Submenu("Open Recent");
+        file.Menu.Items.Add(_nativeRecentMenu);
+        file.Menu.Items.Add(new NativeMenuItemSeparator());
+        file.Menu.Items.Add(Action("Save", () => _ = SaveAsync(), Shortcut.Cmd(Key.S).ToGesture(mac: true)));
+        file.Menu.Items.Add(Action("Save As…", () => _ = SaveAsAsync(), Shortcut.Cmd(Key.S, KeyModifiers.Shift).ToGesture(mac: true)));
+        file.Menu.Items.Add(new NativeMenuItemSeparator());
+        file.Menu.Items.Add(Action("Preferences…", ShowSettings, PreferencesGesture));
+
+        var edit = Submenu("Edit");
+        foreach (var id in new[] { "edit.undo", "edit.redo", null, "edit.cut", "edit.copy", "edit.paste", "edit.selectAll", null, "edit.find", "view.goToLine" })
+        {
+            edit.Menu!.Items.Add(id is null ? new NativeMenuItemSeparator() : Item(_commands[id].Title, id));
+        }
+
+        var view = Submenu("View");
+        foreach (var id in new[] { "view.wordWrap", "view.lineNumbers", null, ZoomCommands.ZoomInId, ZoomCommands.ZoomOutId, ZoomCommands.ActualSizeId })
+        {
+            view.Menu!.Items.Add(id is null ? new NativeMenuItemSeparator() : Item(_commands[id].Title, id));
+        }
+
+        var menu = new NativeMenu();
+        menu.Items.Add(file);
+        menu.Items.Add(edit);
+        menu.Items.Add(view);
+        NativeMenu.SetMenu(this, menu);
     }
 
     /// <summary>

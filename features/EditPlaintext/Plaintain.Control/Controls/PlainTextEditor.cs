@@ -131,6 +131,26 @@ public sealed partial class PlainTextEditor : Avalonia.Controls.Control, IScroll
         set => SetValue(ShowLineNumbersProperty, value);
     }
 
+    public static readonly StyledProperty<bool> HighlightCurrentLineProperty =
+        AvaloniaProperty.Register<PlainTextEditor, bool>(nameof(HighlightCurrentLine), defaultValue: true);
+
+    /// <summary>
+    /// Whether the row the caret is on is washed with a faint tint. <b>On by default</b>, which is what
+    /// this surface has always done — turning it off is the new choice, not the new default, and changing
+    /// which one is the default would move the line under everyone who never asked.
+    /// <para>
+    /// It is worth being able to turn off: the tint is a band across the full width of the viewport, and on
+    /// a log or a column-aligned table that band is the same shape as the data, so it reads as a highlight
+    /// on the <em>content</em> rather than on the caret. The gutter still marks the caret's line in the
+    /// brighter ink either way, so nothing is lost by hiding this.
+    /// </para>
+    /// </summary>
+    public bool HighlightCurrentLine
+    {
+        get => GetValue(HighlightCurrentLineProperty);
+        set => SetValue(HighlightCurrentLineProperty, value);
+    }
+
     /// <summary>
     /// The surface's font. Registered as the editor's <i>own</i> property rather than adopted from
     /// <see cref="TextBlock"/>, and that is load-bearing rather than a style choice: the text properties
@@ -192,6 +212,12 @@ public sealed partial class PlainTextEditor : Avalonia.Controls.Control, IScroll
     protected override void OnPropertyChanged(AvaloniaPropertyChangedEventArgs change)
     {
         base.OnPropertyChanged(change);
+        if (change.Property == HighlightCurrentLineProperty)
+        {
+            InvalidateVisual(); // a repaint is enough: nothing about the tint changes a measurement
+            return;
+        }
+
         if (change.Property == WordWrapProperty || change.Property == FontFamilyProperty
             || change.Property == FontSizeProperty || change.Property == ShowLineNumbersProperty
             || change.Property == ZoomProperty)

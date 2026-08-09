@@ -20,6 +20,12 @@ public sealed class AppSettings
 
     public bool ShowLineNumbers { get; set; } = true;
 
+    /// <summary>
+    /// Whether the caret's row is washed with a faint tint. On, as the surface has always drawn it — this
+    /// setting exists so it can be turned off, not to change what it does by default.
+    /// </summary>
+    public bool HighlightCurrentLine { get; set; } = true;
+
     public double FontSize { get; set; } = 13;
 
     /// <summary>The reading zoom applied on top of <see cref="FontSize"/>, on the family's shared ladder
