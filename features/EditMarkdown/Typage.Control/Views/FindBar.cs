@@ -145,16 +145,13 @@ public sealed class FindBar : Border
         var caseSensitive = _matchCase.IsChecked == true;
         Matches = DocumentSearch.FindAll(_view.Text, query, useRegex, caseSensitive);
 
-        if (Matches.Count == 0)
-        {
-            _current = -1;
-            _count.Text = query.Length == 0 ? string.Empty : "No results";
-        }
-        else
-        {
-            _current = resetCurrent ? 0 : System.Math.Clamp(_current, 0, Matches.Count - 1);
-            _count.Text = $"{_current + 1} of {Matches.Count}";
-        }
+        _current = Matches.Count == 0
+            ? -1
+            : resetCurrent ? 0 : System.Math.Clamp(_current, 0, Matches.Count - 1);
+
+        // The wording is shared with Plaintain's bar (SearchStatus) — the one thing the Phase 5
+        // rule-of-three review found genuinely duplicated between the two. The bars themselves are not.
+        _count.Text = SearchStatus.Describe(_current, Matches.Count, query);
 
         _view.Editor.SetSearchMatches(Matches, _current);
         if (selectMatch)

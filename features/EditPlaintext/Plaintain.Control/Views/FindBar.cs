@@ -13,10 +13,12 @@ namespace Plaintain.Control.Views;
 /// search with an optional regex, over the document's text — the same <see cref="DocumentSearch"/> the
 /// rest of the family uses, so "what counts as a match" is one answer everywhere.
 ///
-/// <para>Deliberately not shared with Typage's find bar yet. Proposal 0003 §5 says to promote it only
-/// once the duplication is <i>observed</i>, and the two differ where it matters: this one has no
-/// replace, no reveal-through-concealment, and it reports matches back as row highlights the editor
-/// paints itself.</para>
+/// <para>Deliberately not shared with Typage's find bar, and the Phase 5 review settled it: the two
+/// differ where it matters. Typage's is a controller bound to its editor that also replaces text and
+/// reveals matches through concealed syntax; this one is a passive strip that raises events and lets the
+/// editor paint the row highlights itself. One control with two modes would be two controls with extra
+/// steps. What the review <em>did</em> promote is the wording below — see
+/// <see cref="Puffinote.Text.Document.SearchStatus"/>.</para>
 /// </summary>
 public sealed class FindBar : Border
 {
@@ -98,9 +100,7 @@ public sealed class FindBar : Border
     /// <summary>Report the search's result: "3 of 17", "No results", or nothing while the query is empty.</summary>
     public void ReportMatches(int current, int total)
     {
-        _count.Text = Query.Length == 0 ? string.Empty
-            : total == 0 ? "No results"
-            : $"{current + 1} of {total}";
+        _count.Text = SearchStatus.Describe(current, total, Query);
         _count.Foreground = total == 0 && Query.Length > 0 ? Brushes.IndianRed : Tokens.Active.MutedText;
     }
 

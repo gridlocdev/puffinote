@@ -45,6 +45,21 @@ There is no single root solution. Each area has its own:
 
 `shared/` has no guide of its own because it isn't an area you work in — it's a dependency of every other one. Its projects are compiled into **every solution**, so a change there is a change to every area: build and test them all (`just check`) before you call it done.
 
+**What belongs in `shared/`, and the things that deliberately don't.** Both editor proposals deferred a
+rule-of-three review to Phase 5; it has been done, and its answers are worth not re-deriving:
+
+| Candidate | Verdict |
+|---|---|
+| The **find bars** (Typage's and Plaintain's) | **Not promoted.** They look alike and are not: Typage's is a controller bound to its editor that also replaces text and reveals matches through concealed syntax; Plaintain's is a passive strip that raises events and lets the editor paint its own highlights. One control with two modes is two controls with extra steps. |
+| The find bars' **match wording** ("3 of 17" / "No results") | **Promoted** → `Puffinote.Text`'s `SearchStatus`. Two apps showed the reader the same phrases, they agreed exactly, and nothing but luck was keeping them agreeing. The shared-vocabulary rule below covers a phrase for the same reason it covers a name. |
+| Pivotask's **label chip** and **due pill** | **Not promoted.** They are already one function inside Pivotask (`TaskCard.Chip`) serving four callers, and no other app has anything of the shape. That is a local abstraction doing its job, not duplication. |
+| The **one-file watcher** and **file stamp** | **Promoted** → `OpenFileWatcher`, `FileStamp`. Five apps needed the identical, fiddly plumbing. |
+| The **crash-recovery snapshot** | **Promoted** → `RecoveryService`. Two text editors, nothing app-specific once the app name is a parameter. Stays text-shaped: a workbook is not a string. |
+| The **macOS app menu** and **About card** | **Promoted** → `MacAppMenu`, `AboutDialog`. Five apps, four strings' difference. |
+
+The rule that decided each of these: promote when the *duplication* is real, not when the *resemblance*
+is. Two things that would have to grow a mode to share an implementation are two things.
+
 When this file and an area guide or a linked doc disagree, the deeper doc wins for design detail; this file wins for repo-wide process.
 
 ## Tech stack (do not change without being asked)
