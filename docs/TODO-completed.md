@@ -534,3 +534,28 @@
     `IEditorPane.Zoom` is the seam — every editor already had a zoom and its own ⌘= / ⌘− commands, so this
     only lets the shell *see* the value. It defaults to a no-op pair, so `ErrorPane` (nothing to scale)
     reads 100% and ignores a write rather than needing a special case at the call site.
+
+- [x] Pivotask: a few differences from `pivotask-prototype/pivotask-prototype.html` remain (read it and the
+  four screenshots beside it — the prototype needs no launching, its whole behaviour is in that one file).
+  Closed so far: the due-date and completion rules, single-click-to-open, the card's step/note facts, the
+  list rendering the same card as the board, the list's section chrome and finished-tasks fold, rename and
+  delete on a group heading, the board losing the collapse caret it should not have had, the empty-column
+  sentences, the header strip (search / filter pills / segmented view switch), and the `/` and `V` keys.
+  Still different:
+    - [x] **"Add a task" is a permanent text box.** The prototype shows a `+ Add a task` *button* that
+      becomes an input when clicked (placeholder "Task name, then Enter"), keeps focus for the next one
+      after Enter, cancels on Escape, and commits a non-empty value on blur. Ours is always an open box,
+      so every column carries an empty field whether or not you are adding anything.
+    - [x] **A new group is not put straight into rename.** The prototype focuses the new name and selects
+      it, so "Add a list" is one gesture rather than two.
+    - [x] **`TaskDialog` has never been audited against the drawer screenshot line by line** — the group
+      picker, the `+` add-to-task menu (Labels / Due date / Steps, with an on/off state), the steps
+      progress bar and its percentage, "Delete all", and the "Delete task" / "Done" footer. This is the
+      one surface where the gap is still unmeasured rather than merely unclosed.
+
+- [x] Pivotask: two of the five command-without-an-affordance gaps are still open. Renaming a group,
+  deleting a group, and folding completed tasks now have affordances (the group heading, and the list's
+  `finished · N` subhead). **`BoardCommands.DeleteTask` and `BoardCommands.AddLabel` still have no caller
+  outside their tests** — the prototype's drawer has a "Delete task" button in its footer and creates
+  labels from its `+` menu, and `TaskDialog` has neither: it says "This board has no labels yet." with no
+  way to make one.
