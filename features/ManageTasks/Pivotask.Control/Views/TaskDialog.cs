@@ -26,18 +26,23 @@ internal sealed class TaskDialog : ModalDialog<bool>
 {
     private readonly BoardDocument _document;
     private readonly TaskItem _task;
-    private readonly StackPanel _body = new() { Spacing = 12, Width = 420 };
+    private readonly StackPanel _body = new() { Spacing = 12 };
     private readonly StackPanel _optional = new() { Spacing = 12 };
+    private readonly DockPanel _head = new() { LastChildFill = true };
 
     public TaskDialog(BoardDocument document, TaskItem task)
     {
         _document = document;
         _task = task;
-        Title = "Task";
+
+        // No "Task" heading over the header strip: the strip already says which list this is in, and the
+        // dialog's own subject is the title in 21pt underneath it. A band repeating the word "Task" would
+        // be the third thing on screen saying so.
+        Title = string.Empty;
 
         var palette = Tokens.Active;
 
-        var title = new TextBox { Text = task.Title, AcceptsReturn = false };
+        var title = new TextBox { Text = task.Title, AcceptsReturn = false, FontSize = 18, FontWeight = FontWeight.SemiBold };
         title.LostFocus += (_, _) =>
         {
             if ((title.Text ?? string.Empty) != task.Title)
@@ -46,9 +51,29 @@ internal sealed class TaskDialog : ModalDialog<bool>
             }
         };
 
-        // The "+" sits on the title row, beside the one thing every task has, because what it offers is
-        // the rest of what this task could be.
+        // The title row is the task in miniature: tick it, name it, and reach the rest of what it could
+        // be. The "+" sits beside the one thing every task has, because that is what it offers more of.
         var titleRow = new DockPanel { LastChildFill = true };
+
+        _tick = new CheckBox
+        {
+            IsChecked = task.Done,
+            VerticalAlignment = VerticalAlignment.Center,
+            Margin = new Thickness(0, 0, 8, 0),
+        };
+        Avalonia.Automation.AutomationProperties.SetName(_tick, "Mark finished");
+        _tick.IsCheckedChanged += (_, _) =>
+        {
+            if ((_tick.IsChecked == true) != _task.Done)
+            {
+                // Completing cascades to the steps, so the checklist under it has to be redrawn.
+                _document.Execute(BoardCommands.SetDone(_task, _tick.IsChecked == true));
+                RebuildOptional();
+            }
+        };
+        DockPanel.SetDock(_tick, Dock.Left);
+        titleRow.Children.Add(_tick);
+
         var add = BuildAddButton();
         DockPanel.SetDock(add, Dock.Right);
         titleRow.Children.Add(add);
@@ -77,17 +102,168 @@ internal sealed class TaskDialog : ModalDialog<bool>
 
         _body.Children.Add(_optional);
 
-        var close = new Button { Content = "Done", IsDefault = true, HorizontalAlignment = HorizontalAlignment.Right };
-        close.Click += (_, _) => Close(true);
-        _body.Children.Add(close);
+        // Head and foot are pinned; only the task's own fields scroll. A checklist of twenty steps must
+        // not push "Delete task" — or the way out of the dialog — off the bottom of the card.
+        var root = new DockPanel { LastChildFill = true, Width = 480 };
+        Avalonia.Automation.AutomationProperties.SetName(root, "Task details");
 
-        DialogContent = _body;
+        var head = new Border
+        {
+            BorderBrush = palette.SurfaceBorder,
+            BorderThickness = new Thickness(0, 0, 0, 1),
+            Padding = new Thickness(0, 0, 0, 10),
+            Margin = new Thickness(0, 0, 0, 14),
+            Child = _head,
+        };
+        DockPanel.SetDock(head, Dock.Top);
+        root.Children.Add(head);
+
+        var foot = new Border
+        {
+            BorderBrush = palette.SurfaceBorder,
+            BorderThickness = new Thickness(0, 1, 0, 0),
+            Padding = new Thickness(0, 12, 0, 0),
+            Margin = new Thickness(0, 14, 0, 0),
+            Child = BuildFoot(),
+        };
+        DockPanel.SetDock(foot, Dock.Bottom);
+        root.Children.Add(foot);
+
+        root.Children.Add(new ScrollViewer
+        {
+            HorizontalScrollBarVisibility = Avalonia.Controls.Primitives.ScrollBarVisibility.Disabled,
+            VerticalScrollBarVisibility = Avalonia.Controls.Primitives.ScrollBarVisibility.Auto,
+            MaxHeight = 460,
+            Content = _body,
+        });
+
+        DialogContent = root;
+        RebuildHead();
         RebuildOptional();
-        _ = palette;
     }
+
+    private readonly CheckBox _tick;
 
     /// <summary>Which optional sections the user has asked for, on top of the ones the task already has.</summary>
     private readonly HashSet<string> _revealed = [];
+
+    /// <summary>
+    /// The header strip: which list the task is in, whether it is starred, and the way out.
+    ///
+    /// <para>The list picker is not decoration — it was the <em>only</em> thing missing that made moving a
+    /// task a drag-and-drop-or-nothing affair in the GUI. Proposal 0004 §7 says the feature must never be
+    /// blocked on drag feeling right, and `ptask move` cannot be the only alternative for someone who is
+    /// looking at the task on screen.</para>
+    /// </summary>
+    private void RebuildHead()
+    {
+        var palette = Tokens.Active;
+        _head.Children.Clear();
+
+        var groups = _document.Board.Groups.ToList();
+        var current = _document.Board.Locate(_task.Id)?.Group;
+
+        var picker = new ComboBox
+        {
+            ItemsSource = groups.Select(g => g.Name.ToUpper(System.Globalization.CultureInfo.CurrentCulture)).ToList(),
+            SelectedIndex = current is null ? -1 : groups.IndexOf(current),
+            FontSize = 11.5,
+            FontWeight = FontWeight.SemiBold,
+            MaxWidth = 230,
+            VerticalAlignment = VerticalAlignment.Center,
+        };
+        Avalonia.Automation.AutomationProperties.SetName(picker, "Move to list");
+
+        // Wired after the initial selection, so opening the dialog is not itself a move.
+        picker.SelectionChanged += (_, _) =>
+        {
+            if (picker.SelectedIndex < 0 || groups[picker.SelectedIndex] is not { } target)
+            {
+                return;
+            }
+
+            if (_document.Board.Locate(_task.Id)?.Group is { } from && !ReferenceEquals(from, target))
+            {
+                _document.Execute(BoardCommands.MoveTask(_document.Board, _task, target));
+            }
+        };
+        DockPanel.SetDock(picker, Dock.Left);
+        _head.Children.Add(picker);
+
+        var close = IconButton("x", "Close details", palette);
+        close.Click += (_, _) => Close(true);
+        DockPanel.SetDock(close, Dock.Right);
+        _head.Children.Add(close);
+
+        var star = IconButton(
+            "star", _task.Important ? "Remove star" : "Add star", palette, filled: _task.Important);
+        if (_task.Important)
+        {
+            star.Foreground = Brushes.Goldenrod;
+        }
+
+        star.Click += (_, _) =>
+        {
+            _document.Execute(BoardCommands.SetImportant(_task, !_task.Important));
+            RebuildHead();
+        };
+        DockPanel.SetDock(star, Dock.Right);
+        _head.Children.Add(star);
+
+        _head.Children.Add(new Panel()); // the gap between the picker and the two buttons
+    }
+
+    /// <summary>
+    /// The footer: throw the task away, or stop looking at it.
+    ///
+    /// <para>Deleting does not ask first, unlike deleting a group. The prototype asks because a web page
+    /// has no undo to offer; here every mutation is a command and one ⌘Z puts the task back, exactly as
+    /// it was, in the group it was in. A group is different — it is a column of other people's work, and
+    /// coarse enough to be worth a question.</para>
+    /// </summary>
+    private Avalonia.Controls.Control BuildFoot()
+    {
+        var row = new DockPanel { LastChildFill = true };
+
+        var delete = new Button { Content = "🗑  Delete task" };
+        Avalonia.Automation.AutomationProperties.SetName(delete, "Delete task");
+        delete.Click += (_, _) =>
+        {
+            if (_document.Board.Locate(_task.Id) is { } located)
+            {
+                _document.Execute(BoardCommands.DeleteTask(located.Group, _task));
+            }
+
+            Close(true);
+        };
+        DockPanel.SetDock(delete, Dock.Left);
+        row.Children.Add(delete);
+
+        var done = new Button { Content = "Done", IsDefault = true };
+        Avalonia.Automation.AutomationProperties.SetName(done, "Done");
+        done.Click += (_, _) => Close(true);
+        DockPanel.SetDock(done, Dock.Right);
+        row.Children.Add(done);
+
+        row.Children.Add(new Panel());
+        return row;
+    }
+
+    private static Button IconButton(string icon, string tip, ThemePalette palette, bool filled = false)
+    {
+        var button = new Button
+        {
+            Content = new LucideIcon { IconKey = icon, Size = 16, IsFilled = filled },
+            Background = Brushes.Transparent,
+            BorderThickness = new Thickness(0),
+            Padding = new Thickness(6, 4),
+            Foreground = palette.MutedText,
+            VerticalAlignment = VerticalAlignment.Center,
+        };
+        ToolTip.SetTip(button, tip);
+        Avalonia.Automation.AutomationProperties.SetName(button, tip);
+        return button;
+    }
 
     private void RebuildOptional()
     {

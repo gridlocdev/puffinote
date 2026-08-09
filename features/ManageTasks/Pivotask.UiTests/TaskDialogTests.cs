@@ -93,6 +93,67 @@ public class TaskDialogTests
         Assert.Null(Avalonia.Automation.AutomationProperties.GetHelpText(rows.Single(r => Name(r) == "Labels")));
     }
 
+    /// <summary>
+    /// The list picker moves the task, which before this was a thing the GUI could only do by dragging —
+    /// so a board whose drag felt wrong had no way to move a task at all except the CLI.
+    /// </summary>
+    [AvaloniaFact]
+    public void The_header_moves_the_task_to_another_list()
+    {
+        var (view, document, task) = Open();
+        var picker = Dialog(view).GetLogicalDescendants().OfType<ComboBox>()
+            .Single(c => Name(c) == "Move to list");
+
+        Assert.Equal(["INBOX", "THIS WEEK"], picker.ItemsSource!.Cast<string>());
+        Assert.Equal(0, picker.SelectedIndex);
+
+        picker.SelectedIndex = 1;
+        Dispatcher.UIThread.RunJobs();
+
+        Assert.Equal("g2", document.Board.Locate(task.Id)!.Value.Group.Id);
+        Assert.Equal("Move Task", document.UndoLabel);
+    }
+
+    /// <summary>Star and tick from the dialog, both through the undo stack like everything else.</summary>
+    [AvaloniaFact]
+    public void The_header_stars_the_task_and_the_title_row_ticks_it()
+    {
+        var (view, document, task) = Open();
+        var dialog = Dialog(view);
+
+        Named(dialog, "Add star").Single().RaiseEvent(new Avalonia.Interactivity.RoutedEventArgs(Button.ClickEvent));
+        Dispatcher.UIThread.RunJobs();
+        Assert.True(task.Important);
+        Assert.Single(Named(dialog, "Remove star")); // …and the button now offers the other direction
+
+        dialog.GetLogicalDescendants().OfType<CheckBox>()
+            .First(c => Name(c) == "Mark finished").IsChecked = true;
+        Dispatcher.UIThread.RunJobs();
+
+        Assert.True(task.Done);
+        document.Undo();
+        Assert.False(task.Done);
+    }
+
+    /// <summary>
+    /// The footer is the only way to throw a task away — there was none at all before. It doesn't ask
+    /// first: one ⌘Z puts the task back exactly as it was.
+    /// </summary>
+    [AvaloniaFact]
+    public void The_footer_deletes_the_task_and_undo_puts_it_back()
+    {
+        var (view, document, task) = Open();
+
+        Click(Named(Dialog(view), "Delete task").Single());
+        Dispatcher.UIThread.RunJobs();
+
+        Assert.Null(document.Board.Locate(task.Id));
+        Assert.False(view.IsModalOpen);
+
+        document.Undo();
+        Assert.Equal("g1", document.Board.Locate(task.Id)!.Value.Group.Id);
+    }
+
     /// <summary>Open the "+" menu and return its rows.</summary>
     private static IReadOnlyList<Button> MenuRows(TaskDialog dialog)
     {
