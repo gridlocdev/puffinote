@@ -490,6 +490,88 @@ public class BoardViewTests
         Assert.False(document.CanUndo);
     }
 
+    /// <summary>Dragging a card into another column moves the task there, in one undoable step.</summary>
+    [AvaloniaFact]
+    public void Dragging_a_card_into_another_column_moves_the_task()
+    {
+        var (view, document) = Open();
+        var card = view.BoardForTest.CardsForTest.First(c => c.Task.Id == "t1");
+        var target = view.BoardForTest.CardsForTest.First(c => c.Task.Id == "t3");
+
+        Drag(card, Centre(target));
+
+        Assert.Equal("g2", document.Board.Locate("t1")!.Value.Group.Id);
+        Assert.Equal("Move Task", document.UndoLabel);
+
+        document.Undo();
+        Assert.Equal("g1", document.Board.Locate("t1")!.Value.Group.Id);
+    }
+
+    /// <summary>
+    /// …and dragging within one column reorders it, which the old press/release pair could not do at all:
+    /// it only ever moved a card that had changed columns, so "put this one at the top" was impossible.
+    /// </summary>
+    [AvaloniaFact]
+    public void Dragging_a_card_within_its_own_column_reorders_it()
+    {
+        var (view, document) = Open();
+        var second = view.BoardForTest.CardsForTest.First(c => c.Task.Id == "t2");
+        var first = view.BoardForTest.CardsForTest.First(c => c.Task.Id == "t1");
+
+        // Above the first card's midpoint, which is what "before it" means.
+        var above = Centre(first);
+        Drag(second, above.WithY(above.Y - (first.Bounds.Height / 2) + 1));
+
+        Assert.Equal(["t2", "t1"], document.Board.Groups[0].Tasks.Select(t => t.Id));
+    }
+
+    /// <summary>
+    /// A press that never travelled is a click, and a click opens the task. The drag has to cost a few
+    /// pixels of movement or it would eat every click on the board.
+    /// </summary>
+    [AvaloniaFact]
+    public void A_press_that_does_not_travel_is_still_a_click()
+    {
+        var (view, document) = Open();
+        var card = view.BoardForTest.CardsForTest.First(c => c.Task.Id == "t1");
+
+        Drag(card, Centre(card).WithX(Centre(card).X + 2));
+
+        Assert.True(view.IsModalOpen);
+        Assert.False(document.CanUndo);
+    }
+
+    /// <summary>…and a drag that ended somewhere else does not also open the task it moved.</summary>
+    [AvaloniaFact]
+    public void A_drag_does_not_also_open_the_task_it_moved()
+    {
+        var (view, _) = Open();
+        var card = view.BoardForTest.CardsForTest.First(c => c.Task.Id == "t1");
+
+        Drag(card, Centre(view.BoardForTest.CardsForTest.First(c => c.Task.Id == "t3")));
+
+        Assert.False(view.IsModalOpen);
+    }
+
+    private static Point Centre(Visual target)
+    {
+        var window = (Window)TopLevel.GetTopLevel(target)!;
+        return target.TranslatePoint(new Point(target.Bounds.Width / 2, target.Bounds.Height / 2), window)!.Value;
+    }
+
+    /// <summary>Press on <paramref name="card"/>, travel to <paramref name="to"/>, and let go there.</summary>
+    private static void Drag(TaskCard card, Point to)
+    {
+        var window = (Window)TopLevel.GetTopLevel(card)!;
+        var from = Centre(card);
+        window.MouseDown(from, MouseButton.Left);
+        window.MouseMove(to);
+        Dispatcher.UIThread.RunJobs();
+        window.MouseUp(to, MouseButton.Left);
+        Dispatcher.UIThread.RunJobs();
+        window.UpdateLayout();
+    }
+
     /// <summary>The first group's add row, whichever of its two forms it is currently in.</summary>
     private static Avalonia.Controls.Control AddRow(TaskBoardView view) =>
         view.BoardForTest.GetLogicalDescendants().OfType<Avalonia.Controls.Control>()

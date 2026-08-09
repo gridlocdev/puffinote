@@ -24,11 +24,12 @@ public sealed class BoardView : UserControl
 {
     private readonly StackPanel _columns = new() { Orientation = Orientation.Horizontal, Spacing = 12 };
     private readonly AddTaskState _add;
-    private TaskItem? _dragging;
+    private readonly CardDrag _drag;
 
     public BoardView()
     {
         _add = new AddTaskState { Rebuild = Rebuild };
+        _drag = new CardDrag(this, () => Document);
         Content = new ScrollViewer
         {
             HorizontalScrollBarVisibility = ScrollBarVisibility.Auto,
@@ -99,6 +100,7 @@ public sealed class BoardView : UserControl
     public void Rebuild()
     {
         _columns.Children.Clear();
+        _drag.Zones.Clear();
         foreach (var group in Document.Board.Groups)
         {
             _columns.Children.Add(BuildColumn(group));
@@ -168,9 +170,7 @@ public sealed class BoardView : UserControl
             Child = layout,
         };
 
-        // Drop target: the column accepts whatever card is being dragged, appending it. Precise
-        // between-cards placement is the card's own drop handler below.
-        column.PointerReleased += (_, _) => Drop(group, before: null);
+        _drag.Zones.Add(new DropZone(group, column, cards));
         return column;
     }
 
@@ -186,47 +186,8 @@ public sealed class BoardView : UserControl
         card.DoneToggled += (_, done) => Document.Execute(BoardCommands.SetDone(task, done));
         card.StarToggled += (_, important) => Document.Execute(BoardCommands.SetImportant(task, important));
         card.Opened += (_, _) => TaskOpened?.Invoke(this, task);
-
-        // Press-and-drag to move. Kept to a pointer press/release pair rather than Avalonia's DoDragDrop
-        // because the keyboard/menu path (BoardCommands.MoveTask, and `ptask move`) is the one that has
-        // to work — proposal 0004 §7 says never to let the feature be blocked on drag-and-drop feeling
-        // right, so this is the simple version and polish is its own change.
-        card.PointerPressed += (_, e) =>
-        {
-            if (e.GetCurrentPoint(card).Properties.IsLeftButtonPressed)
-            {
-                _dragging = task;
-            }
-        };
-        card.PointerReleased += (_, e) =>
-        {
-            if (_dragging is not null && !ReferenceEquals(_dragging, task))
-            {
-                Drop(group, before: task);
-                e.Handled = true;
-            }
-            else
-            {
-                _dragging = null;
-            }
-        };
-
+        _drag.Attach(card, group);
         return card;
-    }
-
-    private void Drop(TaskGroup target, TaskItem? before)
-    {
-        if (_dragging is not { } task)
-        {
-            return;
-        }
-
-        _dragging = null;
-        if (Document.Board.Locate(task.Id) is { } located
-            && (!ReferenceEquals(located.Group, target) || before is not null))
-        {
-            Document.Execute(BoardCommands.MoveTask(Document.Board, task, target, before));
-        }
     }
 
     /// <summary>

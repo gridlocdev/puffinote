@@ -127,6 +127,13 @@ internal sealed class TaskCard : Border
                 return;
             }
 
+            // A drag that ended where it started is still a drag, and Avalonia reports it as a tap. The
+            // person who put a card down did not also ask to open it.
+            if (Dragging)
+            {
+                return;
+            }
+
             Opened?.Invoke(this, EventArgs.Empty);
             e.Handled = true;
         };
@@ -141,6 +148,12 @@ internal sealed class TaskCard : Border
     }
 
     public TaskItem Task { get; }
+
+    /// <summary>
+    /// Set by <see cref="CardDrag"/> while this card is being dragged, and cleared when the next press
+    /// starts a fresh gesture. It exists so the release that ends a drag doesn't also read as a click.
+    /// </summary>
+    internal bool Dragging { get; set; }
 
     public event EventHandler<bool>? DoneToggled;
 

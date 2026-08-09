@@ -20,10 +20,12 @@ public sealed class TaskListView : UserControl
 {
     private readonly StackPanel _rows = new() { Spacing = 2 };
     private readonly AddTaskState _add;
+    private readonly CardDrag _drag;
 
     public TaskListView()
     {
         _add = new AddTaskState { Rebuild = Rebuild };
+        _drag = new CardDrag(this, () => Document);
         Content = new ScrollViewer { Padding = new Thickness(12), Content = _rows };
         Rebuild();
     }
@@ -84,6 +86,7 @@ public sealed class TaskListView : UserControl
     private void Rebuild()
     {
         _rows.Children.Clear();
+        _drag.Zones.Clear();
 
         foreach (var group in Document.Board.Groups)
         {
@@ -109,18 +112,26 @@ public sealed class TaskListView : UserControl
         body.Children.Add(GroupHeader.Build(
             Document, group, visible.Count, caret: true, () => DeleteGroupRequested?.Invoke(this, group)));
 
+        var frame = new Border { Margin = new Thickness(0, 0, 0, 14), Child = body };
+
         if (!group.Collapsed)
         {
-            body.Children.Add(BuildBody(group, visible));
+            body.Children.Add(BuildBody(group, visible, frame));
         }
 
-        return new Border { Margin = new Thickness(0, 0, 0, 14), Child = body };
+        return frame;
     }
 
-    private Avalonia.Controls.Control BuildBody(TaskGroup group, IReadOnlyList<TaskItem> visible)
+    private Avalonia.Controls.Control BuildBody(TaskGroup group, IReadOnlyList<TaskItem> visible, Border frame)
     {
         var palette = Tokens.Active;
         var stack = new StackPanel { Spacing = 0 };
+
+        // The cards get a panel of their own, separate from the add row under them, so a card dropped at
+        // the end of a section lands after the last task rather than after the field you type into.
+        var cards = new StackPanel { Spacing = 0 };
+        stack.Children.Add(cards);
+        _drag.Zones.Add(new DropZone(group, frame, cards));
 
         // Finished tasks sink below a fold of their own rather than sitting among the open ones. That is
         // the list's answer to the board's per-column "hide completed": same state (TaskGroup.FoldDone),
@@ -131,12 +142,12 @@ public sealed class TaskListView : UserControl
 
         foreach (var task in open)
         {
-            stack.Children.Add(BuildCard(group, task));
+            cards.Children.Add(BuildCard(group, task));
         }
 
         if (open.Count == 0 && finished.Count == 0)
         {
-            stack.Children.Add(new TextBlock
+            cards.Children.Add(new TextBlock
             {
                 Text = group.Tasks.Count > 0 ? "Nothing here matches the filter." : "Empty. Add the first task below.",
                 Foreground = palette.MutedText,
@@ -161,13 +172,13 @@ public sealed class TaskListView : UserControl
                 Padding = new Thickness(2, 7, 2, 5),
             };
             subhead.Click += (_, _) => Document.Execute(BoardCommands.SetFoldDone(group, !group.FoldDone));
-            stack.Children.Add(subhead);
+            cards.Children.Add(subhead);
 
             if (!group.FoldDone)
             {
                 foreach (var task in finished)
                 {
-                    stack.Children.Add(BuildCard(group, task));
+                    cards.Children.Add(BuildCard(group, task));
                 }
             }
         }
@@ -182,7 +193,10 @@ public sealed class TaskListView : UserControl
         card.DoneToggled += (_, done) => Document.Execute(BoardCommands.SetDone(task, done));
         card.StarToggled += (_, important) => Document.Execute(BoardCommands.SetImportant(task, important));
         card.Opened += (_, _) => TaskOpened?.Invoke(this, task);
-        _ = group;
+
+        // The list drags too. The prototype makes both views drop targets for the same reason it renders
+        // the same card in both: they are two readings of one board, not a board and a report of it.
+        _drag.Attach(card, group);
         return card;
     }
 }
