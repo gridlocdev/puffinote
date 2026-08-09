@@ -3,6 +3,7 @@ using Avalonia.Input;
 using Avalonia.Layout;
 using Avalonia.Media;
 using Cellestra.Desktop.Controls.RadialMenu;
+using Puffinote.Components.Controls.Icons;
 
 namespace Cellestra.Desktop.Views.Dialogs;
 
@@ -13,12 +14,18 @@ namespace Cellestra.Desktop.Views.Dialogs;
 /// </summary>
 public sealed partial class RadialSettingsDialog
 {
-    /// <summary>Rebuild the per-segment rows ("Segment N — Command" + a Select button) for the count.</summary>
+    /// <summary>
+    /// Rebuild the per-segment rows for the count: a grip, the bound command's name, and a pencil that
+    /// opens the picker. The row's position in the list <em>is</em> the segment number, so it does not also
+    /// spell it out — "Segment 4 —" in front of every name cost a quarter of a narrow column to repeat
+    /// what the reader can already count, and the names are what someone is scanning for.
+    /// </summary>
     private void RebuildBindingRows()
     {
         _bindingRows.Children.Clear();
         _segmentLabels.Clear();
         _rowBorders.Clear();
+        _editButtons.Clear();
 
         if (SelectedSegmentForTest >= SegmentCount)
         {
@@ -29,11 +36,26 @@ public sealed partial class RadialSettingsDialog
         {
             int index = i;
 
-            // The label names the segment and its current command, and doubles as the drag handle and the
-            // keyboard focus target for reordering.
+            // The grip says "this row moves" before anyone tries it — the drag was there before, with
+            // nothing on screen to suggest it. It is a handle as well as a sign: pressing it starts the
+            // same reorder that pressing the name does.
+            var grip = new LucideIcon
+            {
+                IconKey = "grip-vertical",
+                Size = 14,
+                Foreground = GripBrush,
+                VerticalAlignment = VerticalAlignment.Center,
+                Margin = new Avalonia.Thickness(0, 0, 4, 0),
+                Cursor = RowDragCursor,
+            };
+            grip.PointerPressed += (_, e) => OnLabelPressed(index, e);
+            ToolTip.SetTip(grip, "Drag to reorder");
+
+            // The name of the command, and nothing else. Doubles as the drag handle and the keyboard
+            // focus target for reordering.
             var name = new TextBlock
             {
-                Text = $"Segment {i + 1} — {BindingLabel(_bindings[index])}",
+                Text = BindingLabel(_bindings[index]),
                 VerticalAlignment = VerticalAlignment.Center,
                 TextTrimming = TextTrimming.CharacterEllipsis,
                 Focusable = true,
@@ -47,14 +69,26 @@ public sealed partial class RadialSettingsDialog
             name.LostFocus += (_, _) => _labelHasFocus = false;
             name.PointerPressed += (_, e) => OnLabelPressed(index, e);
 
-            var select = new Button { Content = "Select…", Margin = new Avalonia.Thickness(8, 0, 0, 0) };
-            select.Click += (_, _) => ShowCommandPicker(index);
+            // A pencil rather than the old "Select…": the word was as wide as some of the command names
+            // it was pushing off the row, and every row said it. What it does is said on hover instead.
+            var edit = new Button
+            {
+                Content = new LucideIcon { IconKey = "pencil", Size = 13 },
+                Padding = new Avalonia.Thickness(5, 3),
+                Margin = new Avalonia.Thickness(8, 0, 0, 0),
+                VerticalAlignment = VerticalAlignment.Center,
+                Cursor = HandCursor,
+            };
+            ToolTip.SetTip(edit, "Edit");
+            edit.Click += (_, _) => ShowCommandPicker(index);
 
-            var grid = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto") };
-            Grid.SetColumn(name, 0);
-            Grid.SetColumn(select, 1);
+            var grid = new Grid { ColumnDefinitions = new ColumnDefinitions("Auto,*,Auto") };
+            Grid.SetColumn(grip, 0);
+            Grid.SetColumn(name, 1);
+            Grid.SetColumn(edit, 2);
+            grid.Children.Add(grip);
             grid.Children.Add(name);
-            grid.Children.Add(select);
+            grid.Children.Add(edit);
 
             var row = new Border
             {
@@ -64,6 +98,7 @@ public sealed partial class RadialSettingsDialog
             };
 
             _segmentLabels.Add(name);
+            _editButtons.Add(edit);
             _rowBorders.Add(row);
             _bindingRows.Children.Add(row);
         }

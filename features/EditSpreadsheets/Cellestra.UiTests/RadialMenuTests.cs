@@ -318,8 +318,13 @@ public class RadialMenuTests
         Assert.Null(dialog.BuildConfigForTest().CommandIdAt(2));
     }
 
+    /// <summary>
+    /// A row says what its wedge runs and nothing more. The old "Segment N — " prefix repeated, on every
+    /// line, a number the reader can count off the list, and it did so in the column the command names
+    /// needed — which in a 250px panel is the difference between reading a name and reading an ellipsis.
+    /// </summary>
     [AvaloniaFact]
-    public void Segment_row_label_shows_the_bound_command_name()
+    public void Segment_row_label_is_the_bound_command_name_alone()
     {
         var window = new MainWindow();
         window.Show();
@@ -331,14 +336,40 @@ public class RadialMenuTests
         }, commands);
 
         var cut = commands.ById("edit.cut")!.Title;
-        Assert.Equal($"Segment 1 — {cut}", dialog.RowLabelForTest(0));
-        Assert.Equal("Segment 2 — Unbound", dialog.RowLabelForTest(1)); // empty slot
+        Assert.Equal(cut, dialog.RowLabelForTest(0));
+        Assert.Equal("Unbound", dialog.RowLabelForTest(1)); // empty slot
+        Assert.DoesNotContain("Segment", dialog.RowLabelForTest(0), StringComparison.Ordinal);
 
         // Rebinding through the picker updates the label.
         dialog.OpenCommandPickerForTest(1);
         dialog.CommitPickerForTest("format.bold");
-        var bold = commands.ById("format.bold")!.Title;
-        Assert.Equal($"Segment 2 — {bold}", dialog.RowLabelForTest(1));
+        Assert.Equal(commands.ById("format.bold")!.Title, dialog.RowLabelForTest(1));
+    }
+
+    /// <summary>
+    /// The pencil replaces a "Select…" button that was as wide as some of the names it was pushing off the
+    /// row. What it does is said on hover instead of on every line.
+    /// </summary>
+    [AvaloniaFact]
+    public void A_row_is_edited_through_a_pencil_that_says_Edit_on_hover()
+    {
+        var dialog = new RadialSettingsDialog(new RadialMenuConfig
+        {
+            SegmentCount = 3,
+            CommandIds = ["edit.cut", "edit.copy", "edit.paste"],
+        });
+
+        var edit = dialog.RowEditButtonForTest(1);
+        Assert.NotNull(edit);
+        Assert.Equal("Edit", Avalonia.Controls.ToolTip.GetTip(edit));
+
+        // The button carries a glyph, not a word — nothing textual to grow the column.
+        var glyph = Assert.IsType<Puffinote.Components.Controls.Icons.LucideIcon>(edit.Content);
+        Assert.Equal("pencil", glyph.IconKey);
+
+        edit.RaiseEvent(new Avalonia.Interactivity.RoutedEventArgs(Button.ClickEvent));
+        Assert.True(dialog.CommandPickerVisibleForTest);
+        Assert.Equal(1, dialog.CommandPickerSegmentForTest); // and on the row it belongs to
     }
 
     [AvaloniaFact]

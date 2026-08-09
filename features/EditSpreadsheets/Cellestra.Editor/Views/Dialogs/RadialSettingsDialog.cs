@@ -10,14 +10,15 @@ using Puffinote.Components.Theming;
 namespace Cellestra.Desktop.Views.Dialogs;
 
 /// <summary>
-/// Settings for the press-and-hold radial command menu (task 3): on the left, the number of segments,
-/// a "Segment N — Command" row with a Select button per segment, and a Reset button; on the right, a live preview of the radial drawn
-/// exactly as it appears in the grid (same <see cref="RadialMenuOverlay"/>, scaled to fit and centred).
-/// Segments can be reordered three ways — dragging a row's label, dragging a wedge in the preview onto
-/// another (swap), or ⌥⇧↑/↓ on the selected row. Hovering a wedge highlights it and bolds the matching
-/// row; clicking it opens a command-palette-style picker to (re)bind that wedge. Selecting a row from the
-/// keyboard highlights its wedge in the preview. Returns the edited <see cref="RadialMenuConfig"/>, or
-/// null on cancel.
+/// Settings for the press-and-hold radial command menu (task 3): on the left, the number of segments, one
+/// row per segment — a grip, the bound command's name, and a pencil that opens the picker — and a Reset
+/// button; on the right, a live preview of the radial drawn exactly as it appears in the grid (same
+/// <see cref="RadialMenuOverlay"/>, scaled to fit and centred). A row is identified by its position, not
+/// by a "Segment N" prefix on every line. Segments can be reordered three ways — dragging a row by its
+/// grip or its name, dragging a wedge in the preview onto another (swap), or ⌥⇧↑/↓ on the selected row.
+/// Hovering a wedge highlights it and bolds the matching row; clicking it opens a command-palette-style
+/// picker to (re)bind that wedge. Selecting a row from the keyboard highlights its wedge in the preview.
+/// Returns the edited <see cref="RadialMenuConfig"/>, or null on cancel.
 /// </summary>
 public sealed partial class RadialSettingsDialog : ModalDialog<RadialMenuConfig>
 {
@@ -29,6 +30,7 @@ public sealed partial class RadialSettingsDialog : ModalDialog<RadialMenuConfig>
     private static readonly Cursor RadialDragCursor = new(StandardCursorType.DragMove);
     // This dialog and its sub-overlays are dark chrome, so they read the dark token palette.
     private static readonly IBrush SelectedRowBrush = Tokens.Active.AccentSubtle;
+    private static readonly IBrush GripBrush = Tokens.Active.MutedText;
     private static readonly IBrush PickerMuted = Tokens.Active.MutedText;
     private static readonly IBrush PickerCardBrush = Tokens.Active.Surface;
     private static readonly IBrush ScrimBrush = Tokens.Active.Scrim;
@@ -46,6 +48,7 @@ public sealed partial class RadialSettingsDialog : ModalDialog<RadialMenuConfig>
     // Per-segment widgets, in segment order, so the preview can bold/highlight the matching row.
     private readonly List<TextBlock> _segmentLabels = [];
     private readonly List<Border> _rowBorders = [];
+    private readonly List<Button> _editButtons = [];
 
     // Inline confirmations layered over the dialog body (one modal at a time is hosted by the editor, so
     // these can't be a second ShowModalAsync — they live in here): "reset to defaults?" and, when Escape
@@ -111,7 +114,7 @@ public sealed partial class RadialSettingsDialog : ModalDialog<RadialMenuConfig>
                 new TextBlock { Text = "Segment commands", FontWeight = FontWeight.SemiBold },
                 new TextBlock
                 {
-                    Text = "Drag a row, or use ⌥⇧↑/↓, to reorder.",
+                    Text = "Drag a row by its grip, or use ⌥⇧↑/↓, to reorder.",
                     FontSize = 11,
                     Foreground = Brushes.Gray,
                 },
@@ -246,9 +249,13 @@ public sealed partial class RadialSettingsDialog : ModalDialog<RadialMenuConfig>
     internal bool IsRowSelectedForTest(int segment) =>
         segment >= 0 && segment < _rowBorders.Count && ReferenceEquals(_rowBorders[segment].Background, SelectedRowBrush);
 
-    /// <summary>Test seam: the "Segment N — Command" text of a row's label.</summary>
+    /// <summary>Test seam: the bound command's name, which is all a row's label says.</summary>
     internal string? RowLabelForTest(int segment) =>
         segment >= 0 && segment < _segmentLabels.Count ? _segmentLabels[segment].Text : null;
+
+    /// <summary>Test seam: a row's pencil button — the one that opens the picker for that segment.</summary>
+    internal Button? RowEditButtonForTest(int segment) =>
+        segment >= 0 && segment < _editButtons.Count ? _editButtons[segment] : null;
 
     /// <summary>Test seam: which wedge the preview currently highlights.</summary>
     internal int PreviewActiveSegmentForTest => _preview.ActiveSegment;
