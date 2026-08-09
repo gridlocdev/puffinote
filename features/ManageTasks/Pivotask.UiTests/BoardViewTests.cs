@@ -672,6 +672,41 @@ public class BoardViewTests
     /// <summary>The star's drawn size, shared by the card and the task dialog's header.</summary>
     private const double StarGlyphSize = 18;
 
+    /// <summary>
+    /// Scrolled to the end, the trailing "add a list" is fully on screen. It used to be clipped however
+    /// far you scrolled: the inset was the scroller's Padding, which shrinks the viewport without joining
+    /// the extent, so the far edge of the content was permanently out of reach by exactly that much.
+    /// </summary>
+    [AvaloniaFact]
+    public void The_trailing_add_a_list_can_be_scrolled_fully_into_view()
+    {
+        var board = new Board();
+        for (int i = 0; i < 4; i++)
+        {
+            board.Groups.Add(new TaskGroup { Id = $"g{i}", Name = $"Group {i}" });
+        }
+
+        var view = new TaskBoardView { Document = new BoardDocument(board), Today = Today };
+        var window = new Window { Width = 900, Height = 600, Content = view };
+        window.Show();
+        window.UpdateLayout();
+        Dispatcher.UIThread.RunJobs();
+
+        var scroll = view.BoardForTest.GetLogicalDescendants().OfType<ScrollViewer>()
+            .First(s => s.HorizontalScrollBarVisibility == Avalonia.Controls.Primitives.ScrollBarVisibility.Auto);
+        scroll.Offset = new Vector(scroll.Extent.Width, 0); // clamped to the far end
+        window.UpdateLayout();
+        Dispatcher.UIThread.RunJobs();
+
+        var add = view.BoardForTest.GetLogicalDescendants().OfType<Button>()
+            .First(b => (b.Content as string)?.Contains("Add a list", StringComparison.Ordinal) == true);
+        double right = add.TranslatePoint(new Point(0, 0), scroll)!.Value.X + add.Bounds.Width;
+
+        Assert.True(
+            right <= scroll.Viewport.Width,
+            $"its right edge is at {right} in a {scroll.Viewport.Width}-wide viewport");
+    }
+
     /// <summary>A real click, through the window, so the guard inside the card is actually exercised.</summary>
     private static void Click(Visual target)
     {

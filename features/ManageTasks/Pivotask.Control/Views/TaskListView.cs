@@ -26,7 +26,10 @@ public sealed class TaskListView : UserControl
     {
         _add = new AddTaskState { Rebuild = Rebuild };
         _drag = new CardDrag(this, () => Document);
-        Content = new ScrollViewer { Padding = new Thickness(12), Content = _rows };
+        // Margin on the rows rather than padding on the scroller, for the reason the board has it there:
+        // padding shrinks the viewport without joining the extent, so the last row is clipped by it.
+        _rows.Margin = new Thickness(12);
+        Content = new ScrollViewer { Content = _rows };
         Rebuild();
     }
 

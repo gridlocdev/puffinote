@@ -30,11 +30,15 @@ public sealed class BoardView : UserControl
     {
         _add = new AddTaskState { Rebuild = Rebuild };
         _drag = new CardDrag(this, () => Document);
+        // The inset is the columns' own margin, not the scroller's padding. A ScrollViewer's padding
+        // shrinks the viewport without being counted in the extent, so the far edge of the content is
+        // clipped by exactly that much however far you scroll — which is why the trailing "add a list"
+        // could never be brought fully into view.
+        _columns.Margin = new Thickness(12);
         Content = new ScrollViewer
         {
             HorizontalScrollBarVisibility = ScrollBarVisibility.Auto,
             VerticalScrollBarVisibility = ScrollBarVisibility.Disabled,
-            Padding = new Thickness(12),
             Content = _columns,
         };
 
