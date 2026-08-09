@@ -11,6 +11,7 @@ using Pivotask.Core.Editing;
 using Pivotask.Core.Model;
 using Pivotask.Core.Query;
 using Puffinote.Components.Commands;
+using Puffinote.Components.Controls.Icons;
 using Puffinote.Components.Input;
 using Puffinote.Components.Overlays;
 using Puffinote.Components.Theming;
@@ -34,9 +35,11 @@ public sealed class TaskBoardView : UserControl
     private readonly ContentControl _surface = new();
     private readonly LayoutTransformControl _zoomHost = new();
     /// <summary>"Search tasks", the prototype's words — "Search" alone leaves open what it searches.</summary>
-    private readonly TextBox _search = new() { PlaceholderText = "Search tasks", Width = 260 };
+    private readonly TextBox _search = new() { PlaceholderText = "Search tasks" };
     private readonly StackPanel _filters = new() { Orientation = Orientation.Horizontal, Spacing = 4 };
     private readonly ContentControl _switcher = new();
+    private readonly BoardHeader _header;
+    private bool _compactSwitch;
     private TopLevel? _keyHost;
 
     public TaskBoardView()
@@ -55,16 +58,14 @@ public sealed class TaskBoardView : UserControl
         // The prototype's order, left to right: the search, then the filters, then the view switch at the
         // far right. Search leads because it is the widest target and the one you reach for without
         // looking; the switch is last because it is the only control here that changes the *shape* of
-        // what is below rather than what is in it.
-        var strip = new DockPanel { LastChildFill = true, Margin = new Thickness(12, 8) };
-        DockPanel.SetDock(_search, Dock.Left);
-        var switcher = BuildLayoutSwitch();
-        DockPanel.SetDock(switcher, Dock.Right);
-        _filters.HorizontalAlignment = HorizontalAlignment.Right;
-        _filters.Margin = new Thickness(12, 0);
-        strip.Children.Add(_search);
-        strip.Children.Add(switcher);
-        strip.Children.Add(_filters);
+        // what is below rather than what is in it. BoardHeader re-lays all three when the window gets too
+        // narrow to hold them on one line — see its own notes.
+        BuildLayoutSwitch();
+        _header = new BoardHeader(_search, _filters, _switcher, SetSwitchCompact)
+        {
+            Margin = new Thickness(12, 8),
+        };
+        var strip = _header;
 
         // The board is scaled, the strip above it is not: zoom magnifies the tasks, and a filter row that
         // grew with them would eat the room the reader zoomed out to get. A LayoutTransformControl (rather
@@ -312,7 +313,12 @@ public sealed class TaskBoardView : UserControl
             var button = new Button
             {
                 Content = label,
-                Padding = new Thickness(12, 5),
+
+                // The prototype's 12.5px in a 10px gutter. At the stock 14px these four pills wanted 500px
+                // between them — most of a narrow window, and enough on its own to push the strip into its
+                // wrapped form on a screen with plenty of room.
+                FontSize = 12.5,
+                Padding = new Thickness(10, 5),
                 CornerRadius = new CornerRadius(999),
                 BorderThickness = new Thickness(0),
                 Background = active ? palette.SurfaceInset : Brushes.Transparent,
@@ -340,13 +346,34 @@ public sealed class TaskBoardView : UserControl
         var group = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 2 };
         Avalonia.Automation.AutomationProperties.SetName(group, "Choose a view");
 
-        foreach (var (layout, label) in new[] { (BoardLayout.Board, "Board"), (BoardLayout.List, "List") })
+        foreach (var (layout, label, icon) in
+                 new[] { (BoardLayout.Board, "Board", "layout-grid"), (BoardLayout.List, "List", "list") })
         {
             bool active = Layout == layout;
+
+            // Icon and word together, as the prototype has them — and the word is what goes when the strip
+            // runs out of room, because these two icons are the shapes they name.
+            var face = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 7 };
+            face.Children.Add(new LucideIcon
+            {
+                IconKey = icon,
+                Size = 13,
+                IsFilled = true,
+                VerticalAlignment = VerticalAlignment.Center,
+            });
+            face.Children.Add(new TextBlock
+            {
+                Text = label.ToUpper(System.Globalization.CultureInfo.CurrentCulture),
+                FontSize = 11.5,
+                LetterSpacing = 0.6,
+                VerticalAlignment = VerticalAlignment.Center,
+                IsVisible = !_compactSwitch,
+            });
+
             var button = new Button
             {
-                Content = label,
-                Padding = new Thickness(12, 5),
+                Content = face,
+                Padding = _compactSwitch ? new Thickness(10, 6) : new Thickness(12, 6),
                 CornerRadius = new CornerRadius(6),
                 BorderThickness = new Thickness(1),
                 BorderBrush = active ? palette.Accent : Brushes.Transparent,
@@ -354,6 +381,9 @@ public sealed class TaskBoardView : UserControl
                 Foreground = active ? palette.Accent : palette.MutedText,
                 FontWeight = active ? FontWeight.SemiBold : FontWeight.Normal,
             };
+
+            // The tooltip carries the name whether or not the label is showing, which is what makes
+            // dropping the word to an icon a safe trade rather than a guessing game.
             ToolTip.SetTip(button, $"{label} view (V)"); // the chord the prototype advertises here too
             Avalonia.Automation.AutomationProperties.SetName(button, $"{label} view");
             Avalonia.Automation.AutomationProperties.SetHelpText(button, active ? "selected" : null);
@@ -366,4 +396,20 @@ public sealed class TaskBoardView : UserControl
         _switcher.Content = group;
         return _switcher;
     }
+
+    /// <summary>Drop the view switch to its icons, or put its words back. Called by <see cref="BoardHeader"/>
+    /// when the strip changes arrangement — the switch itself has no opinion about how much room there is.</summary>
+    private void SetSwitchCompact(bool compact)
+    {
+        if (_compactSwitch == compact)
+        {
+            return;
+        }
+
+        _compactSwitch = compact;
+        BuildLayoutSwitch();
+    }
+
+    /// <summary>Whether the strip has wrapped — the search on its own row, the switch down to icons.</summary>
+    internal bool HeaderIsCompactForTest => _header.IsCompact;
 }

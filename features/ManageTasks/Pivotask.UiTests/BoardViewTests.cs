@@ -707,6 +707,91 @@ public class BoardViewTests
             $"its right edge is at {right} in a {scroll.Viewport.Width}-wide viewport");
     }
 
+    /// <summary>
+    /// Given room, the strip is the prototype's single row: search on the left, filters pushed right, the
+    /// view switch at the far end with its words on.
+    /// </summary>
+    [AvaloniaFact]
+    public void The_header_is_one_row_when_there_is_room_for_one()
+    {
+        var (view, _) = Open();
+        var window = (Window)TopLevel.GetTopLevel(view)!;
+        Resize(window, 1100);
+
+        Assert.False(view.HeaderIsCompactForTest);
+
+        // On one row means sharing a centre line, not a top edge: the search box is taller than a pill.
+        Assert.Equal(Centre(Search(view), view), Centre(FilterPill(view), view), precision: 0);
+        Assert.Equal(Centre(Search(view), view), Centre(SwitchButton(view), view), precision: 0);
+        Assert.True(SwitchLabel(view).IsVisible);
+    }
+
+    /// <summary>
+    /// Squeezed, it does what the prototype's own media query does rather than letting the three controls
+    /// fight over one row and clipping the losers: the switch drops to its icons, and the search takes a
+    /// full-width row of its own underneath.
+    /// </summary>
+    [AvaloniaFact]
+    public void A_narrow_header_drops_the_switch_to_icons_and_gives_search_its_own_row()
+    {
+        var (view, _) = Open();
+        var window = (Window)TopLevel.GetTopLevel(view)!;
+        Resize(window, 560);
+
+        Assert.True(view.HeaderIsCompactForTest);
+
+        // The switch keeps its buttons — and its names, for anyone who can't read an icon — but not its words.
+        Assert.False(SwitchLabel(view).IsVisible);
+        Assert.Equal("Board view", Avalonia.Automation.AutomationProperties.GetName(SwitchButton(view)));
+
+        // …and the search has moved below the filters, spanning the strip.
+        Assert.True(Top(Search(view), view) > Top(FilterPill(view), view));
+        Assert.True(Search(view).Bounds.Width > 400, $"search is only {Search(view).Bounds.Width} wide");
+    }
+
+    /// <summary>
+    /// Resizing back and forth across the threshold settles both ways. A layout that decides its own
+    /// arrangement can chatter on the boundary — wrap, which frees room, which unwraps, forever — so the
+    /// width it takes to unwrap is measured from the *full-size* switch, not the shrunken one.
+    /// </summary>
+    [AvaloniaFact]
+    public void The_header_settles_on_the_way_back_out_as_well_as_in()
+    {
+        var (view, _) = Open();
+        var window = (Window)TopLevel.GetTopLevel(view)!;
+
+        foreach (var (width, compact) in new[] { (1100.0, false), (560.0, true), (1100.0, false), (480.0, true) })
+        {
+            Resize(window, width);
+            Assert.Equal(compact, view.HeaderIsCompactForTest);
+        }
+    }
+
+    private static void Resize(Window window, double width)
+    {
+        window.Width = width;
+        window.UpdateLayout();
+        Dispatcher.UIThread.RunJobs();
+        window.UpdateLayout();
+    }
+
+    private static double Top(Visual part, Visual root) => part.TranslatePoint(new Point(0, 0), root)!.Value.Y;
+
+    private static double Centre(Visual part, Visual root) => Top(part, root) + (part.Bounds.Height / 2);
+
+    private static TextBox Search(TaskBoardView view) =>
+        view.GetLogicalDescendants().OfType<TextBox>().First(b => b.PlaceholderText == "Search tasks");
+
+    private static Button FilterPill(TaskBoardView view) =>
+        view.GetLogicalDescendants().OfType<Button>().First(b => (b.Content as string) == "All");
+
+    private static Button SwitchButton(TaskBoardView view) =>
+        view.GetLogicalDescendants().OfType<Button>()
+            .First(b => Avalonia.Automation.AutomationProperties.GetName(b) == "Board view");
+
+    private static TextBlock SwitchLabel(TaskBoardView view) =>
+        SwitchButton(view).GetLogicalDescendants().OfType<TextBlock>().First();
+
     /// <summary>A real click, through the window, so the guard inside the card is actually exercised.</summary>
     private static void Click(Visual target)
     {
