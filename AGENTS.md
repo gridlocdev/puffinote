@@ -99,6 +99,21 @@ someone's documents, settings, or unsaved-work snapshots.
 
 **Definition of done:** `just check` passes for every area you touched — i.e. formatting verified, solution builds clean, tests green. Warnings **are** errors here (`TreatWarningsAsErrors=true`), so a warning fails the build — "builds" already means "no warnings," this is not advisory. Formatting is a gate too: `just format-check` runs `dotnet format --verify-no-changes`, and a non-zero exit is a failure to fix, not a suggestion.
 
+**Two ways a `*.UiTests` run hangs with no output**, both of which read as "the build lock again" and are
+not. The run sits there and eventually dies at ~60s with `Xunit.Sdk.TestPipelineException`, or is
+OOM-killed (exit 137); the offending class passes on its own under `--filter`, which is what makes it look
+like a flake:
+
+- **A plain `[Theory]`.** Use `[AvaloniaTheory]` in these projects. (`[Fact]` mixed in is fine.)
+- **A modal left standing on an `OverlayHost`** — including a fire-and-forget
+  `_ = _overlay.ShowModalAsync(…)` that nothing awaits. A headless run has nobody to dismiss it. Either
+  keep the prompt out of the path under test (Typage's and Plaintain's external-change code split the
+  *decision* from the *prompt* for exactly this reason, and test the decision) or dismiss it through a
+  seam that calls `OverlayHost.Close()`.
+
+Bisect with `dotnet test <project>.csproj --no-build --filter "FullyQualifiedName~<Name>"` before
+suspecting anything else.
+
 **Never run two `dotnet build`/`dotnet test` invocations at once** — concurrent runs deadlock on the MSBuild-node and build-output locks and hang indefinitely, and they are also what gets a container OOM-killed: each build brings MSBuild worker nodes (one per core by default), a Roslyn `VBCSCompiler` that outlives it, restore, and a `testhost` per test project. (This is why `just check` is serial — recipe dependencies run one at a time, in the order written.) If it happens: kill the `dotnet`/`testhost`/`MSBuild` processes, `dotnet build-server shutdown`, retry.
 
 That rule holds *across* worktrees, not just within one — several agents in `.claude/worktrees/*` share one container's memory. Editing in parallel is fine; building in parallel is not. In a sandbox with no lock of its own, take one:

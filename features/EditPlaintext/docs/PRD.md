@@ -46,6 +46,14 @@ and writes it back byte for byte.
   **read-only**, and say so — in a dialog once, and continuously in a dimmed gutter and the status bar.
   Saving is held until a person confirms the encoding. A file that looks wrong can be fixed; a file that
   has been *saved* wrong cannot.
+- **Converting the encoding** is a separate, explicit command (File ▸ **Convert Encoding…**), and it is
+  what actually rescues a Latin-1 file: confirming the guess only agrees to write the same bytes back.
+  It offers the five encodings the codec can write, adopts the chosen one, writes the file there and then,
+  and settles the unconfirmed-guess state — choosing an encoding by hand *is* a declaration. It will never
+  be implicit: an editor that quietly upgraded files to UTF-8 on save would be rewriting documents nobody
+  asked it to touch, which is the opposite of the contract above. The dialog says the one thing that
+  matters — what is on screen is what gets written, so text that already looks wrong should be reopened,
+  not converted.
 - **Save** is atomic: a temp file in the target's own directory, then a rename. Same directory because a
   rename across filesystems is a copy, and a copy is not atomic.
 - **Mixed line endings are reported, never silently fixed.** A file with both CRLF and LF reads

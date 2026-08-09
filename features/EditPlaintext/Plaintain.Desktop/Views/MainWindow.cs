@@ -221,6 +221,7 @@ public sealed partial class MainWindow : Window
         file.Items.Add(new Separator());
         file.Items.Add(Action("_Save", () => _ = SaveAsync(), Shortcut.Cmd(Key.S).ToGesture()));
         file.Items.Add(Action("Save _As…", () => _ = SaveAsAsync(), Shortcut.Cmd(Key.S, KeyModifiers.Shift).ToGesture()));
+        file.Items.Add(Action("_Convert Encoding…", () => _ = ConvertEncodingAsync()));
         file.Items.Add(new Separator());
         file.Items.Add(Action("_Preferences…", ShowSettings, PreferencesGesture));
 
@@ -286,6 +287,7 @@ public sealed partial class MainWindow : Window
         file.Menu.Items.Add(new NativeMenuItemSeparator());
         file.Menu.Items.Add(Action("Save", () => _ = SaveAsync(), Shortcut.Cmd(Key.S).ToGesture(mac: true)));
         file.Menu.Items.Add(Action("Save As…", () => _ = SaveAsAsync(), Shortcut.Cmd(Key.S, KeyModifiers.Shift).ToGesture(mac: true)));
+        file.Menu.Items.Add(Action("Convert Encoding…", () => _ = ConvertEncodingAsync()));
         file.Menu.Items.Add(new NativeMenuItemSeparator());
         file.Menu.Items.Add(Action("Preferences…", ShowSettings, PreferencesGesture));
 
