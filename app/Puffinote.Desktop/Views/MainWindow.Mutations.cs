@@ -358,11 +358,25 @@ public partial class MainWindow
         }
     }
 
+    /// <summary>How the user resolved a file that changed on disk under an edited tab.</summary>
+    private enum ConflictDecision
+    {
+        Overwrite,
+        Reload,
+        Cancel,
+    }
+
     private async Task SaveCurrentAsync()
     {
         // Don't save (or surface a save-failure message) while a dialog is already open — a second modal
         // on the same overlay host would clobber the first and hang its awaiter.
         if (_overlayHost.IsOpen || _tabHost.ActivePane is not { } pane)
+        {
+            return;
+        }
+
+        if (_tabHost.ActiveTab is { ExternallyChanged: true } conflicted
+            && !await ResolveConflictAsync(conflicted))
         {
             return;
         }
@@ -375,6 +389,35 @@ public partial class MainWindow
         {
             await _overlayHost.ShowModalAsync(new MessageDialog("Couldn't save", e.Message));
         }
+    }
+
+    /// <summary>
+    /// Ask before a save writes over somebody else's change. The file under <paramref name="tab"/> was
+    /// rewritten while the pane held unsaved edits, so an unprompted ⌘S would silently destroy whichever
+    /// version the user didn't happen to be looking at. Returns true when the save should go ahead.
+    /// <para>
+    /// Both outcomes lose something, which is exactly why the choice belongs to the user: Overwrite loses
+    /// the change on disk, Reload loses the edits in the pane. Cancel is the default and the dismiss value,
+    /// so a stray Return or Esc resolves to the one option that discards nothing.
+    /// </para>
+    /// </summary>
+    private async Task<bool> ResolveConflictAsync(Panes.TabItem tab)
+    {
+        var choice = await _overlayHost.ShowModalAsync(new ChoiceDialog<ConflictDecision>(
+            "Changed on disk",
+            $"“{tab.Pane.Title}” was changed by something else while you were editing it.\n\n" +
+            "Saving now replaces that change with yours.",
+            ConflictDecision.Cancel,
+            new Choice<ConflictDecision>("Overwrite", ConflictDecision.Overwrite),
+            new Choice<ConflictDecision>("Reload and Lose My Edits", ConflictDecision.Reload),
+            new Choice<ConflictDecision>("Cancel", ConflictDecision.Cancel, IsDefault: true, IsCancel: true)));
+
+        if (choice == ConflictDecision.Reload)
+        {
+            await _tabHost.ReloadAsync(tab);
+        }
+
+        return choice == ConflictDecision.Overwrite;
     }
 
     /// <summary>The Save / Don't-Save / Cancel prompt the tab host shows before closing a dirty document.</summary>

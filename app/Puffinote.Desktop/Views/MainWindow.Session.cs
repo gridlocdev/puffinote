@@ -184,6 +184,11 @@ public partial class MainWindow
     {
         SidebarForTest.RefreshTree();
         StartIndexRebuild();
+
+        // The tree and the index were already following external writes; the open tabs were not, so a
+        // `git pull` left every one of them showing bytes that no longer existed — and ready to write them
+        // back. Fire-and-forget: the reload is per-tab and each failure is handled inside.
+        _ = _tabHost.RefreshFromDiskAsync();
     }
 
     /// <summary>

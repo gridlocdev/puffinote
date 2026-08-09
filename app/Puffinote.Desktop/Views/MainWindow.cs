@@ -192,6 +192,14 @@ public partial class MainWindow : Window
                 continue;
             }
 
+            // Somebody else wrote this file while the pane was being edited. Resolving that is a choice
+            // between two losses (§ ResolveConflictAsync) and it is not auto-save's to make on a timer with
+            // nobody watching — the tab stays dirty and waits for a ⌘S, where the question gets asked.
+            if (tab.ExternallyChanged)
+            {
+                continue;
+            }
+
             try
             {
                 await tab.Pane.SaveAsync();

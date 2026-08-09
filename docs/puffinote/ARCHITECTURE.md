@@ -151,8 +151,10 @@ editors. `IEditorPane.SaveAsync()` calls the editor's save; Puffinote never writ
 ## 5. The notebook & file tree
 
 - A **notebook is a single root folder** (PRD §7.1). `NotebookService` opens one at a time, watches it with a
-  `FileSystemWatcher` (add/remove/rename → tree refresh; changes to *open* files ride each editor's
-  existing external-change flow), and owns switching (prompt-to-save all dirty panes, then reload).
+  `FileSystemWatcher` (add/remove/rename → tree refresh + index rebuild + `TabHost.RefreshFromDiskAsync`,
+  which re-reads every clean tab whose file moved and flags the dirty ones), and owns switching
+  (prompt-to-save all dirty panes, then reload). Each tab carries a `FileStamp` — length and last-write
+  time as of the last read or write — which is what tells our own save apart from somebody else's.
 - **Per-notebook state** lives in a `.puffinote/` directory inside the notebook (self-describing, portable):
   session (open tabs, active tab, sidebar collapsed/width), durable per-notebook settings (theme/overrides),
   and the search index. A shipped `.puffinote/.gitignore` **ignores the volatile** (index, session) and

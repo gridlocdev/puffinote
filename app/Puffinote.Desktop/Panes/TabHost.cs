@@ -17,6 +17,28 @@ internal enum CloseDecision
     Cancel,
 }
 
+/// <summary>
+/// What a file looked like the last time this shell read or wrote it. Two cheap facts rather than a hash:
+/// a length and a write time answer "did somebody else touch this?" without reading the bytes of a
+/// document that may be tens of megabytes, and every write that matters here changes at least one of them.
+/// </summary>
+internal readonly record struct FileStamp(long Length, DateTime LastWriteUtc)
+{
+    /// <summary>The stamp of <paramref name="path"/> right now, or null when it is missing or unreadable.</summary>
+    public static FileStamp? For(string path)
+    {
+        try
+        {
+            var info = new FileInfo(path);
+            return info.Exists ? new FileStamp(info.Length, info.LastWriteTimeUtc) : null;
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException or ArgumentException)
+        {
+            return null;
+        }
+    }
+}
+
 /// <summary>One open document in the <see cref="TabHost"/>: its pane, its path, and its dirty handler.</summary>
 internal sealed class TabItem
 {
@@ -36,6 +58,15 @@ internal sealed class TabItem
 
     /// <summary>The dirty state last painted into the tab strip, so a keystroke that doesn't flip it skips a rebuild.</summary>
     public bool RenderedDirty { get; set; }
+
+    /// <summary>The file as this shell last left it — the baseline an external write is noticed against.</summary>
+    public FileStamp? Stamp { get; set; }
+
+    /// <summary>
+    /// Somebody else wrote this file while the pane held unsaved edits. The pane is <em>not</em> reloaded
+    /// (that would throw the edits away without asking); the flag is what makes saving stop and ask first.
+    /// </summary>
+    public bool ExternallyChanged { get; set; }
 }
 
 /// <summary>
@@ -219,7 +250,7 @@ internal sealed class TabHost : UserControl
     /// <summary>Wire a loaded pane into a new tab, subscribe its dirty handler, and activate it.</summary>
     private TabItem AddTab(IEditorPane pane, string fullPath)
     {
-        var tab = new TabItem(pane, fullPath);
+        var tab = new TabItem(pane, fullPath) { Stamp = FileStamp.For(fullPath) };
         tab.DirtyHandler = (_, _) => OnPaneDirtyChanged(tab);
         pane.DirtyChanged += tab.DirtyHandler;
         _tabs.Add(tab);
@@ -371,6 +402,82 @@ internal sealed class TabHost : UserControl
         }
     }
 
+    /// <summary>
+    /// Bring the open tabs back in step with the disk after something outside Puffinote wrote to it — a
+    /// <c>git pull</c>, another editor, the same notebook open on another machine's sync folder. The file
+    /// tree and the search index already refreshed on this signal; a tab that kept showing the bytes from
+    /// before is the one surface still lying about what is in the file, and the one that can write the old
+    /// bytes back over the new ones.
+    /// <para>
+    /// A clean tab reloads: it has nothing of the user's to lose, and showing the current file is the whole
+    /// point. A <em>dirty</em> tab is left exactly as it is and only flagged — reloading it would discard
+    /// unsaved work to resolve a conflict the user has not been told about yet. <see cref="ExternallyChangedTabs"/>
+    /// is how the shell finds those, so saving can stop and ask.
+    /// </para>
+    /// </summary>
+    public async Task RefreshFromDiskAsync()
+    {
+        bool changed = false;
+        foreach (var tab in _tabs.ToList())
+        {
+            // A file that vanished is not this pass's business: a delete made through the tree closes its
+            // tabs (CloseUnder), and a delete from outside is more likely a rename or an atomic write
+            // caught mid-flight than an instruction to throw the document away.
+            if (FileStamp.For(tab.Path) is not { } stamp || stamp == tab.Stamp)
+            {
+                continue;
+            }
+
+            if (tab.Pane.IsDirty)
+            {
+                changed |= !tab.ExternallyChanged;
+                tab.ExternallyChanged = true;
+                continue;
+            }
+
+            await ReloadAsync(tab); // rebuilds the strip itself on success
+        }
+
+        if (changed)
+        {
+            RebuildStrip();
+            Changed?.Invoke(this, EventArgs.Empty);
+        }
+    }
+
+    /// <summary>
+    /// Re-read <paramref name="tab"/>'s file into its existing pane, discarding whatever the pane held.
+    /// Returns false when the file could not be read — a writer may still have it open half-written, and
+    /// the next watcher tick will find it settled, so a failure here leaves the tab alone rather than
+    /// replacing a readable document with an error.
+    /// </summary>
+    public async Task<bool> ReloadAsync(TabItem tab)
+    {
+        ArgumentNullException.ThrowIfNull(tab);
+        try
+        {
+            await tab.Pane.LoadAsync(tab.Path);
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+        {
+            return false;
+        }
+
+        // Stamped from disk after the read, not from the stamp that triggered it: if the file changed again
+        // while we were reading it, this pass saw the older bytes and the next one has to notice.
+        tab.Stamp = FileStamp.For(tab.Path);
+        tab.ExternallyChanged = false;
+
+        // The strip has to be rebuilt even when the dirty state didn't move — the tab's tooltip was saying
+        // the file had changed underneath, and it no longer has.
+        RebuildStrip();
+        Changed?.Invoke(this, EventArgs.Empty);
+        return true;
+    }
+
+    /// <summary>The dirty tabs whose files were written underneath them, in tab order.</summary>
+    public IReadOnlyList<TabItem> ExternallyChangedTabs => [.. _tabs.Where(t => t.ExternallyChanged)];
+
     /// <summary>Activate the next (<paramref name="direction"/> = +1) or previous (-1) tab, wrapping around.</summary>
     public void ActivateRelative(int direction)
     {
@@ -406,6 +513,15 @@ internal sealed class TabHost : UserControl
 
     private void OnPaneDirtyChanged(TabItem tab)
     {
+        // A pane going clean means its bytes are now the file's bytes — it just saved, or we just reloaded
+        // it. Either way the baseline an external write is noticed against has moved, and the conflict (if
+        // there was one) is over: the user was asked before the save that resolved it.
+        if (!tab.Pane.IsDirty)
+        {
+            tab.Stamp = FileStamp.For(tab.Path);
+            tab.ExternallyChanged = false;
+        }
+
         // Every keystroke is an edit, and the auto-save countdown is measured from the last one — so this
         // fires before the clean⇄dirty filter below, which would otherwise report only the first keystroke
         // after a save and let the countdown expire in the middle of a sentence.
@@ -494,7 +610,12 @@ internal sealed class TabHost : UserControl
             Foreground = active ? palette.Accent : palette.MutedText,
         };
         label.Click += (_, _) => Activate(tab);
-        ToolTip.SetTip(label, tab.Pane.Title);
+
+        // A conflict the user hasn't been told about is a conflict that surprises them at the save prompt.
+        // Say it on the tab itself, in words rather than a second dot nobody can decode.
+        ToolTip.SetTip(label, tab.ExternallyChanged
+            ? $"{tab.Pane.Title}\nChanged on disk while you were editing it — saving will ask first."
+            : tab.Pane.Title);
 
         // The close button was a bare "✕" glyph with 4px of horizontal padding and *no* vertical padding — its
         // hit box was barely larger than the ink of the character. It is also the one control on the strip where

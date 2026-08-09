@@ -180,8 +180,14 @@ CLI harness `CliHost`/`CliException`). Both editors already run their palette an
   not.
 - **Recent notebooks** (MRU) are offered at startup and in the menu, reusing the shared `RecentFiles`
   mechanism from `Puffinote.Components.Shell`.
-- **External changes** to files in the notebook are detected (via the sub-apps' existing
-  `FileSystemWatcher` flows for open documents); tree add/remove/rename refreshes the tree.
+- **External changes** to files in the notebook are detected by the shell's own `NotebookWatcher`: an
+  add/remove/rename refreshes the tree and the search index, and **every open tab is reconciled against
+  the disk** in the same pass. A tab with no unsaved edits reloads — it has nothing to lose and stale
+  content is the only thing it could otherwise show. A tab that *is* dirty is left alone and flagged;
+  saving it then asks whether to overwrite the change on disk or reload and lose the edits, and auto-save
+  stands down on it entirely rather than making that choice on a timer. (This was originally written as
+  riding "the sub-apps' existing external-change flows", which an embedded editor does not have: the
+  editors are loaded from a path by the shell, so noticing is the shell's job.)
 
 ### 7.2 The sidebar & file tree
 
