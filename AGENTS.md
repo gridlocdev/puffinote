@@ -130,6 +130,35 @@ dotnet run --project app/Puffinote.Cli -- search "todo"   # full-text search the
 dotnet run --project app/Puffinote.Cli -- md --help       # route into Typage's commands; `sheet …` routes to Cellestra
 ```
 
+## Shared vocabulary
+
+Five apps ship one family, so an element that appears in more than one of them has **one** name — in its
+label, its command title, its tooltip, its settings row, **its key in the config file, its command id**,
+and the PRD that specifies it. Two names for one thing is one thing the reader has to learn twice.
+
+| Term | What it is |
+|---|---|
+| **Command Bar** | The horizontal strip of commands at the top of Typage and Cellestra — the adaptive bar with the search pill at its right end. Three states: visible, collapsed (its slim handle), hidden. Not "toolbar", not "formatting toolbar". |
+| **Command Menu** | The searchable list of every command, opened with ⌘K or by clicking the Command Bar's "Search commands…" pill. Not "command palette" in anything a user reads. |
+
+**A config file is a surface, not an implementation detail.** Its keys are read and hand-edited by people,
+and a command id is the key a shortcut is rebound against in `shortcuts.json` and the value a Cellestra
+radial slot stores — so both follow this table too. `Toolbar` is `CommandBar` in Typage's `settings.json`
+(the name Cellestra's file already used), `view.commandPalette` is `view.commandMenu`, and Typage's
+`view.toolbar*` ids are `view.commandBar*`, which is what Cellestra had all along. A key named after a word
+the UI no longer uses is a third name for an element that is supposed to have one.
+
+Renaming an id does cost something real: a rebound shortcut or a radial slot pointing at the old id stops
+resolving, and the setting under the old key is not read. **No migration is provided** — that was a
+deliberate call, taken while the family is still finding its names, and the fallback in every case is the
+shipped default rather than a broken app.
+
+What does *not* follow the table: C# type and member names that never reach a file (`PaletteListView`,
+`PaletteCatalog`, `CommandPalette`, `IAppEnvironment.ShowCommandPalette`). They are free to be renamed and
+free to lag; nothing outside the compiler reads them. And `docs/proposals/` is exempt — those are records
+of what was decided when, and editing the words a past decision was written in is not a rename, it is a
+forgery.
+
 ## Repo-wide golden rules
 
 1. **One-way layering.** Puffinote → editors + `shared/`; **nothing references Puffinote.** Editors don't depend on each other. If the shell needs a hook to embed an editor, add it to the *editor* or to `shared/`, never as a reach-in from Puffinote.

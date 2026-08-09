@@ -106,7 +106,7 @@ Puffinote tab offer the same set under the same chords.
 | Search | ⌘F |
 | Board / List, and the four filters | (menu) |
 
-⌘K is **not** Pivotask's: it opens the host's command palette, as in the sibling editors.
+⌘K is **not** Pivotask's: it opens the host's Command Menu, as in the sibling editors.
 
 ### 7.1 Preferences
 
