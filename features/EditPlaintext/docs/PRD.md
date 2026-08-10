@@ -96,6 +96,18 @@ you have gone somewhere else they are no longer about anything. Cut, copy and pa
 selection. The primary selection is the ordinary one, so an editor with a single selection behaves exactly
 as it did.
 
+**Other occurrences of the selection** are tinted while it is up: select a word and every other place it
+appears is washed in the selection's own colour at half its strength. It answers "where else is this?",
+which is most of what Find gets opened for in a log, without opening anything and without changing the
+document. What lights up is exactly what ⌘D would take next, in the order it would take them — literal,
+case-sensitive, and non-overlapping, the same rule, so the faint ones become real selections one press at
+a time and the last press leaves none. A selection spanning a line break tints nothing (⌘A would otherwise
+light the file up, and staying inside one line is what keeps the scan on the rows in view rather than on
+the document), nor does a whitespace-only one, which in an indented file would tint nearly every row.
+There is no minimum length: one character is a legitimate thing to ask about. Preferences can turn the
+whole thing off — the tint is drawn under text you did not select, and in a file where the selection is
+everywhere it lights up half the viewport in answer to a click.
+
 Caret and selection operate on grapheme clusters (shared with Typage, so they cannot diverge). Undo and
 redo are session-only. Home is "smart": the first non-whitespace character, then the row's true start.
 Word-wise movement and deletion, page up/down, document ends. Tab indents to the next tab stop; with

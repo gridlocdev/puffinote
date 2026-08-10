@@ -37,7 +37,9 @@ Puffinote leaves Plaintain fully working.
 | `.Caret.cs` | Row↔offset mapping, movement, the goal column, scrolling the caret into view |
 | `.Input.cs` | Keyboard, typing, indent/outdent, undo/redo |
 | `.Pointer.cs` | Click, drag-select, double/triple click, the wheel |
-| `.Rendering.cs` | The paint: gutter, rows, selection, matches, caret |
+| `.MultiSelection.cs` | ⌘D: the extra selections, and the one-edit-for-all-of-them rewrite |
+| `.Occurrences.cs` | Which other appearances of the selected text get tinted (PRD §5) |
+| `.Rendering.cs` | The paint: gutter, rows, occurrences, selection, matches, caret |
 | `.Clipboard.cs` | Cut/copy/paste, with line-ending normalisation on the way in |
 
 ### 3.1 Coordinates
@@ -59,6 +61,12 @@ The control reports a viewport-sized `MeasureOverride` and a document-sized `Ext
 `Offset` from the host `ScrollViewer`. `Render` walks only `firstRow..lastRow`. **Anything that makes
 the control's own size depend on the document breaks this silently** — every test still passes and a
 large file freezes.
+
+The selection-occurrence tint (PRD §5) is built to the same rule, and it is the reason that highlight
+only ever considers a single-line selection: each visible row searches *its own line text* — the string
+the painter has already read to draw the row — for the selected chunk, so a 50 MB log costs what a
+50-line one does and nothing walks the document. The alternative, finding every occurrence up front and
+keeping the list, is the shape §3.4 is a cautionary tale about.
 
 The horizontal extent grows from what has been *seen*, not from measuring every line: finding the
 longest line in a 50 MB file would undo the point of never touching an off-screen row, and a log reader

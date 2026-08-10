@@ -26,6 +26,13 @@ public sealed class AppSettings
     /// </summary>
     public bool HighlightCurrentLine { get; set; } = true;
 
+    /// <summary>
+    /// Whether the other places the selected text appears are tinted while it is selected. On, because
+    /// "where else is this?" is the question a plaintext file gets read for; off for anyone whose files
+    /// make it answer "everywhere", which is a page that will not sit still.
+    /// </summary>
+    public bool HighlightSelectionOccurrences { get; set; } = true;
+
     public double FontSize { get; set; } = 13;
 
     /// <summary>The reading zoom applied on top of <see cref="FontSize"/>, on the family's shared ladder

@@ -55,7 +55,8 @@ public class SettingsTests : IDisposable
         var form = MainWindow.BuildSettingsForm(settings);
 
         Assert.Equal(
-            ["Theme", "Wrap long lines at words", "Show line numbers", "Highlight the current line", "Font size", "Auto-save", "Recovery snapshots"],
+            ["Theme", "Wrap long lines at words", "Show line numbers", "Highlight the current line",
+             "Highlight other occurrences of the selection", "Font size", "Auto-save", "Recovery snapshots"],
             form.Fields.Select(f => f.Label));
     }
 
@@ -77,6 +78,26 @@ public class SettingsTests : IDisposable
         window.Show();
         Dispatcher.UIThread.RunJobs();
         Assert.False(window.EditorView.Editor.HighlightCurrentLine);
+    }
+
+    /// <summary>
+    /// Same shape for the occurrence tint: on until someone says otherwise, and the answer survives a
+    /// restart and reaches the open document rather than only the next one.
+    /// </summary>
+    [AvaloniaFact]
+    public void The_selection_occurrence_highlight_is_on_by_default_and_can_be_turned_off()
+    {
+        Assert.True(new AppSettings().HighlightSelectionOccurrences);
+        Assert.True(Open().EditorView.Editor.HighlightSelectionOccurrences);
+
+        var service = new SettingsService(_path);
+        service.Settings.HighlightSelectionOccurrences = false;
+        service.Save();
+
+        var window = TestShell.NewWindow(new SettingsService(_path)); // i.e. the next launch
+        window.Show();
+        Dispatcher.UIThread.RunJobs();
+        Assert.False(window.EditorView.Editor.HighlightSelectionOccurrences);
     }
 
     /// <summary>

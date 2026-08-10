@@ -46,6 +46,8 @@ public sealed partial class MainWindow
             new ToggleSetting("Show line numbers", () => s.ShowLineNumbers, v => s.ShowLineNumbers = v),
             new ToggleSetting("Highlight the current line", () => s.HighlightCurrentLine, v => s.HighlightCurrentLine = v,
                 "A faint tint across the row the caret is on. On a log or an aligned table it lands on the data rather than on the caret, so it can be turned off; the gutter still marks the line either way."),
+            new ToggleSetting("Highlight other occurrences of the selection", () => s.HighlightSelectionOccurrences, v => s.HighlightSelectionOccurrences = v,
+                "Select a word and every other place it appears is tinted, faintly, in the same colour — which is also what ⌘D takes next. In a file where the selection is everywhere, that lights up half the page, so it can be turned off."),
             new NumberSetting("Font size", () => s.FontSize, v => s.FontSize = v, 8, 48, step: 1, decimals: 1,
                 hint: "Point size of the editor text."),
         ]),
@@ -67,6 +69,7 @@ public sealed partial class MainWindow
         EditorView.Editor.WordWrap = s.WordWrap;
         EditorView.Editor.ShowLineNumbers = s.ShowLineNumbers;
         EditorView.Editor.HighlightCurrentLine = s.HighlightCurrentLine;
+        EditorView.Editor.HighlightSelectionOccurrences = s.HighlightSelectionOccurrences;
         EditorView.Editor.FontSize = s.FontSize;
         _autoSave.IntervalSeconds = s.AutoSaveSeconds; // takes effect on the document already open
         SetupRecoverySnapshots(); // pick up the new interval (or stop, when it is 0)

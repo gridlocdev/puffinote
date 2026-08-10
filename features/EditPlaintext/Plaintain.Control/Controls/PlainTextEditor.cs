@@ -159,6 +159,26 @@ public sealed partial class PlainTextEditor : Avalonia.Controls.Control, IScroll
         set => SetValue(HighlightCurrentLineProperty, value);
     }
 
+    public static readonly StyledProperty<bool> HighlightSelectionOccurrencesProperty =
+        AvaloniaProperty.Register<PlainTextEditor, bool>(nameof(HighlightSelectionOccurrences), defaultValue: true);
+
+    /// <summary>
+    /// Whether the other places the selected text appears are tinted while it is selected — see
+    /// <see cref="OccurrenceTerm"/> for what counts. <b>On by default</b>: the question it answers
+    /// ("where else is this?") is one people ask constantly and currently open Find for.
+    /// <para>
+    /// Off is a real preference rather than a concession. The tint is drawn under text you did not
+    /// select, so in a file where the selected chunk is everywhere — a delimiter in a CSV, a repeated
+    /// field name in a log — it lights up half the viewport in answer to a click, and someone reading
+    /// that file wants the page to stay still.
+    /// </para>
+    /// </summary>
+    public bool HighlightSelectionOccurrences
+    {
+        get => GetValue(HighlightSelectionOccurrencesProperty);
+        set => SetValue(HighlightSelectionOccurrencesProperty, value);
+    }
+
     /// <summary>
     /// The surface's font. Registered as the editor's <i>own</i> property rather than adopted from
     /// <see cref="TextBlock"/>, and that is load-bearing rather than a style choice: the text properties
@@ -220,9 +240,9 @@ public sealed partial class PlainTextEditor : Avalonia.Controls.Control, IScroll
     protected override void OnPropertyChanged(AvaloniaPropertyChangedEventArgs change)
     {
         base.OnPropertyChanged(change);
-        if (change.Property == HighlightCurrentLineProperty)
+        if (change.Property == HighlightCurrentLineProperty || change.Property == HighlightSelectionOccurrencesProperty)
         {
-            InvalidateVisual(); // a repaint is enough: nothing about the tint changes a measurement
+            InvalidateVisual(); // a repaint is enough: nothing about a tint changes a measurement
             return;
         }
 

@@ -10,7 +10,7 @@ namespace Plaintain.Control.Controls;
 public sealed partial class PlainTextEditor
 {
     /// <summary>The colours the surface paints with, resolved for the active theme variant.</summary>
-    private sealed record Palette(IBrush Canvas, IBrush Text, IBrush GutterFill, IBrush GutterText, IBrush CurrentRow, IBrush Selection, IBrush Caret, IBrush Match);
+    private sealed record Palette(IBrush Canvas, IBrush Text, IBrush GutterFill, IBrush GutterText, IBrush CurrentRow, IBrush Selection, IBrush Occurrence, IBrush Caret, IBrush Match);
 
     private static Palette PaletteFor(ThemeVariant variant)
     {
@@ -27,11 +27,22 @@ public sealed partial class PlainTextEditor
             // by the content column. Just enough to find the caret with, not enough to look at.
             CurrentRow: Brush(dark ? 0x14FFFFFFu : 0x0A000000u),
             Selection: tokens.AccentSubtle,
+            // The same hue as the selection at half its wash, because that is the relationship: these are
+            // the same text, and the only thing being said is that you didn't select these ones. A second
+            // colour would make them a second kind of thing to learn. Half is where it stays legible over
+            // the current-row tint below it without competing with the selection above it.
+            Occurrence: Fade(tokens.AccentSubtle, 0x1A),
             Caret: tokens.Accent,
             Match: Brush(dark ? 0x553FB084u : 0x5515734Fu));
     }
 
     private static IBrush Brush(uint argb) => new Avalonia.Media.Immutable.ImmutableSolidColorBrush(Color.FromUInt32(argb));
+
+    /// <summary>The colour of <paramref name="brush"/> at <paramref name="alpha"/> — a token re-mixed rather
+    /// than a literal, so it follows the app's accent instead of drifting from it.</summary>
+    private static IBrush Fade(IBrush brush, byte alpha) => brush is ISolidColorBrush solid
+        ? new Avalonia.Media.Immutable.ImmutableSolidColorBrush(Color.FromArgb(alpha, solid.Color.R, solid.Color.G, solid.Color.B))
+        : brush;
 
     /// <summary>Matches the find bar has highlighted, in document offsets.</summary>
     private IReadOnlyList<Puffinote.Text.Document.SearchMatch> _matches = [];
@@ -59,6 +70,7 @@ public sealed partial class PlainTextEditor
         }
 
         var doc = Buffer.Document;
+        _occurrenceTerm = OccurrenceTerm(); // once for the frame; every row is then a search within its own text
         int totalRows = Math.Max(1, TotalRows);
         int firstRow = Math.Max(0, (int)(_offset.Y / _rowHeight));
         int lastRow = Math.Min(totalRows - 1, (int)((_offset.Y + bounds.Height) / _rowHeight));
@@ -95,6 +107,9 @@ public sealed partial class PlainTextEditor
                     context.FillRectangle(palette.CurrentRow, new Rect(gutter, y, Math.Max(0, bounds.Width - gutter), _rowHeight));
                 }
 
+                // Occurrences first: they are the quietest of the three and must never sit over a selection
+                // or a search match, both of which say something more specific about the same text.
+                DrawRowOccurrences(context, palette, line, lineText, segment, segmentStartColumn, y);
                 DrawRowSelection(context, palette, row, line, segment, segmentStartColumn, y, bounds);
                 DrawRowMatches(context, palette, line, segment, segmentStartColumn, y);
 
@@ -240,6 +255,44 @@ public sealed partial class PlainTextEditor
         _ = bounds;
     }
 
+    /// <summary>
+    /// Tint this row's share of the other occurrences of the selected text. The scan is over
+    /// <paramref name="lineText"/> — the string the painter already read for this row — and the hits are
+    /// then clipped to the row, so a wrapped line's occurrence is drawn on whichever of its rows it
+    /// actually lands on. A wrapped line is scanned once per row it occupies; that is bounded by the
+    /// viewport, which is the whole point.
+    /// </summary>
+    private void DrawRowOccurrences(DrawingContext context, Palette palette, int line, string lineText, int segment, int startColumn, double y)
+    {
+        if (_occurrenceTerm is null)
+        {
+            return;
+        }
+
+        _occurrenceScratch.Clear();
+        CollectOccurrences(line, lineText, _occurrenceScratch);
+        if (_occurrenceScratch.Count == 0)
+        {
+            return;
+        }
+
+        int rowStart = OffsetAtColumn(line, startColumn);
+        int rowEnd = RowEndOffsetFor(line, segment);
+        foreach (var hit in _occurrenceScratch)
+        {
+            int from = Math.Max(hit.Start, rowStart);
+            int to = Math.Min(hit.End, rowEnd);
+            if (to <= from)
+            {
+                continue;
+            }
+
+            double x1 = TextLeft - _offset.X + ((ColumnOf(line, from) - startColumn) * _charWidth);
+            double x2 = TextLeft - _offset.X + ((ColumnOf(line, to) - startColumn) * _charWidth);
+            context.FillRectangle(palette.Occurrence, new Rect(x1, y, Math.Max(1, x2 - x1), _rowHeight));
+        }
+    }
+
     private void DrawRowMatches(DrawingContext context, Palette palette, int line, int segment, int startColumn, double y)
     {
         if (_matches.Count == 0)
@@ -347,6 +400,17 @@ public sealed partial class PlainTextEditor
     /// </summary>
     internal static Color CurrentRowTintForTest(ThemeVariant variant) =>
         ((ISolidColorBrush)PaletteFor(variant).CurrentRow).Color;
+
+    /// <summary>
+    /// Test seam: the selection tint and the occurrence tint for <paramref name="variant"/>, so the one
+    /// relationship between them — same colour, quieter — is held by a test rather than by whoever next
+    /// edits the palette.
+    /// </summary>
+    internal static (Color Selection, Color Occurrence) SelectionTintsForTest(ThemeVariant variant)
+    {
+        var palette = PaletteFor(variant);
+        return (((ISolidColorBrush)palette.Selection).Color, ((ISolidColorBrush)palette.Occurrence).Color);
+    }
 
     /// <summary>Test seam: whether the blink is currently on its lit phase.</summary>
     internal bool IsCaretLitForTest => _caretBlink.IsCaretVisible;

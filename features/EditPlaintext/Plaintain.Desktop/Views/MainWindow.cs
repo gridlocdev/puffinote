@@ -85,6 +85,7 @@ public sealed partial class MainWindow : Window
         EditorView.Editor.WordWrap = _settings.Settings.WordWrap;
         EditorView.Editor.ShowLineNumbers = _settings.Settings.ShowLineNumbers;
         EditorView.Editor.HighlightCurrentLine = _settings.Settings.HighlightCurrentLine;
+        EditorView.Editor.HighlightSelectionOccurrences = _settings.Settings.HighlightSelectionOccurrences;
         EditorView.Editor.FontSize = _settings.Settings.FontSize;
         EditorView.Zoom = _settings.Settings.Zoom;
         // Every keystroke and every caret move comes through here, so it takes the debounced path — the
