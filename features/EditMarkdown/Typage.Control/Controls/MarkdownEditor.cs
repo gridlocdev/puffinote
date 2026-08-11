@@ -268,6 +268,13 @@ public partial class MarkdownEditor : Avalonia.Controls.Control, ILogicalScrolla
                 return;
             }
 
+            // Changing how the document is presented must not move the reader. Every row height, every
+            // paragraph grouping and every collapsed blank differs between the modes, so the same scroll
+            // offset in pixels points at different text after the switch — which is what made the view jump.
+            // Remember the text at the top of the viewport, and put that text back at the top afterwards. The
+            // caret needs no such care: it is a document offset, and the document is not what changed.
+            var anchor = TopOfViewportOffset();
+
             field = value;
             // RawText ungroups paragraphs and un-collapses blanks, and concealment/styling differ by mode, so
             // re-group fully and drop the cached visuals.
@@ -276,7 +283,57 @@ public partial class MarkdownEditor : Avalonia.Controls.Control, ILogicalScrolla
             RaiseScrollInvalidated(EventArgs.Empty);
             InvalidateMeasure();
             InvalidateVisual();
+            ScrollOffsetToTop(anchor);
         }
+    }
+
+    /// <summary>
+    /// The document offset drawn at the top edge of the viewport — the reader's place in the text. Null before
+    /// the control is arranged in one (a headless construction, or a mode set before the first layout pass),
+    /// where there is no scroll position to keep.
+    /// </summary>
+    private int? TopOfViewportOffset()
+    {
+        if (_viewport.Height <= 0)
+        {
+            return null;
+        }
+
+        EnsureLayout();
+        return OffsetAtPoint(new Point(0, 1)); // a pixel *into* the viewport: its very edge is a block boundary
+    }
+
+    /// <summary>Scroll so <paramref name="anchor"/> sits at the top of the viewport again, where the reader
+    /// left it. A no-op when there was no viewport to anchor against.</summary>
+    private void ScrollOffsetToTop(int? anchor)
+    {
+        if (anchor is not { } offset || _viewport.Height <= 0)
+        {
+            return;
+        }
+
+        EnsureLayout();
+        var r = ResolveCaret(offset);
+        var y = RowTop(r.Block) + (r.Visual.RowOf(r.Col) * RowHeight(r.Block)) + PaddingTop;
+        var target = ClampOffset(new Vector(_offset.X, y));
+        if (target != _offset)
+        {
+            _offset = target;
+            InvalidateVisual();
+            RaiseScrollInvalidated(EventArgs.Empty);
+        }
+    }
+
+    /// <summary>The document offset at the top of the viewport; for tests.</summary>
+    internal int? TopOfViewportOffsetForTest() => TopOfViewportOffset();
+
+    /// <summary>Where <paramref name="offset"/> is drawn relative to the top edge of the viewport (0 is the
+    /// edge itself, negative is scrolled past); for tests.</summary>
+    internal double ViewportYForTest(int offset)
+    {
+        EnsureLayout();
+        var r = ResolveCaret(offset);
+        return RowTop(r.Block) + (r.Visual.RowOf(r.Col) * RowHeight(r.Block)) + PaddingTop - _offset.Y;
     }
 
     /// <summary>

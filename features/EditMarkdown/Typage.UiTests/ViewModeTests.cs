@@ -1,6 +1,12 @@
+using Avalonia;
+using Avalonia.Controls;
+using Avalonia.Controls.Primitives;
+using Avalonia.Headless;
 using Avalonia.Headless.XUnit;
 using Puffinote.Components.Controls.CommandBar;
+using Puffinote.Text.Document;
 using Typage.Control.Controls;
+using Typage.Control.Rendering;
 using Xunit;
 
 namespace Typage.UiTests;
@@ -53,6 +59,42 @@ public class ViewModeTests
         window.SetViewModeForTest(MarkdownEditor.ViewMode.RawText);
         Assert.Equal(MarkdownEditor.ViewMode.RawText, window.EditorView.Editor.View);
         Assert.Equal(MarkdownEditor.ViewMode.RawText, settings.Settings.View);
+    }
+
+    [AvaloniaFact]
+    public void SwitchingViewMode_KeepsTheReadersPlace_AndTheCaret()
+    {
+        // Every mode has its own row heights, paragraph grouping and collapsed blanks, so the same scroll
+        // offset in pixels lands on different text after a switch — the view used to jump somewhere else in
+        // the document. The text at the top of the viewport is what must not move.
+        // Hard-wrapped prose: one flowing block in the WYSIWYG view, sixty separate rows in the source one —
+        // as different as the two layouts get, which is the point.
+        var text = string.Join("\n", Enumerable.Range(0, 60).Select(i => $"sentence {i} with a few words in it"));
+        var editor = new MarkdownEditor { Text = text };
+        var window = new Window { Width = 500, Height = 300, Content = editor };
+        window.Show();
+        window.CaptureRenderedFrame(); // arrange, so there is a viewport to scroll inside
+
+        ((IScrollable)editor).Offset = new Vector(0, 900);
+        window.CaptureRenderedFrame();
+
+        var document = editor.Buffer.Document;
+        var anchor = editor.TopOfViewportOffsetForTest() ?? 0;
+        Assert.True(document.GetPosition(anchor).Line > 0, "the test needs to be scrolled away from the top");
+
+        editor.Buffer.Selection = Selection.At(anchor + 3);
+        var caret = editor.Buffer.Selection.Caret;
+
+        foreach (var mode in new[] { MarkdownEditor.ViewMode.RawText, MarkdownEditor.ViewMode.Formatted, MarkdownEditor.ViewMode.Rich })
+        {
+            editor.View = mode;
+            window.CaptureRenderedFrame();
+
+            // The text that was at the top is still in the first row of the viewport — not scrolled past
+            // (negative) and not pushed down the page, whatever the new layout did to the rows above it.
+            Assert.InRange(editor.ViewportYForTest(anchor), 0, MarkdownTheme.Default.BodyRowHeight);
+            Assert.Equal(caret, editor.Buffer.Selection.Caret); // the caret is an offset; the document didn't change
+        }
     }
 
     [AvaloniaFact]
