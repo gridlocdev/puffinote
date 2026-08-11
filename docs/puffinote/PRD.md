@@ -203,6 +203,17 @@ CLI harness `CliHost`/`CliException`). Both editors already run their palette an
   - Standard tree affordances: expand/collapse folders, new file/folder, rename, delete (confirmed),
     reveal in Finder, and drag to move (move is a plain filesystem move; Puffinote does **not** rewrite
     link references — link-refactor is a non-goal).
+  - **The move gesture** is drawn by the tree itself rather than handed to the platform's drag-and-drop,
+    because all three of the things that make a tree drag legible are ours to draw: a **ghost** of the entry
+    under the pointer, a **drop indicator** outlining where it would land, and a hovered collapsed folder
+    **opening** after a second so you can aim inside it without letting go. A drop on a *folder* means that
+    folder, on a *file* the folder holding it, and on the empty space below the rows the top level of
+    whatever the tree is scoped to. Moves that would change nothing (into the folder it is already in) or
+    swallow themselves (a folder into its own descendant) show no indicator and do nothing on release; a
+    name already taken in the target is refused rather than overwritten. Escape abandons a drag in flight.
+    There is no confirmation prompt: the gesture said what and where, it is visible throughout, and it is
+    undone by dragging the entry back. Open tabs and the recent list are reconciled exactly as a rename
+    reconciles them.
 
 #### 7.2.1 Collapsible
 

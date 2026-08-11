@@ -82,6 +82,7 @@ internal sealed class SidebarView : UserControl
         _files.NewTaskboardRequested += node => NewTaskboardRequested?.Invoke(node);
         _files.NewFileRequested += node => NewFileRequested?.Invoke(node);
         _files.NewFolderRequested += node => NewFolderRequested?.Invoke(node);
+        _files.MoveRequested += (node, directory) => MoveRequested?.Invoke(node, directory);
         _files.RevealRequested += node => RevealRequested?.Invoke(node);
         _files.OpenExternallyRequested += node => OpenExternallyRequested?.Invoke(node);
 
@@ -150,6 +151,9 @@ internal sealed class SidebarView : UserControl
     public event Action<NotebookNode?>? NewTaskboardRequested;
     public event Action<NotebookNode?>? NewFileRequested;
     public event Action<NotebookNode?>? NewFolderRequested;
+
+    /// <summary>Raised when a row is dragged onto a folder: move it there, fulfilled by the shell.</summary>
+    public event Action<NotebookNode, string>? MoveRequested;
 
     /// <summary>Hand-offs to the host OS (tree context menu), fulfilled by the shell.</summary>
     public event Action<NotebookNode>? RevealRequested;

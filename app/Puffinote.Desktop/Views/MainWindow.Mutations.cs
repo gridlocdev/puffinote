@@ -240,6 +240,22 @@ public partial class MainWindow
         });
     }
 
+    /// <summary>
+    /// Move <paramref name="node"/> into <paramref name="directory"/> — the tree's drag-and-drop. No prompt:
+    /// the gesture already said what to do and where, it is visible the whole way (ghost, drop indicator), and
+    /// it is undone by dragging the entry back. What it does need is the same reconciliation a rename does —
+    /// an open tab and the recent list both point at a path that has just changed.
+    /// </summary>
+    private Task MoveNodeAsync(NotebookNode node, string directory) =>
+        IsRootNode(node) ? Task.CompletedTask : MutateAsync($"Couldn't move “{node.Name}”", () =>
+        {
+            var newPath = NotebookMutations.Move(node.Path, directory);
+            _tabHost.RebindPaths(node.Path, newPath);
+            RemapRecent(node.Path, newPath);
+            SidebarForTest.RevealInTree(newPath);
+            return Task.CompletedTask;
+        });
+
     private async Task PromptDeleteAsync(NotebookNode node)
     {
         if (_overlayHost.IsOpen || IsRootNode(node))

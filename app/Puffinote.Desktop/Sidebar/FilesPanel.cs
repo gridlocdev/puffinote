@@ -53,6 +53,7 @@ internal sealed class FilesPanel : ISidebarPanel
         _tree.NewFileRequested += node => NewFileRequested?.Invoke(node);
         _tree.NewFolderRequested += node => NewFolderRequested?.Invoke(node);
         _tree.EnterFolderRequested += node => EnterFolder(node.Path);
+        _tree.MoveRequested += (node, directory) => MoveRequested?.Invoke(node, directory);
         _tree.RevealRequested += node => RevealRequested?.Invoke(node);
         _tree.OpenExternallyRequested += node => OpenExternallyRequested?.Invoke(node);
 
@@ -113,6 +114,9 @@ internal sealed class FilesPanel : ISidebarPanel
     public event Action<NotebookNode?>? NewTaskboardRequested;
     public event Action<NotebookNode?>? NewFileRequested;
     public event Action<NotebookNode?>? NewFolderRequested;
+
+    /// <summary>Raised when a row is dragged onto a folder: move it there (the shell does the filesystem work).</summary>
+    public event Action<NotebookNode, string>? MoveRequested;
 
     /// <summary>Hand-offs to the host OS (tree context menu), fulfilled by the shell.</summary>
     public event Action<NotebookNode>? RevealRequested;

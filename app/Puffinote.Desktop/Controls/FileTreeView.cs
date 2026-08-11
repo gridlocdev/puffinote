@@ -51,7 +51,7 @@ namespace Puffinote.Desktop.Controls;
 /// The <see cref="NotebookNode"/> model is unchanged; mutation actions (new/rename/delete) drive this through
 /// <see cref="Refresh"/> / <see cref="SelectPath"/>.
 /// </summary>
-internal sealed class FileTreeView : UserControl
+internal sealed partial class FileTreeView : UserControl
 {
     private sealed record Row(NotebookNode Node, int Depth);
 
@@ -148,7 +148,9 @@ internal sealed class FileTreeView : UserControl
         AddHandler(KeyDownEvent, OnKeyDown, RoutingStrategies.Tunnel | RoutingStrategies.Bubble);
         AddHandler(TextInputEvent, OnTextInput, RoutingStrategies.Tunnel | RoutingStrategies.Bubble);
 
-        Content = _list;
+        // The list, with the drag overlay (ghost + drop indicator) floating over it — see FileTreeView.Drag.cs.
+        Content = new Panel { Children = { _list, _dragOverlay } };
+        InitializeDrag();
     }
 
     /// <summary>Raised when the selected entry changes (null when the selection is cleared).</summary>
@@ -832,6 +834,14 @@ internal sealed class FileTreeView : UserControl
 
     private void OnKeyDown(object? sender, KeyEventArgs e)
     {
+        // Escape abandons a drag in flight, wherever the pointer is — the way out of a move you didn't mean.
+        if (e.Key == Key.Escape && IsDraggingForTest)
+        {
+            CancelDrag();
+            e.Handled = true;
+            return;
+        }
+
         // The "Command" chord modifier is ⌘ on macOS, Ctrl elsewhere — matching the platform's editors and the
         // shell's own catalog.
         var command = UseMacKeymap ? KeyModifiers.Meta : KeyModifiers.Control;
@@ -1094,6 +1104,8 @@ internal sealed class FileTreeView : UserControl
         {
             return;
         }
+
+        NoteDragCandidate(clicked.Node, e); // a press on a row may turn into a move — see FileTreeView.Drag.cs
 
         var selectOnly = e.KeyModifiers.HasFlag(UseMacKeymap ? KeyModifiers.Meta : KeyModifiers.Control);
         if (selectOnly)

@@ -107,6 +107,7 @@ public partial class MainWindow : Window
         SidebarForTest.NewFolderRequested += node => _ = PromptNewFolderAsync(node);
         SidebarForTest.RenameRequested += node => _ = PromptRenameAsync(node);
         SidebarForTest.DeleteRequested += node => _ = PromptDeleteAsync(node);
+        SidebarForTest.MoveRequested += (node, directory) => _ = MoveNodeAsync(node, directory);
         SidebarForTest.RevealRequested += node => _ = RevealAsync(node);
         SidebarForTest.OpenExternallyRequested += node => _ = OpenExternallyAsync(node);
         SidebarForTest.ToggleRequested += ToggleSidebar;

@@ -117,4 +117,59 @@ public sealed class NotebookMutationsTests : IDisposable
 
         Assert.False(Directory.Exists(folder));
     }
+
+    // ---- Move (the tree's drag-and-drop) ----------------------------------------------------------
+
+    [Fact]
+    public void Move_puts_a_file_in_the_target_folder_keeping_its_name()
+    {
+        var file = NotebookMutations.CreateFile(_dir.FullName, "note.md", "body"u8.ToArray());
+        var folder = NotebookMutations.CreateFolder(_dir.FullName, "archive");
+
+        var moved = NotebookMutations.Move(file, folder);
+
+        Assert.Equal(Path(System.IO.Path.Combine("archive", "note.md")), moved);
+        Assert.False(File.Exists(file));
+        Assert.Equal("body", File.ReadAllText(moved));
+    }
+
+    [Fact]
+    public void Move_takes_a_folder_and_everything_in_it()
+    {
+        var source = NotebookMutations.CreateFolder(_dir.FullName, "src");
+        NotebookMutations.CreateFile(source, "child.md");
+        var target = NotebookMutations.CreateFolder(_dir.FullName, "dest");
+
+        var moved = NotebookMutations.Move(source, target);
+
+        Assert.True(File.Exists(System.IO.Path.Combine(moved, "child.md")));
+        Assert.False(Directory.Exists(source));
+    }
+
+    [Fact]
+    public void Move_refuses_a_name_already_taken_there_rather_than_overwriting_it()
+    {
+        var file = NotebookMutations.CreateFile(_dir.FullName, "note.md");
+        var folder = NotebookMutations.CreateFolder(_dir.FullName, "archive");
+        NotebookMutations.CreateFile(folder, "note.md", "the one already there"u8.ToArray());
+
+        Assert.Throws<IOException>(() => NotebookMutations.Move(file, folder));
+        Assert.Equal("the one already there", File.ReadAllText(System.IO.Path.Combine(folder, "note.md")));
+    }
+
+    [Fact]
+    public void CanMove_refuses_the_three_moves_that_make_no_sense()
+    {
+        var folder = NotebookMutations.CreateFolder(_dir.FullName, "outer");
+        var inner = NotebookMutations.CreateFolder(folder, "inner");
+        var file = NotebookMutations.CreateFile(_dir.FullName, "note.md");
+
+        Assert.False(NotebookMutations.CanMove(folder, folder));         // into itself
+        Assert.False(NotebookMutations.CanMove(folder, inner));          // into its own descendant
+        Assert.False(NotebookMutations.CanMove(file, _dir.FullName));    // where it already is
+
+        Assert.True(NotebookMutations.CanMove(file, folder));
+        Assert.True(NotebookMutations.CanMove(inner, _dir.FullName));    // out to the top level
+        Assert.Throws<IOException>(() => NotebookMutations.Move(folder, inner));
+    }
 }

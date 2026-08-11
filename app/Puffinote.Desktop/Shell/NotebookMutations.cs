@@ -74,6 +74,52 @@ internal static class NotebookMutations
         return target;
     }
 
+    /// <summary>
+    /// Whether the entry at <paramref name="path"/> can be moved into <paramref name="directory"/> — the
+    /// question a drag over the tree asks on every pointer move, so it must be answerable without touching the
+    /// disk twice or throwing. Three moves are refused: into the folder it is already in (nothing would
+    /// happen), into itself, and into one of its own descendants (which would take the folder with it).
+    /// </summary>
+    public static bool CanMove(string path, string directory)
+    {
+        var source = System.IO.Path.GetFullPath(path);
+        var target = System.IO.Path.GetFullPath(directory);
+        return !PathScope.IsUnderOrEqual(target, source)
+            && !string.Equals(System.IO.Path.GetDirectoryName(source), target, StringComparison.OrdinalIgnoreCase);
+    }
+
+    /// <summary>
+    /// Move the file or folder at <paramref name="path"/> into <paramref name="directory"/>, keeping its name;
+    /// returns the new path. A name already taken there is a refusal, not an overwrite — the drop that asked
+    /// for it was aimed at a folder, not at the file it would have destroyed.
+    /// </summary>
+    public static string Move(string path, string directory)
+    {
+        if (!CanMove(path, directory))
+        {
+            throw new IOException("That folder can't hold it.");
+        }
+
+        var name = System.IO.Path.GetFileName(path.TrimEnd(
+            System.IO.Path.DirectorySeparatorChar, System.IO.Path.AltDirectorySeparatorChar));
+        var target = Combine(directory, name);
+        if (File.Exists(target) || Directory.Exists(target))
+        {
+            throw new IOException($"“{name}” already exists in “{System.IO.Path.GetFileName(directory)}”.");
+        }
+
+        if (Directory.Exists(path))
+        {
+            Directory.Move(path, target);
+        }
+        else
+        {
+            File.Move(path, target);
+        }
+
+        return target;
+    }
+
     /// <summary>Delete the file, or the folder (recursively), at <paramref name="path"/>.</summary>
     public static void Delete(string path)
     {
