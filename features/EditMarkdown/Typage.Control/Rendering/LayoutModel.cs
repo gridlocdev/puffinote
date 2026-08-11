@@ -21,6 +21,11 @@ internal interface ILayoutHost
     double CheckboxGutter { get; }
     int ListLevel(int line);
     string? OrderedMarkerText(int line, string lineText, int sLine, int enLine);
+
+    /// <summary>The drawn size of the picture on <paramref name="line"/>, when the line is an image block whose
+    /// file actually resolves to one. Null for every other line — including an image line whose file is
+    /// missing or remote, which lays out as its ordinary text.</summary>
+    InlineImage? ImageOnLine(int line);
 }
 
 /// <summary>
@@ -269,6 +274,15 @@ internal sealed class LayoutModel
             var firstOfRun = b == 0 || kinds[b - 1] != kinds[b];
             var lastOfRun = b == blockCount - 1 || kinds[b + 1] != kinds[b];
             var m = theme.MetricsFor(kinds[b], HeadingLevelOf(b), firstOfRun, lastOfRun);
+
+            // A picture's row is as tall as the picture: the block draws the bitmap into its one row, so the
+            // theme's body row height would crop it. An image line whose file didn't resolve keeps that body
+            // height and renders its source text instead.
+            if (kinds[b] == MarkdownBlockKind.Image && _host.ImageOnLine(BlockStartLine[b]) is { } image)
+            {
+                m = m with { RowHeight = image.Height };
+            }
+
             metrics[b] = m;
             heights[b] = rowCounts[b] == 0 ? 0 : m.PadTop + (rowCounts[b] * m.RowHeight) + m.PadBottom;
         }
@@ -355,6 +369,11 @@ internal sealed class LayoutModel
             return MarkdownBlockKind.Code;
         }
 
+        if (IsImageLine(line))
+        {
+            return MarkdownBlockKind.Image;
+        }
+
         var toks = _host.Model.LineTokens(line);
         if (toks.Count == 0)
         {
@@ -436,6 +455,17 @@ internal sealed class LayoutModel
 
         return false;
     }
+
+    /// <summary>
+    /// Whether <paramref name="line"/> is an <b>image block</b>: one <c>![alt](url)</c> and nothing else, in a
+    /// view that draws pictures. Such a line stands on its own — it neither flows into the paragraph above it
+    /// nor absorbs the line below — because a picture is a block object, not a word in a sentence. That is true
+    /// whether or not the file resolves, so a broken image path can't change how the document is grouped (only
+    /// what the block draws).
+    /// </summary>
+    public bool IsImageLine(int line) =>
+        !_host.RawTextMode && !_host.MarkersRevealed
+        && InlineImages.ImageLineUrl(_host.Model, _host.Document, line) is not null;
 
     /// <summary>Whether <paramref name="line"/> sits inside a code block or the front matter — the two states whose
     /// rows never join a paragraph. Not simply "its entering state isn't Normal": see <see cref="IsCodeLine"/> for
@@ -543,6 +573,11 @@ internal sealed class LayoutModel
         if (InCodeOrFrontMatter(line))
         {
             return false; // inside fenced/indented code or front matter
+        }
+
+        if (IsImageLine(line))
+        {
+            return false; // a picture on its own line is a block, not part of the paragraph around it
         }
 
         var toks = _host.Model.LineTokens(line);
@@ -658,7 +693,7 @@ internal sealed class LayoutModel
         var visual = _builder.Build(block, new BlockLayoutContext(
             _host.Document, _host.Model, _host.Theme, BlockStartLine,
             _host.RawTextMode, _host.MarkersRevealed, _host.WrapWidth, _host.CheckboxGutter,
-            _host.ListLevel, _host.OrderedMarkerText));
+            _host.ListLevel, _host.OrderedMarkerText, _host.ImageOnLine));
         _blockVisualCache[block] = visual;
         return visual;
     }

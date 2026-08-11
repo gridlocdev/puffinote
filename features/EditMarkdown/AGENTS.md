@@ -202,11 +202,12 @@ is worse than none, because it's what the next agent plans against.
 | Editing assists (§7.2) · three-state task boxes (§8.3.2) · the caret-nav suite · raw-source toggle · focus mode | **Built** |
 | One command catalog (`Typage.Control/Commands`) + Command Menu (⌘K) · find/replace · platform-native menu (§7.5) · themes · preferences · recent files | **Built** — hosts merge the catalog in; they don't define commands |
 | File safety: atomic save, watcher + three-way conflict, autosave/recovery (§9.4), dependency-allowlist gate (§5/§9.3) | **Built** |
-| Image **insert** + staging for unsaved docs (`ImageStaging`) | **Built** — picking and inserting only; *pasting* an image is not |
+| Image **insert** + **paste** + staging for unsaved docs (`ImageStaging`) | **Built** — a clipboard image file or bitmap is written beside the document as `image-<TIMESTAMP>.<ext>` (PRD §7.6) |
 | Whole-line block **folding** — collapsing a code/front-matter fence row, a real table grid, a true front-matter "Properties" fold | **Not built** — those rows still render as rows |
-| **Block objects** — inline images, rendered tables, embeds | **Not built** |
+| **Block objects** — inline images | **Built** — a line holding one `![alt](url)` draws as the picture (`Rendering/InlineImages.cs`, `MarkdownBlockKind.Image`); local files only, scaled down to the column, never up |
+| **Block objects** — rendered tables, embeds | **Not built** |
 | **IME** · **automation peer** (accessibility) | **Not built** (PRD §11, phases 3 and 9) |
-| **Smart paste** — HTML→MD, image paste, paste-as-plain | **Not built** — `PasteAsync` is plain text |
+| **Smart paste** — HTML→MD, paste-as-plain | **Not built** — `PasteAsync` handles an image and otherwise pastes plain text |
 | **Spell check** · OS **print/PDF** | **Not built** (phase 8) |
 
 **Verification here has no pixels.** The headless CI has no GPU, so the draw path is checked *structurally* —

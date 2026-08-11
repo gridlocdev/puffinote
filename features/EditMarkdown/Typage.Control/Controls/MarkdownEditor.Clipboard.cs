@@ -1,6 +1,7 @@
 using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Input.Platform;
+using Avalonia.Platform.Storage;
 using Avalonia.Threading;
 using Typage.Engine.Markdown;
 
@@ -38,9 +39,21 @@ public partial class MarkdownEditor
         RunOnUiThread(() => Buffer.Insert(string.Empty)); // delete the selection on the UI thread
     }
 
+    /// <summary>Raised when a pasted image couldn't be written to disk; the argument is the reason. The host
+    /// surfaces it (<see cref="Views.MarkdownEditorView"/> shows it in the editor's own overlay).</summary>
+    public event EventHandler<string>? ImagePasteFailed;
+
     public async Task PasteAsync()
     {
         if (TopLevel.GetTopLevel(this)?.Clipboard is not { } clipboard)
+        {
+            return;
+        }
+
+        // A picture on the clipboard is pasted as a picture: the bytes are written into the document's own
+        // folder and the reference to them is what lands in the text (PRD §7.2). Text paste is the fallback,
+        // and the common case.
+        if (await TryPasteImageAsync(clipboard))
         {
             return;
         }
@@ -66,6 +79,117 @@ public partial class MarkdownEditor
                 Buffer.Insert(nl == "\n" ? normalized : normalized.Replace("\n", nl));
             });
         }
+    }
+
+    /// <summary>
+    /// Paste an image, if the clipboard is carrying one: true when it handled the paste (including when it
+    /// reported a failure), false when there was no picture and the text path should run.
+    ///
+    /// <para>A copied <b>file</b> is preferred over a raw <b>bitmap</b>, and only when it is an image file: it
+    /// keeps the original bytes and format, where a bitmap has been decoded and would be re-encoded as PNG.
+    /// Anything else on the clipboard — including a non-image file, whose path other apps also offer as text —
+    /// falls through untouched.</para>
+    /// </summary>
+    private async Task<bool> TryPasteImageAsync(IClipboard clipboard)
+    {
+        string? sourcePath = null;
+        Avalonia.Media.Imaging.Bitmap? bitmap = null;
+        try
+        {
+            foreach (var file in await clipboard.TryGetFilesAsync() ?? [])
+            {
+                if (file.TryGetLocalPath() is { } path && IsImageFile(path))
+                {
+                    sourcePath = path;
+                    break;
+                }
+            }
+
+            if (sourcePath is null)
+            {
+                bitmap = await clipboard.TryGetBitmapAsync();
+            }
+        }
+        catch (Exception)
+        {
+            return false; // a clipboard read failure is not an image paste; let the text path try
+        }
+
+        if (sourcePath is null && bitmap is null)
+        {
+            return false;
+        }
+
+        try
+        {
+            // A clipboard await can resume off the UI thread, and what follows edits the document.
+            await Dispatcher.UIThread.InvokeAsync(() => InsertPastedImage(sourcePath, bitmap));
+        }
+        finally
+        {
+            bitmap?.Dispose(); // the surface re-loads it from the file it was just written to
+        }
+
+        return true;
+    }
+
+    /// <summary>
+    /// Write the pasted image beside the document and insert the reference to it. A <b>saved</b> document gets
+    /// the file in its own folder — <c>image-&lt;TIMESTAMP&gt;.&lt;ext&gt;</c>, deconflicted — referenced
+    /// relatively, so moving the note and its folder together keeps the picture. An <b>unsaved</b> one has no
+    /// folder yet, so the file is staged exactly as a picked image is, and the host's next save moves it home
+    /// (<see cref="ImageStaging.Reconcile"/>).
+    /// </summary>
+    private void InsertPastedImage(string? sourcePath, Avalonia.Media.Imaging.Bitmap? bitmap)
+    {
+        // A decoded bitmap has no format left to preserve; Avalonia writes PNG, so that is what it is called.
+        var name = ImageStaging.PastedImageName(DateTime.Now, sourcePath is null ? ".png" : Path.GetExtension(sourcePath));
+        try
+        {
+            string destination;
+            string url;
+            if (DocumentPath is { } documentPath)
+            {
+                var folder = Path.GetDirectoryName(Path.GetFullPath(documentPath)) ?? ".";
+                destination = ImageStaging.UniqueDestination(folder, name, File.Exists);
+                url = ImageStaging.RelativeUrl(documentPath, destination);
+            }
+            else
+            {
+                destination = ImageStaging.StagedPath(name, Guid.NewGuid().ToString("N"));
+                url = destination;
+            }
+
+            if (sourcePath is not null)
+            {
+                File.Copy(sourcePath, destination);
+            }
+            else
+            {
+                bitmap!.Save(destination);
+            }
+
+            InsertImageReference(ImageStaging.EncodeUrl(url), Path.GetFileNameWithoutExtension(name));
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or NotSupportedException)
+        {
+            ImagePasteFailed?.Invoke(this, ex.Message);
+        }
+    }
+
+    /// <summary>Whether <paramref name="path"/> names one of the image types the editor inserts (PRD §8.3).</summary>
+    private static bool IsImageFile(string path)
+    {
+        var extension = Path.GetExtension(path);
+        foreach (var pattern in ImageStaging.ImagePatterns)
+        {
+            if (extension.Equals(pattern[1..], StringComparison.OrdinalIgnoreCase))
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     /// <summary>Run a document edit on the UI thread (clipboard awaits may resume off it).</summary>

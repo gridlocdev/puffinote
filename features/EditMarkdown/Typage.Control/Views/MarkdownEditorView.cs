@@ -81,6 +81,10 @@ public class MarkdownEditorView : UserControl
         // items ask for the prompt and it opens here — one dialog for the menu, the toolbar and ⌘⌥K alike.
         Editor.InsertLinkRequested += (_, _) => _ = ShowLinkDialogAsync();
         Editor.EditLinkRequested += (_, _) => _ = ShowEditLinkDialogAsync();
+
+        // The surface writes a pasted image to disk; only the view has an overlay to report a failure in.
+        Editor.ImagePasteFailed += (_, reason) =>
+            ShowError("Couldn't paste the image.", $"{reason}\n\nCheck that the document's folder is writable.");
     }
 
     /// <summary>The formatting toolbar docked over the editor (shown via <see cref="CommandBarVisibility"/>).</summary>
@@ -119,7 +123,11 @@ public class MarkdownEditorView : UserControl
     /// the file); the surface reads it to anchor a relative image path and to name an HTML export. An unset
     /// path is not an error — it's what puts an inserted image through <see cref="ImageStaging"/>.
     /// </summary>
-    public string? DocumentPath { get; set; }
+    public string? DocumentPath
+    {
+        get => Editor.DocumentPath;
+        set => Editor.DocumentPath = value; // the surface anchors drawn images and pasted ones against it
+    }
 
     /// <summary>How the Markdown is rendered: live preview, markers revealed, or plain source (PRD §7.4).</summary>
     public MarkdownEditor.ViewMode ViewMode

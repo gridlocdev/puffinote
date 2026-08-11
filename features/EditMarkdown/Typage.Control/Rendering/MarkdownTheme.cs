@@ -31,6 +31,10 @@ public enum MarkdownBlockKind
     Rule,
     Table,
     FrontMatter,
+
+    /// <summary>A line holding one <c>![alt](url)</c> and nothing else: drawn as the picture itself, at the
+    /// picture's own height (see <see cref="Rendering.InlineImages"/>).</summary>
+    Image,
 }
 
 /// <summary>
@@ -567,6 +571,11 @@ public record MarkdownTheme
 
             case MarkdownBlockKind.FrontMatter:
                 return new BlockMetrics(BodyRowHeight, firstOfRun ? 4 * s : 0, lastOfRun ? 16 * s : 0);
+
+            // A picture sets its own row height (the layout overrides this one with the drawn size); the
+            // margins are a paragraph's, so an image between two paragraphs sits in the same rhythm they do.
+            case MarkdownBlockKind.Image:
+                return new BlockMetrics(BodyRowHeight, 12 * s, 12 * s);
 
             default:
                 return new BlockMetrics(BodyRowHeight, 0, 12 * s);

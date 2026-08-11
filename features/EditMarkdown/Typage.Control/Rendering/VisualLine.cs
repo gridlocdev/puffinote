@@ -48,6 +48,11 @@ public enum DecorationKind
     /// <summary>A nested list item's leading indentation: a spacer that draws nothing and advances one fixed step
     /// per nesting level, in place of the measured width of the item's source spaces.</summary>
     ListIndent,
+
+    /// <summary>A picture drawn in place of a concealed <c>![alt](url)</c> that is alone on its line. The run's
+    /// <see cref="VisualRun.Text"/> carries the image's <i>URL</i>, which the surface resolves against its own
+    /// bitmap cache; its width is the drawn width and its row is as tall as the picture.</summary>
+    Image,
 }
 
 /// <summary>

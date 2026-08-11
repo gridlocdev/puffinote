@@ -39,6 +39,7 @@ public partial class MarkdownEditor : Avalonia.Controls.Control, ILogicalScrolla
     private readonly TextMeasurer _measurer; // text measurement + FormattedText/width caches (theme-only dep)
     private readonly LayoutModel _layout; // owns block grouping, row counts, and the VisualLine cache
     private readonly CaretBlink _caretBlink; // the family's blinking caret — one rate across every app
+    private readonly InlineImageCache _images = new(); // decoded bitmaps for the document's inline images
     private MarkdownModel _model;
     private IBrush _dimMarker = new SolidColorBrush(Color.FromArgb(0x46, 0x6E, 0x76, 0x81));
 
@@ -179,6 +180,30 @@ public partial class MarkdownEditor : Avalonia.Controls.Control, ILogicalScrolla
 
     /// <summary>Resolves embed targets to controls; defaults to <see cref="NullEmbedResolver"/> (embeds show as source).</summary>
     public IEmbedResolver EmbedResolver { get; set; } = NullEmbedResolver.Instance;
+
+    /// <summary>
+    /// The absolute path of the file being edited, or null for an unsaved document — set by the host through
+    /// <see cref="Views.MarkdownEditorView.DocumentPath"/>. The surface reads it to anchor the <i>relative</i>
+    /// image paths it draws and the ones a pasted image is written beside. Changing it re-resolves every
+    /// picture: the same <c>images/photo.png</c> means a different file once the note has moved.
+    /// </summary>
+    public string? DocumentPath
+    {
+        get; set
+        {
+            if (field == value)
+            {
+                return;
+            }
+
+            field = value;
+            _images.Clear();
+            _layout.InvalidateAll(); // image sizes set their blocks' row heights — every block re-measures
+            RaiseScrollInvalidated(EventArgs.Empty);
+            InvalidateMeasure();
+            InvalidateVisual();
+        }
+    }
 
     /// <summary>Number of spaces inserted by Tab (PRD §7.2 — default 4, configurable in Settings).</summary>
     public int IndentWidth { get; set; } = 4;
@@ -589,6 +614,27 @@ public partial class MarkdownEditor : Avalonia.Controls.Control, ILogicalScrolla
     int ILayoutHost.ListLevel(int line) => ListLevel(line);
     string? ILayoutHost.OrderedMarkerText(int line, string lineText, int sLine, int enLine)
         => OrderedMarkerText(line, lineText, sLine, enLine);
+    InlineImage? ILayoutHost.ImageOnLine(int line) => ImageOnLine(line);
+
+    /// <summary>
+    /// The picture an image block draws, at the size it draws it: the line's lone <c>![alt](url)</c> resolved
+    /// against <see cref="DocumentPath"/> and scaled to the reading column. Null when the line is not an image
+    /// block, when the view isn't the WYSIWYG one (the other two show the source, which is the point of them),
+    /// or when the URL names nothing this editor can draw — a missing file, or a remote address, which stays
+    /// text because the editor doesn't fetch over the network.
+    /// </summary>
+    private InlineImage? ImageOnLine(int line)
+    {
+        if (View != ViewMode.Rich || InlineImages.ImageLineUrl(_model, Buffer.Document, line) is not { } url)
+        {
+            return null;
+        }
+
+        return _images.Resolve(url, DocumentPath, ContentWidth());
+    }
+
+    /// <summary>The bitmap behind an image block's URL, for the draw path (already loaded by layout).</summary>
+    private Avalonia.Media.Imaging.Bitmap? ImageBitmap(string url) => _images.Lookup(url, DocumentPath);
 
     /// <summary>The detected front-matter block range; for tests.</summary>
     internal (int Start, int End)? FrontMatterBlockForTest() => FrontMatterBlock();

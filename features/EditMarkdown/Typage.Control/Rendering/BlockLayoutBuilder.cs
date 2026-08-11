@@ -15,6 +15,8 @@ namespace Typage.Control.Rendering;
 /// list's document structure, so the control owns it.</param>
 /// <param name="OrderedMarkerText">Given <c>(line, lineText, sLine, enLine)</c>, the "N. " text to show for
 /// an ordered-list marker at that line-relative span, or <c>null</c> when it is not an ordered marker.</param>
+/// <param name="ImageOnLine">The drawn size of the picture on a line that is an image block, or null — the
+/// same seam <see cref="ILayoutHost.ImageOnLine"/> answers, since only the control owns the loaded bitmaps.</param>
 internal readonly record struct BlockLayoutContext(
     TextDocument Document,
     MarkdownModel Model,
@@ -25,7 +27,8 @@ internal readonly record struct BlockLayoutContext(
     double WrapWidth,
     double CheckboxGutter,
     Func<int, int> ListLevel,
-    Func<int, string, int, int, string?> OrderedMarkerText);
+    Func<int, string, int, int, string?> OrderedMarkerText,
+    Func<int, InlineImage?> ImageOnLine);
 
 /// <summary>
 /// Turns one document block into a laid-out <see cref="VisualLine"/>: it tiles the block's text into styled
@@ -53,6 +56,7 @@ internal sealed class BlockLayoutBuilder
     private double _checkboxGutter;
     private Func<int, int> _listLevel = null!;
     private Func<int, string, int, int, string?> _orderedMarkerText = null!;
+    private Func<int, InlineImage?> _imageOnLine = null!;
 
     public BlockLayoutBuilder(TextMeasurer measurer) => _measurer = measurer;
 
@@ -75,6 +79,7 @@ internal sealed class BlockLayoutBuilder
         _checkboxGutter = ctx.CheckboxGutter;
         _listLevel = ctx.ListLevel;
         _orderedMarkerText = ctx.OrderedMarkerText;
+        _imageOnLine = ctx.ImageOnLine;
 
         var doc = _doc;
         var startLine = _blockStartLine[block];
@@ -90,6 +95,23 @@ internal sealed class BlockLayoutBuilder
             var lineText = doc.GetText(blockStart, blockEnd - blockStart).TrimEnd('\n', '\r');
             var plain = new List<VisualLine.Segment> { new(0, lineText.Length, _theme.RawTextStyle(), false) };
             return VisualLine.Build(lineText, plain, _measurer.MeasureWidth, _wrapWidth);
+        }
+
+        // An image block: the whole reference is concealed behind one decoration as wide as the drawn picture,
+        // which the surface paints into the block's row. Because the decoration covers the reference's columns
+        // atomically, the caret can only sit before or after the picture (never inside "![alt](url)"), a click
+        // on either half lands on the near side, and selecting it highlights the picture — all of it out of the
+        // one offset↔visual map, with no second mapping. An image line always *is* its own block (see
+        // LayoutModel.IsImageLine), so this never swallows a paragraph's text.
+        if (_imageOnLine(startLine) is { } image)
+        {
+            var source = doc.GetText(blockStart, blockEnd - blockStart).TrimEnd('\n', '\r');
+            var style = DefaultStyle(0);
+            var run = new List<VisualLine.Segment>
+            {
+                new(0, source.Length, style, true, DecorationKind.Image, image.Width, ImageUrlOf(startLine) ?? string.Empty),
+            };
+            return VisualLine.Build(source, run, _measurer.MeasureWidth, _wrapWidth);
         }
 
         // Interior newlines render as spaces so the paragraph flows; the last line's trailing CR is dropped
@@ -238,6 +260,10 @@ internal sealed class BlockLayoutBuilder
 
         return VisualLine.Build(text, segments, _measurer.MeasureWidth, _wrapWidth);
     }
+
+    /// <summary>The URL of the image on <paramref name="line"/> — carried as the decoration's text so the draw
+    /// path can ask the surface's cache for the bitmap without a second lookup of its own.</summary>
+    private string? ImageUrlOf(int line) => InlineImages.ImageLineUrl(_model, _doc, line);
 
     /// <summary>The treatment of one content run on a <b>done</b> task item — struck through and dimmed — or
     /// <paramref name="style"/> unchanged when the block isn't one.</summary>

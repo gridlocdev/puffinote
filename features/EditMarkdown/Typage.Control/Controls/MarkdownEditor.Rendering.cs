@@ -503,6 +503,21 @@ public partial class MarkdownEditor
                 // decoration survives only for its width — it is what holds the quote's text off the bar.
                 break;
 
+            case DecorationKind.Image:
+                {
+                    // The picture, drawn into the row its own height set (LayoutModel's Image metrics). The run
+                    // carries the URL; the bitmap is already in the cache, since resolving its size is what
+                    // made this row as tall as it is. A bitmap that has gone missing since simply draws
+                    // nothing — the source text is still there, and the next edit re-resolves it.
+                    if (ImageBitmap(run.Text) is { } bitmap)
+                    {
+                        var dest = new Rect(run.X, lineTop, run.Width, lineH);
+                        context.DrawImage(bitmap, new Rect(bitmap.Size), dest);
+                    }
+
+                    break;
+                }
+
             case DecorationKind.HorizontalRule:
                 context.DrawLine(new Pen(EditorTheme.RuleForeground, EditorTheme.RuleThickness), new Point(run.X, cy), new Point(ContentRight(), cy));
                 break;

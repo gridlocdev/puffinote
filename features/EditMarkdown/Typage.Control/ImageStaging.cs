@@ -45,12 +45,30 @@ public static class ImageStaging
     /// </summary>
     public static string Stage(string sourcePath, string uniqueId)
     {
-        Directory.CreateDirectory(StagingRoot);
-        var name = $"{uniqueId}{NameSeparator}{Path.GetFileName(sourcePath)}";
-        var dest = Path.Combine(StagingRoot, name);
+        var dest = StagedPath(Path.GetFileName(sourcePath), uniqueId);
         File.Copy(sourcePath, dest, overwrite: true);
         return dest;
     }
+
+    /// <summary>
+    /// The staged path an image named <paramref name="originalName"/> would take, with the staging root
+    /// created. For an image with no source file to copy — a bitmap pasted from the clipboard — which is
+    /// written straight to this path. Same <c>{id}__{name}</c> spelling as <see cref="Stage"/>, so
+    /// <see cref="OriginalName"/> and <see cref="Reconcile"/> treat the two alike.
+    /// </summary>
+    public static string StagedPath(string originalName, string uniqueId)
+    {
+        Directory.CreateDirectory(StagingRoot);
+        return Path.Combine(StagingRoot, $"{uniqueId}{NameSeparator}{originalName}");
+    }
+
+    /// <summary>
+    /// The file name a pasted image takes: <c>image-&lt;TIMESTAMP&gt;.&lt;ext&gt;</c>, the timestamp being
+    /// <paramref name="when"/> to the second. It is stable, sorts chronologically, and says what the file is
+    /// without depending on whatever the source application called it (a clipboard bitmap has no name at all).
+    /// </summary>
+    public static string PastedImageName(System.DateTime when, string extension) =>
+        $"image-{when:yyyyMMddHHmmss}{(extension.StartsWith('.') ? extension : "." + extension)}";
 
     /// <summary>
     /// Encode <paramref name="url"/> as a Markdown image/link destination. An <b>absolute</b> filesystem path

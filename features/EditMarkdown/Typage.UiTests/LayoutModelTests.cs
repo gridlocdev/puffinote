@@ -77,5 +77,11 @@ public class LayoutModelTests
         public int ListLevel(int line) => 0;
 
         public string? OrderedMarkerText(int line, string lineText, int sLine, int enLine) => null;
+
+        /// <summary>The drawn image sizes this host reports, by line — how a test puts a picture on a line
+        /// without a bitmap to decode (the headless suite has no pixels to decode one with).</summary>
+        public Dictionary<int, InlineImage> Images { get; } = [];
+
+        public InlineImage? ImageOnLine(int line) => Images.TryGetValue(line, out var image) ? image : null;
     }
 }
