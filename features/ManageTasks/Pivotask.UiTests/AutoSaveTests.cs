@@ -51,7 +51,7 @@ public class AutoSaveTests : IDisposable
     /// <summary>A saved board file on disk, and the window with it open.</summary>
     private (MainWindow Window, string Path) OpenSavedBoard(int? autoSaveSeconds = null)
     {
-        var path = Path.Combine(_dir, $"board-{Guid.NewGuid():N}.pivotask.json");
+        var path = Path.Combine(_dir, $"board-{Guid.NewGuid():N}.pivotask");
         new BoardDocument().Save(path);
 
         var window = Open(autoSaveSeconds);

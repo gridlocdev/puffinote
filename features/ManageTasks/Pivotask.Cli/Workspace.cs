@@ -10,13 +10,16 @@ namespace Pivotask.Cli;
 /// </summary>
 internal static class Workspace
 {
-    /// <summary>The compound extension. <c>Path.GetExtension</c> returns ".json" for these, which is why
-    /// nothing in the family may match a board by extension — it is a suffix.</summary>
-    public const string Suffix = ".pivotask.json";
+    /// <summary>The board's extension — what a new board is called and what discovery looks for.</summary>
+    public const string Suffix = ".pivotask";
+
+    /// <summary>The extension boards used to have. Opened and discovered, never created: a notebook
+    /// written before the rename is full of them.</summary>
+    public const string LegacySuffix = ".pivotask.json";
 
     /// <summary>
     /// Open the board at <paramref name="path"/>, or — when none was given — the single
-    /// <c>*.pivotask.json</c> in the working directory.
+    /// <c>*.pivotask</c> in the working directory.
     ///
     /// <para>Exactly one: with none there is nothing to act on, and with several, guessing which board
     /// <c>ptask done</c> meant is the kind of help that loses work. Both cases say what to do instead.</para>
@@ -34,7 +37,12 @@ internal static class Workspace
 
     private static string Discover()
     {
+        // Both spellings: a folder holding a board written before the rename still has exactly one board
+        // in it, and "no *.pivotask here" would be a lie told about a file sitting in plain sight. The
+        // wildcard for the new suffix also matches the old one, so they are de-duplicated by path.
         var boards = Directory.GetFiles(Directory.GetCurrentDirectory(), $"*{Suffix}")
+            .Concat(Directory.GetFiles(Directory.GetCurrentDirectory(), $"*{LegacySuffix}"))
+            .Distinct(StringComparer.Ordinal)
             .OrderBy(p => p, StringComparer.Ordinal)
             .ToList();
 

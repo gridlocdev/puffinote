@@ -76,7 +76,7 @@ public partial class MainWindow
 
     private Task PromptNewTaskboardAsync(NotebookNode? context) =>
         // Seeded for the same reason a spreadsheet is: Pivotask reads a board *out of* JSON, so a 0-byte
-        // ".pivotask.json" is not an empty board, it's a parse error. BoardDocument's own starter is the
+        // ".pivotask" is not an empty board, it's a parse error. BoardDocument's own starter is the
         // seed — the shell doesn't get its own opinion about what a new board contains.
         PromptNewDocumentAsync(context, DocumentTypes.BoardSuffix, "New Taskboard", "task board",
             static () => Encoding.UTF8.GetBytes(new BoardDocument().Serialize()));

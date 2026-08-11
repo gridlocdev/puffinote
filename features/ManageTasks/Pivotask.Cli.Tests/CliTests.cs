@@ -20,7 +20,7 @@ public sealed class CliTests : IDisposable
 
     public CliTests()
     {
-        _board = Path.Combine(_scratch.FullName, "work.pivotask.json");
+        _board = Path.Combine(_scratch.FullName, "work.pivotask");
         var board = new Board();
         board.Labels.Add(new Label { Id = "design", Name = "design", Color = "#0e7490" });
         board.Labels.Add(new Label { Id = "ops", Name = "ops", Color = "#4d7c0f" });
@@ -236,7 +236,7 @@ public sealed class CliTests : IDisposable
     public void Two_boards_here_is_a_question_not_a_guess()
     {
         // Guessing which board `ptask done` meant is the kind of help that loses work.
-        File.Copy(_board, Path.Combine(_scratch.FullName, "other.pivotask.json"));
+        File.Copy(_board, Path.Combine(_scratch.FullName, "other.pivotask"));
 
         Assert.Contains("Say which one with --board", Error("groups"), StringComparison.Ordinal);
     }

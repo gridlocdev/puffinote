@@ -16,7 +16,7 @@ namespace Puffinote.Desktop.Controls;
 /// the hues.</para>
 ///
 /// <para>Puffinote's own native types lead the map: <c>.md</c> (Typage) gets the first-party
-/// <c>markdown</c> glyph, <c>.ods</c> (Cellestra) the <c>table</c> glyph, and <c>.pivotask.json</c>
+/// <c>markdown</c> glyph, <c>.ods</c> (Cellestra) the <c>table</c> glyph, and <c>.pivotask</c>
 /// (Pivotask) the <c>square-check</c> glyph, so the files the app actually edits are the ones that never
 /// have to be squinted at. The board's whole point is that it is <em>not</em> drawn as the JSON it happens
 /// to be stored as — a notebook's boards sit among its notes, not among its config files.</para>
@@ -72,7 +72,8 @@ internal static class FileGlyph
 
         // Ahead of "json" only by being the longer key: `For` tries the whole extension before its final
         // segment, so a board is matched here and never falls through to the generic JSON entry below.
-        ["pivotask.json"] = Board,
+        ["pivotask"] = Board,
+        ["pivotask.json"] = Board, // boards written before the rename
 
         ["png"] = Image,
         ["jpg"] = Image,
@@ -175,7 +176,7 @@ internal static class FileGlyph
     /// not a "gz" file called <c>archive.tar</c>, and <c>types.d.ts</c> is a declaration file — splitting on the
     /// last dot would name them wrongly. Longest first, so <c>tar.gz</c> wins over <c>gz</c>.
     ///
-    /// <para><c>pivotask.json</c> leads the list because it is the family's own: a board is
+    /// <para><c>pivotask.json</c> leads the list because a board written before the rename is the family's own:
     /// <c>tasks.pivotask.json</c>, not a JSON file called <c>tasks.pivotask</c> — which is exactly what the tree
     /// used to show, splitting the suffix in half and leaving <c>.pivotask</c> stranded in the name. Splitting it
     /// on the last dot would also hand the row the generic JSON glyph rather than a board's own — the two things

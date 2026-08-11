@@ -33,8 +33,8 @@ public class DocumentTitleBarTests
     [AvaloniaFact]
     public void Opening_a_board_names_it_in_the_title_bar()
     {
-        // A board is a compound suffix, ".pivotask.json" — the whole of it is the file's name.
-        var path = Path.Combine(Path.GetTempPath(), $"pivotask-titlebar-{Guid.NewGuid():N}.pivotask.json");
+        // A board is a ".pivotask" — the extension is its own, so the title bar shows the name whole.
+        var path = Path.Combine(Path.GetTempPath(), $"pivotask-titlebar-{Guid.NewGuid():N}.pivotask");
         File.WriteAllText(path, """{"version":1,"groups":[]}""");
         try
         {

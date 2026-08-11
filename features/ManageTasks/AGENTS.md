@@ -7,8 +7,8 @@ conventions of the sibling features — same repo, same tooling, same golden-rul
 
 ## What this project is
 
-**Pivotask** is a Trello-inspired task board. One board lives in one JSON file, recognised by the
-compound extension **`.pivotask.json`**. Its CLI is **`ptask`**.
+**Pivotask** is a Trello-inspired task board. One board lives in one JSON file, named with the
+extension **`.pivotask`**. Its CLI is **`ptask`**.
 
 It is the family's **first non-text editor**, and that changes what it shares: not
 `Puffinote.Text` — there is no piece table here, no grapheme navigation, no encoding round-trip — but
@@ -32,9 +32,12 @@ rationale is [proposal 0004](../../docs/proposals/0004-pivotask.md), and the
 4. **The format's rules are the format's design** (§4). Deterministic bytes, unknown fields preserved,
    a version ahead of ours refused, atomic save. This file lives in git; every one of those exists so it
    stays reviewable and survives being opened by an older build.
-5. **`.pivotask.json` is a SUFFIX, not an extension.** `Path.GetExtension` returns `".json"`. Anything
-   that matches a board must use `EndsWith`, and must be ordered ahead of any generic `.json` route —
-   there is a regression test for this in `Puffinote.UiTests`.
+5. **A board is matched by `EndsWith`, not by `Path.GetExtension`.** The extension is `.pivotask` now,
+   but boards written before the rename are `.pivotask.json` — for which `GetExtension` returns
+   `".json"` — and those still open. So a board is matched by suffix, against both spellings
+   (`DocumentTypes.IsBoard` / `Workspace.Suffix` + `LegacySuffix`), and always ahead of any generic
+   `.json` route. There is a regression test for the routing in `Puffinote.UiTests`. Only `.pivotask` is
+   ever *written*, and only it is claimed from Finder.
 6. **No scope creep toward a project manager.** No assignees, no recurrence, no times or timezones, no
    dependencies, no nesting beyond the one `steps[]` level, no cross-notebook aggregation. See §8 of the
    proposal, restated in the PRD's non-goals.

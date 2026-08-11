@@ -2,12 +2,13 @@ namespace Puffinote.Desktop.Panes;
 
 /// <summary>
 /// Maps a file to the pane that can edit it (ARCHITECTURE §4.1): <c>.md</c> → Typage, <c>.ods</c> →
-/// Cellestra, <c>.pivotask.json</c> → Pivotask, and <b>anything else that reads as text</b> → Plaintain.
+/// Cellestra, <c>.pivotask</c> → Pivotask, and <b>anything else that reads as text</b> → Plaintain.
 /// A future file type is one new <see cref="IEditorPane"/> plus a branch here — no shell rewrite.
 ///
 /// <para><b>The order matters, twice.</b> The specific editors are asked first, because a Markdown file
 /// and a spreadsheet are both "text" to a decoder and neither should open in a plaintext pane. And a
-/// board is matched by <i>suffix</i> before anything looks at extensions at all:
+/// board is matched by <i>suffix</i> before anything looks at extensions at all, because boards written
+/// before the rename are still called <c>.pivotask.json</c>:
 /// <c>Path.GetExtension("board.pivotask.json")</c> returns <c>".json"</c>, so extension matching is
 /// structurally unable to see one — and <c>.json</c> is on Plaintain's fast list, so a board would
 /// otherwise open as text (proposal 0004 §4, and the risk its §7 records).</para>
@@ -79,7 +80,7 @@ internal static class EditorPaneFactory
             return new SheetPane();
         }
 
-        // Before any extension test: ".pivotask.json" ends in ".json", which Plaintain routes on sight.
+        // Before any extension test: a legacy ".pivotask.json" ends in ".json", which Plaintain routes on sight.
         if (IsBoard(path))
         {
             return new TaskBoardPane();
@@ -102,7 +103,7 @@ internal static class EditorPaneFactory
         HasExtension(path, DocumentTypes.SpreadsheetExtensions);
 
     private static bool IsBoard(string path) =>
-        path is not null && path.EndsWith(DocumentTypes.BoardSuffix, StringComparison.OrdinalIgnoreCase);
+        path is not null && DocumentTypes.IsBoard(path);
 
     /// <summary>
     /// Whether Plaintain should take this file: a known text extension, or — for anything else — bytes

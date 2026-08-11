@@ -24,8 +24,17 @@ switcher. More boards means more files, which a notebook app already handles.
 
 ## 2. The file format
 
-Extension **`.pivotask.json`**. The `.json` tail is deliberate: the file stays readable, diffable, and
-openable by anything, and Plaintain can open it as text without ceremony.
+Extension **`.pivotask`**. The contents are still plain JSON, deliberately — the file stays readable,
+diffable, and openable by anything, and Plaintain can open it as text without ceremony — but the *name*
+no longer says so.
+
+*(Revised from `.pivotask.json`. A two-part extension is invisible to `Path.GetExtension`, so every
+component that routes a file had to know it was a suffix, and claiming it from an operating system
+needed an exported UTI carrying a two-part filename tag — the one risk proposal 0004 §4 left open. A
+plain extension of its own is what lets Finder hand a board to Pivotask **without** also offering
+Pivotask for every JSON file on the machine, which is the whole point of a claim. Boards written before
+the rename are still opened, everywhere — they are simply not what a save produces, and not what is
+claimed.)*
 
 Four rules, and they are the format's real design, because this file lives in git:
 
@@ -144,7 +153,7 @@ ptask groups
 A task is named by id **or by part of its title** — ids are what a script uses, titles are how a person
 refers to their own tasks. An ambiguous title lists the candidates rather than picking one.
 
-The board is found automatically when there is exactly one `*.pivotask.json` in the working directory.
+The board is found automatically when there is exactly one `*.pivotask` (or legacy `*.pivotask.json`) in the working directory.
 With none, or with several, it says what to do instead: guessing which board `ptask done` meant is the
 kind of help that loses work.
 
@@ -167,5 +176,5 @@ notebook. Everything else in the prototype's header strip — the search, the fi
 about the tasks, and is kept.
 
 And three boundaries worth stating as such: **task notes are plain text**; **one board per file**; and
-**Puffinote does not aggregate tasks across the notebook** — a `.pivotask.json` opens in a tab like any
+**Puffinote does not aggregate tasks across the notebook** — a `.pivotask` opens in a tab like any
 other file, and the shell keeps delegating to editors rather than reading document contents itself.

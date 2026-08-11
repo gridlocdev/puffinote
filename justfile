@@ -670,7 +670,7 @@ publish-pivotask-desktop:
 publish-pivotask-app:
     CONFIG={{ CONFIG }} RID={{ RID }} OUT={{ PIVOTASK_OUT }} {{ PACKAGE_MAC }} pivotask
 
-# Check that Launch Services honours the .pivotask.json compound extension (macOS only — that is the
+# Check that Launch Services types a .pivotask file as Pivotask's own document (macOS only — that is the
 # point). Prints PASS, or FAIL with the fallback proposal 0004 §10.3 already settled.
 [group('pivotask')]
 verify-pivotask-file-claim *APP:

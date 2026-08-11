@@ -11,7 +11,7 @@ builds, tests, and ships on its own, and Puffinote composes it as a fourth pane 
 Columns of cards. Tick them, star them, drag them between columns, open one for its notes and checklist.
 Board view or list view, four filters, and a search that reaches into step text.
 
-The file is `.pivotask.json` — plain JSON, on purpose, so it stays readable, diffable, and openable by
+The file is `.pivotask` — plain JSON inside, on purpose, so it stays readable, diffable, and openable by
 anything. A save that changed nothing produces byte-identical output, so it never shows up in a diff, and
 a field written by a newer version survives being opened and saved by an older one.
 
@@ -46,7 +46,8 @@ ptask show k3f9a2b
 ptask groups
 ```
 
-It finds the single `*.pivotask.json` in the working directory on its own. With none, or with several,
+It finds the single `*.pivotask` in the working directory on its own (boards written before the rename,
+`*.pivotask.json`, count too). With none, or with several,
 it says what to do instead — guessing which board `ptask done` meant is the kind of help that loses work.
 
 ## Docs

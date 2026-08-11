@@ -40,7 +40,7 @@ public class ExternalChangeTests : IDisposable
 
     private (MainWindow Window, string Path) OpenSavedBoard()
     {
-        var path = Path.Combine(_dir, $"board-{Guid.NewGuid():N}.pivotask.json");
+        var path = Path.Combine(_dir, $"board-{Guid.NewGuid():N}.pivotask");
         new BoardDocument().Save(path);
 
         var window = new MainWindow(new SettingsService(Path.Combine(_dir, $"settings-{Guid.NewGuid():N}.json")));

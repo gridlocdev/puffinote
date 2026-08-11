@@ -79,7 +79,8 @@ preference, and inventing settings to fill out a dialog is how a config file sto
 ## 6. The Puffinote seam
 
 `TaskBoardPane` wraps `TaskBoardView`, and `EditorPaneFactory` routes to it — **by suffix, ahead of every
-extension test**. `Path.GetExtension("board.pivotask.json")` returns `".json"`, which is on Plaintain's
+extension test**. `Path.GetExtension("board.pivotask.json")` — the name boards had before the rename —
+returns `".json"`, which is on Plaintain's
 fast list, so a board matched by extension would open as a wall of JSON. There is a regression test for
 this in `Puffinote.UiTests`, which is what proposal 0004 §7 asks for.
 

@@ -9,7 +9,7 @@ A monorepo for **Puffinote**, a notebook-style workspace that composes independe
 - **Typage** — a Markdown (`.md`) live-preview editor.
 - **Cellestra** — an OpenDocument Spreadsheet (`.ods`) editor (macOS-first for 1.0).
 - **Plaintain** — a plaintext (`.txt`, `.log`, anything decodable) editor.
-- **Pivotask** — a task board (`.pivotask.json`).
+- **Pivotask** — a task board (`.pivotask`).
 - **Puffinote** — the composite shell/app that embeds them, plus a unifying CLI.
 
 Each editor builds, tests, and ships on its own; the shell embeds them without reaching into their internals. Removing Puffinote must leave every editor fully working.

@@ -27,9 +27,10 @@ public sealed partial class MainWindow : Window
 {
     private static readonly FilePickerFileType BoardType = new("Pivotask board")
     {
-        // The compound extension. Note the pattern is "*.pivotask.json", not "*.json" — a board is a
-        // suffix, not an extension, and everything in the family that matches one has to know that.
-        Patterns = ["*.pivotask.json"],
+        // The board's own extension, and the one it used to have — boards written before the rename are
+        // still opened, they are simply no longer what "Save" produces. Never "*.json": a board is a
+        // Pivotask document, not every JSON file on the machine.
+        Patterns = ["*.pivotask", "*.pivotask.json"],
     };
 
     private readonly TaskBoardView _view;
@@ -427,7 +428,7 @@ public sealed partial class MainWindow : Window
         var file = await StorageProvider.SaveFilePickerAsync(new FilePickerSaveOptions
         {
             Title = "Save board",
-            SuggestedFileName = Path.GetFileName(_view.Document.Path) ?? "board.pivotask.json",
+            SuggestedFileName = Path.GetFileName(_view.Document.Path) ?? "board.pivotask",
             FileTypeChoices = [BoardType],
         });
 

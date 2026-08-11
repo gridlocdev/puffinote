@@ -26,7 +26,8 @@ public sealed class DocumentTypesTests
     [InlineData("todo.markdown", ".markdown", "New Note…")]
     [InlineData("todo.mdown", ".mdown", "New Note…")]
     [InlineData("budget.ods", ".ods", "New Spreadsheet…")]
-    [InlineData("work.pivotask.json", ".pivotask.json", "New Taskboard…")]
+    [InlineData("work.pivotask", ".pivotask", "New Taskboard…")]
+    [InlineData("work.pivotask.json", ".pivotask", "New Taskboard…")] // the name boards used to have
     public void A_type_with_its_own_command_keeps_its_extension(string name, string extension, string command)
     {
         var reserved = DocumentTypes.ReservedFor(name);
@@ -45,11 +46,12 @@ public sealed class DocumentTypesTests
         Assert.NotNull(DocumentTypes.ReservedFor(name));
 
     [Fact]
-    public void A_board_is_matched_by_its_whole_suffix_not_by_its_extension()
+    public void A_board_is_matched_by_its_own_suffix_under_either_spelling()
     {
         // Path.GetExtension("work.pivotask.json") is ".json", so anything reading the extension alone would
         // wave a board through and then hand Pivotask a 0-byte file to parse.
-        Assert.Equal(".pivotask.json", DocumentTypes.ReservedFor("work.pivotask.json")?.Extension);
+        Assert.Equal(".pivotask", DocumentTypes.ReservedFor("work.pivotask")?.Extension);
+        Assert.Equal(".pivotask", DocumentTypes.ReservedFor("work.pivotask.json")?.Extension);
         Assert.Null(DocumentTypes.ReservedFor("work.json"));
     }
 

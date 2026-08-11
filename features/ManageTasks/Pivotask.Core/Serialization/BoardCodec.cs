@@ -9,7 +9,8 @@ namespace Pivotask.Core.Serialization;
 public sealed class BoardFormatException(string message) : Exception(message);
 
 /// <summary>
-/// Reads and writes <c>.pivotask.json</c>. The serialization rules <i>are</i> the format's design, and
+/// Reads and writes <c>.pivotask</c> files (JSON inside; boards written before the rename are called
+/// <c>.pivotask.json</c> and read identically). The serialization rules <i>are</i> the format's design, and
 /// they exist because this file lives in git (proposal 0004 §4):
 ///
 /// <list type="bullet">

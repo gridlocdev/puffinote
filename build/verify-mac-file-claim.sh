@@ -1,19 +1,19 @@
 #!/usr/bin/env bash
-# Verify, on a real Mac, that Launch Services honours Pivotask's compound-extension claim.
+# Verify, on a real Mac, that Launch Services types a board as Pivotask's own document.
 #
-# This is the one open question proposal 0004 §4 left unanswered: `.pivotask.json` is a two-part
-# extension, and CFBundleTypeExtensions matches only the final component — so the claim rides on an
-# exported UTI whose UTTypeTagSpecification carries the whole "pivotask.json" tag. macOS is documented
-# to support that (`.tar.gz` works the same way) and it has never been tried here, because the
-# devcontainer is Linux and no amount of reading settles it.
+# This used to be the open question proposal 0004 §4 left unanswered, back when a board was called
+# `.pivotask.json`: a two-part extension, which CFBundleTypeExtensions cannot match (it sees only the
+# final component), so the claim rode on an exported UTI carrying the whole two-part tag. The format
+# has since been renamed to a plain `.pivotask` — still JSON inside, but with a name of its own — which
+# is exactly the kind of extension an operating system routes without any special pleading.
 #
-# It exists as a script rather than as a line in a TODO file because "verify on a real Mac" is a task
-# nobody can hand to anybody. This can be handed to anybody: run it on a Mac, read the last line.
+# So this is now a check rather than an experiment. It still exists as a script because the devcontainer
+# is Linux and no amount of reading settles what a Mac actually does.
 #
 #   ./build/verify-mac-file-claim.sh                     # uses artifacts/pivotask/<rid>/Pivotask.app
 #   ./build/verify-mac-file-claim.sh path/to/Pivotask.app
 #
-# On PASS: nothing to do — the plist is right and §10.3's fallback is not needed.
+# On PASS: nothing to do.
 # On FAIL: apply §10.3. Delete the CFBundleDocumentTypes *and* UTExportedTypeDeclarations arrays from
 #          features/ManageTasks/Pivotask.Desktop/Info.plist and ship with no Finder claim. Do NOT fall
 #          back to claiming bare `json`: that puts Pivotask in the Open With menu of every JSON file on
@@ -42,12 +42,12 @@ echo "Registering $app with Launch Services…"
 
 scratch=$(mktemp -d)
 trap 'rm -rf "$scratch"' EXIT
-sample="$scratch/sample.pivotask.json"
+sample="$scratch/sample.pivotask"
 printf '{\n  "version": 1,\n  "groups": []\n}\n' > "$sample"
 
 # Spotlight decides a file's type from the same Uniform Type Identifier database Launch Services uses,
 # so this is the question asked directly: what type does the system think this file is?
-echo "Asking the system what sample.pivotask.json is…"
+echo "Asking the system what sample.pivotask is…"
 for _ in $(seq 1 10); do
   type=$(mdls -raw -name kMDItemContentType "$sample" 2>/dev/null || echo "")
   [[ -n "$type" && "$type" != "(null)" ]] && break
@@ -60,7 +60,7 @@ echo "  Handler:"
 
 if [[ "$type" == "com.pivotask.board" ]]; then
   echo
-  echo "PASS — the compound extension is honoured. The plist stands; §10.3's fallback is not needed."
+  echo "PASS — a .pivotask file is typed as com.pivotask.board and opens in Pivotask."
   exit 0
 fi
 
@@ -68,4 +68,3 @@ echo
 echo "FAIL — the system typed it as '${type:-nothing}', not com.pivotask.board."
 echo "Apply proposal 0004 §10.3: remove CFBundleDocumentTypes and UTExportedTypeDeclarations from"
 echo "features/ManageTasks/Pivotask.Desktop/Info.plist entirely. Do not claim bare 'json'."
-exit 1

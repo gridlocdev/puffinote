@@ -79,8 +79,8 @@ public sealed class NewMenuTests
             var window = OpenNotebook(dir);
             CreateViaMenu(window, "New Taskboard…", "work");
 
-            // The compound extension is the command's, not the user's — they typed a base name only.
-            var path = Path.Combine(dir.FullName, "work.pivotask.json");
+            // The extension is the command's, not the user's — they typed a base name only.
+            var path = Path.Combine(dir.FullName, "work.pivotask");
             Assert.True(File.Exists(path));
 
             // Seeded with Pivotask's own starter board: an empty file here is a parse error, not a blank board.
@@ -147,7 +147,8 @@ public sealed class NewMenuTests
     [AvaloniaTheory]
     [InlineData("budget.ods")]
     [InlineData("todo.md")]
-    [InlineData("work.pivotask.json")]
+    [InlineData("work.pivotask")]
+    [InlineData("work.pivotask.json")] // the name boards used to have is still spoken for
     public void A_new_file_refuses_an_extension_that_has_its_own_command(string name)
     {
         var dir = Directory.CreateTempSubdirectory("puffinote-new-reserved");
@@ -156,7 +157,7 @@ public sealed class NewMenuTests
             var window = OpenNotebook(dir);
             CreateViaMenu(window, "New File…", name);
 
-            // Nothing was written: an empty .ods / .pivotask.json is a file its own editor then can't open —
+            // Nothing was written: an empty .ods / .pivotask is a file its own editor then can't open —
             // exactly the trap the seeded commands exist to avoid.
             Assert.False(File.Exists(Path.Combine(dir.FullName, name)));
 

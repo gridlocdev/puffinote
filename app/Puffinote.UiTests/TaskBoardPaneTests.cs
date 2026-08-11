@@ -9,7 +9,8 @@ namespace Puffinote.UiTests;
 
 /// <summary>
 /// The fourth pane type, and the routing rule that has to survive Plaintain's text fallback:
-/// <c>.pivotask.json</c> is a <b>suffix</b>, and <c>Path.GetExtension</c> sees only <c>.json</c> — which
+/// A board written before the rename is a <c>.pivotask.json</c> — a <b>suffix</b>, where <c>Path.GetExtension</c>
+/// sees only <c>.json</c> — which
 /// is on Plaintain's fast list. Proposal 0004 §7 records this as the one real interaction between the
 /// two proposals; this is the regression test it asks for.
 /// </summary>
@@ -19,7 +20,7 @@ public sealed class TaskBoardPaneTests : IDisposable
 
     public void Dispose() => _scratch.Delete(recursive: true);
 
-    private string WriteBoard(string name = "work.pivotask.json")
+    private string WriteBoard(string name = "work.pivotask")
     {
         var board = new Board();
         var inbox = new TaskGroup { Id = "g1", Name = "Inbox" };
@@ -35,7 +36,7 @@ public sealed class TaskBoardPaneTests : IDisposable
     [AvaloniaFact]
     public void A_board_opens_in_a_board_pane_not_a_text_one()
     {
-        // The whole point: ".pivotask.json" ends in ".json", so extension matching would send this to
+        // The whole point: a legacy ".pivotask.json" ends in ".json", so extension matching would send it to
         // Plaintain and the file would open as a wall of JSON.
         Assert.IsType<TaskBoardPane>(EditorPaneFactory.Create(WriteBoard()));
     }
@@ -63,7 +64,7 @@ public sealed class TaskBoardPaneTests : IDisposable
         using var pane = EditorPaneFactory.Create(path)!;
         await pane.LoadAsync(path);
 
-        Assert.Equal("work.pivotask.json", pane.Title);
+        Assert.Equal("work.pivotask", pane.Title);
         Assert.False(pane.IsDirty);
     }
 

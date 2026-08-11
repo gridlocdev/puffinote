@@ -70,7 +70,7 @@ public sealed class ZoomParityTests
                 await PaneForAsync(dir.FullName, "note.md"),
                 await PaneForAsync(dir.FullName, "log.txt"),
                 await PaneForAsync(dir.FullName, "book.ods", WorkbookSession.NewBlank().SerializeToBytes()),
-                await PaneForAsync(dir.FullName, "board.pivotask.json", BlankBoard()),
+                await PaneForAsync(dir.FullName, "board.pivotask", BlankBoard()),
             };
 
             foreach (var pane in panes)
@@ -137,7 +137,7 @@ public sealed class ZoomParityTests
                 await PaneForAsync(dir.FullName, "note.md"),
                 await PaneForAsync(dir.FullName, "log.txt"),
                 await PaneForAsync(dir.FullName, "book.ods", WorkbookSession.NewBlank().SerializeToBytes()),
-                await PaneForAsync(dir.FullName, "board.pivotask.json", BlankBoard()),
+                await PaneForAsync(dir.FullName, "board.pivotask", BlankBoard()),
             };
 
             foreach (var pane in panes)
