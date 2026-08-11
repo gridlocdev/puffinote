@@ -57,3 +57,9 @@ container — that's not a regression, so verify with tests, not by running the 
 seam — Phase 1+), `Controls/`, `Panels/`, `Views/`. `Puffinote.Cli/` — the router (Phase 6).
 `Puffinote.Tests` / `Puffinote.UiTests` / `Puffinote.Cli.Tests`. Don't invent new top-level folders;
 extend the tree in ARCHITECTURE §13. When in doubt, **stop and ask**, then record the resolution in the doc.
+
+**The window has two strips of icons, and they are not the same thing.** The **Workspace Rail** (far left,
+`Controls/WorkspaceRail.cs`, listed in `Shell/Workspaces.cs`) switches between Todos / Calendar / Notes /
+Data — four *workspaces*, of which only Notes is built (PRD §7.1). The **sidebar's** switcher row moves
+between panels *inside* Notes (Files, Search, Outline, Recent) and collapses with the sidebar. A new
+destination goes in the rail; a new way of looking at the notebook goes in the sidebar.

@@ -95,6 +95,17 @@ public partial class MainWindow
             new("shell.toggleSidebar", "Toggle Sidebar", "Show or hide the sidebar", Bound("shell.toggleSidebar", Shortcut.Cmd(Key.OemBackslash)),
                 ToggleSidebar),
 
+            // The workspace rail, said in words: the same four destinations the strip on the left offers,
+            // reachable from ⌘K and the View menu. A rail is a fine way to move between things you can see;
+            // it is no way at all to move between things you have to find.
+            .. Workspaces.All.Select(workspace => new AppCommand(
+                Workspaces.CommandId(workspace.Id),
+                workspace.Title,
+                workspace.Promise.Length > 0 ? workspace.Promise : "The notebook: files, tabs, and editors",
+                Bound(Workspaces.CommandId(workspace.Id), null),
+                () => ActiveWorkspace = workspace.Id,
+                icon: workspace.Icon)),
+
             // The session-scoped twin of the Preferences toggle: this flips what you're looking at now and
             // writes nothing, so hiding the strip to read one long note doesn't quietly become your default.
             // No gesture out of the box — there's no platform convention for it, and unlike ⌘\ for the sidebar
@@ -235,7 +246,7 @@ public partial class MainWindow
                 Items =
                 {
                     new NativeMenuItem { Header = "File", Menu = BuildNativeMenu("shell.openNotebook", "shell.quickOpen", "shell.newFolder", "shell.newNote", "shell.newSpreadsheet", "shell.newTaskboard", "shell.newFile", "shell.save", "shell.closeTab", "shell.closeOtherTabs", "shell.closeAllTabs") },
-                    new NativeMenuItem { Header = "View", Menu = BuildNativeMenu("shell.commandMenu", "shell.toggleSidebar", "shell.toggleTabBar", "shell.focusTree", "shell.focusEditor", "shell.toggleEditorCommandBar", "shell.toggleFileExtensions", "shell.nextTab", "shell.prevTab", "shell.preferences") },
+                    new NativeMenuItem { Header = "View", Menu = BuildNativeMenu("shell.commandMenu", "view.workspace.notes", "view.workspace.todos", "view.workspace.calendar", "view.workspace.data", "shell.toggleSidebar", "shell.toggleTabBar", "shell.focusTree", "shell.focusEditor", "shell.toggleEditorCommandBar", "shell.toggleFileExtensions", "shell.nextTab", "shell.prevTab", "shell.preferences") },
                     new NativeMenuItem { Header = "Help", Menu = BuildNativeMenu("shell.shortcuts", "shell.about") },
                 },
             });
@@ -252,7 +263,7 @@ public partial class MainWindow
             Items =
             {
                 new MenuItem { Header = "_File", ItemsSource = BuildMenuItems("shell.openNotebook", "shell.quickOpen", "shell.newFolder", "shell.newNote", "shell.newSpreadsheet", "shell.newTaskboard", "shell.newFile", "shell.save", "shell.closeTab", "shell.closeOtherTabs", "shell.closeAllTabs") },
-                new MenuItem { Header = "_View", ItemsSource = BuildMenuItems("shell.commandMenu", "shell.toggleSidebar", "shell.toggleTabBar", "shell.focusTree", "shell.focusEditor", "shell.toggleEditorCommandBar", "shell.toggleFileExtensions", "shell.nextTab", "shell.prevTab", "shell.preferences") },
+                new MenuItem { Header = "_View", ItemsSource = BuildMenuItems("shell.commandMenu", "view.workspace.notes", "view.workspace.todos", "view.workspace.calendar", "view.workspace.data", "shell.toggleSidebar", "shell.toggleTabBar", "shell.focusTree", "shell.focusEditor", "shell.toggleEditorCommandBar", "shell.toggleFileExtensions", "shell.nextTab", "shell.prevTab", "shell.preferences") },
                 new MenuItem { Header = "_Help", ItemsSource = BuildMenuItems("shell.shortcuts", "shell.about") },
             },
         };

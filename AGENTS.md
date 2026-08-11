@@ -170,6 +170,7 @@ and the PRD that specifies it. Two names for one thing is one thing the reader h
 |---|---|
 | **Command Bar** | The horizontal strip of commands at the top of Typage and Cellestra — the adaptive bar with the search pill at its right end. Three states: visible, collapsed (its slim handle), hidden. Not "toolbar", not "formatting toolbar". |
 | **Command Menu** | The searchable list of every command, opened with ⌘K or by clicking the Command Bar's "Search commands…" pill. Not "command palette" in anything a user reads. |
+| **Workspace Rail** | The strip of destinations down the far-left edge of Puffinote's window — Todos, Calendar, Notes, Data — and each destination is a **workspace**. Not "activity bar", not "nav rail", and never confused with the *sidebar*, which switches panels inside the Notes workspace. Its command ids are `view.workspace.<name>`. |
 
 **A config file is a surface, not an implementation detail.** Its keys are read and hand-edited by people,
 and a command id is the key a shortcut is rebound against in `shortcuts.json` and the value a Cellestra
