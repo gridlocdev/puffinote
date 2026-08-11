@@ -253,12 +253,20 @@ public partial class MarkdownEditor
         // "one press, one new line"; in a view that draws the source literally, that means one newline.
         // Nothing else about Enter changes: list continuation, exiting a list and the rest are the same in
         // all three views.
+        // …and except inside a list item or a blockquote, where there is no paragraph to break. A "\n\n"
+        // there ends the item and leaves a blank line inside the list — visibly two new lines from one press,
+        // and a structural change nobody asked for. It reaches here mainly through a *selection*: replacing
+        // selected text with a break took the paragraph path whatever line the selection sat on. So the
+        // paragraph break is spent only where a paragraph is actually being broken: on a line with no list
+        // marker, no checkbox, no number and no quote — including a hard-wrapped continuation line, which
+        // carries no marker of its own but is still part of the item above it.
         var rawSource = View == ViewMode.RawText;
-        var paraBreak = !rawSource && beforeContent && !afterNewline ? nl + nl : nl;
+        var paragraphContext = !rawSource && beforeContent && !InListOrQuote(breakLine);
+        var paraBreak = paragraphContext && !afterNewline ? nl + nl : nl;
 
         // Past the break — skipping the collapsed first blank, which in raw text is not collapsed and so
         // must not be skipped either.
-        var paraCaret = sel.Start + (!rawSource && beforeContent ? 2 : 1) * nl.Length;
+        var paraCaret = sel.Start + (paragraphContext ? 2 : 1) * nl.Length;
 
         void PlaceParaCaret() => Buffer.Selection = Selection.At(Math.Clamp(paraCaret, 0, Buffer.Document.Length));
 
@@ -335,6 +343,17 @@ public partial class MarkdownEditor
                 PlaceParaCaret();
                 break;
         }
+    }
+
+    /// <summary>
+    /// Whether <paramref name="line"/> is inside a list item or a blockquote — a bullet, a number, a checkbox,
+    /// a <c>&gt;</c>, or a hard-wrapped continuation line of an item above (which carries no marker of its own
+    /// but is drawn as one flowing item). These are the lines a paragraph break does not belong on.
+    /// </summary>
+    private bool InListOrQuote(int line)
+    {
+        var prefix = LinePrefix.Parse(Buffer.Document.GetLineText(line));
+        return prefix.HasList || prefix.HasQuote || ContinuedListItemLine(line) >= 0;
     }
 
     /// <summary>Tab/Shift+Tab: indent or outdent list items / selected lines; otherwise insert spaces.</summary>

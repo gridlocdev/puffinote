@@ -243,4 +243,43 @@ public class ParagraphBreakTests
         e.ShiftEnterForTest();
         Assert.Equal("alpha\r\n\r\nbeta", e.Text);
     }
+
+    // ----- the paragraph break is for paragraphs -----
+
+    [AvaloniaTheory]
+    [InlineData("- [ ] buy milk today")] // a checkbox
+    [InlineData("- buy milk today")]     // a bullet
+    [InlineData("1. buy milk today")]    // a number
+    [InlineData("> buy milk today")]     // a blockquote
+    public void Enter_OverASelectionInAnItem_AddsOneLine_NotTwo(string text)
+    {
+        // Replacing a selection took the paragraph path whatever line it sat on, so Enter inside a list item
+        // ended the item and left a blank line in the middle of the list: two new lines from one press.
+        var e = new MarkdownEditor { Text = text };
+        var cut = text.IndexOf("milk", StringComparison.Ordinal);
+        e.Buffer.Selection = new Selection(cut, cut + 5); // "milk "
+        e.EnterForTest();
+
+        Assert.Equal(text[..cut] + "\n" + text[(cut + 5)..], e.Text);
+        Assert.Equal(cut + 1, e.Buffer.Selection.Caret);
+    }
+
+    [AvaloniaFact]
+    public void Enter_OverASelectionInAHardWrappedItem_AddsOneLine()
+    {
+        // The second line of a hard-wrapped item carries no marker of its own, but it is still that item.
+        var e = new MarkdownEditor { Text = "- an item that\ncontinues here" };
+        e.Buffer.Selection = new Selection(15, 24); // "continues" on the continuation line
+        e.EnterForTest();
+        Assert.Equal("- an item that\n\n here", e.Text); // one newline added, not two
+    }
+
+    [AvaloniaFact]
+    public void Enter_OverASelectionInAParagraph_StillOpensAParagraph()
+    {
+        var e = new MarkdownEditor { Text = "buy milk today" };
+        e.Buffer.Selection = new Selection(4, 9); // "milk "
+        e.EnterForTest();
+        Assert.Equal("buy \n\ntoday", e.Text);
+    }
 }
