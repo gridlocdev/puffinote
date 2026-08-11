@@ -115,7 +115,7 @@ Three constraints drive the architecture:
 - **Caret/selection** operate on **grapheme clusters** (via `System.Globalization`).
 - **IME composition** is a first-class requirement, with the candidate window at the caret.
 - **Bidirectional / RTL text** supported using Avalonia's bidi; caret movement is visual-order aware.
-- **Undo/redo** with sensible grouping: typing runs coalesce (bounded by a short idle timeout and by caret jumps); structural edits and command operations are discrete. Revert and external reload clear the redo stack and reset the undo baseline.
+- **Undo/redo** with sensible grouping: typing runs coalesce (bounded by a short idle timeout and by caret jumps); structural edits and command operations are discrete. Revert clears the redo stack and resets the undo baseline. An **external reload is itself one undoable step** (revised): taking somebody else’s version is the change a reader most wants a way back from, so the history survives it and ⌘Z gives back what was in the editor — leaving the document dirty against the file, which by then it is.
 - **Editing assists:** list continuation; blockquote/indent continuation on Enter; auto-pairing of `*` `_` `` ` `` `[` `(` with wrap-selection; Tab/Shift+Tab indent/outdent; auto-indent.
 - **Enter and the paragraph break:** plain Enter writes a real Markdown paragraph break (`\n\n`), because a
   single newline is a soft break the tokenizer flows back together. In the two formatted views the blank it

@@ -65,7 +65,7 @@ public sealed partial class MainWindow
 
         if (!EditorView.IsDirty)
         {
-            OpenPath(path); // nothing of the user's to lose — show what is actually in the file
+            OpenPath(path, reloading: true); // nothing of the user's to lose — show what is actually in the file
             return false;
         }
 
@@ -114,7 +114,7 @@ public sealed partial class MainWindow
             {
                 case ConflictChoice.Reload when CurrentPath is { } path:
                     _conflictPromptOpen = false; // OpenPath may raise a dialog of its own
-                    OpenPath(path);
+                    OpenPath(path, reloading: true);
                     return false; // there is nothing left to save: the buffer is the file
                 case ConflictChoice.SaveAs:
                     DiskChangedUnderEdits = false;
@@ -142,6 +142,16 @@ public sealed partial class MainWindow
     /// conflict prompt — which a headless suite stops short of, having nobody to answer it.
     /// </summary>
     internal bool NoteExternalChangeForTest() => NoteExternalChange();
+
+    /// <summary>Take the version on disk of the open file, as "Reload" does; for tests (a headless run has
+    /// no watcher ticking and no prompt to answer).</summary>
+    internal void ReloadForTest()
+    {
+        if (CurrentPath is { } path)
+        {
+            OpenPath(path, reloading: true);
+        }
+    }
 
     /// <summary>Test seam: whether an unresolved external write is standing between the buffer and the file.</summary>
     internal bool DiskChangedUnderEditsForTest => DiskChangedUnderEdits;

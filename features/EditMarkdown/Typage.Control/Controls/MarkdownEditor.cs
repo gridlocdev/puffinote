@@ -484,6 +484,9 @@ public partial class MarkdownEditor : Avalonia.Controls.Control, ILogicalScrolla
     /// <summary>Replace the document but leave it marked dirty (used for crash recovery, PRD §9.4).</summary>
     public void LoadDirty(string text) => Buffer.Load(text, markSaved: false);
 
+    /// <summary>Replace the document with the version on disk as one undoable step (an external-change reload).</summary>
+    public void ReloadText(string text) => Buffer.ReloadFrom(text);
+
     public void Undo() => Buffer.Undo();
 
     public void Redo() => Buffer.Redo();

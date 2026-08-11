@@ -75,6 +75,9 @@ public sealed class PlainTextEditorView : UserControl
     /// <summary>Load a document, marking it clean (or dirty, for a crash-recovery restore).</summary>
     public void LoadText(string? text, bool markSaved = true) => Editor.Load(text, markSaved);
 
+    /// <summary>Take the version on disk as one undoable step (an external-change reload).</summary>
+    public void ReloadText(string? text) => Editor.ReloadFrom(text);
+
     public void MarkSaved() => Editor.Buffer.MarkSaved();
 
     public void FocusEditor() => Editor.Focus();

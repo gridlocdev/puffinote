@@ -76,6 +76,16 @@ internal sealed class SheetPane : IEditorPane, IEditorHost, IConfigurablePane
         DirtyChanged?.Invoke(this, EventArgs.Empty);
     }
 
+    /// <summary>The workbook changed on disk: take that version as an undoable step, so ⌘Z gives back the
+    /// one the tab was holding.</summary>
+    public async Task ReloadAsync(string path)
+    {
+        await using var stream = File.OpenRead(path);
+        await _view.LoadAsync(stream, path, reloading: true);
+        Path = System.IO.Path.GetFullPath(path);
+        DirtyChanged?.Invoke(this, EventArgs.Empty);
+    }
+
     public async Task SaveAsync()
     {
         if (Path is null)

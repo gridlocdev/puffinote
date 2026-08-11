@@ -9,7 +9,15 @@ namespace Typage.Desktop.Views;
 
 public partial class MainWindow
 {
-    public void OpenPath(string path)
+    public void OpenPath(string path) => OpenPath(path, reloading: false);
+
+    /// <summary>
+    /// Open <paramref name="path"/> into the window. <paramref name="reloading"/> says this is the
+    /// <em>same</em> file being taken again after it changed on disk, which differs in one way that matters
+    /// to the reader: the new text lands as an undoable step rather than as a fresh document, so ⌘Z gives
+    /// back what was in the editor if the version on disk turns out not to be what they wanted (PRD §7.1).
+    /// </summary>
+    private void OpenPath(string path, bool reloading)
     {
         try
         {
@@ -30,7 +38,15 @@ public partial class MainWindow
                     "would be the edit that actually damages the file.");
             }
 
-            EditorView.LoadText(text);
+            if (reloading)
+            {
+                EditorView.ReloadText(text);
+            }
+            else
+            {
+                EditorView.LoadText(text);
+            }
+
             SetCurrentPath(path);
             _autoSave.Cancel(); // any countdown was aimed at the document this one just replaced
             _lastKnownDiskText = text; // the on-disk baseline for external-change detection

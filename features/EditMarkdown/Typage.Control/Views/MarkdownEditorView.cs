@@ -264,6 +264,13 @@ public class MarkdownEditorView : UserControl
         Editor.MarkSaved();
     }
 
+    /// <summary>
+    /// Take the version on disk as one <b>undoable</b> step — what "Reload" means when the file changed
+    /// under an open document. ⌘Z then gives back what was in the editor, for the reader who takes the
+    /// disk version and immediately wishes they hadn't.
+    /// </summary>
+    public void ReloadText(string text) => Editor.ReloadText(text);
+
     public void MarkSaved() => Editor.MarkSaved();
 
     /// <summary>Load recovered text, leaving it marked dirty (unsaved) for crash recovery (PRD §9.4).</summary>

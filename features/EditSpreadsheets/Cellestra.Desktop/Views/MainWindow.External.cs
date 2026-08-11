@@ -79,7 +79,7 @@ public partial class MainWindow
     /// baseline are all established the one way they are established anywhere else.</summary>
     private async Task ReloadFromDiskAsync(string path)
     {
-        await OpenPathAsync(path);
+        await OpenPathAsync(path, reloading: true);
         Editor.Narrate($"{Path.GetFileName(path)} was changed on disk and has been reloaded.");
     }
 

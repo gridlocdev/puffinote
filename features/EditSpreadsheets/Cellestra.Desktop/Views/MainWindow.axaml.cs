@@ -526,7 +526,9 @@ public partial class MainWindow : Window, IEditorHost
         await OpenPathAsync(files[0].Path.LocalPath);
     }
 
-    public async Task OpenPathAsync(string path)
+    /// <param name="reloading">True when this is the same file being taken again after it changed on disk.
+    /// The document then arrives as an undoable step, so ⌘Z gives back the workbook that was open.</param>
+    public async Task OpenPathAsync(string path, bool reloading = false)
     {
         if (!await ConfirmDiscardChangesAsync())
         {
@@ -553,7 +555,7 @@ public partial class MainWindow : Window, IEditorHost
                     return WorkbookSession.LoadAndRecalc(stream);
                 });
 
-                Editor.AdoptLoaded(loaded, path);
+                Editor.AdoptLoaded(loaded, path, reloading);
                 TrackOnDisk(path); // this read is the new baseline, and this file is the one to watch
                 _autoSave.Cancel(); // any countdown was aimed at the workbook this one replaces
 

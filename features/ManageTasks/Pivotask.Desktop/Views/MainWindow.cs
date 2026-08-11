@@ -117,11 +117,27 @@ public sealed partial class MainWindow : Window
     }
 
     /// <summary>Open a board file, replacing whatever is open.</summary>
-    public void OpenPath(string path)
+    public void OpenPath(string path) => OpenPath(path, reloading: false);
+
+    /// <summary>
+    /// Open <paramref name="path"/>, replacing whatever is open. <paramref name="reloading"/> says this is
+    /// the <em>same</em> board being taken again after the file changed underneath, and the difference is
+    /// the history: the disk version lands as one undoable step instead of as a new document, so ⌘Z gives
+    /// back the board that was on screen if that turns out to be what was wanted.
+    /// </summary>
+    private void OpenPath(string path, bool reloading)
     {
         try
         {
-            _view.Document = BoardDocument.Open(path);
+            if (reloading && _view.Document is { } open && string.Equals(open.Path, path, StringComparison.Ordinal))
+            {
+                open.Reload(File.ReadAllText(path));
+            }
+            else
+            {
+                _view.Document = BoardDocument.Open(path);
+            }
+
             TrackOnDisk(path); // this read is the new baseline, and this file is the one to watch
             _autoSave.Cancel(); // any countdown was aimed at the board this one just replaced
             UpdateChrome();

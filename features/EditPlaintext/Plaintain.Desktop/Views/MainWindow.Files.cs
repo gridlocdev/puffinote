@@ -24,7 +24,15 @@ public sealed partial class MainWindow
         Patterns = ["*.txt", "*.text", "*.log", "*.md", "*.conf", "*.cfg", "*.ini", "*.env", "*.json", "*.yaml", "*.yml", "*.csv"],
     };
 
-    public void OpenPath(string path)
+    public void OpenPath(string path) => OpenPath(path, reloading: false);
+
+    /// <summary>
+    /// Open <paramref name="path"/> into the window. <paramref name="reloading"/> says this is the
+    /// <em>same</em> file being taken again after something else wrote to it, which differs in the one way
+    /// that matters to the reader: the disk version lands as an undoable step rather than as a fresh
+    /// document, so ⌘Z gives back what was in the editor if it turns out not to be what they wanted.
+    /// </summary>
+    private void OpenPath(string path, bool reloading)
     {
         try
         {
@@ -32,7 +40,15 @@ public sealed partial class MainWindow
             _format = read.Format;
             EncodingUnconfirmed = read.IsReadOnly;
             EditorView.Editor.IsReadOnlyEncoding = read.IsReadOnly;
-            EditorView.LoadText(read.Text);
+            if (reloading)
+            {
+                EditorView.ReloadText(read.Text);
+            }
+            else
+            {
+                EditorView.LoadText(read.Text);
+            }
+
             CurrentPath = path;
             TrackOnDisk(path); // this read is the new baseline, and this file is the one to watch
             _autoSave.Cancel(); // any countdown was aimed at the document this one just replaced

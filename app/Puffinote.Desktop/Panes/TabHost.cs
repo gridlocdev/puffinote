@@ -442,7 +442,7 @@ internal sealed class TabHost : UserControl
         ArgumentNullException.ThrowIfNull(tab);
         try
         {
-            await tab.Pane.LoadAsync(tab.Path);
+            await tab.Pane.ReloadAsync(tab.Path);
         }
         catch (Exception)
         {

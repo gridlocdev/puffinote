@@ -77,6 +77,19 @@ internal sealed class PlainTextPane : IEditorPane, IConfigurablePane
         return Task.CompletedTask;
     }
 
+    /// <summary>The file changed on disk: take that version as one undoable step, so ⌘Z gives the tab's own
+    /// text back if the version on disk isn't what was wanted.</summary>
+    public Task ReloadAsync(string path)
+    {
+        var read = TextFileCodec.Read(File.ReadAllBytes(path));
+        _format = read.Format;
+        _view.Editor.IsReadOnlyEncoding = read.IsReadOnly;
+        _view.ReloadText(read.Text);
+        Path = path;
+        DirtyChanged?.Invoke(this, EventArgs.Empty);
+        return Task.CompletedTask;
+    }
+
     public Task SaveAsync()
     {
         if (Path is not { } path || _view.Editor.IsReadOnlyEncoding)

@@ -164,6 +164,25 @@ public class ExternalChangeTests : IDisposable
         Assert.False(window.DiskChangedUnderEditsForTest);
     }
 
+    /// <summary>Taking somebody else's version is the change a reader most wants a way back from.</summary>
+    [AvaloniaFact]
+    public void A_reload_is_undoable()
+    {
+        var path = WriteFile("notes.txt", "mine\n");
+        var window = Open();
+        window.OpenPath(path);
+        SetText(window, "my unsaved work");
+
+        WriteExternally(path, "theirs\n");
+        window.ReloadForTest();
+        Assert.Equal("theirs\n", window.EditorView.Text);
+        Assert.False(window.EditorView.IsDirty);
+
+        window.EditorView.Editor.Buffer.Undo();
+        Assert.Equal("my unsaved work", window.EditorView.Text);
+        Assert.True(window.EditorView.IsDirty);
+    }
+
     /// <summary>An untitled buffer has no file to be changed underneath it, and watches nothing.</summary>
     [AvaloniaFact]
     public void An_untitled_buffer_watches_nothing()

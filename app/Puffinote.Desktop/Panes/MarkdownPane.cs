@@ -149,6 +149,16 @@ internal sealed class MarkdownPane : IEditorPane, IConfigurablePane
         return Task.CompletedTask;
     }
 
+    /// <summary>The note changed on disk: take that version as one undoable step, so ⌘Z gives the tab's own
+    /// text back. The path is unchanged, so nothing else about the pane moves.</summary>
+    public Task ReloadAsync(string path)
+    {
+        _view.ReloadText(_session.Load(path));
+        _view.DocumentPath = _session.CurrentPath;
+        DirtyChanged?.Invoke(this, EventArgs.Empty);
+        return Task.CompletedTask;
+    }
+
     public Task SaveAsync()
     {
         _session.Save(_view.Text);

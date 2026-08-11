@@ -82,6 +82,24 @@ public sealed class BoardDocument
         Changed?.Invoke(this, EventArgs.Empty);
     }
 
+    /// <summary>
+    /// Take the version on disk as <b>one undoable step</b> — what "Reload" means when the file changed
+    /// underneath. Unlike <see cref="Load"/> the history survives, so ⌘Z gives back the board that was open
+    /// a moment ago if the version that arrived isn't the one that was wanted. The reloaded text becomes the
+    /// clean baseline, so undoing it correctly leaves the document dirty against the file.
+    /// </summary>
+    public void Reload(string json)
+    {
+        // The steps before the reload go, and only the reload itself is left to undo. A board's commands
+        // hold *references* into the object graph ("remove this task"), and rebuilding the board from text
+        // replaces every one of those objects — so an older command would revert against something no
+        // longer on the board and quietly do nothing. One honest step back beats a stack of no-ops.
+        _history.Clear();
+        Execute(BoardCommands.Replace(Board, json));
+        _savedText = BoardCodec.Write(Board);
+        Changed?.Invoke(this, EventArgs.Empty);
+    }
+
     /// <summary>Read a board from disk.</summary>
     public static BoardDocument Open(string path)
     {

@@ -53,6 +53,33 @@ public class ExternalChangeTests
     }
 
     [AvaloniaFact]
+    public void ReloadingIsUndoable_SoTheDiskVersionCanBeTakenBack()
+    {
+        // Taking somebody else's version is exactly the change a reader most wants a way back from.
+        var path = WriteTemp("mine");
+        try
+        {
+            var window = TestShell.NewWindow();
+            window.OpenPath(path);
+            window.EditorView.Editor.Buffer.Insert(" and mine");
+            Assert.Equal(" and minemine", window.EditorView.Text);
+
+            System.IO.File.WriteAllText(path, "theirs");
+            window.ReloadForTest();
+            Assert.Equal("theirs", window.EditorView.Text);
+            Assert.False(window.EditorView.IsDirty);
+
+            window.EditorView.Undo();
+            Assert.Equal(" and minemine", window.EditorView.Text);
+            Assert.True(window.EditorView.IsDirty);
+        }
+        finally
+        {
+            System.IO.File.Delete(path);
+        }
+    }
+
+    [AvaloniaFact]
     public void DifferentText_WhenDirty_IsAConflict()
     {
         var path = WriteTemp("hello");

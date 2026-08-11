@@ -88,13 +88,16 @@ public sealed class WorkbookSession
     /// <summary>Raised when the active sheet or sheet list changes.</summary>
     public event EventHandler? StructureChanged;
 
-    public bool CanUndo => _history.CanUndo;
+    public bool CanUndo => _history.CanUndo || _undoReloads.Count > 0;
 
-    public bool CanRedo => _history.CanRedo;
+    public bool CanRedo => _history.CanRedo || _redoReloads.Count > 0;
 
-    public string? UndoLabel => _history.UndoLabel;
+    public string? UndoLabel => _history.UndoLabel ?? (_undoReloads.Count > 0 ? ReloadLabel : null);
 
-    public string? RedoLabel => _history.RedoLabel;
+    public string? RedoLabel => _history.RedoLabel ?? (_redoReloads.Count > 0 ? ReloadLabel : null);
+
+    /// <summary>What the undo menu calls a reload — the same word the prompt that offered it used.</summary>
+    private const string ReloadLabel = "Reload";
 
     public Worksheet AddSheet()
     {
@@ -222,6 +225,7 @@ public sealed class WorkbookSession
     {
         if (!_history.CanUndo)
         {
+            UndoReload(); // nothing left in this workbook's history — step back across the reload, if there was one
             return;
         }
 
@@ -243,6 +247,7 @@ public sealed class WorkbookSession
     {
         if (!_history.CanRedo)
         {
+            RedoReload();
             return;
         }
 
@@ -462,9 +467,34 @@ public sealed class WorkbookSession
     /// recalc engine, reset undo history and selection mementos, and raise the change events so the
     /// grid repaints. No recalculation happens here — it already ran off-thread.
     /// </summary>
-    public void AdoptWorkbook(LoadedWorkbook loaded, string? path)
+    public void AdoptWorkbook(LoadedWorkbook loaded, string? path) => AdoptWorkbook(loaded, path, reloading: false);
+
+    /// <summary>
+    /// Swap in a loaded workbook, remembering the one it replaced when this is a <b>reload</b> — the same
+    /// file, taken again after something else wrote to it (PRD §8.5).
+    ///
+    /// <para>A reload cannot be an <see cref="IEditCommand"/>: a command edits <i>a</i> workbook, and this
+    /// replaces the workbook object itself, its recalculation graph and its history together. So the step
+    /// back is the whole previous session state, kept beside the history rather than inside it — undo takes
+    /// it once the reloaded workbook's own history is exhausted, which is precisely "keep undoing and you
+    /// pass back through the reload", and the restored workbook brings its own history with it so the undos
+    /// before the reload still work. Without this, taking somebody else's version was the one change in the
+    /// app with no way back.</para>
+    /// </summary>
+    public void AdoptWorkbook(LoadedWorkbook loaded, string? path, bool reloading)
     {
         ArgumentNullException.ThrowIfNull(loaded);
+        if (reloading)
+        {
+            _undoReloads.Push(CaptureState());
+            _redoReloads.Clear(); // a new reload forks the timeline, exactly as a new edit does
+        }
+        else
+        {
+            _undoReloads.Clear(); // a different document entirely: the old one's steps are not this one's
+            _redoReloads.Clear();
+        }
+
         Workbook = loaded.Workbook;
         _sourcePackage = loaded.Package;
         _recalc = loaded.Recalc;
@@ -477,5 +507,67 @@ public sealed class WorkbookSession
         IsModified = false;
         StructureChanged?.Invoke(this, EventArgs.Empty);
         Changed?.Invoke(this, EventArgs.Empty);
+    }
+
+    // ---- Undoing a reload -------------------------------------------------
+
+    /// <summary>Everything a reload replaces, so undo can put the previous document back whole.</summary>
+    private sealed record SessionState(
+        Workbook Workbook,
+        OdsPackage? Package,
+        RecalculationEngine Recalc,
+        int Mismatches,
+        EditHistory History,
+        Worksheet ActiveSheet,
+        string? FilePath,
+        bool IsModified);
+
+    private readonly Stack<SessionState> _undoReloads = new();
+    private readonly Stack<SessionState> _redoReloads = new();
+
+    private SessionState CaptureState() =>
+        new(Workbook, _sourcePackage, _recalc, LoadRecalcMismatches, _history, ActiveSheet, FilePath, IsModified);
+
+    private void Restore(SessionState state)
+    {
+        Workbook = state.Workbook;
+        _sourcePackage = state.Package;
+        _recalc = state.Recalc;
+        LoadRecalcMismatches = state.Mismatches;
+        _history = state.History;
+        _undoSelections.Clear();
+        _redoSelections.Clear();
+        ActiveSheet = state.ActiveSheet;
+        FilePath = state.FilePath;
+
+        // Whatever it was before the reload, it differs from the file now — the file is what was just
+        // stepped away from — so the document is modified and Save has something to write.
+        IsModified = true;
+        StructureChanged?.Invoke(this, EventArgs.Empty);
+        Changed?.Invoke(this, EventArgs.Empty);
+    }
+
+    /// <summary>Step back across the most recent reload, restoring the document it replaced.</summary>
+    private void UndoReload()
+    {
+        if (_undoReloads.Count == 0)
+        {
+            return;
+        }
+
+        _redoReloads.Push(CaptureState());
+        Restore(_undoReloads.Pop());
+    }
+
+    /// <summary>Step forward again onto the version that was reloaded from disk.</summary>
+    private void RedoReload()
+    {
+        if (_redoReloads.Count == 0)
+        {
+            return;
+        }
+
+        _undoReloads.Push(CaptureState());
+        Restore(_redoReloads.Pop());
     }
 }

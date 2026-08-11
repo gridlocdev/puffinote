@@ -185,7 +185,10 @@ CLI harness `CliHost`/`CliException`). Both editors already run their palette an
   the disk** in the same pass. A tab with no unsaved edits reloads — it has nothing to lose and stale
   content is the only thing it could otherwise show. A tab that *is* dirty is left alone and flagged;
   saving it then asks whether to overwrite the change on disk or reload and lose the edits, and auto-save
-  stands down on it entirely rather than making that choice on a timer. (This was originally written as
+  stands down on it entirely rather than making that choice on a timer. **A reload is an undoable step**
+  wherever the pane's editor has a history to keep it in (`IEditorPane.ReloadAsync`, which defaults to a
+  plain re-open): taking somebody else's version is the change a reader most wants a way back from, so ⌘Z
+  in the tab gives back what the tab was holding. (This was originally written as
   riding "the sub-apps' existing external-change flows", which an embedded editor does not have: the
   editors are loaded from a path by the shell, so noticing is the shell's job.)
 

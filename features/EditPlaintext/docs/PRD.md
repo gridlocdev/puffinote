@@ -66,6 +66,8 @@ and writes it back byte for byte.
   from `shared/`). With nothing unsaved, the file is re-read — showing what is actually there is the only
   useful behaviour. With unsaved edits, the buffer is left exactly as it is and the conflict is *recorded*:
   the status bar says "changed on disk — Save will ask", ⌘S then offers Reload / Save As… / Keep Mine, and
+  **Reload is one undoable step** — the version on disk replaces the buffer as an edit, so ⌘Z gives back what
+  was in the editor for anyone who takes it and immediately wishes they had not — and
   auto-save stands down entirely rather than deciding whose bytes survive on a timer.
   **No dialog appears at the moment of the change**, unlike Typage. Plaintain is the app most likely to
   have a file open that something else is actively writing — a log being appended to, a config a tool

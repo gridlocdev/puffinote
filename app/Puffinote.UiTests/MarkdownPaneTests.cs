@@ -134,6 +134,37 @@ public sealed class MarkdownPaneTests
     }
 
     [AvaloniaFact]
+    public async Task Reloading_a_tab_is_undoable()
+    {
+        // A pull rewrote the note under an open tab. Taking that version is a change like any other, so ⌘Z
+        // has to give back what the tab was holding.
+        var dir = Directory.CreateTempSubdirectory("puffinote-reload");
+        try
+        {
+            var path = Path.Combine(dir.FullName, "note.md");
+            File.WriteAllText(path, "mine");
+
+            var pane = EditorPaneFactory.Create(path)!;
+            await pane.LoadAsync(path);
+            var editor = Assert.IsType<MarkdownEditorView>(pane.View);
+            editor.LoadRecovered("mine, edited here");
+
+            File.WriteAllText(path, "theirs");
+            await pane.ReloadAsync(path);
+            Assert.Equal("theirs", editor.Text);
+            Assert.False(pane.IsDirty);
+
+            editor.Undo();
+            Assert.Equal("mine, edited here", editor.Text);
+            Assert.True(pane.IsDirty);
+        }
+        finally
+        {
+            dir.Delete(recursive: true);
+        }
+    }
+
+    [AvaloniaFact]
     public void Factory_creates_a_markdown_pane_for_md_and_declines_unsupported_types()
     {
         Assert.IsType<MarkdownPane>(EditorPaneFactory.Create("/x/note.MD"));

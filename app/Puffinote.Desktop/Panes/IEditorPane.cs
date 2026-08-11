@@ -41,6 +41,14 @@ internal interface IEditorPane : IDisposable
     /// <summary>Open <paramref name="path"/> into this pane.</summary>
     Task LoadAsync(string path);
 
+    /// <summary>
+    /// Take the version on disk of the file this pane already has open — after something else wrote to it.
+    /// The default is a plain re-open, which is right for a pane whose document has no history to keep; an
+    /// editor that <em>has</em> one takes the new text as an <b>undoable step</b> instead, so ⌘Z gives back
+    /// what was in the pane for someone who reloads and immediately wishes they hadn't.
+    /// </summary>
+    Task ReloadAsync(string path) => LoadAsync(path);
+
     /// <summary>Save the document to its current path (byte-faithful, atomic — the editor's own save).</summary>
     Task SaveAsync();
 

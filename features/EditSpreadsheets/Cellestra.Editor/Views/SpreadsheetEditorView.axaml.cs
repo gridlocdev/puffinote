@@ -365,9 +365,12 @@ public partial class SpreadsheetEditorView : UserControl, IAppEnvironment
     /// rebuild the tabs/chrome. A freshly-opened file is on disk in a saved state, so this records a
     /// saved baseline. The host owns the file lock, recent-files list, and any open-time warnings.
     /// </summary>
-    public void AdoptLoaded(WorkbookSession.LoadedWorkbook loaded, string? path)
+    /// <param name="reloading">True when this is the <em>same</em> file being taken again after something
+    /// else wrote to it, which makes the swap an undoable step rather than a fresh document
+    /// (<see cref="WorkbookSession.AdoptWorkbook(WorkbookSession.LoadedWorkbook, string?, bool)"/>).</param>
+    public void AdoptLoaded(WorkbookSession.LoadedWorkbook loaded, string? path, bool reloading = false)
     {
-        Session.AdoptWorkbook(loaded, path);
+        Session.AdoptWorkbook(loaded, path, reloading);
         _lastSavedAt = DateTime.Now;
         Grid.Attach(Session);
         BuildSheetTabs();
@@ -410,10 +413,12 @@ public partial class SpreadsheetEditorView : UserControl, IAppEnvironment
     /// <paramref name="path"/> (used for the title/Save target; may be null for an unsaved stream). The
     /// deserialize + initial recalc run off the UI thread so a large document doesn't freeze the host.
     /// </summary>
-    public async Task LoadAsync(Stream content, string? path)
+    /// <param name="reloading">True when this is the same file being taken again after it changed on disk,
+    /// which makes it an undoable step rather than a fresh document.</param>
+    public async Task LoadAsync(Stream content, string? path, bool reloading = false)
     {
         var loaded = await Task.Run(() => WorkbookSession.LoadAndRecalc(content));
-        AdoptLoaded(loaded, path);
+        AdoptLoaded(loaded, path, reloading);
     }
 
     /// <summary>

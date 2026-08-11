@@ -1,4 +1,5 @@
 using Pivotask.Core.Model;
+using Pivotask.Core.Serialization;
 
 namespace Pivotask.Core.Editing;
 
@@ -336,6 +337,45 @@ public static class BoardCommands
     {
         ArgumentNullException.ThrowIfNull(label);
         return new Action("Add Label", board => board.Labels.Add(label), board => board.Labels.Remove(label));
+    }
+
+    // ---- The whole board ---------------------------------------------------
+
+    /// <summary>
+    /// Replace the board's entire contents with <paramref name="json"/> — what "Reload" does when the file
+    /// has changed underneath (a pull, another app). It is a command like any other so that it lands in the
+    /// history: taking someone else's version is exactly the change a person most wants to be able to undo,
+    /// and before this it was a fresh document with an empty history and no way back.
+    ///
+    /// <para>Both sides are held as <b>text</b>, not as object graphs: a board's model is mutable, so
+    /// keeping a reference to "the board before" would keep a reference to the very object being rewritten.
+    /// The serialized form is the one snapshot that cannot be edited out from under the command — and it is
+    /// how the document already decides whether it is dirty.</para>
+    /// </summary>
+    public static IBoardCommand Replace(Board board, string json)
+    {
+        ArgumentNullException.ThrowIfNull(board);
+        var before = BoardCodec.Write(board);
+        return new Action("Reload", target => Restore(target, json), target => Restore(target, before));
+    }
+
+    /// <summary>Rewrite <paramref name="board"/> in place from <paramref name="json"/> — the same object, new
+    /// contents, so every reference the UI is holding still points at the open board.</summary>
+    private static void Restore(Board board, string json)
+    {
+        var source = BoardCodec.Read(json);
+
+        board.Groups.Clear();
+        board.Groups.AddRange(source.Groups);
+
+        board.Labels.Clear();
+        board.Labels.AddRange(source.Labels);
+
+        board.Unknown.Clear();
+        foreach (var entry in source.Unknown)
+        {
+            board.Unknown[entry.Key] = entry.Value;
+        }
     }
 
     /// <summary>A command built from a pair of closures. Every factory above is one of these.</summary>

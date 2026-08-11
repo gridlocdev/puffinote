@@ -166,6 +166,16 @@ public partial class MainWindow
         return EditorView.IsDirty ? DiskChange.Conflict : DiskChange.ReloadClean;
     }
 
+    /// <summary>Take the version on disk of the open file, as the watcher's "Reload" does; for tests (a
+    /// headless run has no file-system watcher ticking and no prompt to answer).</summary>
+    internal void ReloadForTest()
+    {
+        if (_currentPath is { } path)
+        {
+            OpenPath(path, reloading: true);
+        }
+    }
+
     private void WatchCurrentFile() => _watcher.Watch(_currentPath);
 
     private async void HandleExternalChange()
@@ -190,7 +200,7 @@ public partial class MainWindow
             case DiskChange.None:
                 return;
             case DiskChange.ReloadClean:
-                OpenPath(_currentPath); // no local edits — pick up the new version silently
+                OpenPath(_currentPath, reloading: true); // no local edits — pick up the new version silently
                 return;
             case DiskChange.Conflict:
                 _conflictPromptOpen = true;
@@ -199,7 +209,7 @@ public partial class MainWindow
                     switch (await PromptConflictAsync())
                     {
                         case ConflictChoice.Reload:
-                            OpenPath(_currentPath);
+                            OpenPath(_currentPath, reloading: true);
                             break;
                         case ConflictChoice.SaveAs:
                             await SaveAsAsync();

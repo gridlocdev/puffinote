@@ -117,6 +117,20 @@ public sealed partial class PlainTextEditor : Avalonia.Controls.Control, IScroll
         SelectionChanged?.Invoke(this, EventArgs.Empty);
     }
 
+    /// <summary>
+    /// Take the version on disk as one <b>undoable</b> step — what "Reload" means when the file changed
+    /// under an open document. The history survives, so ⌘Z gives back what was in the editor for anyone who
+    /// takes the disk version and immediately wishes they hadn't. The scroll position is left alone: the
+    /// text was replaced, not the file, and being thrown back to line 1 of a log is its own kind of loss.
+    /// </summary>
+    public void ReloadFrom(string? text)
+    {
+        Buffer.ReloadFrom(text);
+        InvalidateMetrics();
+        InvalidateVisual();
+        SelectionChanged?.Invoke(this, EventArgs.Empty);
+    }
+
     // ---- Options ----------------------------------------------------------
 
     public static readonly StyledProperty<bool> WordWrapProperty =

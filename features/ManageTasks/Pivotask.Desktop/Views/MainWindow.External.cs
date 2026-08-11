@@ -48,7 +48,7 @@ public sealed partial class MainWindow
 
         if (!_view.Document.IsDirty)
         {
-            OpenPath(path); // nothing of the user's to lose — show the board that is actually in the file
+            OpenPath(path, reloading: true); // nothing of the user's to lose — show the board that is actually in the file
             return false;
         }
 
@@ -96,7 +96,7 @@ public sealed partial class MainWindow
                 case ConflictChoice.Reload:
                     DiskChangedUnderEdits = false;
                     _conflictPromptOpen = false; // OpenPath may raise a dialog of its own
-                    OpenPath(path);
+                    OpenPath(path, reloading: true);
                     return false; // nothing left to save: the board is the file
                 case ConflictChoice.Overwrite:
                     // The version on disk becomes the baseline we are knowingly writing over.

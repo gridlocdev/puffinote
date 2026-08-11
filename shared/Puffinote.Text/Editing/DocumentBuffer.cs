@@ -182,6 +182,29 @@ public sealed class DocumentBuffer
         RaiseTextChanged(0); // whole document replaced
     }
 
+    /// <summary>
+    /// Take the version on disk as <b>one undoable edit</b> — what "Reload" means when a file has changed
+    /// underneath an open document. Unlike <see cref="Load"/> this keeps the history: the reload is a step
+    /// like any other, so ⌘Z gives back what was in the editor a moment ago if the disk version turns out
+    /// not to be what the reader wanted. A reload is also, by definition, clean afterwards, so the new text
+    /// becomes the saved baseline — and undoing it therefore makes the document dirty again, which is
+    /// exactly what it then is.
+    /// </summary>
+    public void ReloadFrom(string? text)
+    {
+        var replacement = text ?? string.Empty;
+        if (Document.GetText() == replacement)
+        {
+            MarkSaved(); // identical bytes: nothing to undo, but the file and the buffer now agree
+            return;
+        }
+
+        // The caret keeps its offset where the new text is long enough to hold it: the reader was reading
+        // somewhere, and a reload that also sent them back to line 1 would lose their place twice over.
+        ReplaceRange(0, Document.Length, replacement, caretAfter: Math.Min(_selection.Caret, replacement.Length));
+        MarkSaved();
+    }
+
     /// <summary>Mark the current snapshot as the saved baseline (after a successful save).</summary>
     public void MarkSaved() => SavedDocument = Document;
 

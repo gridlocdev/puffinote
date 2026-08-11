@@ -69,6 +69,23 @@ internal sealed class TaskBoardPane : IEditorPane, IConfigurablePane
         return Task.CompletedTask;
     }
 
+    /// <summary>The board changed on disk — a pull, most likely. Take that version as one undoable step, so
+    /// ⌘Z gives the tab's own board back.</summary>
+    public Task ReloadAsync(string path)
+    {
+        if (_view.Document is { } open && string.Equals(open.Path, path, StringComparison.Ordinal))
+        {
+            open.Reload(File.ReadAllText(path));
+        }
+        else
+        {
+            _view.Document = BoardDocument.Open(path);
+        }
+
+        DirtyChanged?.Invoke(this, EventArgs.Empty);
+        return Task.CompletedTask;
+    }
+
     public Task SaveAsync()
     {
         // The document owns the write: deterministic bytes, unknown fields preserved, temp-then-rename.
