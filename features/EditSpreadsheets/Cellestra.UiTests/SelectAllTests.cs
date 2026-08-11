@@ -80,6 +80,53 @@ public class SelectAllTests
         Assert.Equal(SheetDimensions.MaxColumns - 1, env.Selection.Right); // the whole sheet
     }
 
+    [AvaloniaFact]
+    public void A_whole_sheet_selection_is_only_highlighted_over_what_copy_would_take()
+    {
+        // The selection stays the whole-sheet rectangle — that is what Excel and Calc hold too — but copy
+        // and cut clamp it to the used range, so washing all 16384 x 1048576 cells would promise an action
+        // over the entire grid that the action will not perform.
+        var window = new MainWindow();
+        window.Show();
+        IAppEnvironment env = window.Editor;
+        var sheet = env.Session.ActiveSheet;
+        sheet.SetValue(0, 0, CellValue.Number(1));
+        sheet.SetValue(0, 1, CellValue.Number(2));
+        sheet.SetValue(1, 0, CellValue.Number(3));
+        sheet.SetValue(1, 1, CellValue.Number(4)); // used range is A1:B2
+        env.Selection.MoveTo(0, 0);
+
+        RunSelectAll(env); // the data region
+        RunSelectAll(env); // the whole sheet
+        Assert.Equal(SheetDimensions.MaxRows - 1, env.Selection.Bottom);
+        Assert.Equal(SheetDimensions.MaxColumns - 1, env.Selection.Right);
+
+        var lit = window.Editor.Grid.HighlightedSelectionForTest;
+        Assert.Equal(0, lit.Top);
+        Assert.Equal(0, lit.Left);
+        Assert.Equal(1, lit.Bottom);
+        Assert.Equal(1, lit.Right);
+    }
+
+    [AvaloniaFact]
+    public void A_range_the_user_actually_drew_is_highlighted_exactly_as_drawn()
+    {
+        // Only the oversized case is clamped: a deliberately selected block of blank cells is still that
+        // block, and copying it still copies blanks.
+        var window = new MainWindow();
+        window.Show();
+        IAppEnvironment env = window.Editor;
+        env.Session.ActiveSheet.SetValue(0, 0, CellValue.Number(1));
+        env.Selection.MoveTo(5, 5);
+        env.Selection.ExtendTo(9, 9);
+
+        var lit = window.Editor.Grid.HighlightedSelectionForTest;
+        Assert.Equal(5, lit.Top);
+        Assert.Equal(5, lit.Left);
+        Assert.Equal(9, lit.Bottom);
+        Assert.Equal(9, lit.Right);
+    }
+
     // ---- SelectAllExpander (pure expansion logic, no window) -----------------
 
     private static Worksheet TwoByTwoSheet()

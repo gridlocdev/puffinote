@@ -2,6 +2,7 @@ using System.Globalization;
 using Avalonia;
 using Avalonia.Media;
 using Cellestra.Core.Data;
+using Cellestra.Core.Editing;
 using Cellestra.Core.Model;
 using Cellestra.Core.Styling;
 using Cellestra.Core.Values;
@@ -399,12 +400,33 @@ public sealed partial class SpreadsheetGrid
         // each clipped to the visible viewport.
         foreach (var range in Selection.Ranges)
         {
-            if (TryGetRegionRect(range.Top, range.Left, range.Bottom, range.Right, out var rect))
+            var shown = Highlighted(range);
+            if (TryGetRegionRect(shown.Top, shown.Left, shown.Bottom, shown.Right, out var rect))
             {
                 context.FillRectangle(fill, rect);
             }
         }
     }
+
+    /// <summary>
+    /// The rectangle a selected <paramref name="range"/> is <i>shown</i> as — itself, except when ⌘A has
+    /// expanded to the whole sheet.
+    ///
+    /// <para>A whole-sheet selection is 16384 × 1048576 cells and is deliberately held as that rectangle (as
+    /// Excel and Calc hold theirs), but copy and cut clamp it to the sheet's used range — otherwise there is
+    /// no copy, only a hang. So the highlight has to clamp too: washing the entire grid promises the action
+    /// will run over all of it, and the reader has no way to know it won't. Both go through
+    /// <see cref="ClipboardBlock.CopyRange"/>, so what is lit and what is copied cannot drift apart.</para>
+    ///
+    /// <para>It costs a used-range walk per paint while such a selection is up. That is the state you are in
+    /// for the two seconds between ⌘A⌘A and ⌘C, and it buys the selection telling the truth.</para>
+    /// </summary>
+    private CellRange Highlighted(CellRange range) =>
+        Sheet is { } sheet ? ClipboardBlock.CopyRange(sheet, range) : range;
+
+    /// <summary>The rectangle the selection is drawn (and its headers lit) over; for tests — the headless
+    /// suite has no pixels to read the wash off.</summary>
+    internal CellRange HighlightedSelectionForTest => Highlighted(Selection.Range);
 
     private void DrawActiveOutline(DrawingContext context, IPen pen)
     {
@@ -427,6 +449,10 @@ public sealed partial class SpreadsheetGrid
 
     private void DrawHeaders(DrawingContext context, IBrush headerBrush, IBrush textBrush, IPen gridPen)
     {
+        // The headers light the same span the cells are washed over — the clamped one for an expanded ⌘A
+        // (see Highlighted), so the two halves of the selection never disagree about how far it reaches.
+        var lit = Highlighted(Selection.Range);
+
         // Corner.
         context.FillRectangle(headerBrush, new Rect(0, 0, HeaderWidth, HeaderHeight));
 
@@ -441,7 +467,7 @@ public sealed partial class SpreadsheetGrid
             foreach (var (col, x, w) in _visibleColumns)
             {
                 var rect = new Rect(x, 0, w, HeaderHeight);
-                bool active = col >= Selection.Left && col <= Selection.Right;
+                bool active = col >= lit.Left && col <= lit.Right;
                 context.FillRectangle(active ? _palette.ActiveHeaderFill : headerBrush, rect);
                 context.DrawRectangle(null, gridPen, rect);
                 DrawCentered(context, ColumnHeaderLabel(col), rect, typeface, textBrush, headerFontSize, rect.Width - 4);
@@ -453,7 +479,7 @@ public sealed partial class SpreadsheetGrid
             foreach (var (row, y, h) in _visibleRows)
             {
                 var rect = new Rect(0, y, HeaderWidth, h);
-                bool active = row >= Selection.Top && row <= Selection.Bottom;
+                bool active = row >= lit.Top && row <= lit.Bottom;
                 context.FillRectangle(active ? _palette.ActiveHeaderFill : headerBrush, rect);
                 context.DrawRectangle(null, gridPen, rect);
                 DrawCentered(context, (row + 1).ToString(CultureInfo.InvariantCulture), rect, typeface, textBrush, headerFontSize);
