@@ -1,6 +1,7 @@
 using Avalonia.Headless.XUnit;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
+using Puffinote.Components.Controls.Icons;
 using Puffinote.Desktop.Controls;
 using Puffinote.Desktop.Shell;
 using Puffinote.Desktop.Sidebar;
@@ -35,6 +36,21 @@ public sealed class WorkspaceRailTests
 
         // Marked with a shape and spoken, not merely coloured (WCAG 2.2 §1.4.1).
         Assert.Equal("Notes", window.WorkspaceRailForTest.MarkedTitleForTest);
+    }
+
+    [AvaloniaFact]
+    public void Every_entry_has_a_glyph_that_actually_exists()
+    {
+        // The icon set is the vendored Lucide subset, and a key with no SVG behind it resolves to null and
+        // draws *nothing* — no error, no fallback, just a word with a hole above it, which is how Notes
+        // shipped with an invisible icon. Named keys are checked here rather than by looking at the app,
+        // because looking at the app is what this suite cannot do.
+        foreach (var workspace in Workspaces.All)
+        {
+            Assert.True(
+                LucideIcons.Get(workspace.Icon) is not null,
+                $"{workspace.Title}'s icon \"{workspace.Icon}\" is not vendored under Assets/icons.");
+        }
     }
 
     [AvaloniaFact]
