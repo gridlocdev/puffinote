@@ -87,11 +87,12 @@ public class CodeBlockTests
     }
 
     [AvaloniaFact]
-    public void TheChipOfAWrappedInlineCodeSpan_IsContinuous()
+    public void AMultiWordInlineCodeSpan_DrawsOneChipOverAllOfItsPieces()
     {
-        // With wrapping on, a code span lays out one word/space piece at a time and each piece draws its own chip.
-        // Sizing those chips by FormattedText.Width — which omits trailing whitespace — collapsed the chip of the
-        // space between two code words to nothing, splitting `inline code` into two chips with a hole between them.
+        // With wrapping on, a code span lays out one word/space piece at a time. A chip per piece bled its
+        // padding sideways over the piece beside it — and since each chip is painted after the previous piece's
+        // glyphs, that bleed painted out the tail of the word it had just drawn: the span looked cut off.
+        // One chip across the whole span spends the padding only at the two outer edges.
         var view = new MarkdownEditorView();
         var window = new Window { Width = 400, Height = 200, Content = view };
         window.Show();
@@ -101,24 +102,16 @@ public class CodeBlockTests
         var editor = view.Editor;
         var v = editor.BuildVisualLineForTest(0);
         var pieces = v.Runs.Where(r => r.Kind == VisualRunKind.Text && r.Style.Background is not null).ToList();
-
         Assert.Contains(pieces, r => r.Text == " "); // the span really did split on its space
+
         var pad = MarkdownTheme.Default.InlineCodePadding;
-        var chips = pieces.ConvertAll(r => editor.ChipRectForTest(r, 0, 26));
+        var chip = Assert.Single(editor.ChipRectsForTest(0, 26));
 
-        // Each chip spans its piece's laid-out advance — the space piece included, which is the one
-        // FormattedText.Width reports as zero-width.
-        for (var i = 0; i < chips.Count; i++)
-        {
-            Assert.Equal(pieces[i].Width + (pad * 2), chips[i].Width, 3);
-        }
-
-        // So consecutive chips meet: no gap, and the span reads as one pill.
-        for (var i = 1; i < chips.Count; i++)
-        {
-            Assert.True(chips[i - 1].Right >= chips[i].X,
-                $"a gap opens between the chips of \"{pieces[i - 1].Text}\" and \"{pieces[i].Text}\"");
-        }
+        // It covers every piece — the space included, which is the one FormattedText.Width reports as
+        // zero-width — plus the reserved padding at each end, and nothing more.
+        Assert.Equal(pieces[0].X - pad, chip.X, 3);
+        Assert.Equal(pieces[^1].X + pieces[^1].Width + pad, chip.Right, 3);
+        Assert.All(pieces, p => Assert.True(p.X >= chip.X && p.X + p.Width <= chip.Right));
     }
 
     [AvaloniaFact]
@@ -132,11 +125,20 @@ public class CodeBlockTests
         var before = v.Runs.First(r => r.Text == "say ");
         var code = v.Runs.First(r => r.Text == "code");
         var after = v.Runs.First(r => r.Text == " here");
-        var chip = editor.ChipRectForTest(code, 0, 26);
+        var chip = Assert.Single(editor.ChipRectsForTest(0, 26));
 
         Assert.True(chip.X >= before.X + before.Width, "the chip paints over the word before it");
         Assert.True(chip.Right <= after.X, "the chip paints over the word after it");
         Assert.True(chip.Width > code.Width, "the chip should be padded around its code, not flush with it");
+    }
+
+    [AvaloniaFact]
+    public void TwoInlineCodeSpansOnALine_DrawTwoChips()
+    {
+        // Coalescing pieces must stop at the span's own edge: the prose between two code spans has no
+        // background, which is what ends the first chip.
+        var editor = new Typage.Control.Controls.MarkdownEditor { Text = "`one` and `two`\nx" };
+        Assert.Equal(2, editor.ChipRectsForTest(0, 26).Count);
     }
 
     [AvaloniaFact]

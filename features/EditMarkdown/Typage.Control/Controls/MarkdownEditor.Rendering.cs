@@ -288,6 +288,9 @@ public partial class MarkdownEditor
             DrawSelection(context, blockStart, rowsTop, lineH, sel, visual);
         }
 
+        // The background chips (inline-code pills, highlight bands) — all of them, before any glyph.
+        DrawChips(context, visual, rowsTop, lineH);
+
         // Draw every visual run on its wrapped row: concealed marker runs vanish (zero width, not drawn);
         // text and decorations advance the cursor exactly as the offset↔visual map measured them.
         foreach (var run in visual.Runs)
@@ -319,46 +322,112 @@ public partial class MarkdownEditor
         return visual.Width;
     }
 
-    /// <summary>Draw one visible run (content, or a revealed marker — markers carry their own brush in the style).</summary>
+    /// <summary>Draw one visible run (content, or a revealed marker — markers carry their own brush in the style).
+    /// Its background, if it has one, was drawn with the rest of the row's chips before any text (<see cref="DrawChips"/>).</summary>
     private void DrawTextRun(DrawingContext context, VisualRun run, double lineTop, double lineH)
     {
         var ft = _measurer.GetFormattedText(run.Text, run.Style, run.Style.Foreground);
         var y = lineTop + (lineH - ft.Height) / 2;
-
-        if (run.Style.Background is not null)
-        {
-            context.FillRectangle(run.Style.Background, ChipRect(run, lineTop, lineH), 4);
-        }
-
         context.DrawText(ft, new Point(run.X, y));
         DrawRunDecorations(context, run, ft, y);
     }
 
     /// <summary>
-    /// The chip/band drawn behind a run that carries a <see cref="RunStyle.Background"/> — an inline-code pill, a
-    /// highlight. It reads as a chip <i>around</i> the code rather than a colour behind it, which takes two things
-    /// the obvious rectangle gets wrong.
+    /// Draw the background chips of one block — an inline-code pill, a highlight band — <b>one per span</b>,
+    /// under all of the block's text.
     ///
-    /// <para>It spans the run's <b>laid-out</b> advance, not its <c>FormattedText.Width</c>: that omits trailing
+    /// <para>With wrapping on, a span lays out one word/space piece at a time, so <c>`dotnet build`</c> is three
+    /// runs, not one. A chip per run bled its padding sideways over its neighbours, and since a run's chip is
+    /// painted after the previous run's glyphs, that bleed painted out the tail of the word it had just drawn —
+    /// the code span looked cut off. Coalescing the pieces fixes it at the source: the padding is spent only at
+    /// the two outer edges of the span, where the concealed backticks reserved room for it, and the inside of
+    /// the span is one continuous fill with nothing to overlap.</para>
+    /// </summary>
+    private void DrawChips(DrawingContext context, VisualLine visual, double rowsTop, double lineH)
+    {
+        var runs = visual.Runs;
+        for (var i = 0; i < runs.Count; i++)
+        {
+            if (runs[i].Kind != VisualRunKind.Text || runs[i].Style.Background is not { } brush)
+            {
+                continue;
+            }
+
+            var last = ChipGroupEnd(runs, i);
+            context.FillRectangle(brush, ChipRect(runs[i], runs[last], rowsTop + (runs[i].Row * lineH), lineH), 4);
+            i = last;
+        }
+    }
+
+    /// <summary>
+    /// The index of the last run in the chip that starts at <paramref name="first"/>: the run of consecutive
+    /// text pieces sharing one background and padding on one row. A change of typeface inside the span (an
+    /// emphasised word in a highlight) keeps the same chip; a wrap to the next row starts a new one, which is
+    /// what makes a span crossing a line break read as a chip on each row.
+    /// </summary>
+    private static int ChipGroupEnd(IReadOnlyList<VisualRun> runs, int first)
+    {
+        var last = first;
+        while (last + 1 < runs.Count)
+        {
+            var next = runs[last + 1];
+            if (next.Kind != VisualRunKind.Text || next.Row != runs[first].Row
+                || !Equals(next.Style.Background, runs[first].Style.Background)
+                || next.Style.BackgroundPad != runs[first].Style.BackgroundPad)
+            {
+                break;
+            }
+
+            last++;
+        }
+
+        return last;
+    }
+
+    /// <summary>
+    /// The chip/band drawn behind the span running from <paramref name="first"/> to <paramref name="last"/>. It
+    /// reads as a chip <i>around</i> the code rather than a colour behind it, which takes two things the obvious
+    /// rectangle gets wrong.
+    ///
+    /// <para>It spans the runs' <b>laid-out</b> advance, not their <c>FormattedText.Width</c>: that omits trailing
     /// whitespace (<see cref="TextMeasurer.MeasureWidth"/> exists to add it back), so a piece of code ending in a
     /// space measured as nothing — which is what broke a wrapped <c>`inline code`</c> into two chips with a hole
     /// where the space was.</para>
     ///
     /// <para>And it bleeds by the style's own <see cref="RunStyle.BackgroundPad"/> — exactly the padding the layout
-    /// reserved beside the run, as a spacer where the markers concealed — so the bleed lands in space of its own
-    /// instead of painting over the tail of the word before it. Height is capped to the row, so a code span on a
+    /// reserved beside the span, as a spacer where the markers concealed — so the bleed lands in space of its own
+    /// instead of painting over the words on either side. Height is capped to the row, so a code span on a
     /// heading line can't outgrow the heading's row.</para>
     /// </summary>
-    private Rect ChipRect(VisualRun run, double lineTop, double lineH)
+    private Rect ChipRect(VisualRun first, VisualRun last, double lineTop, double lineH)
     {
-        var bleed = run.Style.BackgroundPad;
-        var chipH = Math.Min(lineH - 2, run.Style.FontSize * EditorTheme.ChipHeightRatio);
-        return new Rect(run.X - bleed, lineTop + ((lineH - chipH) / 2), run.Width + (bleed * 2), chipH);
+        var bleed = first.Style.BackgroundPad;
+        var chipH = Math.Min(lineH - 2, first.Style.FontSize * EditorTheme.ChipHeightRatio);
+        var x = first.X - bleed;
+        var right = last.X + last.Width + bleed;
+        return new Rect(x, lineTop + ((lineH - chipH) / 2), right - x, chipH);
     }
 
-    /// <summary>The chip rectangle drawn behind <paramref name="run"/>; for tests (the draw path itself has no
-    /// pixels to assert on in the headless suite).</summary>
-    internal Rect ChipRectForTest(VisualRun run, double lineTop, double lineH) => ChipRect(run, lineTop, lineH);
+    /// <summary>The chip rectangles a block would draw, in order; for tests (the draw path itself has no pixels
+    /// to assert on in the headless suite).</summary>
+    internal List<Rect> ChipRectsForTest(int line, double lineH)
+    {
+        var runs = LineVisual(line).Runs;
+        var rects = new List<Rect>();
+        for (var i = 0; i < runs.Count; i++)
+        {
+            if (runs[i].Kind != VisualRunKind.Text || runs[i].Style.Background is null)
+            {
+                continue;
+            }
+
+            var last = ChipGroupEnd(runs, i);
+            rects.Add(ChipRect(runs[i], runs[last], runs[i].Row * lineH, lineH));
+            i = last;
+        }
+
+        return rects;
+    }
 
     /// <summary>
     /// Draw the run's underline/strikethrough as real lines in the drawing context. Avalonia's
