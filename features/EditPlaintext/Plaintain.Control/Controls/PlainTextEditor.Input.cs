@@ -13,6 +13,9 @@ public sealed partial class PlainTextEditor
 
         if (!command && !string.IsNullOrEmpty(e.Text) && !char.IsControl(e.Text[0]))
         {
+            // A composition in flight (dictation, an IME) already wrote its marked text into the document;
+            // this event is the commit of those same words, so the marked text comes out first.
+            EndComposition();
             ClearGoalColumn();
             if (!ReplaceEverySelection(e.Text))
             {

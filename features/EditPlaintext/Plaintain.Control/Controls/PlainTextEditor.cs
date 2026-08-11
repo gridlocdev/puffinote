@@ -67,6 +67,11 @@ public sealed partial class PlainTextEditor : Avalonia.Controls.Control, IScroll
         WatchFocus();
         _caretBlink = CaretBlink.Attach(this);
 
+        // The platform's text input — dictation, and any IME that composes before it commits. A custom-drawn
+        // surface has to hand a client over itself; see PlainTextEditor.InputMethod.cs.
+        _inputMethod = new EditorInputMethodClient(this);
+        WatchInputMethod();
+
         // The surface resolves its palette from ActualThemeVariant at paint time (see Render), so a theme
         // switch changes what it *would* draw — but nothing about a theme change asks a custom-drawn control
         // to draw again. Without this, choosing Light in Preferences leaves the text on the old canvas until

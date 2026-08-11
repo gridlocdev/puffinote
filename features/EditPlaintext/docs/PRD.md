@@ -119,6 +119,16 @@ find where you are reading doesn't throw you back to line 1 of a 50,000-line log
 
 **Go to Line** jumps by number and centres the line.
 
+**Dictation and other composed input.** The surface hands the platform a text-input client, so macOS
+dictation lands **word by word as it is spoken** rather than in one lump when it is dismissed. Marked
+(uncommitted) text is written into the document itself and replaced in place by each update, so the caret,
+the wrap and the renderer see nothing but ordinary text and there is no second text model beside the piece
+table; the commit that follows withdraws the marked text and inserts the phrase once. Any other edit —
+typing, a click, a reload — ends the composition, because the range it was written into is no longer the
+one it thinks it owns. This is what a custom-drawn editor must provide itself; a `TextBox` gets it free,
+and without it the OS has nowhere to put recognised words (the `IMKCFRunLoopWakeUpReliable` complaint in
+the console).
+
 ## 6. Why the geometry is arithmetic
 
 Every row is `RowHeight` tall and every character `CharWidth` wide, so:
