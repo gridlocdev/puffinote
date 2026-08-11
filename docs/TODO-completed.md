@@ -574,3 +574,107 @@
 - [x] Plaintain: crash-recovery snapshot, and external-change detection
 - [x] Shared: the rule-of-three check both proposals defer to Phase 5. (Find bars and the label chip: **not** promoted, with reasons. The find bars' match wording: promoted. Verdicts recorded in the root AGENTS.md.)
 - [x] Puffinote: decide whether the shell's title bar should flash "— Saved" the way Cellestra's does. (It should, for every pane type and for auto-save too.)
+
+- [x] Typage: Allow pasting images. Typage should render images inline like how Obsidian does, and be pasted into the same folder as where the current file being edited is with "image-<TIMESTAMP>.<extension>".
+
+    A clipboard image *file* is preferred over a raw bitmap (it keeps the original bytes and format); a
+    bitmap has no format left to preserve, so it is written as PNG. Either lands beside the document as
+    `image-yyyyMMddHHmmss.<ext>`, deconflicted within the second. An unsaved document has no folder yet,
+    so it stages the file exactly as a picked image already did. Inline rendering is the surface's first
+    **block object**: a line holding one `![alt](url)` and nothing else becomes one atomic decoration run
+    as wide as the drawn picture, over a block whose row height is the drawn height — so the existing
+    offset↔visual map places it and the caret sits either side of a picture but never inside its source.
+    Such a line is its own block whether or not the file loads, so a missing picture cannot re-group the
+    document. Remote URLs stay text: the editor makes no network requests. PRD §7.6 revised (it had said
+    an attachments subfolder and "prompt to save first").
+
+- [x] Typage: When pasting text content that starts with "- [ ]" onto a line that already begins with a checkbox, it should paste the content without the leading "- [ ]" characters.
+
+    `LinePrefix.StripDuplicateTaskMarker`, beside the other assists that read a line's leading structure.
+    Two conditions, both deliberate: the target line must carry a *box* (a checkbox pasted onto a plain
+    bullet is a change of kind, not a duplicate), and the caret must be in the item's content — pasting in
+    front of the marker asks for a new item above this one, where stripping would delete the box being
+    pasted. Later lines of a multi-line paste keep their own markers.
+
+- [x] Typage: The inline code block syntax cuts off text content due to the padding , it must be padding around the text and not cover or obscure the text.
+
+    With wrapping on, a span lays out one word/space piece at a time, and each piece drew its own chip
+    bled sideways by the span's padding — painting over the tail of the word drawn just before it. One
+    chip per span now, under all of the block's text: the padding is spent only at the two outer edges,
+    where the concealed backticks reserved room for it.
+
+- [x] Typage: When switching view modes, keep the scroll position and cursor in the same location as it was originally
+
+    The editor remembers the document offset at the top of the viewport before the change and scrolls it
+    back there after. The caret needed nothing — it is a document offset and the document is not what
+    changed — which the test says explicitly, since it was half the report.
+
+- [x] Typage: Fix erroneous behavior when adding new lines. "Enter" should only add two new lines if it's after a contiguous paragraph that is not prefixed by a list indicator like "-", "1.", "- [ ]", etc.
+
+    The paragraph break is now spent only where a paragraph is being broken: no bullet, number, checkbox
+    or ">", and not a hard-wrapped continuation line either. It reached list items mostly through a
+    *selection* — replacing selected text with a break went down the paragraph path from any line at all.
+
+- [x] Puffinote: click and drag files and folders in sidebar to actually move them. draw a ghost on the file being moved, show the drop indicator, expand folders if hovered over for a second.
+
+    Drawn by the tree itself rather than handed to the platform's drag-and-drop, because the ghost, the
+    drop indicator and the hover-to-open are all ours to draw. A drop on a folder means that folder, on a
+    file the folder holding it, on the empty space the top level of the current scope. Moves that would
+    change nothing or swallow themselves show no indicator and do nothing on release; a name already
+    taken is refused rather than overwritten; Escape abandons a drag. No prompt — the gesture said what
+    and where, and it is undone by dragging the entry back.
+
+- [x] Plaintain: macOS dictation is not working. I speak but nothing enters immediately, I need to press "esc" first then all dictated content enters at the same time.
+
+    A custom-drawn surface is invisible to the platform's text-input machinery until it hands over a
+    client, so the OS had nowhere to put recognised words and held the whole utterance (the
+    `IMKCFRunLoopWakeUpReliable` complaint). The editor now answers the request with one. Marked text is
+    written into the document and replaced in place by each update, so a phrase grows where it will end
+    up and every intermediate state is an ordinary document; the commit withdraws the marked text so the
+    phrase lands once. Typage's surface has the same gap and is deliberately not in that change.
+
+- [x] Cellestra: With whole-sheet ⌘A, only highlight the range of what the copy/cut would be selecting in this case, since that's what the action will be performed on.
+
+    The wash and the lit headers go through the same `ClipboardBlock.CopyRange` the clipboard calls, so
+    what is lit and what is taken cannot drift apart. A range the user actually drew is lit exactly as
+    drawn, blanks included; only the oversized case is clamped.
+
+- [x] All apps: When reloading from an external change on disk, and selecting "Reload", please apply that to the undo/redo history so that if what they reloaded from disk isn't something they want they can cmd+z to go back.
+
+    Each app in the shape its document model allows. The text editors and their Puffinote panes share
+    `DocumentBuffer.ReloadFrom`: the disk text replaces the buffer as one undoable edit and becomes the
+    saved baseline. Pivotask replaces the board through a command, rewriting the same `Board` object in
+    place, and clears the steps before it — a board command holds references into an object graph the
+    reload rebuilds, so older commands would revert against objects no longer on the board. Cellestra
+    cannot express it as an `IEditCommand` at all (a reload swaps the workbook, its recalculation graph
+    and its history at once), so the step back is the whole previous session state, taken once the
+    reloaded workbook's own history runs out — which brings the earlier document back *with* its undo stack.
+
+- [x] Cellestra: external-change detection — figure out why libreoffice shows this while the .ods file is being edited in cellestra.
+
+    "The lock file is corrupted and probably empty." We wrote six comma-separated fields, on the stated
+    assumption that LibreOffice reads the line positionally and ignores what it doesn't recognise. It
+    doesn't: it parses the buffer as a *list* of five-field records, so the sixth field opened a second
+    record that ran out of fields. The line is now exactly LibreOffice's five, in its order, with `\`,
+    `,` and `;` escaped inside a field; our owner token (which is what lets a lock left by a killed
+    process be reclaimed) moved into the user-URL field, which LibreOffice treats as opaque.
+
+- [x] Pivotask: Change the supported file extension from ".pivotask.json" to ".pivotask".
+
+    A two-part extension is invisible to `Path.GetExtension`, so everything that routed a file had to
+    know a board is matched by suffix, and claiming it from macOS needed an exported UTI carrying a
+    two-part filename tag — proposal 0004 §4's one open risk, retired rather than verified. The contents
+    are unchanged and still JSON. Boards written before the rename still open everywhere (and `ptask`
+    still discovers them); they are simply not what a save produces or what Finder is asked for.
+
+- [x] Add an Outlook-like sidebar at the very left of the screen that allows toggling between Todos / Calendar / Notes / Data.
+    - [x] Todos (placeholder)
+    - [x] Calendar (placeholder)
+    - [x] Notes (Puffinote's current UI)
+    - [x] Data (placeholder)
+
+    The **Workspace Rail** (the name is in the vocabulary table now, so the sidebar's panel switcher and
+    this are never called the same thing). Notes is the notebook, built once and kept alive while you are
+    elsewhere — an open tab, a scroll position and a selection all live in those controls. The other
+    three say what will live in them and that they are not built yet. Every entry is a shell command too,
+    so ⌘K and the View menu reach all four without the pointer.
