@@ -55,21 +55,56 @@ public sealed class FileLockTests : IDisposable
     }
 
     [Fact]
+    public void The_line_we_write_is_the_one_libreoffice_parses()
+    {
+        // A record of exactly five fields, closed with ';'. LibreOffice parses the buffer as a *list* of
+        // five-field records, so a sixth field opens a second one that then runs out — which is what had
+        // it greeting a Cellestra-locked file with "the lock file is corrupted and probably empty" and
+        // offering nothing but read-only.
+        string doc = Doc();
+        using var held = FileLock.TryAcquire(doc, "Cellestra");
+
+        string line = File.ReadAllText(FileLock.LockPathFor(doc));
+        Assert.EndsWith(";", line, StringComparison.Ordinal);
+        Assert.Equal(5, line.TrimEnd(';').Split(',').Length);
+
+        // And in LibreOffice's own field order: user, user, host, edit time, user URL.
+        var fields = line.TrimEnd(';').Split(',');
+        Assert.Equal(Environment.UserName, fields[0]);
+        Assert.Equal(Environment.UserName, fields[1]);
+        Assert.Equal(Environment.MachineName, fields[2]);
+        Assert.Matches(@"^\d{2}\.\d{2}\.\d{4} \d{2}:\d{2}$", fields[3]);
+        Assert.StartsWith("Puffinote:Cellestra:", fields[4], StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void Acquire_returns_null_when_already_locked()
     {
         string doc = Doc();
-        // A foreign lock, e.g. one LibreOffice left behind.
-        File.WriteAllText(FileLock.LockPathFor(doc), "alice,imac,01.01.2026 09:00,,LibreOffice;");
+        // A foreign lock, in the shape LibreOffice actually writes: the fifth field is its user URL.
+        File.WriteAllText(FileLock.LockPathFor(doc), "Alice A,alice,imac,01.01.2026 09:00,file:///Users/alice/;");
 
         Assert.Null(FileLock.TryAcquire(doc, "Cellestra"));
-        Assert.Equal("alice", FileLock.Inspect(doc)!.User);
+        var info = FileLock.Inspect(doc)!;
+        Assert.Equal("Alice A", info.User);
+        Assert.Equal("imac", info.Host);
+        Assert.Equal(string.Empty, info.Application); // a profile URL is not an application name
+    }
+
+    [Fact]
+    public void A_name_with_a_comma_in_it_stays_one_field()
+    {
+        string doc = Doc();
+        File.WriteAllText(FileLock.LockPathFor(doc), @"Alice\, A,alice,imac,01.01.2026 09:00,file:///Users/alice/;");
+
+        Assert.Equal("Alice, A", FileLock.Inspect(doc)!.User);
     }
 
     [Fact]
     public void A_foreign_lock_is_never_stale_however_old_it_looks()
     {
         string doc = Doc();
-        File.WriteAllText(FileLock.LockPathFor(doc), "alice,imac,01.01.1999 09:00,,LibreOffice;");
+        File.WriteAllText(FileLock.LockPathFor(doc), "Alice A,alice,imac,01.01.1999 09:00,file:///Users/alice/;");
 
         // No owner token means we cannot know whether the writer is alive, and guessing wrong deletes a
         // lock somebody is editing behind. Age is not evidence.
@@ -111,7 +146,7 @@ public sealed class FileLockTests : IDisposable
         // table says nothing about theirs.
         File.WriteAllText(
             FileLock.LockPathFor(doc),
-            $"alice,some-other-mac,01.01.2026 09:00,,Cellestra,Puffinote:{DeadPid}@12345;");
+            $"Alice A,alice,some-other-mac,01.01.2026 09:00,Puffinote:Cellestra:{DeadPid}@12345;");
 
         Assert.False(FileLock.Inspect(doc)!.IsStale);
         Assert.Null(FileLock.TryAcquire(doc, "Cellestra"));
@@ -189,5 +224,5 @@ public sealed class FileLockTests : IDisposable
             FileLock.LockPathFor(documentPath),
             string.Create(
                 CultureInfo.InvariantCulture,
-                $"{Environment.UserName},{Environment.MachineName},01.01.2026 09:00,,Cellestra,Puffinote:{pid}@{startTicks};"));
+                $"{Environment.UserName},{Environment.UserName},{Environment.MachineName},01.01.2026 09:00,Puffinote:Cellestra:{pid}@{startTicks};"));
 }

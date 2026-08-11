@@ -17,19 +17,28 @@ public sealed record LockInfo(string User, string Host, string Application, stri
 /// advisory only: it relies on every editor honoring the same convention.
 /// </summary>
 /// <remarks>
-/// A lock file is a promise to remove it, and a process that is killed cannot keep a promise. So the
-/// line we write carries a sixth field naming the process that wrote it — <c>Puffinote:&lt;pid&gt;@&lt;start
-/// ticks&gt;</c> — and <see cref="TryAcquire"/> reclaims a lock whose owner is no longer running. Without
-/// that, one force-quit would lock a spreadsheet out of this whole family permanently, which is exactly
-/// the "other applications can't open my file any more" this locking is supposed to prevent. The start
-/// time is there because process ids are recycled: a stale 4321 and a live, unrelated 4321 are otherwise
-/// indistinguishable, and reclaiming the second would delete a lock somebody is relying on.
+/// <para><b>The format is exactly LibreOffice's, five fields and no more</b>: OpenOffice user name,
+/// system user name, host, edit time, and the writer's "user URL", comma-separated and closed with a
+/// <c>;</c>, with <c>\</c>, <c>,</c> and <c>;</c> backslash-escaped inside a field. We used to append a
+/// sixth field of our own, on the assumption that LibreOffice reads the line positionally and ignores
+/// what it doesn't recognise. It does not: it parses the buffer as a <i>list</i> of five-field records,
+/// so a sixth field starts a second record that then runs out of fields — and LibreOffice greets the
+/// file with "The lock file is corrupted and probably empty", offering only to open the document
+/// read-only. Opening a Cellestra-locked file in LibreOffice hit that every time; the reverse worked,
+/// because reading a lock is forgiving in a way parsing one is not.</para>
 ///
-/// The extra field is additive on purpose. LibreOffice reads this format positionally and ignores what
-/// it doesn't recognise, so a lock of ours still reads correctly there; conversely a lock with no sixth
-/// field is somebody else's and is never reclaimed, however old it looks. Releasing on the way out is
-/// <see cref="DocumentLocks"/>'s job — hold locks through it, not directly, or nothing will clean up
-/// after a signal.
+/// <para>A lock file is also a promise to remove it, and a process that is killed cannot keep a promise.
+/// So the token naming the writer — <c>Puffinote:&lt;app&gt;:&lt;pid&gt;@&lt;start ticks&gt;</c> — rides in
+/// the <b>user-URL</b> field, which LibreOffice treats as an opaque string it only compares against its
+/// own. <see cref="TryAcquire"/> reclaims a lock whose owner is demonstrably no longer running; without
+/// that, one force-quit would lock a spreadsheet out of this whole family permanently, which is exactly
+/// the "other applications can't open my file any more" this locking exists to prevent. The start time is
+/// there because process ids are recycled: a stale 4321 and a live, unrelated 4321 are otherwise
+/// indistinguishable, and reclaiming the second would delete a lock somebody is relying on. A lock whose
+/// user-URL is not one of ours is somebody else's and is never reclaimed, however old it looks.</para>
+///
+/// <para>Releasing on the way out is <see cref="DocumentLocks"/>'s job — hold locks through it, not
+/// directly, or nothing will clean up after a signal.</para>
 /// </remarks>
 public sealed class FileLock : IDisposable
 {
@@ -78,14 +87,13 @@ public sealed class FileLock : IDisposable
 
         try
         {
-            // LibreOffice writes a single comma-separated line ending in ';':
-            // user,host,timestamp,ip,app; — and we append our owner token as a sixth field.
-            string content = File.ReadAllText(lockPath).Trim().TrimEnd(';');
-            string[] fields = content.Split(',');
-            string user = Field(fields, 0);
-            string host = Field(fields, 1);
-            string application = Field(fields, 4);
-            return new LockInfo(user, host, application, lockPath, OwnerIsGone(host, Field(fields, 5)));
+            // One record of five fields: ooo-user, system-user, host, edit time, user URL — the last of
+            // which carries our own token when the lock is one of ours (see the remarks above).
+            string[] fields = ParseRecord(File.ReadAllText(lockPath));
+            string user = Field(fields, OooUserField) is { Length: > 0 } named ? named : Field(fields, SystemUserField);
+            string host = Field(fields, HostField);
+            string owner = Field(fields, UserUrlField);
+            return new LockInfo(user, host, ApplicationOf(owner), lockPath, OwnerIsGone(host, owner));
         }
         catch (IOException)
         {
@@ -174,6 +182,15 @@ public sealed class FileLock : IDisposable
         }
     }
 
+    // LibreOffice's field order (svl's LockFileCommon): everything that reads or writes one of these
+    // lines names its fields from here, so the order is stated once.
+    private const int OooUserField = 0;
+    private const int SystemUserField = 1;
+    private const int HostField = 2;
+    private const int EditTimeField = 3;
+    private const int UserUrlField = 4;
+    private const int FieldCount = 5;
+
     private static string Field(string[] fields, int index) =>
         index < fields.Length ? fields[index].Trim() : string.Empty;
 
@@ -183,8 +200,71 @@ public sealed class FileLock : IDisposable
         using var self = Process.GetCurrentProcess();
         string owner = string.Create(
             CultureInfo.InvariantCulture,
-            $"{OwnerPrefix}{Environment.ProcessId}@{self.StartTime.Ticks}");
-        return $"{Environment.UserName},{Environment.MachineName},{stamp},,{application},{owner};";
+            $"{OwnerPrefix}{application}:{Environment.ProcessId}@{self.StartTime.Ticks}");
+
+        var fields = new string[FieldCount];
+        fields[OooUserField] = Environment.UserName;
+        fields[SystemUserField] = Environment.UserName;
+        fields[HostField] = Environment.MachineName;
+        fields[EditTimeField] = stamp;
+        fields[UserUrlField] = owner;
+        return string.Join(',', fields.Select(Escape)) + ";";
+    }
+
+    /// <summary>Escape a field the way LibreOffice does: <c>\</c>, <c>,</c> and <c>;</c> carry a backslash,
+    /// so a user or host name containing one can't split the record.</summary>
+    private static string Escape(string field) =>
+        field.Replace("\\", "\\\\", StringComparison.Ordinal)
+             .Replace(",", "\\,", StringComparison.Ordinal)
+             .Replace(";", "\\;", StringComparison.Ordinal);
+
+    /// <summary>
+    /// The fields of the first record in <paramref name="content"/>, unescaped. Splitting on bare commas
+    /// would be wrong for a name written by LibreOffice with an escaped one in it, and the terminating
+    /// <c>;</c> ends the record even when a file holds several.
+    /// </summary>
+    private static string[] ParseRecord(string content)
+    {
+        var fields = new List<string>(FieldCount);
+        var field = new System.Text.StringBuilder();
+        for (var i = 0; i < content.Length; i++)
+        {
+            char c = content[i];
+            if (c == '\\' && i + 1 < content.Length)
+            {
+                field.Append(content[++i]);
+            }
+            else if (c == ',')
+            {
+                fields.Add(field.ToString());
+                field.Clear();
+            }
+            else if (c == ';' || c == '\n' || c == '\r')
+            {
+                break;
+            }
+            else
+            {
+                field.Append(c);
+            }
+        }
+
+        fields.Add(field.ToString());
+        return [.. fields];
+    }
+
+    /// <summary>The application named in one of our own owner tokens; empty for anybody else's lock (a
+    /// LibreOffice lock's user URL is a profile URL, and claiming that as an app name would be a lie).</summary>
+    private static string ApplicationOf(string ownerToken)
+    {
+        if (!ownerToken.StartsWith(OwnerPrefix, StringComparison.Ordinal))
+        {
+            return string.Empty;
+        }
+
+        string body = ownerToken[OwnerPrefix.Length..];
+        int colon = body.LastIndexOf(':');
+        return colon > 0 ? body[..colon] : string.Empty;
     }
 
     /// <summary>
@@ -232,14 +312,23 @@ public sealed class FileLock : IDisposable
         }
     }
 
+    /// <summary>Read the <c>&lt;app&gt;:&lt;pid&gt;@&lt;start ticks&gt;</c> body of one of our owner tokens.</summary>
     private static bool TryParseOwner(string ownerToken, out int pid, out long startTicks)
     {
         pid = 0;
         startTicks = 0;
         string body = ownerToken[OwnerPrefix.Length..];
         int at = body.IndexOf('@', StringComparison.Ordinal);
-        return at > 0
-            && int.TryParse(body[..at], NumberStyles.None, CultureInfo.InvariantCulture, out pid)
+        if (at <= 0)
+        {
+            return false;
+        }
+
+        // The application name may itself hold a colon, so the *last* one before the '@' opens the pid.
+        string head = body[..at];
+        int colon = head.LastIndexOf(':');
+        string pidText = colon >= 0 ? head[(colon + 1)..] : head;
+        return int.TryParse(pidText, NumberStyles.None, CultureInfo.InvariantCulture, out pid)
             && long.TryParse(body[(at + 1)..], NumberStyles.None, CultureInfo.InvariantCulture, out startTicks);
     }
 }
