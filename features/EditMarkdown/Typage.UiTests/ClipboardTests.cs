@@ -40,6 +40,21 @@ public class ClipboardTests
     }
 
     [AvaloniaFact]
+    public async Task Paste_TaskItemIntoATaskItem_KeepsOneCheckbox()
+    {
+        var editor = new MarkdownEditor { Text = "- [ ] " };
+        var window = new Window { Content = editor };
+        window.Show();
+
+        var clipboard = TopLevel.GetTopLevel(editor)!.Clipboard!;
+        await clipboard.SetTextAsync("- [ ] Buy milk");
+
+        editor.Buffer.Selection = Puffinote.Text.Document.Selection.At(6); // in the item's content
+        await editor.PasteAsync();
+        Assert.Equal("- [ ] Buy milk", editor.Text);
+    }
+
+    [AvaloniaFact]
     public async Task Cut_CopiesAndDeletesSelection()
     {
         var editor = new MarkdownEditor { Text = "hello world" };

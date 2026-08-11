@@ -3,6 +3,7 @@ using Avalonia.Input;
 using Avalonia.Input.Platform;
 using Avalonia.Platform.Storage;
 using Avalonia.Threading;
+using Puffinote.Text.Editing;
 using Typage.Engine.Markdown;
 
 namespace Typage.Control.Controls;
@@ -76,6 +77,7 @@ public partial class MarkdownEditor
             {
                 var nl = DetectNewline(Buffer.Document);
                 var normalized = text.Replace("\r\n", "\n").Replace('\r', '\n');
+                normalized = StripDuplicateTaskMarker(normalized);
                 Buffer.Insert(nl == "\n" ? normalized : normalized.Replace("\n", nl));
             });
         }
@@ -190,6 +192,18 @@ public partial class MarkdownEditor
         }
 
         return false;
+    }
+
+    /// <summary>
+    /// <paramref name="text"/> with the leading <c>"- [ ] "</c> dropped when it would be the second one on the
+    /// line the paste lands in (<see cref="LinePrefix.StripDuplicateTaskMarker"/>). Read at the point of
+    /// insertion — the selection's start, since a paste over a selection replaces it from there.
+    /// </summary>
+    private string StripDuplicateTaskMarker(string text)
+    {
+        var doc = Buffer.Document;
+        var at = doc.GetPosition(Buffer.Selection.Start);
+        return LinePrefix.StripDuplicateTaskMarker(text, doc.GetLineText(at.Line), at.Column);
     }
 
     /// <summary>Run a document edit on the UI thread (clipboard awaits may resume off it).</summary>

@@ -212,4 +212,25 @@ public class LinePrefixTests
     [InlineData("    indented code")]
     public void ABlockOpener_IsNotALazyContinuation(string line) =>
         Assert.False(LinePrefix.IsLazyContinuation(line));
+
+    // ----- pasting a task item into a task item -----
+
+    [Theory]
+    [InlineData("- [ ] Buy milk", "Buy milk")]
+    [InlineData("- [x] Done thing", "Done thing")]
+    [InlineData("  * [/] Nested", "Nested")]            // indent, bullet and box all go
+    [InlineData("3. [ ] Numbered", "Numbered")]
+    [InlineData("- [ ] first\n- [ ] second", "first\n- [ ] second")] // only the first line merges
+    public void PastingATaskItemIntoOne_DropsTheIncomingMarker(string pasted, string expected) =>
+        Assert.Equal(expected, LinePrefix.StripDuplicateTaskMarker(pasted, "- [ ] ", caretColumn: 6));
+
+    [Theory]
+    [InlineData("- [ ] Buy milk", "- item", 6)]      // target is a bullet, not a box: a real change of kind
+    [InlineData("- [ ] Buy milk", "plain text", 5)]  // target isn't a list at all
+    [InlineData("- [ ] Buy milk", "- [ ] ", 0)]      // caret before the marker: a new item above, not a merge
+    [InlineData("- bullet", "- [ ] ", 6)]            // incoming has no box
+    [InlineData("plain paste", "- [ ] ", 6)]
+    [InlineData("", "- [ ] ", 6)]
+    public void EverythingElsePastesUnchanged(string pasted, string targetLine, int caretColumn) =>
+        Assert.Equal(pasted, LinePrefix.StripDuplicateTaskMarker(pasted, targetLine, caretColumn));
 }

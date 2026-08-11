@@ -176,6 +176,32 @@ public readonly record struct LinePrefix(
     public static bool IsLazyContinuation(string line) =>
         LineTokenizer.IsSetextTextLine(line, isFrontMatterOpen: false);
 
+    /// <summary>
+    /// The text a paste should actually insert, given the line it lands in. Pasting <c>"- [ ] Buy milk"</c>
+    /// into the content of a line that <b>already is</b> a checkbox item would spell the marker twice —
+    /// <c>"- [ ] - [ ] Buy milk"</c> — where what was meant is the item's text. So the pasted <i>first</i> line
+    /// gives up its own marker: its indent, quote, list marker and box are dropped, and the rest of the paste
+    /// (later lines keep their markers, being items of their own) is inserted unchanged.
+    ///
+    /// <para>Both halves of the condition matter. The target line must carry a box, not merely a bullet — a
+    /// checkbox pasted onto a plain bullet is a real change of kind, not a duplicate. And the caret must be in
+    /// the item's <i>content</i> (at or past <see cref="Length"/>): pasting in front of the marker is asking
+    /// for a new item above this one, and stripping there would silently delete the box being pasted.</para>
+    /// </summary>
+    public static string StripDuplicateTaskMarker(string pasted, string targetLine, int caretColumn)
+    {
+        var target = Parse(targetLine);
+        if (!target.HasTask || caretColumn < target.Length || pasted.Length == 0)
+        {
+            return pasted;
+        }
+
+        var breakAt = pasted.IndexOf('\n', StringComparison.Ordinal);
+        var firstLine = breakAt < 0 ? pasted : pasted[..breakAt];
+        var incoming = Parse(firstLine);
+        return incoming.HasTask ? pasted[incoming.Length..] : pasted;
+    }
+
     /// <summary>The prefix to begin the next sibling item/line with (after a newline) — PRD §7.2.</summary>
     public string ContinuationPrefix()
     {
