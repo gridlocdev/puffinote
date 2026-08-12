@@ -42,9 +42,9 @@ public sealed class WorkspaceRailTests
     public void Every_entry_has_a_glyph_that_actually_exists()
     {
         // The icon set is the vendored Lucide subset, and a key with no SVG behind it resolves to null and
-        // draws *nothing* — no error, no fallback, just a word with a hole above it, which is how Notes
-        // shipped with an invisible icon. Named keys are checked here rather than by looking at the app,
-        // because looking at the app is what this suite cannot do.
+        // draws *nothing* — no error, no placeholder, just a word with a hole above it, which is how Notes
+        // first shipped. An entry names the glyph it wants and the glyph is vendored to match; this is what
+        // says the file is really there, since looking at the window is what this suite cannot do.
         foreach (var workspace in Workspaces.All)
         {
             Assert.True(

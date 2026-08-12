@@ -42,10 +42,7 @@ internal static class Workspaces
             "Every task board in this notebook, in one list — the .pivotask files, found however deep they are filed."),
         new(Workspace.Calendar, "calendar", "Calendar", "calendar",
             "The notebook's dated work on a calendar: what is due, and when."),
-        // "book-open", not "notebook-pen": the icon set is the vendored Lucide subset under
-        // Puffinote.Components/Assets/icons, and a key with no file behind it resolves to null and draws
-        // nothing at all — which is exactly what happened here. WorkspaceRailTests pins every key.
-        new(Workspace.Notes, "notes", "Notes", "book-open", string.Empty),
+        new(Workspace.Notes, "notes", "Notes", "notebook-pen", string.Empty),
         new(Workspace.Data, "data", "Data", "table",
             "Every spreadsheet in this notebook, in one list — the .ods files, found however deep they are filed."),
     ];
