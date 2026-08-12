@@ -43,7 +43,7 @@ internal static class Workspaces
         new(Workspace.Calendar, "calendar", "Calendar", "calendar",
             "The notebook's dated work on a calendar: what is due, and when."),
         new(Workspace.Notes, "notes", "Notes", "notebook-pen", string.Empty),
-        new(Workspace.Data, "data", "Data", "table",
+        new(Workspace.Data, "data", "Data", "database",
             "Every spreadsheet in this notebook, in one list — the .ods files, found however deep they are filed."),
     ];
 
