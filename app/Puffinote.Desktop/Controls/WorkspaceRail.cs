@@ -113,10 +113,16 @@ internal sealed class WorkspaceRail : UserControl
     /// <para>The other three keep exactly the hover they had — the shell's ordinary <c>SurfaceHover</c>
     /// wash — because there the pointer is telling the truth.</para>
     ///
-    /// <para>Set on the template's presenter rather than on the button, for the same reason the theme sets
-    /// it there: a value on the button is what the theme was overriding in the first place. The brushes are
-    /// <see cref="Tokens.Active"/>'s, which are re-tinted in place on a theme change, so these styles follow
-    /// light/dark without being rebuilt.</para>
+    /// <para>These are set on the template's presenter, where the theme sets its own — a brush on the button
+    /// only reaches the presenter through a template binding, which any presenter-level style outranks. That
+    /// is also why <b>the resting look is not here</b>: with no style matching, the presenter falls back to
+    /// that template binding, so the plain state is the button's own Background/BorderBrush
+    /// (<see cref="BuildEntry"/>). An unconditional style saying "transparent" is inert — measured, not
+    /// assumed — and leaving the button's brushes off is what let FluentTheme's grey chrome show through on
+    /// all four entries at once.</para>
+    ///
+    /// <para>The brushes are <see cref="Tokens.Active"/>'s, which are re-tinted in place on a theme change,
+    /// so these styles follow light/dark without being rebuilt.</para>
     /// </summary>
     private void StyleEntries(ThemePalette palette)
     {
@@ -124,7 +130,6 @@ internal sealed class WorkspaceRail : UserControl
         // rules come after the ones they displace — and they spell out hover and press even though the
         // plain ".active" rule would already outrank both by position alone, because "what happens when I
         // hover the one I'm in?" is a question a reader should be able to answer from this list.
-        Add(x => x.OfType<Button>(), Brushes.Transparent, Brushes.Transparent);
         Add(x => x.OfType<Button>().Class(":pointerover"), palette.SurfaceHover, Brushes.Transparent);
         Add(x => x.OfType<Button>().Class(":pressed"), palette.SurfaceHover, Brushes.Transparent);
         Add(x => x.OfType<Button>().Class(ActiveClass), palette.AccentSubtle, palette.Accent);
@@ -166,6 +171,12 @@ internal sealed class WorkspaceRail : UserControl
                 Children = { glyph, label },
             },
             Tag = workspace.Id,
+
+            // The resting look, and it has to be set here rather than in a style: with no style matching,
+            // the presenter falls back to the template binding — this — and what it would otherwise fall
+            // back to is FluentTheme's own grey button chrome, on all four entries at once.
+            Background = Brushes.Transparent,
+            BorderBrush = Brushes.Transparent,
 
             // The active bar's width is reserved on every entry — the styles above decide whether it is
             // painted — so switching workspaces never nudges the icons sideways.

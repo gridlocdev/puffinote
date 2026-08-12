@@ -95,6 +95,23 @@ public sealed class WorkspaceRailTests
     }
 
     [AvaloniaFact]
+    public void An_entry_you_are_not_in_is_unpainted_until_you_hover_it()
+    {
+        // The rail sits on its own surface, so an idle entry shows that surface and nothing else. Left to
+        // FluentTheme the buttons wear its grey chrome instead — four washed entries at rest, which reads
+        // as everything being hovered at once and leaves the active one the odd shade rather than the lit one.
+        var window = Open(); // Notes is active
+        window.UpdateLayout();
+
+        foreach (var title in new[] { "Todos", "Calendar", "Data" })
+        {
+            var face = Face(window, title);
+            Assert.Equal(Brushes.Transparent, face.Background);
+            Assert.Equal(Brushes.Transparent, face.BorderBrush);
+        }
+    }
+
+    [AvaloniaFact]
     public void The_other_entries_still_light_up_under_the_pointer()
     {
         // The fix must not cost the three you *can* go to their hover: there the pointer is telling the truth.
