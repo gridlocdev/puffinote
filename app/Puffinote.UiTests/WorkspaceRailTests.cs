@@ -1,7 +1,12 @@
+using Avalonia.Automation;
+using Avalonia.Controls;
+using Avalonia.Controls.Presenters;
 using Avalonia.Headless.XUnit;
+using Avalonia.Media;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
 using Puffinote.Components.Controls.Icons;
+using Puffinote.Components.Theming;
 using Puffinote.Desktop.Controls;
 using Puffinote.Desktop.Shell;
 using Puffinote.Desktop.Sidebar;
@@ -51,6 +56,60 @@ public sealed class WorkspaceRailTests
                 LucideIcons.Get(workspace.Icon) is not null,
                 $"{workspace.Title}'s icon \"{workspace.Icon}\" is not vendored under Assets/icons.");
         }
+    }
+
+    /// <summary>The presenter the button's template paints its wash and its leading bar on.</summary>
+    private static ContentPresenter Face(MainWindow window, string title) =>
+        window.GetVisualDescendants().OfType<Button>()
+            .Single(b => AutomationProperties.GetName(b) == title)
+            .GetVisualDescendants().OfType<ContentPresenter>().First();
+
+    private static void Hover(MainWindow window, string title, bool hovering)
+    {
+        var button = window.GetVisualDescendants().OfType<Button>()
+            .Single(b => AutomationProperties.GetName(b) == title);
+        ((IPseudoClasses)button.Classes).Set(":pointerover", hovering);
+        Dispatcher.UIThread.RunJobs();
+        window.UpdateLayout();
+    }
+
+    [AvaloniaFact]
+    public void The_entry_you_are_in_does_not_react_to_the_pointer()
+    {
+        // Hovering it used to swap the accent wash for the theme's grey *and* drop the accent bar, because
+        // FluentTheme's :pointerover setters land on the template and outrank a brush set on the button. A
+        // destination you have already arrived at should not offer to take you there.
+        var window = Open();
+        window.WorkspaceRailForTest.ClickForTest("Calendar");
+        Dispatcher.UIThread.RunJobs();
+        window.UpdateLayout();
+
+        var resting = Face(window, "Calendar");
+        var (wash, bar) = (resting.Background, resting.BorderBrush);
+        Assert.NotEqual(Brushes.Transparent, wash); // it is washed and barred to begin with
+        Assert.NotEqual(Brushes.Transparent, bar);
+
+        Hover(window, "Calendar", hovering: true);
+        Assert.Same(wash, Face(window, "Calendar").Background);
+        Assert.Same(bar, Face(window, "Calendar").BorderBrush);
+    }
+
+    [AvaloniaFact]
+    public void The_other_entries_still_light_up_under_the_pointer()
+    {
+        // The fix must not cost the three you *can* go to their hover: there the pointer is telling the truth.
+        var window = Open(); // Notes is active, so Todos is one of the three
+        window.UpdateLayout();
+
+        var resting = Face(window, "Todos").Background;
+        Hover(window, "Todos", hovering: true);
+        var hovered = Face(window, "Todos").Background;
+
+        Assert.NotEqual(resting, hovered);
+        Assert.Same(Tokens.Active.SurfaceHover, hovered); // the shell's ordinary hover wash, not the theme's
+
+        Hover(window, "Todos", hovering: false);
+        Assert.Equal(resting, Face(window, "Todos").Background);
     }
 
     [AvaloniaFact]

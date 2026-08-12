@@ -1,8 +1,10 @@
 using Avalonia;
 using Avalonia.Automation;
 using Avalonia.Controls;
+using Avalonia.Controls.Presenters;
 using Avalonia.Layout;
 using Avalonia.Media;
+using Avalonia.Styling;
 using Puffinote.Components.Controls.Icons;
 using Puffinote.Components.Theming;
 using Puffinote.Desktop.Shell;
@@ -36,11 +38,15 @@ internal sealed class WorkspaceRail : UserControl
 
     private readonly StackPanel _entries = new() { Orientation = Orientation.Vertical };
 
+    /// <summary>Marks the entry you are in, so the styles below can treat it differently from the rest.</summary>
+    private const string ActiveClass = "workspace-active";
+
     public WorkspaceRail()
     {
         var palette = Tokens.Active;
         Width = RailWidth;
 
+        StyleEntries(palette);
         foreach (var workspace in Workspaces.All)
         {
             _entries.Children.Add(BuildEntry(workspace));
@@ -94,6 +100,46 @@ internal sealed class WorkspaceRail : UserControl
             .Select(b => AutomationProperties.GetName(b))
             .FirstOrDefault();
 
+    /// <summary>
+    /// The rail's own answer to hover and press, replacing FluentTheme's.
+    ///
+    /// <para><b>The entry you are in does not react to the pointer.</b> Hovering it did two visible things
+    /// before this: the accent wash became the theme's grey, and the accent bar down its edge vanished —
+    /// because the theme's <c>:pointerover</c> setters land on the button's template and outrank a brush
+    /// assigned to the button itself. Both are wrong for a destination you have already arrived at: hover
+    /// says "this would do something", and clicking the entry you are in does nothing at all. So the active
+    /// entry paints identically at rest, under the pointer, and pressed.</para>
+    ///
+    /// <para>The other three keep exactly the hover they had — the shell's ordinary <c>SurfaceHover</c>
+    /// wash — because there the pointer is telling the truth.</para>
+    ///
+    /// <para>Set on the template's presenter rather than on the button, for the same reason the theme sets
+    /// it there: a value on the button is what the theme was overriding in the first place. The brushes are
+    /// <see cref="Tokens.Active"/>'s, which are re-tinted in place on a theme change, so these styles follow
+    /// light/dark without being rebuilt.</para>
+    /// </summary>
+    private void StyleEntries(ThemePalette palette)
+    {
+        // Avalonia has no CSS specificity: for one property, the last matching style wins. So the active
+        // rules come after the ones they displace — and they spell out hover and press even though the
+        // plain ".active" rule would already outrank both by position alone, because "what happens when I
+        // hover the one I'm in?" is a question a reader should be able to answer from this list.
+        Add(x => x.OfType<Button>(), Brushes.Transparent, Brushes.Transparent);
+        Add(x => x.OfType<Button>().Class(":pointerover"), palette.SurfaceHover, Brushes.Transparent);
+        Add(x => x.OfType<Button>().Class(":pressed"), palette.SurfaceHover, Brushes.Transparent);
+        Add(x => x.OfType<Button>().Class(ActiveClass), palette.AccentSubtle, palette.Accent);
+        Add(x => x.OfType<Button>().Class(ActiveClass).Class(":pointerover"), palette.AccentSubtle, palette.Accent);
+        Add(x => x.OfType<Button>().Class(ActiveClass).Class(":pressed"), palette.AccentSubtle, palette.Accent);
+
+        void Add(Func<Selector?, Selector> selector, IBrush background, IBrush border)
+        {
+            var style = new Style(x => selector(x).Template().OfType<ContentPresenter>().Name("PART_ContentPresenter"));
+            style.Setters.Add(new Setter(ContentPresenter.BackgroundProperty, background));
+            style.Setters.Add(new Setter(ContentPresenter.BorderBrushProperty, border));
+            Styles.Add(style);
+        }
+    }
+
     private Button BuildEntry(WorkspaceInfo workspace)
     {
         var glyph = new LucideIcon
@@ -120,12 +166,10 @@ internal sealed class WorkspaceRail : UserControl
                 Children = { glyph, label },
             },
             Tag = workspace.Id,
-            Background = Brushes.Transparent,
 
-            // The active bar is reserved on every entry, transparent until it is the one you are in, so
-            // switching workspaces never nudges the icons sideways.
+            // The active bar's width is reserved on every entry — the styles above decide whether it is
+            // painted — so switching workspaces never nudges the icons sideways.
             BorderThickness = new Thickness(ActiveBarWidth, 0, 0, 0),
-            BorderBrush = Brushes.Transparent,
             CornerRadius = new CornerRadius(0),
             Padding = new Thickness(0, 8, ActiveBarWidth, 8),
             HorizontalAlignment = HorizontalAlignment.Stretch,
@@ -157,8 +201,10 @@ internal sealed class WorkspaceRail : UserControl
             bool active = button.Tag is Workspace id && id == Active;
             var ink = active ? palette.Accent : palette.MutedText;
             button.Foreground = ink;
-            button.BorderBrush = active ? palette.Accent : Brushes.Transparent;
-            button.Background = active ? palette.AccentSubtle : Brushes.Transparent;
+
+            // The wash and the bar are the styles' business (see StyleEntries) — this only says which
+            // entry it is, so that hover and press can't paint over the answer.
+            button.Classes.Set(ActiveClass, active);
             AutomationProperties.SetHelpText(button, active ? "selected" : null);
 
             // The glyph is a bare Control rather than text, so it takes the ink only if it is handed it.
