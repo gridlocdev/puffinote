@@ -196,28 +196,41 @@ internal sealed class TabHost : UserControl
             return;
         }
 
-        var pane = EditorPaneFactory.Create(path, _editorConfig);
-        if (pane is null)
-        {
-            return; // unsupported type — Phase 3 preview/external
-        }
-
+        IEditorPane? pane = null;
         try
         {
+            // Building the pane is part of opening the file, so it is inside this try. A pane's *constructor*
+            // can fail — a pane is a whole embedded editor, and Cellestra's builds its entire UI from compiled
+            // XAML on the way up — and until this moved, such a failure escaped into a fire-and-forget open
+            // (MainWindow: `_ = OpenFileAsync(path)`) and was dropped on the floor. The click did nothing at
+            // all: no tab, no message, nothing in the log, and one file type silently unopenable while every
+            // other type kept working. Whatever goes wrong building or loading an editor, the answer is the
+            // same and the user gets to read it.
+            pane = BuildPane(path, _editorConfig);
+            if (pane is null)
+            {
+                return; // unsupported type — Phase 3 preview/external
+            }
+
             await pane.LoadAsync(path);
         }
         catch (Exception e)
         {
-            pane.Dispose();
+            pane?.Dispose();
 
             // A file that's simply gone — a stale recent entry, or one deleted externally — leaves the open
             // documents untouched; it shouldn't replace your work with an error. A file that EXISTS but can't
-            // be parsed (an empty/corrupt .ods that isn't a real workbook) shows the reason in the editor area
-            // instead of a blank/broken editor. Catching broadly also stops a non-IO parse error propagating
-            // out of this fire-and-forget open and going unobserved.
+            // be opened (an empty/corrupt .ods that isn't a real workbook, an editor that failed to build)
+            // shows the reason in the editor area instead of a blank/broken editor. Catching broadly also
+            // stops a non-IO error propagating out of this fire-and-forget open and going unobserved.
             if (File.Exists(full))
             {
-                AddTab(new ErrorPane(path, $"Couldn’t open {System.IO.Path.GetFileName(path)}.\n\n{e.Message}"), full);
+                // The exception's *type* is named alongside its message because the messages that matter most
+                // here are the ones that are empty or generic — an editor that failed to build says far more
+                // in "XamlLoadException" than in whatever one-liner came with it.
+                AddTab(
+                    new ErrorPane(path, $"Couldn’t open {System.IO.Path.GetFileName(path)}.\n\n{e.GetType().Name}: {e.Message}"),
+                    full);
             }
 
             return;
@@ -236,6 +249,14 @@ internal sealed class TabHost : UserControl
         Activate(tab);
         return tab;
     }
+
+    /// <summary>
+    /// How a pane is built for a path. It is <see cref="EditorPaneFactory.Create"/>, and it is indirect only
+    /// so a test can stand a failing editor in its place: "a pane that throws on the way up says why" is the
+    /// one behaviour here that cannot be provoked with a file, since it is the editor that is broken and not
+    /// the document.
+    /// </summary>
+    internal Func<string, EditorConfig?, IEditorPane?> BuildPane { get; set; } = EditorPaneFactory.Create;
 
     /// <summary>Test seam: open a pre-built pane (bypassing the factory/disk) so tests can inject a fake editor.</summary>
     internal TabItem OpenForTest(IEditorPane pane, string path) =>

@@ -99,7 +99,8 @@ public sealed class SheetPaneTests
             Assert.Equal(1, host.Count);
             var pane = Assert.IsType<ErrorPane>(host.ActivePane);
             Assert.Equal("broken.ods", pane.Title);
-            Assert.Contains("broken.ods", Assert.IsType<TextBlock>(pane.View).Text);
+            // Selectable, so the reason can be copied out of the tab rather than retyped from it.
+            Assert.Contains("broken.ods", Assert.IsType<SelectableTextBlock>(pane.View).Text);
             Assert.Null(pane.Path); // an error tab is never recorded as recent
         }
         finally

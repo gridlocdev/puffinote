@@ -577,4 +577,32 @@ public sealed class TabHostTests
         host.Settings = new PuffinoteSettings { ShowTabBar = false };
         Assert.False(host.IsStripVisibleForTest);
     }
+
+    [AvaloniaFact]
+    public async Task An_editor_that_fails_to_build_says_so_rather_than_swallowing_the_click()
+    {
+        // A pane is a whole embedded editor, and one can fail on the way up — a control whose XAML or
+        // resources don't load throws from its constructor. That used to happen outside the open's try, in a
+        // fire-and-forget task, so the exception went nowhere: clicking the file did nothing at all, said
+        // nothing, and logged nothing, with one file type silently unopenable while every other type worked.
+        var dir = Directory.CreateTempSubdirectory("puffinote-broken-editor");
+        try
+        {
+            var path = Path.Combine(dir.FullName, "book.ods");
+            File.WriteAllText(path, "");
+
+            var host = new TabHost { BuildPane = (_, _) => throw new InvalidOperationException("editor did not load") };
+            await host.OpenAsync(path);
+
+            var pane = Assert.IsType<ErrorPane>(host.ActivePane);
+            var text = Assert.IsType<SelectableTextBlock>(pane.View).Text ?? string.Empty;
+            Assert.Contains("book.ods", text);
+            Assert.Contains("editor did not load", text);
+            Assert.Contains(nameof(InvalidOperationException), text); // the type earns its place when the message is thin
+        }
+        finally
+        {
+            dir.Delete(recursive: true);
+        }
+    }
 }

@@ -18,7 +18,11 @@ internal sealed class ErrorPane : IEditorPane
     public ErrorPane(string path, string message)
     {
         Title = System.IO.Path.GetFileName(path);
-        View = new TextBlock
+
+        // Selectable, because the one thing anybody wants to do with an error is quote it — into a bug
+        // report, a search, or a message to whoever wrote the file. A message you cannot copy makes the
+        // reader retype it, which is how a diagnosis turns into a paraphrase.
+        View = new SelectableTextBlock
         {
             Text = message,
             TextWrapping = TextWrapping.Wrap,
