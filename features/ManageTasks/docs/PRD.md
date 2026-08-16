@@ -144,6 +144,29 @@ made *on a board* is recorded in that board's file (§2), so it is not asked aga
 **Search** matches the title, the notes, **and the step text**. A checklist item is where the specific
 words usually are; a search that couldn't reach them would send you opening tasks one at a time to look.
 
+### 5.1 The strip
+
+Two controls, at the two ends: the **view switch** hard left — how you are reading the board — and
+**Filter** hard right — what you are reading of it. Nothing in between.
+
+Everything that narrows lives behind the Filter button, in one panel: the search box, and under it the
+four slices with a **tick** against the one in force. They are one job — "which of these tasks am I
+looking at" — so they are one panel, and you can type a word and pick a slice without crossing the strip
+twice. The panel stays open when you pick: the tick has just moved and the board behind it has already
+changed, and closing would hide both answers at once.
+
+*(The four slices used to be pills laid out flat in the strip, beside the search box. Four pills is a
+control that is three-quarters "not this one" — it spent the width of half a narrow window showing the
+three answers you didn't pick, permanently, to a question you ask occasionally. With two controls left
+there is also nothing to re-arrange, so the strip's adaptive layout went with them.)*
+
+The button has to say when something is hidden, because a filtered board looks exactly like a board with
+fewer tasks on it: it **names the slice** in force and wears the accent whenever a slice *or* a search is
+narrowing what you can see, with the search text in its tooltip.
+
+**`/` opens the panel** with the caret in the search box, and so does **Search… (⌘F)** — the search box
+lives inside the editor now, so the command opens it rather than asking a host to find a box for it.
+
 ## 6. Undo
 
 Command-based and session-only, capped at 1,000 steps, never written to the file. Every mutation is a

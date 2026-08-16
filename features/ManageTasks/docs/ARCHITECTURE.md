@@ -59,10 +59,14 @@ that there are two ways to read a board and which one this file was left in.
 
 ## 4. The control
 
-`TaskBoardView` is the composite: the filter/search strip, the board or list under it, the task dialog
-over it, and the catalog. `BoardView` and `TaskListView` both read the document and both consume the same
-filter/search seam from `BoardQuery` — which is why Phase 5's list view was an addition rather than a
-rework.
+`TaskBoardView` is the composite: the strip, the board or list under it, the task dialog over it, and the
+catalog. `BoardView` and `TaskListView` both read the document and both consume the same filter/search
+seam from `BoardQuery` — which is why Phase 5's list view was an addition rather than a rework.
+
+The strip is a `DockPanel` with two children — the view switch docked left, the Filter button docked
+right — and the search box and the four slices live in the button's `Flyout` (PRD §5.1). It had a
+`BoardHeader` panel that re-arranged three controls adaptively; with two controls at opposite ends there
+is nothing left to arrange, so that went with the pills.
 
 **Rebuild, don't diff.** Both views rebuild wholesale when the document changes. A board is tens of
 tasks, so a rebuild is cheap, and it removes an entire class of bug: a view that has quietly stopped

@@ -483,11 +483,14 @@ public class BoardViewTests
     }
 
     /// <summary>
-    /// V flips the view and / jumps to the search box — the prototype's two unmodified keys. Both are
+    /// V flips the view and / reaches the search box — the prototype's two unmodified keys. Both are
     /// suppressed while you are typing, because a bare letter has to stay a letter where one is expected.
+    ///
+    /// <para>The search box now lives in the filter panel, so / has a panel to open before it has a caret
+    /// to place.</para>
     /// </summary>
     [AvaloniaFact]
-    public void V_flips_the_view_and_slash_jumps_to_search_unless_you_are_typing()
+    public void V_flips_the_view_and_slash_reaches_the_search_box_unless_you_are_typing()
     {
         var (view, _) = Open();
         var window = (Window)TopLevel.GetTopLevel(view)!;
@@ -498,13 +501,21 @@ public class BoardViewTests
 
         window.KeyPressQwerty(PhysicalKey.Slash, RawInputModifiers.None);
         Dispatcher.UIThread.RunJobs();
-        var search = view.GetLogicalDescendants().OfType<TextBox>().First(b => b.PlaceholderText == "Search tasks");
-        Assert.True(search.IsFocused);
+        Assert.True(view.FilterMenu.IsOpen);
+        Assert.True(Search(view).IsFocused);
 
-        // Now that the caret is in the search box, "v" is a letter someone is typing.
+        view.FilterMenu.Hide();
+        view.Layout = BoardLayout.Board; // back to the columns, where the add-a-task row under test lives
+        Dispatcher.UIThread.RunJobs();
+
+        // Typing into a field on the board itself — where "v" is a letter, not a command.
+        AddRow(view).RaiseEvent(new Avalonia.Interactivity.RoutedEventArgs(Button.ClickEvent));
+        Dispatcher.UIThread.RunJobs();
+        Assert.True(((TextBox)AddRow(view)).IsFocused);
+
         window.KeyPressQwerty(PhysicalKey.V, RawInputModifiers.None);
         Dispatcher.UIThread.RunJobs();
-        Assert.Equal(BoardLayout.List, view.Layout);
+        Assert.Equal(BoardLayout.Board, view.Layout);
     }
 
     /// <summary>
@@ -1194,63 +1205,120 @@ public class BoardViewTests
     }
 
     /// <summary>
-    /// Given room, the strip is the prototype's single row: search on the left, filters pushed right, the
-    /// view switch at the far end with its words on.
+    /// Two controls at the two ends of the strip: how you are reading the board on the left, what you are
+    /// reading of it on the right, and nothing in between.
+    ///
+    /// <para>The strip used to carry the search box, four filter pills and the switch, adaptively
+    /// re-arranged when they stopped fitting. Four pills is a control that is three-quarters "not this
+    /// one" — it spent the width of half a narrow window showing the three answers you didn't pick,
+    /// permanently, to a question you ask occasionally.</para>
     /// </summary>
     [AvaloniaFact]
-    public void The_header_is_one_row_when_there_is_room_for_one()
+    public void The_strip_is_the_view_switch_on_the_left_and_Filter_on_the_right()
     {
         var (view, _) = Open();
         var window = (Window)TopLevel.GetTopLevel(view)!;
         Resize(window, 1100);
 
-        Assert.False(view.HeaderIsCompactForTest);
+        var switcher = SwitchButton(view);
+        var filter = FilterButton(view);
 
-        // On one row means sharing a centre line, not a top edge: the search box is taller than a pill.
-        Assert.Equal(Centre(Search(view), view), Centre(FilterPill(view), view), precision: 0);
-        Assert.Equal(Centre(Search(view), view), Centre(SwitchButton(view), view), precision: 0);
-        Assert.True(SwitchLabel(view).IsVisible);
+        // One row: they share a centre line, not merely a top edge.
+        Assert.Equal(Centre(switcher, view), Centre(filter, view), precision: 0);
+
+        // The switch is hard left and Filter is hard right, with the board's width between them.
+        Assert.True(Left(switcher, view) < 30, $"the switch starts at {Left(switcher, view)}");
+        double gap = 1100 - Left(filter, view) - filter.Bounds.Width;
+        Assert.True(gap < 30, $"Filter ends {gap} short of the right edge");
+        Assert.True(Left(filter, view) > Left(switcher, view) + switcher.Bounds.Width + 400);
+
+        // Nothing else is on the strip — the pills and the search box have gone into the panel.
+        Assert.DoesNotContain(
+            view.GetLogicalDescendants().OfType<TextBox>(), b => b.PlaceholderText == "Search tasks");
+        Assert.DoesNotContain(
+            view.GetLogicalDescendants().OfType<Button>(), b => (b.Content as string) == "All");
     }
 
     /// <summary>
-    /// Squeezed, it does what the prototype's own media query does rather than letting the three controls
-    /// fight over one row and clipping the losers: the switch drops to its icons, and the search takes a
-    /// full-width row of its own underneath.
+    /// The Filter panel holds the search box and the four slices together, with a tick against the one in
+    /// force — they are one job ("which of these tasks am I looking at"), so they are one panel.
     /// </summary>
     [AvaloniaFact]
-    public void A_narrow_header_drops_the_switch_to_icons_and_gives_search_its_own_row()
+    public void The_filter_panel_holds_the_search_box_and_the_four_slices()
     {
         var (view, _) = Open();
-        var window = (Window)TopLevel.GetTopLevel(view)!;
-        Resize(window, 560);
 
-        Assert.True(view.HeaderIsCompactForTest);
+        Assert.Equal(["All", "Starred", "Due soon", "Unfinished"], FilterRows(view).Select(Named));
+        Assert.Same(Search(view).Parent, FilterPanel(view)); // the search box is in the panel, not the strip
 
-        // The switch keeps its buttons — and its names, for anyone who can't read an icon — but not its words.
-        Assert.False(SwitchLabel(view).IsVisible);
-        Assert.Equal("Board view", Avalonia.Automation.AutomationProperties.GetName(SwitchButton(view)));
+        // A tick, not a fill: in a vertical list that is what "this is the one" looks like, and it survives
+        // a reader who cannot tell the fill from the ground.
+        Assert.Equal(["selected", null, null, null], FilterRows(view).Select(Help));
 
-        // …and the search has moved below the filters, spanning the strip.
-        Assert.True(Top(Search(view), view) > Top(FilterPill(view), view));
-        Assert.True(Search(view).Bounds.Width > 400, $"search is only {Search(view).Bounds.Width} wide");
+        Row(view, "Starred").RaiseEvent(new Avalonia.Interactivity.RoutedEventArgs(Button.ClickEvent));
+        Dispatcher.UIThread.RunJobs();
+
+        Assert.Equal(TaskFilter.Starred, view.Filter);
+        Assert.Equal([null, "selected", null, null], FilterRows(view).Select(Help));
     }
 
     /// <summary>
-    /// Resizing back and forth across the threshold settles both ways. A layout that decides its own
-    /// arrangement can chatter on the boundary — wrap, which frees room, which unwraps, forever — so the
-    /// width it takes to unwrap is measured from the *full-size* switch, not the shrunken one.
+    /// The button says when the board is showing a slice of itself. A filtered board looks exactly like a
+    /// board with fewer tasks on it, and the pills at least showed which one was lit — so the button that
+    /// replaced them names the slice and wears the accent whenever a slice or a search is hiding anything.
     /// </summary>
     [AvaloniaFact]
-    public void The_header_settles_on_the_way_back_out_as_well_as_in()
+    public void The_filter_button_says_what_is_being_hidden()
+    {
+        var (view, _) = Open();
+        var button = FilterButton(view);
+
+        static string? Label(Button b) =>
+            b.GetLogicalDescendants().OfType<TextBlock>().First().Text;
+
+        Assert.Equal("Filter", Label(button));
+        Assert.Null(Avalonia.Automation.AutomationProperties.GetHelpText(button));
+
+        view.Filter = TaskFilter.Unfinished;
+        Dispatcher.UIThread.RunJobs();
+        Assert.Equal("Unfinished", Label(button));
+        Assert.Same(Puffinote.Components.Theming.Tokens.Active.Accent, button.BorderBrush);
+
+        // A search narrows the board without changing the slice, and has to say so too.
+        view.Filter = TaskFilter.All;
+        view.Query = "invoice";
+        Dispatcher.UIThread.RunJobs();
+        Assert.Equal("Filter", Label(button));
+        Assert.Contains("invoice", Avalonia.Automation.AutomationProperties.GetHelpText(button)!, StringComparison.Ordinal);
+        Assert.Same(Puffinote.Components.Theming.Tokens.Active.Accent, button.BorderBrush);
+    }
+
+    /// <summary>
+    /// <c>/</c> opens the filter panel — the search box lives in it now, so jumping to the search box means
+    /// opening the panel first. ⌘F is the same journey from the command catalog.
+    /// </summary>
+    [AvaloniaFact]
+    public void Slash_and_the_search_command_both_open_the_filter_panel()
     {
         var (view, _) = Open();
         var window = (Window)TopLevel.GetTopLevel(view)!;
 
-        foreach (var (width, compact) in new[] { (1100.0, false), (560.0, true), (1100.0, false), (480.0, true) })
-        {
-            Resize(window, width);
-            Assert.Equal(compact, view.HeaderIsCompactForTest);
-        }
+        Assert.False(view.FilterMenu.IsOpen);
+
+        window.KeyPressQwerty(PhysicalKey.Slash, RawInputModifiers.None);
+        Dispatcher.UIThread.RunJobs();
+        Assert.True(view.FilterMenu.IsOpen);
+
+        view.FilterMenu.Hide();
+        Dispatcher.UIThread.RunJobs();
+        Assert.False(view.FilterMenu.IsOpen);
+
+        view.EditingCommands.Single(c => c.Id == "edit.find").Execute();
+        Dispatcher.UIThread.RunJobs();
+        Assert.True(view.FilterMenu.IsOpen);
+
+        view.FilterMenu.Hide(); // never leave a popup standing in a headless run
+        Dispatcher.UIThread.RunJobs();
     }
 
     private static void Resize(Window window, double width)
@@ -1263,20 +1331,31 @@ public class BoardViewTests
 
     private static double Top(Visual part, Visual root) => part.TranslatePoint(new Point(0, 0), root)!.Value.Y;
 
+    private static double Left(Visual part, Visual root) => part.TranslatePoint(new Point(0, 0), root)!.Value.X;
+
     private static double Centre(Visual part, Visual root) => Top(part, root) + (part.Bounds.Height / 2);
 
-    private static TextBox Search(TaskBoardView view) =>
-        view.GetLogicalDescendants().OfType<TextBox>().First(b => b.PlaceholderText == "Search tasks");
+    /// <summary>The filter panel's own content, which exists whether or not the popup is showing.</summary>
+    private static StackPanel FilterPanel(TaskBoardView view) => (StackPanel)view.FilterMenu.Content!;
 
-    private static Button FilterPill(TaskBoardView view) =>
-        view.GetLogicalDescendants().OfType<Button>().First(b => (b.Content as string) == "All");
+    private static TextBox Search(TaskBoardView view) =>
+        FilterPanel(view).GetLogicalDescendants().OfType<TextBox>().First(b => b.PlaceholderText == "Search tasks");
+
+    private static List<Button> FilterRows(TaskBoardView view) =>
+        [.. FilterPanel(view).GetLogicalDescendants().OfType<Button>()];
+
+    private static Button Row(TaskBoardView view, string name) =>
+        FilterRows(view).First(b => Named(b) == name);
+
+    private static string? Named(Button b) => Avalonia.Automation.AutomationProperties.GetName(b);
+
+    private static string? Help(Button b) => Avalonia.Automation.AutomationProperties.GetHelpText(b);
+
+    private static Button FilterButton(TaskBoardView view) =>
+        view.GetLogicalDescendants().OfType<Button>().First(b => Named(b) == "Filter");
 
     private static Button SwitchButton(TaskBoardView view) =>
-        view.GetLogicalDescendants().OfType<Button>()
-            .First(b => Avalonia.Automation.AutomationProperties.GetName(b) == "Board view");
-
-    private static TextBlock SwitchLabel(TaskBoardView view) =>
-        SwitchButton(view).GetLogicalDescendants().OfType<TextBlock>().First();
+        view.GetLogicalDescendants().OfType<Button>().First(b => Named(b) == "Board view");
 
     /// <summary>A real click, through the window, so the guard inside the card is actually exercised.</summary>
     private static void Click(Visual target)

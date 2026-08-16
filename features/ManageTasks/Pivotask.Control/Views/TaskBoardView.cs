@@ -29,11 +29,19 @@ public sealed class TaskBoardView : UserControl
     private readonly LayoutTransformControl _zoomHost = new();
     /// <summary>"Search tasks", the prototype's words — "Search" alone leaves open what it searches.</summary>
     private readonly TextBox _search = new() { PlaceholderText = "Search tasks" };
-    private readonly StackPanel _filters = new() { Orientation = Orientation.Horizontal, Spacing = 4 };
+    private readonly StackPanel _filterRows = new() { Spacing = 2 };
+    private readonly Button _filterButton = new();
     private readonly ContentControl _switcher = new();
-    private readonly BoardHeader _header;
-    private bool _compactSwitch;
     private TopLevel? _keyHost;
+
+    /// <summary>The four slices, in the order the menu lists them. One choice with four answers.</summary>
+    private static readonly (TaskFilter Filter, string Label)[] Slices =
+    [
+        (TaskFilter.All, "All"),
+        (TaskFilter.Starred, "Starred"),
+        (TaskFilter.DueSoon, "Due soon"),
+        (TaskFilter.Unfinished, "Unfinished"),
+    ];
 
     public TaskBoardView()
     {
@@ -46,16 +54,23 @@ public sealed class TaskBoardView : UserControl
         {
             BoardForTest.Query = _search.Text ?? string.Empty;
             ListForTest.Query = _search.Text ?? string.Empty;
+            RefreshFilterFace(); // the button says when something is narrowing the board
         };
 
-        // The prototype's order, left to right: the search, then the filters, then the view switch at the
-        // far right. Search leads because it is the widest target and the one you reach for without
-        // looking; the switch is last because it is the only control here that changes the *shape* of
-        // what is below rather than what is in it. BoardHeader re-lays all three when the window gets too
-        // narrow to hold them on one line — see its own notes.
+        // Two controls, at the two ends: how you are reading the board on the left, what you are reading
+        // of it on the right. Everything that *narrows* — the search box and the four slices — is behind
+        // the Filter button, because narrowing is one job with several settings and a strip that laid all
+        // of them out flat spent its width on four pills that are three-quarters "not this one". You look
+        // at a board far more often than you filter it.
         BuildLayoutSwitch();
         var palette = Tokens.Active;
-        _header = new BoardHeader(_search, _filters, _switcher, SetSwitchCompact);
+        _filterButton.Flyout = FilterMenu;
+
+        var bar = new DockPanel { LastChildFill = false };
+        DockPanel.SetDock(_switcher, Dock.Left);
+        DockPanel.SetDock(_filterButton, Dock.Right);
+        bar.Children.Add(_switcher);
+        bar.Children.Add(_filterButton);
 
         // Chrome, not paper: the strip is a raised surface with a hairline under it, and the board below
         // is the recessed sheet the columns sit on. That contrast is the prototype's `--surface` bar over
@@ -68,7 +83,7 @@ public sealed class TaskBoardView : UserControl
             BorderBrush = palette.SurfaceBorder,
             BorderThickness = new Thickness(0, 0, 0, 1),
             Padding = new Thickness(12, 8),
-            Child = _header,
+            Child = bar,
         };
 
         // The board is scaled, the strip above it is not: zoom magnifies the tasks, and a filter row that
@@ -96,7 +111,7 @@ public sealed class TaskBoardView : UserControl
 
         // The trackpad half of zoom, over the same seam the ⌘= / ⌘− catalog uses (see PinchZoom).
         PinchZoom.Attach(this, () => Zoom, zoom => Zoom = zoom);
-        BuildFilters();
+        RefreshFilters();
         ApplyLayout();
         Document = Document;
     }
@@ -184,7 +199,7 @@ public sealed class TaskBoardView : UserControl
         {
             BoardForTest.Filter = value;
             ListForTest.Filter = value;
-            BuildFilters();
+            RefreshFilters();
         }
     }
 
@@ -315,8 +330,8 @@ public sealed class TaskBoardView : UserControl
     }
 
     /// <summary>
-    /// The two unmodified keys the prototype binds: <c>/</c> jumps to the search box and selects what is
-    /// in it, and <c>V</c> flips between board and list.
+    /// The two unmodified keys the prototype binds: <c>/</c> opens the filter panel with the caret in its
+    /// search box, and <c>V</c> flips between board and list.
     /// <para>
     /// Both are suppressed while you are typing — into the search box, a card's add-a-task field, a group
     /// name, or anything else that takes text — and while the task dialog is up, because a bare letter has
@@ -343,8 +358,7 @@ public sealed class TaskBoardView : UserControl
 
         if (e.Key == Key.Oem2 || e.Key == Key.Divide)
         {
-            _search.Focus();
-            _search.SelectAll();
+            OpenFilters(); // the search box lives in the filter panel now, so / has to open it first
             e.Handled = true;
         }
         else if (e.Key == Key.V)
@@ -415,48 +429,173 @@ public sealed class TaskBoardView : UserControl
     private void ApplyLayout()
     {
         _surface.Content = Layout == BoardLayout.Board ? BoardForTest : ListForTest;
-        BuildFilters();
+        BuildLayoutSwitch(); // the switch lights the view in force, so it is rebuilt whenever that changes
     }
 
-    private void BuildFilters()
+    /// <summary>
+    /// Everything that narrows the board, in one panel hung off the Filter button: the search box, and
+    /// under it the four slices with a tick against whichever is in force.
+    ///
+    /// <para>They were four pills laid out flat in the strip beside the search box. Four pills is a
+    /// control that is three-quarters "not this one" — it spends the width of half a narrow window
+    /// showing you the three answers you didn't pick, permanently, to a question you ask occasionally.
+    /// Search and the slices are also one job, not two: both answer "which of these tasks am I looking
+    /// at", and putting them in one panel is what lets you type a word and tick "Unfinished" without
+    /// crossing the strip twice.</para>
+    ///
+    /// <para>A tick rather than a filled pill, because in a vertical list that is what "this is the one"
+    /// looks like — and it survives a reader who cannot tell the fill from the ground (WCAG 2.2 §1.4.1),
+    /// which a colour difference alone does not.</para>
+    /// </summary>
+    internal Flyout FilterMenu => field ??= BuildFilterMenu();
+
+    private Flyout BuildFilterMenu()
     {
         var palette = Tokens.Active;
-        BuildLayoutSwitch(); // the switch lights the view in force, so it is rebuilt whenever that changes
-        _filters.Children.Clear();
-        foreach (var (filter, label) in new[]
-                 {
-                     (TaskFilter.All, "All"),
-                     (TaskFilter.Starred, "Starred"),
-                     (TaskFilter.DueSoon, "Due soon"),
-                     (TaskFilter.Unfinished, "Unfinished"),
-                 })
+
+        var panel = new StackPanel { Spacing = 8, MinWidth = 232 };
+        panel.Children.Add(_search);
+        panel.Children.Add(new Border
         {
-            // A pill, filled when it is the one in force — the prototype's shape, and the right one here:
-            // these four are one choice with four answers, and a filled pill says "this is the answer"
-            // where an underline reads as a tab you could be on several of.
+            BorderBrush = palette.SurfaceBorder,
+            BorderThickness = new Thickness(0, 1, 0, 0),
+            Margin = new Thickness(0, 2, 0, 0),
+        });
+        panel.Children.Add(_filterRows);
+        Avalonia.Automation.AutomationProperties.SetName(panel, "Filter tasks");
+
+        var flyout = new Flyout
+        {
+            Content = panel,
+            Placement = PlacementMode.BottomEdgeAlignedRight,
+            ShowMode = FlyoutShowMode.Standard,
+        };
+
+        // The caret lands in the search box on open, because typing is what most people came here to do
+        // and the slices are a click away either way. Posted, so the popup's own focus pass is finished
+        // before this one runs.
+        flyout.Opened += (_, _) => Avalonia.Threading.Dispatcher.UIThread.Post(() =>
+        {
+            _search.Focus();
+            _search.SelectAll();
+        });
+
+        return flyout;
+    }
+
+    /// <summary>Open the filter panel and put the caret in its search box — what <c>/</c> and ⌘F do.</summary>
+    public void OpenFilters()
+    {
+        if (!FilterMenu.IsOpen)
+        {
+            FilterMenu.ShowAt(_filterButton);
+        }
+
+        Avalonia.Threading.Dispatcher.UIThread.Post(() =>
+        {
+            _search.Focus();
+            _search.SelectAll();
+        });
+    }
+
+    /// <summary>The filter panel's rows and the button's face, both of which state which slice is in force.</summary>
+    private void RefreshFilters()
+    {
+        var palette = Tokens.Active;
+        _filterRows.Children.Clear();
+
+        foreach (var (filter, label) in Slices)
+        {
             bool active = Filter == filter;
+
+            var row = new DockPanel { LastChildFill = true };
+            var tick = new LucideIcon
+            {
+                IconKey = "check",
+                Size = 14,
+                Foreground = palette.Accent,
+                VerticalAlignment = VerticalAlignment.Center,
+                Margin = new Thickness(0, 0, 10, 0),
+
+                // Opacity, not IsVisible: the tick keeps its slot either way, so the four labels line up
+                // in one column instead of shuffling sideways as the choice moves between them.
+                Opacity = active ? 1 : 0,
+            };
+            DockPanel.SetDock(tick, Dock.Left);
+            row.Children.Add(tick);
+            row.Children.Add(new TextBlock
+            {
+                Text = label,
+                FontSize = 12.5,
+                VerticalAlignment = VerticalAlignment.Center,
+                Foreground = active ? palette.Text : palette.MutedText,
+            });
+
             var button = new Button
             {
-                Content = label,
-
-                // The prototype's 12.5px in a 10px gutter. At the stock 14px these four pills wanted 500px
-                // between them — most of a narrow window, and enough on its own to push the strip into its
-                // wrapped form on a screen with plenty of room.
-                FontSize = 12.5,
-                Padding = new Thickness(10, 5),
-                CornerRadius = new CornerRadius(999),
+                Content = row,
+                Padding = new Thickness(8, 6),
+                CornerRadius = new CornerRadius(6),
                 BorderThickness = new Thickness(0),
-                Background = active ? palette.SurfaceInset : Brushes.Transparent,
-                Foreground = active ? palette.Text : palette.MutedText,
+                Background = Brushes.Transparent,
+                HorizontalAlignment = HorizontalAlignment.Stretch,
+                HorizontalContentAlignment = HorizontalAlignment.Stretch,
                 FontWeight = active ? FontWeight.SemiBold : FontWeight.Normal,
             };
             Avalonia.Automation.AutomationProperties.SetName(button, label);
             Avalonia.Automation.AutomationProperties.SetHelpText(button, active ? "selected" : null);
 
+            // The panel stays open on a pick: the search box is in it, the tick has just moved, and the
+            // board behind has already changed — closing would hide all three answers at once.
             var captured = filter;
             button.Click += (_, _) => Filter = captured;
-            _filters.Children.Add(button);
+            _filterRows.Children.Add(button);
         }
+
+        RefreshFilterFace();
+    }
+
+    /// <summary>
+    /// The button itself, which has to say whether anything is being hidden. A board showing a slice of
+    /// itself looks exactly like a board with fewer tasks on it, and the four pills at least said which
+    /// one was lit — so the button that replaced them names the slice in force and wears the accent
+    /// whenever a slice or a search is narrowing what you can see.
+    /// </summary>
+    private void RefreshFilterFace()
+    {
+        var palette = Tokens.Active;
+        string query = Query;
+        bool narrowed = Filter != TaskFilter.All || query.Length > 0;
+        string slice = Array.Find(Slices, s => s.Filter == Filter).Label;
+
+        var face = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 7 };
+        face.Children.Add(new LucideIcon
+        {
+            IconKey = "filter",
+            Size = 13,
+            IsFilled = narrowed,
+            VerticalAlignment = VerticalAlignment.Center,
+        });
+        face.Children.Add(new TextBlock
+        {
+            Text = Filter == TaskFilter.All ? "Filter" : slice,
+            FontSize = 12.5,
+            VerticalAlignment = VerticalAlignment.Center,
+        });
+
+        _filterButton.Content = face;
+        _filterButton.Padding = new Thickness(12, 6);
+        _filterButton.CornerRadius = new CornerRadius(6);
+        _filterButton.BorderThickness = new Thickness(1);
+        _filterButton.BorderBrush = narrowed ? palette.Accent : Brushes.Transparent;
+        _filterButton.Background = narrowed ? palette.SurfaceInset : Brushes.Transparent;
+        _filterButton.Foreground = narrowed ? palette.Accent : palette.MutedText;
+        _filterButton.FontWeight = narrowed ? FontWeight.SemiBold : FontWeight.Normal;
+
+        string state = query.Length > 0 ? $"{slice} · “{query}”" : slice;
+        ToolTip.SetTip(_filterButton, narrowed ? $"Filter tasks — {state} (/)" : "Filter tasks (/)");
+        Avalonia.Automation.AutomationProperties.SetName(_filterButton, "Filter");
+        Avalonia.Automation.AutomationProperties.SetHelpText(_filterButton, narrowed ? state : null);
     }
 
     /// <summary>
@@ -492,13 +631,12 @@ public sealed class TaskBoardView : UserControl
                 FontSize = 11.5,
                 LetterSpacing = 0.6,
                 VerticalAlignment = VerticalAlignment.Center,
-                IsVisible = !_compactSwitch,
             });
 
             var button = new Button
             {
                 Content = face,
-                Padding = _compactSwitch ? new Thickness(10, 6) : new Thickness(12, 6),
+                Padding = new Thickness(12, 6),
                 CornerRadius = new CornerRadius(6),
                 BorderThickness = new Thickness(1),
                 BorderBrush = active ? palette.Accent : Brushes.Transparent,
@@ -507,8 +645,6 @@ public sealed class TaskBoardView : UserControl
                 FontWeight = active ? FontWeight.SemiBold : FontWeight.Normal,
             };
 
-            // The tooltip carries the name whether or not the label is showing, which is what makes
-            // dropping the word to an icon a safe trade rather than a guessing game.
             ToolTip.SetTip(button, $"{label} view (V)"); // the chord the prototype advertises here too
             Avalonia.Automation.AutomationProperties.SetName(button, $"{label} view");
             Avalonia.Automation.AutomationProperties.SetHelpText(button, active ? "selected" : null);
@@ -521,20 +657,4 @@ public sealed class TaskBoardView : UserControl
         _switcher.Content = group;
         return _switcher;
     }
-
-    /// <summary>Drop the view switch to its icons, or put its words back. Called by <see cref="BoardHeader"/>
-    /// when the strip changes arrangement — the switch itself has no opinion about how much room there is.</summary>
-    private void SetSwitchCompact(bool compact)
-    {
-        if (_compactSwitch == compact)
-        {
-            return;
-        }
-
-        _compactSwitch = compact;
-        BuildLayoutSwitch();
-    }
-
-    /// <summary>Whether the strip has wrapped — the search on its own row, the switch down to icons.</summary>
-    internal bool HeaderIsCompactForTest => _header.IsCompact;
 }

@@ -14,7 +14,10 @@ namespace Pivotask.Control.Commands;
 /// by construction rather than by two lists happening to agree.
 ///
 /// <para>What stays with a host is only what needs a host: opening and saving <i>files</i>, recent
-/// boards, the window. Everything that acts on the board is here.</para>
+/// boards, the window. Everything that acts on the board is here — including "Search…", which used to
+/// raise an event for a host to answer because the search box lived in a strip the host had to reach
+/// into. It lives in the board's own filter panel now, so the command opens it and nobody else is
+/// involved.</para>
 /// </summary>
 public static class TaskEditingCommands
 {
@@ -59,17 +62,11 @@ public static class TaskEditingCommands
                 isActive: () => view.Filter == TaskFilter.Unfinished, icon: "square-check"),
 
             new("edit.find", "Search…", "Search titles, notes, and steps.", Shortcut.Cmd(Key.F),
-                () => SearchRequested?.Invoke(view), icon: "search"),
+                view.OpenFilters, icon: "search"),
 
             .. ZoomCommands.Build(() => view.Zoom, zoom => view.Zoom = zoom),
         ];
     }
-
-    /// <summary>
-    /// Raised by "Search…" so a host can put the caret in whichever search box it is showing. The
-    /// command belongs to the editor (it acts on what the board displays); only the focus is the host's.
-    /// </summary>
-    public static event Action<TaskBoardView>? SearchRequested;
 
     private static void AddTask(TaskBoardView view)
     {

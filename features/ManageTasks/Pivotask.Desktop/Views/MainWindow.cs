@@ -5,7 +5,6 @@ using Avalonia.Layout;
 using Avalonia.Media;
 using Avalonia.Platform.Storage;
 using Avalonia.Threading;
-using Pivotask.Control.Commands;
 using Pivotask.Control.Views;
 using Pivotask.Core;
 using Pivotask.Core.Serialization;
@@ -83,8 +82,6 @@ public sealed partial class MainWindow : Window
             UpdateChrome();
             _autoSave.Notify();
         };
-        TaskEditingCommands.SearchRequested += OnSearchRequested;
-
         var root = new DockPanel { LastChildFill = true };
 
         // The title bar is the topmost strip, above even the in-window menu, because on macOS it *is* the
@@ -114,7 +111,6 @@ public sealed partial class MainWindow : Window
         base.OnClosed(e);
         _autoSave.Dispose();
         _watcher.Dispose();
-        TaskEditingCommands.SearchRequested -= OnSearchRequested;
     }
 
     /// <summary>Open a board file, replacing whatever is open.</summary>
@@ -367,15 +363,6 @@ public sealed partial class MainWindow : Window
         // An unresolved external write outranks the counts: until it is settled there is a second version
         // of this board on disk, which is a more urgent fact than how many tasks are open.
         _status.Text = DiskChangedUnderEdits ? $"{counts} · changed on disk — Save will ask" : counts;
-    }
-
-    private void OnSearchRequested(TaskBoardView view)
-    {
-        if (ReferenceEquals(view, _view))
-        {
-            _view.Query = string.Empty;
-            _view.Focus();
-        }
     }
 
     // ---- Files ------------------------------------------------------------
