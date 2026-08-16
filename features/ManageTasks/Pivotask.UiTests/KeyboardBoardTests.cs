@@ -30,7 +30,7 @@ public class KeyboardBoardTests
         document.Execute(BoardCommands.AddTask(todo, new TaskItem { Id = "t2", Title = "second" }));
         document.Execute(BoardCommands.AddTask(doing, new TaskItem { Id = "t3", Title = "other" }));
 
-        var view = new TaskBoardView { Document = document };
+        var view = new TaskBoardView { Document = document, Layout = BoardLayout.Board };
         var window = new Window { Width = 1000, Height = 700, Content = view };
         window.Show();
         Dispatcher.UIThread.RunJobs();

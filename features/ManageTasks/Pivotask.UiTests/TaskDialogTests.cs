@@ -36,7 +36,7 @@ public class TaskDialogTests
         arrange?.Invoke(board);
 
         var document = new BoardDocument(board);
-        var view = new TaskBoardView { Document = document, Today = Today };
+        var view = new TaskBoardView { Document = document, Today = Today, Layout = BoardLayout.Board };
         var window = new Window { Width = 900, Height = 700, Content = view };
         window.Show();
         window.UpdateLayout();

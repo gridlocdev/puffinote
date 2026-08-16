@@ -124,8 +124,16 @@ public sealed class TaskBoardView : UserControl
     /// <summary>Raised on any change to the document, so a host can repaint its dirty indicator.</summary>
     public event EventHandler? DocumentChanged;
 
-    /// <summary>Board or list. One filter set and one search box serve both — which is why the list view
-    /// was an addition in Phase 5 rather than a rework (proposal 0004 §10.6).</summary>
+    /// <summary>
+    /// Board or list. One filter set and one search box serve both — which is why the list view was an
+    /// addition in Phase 5 rather than a rework (proposal 0004 §10.6).
+    /// <para>
+    /// The <b>list</b> is what a board opens in when nothing has said otherwise. Columns are the better
+    /// picture of a board you already know the shape of; rows are the better reading of one you don't,
+    /// which every board is on the day it is made — and a person who wants columns says so once, in
+    /// Preferences or with a press of V, and the board file remembers it from then on.
+    /// </para>
+    /// </summary>
     public BoardLayout Layout
     {
         get;
@@ -134,7 +142,7 @@ public sealed class TaskBoardView : UserControl
             field = value;
             ApplyLayout();
         }
-    } = BoardLayout.Board;
+    } = BoardLayout.List;
 
     public TaskFilter Filter
     {

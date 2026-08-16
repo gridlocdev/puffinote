@@ -97,6 +97,11 @@ Two readings of the same tasks — **Board** (columns) and **List** (grouped row
 set and **one** search box. That sharing is not an implementation detail: it is why the list view could
 be added later without reworking the board.
 
+**A board opens in the List** unless something says otherwise. Columns are the better picture of a board
+whose shape you already know; rows are the better reading of one you don't — which every board is on the
+day it is made, and which any board is to someone opening it for the first time. Wanting columns is said
+once — with a press of V, from the View menu, or as **Board → Open in** in Preferences.
+
 | Filter | Means |
 |---|---|
 | All | everything |

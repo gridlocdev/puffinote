@@ -27,7 +27,7 @@ public class ZoomTests
         inbox.Tasks.Add(new TaskItem { Id = "t1", Title = "Rewrite the empty states" });
         board.Groups.Add(inbox);
 
-        var view = new TaskBoardView { Document = new BoardDocument(board) };
+        var view = new TaskBoardView { Document = new BoardDocument(board), Layout = BoardLayout.Board };
         var window = new Window { Width = 900, Height = 600, Content = view };
         window.Show();
         window.UpdateLayout();

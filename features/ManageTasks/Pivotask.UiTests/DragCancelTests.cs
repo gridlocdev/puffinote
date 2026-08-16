@@ -26,7 +26,7 @@ public class DragCancelTests
         document.Execute(BoardCommands.AddGroup("Doing"));
         document.Execute(BoardCommands.AddTask(document.Board.Groups[0], new TaskItem { Id = "t1", Title = "first" }));
 
-        var view = new TaskBoardView { Document = document };
+        var view = new TaskBoardView { Document = document, Layout = BoardLayout.Board };
         var window = new Window { Width = 1000, Height = 700, Content = view };
         window.Show();
         Dispatcher.UIThread.RunJobs();

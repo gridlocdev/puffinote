@@ -37,12 +37,29 @@ public class BoardViewTests
         board.Groups.Add(week);
 
         var document = new BoardDocument(board);
-        var view = new TaskBoardView { Document = document, Today = Today };
+
+        // Columns, said out loud: a board opens in the *list* now, and the tests below that drive columns
+        // have to ask for them rather than inherit them. The other view is detached, and a detached card
+        // reports no bounds at all.
+        var view = new TaskBoardView { Document = document, Today = Today, Layout = BoardLayout.Board };
         var window = new Window { Width = 900, Height = 600, Content = view };
         window.Show();
         window.UpdateLayout();
         Dispatcher.UIThread.RunJobs();
         return (view, document);
+    }
+
+    /// <summary>
+    /// A board nobody has expressed an opinion about opens as rows.
+    ///
+    /// <para>Columns are the better picture of a board you already know the shape of; rows are the better
+    /// reading of one you don't — which every board is on the day it is made. Wanting columns is said
+    /// once, in Preferences or with a press of V, and the board file remembers it from then on.</para>
+    /// </summary>
+    [AvaloniaFact]
+    public void A_board_nobody_has_an_opinion_about_opens_as_rows()
+    {
+        Assert.Equal(BoardLayout.List, new TaskBoardView().Layout);
     }
 
     [AvaloniaFact]
@@ -248,7 +265,7 @@ public class BoardViewTests
         group.Tasks.Add(task);
         board.Groups.Add(group);
 
-        var view = new TaskBoardView { Document = new BoardDocument(board), Today = Today };
+        var view = new TaskBoardView { Document = new BoardDocument(board), Today = Today, Layout = BoardLayout.Board };
         var window = new Window { Width = 900, Height = 600, Content = view };
         window.Show();
         window.UpdateLayout();
@@ -427,7 +444,7 @@ public class BoardViewTests
 
         board.Groups.Add(group);
 
-        var view = new TaskBoardView { Document = new BoardDocument(board), Today = Today };
+        var view = new TaskBoardView { Document = new BoardDocument(board), Today = Today, Layout = BoardLayout.Board };
         var window = new Window { Width = 900, Height = 600, Content = view };
         window.Show();
         window.UpdateLayout();
@@ -952,7 +969,7 @@ public class BoardViewTests
             board.Groups.Add(new TaskGroup { Id = $"g{i}", Name = $"Group {i}" });
         }
 
-        var view = new TaskBoardView { Document = new BoardDocument(board), Today = Today };
+        var view = new TaskBoardView { Document = new BoardDocument(board), Today = Today, Layout = BoardLayout.Board };
         var window = new Window { Width = 900, Height = 600, Content = view };
         window.Show();
         window.UpdateLayout();
@@ -1082,7 +1099,7 @@ public class BoardViewTests
         group.Tasks.Add(task);
         board.Groups.Add(group);
 
-        var view = new TaskBoardView { Document = new BoardDocument(board), Today = Today };
+        var view = new TaskBoardView { Document = new BoardDocument(board), Today = Today, Layout = BoardLayout.Board };
         var window = new Window { Width = 900, Height = 600, Content = view };
         window.Show();
         window.UpdateLayout();

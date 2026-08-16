@@ -13,8 +13,8 @@ namespace Puffinote.Desktop.Panes;
 /// </summary>
 internal sealed record BoardConfig
 {
-    /// <summary>The reading a board opens in: columns, or grouped rows.</summary>
-    public BoardLayout Layout { get; set; } = BoardLayout.Board;
+    /// <summary>The reading a board opens in: columns, or grouped rows. Rows by default, as in Pivotask.</summary>
+    public BoardLayout Layout { get; set; } = BoardLayout.List;
 
     /// <summary>The filter a board opens with.</summary>
     public TaskFilter Filter { get; set; } = TaskFilter.All;

@@ -94,14 +94,14 @@ public class SettingsTests : IDisposable
         Dispatcher.UIThread.RunJobs();
 
         var combos = form.GetLogicalDescendants().OfType<ComboBox>().ToList();
-        combos[1].SelectedIndex = 1; // List      (combos[0] is Appearance ▸ Theme)
+        combos[1].SelectedIndex = 0; // Board     (combos[0] is Appearance ▸ Theme)
         combos[2].SelectedIndex = 3; // Unfinished
         form.GetLogicalDescendants().OfType<NumericUpDown>().Single().Value = 60m; // auto-save
 
-        Assert.Equal(BoardLayout.Board, settings.Layout); // nothing written until the dialog is accepted
+        Assert.Equal(BoardLayout.List, settings.Layout); // nothing written until the dialog is accepted
         form.Commit();
 
-        Assert.Equal(BoardLayout.List, settings.Layout);
+        Assert.Equal(BoardLayout.Board, settings.Layout);
         Assert.Equal(TaskFilter.Unfinished, settings.Filter);
         Assert.Equal(60, settings.AutoSaveSeconds);
     }
@@ -110,12 +110,12 @@ public class SettingsTests : IDisposable
     public void Preferences_that_survive_a_restart_come_back_on_the_board()
     {
         var service = new SettingsService(_path);
-        service.Settings.Layout = BoardLayout.List;
+        service.Settings.Layout = BoardLayout.Board; // i.e. not the default, or this proves nothing
         service.Settings.Filter = TaskFilter.Starred;
         service.Save();
 
         var window = Open(); // a fresh window over the same file — i.e. the next launch
-        Assert.Equal(BoardLayout.List, window.BoardView.Layout);
+        Assert.Equal(BoardLayout.Board, window.BoardView.Layout);
         Assert.Equal(TaskFilter.Starred, window.BoardView.Filter);
     }
 
@@ -123,7 +123,7 @@ public class SettingsTests : IDisposable
     public void A_settings_file_that_isnt_there_is_a_first_run_not_an_error()
     {
         var window = Open(); // _path was never written
-        Assert.Equal(BoardLayout.Board, window.BoardView.Layout);
+        Assert.Equal(BoardLayout.List, window.BoardView.Layout);
         Assert.Equal(TaskFilter.All, window.BoardView.Filter);
     }
 }

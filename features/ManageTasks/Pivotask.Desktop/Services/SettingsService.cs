@@ -21,8 +21,12 @@ public sealed class AppSettings
     /// </summary>
     public ThemePreference Theme { get; set; } = ThemePreference.System;
 
-    /// <summary>The reading the board opens in. Columns is the default; the list is the same tasks.</summary>
-    public BoardLayout Layout { get; set; } = BoardLayout.Board;
+    /// <summary>
+    /// The reading a board opens in. The <b>list</b> is the default: columns are the better picture of a
+    /// board you already know the shape of, and rows are the better reading of one you don't — which every
+    /// board is on the day it is made. Either way they are the same tasks.
+    /// </summary>
+    public BoardLayout Layout { get; set; } = BoardLayout.List;
 
     /// <summary>The filter the board opens with — for someone who works from "unfinished", every time.</summary>
     public TaskFilter Filter { get; set; } = TaskFilter.All;
