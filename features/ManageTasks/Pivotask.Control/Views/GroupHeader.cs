@@ -34,7 +34,16 @@ internal static class GroupHeader
         BoardDocument document, TaskGroup group, int visibleCount, bool caret, Action requestDelete)
     {
         var palette = Tokens.Active;
-        var row = new DockPanel { LastChildFill = true, Margin = new Thickness(0, 0, 0, 8) };
+        var row = new DockPanel
+        {
+            LastChildFill = true,
+            Margin = new Thickness(0, 0, 0, 8),
+
+            // Transparent rather than unset, so the whole strip answers the pointer and not just the
+            // pixels that happen to have ink on them. This row is the handle the group is dragged by
+            // (GroupDrag), and a handle with holes in it is a handle you have to aim at.
+            Background = Brushes.Transparent,
+        };
 
         if (caret)
         {
@@ -112,7 +121,7 @@ internal static class GroupHeader
             VerticalAlignment = VerticalAlignment.Center,
             Cursor = new Cursor(StandardCursorType.Ibeam),
         };
-        ToolTip.SetTip(label, "Click to rename");
+        ToolTip.SetTip(label, "Click to rename, drag to reorder");
 
         void StartEditing()
         {
@@ -168,10 +177,33 @@ internal static class GroupHeader
             box.SelectAll();
         }
 
+        // The rename waits for the release, and only happens if the pointer never went anywhere.
+        //
+        // A press on a heading now has two possible meanings — rename this group, or move it (GroupDrag)
+        // — and which one it was is not known until the pointer either travels or doesn't. Editing on the
+        // press replaced this label with a text box under a pointer that was on its way somewhere else,
+        // which left the drag dragging a caret.
+        Point? pressedAt = null;
+
         label.PointerPressed += (_, e) =>
         {
-            StartEditing();
+            pressedAt = e.GetPosition(null);
             e.Handled = true; // the card beneath must not read this as a click on the column
+        };
+
+        label.PointerReleased += (_, e) =>
+        {
+            var from = pressedAt;
+            pressedAt = null;
+
+            var at = e.GetPosition(null);
+            if (from is { } start
+                && Math.Abs(at.X - start.X) < GroupDrag.Threshold
+                && Math.Abs(at.Y - start.Y) < GroupDrag.Threshold)
+            {
+                StartEditing();
+                e.Handled = true;
+            }
         };
 
         host.Content = label;

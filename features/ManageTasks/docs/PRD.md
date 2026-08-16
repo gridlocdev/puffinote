@@ -78,9 +78,15 @@ what keeps a column of plain one-line tasks from looking like a form.
 
 - **Add a task** inline at the foot of any column; **add a group** at the end of the board.
 - **Collapse** a column, or **fold** its completed tasks away.
-- **Drag** a card between columns or within one: a line shows exactly where it would land, the column it
-  would join lights up, and **Escape puts it back** — a drag you have thought better of should not have to
-  be dropped somewhere and undone.
+- **Drag** a card between columns or within one: the card lifts onto the cursor — tilted, with a shadow,
+  while a dimmed placeholder holds the space it came from — a line shows exactly where it would land, the
+  column it would join lights up, and **Escape puts it back**, because a drag you have thought better of
+  should not have to be dropped somewhere and undone.
+- **Drag a group's heading** to move the whole group: columns left and right on the board, sections up and
+  down in the list. Same gesture grammar as a card's, deliberately — nothing happens until the pointer has
+  travelled a few pixels, so a plain click on a heading is still the rename it always was, and Escape puts
+  it back. A board's columns are a sequence (a pipeline, a week, a set of stages), and before this the
+  sequence was the order they were created in, permanently.
 - **The keyboard reaches everything the drag does.** Arrows walk the cards (←/→ across columns, ↑/↓ within
   one; on the list, ↑/↓ run the whole thing as one list); **⌥⇧ and an arrow move the task itself** —
   vertically it changes places with its neighbour, horizontally it joins the column beside it at the same

@@ -27,6 +27,7 @@ public sealed class TaskListView : UserControl
 
     private readonly AddTaskState _add;
     private readonly CardDrag _drag;
+    private readonly GroupDrag _groupDrag;
     private readonly CardKeyboard _keyboard;
     private readonly GestureGate _gate;
 
@@ -40,6 +41,7 @@ public sealed class TaskListView : UserControl
         // nudging everything under it by a pixel. The insertion marker says where the card is going, which
         // is the question a drop actually has, and it says it more precisely than a highlighted box.
         _drag = new CardDrag(this, () => Document, _ghosts, lightZones: false);
+        _groupDrag = new GroupDrag(this, () => Document, _ghosts, _rows, horizontal: false);
         _keyboard = new CardKeyboard(() => Document, _drag.Zones, sideBySide: false);
         // Margin on the rows rather than padding on the scroller, for the reason the board has it there:
         // padding shrinks the viewport without joining the extent, so the last row is clipped by it.
@@ -89,8 +91,9 @@ public sealed class TaskListView : UserControl
     /// <summary>Raised when a section's × is pressed; the host asks before throwing the work away.</summary>
     public event EventHandler<TaskGroup>? DeleteGroupRequested;
 
-    /// <summary>Abandon a drag in flight, leaving the board as it was; false when there was none.</summary>
-    public bool CancelDrag() => _drag.Cancel();
+    /// <summary>Abandon a drag in flight — a card's or a whole section's — leaving the board as it was;
+    /// false when there was none.</summary>
+    public bool CancelDrag() => _drag.Cancel() || _groupDrag.Cancel();
 
     internal DateOnly Today { get; set; } = DateOnly.FromDateTime(DateTime.Now);
 
@@ -118,6 +121,7 @@ public sealed class TaskListView : UserControl
 
         _rows.Children.Clear();
         _drag.Zones.Clear();
+        _groupDrag.Zones.Clear();
 
         foreach (var group in Document.Board.Groups)
         {
@@ -140,10 +144,12 @@ public sealed class TaskListView : UserControl
         // Unlike the board, a section always appears even when it is empty: the list is the view that
         // shows you the shape of the whole board, and a group that silently vanished from it would be a
         // group you forget you have.
-        body.Children.Add(GroupHeader.Build(
-            Document, group, visible.Count, caret: true, () => DeleteGroupRequested?.Invoke(this, group)));
+        var head = GroupHeader.Build(
+            Document, group, visible.Count, caret: true, () => DeleteGroupRequested?.Invoke(this, group));
+        body.Children.Add(head);
 
         var frame = new Border { Margin = new Thickness(0, 0, 0, 14), Child = body };
+        _groupDrag.Attach(head, group, frame); // the heading moves the whole section, as it does a column
 
         if (!group.Collapsed)
         {

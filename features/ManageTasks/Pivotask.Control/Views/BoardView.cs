@@ -32,6 +32,7 @@ public sealed class BoardView : UserControl
 
     private readonly AddTaskState _add;
     private readonly CardDrag _drag;
+    private readonly GroupDrag _groupDrag;
     private readonly CardKeyboard _keyboard;
     private readonly GestureGate _gate;
 
@@ -40,6 +41,7 @@ public sealed class BoardView : UserControl
         _add = new AddTaskState { Rebuild = Rebuild };
         _gate = new GestureGate(this, Rebuild);
         _drag = new CardDrag(this, () => Document, _ghosts);
+        _groupDrag = new GroupDrag(this, () => Document, _ghosts, _columns, horizontal: true);
         _keyboard = new CardKeyboard(() => Document, _drag.Zones, sideBySide: true);
         // The inset is the columns' own margin, not the scroller's padding. A ScrollViewer's padding
         // shrinks the viewport without being counted in the extent, so the far edge of the content is
@@ -112,8 +114,9 @@ public sealed class BoardView : UserControl
     /// </summary>
     public event EventHandler<TaskGroup>? DeleteGroupRequested;
 
-    /// <summary>Abandon a drag in flight, leaving the board as it was; false when there was none.</summary>
-    public bool CancelDrag() => _drag.Cancel();
+    /// <summary>Abandon a drag in flight — a card's or a whole column's — leaving the board as it was;
+    /// false when there was none.</summary>
+    public bool CancelDrag() => _drag.Cancel() || _groupDrag.Cancel();
 
     /// <summary>Today, injectable so a test can pin what "due soon" means rather than racing the clock.</summary>
     internal DateOnly Today { get; set; } = DateOnly.FromDateTime(DateTime.Now);
@@ -137,6 +140,7 @@ public sealed class BoardView : UserControl
 
         _columns.Children.Clear();
         _drag.Zones.Clear();
+        _groupDrag.Zones.Clear();
         foreach (var group in Document.Board.Groups)
         {
             _columns.Children.Add(BuildColumn(group));
@@ -214,6 +218,10 @@ public sealed class BoardView : UserControl
         };
 
         _drag.Zones.Add(new DropZone(group, column, cards));
+
+        // The heading is the column's handle: press it and travel, and the whole column moves. Attached
+        // after the column exists, because what the gesture carries is the column, not the heading.
+        _groupDrag.Attach(head, group, column);
         return column;
     }
 

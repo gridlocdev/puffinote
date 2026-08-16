@@ -6,4 +6,4 @@
 - [x] pivotask: cmd+enter when editing any textbox on the popup modal should do the same as "done" button
 - [x] pivotask: default new pivotasks to open in the "tasks" view
 - [x] pivotask: in the pivotask file, store the last view it was opened in, either board or tasks view 
-- [ ] pivotask: allow reordering groups with clicking and dragging on the row or text with the group header
+- [x] pivotask: allow reordering groups with clicking and dragging on the row or text with the group header

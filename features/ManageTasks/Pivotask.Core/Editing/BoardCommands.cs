@@ -121,6 +121,32 @@ public static class BoardCommands
             b => b.Groups.Insert(Math.Clamp(index, 0, b.Groups.Count), group));
     }
 
+    /// <summary>
+    /// Move <paramref name="group"/> so it sits before <paramref name="before"/>, or last when that is
+    /// null. One command rather than a remove plus an add, so undo puts the column back where it was in a
+    /// single press — which is what someone who dropped a list in the wrong place expects, exactly as it
+    /// is for a task (<see cref="MoveTask"/>).
+    /// </summary>
+    public static IBoardCommand MoveGroup(Board board, TaskGroup group, TaskGroup? before)
+    {
+        ArgumentNullException.ThrowIfNull(board);
+        ArgumentNullException.ThrowIfNull(group);
+        int origin = board.Groups.IndexOf(group);
+
+        return new Action("Move Group",
+            b =>
+            {
+                b.Groups.Remove(group);
+                int at = before is null ? b.Groups.Count : Math.Max(0, b.Groups.IndexOf(before));
+                b.Groups.Insert(Math.Clamp(at, 0, b.Groups.Count), group);
+            },
+            b =>
+            {
+                b.Groups.Remove(group);
+                b.Groups.Insert(Math.Clamp(origin, 0, b.Groups.Count), group);
+            });
+    }
+
     public static IBoardCommand SetCollapsed(TaskGroup group, bool collapsed)
     {
         ArgumentNullException.ThrowIfNull(group);

@@ -370,7 +370,17 @@ public class BoardViewTests
             b => (b.Content as string)?.Contains("finished · 1", StringComparison.Ordinal) == true);
     }
 
-    /// <summary>A group can be renamed where it sits — the prototype's editable heading.</summary>
+    /// <summary>
+    /// A group can be renamed where it sits — the prototype's editable heading.
+    ///
+    /// <para>A whole click, press and release both: a press on a heading now has two possible meanings —
+    /// rename this group, or move it — and which one it was is not known until the pointer either travels
+    /// or doesn't.</para>
+    ///
+    /// <para>Raised on the label rather than clicked through the window, as it always has been: the
+    /// headless run draws nothing, so a bare <see cref="TextBlock"/> is not something a pointer can land
+    /// on. What a real click lands on is the heading row, which the drag owns and the tests below drive.</para>
+    /// </summary>
     [AvaloniaFact]
     public void Clicking_a_group_name_renames_it_in_place()
     {
@@ -378,11 +388,7 @@ public class BoardViewTests
         var heading = view.BoardForTest.GetLogicalDescendants().OfType<TextBlock>()
             .First(t => t.Text == "INBOX");
 
-        heading.RaiseEvent(new Avalonia.Input.PointerPressedEventArgs(
-            heading, new Avalonia.Input.Pointer(0, Avalonia.Input.PointerType.Mouse, true),
-            heading, default, 0, new Avalonia.Input.PointerPointProperties(default, Avalonia.Input.PointerUpdateKind.LeftButtonPressed),
-            Avalonia.Input.KeyModifiers.None));
-        Dispatcher.UIThread.RunJobs();
+        ClickWithoutTravelling(heading);
 
         var box = view.BoardForTest.GetLogicalDescendants().OfType<TextBox>()
             .First(b => b.Text == "Inbox");
@@ -728,23 +734,117 @@ public class BoardViewTests
         Dispatcher.UIThread.RunJobs();
     }
 
-    private static Point Centre(Visual target)
+    /// <summary>
+    /// Dragging a group's heading moves the whole group, in one undoable step — columns left and right on
+    /// the board, sections up and down in the list.
+    ///
+    /// <para>The order of the columns used to be the order they had been created in, permanently: putting
+    /// "This week" ahead of "Inbox" meant renaming both, or moving every task in one of them. A board's
+    /// columns are usually a sequence — a pipeline, a week, a set of stages — and a sequence you cannot
+    /// reorder is one you have to get right the first time.</para>
+    /// </summary>
+    [AvaloniaFact]
+    public void Dragging_a_group_heading_moves_the_whole_group()
     {
-        var window = (Window)TopLevel.GetTopLevel(target)!;
-        return target.TranslatePoint(new Point(target.Bounds.Width / 2, target.Bounds.Height / 2), window)!.Value;
+        var (view, document) = Open();
+        var window = (Window)TopLevel.GetTopLevel(view)!;
+
+        var second = Heading(view.BoardForTest, "THIS WEEK");
+        var first = Heading(view.BoardForTest, "INBOX");
+
+        // Left of the first column's midpoint, which is what "before it" means when they run sideways.
+        var target = Centre(first);
+        window.MouseDown(Centre(second), MouseButton.Left);
+        window.MouseMove(target.WithX(target.X - (first.Bounds.Width / 2) - 20));
+        Dispatcher.UIThread.RunJobs();
+
+        // Mid-drag: the column is dimmed where it stands and its name is in the air.
+        var column = view.BoardForTest.GetLogicalDescendants().OfType<Border>()
+            .First(b => b.Width == 280 && b.GetLogicalDescendants().OfType<TextBlock>().Any(t => t.Text == "THIS WEEK"));
+        Assert.Equal(0.35, column.Opacity);
+        Assert.Contains(
+            view.BoardForTest.GetLogicalDescendants().OfType<Canvas>().SelectMany(c => c.Children.OfType<Border>()),
+            g => g.GetLogicalDescendants().OfType<TextBlock>().Any(t => t.Text == "THIS WEEK"));
+
+        window.MouseUp(target.WithX(target.X - (first.Bounds.Width / 2) - 20), MouseButton.Left);
+        Dispatcher.UIThread.RunJobs();
+
+        Assert.Equal(["g2", "g1"], document.Board.Groups.Select(g => g.Id));
+        Assert.Equal("Move Group", document.UndoLabel);
+
+        document.Undo();
+        Assert.Equal(["g1", "g2"], document.Board.Groups.Select(g => g.Id));
     }
 
-    /// <summary>Press on <paramref name="card"/>, travel to <paramref name="to"/>, and let go there.</summary>
-    private static void Drag(TaskCard card, Point to)
+    /// <summary>…and the list reorders its sections the same way, running the other direction.</summary>
+    [AvaloniaFact]
+    public void Dragging_a_section_heading_reorders_the_list()
     {
-        var window = (Window)TopLevel.GetTopLevel(card)!;
-        var from = Centre(card);
-        window.MouseDown(from, MouseButton.Left);
+        var (view, document) = Open();
+        var window = (Window)TopLevel.GetTopLevel(view)!;
+        view.Layout = BoardLayout.List;
+        Dispatcher.UIThread.RunJobs();
+        window.UpdateLayout();
+
+        var second = Heading(view.ListForTest, "THIS WEEK");
+        var first = Heading(view.ListForTest, "INBOX");
+
+        var target = Centre(first);
+        Drag(second, target.WithY(target.Y - (first.Bounds.Height / 2) - 10));
+
+        Assert.Equal(["g2", "g1"], document.Board.Groups.Select(g => g.Id));
+    }
+
+    /// <summary>A group dropped back where it came from is not an edit — an undo entry that reverses
+    /// nothing makes ⌘Z lie about how far back the last real change was.</summary>
+    [AvaloniaFact]
+    public void Dropping_a_group_where_it_already_was_is_not_an_edit()
+    {
+        var (view, document) = Open();
+        var heading = Heading(view.BoardForTest, "INBOX");
+
+        Drag(heading, Centre(heading).WithX(Centre(heading).X + 12));
+
+        Assert.Equal(["g1", "g2"], document.Board.Groups.Select(g => g.Id));
+        Assert.False(document.CanUndo);
+    }
+
+    /// <summary>A press and a release on <paramref name="target"/> itself, at the same spot — what the
+    /// heading's rename waits for, delivered where a headless pointer cannot reach.</summary>
+    private static void ClickWithoutTravelling(Avalonia.Controls.Control target)
+    {
+        var pointer = new Pointer(0, PointerType.Mouse, isPrimary: true);
+        target.RaiseEvent(new PointerPressedEventArgs(
+            target, pointer, target, default, 0,
+            new PointerPointProperties(default, PointerUpdateKind.LeftButtonPressed),
+            KeyModifiers.None));
+        target.RaiseEvent(new PointerReleasedEventArgs(
+            target, pointer, target, default, 0,
+            new PointerPointProperties(default, PointerUpdateKind.LeftButtonReleased),
+            KeyModifiers.None,
+            MouseButton.Left));
+        Dispatcher.UIThread.RunJobs();
+    }
+
+    private static TextBlock Heading(Visual surface, string name) =>
+        surface.GetLogicalDescendants().OfType<TextBlock>().First(t => t.Text == name);
+
+    /// <summary>Press on <paramref name="from"/>, travel to <paramref name="to"/>, and let go there.</summary>
+    private static void Drag(Visual from, Point to)
+    {
+        var window = (Window)TopLevel.GetTopLevel(from)!;
+        window.MouseDown(Centre(from), MouseButton.Left);
         window.MouseMove(to);
         Dispatcher.UIThread.RunJobs();
         window.MouseUp(to, MouseButton.Left);
         Dispatcher.UIThread.RunJobs();
         window.UpdateLayout();
+    }
+
+    private static Point Centre(Visual target)
+    {
+        var window = (Window)TopLevel.GetTopLevel(target)!;
+        return target.TranslatePoint(new Point(target.Bounds.Width / 2, target.Bounds.Height / 2), window)!.Value;
     }
 
     /// <summary>
