@@ -137,13 +137,18 @@ public sealed class BoardDocument
 
     /// <summary>
     /// What a brand-new board starts as. Empty columns rather than sample tasks: a starter board's job
-    /// is to be somewhere to put the first real task, not something to clear out first. The three names
-    /// are the ones almost every board grows anyway.
+    /// is to be somewhere to put the first real task, not something to clear out first.
+    ///
+    /// <para>The three names are a <b>state of work</b> — To do, In progress, Done — which is what a
+    /// board is for. "Inbox / This week / Done" mixed two ideas: two of those columns said *when*, one
+    /// said *whether*, so a task in flight had no column that fit and the first thing anyone did with a
+    /// new board was rename them. Names are still a click to change; these are just the ones that need
+    /// changing least often.</para>
     /// </summary>
     public static Board Starter()
     {
         var board = new Board();
-        string[] names = ["Inbox", "This week", "Done"];
+        string[] names = ["To do", "In progress", "Done"];
         for (int i = 0; i < names.Length; i++)
         {
             board.Groups.Add(new TaskGroup { Id = Ids.FromSeed(i), Name = names[i] });

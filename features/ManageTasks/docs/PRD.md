@@ -22,6 +22,12 @@ Board             { view?, labels[], groups[] }
 **One board per file.** The root object *is* the board — no wrapping array, no board id, no in-app board
 switcher. More boards means more files, which a notebook app already handles.
 
+**A new board starts as three empty groups — To do, In progress, Done** — and no sample tasks: a starter
+board's job is to be somewhere to put the first real task, not something to clear out first. The three
+names are a state of work, which is what a board is for. They were *Inbox / This week / Done*, which mixed
+two ideas — two of those said *when* and one said *whether* — so a task in flight had no column that fit,
+and renaming them was the first thing anyone did.
+
 ## 2. The file format
 
 Extension **`.pivotask`**. The contents are still plain JSON, deliberately — the file stays readable,

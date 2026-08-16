@@ -39,9 +39,9 @@ Every install has an exact inverse (`uninstall-pivotask`, `uninstall-pivotask-ap
 
 ```bash
 ptask list --due-soon                        # what's about to bite
-ptask add "Renew the domain" --group Inbox --due 2026-09-01
+ptask add "Renew the domain" --group "To do" --due 2026-09-01
 ptask done "Renew the domain"                # by id, or by part of the title
-ptask move k3f9a2b --group "This week"
+ptask move k3f9a2b --group "In progress"
 ptask show k3f9a2b
 ptask groups
 ```

@@ -215,6 +215,24 @@ public class BoardCodecTests
         Assert.Equal(BoardCodec.Write(BoardDocument.Starter()), BoardCodec.Write(BoardDocument.Starter()));
     }
 
+    /// <summary>
+    /// A new board starts as three empty groups naming a <em>state of work</em>, which is what a board is
+    /// for. They were "Inbox / This week / Done", which mixed two ideas — two of those said <em>when</em>
+    /// and one said <em>whether</em> — so a task in flight had no column that fit, and renaming them was
+    /// the first thing anyone did with a new board.
+    /// </summary>
+    [Fact]
+    public void A_new_board_starts_as_three_empty_states_of_work()
+    {
+        var board = BoardDocument.Starter();
+
+        Assert.Equal(["To do", "In progress", "Done"], board.Groups.Select(g => g.Name));
+
+        // Empty, not seeded with samples: a starter board is somewhere to put the first real task, not
+        // something to clear out first.
+        Assert.All(board.Groups, g => Assert.Empty(g.Tasks));
+    }
+
     [Fact]
     public void It_is_json_anything_can_read()
     {
