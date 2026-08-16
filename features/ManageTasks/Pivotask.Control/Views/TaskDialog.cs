@@ -8,6 +8,7 @@ using Pivotask.Core;
 using Pivotask.Core.Editing;
 using Pivotask.Core.Model;
 using Pivotask.Core.Query;
+using Puffinote.Components.Commands;
 using Puffinote.Components.Controls.Icons;
 using Puffinote.Components.Overlays;
 using Puffinote.Components.Theming;
@@ -191,6 +192,17 @@ internal sealed class TaskDialog : ModalDialog<bool>
         // Every focus move inside the dialog, so a step's Enter knows where the caret came from.
         AddHandler(GotFocusEvent, OnFocusMoved, Avalonia.Interactivity.RoutingStrategies.Bubble, handledEventsToo: true);
 
+        // ⌘Enter is "Done", from wherever the caret happens to be. Plain Enter cannot be: it names the
+        // task in the title, adds an item in the steps field, and settles a step where it is — three
+        // fields where the key that means "that's what it says" has to keep meaning that. So the way out
+        // gets the modified form of the same key, which is the platform's own convention for "finish this
+        // whole thing" over a field's "finish this line".
+        //
+        // On the way *down*, and handled, because those three fields have Enter handlers of their own and
+        // none of them looks at the modifiers — the chord would otherwise be eaten by whichever one has
+        // the caret before it ever reached the dialog.
+        AddHandler(KeyDownEvent, OnFinishChord, Avalonia.Interactivity.RoutingStrategies.Tunnel, handledEventsToo: true);
+
         DialogContent = root;
         RebuildHead();
         RebuildOptional();
@@ -205,6 +217,35 @@ internal sealed class TaskDialog : ModalDialog<bool>
     /// <summary>The field with the caret, and the one that had it before — see <see cref="ReturnFocus"/>.</summary>
     private Avalonia.Controls.Control? _focusNow;
     private Avalonia.Controls.Control? _focusBefore;
+
+    /// <summary>The chord that finishes the dialog: ⌘Enter on macOS, Ctrl+Enter everywhere else.</summary>
+    private static KeyModifiers FinishModifiers => Shortcut.Cmd(Key.Enter).ModifiersFor(Shortcut.IsMac);
+
+    private void OnFinishChord(object? sender, KeyEventArgs e)
+    {
+        if (e.Key != Key.Enter || e.KeyModifiers != FinishModifiers)
+        {
+            return;
+        }
+
+        Finish();
+        e.Handled = true;
+    }
+
+    /// <summary>
+    /// What "Done" does, whether it was clicked or typed.
+    ///
+    /// <para>The caret comes out of whatever field it is in <em>first</em>. Every field in this dialog
+    /// commits on losing focus, so a close that went straight to <see cref="ModalDialog{TResult}.Close"/>
+    /// would throw away the very words that made you finish. Clicking the button does this by itself —
+    /// the press moves the focus on its way to the button — which is exactly why the chord has to do it
+    /// deliberately, and why both go through here rather than each having its own idea of what Done means.</para>
+    /// </summary>
+    private void Finish()
+    {
+        TopLevel.GetTopLevel(this)?.FocusManager?.Focus(null);
+        Close(true);
+    }
 
     private void OnFocusMoved(object? sender, FocusChangedEventArgs e)
     {
@@ -344,7 +385,8 @@ internal sealed class TaskDialog : ModalDialog<bool>
 
         var done = new Button { Content = "Done", IsDefault = true };
         Avalonia.Automation.AutomationProperties.SetName(done, "Done");
-        done.Click += (_, _) => Close(true);
+        ToolTip.SetTip(done, $"Done ({(Shortcut.IsMac ? "⌘↩" : "Ctrl+↩")})");
+        done.Click += (_, _) => Finish();
         DockPanel.SetDock(done, Dock.Right);
         row.Children.Add(done);
 

@@ -3,6 +3,7 @@ using Avalonia.Controls;
 using Avalonia.Controls.Primitives;
 using Avalonia.Headless;
 using Avalonia.Headless.XUnit;
+using Avalonia.Input;
 using Avalonia.LogicalTree;
 using Avalonia.Media;
 using Avalonia.Threading;
@@ -87,6 +88,41 @@ public class TaskDialogTests
         Assert.All(
             days.Where(d => !ReferenceEquals(d, today)),
             d => Assert.NotSame(palette.Accent, d.BorderBrush));
+    }
+
+    /// <summary>
+    /// ⌘Enter is "Done", from whichever field the caret is in — and it keeps what was typed there.
+    ///
+    /// <para>Plain Enter cannot be the way out: it names the task in the title, adds an item in the steps
+    /// field, and settles a step where it is, so in three of this dialog's fields the key that means
+    /// "that's what it says" has to go on meaning that. The chord has to be handled on the way down for
+    /// the same reason — each of those fields has an Enter handler that never looks at the modifiers, and
+    /// whichever one held the caret would otherwise eat it.</para>
+    /// </summary>
+    [AvaloniaFact]
+    public void Cmd_Enter_finishes_the_dialog_from_whichever_field_has_the_caret()
+    {
+        var (view, _, task) = Open(board => board.Groups[0].Tasks[0].Steps.Add(
+            new TaskStep { Id = "s1", Text = "outline" }));
+
+        var dialog = Dialog(view);
+        var title = dialog.GetLogicalDescendants().OfType<TextBox>().First(b => b.Text == task.Title);
+
+        title.Focus();
+        Dispatcher.UIThread.RunJobs();
+        title.Text = "Draft the retro";
+
+        title.RaiseEvent(new KeyEventArgs
+        {
+            RoutedEvent = InputElement.KeyDownEvent,
+            Key = Key.Enter,
+            KeyModifiers = Puffinote.Components.Commands.Shortcut.Cmd(Key.Enter)
+                .ModifiersFor(Puffinote.Components.Commands.Shortcut.IsMac),
+        });
+        Dispatcher.UIThread.RunJobs();
+
+        Assert.False(view.IsModalOpen);              // the dialog is gone…
+        Assert.Equal("Draft the retro", task.Title); // …and the half-typed title went with it, not away
     }
 
     /// <summary>Nothing but the title and the notes until the task has more, or you ask for more.</summary>
