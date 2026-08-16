@@ -137,8 +137,14 @@ public sealed class TaskListView : UserControl
     private Avalonia.Controls.Control BuildSection(TaskGroup group)
     {
         var body = new StackPanel { Spacing = 0 };
+
+        // The same reading of the group the board builds — filtered, searched, folded, and with the
+        // finished ones at the foot. Ordered in the view rather than in the file, so ticking a task is
+        // still one small undoable edit and unticking it puts it back where it was.
         var visible = group.Tasks
+            .Where(task => !(group.FoldDone && task.Done))
             .Where(task => BoardQuery.Matches(task, Filter, Today) && BoardQuery.Matches(task, Query))
+            .OrderBy(task => task.Done)
             .ToList();
 
         // Unlike the board, a section always appears even when it is empty: the list is the view that
@@ -170,19 +176,18 @@ public sealed class TaskListView : UserControl
         stack.Children.Add(cards);
         _drag.Zones.Add(new DropZone(group, frame, cards));
 
-        // Finished tasks sink below a fold of their own rather than sitting among the open ones. That is
-        // the list's answer to the board's per-column "hide completed": same state (TaskGroup.FoldDone),
-        // shown as a subhead you can open, because in a single column the finished ones would otherwise
-        // push the work you still have off the screen.
-        var open = visible.Where(task => !task.Done).ToList();
-        var finished = visible.Where(task => task.Done).ToList();
-
-        foreach (var task in open)
+        // Finished tasks sink to the foot of the section, and that is the whole of it — no heading, no
+        // rule, no count. They had a "finished · 3" subhead you could fold, which was three pieces of
+        // furniture answering a question the strikethrough already answers: a ticked task is plainly
+        // ticked wherever it sits, so a band announcing that the ticked ones are below it is a label on
+        // a label. Sinking them is the part that was doing the work — a record of work sitting between
+        // two things you still have to do is a thing you read past every time you look at the section.
+        foreach (var task in visible)
         {
             cards.Children.Add(BuildCard(group, task));
         }
 
-        if (open.Count == 0 && finished.Count == 0)
+        if (visible.Count == 0)
         {
             cards.Children.Add(new TextBlock
             {
@@ -192,32 +197,6 @@ public sealed class TaskListView : UserControl
                 FontSize = 13,
                 Margin = new Thickness(2, 4, 2, 6),
             });
-        }
-
-        if (finished.Count > 0)
-        {
-            var subhead = new Button
-            {
-                Content = $"{(group.FoldDone ? "▸" : "▾")}  finished · {finished.Count}",
-                Background = Brushes.Transparent,
-                BorderThickness = new Thickness(0, 1, 0, 0),
-                BorderBrush = palette.SurfaceBorder,
-                Foreground = palette.MutedText,
-                FontSize = 11,
-                HorizontalAlignment = HorizontalAlignment.Stretch,
-                HorizontalContentAlignment = HorizontalAlignment.Left,
-                Padding = new Thickness(2, 7, 2, 5),
-            };
-            subhead.Click += (_, _) => Document.Execute(BoardCommands.SetFoldDone(group, !group.FoldDone));
-            cards.Children.Add(subhead);
-
-            if (!group.FoldDone)
-            {
-                foreach (var task in finished)
-                {
-                    cards.Children.Add(BuildCard(group, task));
-                }
-            }
         }
 
         stack.Children.Add(AddTaskRow.Build(Document, group, _add));

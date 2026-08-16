@@ -349,11 +349,50 @@ public class BoardViewTests
     }
 
     /// <summary>
-    /// Finished tasks sink under a fold of their own in the list. In one column they would otherwise push
-    /// the work you still have off the screen.
+    /// Finished tasks sink to the foot of their group, in both readings — crossed out, still readable,
+    /// and out of the queue.
+    ///
+    /// <para>The list used to gather them under a foldable "finished · 3" subhead. That was three pieces
+    /// of furniture answering a question the strikethrough already answers: a ticked task is plainly
+    /// ticked wherever it sits, so a band announcing that the ticked ones are below it is a label on a
+    /// label. The sinking is the part that was doing the work.</para>
+    ///
+    /// <para>Ordered in the view, not in the file: ticking a task stays one small undoable edit, and
+    /// unticking it puts it back where it was rather than at the end.</para>
     /// </summary>
     [AvaloniaFact]
-    public void The_list_folds_finished_tasks_under_a_subhead()
+    public void A_finished_task_sinks_to_the_foot_of_its_group_without_a_heading_over_it()
+    {
+        var (view, document) = Open();
+        var group = document.Board.Groups[1];
+        document.Execute(BoardCommands.AddTask(group, new TaskItem { Id = "t4", Title = "Book the room" }));
+        Dispatcher.UIThread.RunJobs();
+
+        // t3 is done and was added first, so in the file it is still ahead of t4…
+        Assert.Equal(["t3", "t4"], group.Tasks.Select(t => t.Id));
+
+        // …and on screen it is behind it, in both views.
+        Assert.Equal(["t1", "t2", "t4", "t3"], view.BoardForTest.CardsForTest.Select(c => c.Task.Id));
+
+        view.Layout = BoardLayout.List;
+        Dispatcher.UIThread.RunJobs();
+        Assert.Equal(["t1", "t2", "t4", "t3"], view.ListForTest.CardsForTest.Select(c => c.Task.Id));
+
+        // Nothing announces the sinking — no subhead, no rule, no count.
+        Assert.DoesNotContain(
+            view.ListForTest.GetLogicalDescendants().OfType<Button>(),
+            b => (b.Content as string)?.Contains("finished", StringComparison.OrdinalIgnoreCase) == true);
+
+        // Unticking puts it back where the file always had it.
+        document.Execute(BoardCommands.SetDone(group.Tasks.Single(t => t.Id == "t3"), false));
+        Dispatcher.UIThread.RunJobs();
+        Assert.Equal(["t1", "t2", "t3", "t4"], view.ListForTest.CardsForTest.Select(c => c.Task.Id));
+    }
+
+    /// <summary>A group whose completed tasks are folded away hides them in both readings — the state is
+    /// the file's (<c>foldDone</c>) and the CLI's, and the views go on honouring it.</summary>
+    [AvaloniaFact]
+    public void Folding_completed_tasks_hides_them_in_the_list_too()
     {
         var (view, document) = Open();
         view.Layout = BoardLayout.List;
@@ -365,9 +404,6 @@ public class BoardViewTests
         Dispatcher.UIThread.RunJobs();
 
         Assert.DoesNotContain(view.ListForTest.CardsForTest, c => c.Task.Id == "t3");
-        Assert.Contains(
-            view.ListForTest.GetLogicalDescendants().OfType<Button>(),
-            b => (b.Content as string)?.Contains("finished · 1", StringComparison.Ordinal) == true);
     }
 
     /// <summary>

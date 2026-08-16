@@ -77,7 +77,13 @@ chips, a due pill, a step count, and a star. A card shows nothing it has nothing
 what keeps a column of plain one-line tasks from looking like a form.
 
 - **Add a task** inline at the foot of any column; **add a group** at the end of the board.
-- **Collapse** a column, or **fold** its completed tasks away.
+- **Collapse** a column, or **fold** its completed tasks away (`foldDone`, set from the CLI).
+- **A finished task sinks to the foot of its group**, in both readings, with nothing announcing that it
+  has. It keeps its words and the line through them — you should be able to see what you finished — it
+  just stops holding a place in the queue, because a record of work sitting between two things you still
+  have to do is a thing you read past every time you look at the column. Ordered in the *view*, not in the
+  file: ticking a task stays one small undoable edit, and unticking it puts it back where it was rather
+  than at the end.
 - **Drag** a card between columns or within one: the card lifts onto the cursor — tilted, with a shadow,
   while a dimmed placeholder holds the space it came from — a line shows exactly where it would land, the
   column it would join lights up, and **Escape puts it back**, because a drag you have thought better of

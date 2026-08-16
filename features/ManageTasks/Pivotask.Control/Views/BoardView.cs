@@ -225,11 +225,25 @@ public sealed class BoardView : UserControl
         return column;
     }
 
-    /// <summary>The tasks this group shows: filtered, searched, and minus the completed ones when folded.</summary>
+    /// <summary>
+    /// The tasks this group shows: filtered, searched, minus the completed ones when folded, and with
+    /// whatever is finished sunk to the foot of the column.
+    ///
+    /// <para>A ticked task has stopped being work and become a record of work, and a record sitting
+    /// between two things you still have to do is a thing you have to read past every time you look at
+    /// the column. It keeps its words and its line through them — you should be able to see what you
+    /// finished — it just stops holding a place in the queue.</para>
+    ///
+    /// <para>Ordering the <em>view</em>, not the group: the file keeps the order the tasks were put in,
+    /// so ticking something is still one small undoable edit rather than a tick plus a move, and
+    /// unticking it puts it back exactly where it was rather than at the end. <see cref="Enumerable.OrderBy"/>
+    /// is stable, so everything else keeps the order it had.</para>
+    /// </summary>
     private IEnumerable<TaskItem> Visible(TaskGroup group) =>
         group.Tasks
             .Where(task => !(group.FoldDone && task.Done))
-            .Where(task => BoardQuery.Matches(task, Filter, Today) && BoardQuery.Matches(task, Query));
+            .Where(task => BoardQuery.Matches(task, Filter, Today) && BoardQuery.Matches(task, Query))
+            .OrderBy(task => task.Done);
 
     /// <summary>
     /// Arrows walk the cards, ⌥⇧-arrows move one. Handled here rather than on the card so the whole set
