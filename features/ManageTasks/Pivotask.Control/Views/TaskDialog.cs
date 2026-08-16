@@ -536,6 +536,12 @@ internal sealed class TaskDialog : ModalDialog<bool>
         };
         Avalonia.Automation.AutomationProperties.SetName(picker, "Due date");
 
+        // "Is this week's Thursday the 12th or the 19th?" is the question this control exists to answer,
+        // and it is answered by finding today first. The stock theme marks today with a hairline a
+        // half-step off its neighbours, which on a grid of thirty near-identical numerals is not a
+        // difference you can find without hunting for it.
+        CalendarChrome.MarkToday(picker);
+
         picker.SelectedDateChanged += (_, _) =>
         {
             DateOnly? chosen = picker.SelectedDate is { } date ? DateOnly.FromDateTime(date) : null;

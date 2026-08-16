@@ -1,5 +1,6 @@
 using Avalonia;
 using Avalonia.Controls;
+using Avalonia.Controls.Primitives;
 using Avalonia.Headless;
 using Avalonia.Headless.XUnit;
 using Avalonia.LogicalTree;
@@ -47,6 +48,46 @@ public class TaskDialogTests
 
     private static TaskDialog Dialog(TaskBoardView view) =>
         view.OverlayForTest.GetLogicalDescendants().OfType<TaskDialog>().Single();
+
+    /// <summary>
+    /// Today is unmistakable in the due-date calendar.
+    ///
+    /// <para>The stock theme marks it with a hairline a half-step off its neighbours, which on a grid of
+    /// thirty near-identical numerals is not a difference you can find without hunting for it — and
+    /// finding today is how "is this week's Thursday the 12th or the 19th?" gets answered. Three signals,
+    /// not one, because a colour alone is not a difference every reader can see: a ring, a wash, and bold.</para>
+    ///
+    /// <para>Driven through a bare <see cref="Calendar"/> rather than the picker's popup: the styles are
+    /// what is under test, the day grid only exists once a month is on screen, and a popup left standing
+    /// in a headless run is one of the two ways this suite hangs.</para>
+    /// </summary>
+    [AvaloniaFact]
+    public void Today_is_unmistakable_in_the_due_date_calendar()
+    {
+        var palette = Puffinote.Components.Theming.Tokens.Active;
+
+        var calendar = new Calendar();
+        CalendarChrome.MarkToday(calendar);
+
+        var window = new Window { Width = 420, Height = 420, Content = calendar };
+        window.Show();
+        window.UpdateLayout();
+        Dispatcher.UIThread.RunJobs();
+        window.UpdateLayout();
+
+        var days = calendar.GetVisualDescendants().OfType<CalendarDayButton>().ToList();
+        Assert.NotEmpty(days);
+
+        var today = Assert.Single(days, d => d.Classes.Contains(":today"));
+        Assert.Same(palette.Accent, today.BorderBrush);
+        Assert.Same(palette.AccentSubtle, today.Background);
+        Assert.Equal(FontWeight.Bold, today.FontWeight);
+
+        // …and it is the only square wearing it, or it would not be a mark.
+        Assert.All(
+            days.Where(d => !ReferenceEquals(d, today)),
+            d => Assert.NotSame(palette.Accent, d.BorderBrush));
+    }
 
     /// <summary>Nothing but the title and the notes until the task has more, or you ask for more.</summary>
     [AvaloniaFact]
