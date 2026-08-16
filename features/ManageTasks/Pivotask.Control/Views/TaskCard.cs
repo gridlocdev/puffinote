@@ -128,6 +128,26 @@ internal sealed class TaskCard : Border
         // The same star the task dialog puts in its header — one control, so there is one answer to what
         // starred looks like rather than a drawn glyph in one place and a "★" character in the other.
         var star = StarButton.Build(task.Important, () => StarToggled?.Invoke(this, !task.Important));
+
+        // A star only shows itself when it has something to say. Starring is rare and unstarring rarer, so
+        // an outline drawn on every card in every column was a hollow shape repeated twenty times down the
+        // board — noise the eye has to discard before it can find the two cards that *are* starred. Hidden
+        // at rest and revealed under the pointer or the focus ring, which is the same bargain the group
+        // header's × already makes: the affordance is still there, it simply isn't shouting.
+        //
+        // Opacity rather than IsVisible, so the card's first line keeps the same shape whether or not the
+        // star is showing — a title that reflowed as the pointer crossed it would be a worse noise than
+        // the one this removes. And the pointer is always over the card before it can be over the star, so
+        // there is no moment where a click lands on something invisible.
+        if (!task.Important)
+        {
+            star.Opacity = 0;
+            PointerEntered += (_, _) => star.Opacity = 1;
+            PointerExited += (_, _) => star.Opacity = 0;
+            star.GotFocus += (_, _) => star.Opacity = 1; // reachable by keyboard, not only by pointer
+            star.LostFocus += (_, _) => star.Opacity = 0;
+        }
+
         var starSlot = new LineSlot
         {
             VerticalAlignment = VerticalAlignment.Top,

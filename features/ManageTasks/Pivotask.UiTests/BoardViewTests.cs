@@ -772,6 +772,41 @@ public class BoardViewTests
     private const double StarGlyphSize = 18;
 
     /// <summary>
+    /// A card shows its star only when it is starred — or when the pointer is on it.
+    ///
+    /// <para>Starring is rare and unstarring rarer, so an outline star drawn on every card in every column
+    /// was a hollow shape repeated down the whole board: noise the eye has to discard before it can find
+    /// the cards that actually are starred. It stays reachable, because taking the affordance away would
+    /// leave the board with no way to star anything at all.</para>
+    /// </summary>
+    [AvaloniaFact]
+    public void An_unstarred_card_keeps_its_star_hidden_until_the_pointer_is_on_it()
+    {
+        var (view, _) = Open();
+        var window = (Window)TopLevel.GetTopLevel(view)!;
+
+        static Button Star(TaskCard card) =>
+            card.GetLogicalDescendants().OfType<Button>().First(b =>
+                Avalonia.Automation.AutomationProperties.GetName(b) is "Add star" or "Remove star");
+
+        var starred = view.BoardForTest.CardsForTest.First(c => c.Task.Id == "t1");   // Important
+        var plain = view.BoardForTest.CardsForTest.First(c => c.Task.Id == "t2");     // not
+
+        Assert.Equal(1, Star(starred).Opacity);
+        Assert.Equal(0, Star(plain).Opacity);
+
+        // The pointer reaches the card before it can reach the star, so nothing is ever clicked blind.
+        window.MouseMove(Centre(plain));
+        Dispatcher.UIThread.RunJobs();
+        Assert.Equal(1, Star(plain).Opacity);
+
+        window.MouseMove(Centre(starred));
+        Dispatcher.UIThread.RunJobs();
+        Assert.Equal(0, Star(plain).Opacity);
+        Assert.Equal(1, Star(starred).Opacity); // …and a starred one never dims
+    }
+
+    /// <summary>
     /// The tick box is drawn whole.
     ///
     /// <para>Putting the checkbox on the title's line by setting its Height to the line height did not
