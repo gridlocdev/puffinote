@@ -33,7 +33,12 @@ internal sealed record DropZone(TaskGroup Group, Border Frame, Panel Cards);
 /// is shown. Once it is a drag, the card dims where it came from and a line shows where it would land,
 /// because a drag with no answer to "where exactly?" is a drag you have to undo to find out.</para>
 /// </summary>
-internal sealed class CardDrag(Visual root, Func<BoardDocument> document)
+/// <param name="root">The view the gesture's coordinates are measured in.</param>
+/// <param name="document">The open document, read late so a rebind is picked up.</param>
+/// <param name="lightZones">Whether the zone under the pointer lights its own border. True on the board,
+/// where a column is a bordered box and lighting it is a change of colour; false in the list, where a
+/// section has no border of its own and this would <em>grow</em> one under the pointer.</param>
+internal sealed class CardDrag(Visual root, Func<BoardDocument> document, bool lightZones = true)
 {
     /// <summary>How far the pointer travels before a press becomes a drag rather than a click.</summary>
     private const double Threshold = 4;
@@ -291,6 +296,11 @@ internal sealed class CardDrag(Visual root, Func<BoardDocument> document)
 
     private void Light(DropZone zone)
     {
+        if (!lightZones)
+        {
+            return;
+        }
+
         _lit = zone;
         _litWas = (zone.Frame.BorderBrush, zone.Frame.BorderThickness);
         zone.Frame.BorderBrush = Tokens.Active.Accent;

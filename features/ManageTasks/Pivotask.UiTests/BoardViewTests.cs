@@ -553,6 +553,53 @@ public class BoardViewTests
         Assert.False(view.IsModalOpen);
     }
 
+    /// <summary>
+    /// The list is the quieter reading of the two: its tasks carry no outline, and the section you are
+    /// dropping into does not light up.
+    ///
+    /// <para>Both were the board's chrome applied where it doesn't fit. On the board a card's edge is what
+    /// separates it from the column it lies in, and a column is a bordered box whose border can change
+    /// colour; in the list every row is a task and a section has no border of its own, so the same code
+    /// drew thirty redundant outlines and <em>grew</em> a line around a whole screen of tasks under the
+    /// pointer. The insertion marker still says exactly where the card is going.</para>
+    /// </summary>
+    [AvaloniaFact]
+    public void The_list_draws_flat_cards_and_never_lights_the_section_you_drop_into()
+    {
+        var (view, _) = Open();
+        var window = (Window)TopLevel.GetTopLevel(view)!;
+
+        // The board keeps its outlines: there, the edge is doing work.
+        Assert.All(view.BoardForTest.CardsForTest, c => Assert.Equal(new Thickness(1), c.BorderThickness));
+
+        view.Layout = BoardLayout.List;
+        Dispatcher.UIThread.RunJobs();
+        window.UpdateLayout();
+
+        Assert.NotEmpty(view.ListForTest.CardsForTest);
+        Assert.All(view.ListForTest.CardsForTest, c => Assert.Equal(default, c.BorderThickness));
+
+        // Mid-drag — press, travel, and look before letting go.
+        var card = view.ListForTest.CardsForTest.First(c => c.Task.Id == "t1");
+        var onto = view.ListForTest.CardsForTest.First(c => c.Task.Id == "t3");
+        window.MouseDown(Centre(card), MouseButton.Left);
+        window.MouseMove(Centre(onto));
+        Dispatcher.UIThread.RunJobs();
+
+        var sections = view.ListForTest.GetLogicalDescendants().OfType<Border>()
+            .Where(b => b.Margin.Bottom == 14).ToList();
+        Assert.NotEmpty(sections);
+        Assert.All(sections, s => Assert.Equal(default, s.BorderThickness));
+
+        // …and the marker that answers "where exactly?" is drawn all the same.
+        Assert.Contains(
+            view.ListForTest.GetLogicalDescendants().OfType<Border>(),
+            b => b.Height == 2 && ReferenceEquals(b.Background, Puffinote.Components.Theming.Tokens.Active.Accent));
+
+        window.MouseUp(Centre(onto), MouseButton.Left);
+        Dispatcher.UIThread.RunJobs();
+    }
+
     private static Point Centre(Visual target)
     {
         var window = (Window)TopLevel.GetTopLevel(target)!;

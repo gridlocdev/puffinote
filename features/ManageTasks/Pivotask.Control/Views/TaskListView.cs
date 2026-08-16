@@ -30,7 +30,12 @@ public sealed class TaskListView : UserControl
     {
         _add = new AddTaskState { Rebuild = Rebuild };
         _gate = new GestureGate(this, Rebuild);
-        _drag = new CardDrag(this, () => Document);
+        // No glow on the section you are dropping into. On the board a column is a bordered box already, so
+        // lighting its edge is a change of colour; a list section has no edge of its own, so the same code
+        // *grew* one under the pointer — a line appearing and disappearing around a whole screen of tasks,
+        // nudging everything under it by a pixel. The insertion marker says where the card is going, which
+        // is the question a drop actually has, and it says it more precisely than a highlighted box.
+        _drag = new CardDrag(this, () => Document, lightZones: false);
         _keyboard = new CardKeyboard(() => Document, _drag.Zones, sideBySide: false);
         // Margin on the rows rather than padding on the scroller, for the reason the board has it there:
         // padding shrinks the viewport without joining the extent, so the last row is clipped by it.
@@ -240,7 +245,7 @@ public sealed class TaskListView : UserControl
 
     private TaskCard BuildCard(TaskGroup group, TaskItem task)
     {
-        var card = new TaskCard(Document.Board, task, Today);
+        var card = new TaskCard(Document.Board, task, Today, flat: true);
         card.DoneToggled += (_, done) => Document.Execute(BoardCommands.SetDone(task, done));
         card.StarToggled += (_, important) => Document.Execute(BoardCommands.SetImportant(task, important));
         card.Opened += (_, _) => TaskOpened?.Invoke(this, task);

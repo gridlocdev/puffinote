@@ -29,14 +29,21 @@ internal sealed class TaskCard : Border
     /// </summary>
     private const double LineHeight = 20;
 
-    public TaskCard(Board board, TaskItem task, DateOnly today)
+    /// <summary>
+    /// Build the card for <paramref name="task"/>. <paramref name="flat"/> drops its outline, which is what
+    /// the list asks for: on the board a card is one of several objects lying in a column and its edge is
+    /// what separates it from the column's own, but in the list every row is a task and nothing else, so
+    /// thirty outlines down a single column are thirty lines drawing a boundary nobody was in doubt about.
+    /// The white fill on the paper behind it still says where each task begins and ends.
+    /// </summary>
+    public TaskCard(Board board, TaskItem task, DateOnly today, bool flat = false)
     {
         Task = task;
         var palette = Tokens.Active;
 
         Background = palette.Surface;
         BorderBrush = palette.SurfaceBorder;
-        BorderThickness = new Thickness(1);
+        BorderThickness = new Thickness(flat ? 0 : 1);
         CornerRadius = new CornerRadius(6);
         Padding = new Thickness(10, 8);
         Margin = new Thickness(0, 0, 0, 6);
