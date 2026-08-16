@@ -710,6 +710,12 @@ public class BoardViewTests
         Assert.IsType<RotateTransform>(ghost.RenderTransform);
         Assert.NotEqual(default, ghost.BoxShadow);
 
+        // Faint enough to see the drop marker through. The card in the air is drawn above everything and
+        // spends most of the drag directly on top of the one thing that answers "where exactly?" — at
+        // nine-tenths opaque it simply blotted that out, so the drag showed you what you were carrying at
+        // the cost of where you were putting it.
+        Assert.InRange(ghost.Opacity, 0.2, 0.5);
+
         // It hangs off the pointer at the point of the card it was picked up by — the middle, here —
         // rather than snapping its own corner to the cursor.
         var pointer = onto.TranslatePoint(

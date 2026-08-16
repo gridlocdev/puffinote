@@ -52,6 +52,17 @@ internal sealed class CardDrag(Visual root, Func<BoardDocument> document, Canvas
     /// </summary>
     private const double Tilt = 2.5;
 
+    /// <summary>
+    /// How solid the lifted card is.
+    ///
+    /// <para>Faint on purpose. It is drawn above everything, it is card-sized, and the thing it spends
+    /// most of the drag directly on top of is the insertion marker — the one part of the gesture that
+    /// answers "where exactly?". At nine-tenths opaque it simply blotted that out, so the drag showed you
+    /// what you were carrying at the cost of where you were putting it. Enough to read the title through,
+    /// not enough to hide the line underneath.</para>
+    /// </summary>
+    internal const double GhostOpacity = 0.4;
+
     /// <summary>The zones currently on screen. A view clears this and refills it on every rebuild.</summary>
     public List<DropZone> Zones { get; } = [];
 
@@ -207,7 +218,7 @@ internal sealed class CardDrag(Visual root, Func<BoardDocument> document, Canvas
         var ghost = card.Duplicate();
         ghost.Width = card.Bounds.Width;
         ghost.Margin = default; // the original's bottom gap is spacing between cards, not part of one
-        ghost.Opacity = 0.9;
+        ghost.Opacity = GhostOpacity;
         ghost.IsHitTestVisible = false;
         ghost.RenderTransform = new RotateTransform(Tilt);
         ghost.BoxShadow = new BoxShadows(new BoxShadow

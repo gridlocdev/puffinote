@@ -261,7 +261,10 @@ internal sealed class GroupDrag(
             BorderThickness = new Thickness(1),
             CornerRadius = new CornerRadius(6),
             Padding = new Thickness(10, 6),
-            Opacity = 0.9,
+
+            // Faint, for the reason a lifted card is (CardDrag.GhostOpacity): it rides above the bar that
+            // says where the group would land, and a solid one hides the answer it was drawn to help with.
+            Opacity = CardDrag.GhostOpacity,
             IsHitTestVisible = false,
             BoxShadow = new BoxShadows(new BoxShadow { OffsetY = 10, Blur = 24, Color = Color.FromArgb(0x4D, 0, 0, 0) }),
             Child = new TextBlock
