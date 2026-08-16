@@ -210,6 +210,12 @@ CLI harness `CliHost`/`CliException`). Both editors already run their palette an
   - Standard tree affordances: expand/collapse folders, new file/folder, rename, delete (confirmed),
     reveal in Finder, and drag to move (move is a plain filesystem move; Puffinote does **not** rewrite
     link references — link-refactor is a non-goal).
+  - **The header's expand/collapse-all toggle** offers whichever of the two the tree has left to give, in its
+    label and its chevrons, and goes dim when there are no folders to act on at all. **Dim chrome explains
+    itself:** hovering it reads "No folders available for expanding", and a screen reader hears the same as
+    the button's help text while its name stays the action. Dimming alone says only *that* something is
+    unavailable, which leaves the reader to guess between a broken button, an empty notebook, and a step they
+    have missed.
   - **The move gesture** is drawn by the tree itself rather than handed to the platform's drag-and-drop,
     because all three of the things that make a tree drag legible are ours to draw: a **ghost** of the entry
     under the pointer, a **drop indicator** outlining where it would land, and a hovered collapsed folder

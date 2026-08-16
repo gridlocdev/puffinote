@@ -101,6 +101,51 @@ public sealed class SidebarFolderToggleTests : IDisposable
         Assert.False(sidebar.FoldersToggle.IsEnabled);
     }
 
+    /// <summary>What the pointer would show over the toggle — from the button, or from the wrapper that
+    /// speaks for it while it is disabled.</summary>
+    private static string? HoverMessage(Button toggle) =>
+        ToolTip.GetTip(toggle) as string ?? ToolTip.GetTip((Control)toggle.Parent!) as string;
+
+    [AvaloniaFact]
+    public void The_dimmed_button_explains_itself_on_hover()
+    {
+        // Dimming says *that* the button is unavailable and never *why*, which leaves the reader guessing
+        // between a broken button, an empty notebook, and a step they missed.
+        Touch("Inbox.md");
+        var (sidebar, _) = Open();
+        var toggle = sidebar.FoldersToggle;
+
+        Assert.False(toggle.IsEnabled);
+        Assert.Equal("No folders available for expanding", HoverMessage(toggle));
+
+        // The message has to live on something the pointer is actually delivered to: a disabled control is
+        // precisely the one that may never see a hover, so the wrapper holds it and stays enabled.
+        var host = Assert.IsType<Border>(toggle.Parent);
+        Assert.True(host.IsEnabled);
+        Assert.Equal("No folders available for expanding", ToolTip.GetTip(host));
+
+        // And it is spoken, not only drawn — the reason rides as help text while the name stays the action.
+        Assert.Equal("Expand all folders", Label(toggle));
+        Assert.Equal("No folders available for expanding", AutomationProperties.GetHelpText(toggle));
+    }
+
+    [AvaloniaFact]
+    public void A_button_that_works_says_what_it_will_do_and_nothing_else()
+    {
+        // Only one of the pair ever carries a tip, so two messages can never race the same hover.
+        Touch("Projects/Roadmap.md");
+        var (sidebar, _) = Open();
+        var toggle = sidebar.FoldersToggle;
+
+        Assert.True(toggle.IsEnabled);
+        Assert.Equal("Expand all folders", HoverMessage(toggle));
+        Assert.Null(ToolTip.GetTip((Control)toggle.Parent!));
+        Assert.Null(AutomationProperties.GetHelpText(toggle));
+
+        Click(toggle);
+        Assert.Equal("Collapse all folders", HoverMessage(toggle));
+    }
+
     /// <summary>An empty folder opens to nothing, so it must not claim there is something to collapse.</summary>
     [AvaloniaFact]
     public void An_empty_folder_does_not_make_the_button_offer_Collapse()

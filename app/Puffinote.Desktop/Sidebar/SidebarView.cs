@@ -68,6 +68,9 @@ internal sealed class SidebarView : UserControl
         Margin = new Thickness(8, 0, 8, 6),
     };
     private readonly Border _body = new();
+
+    /// <summary>Carries the folder toggle's hover message while the toggle itself is disabled.</summary>
+    private readonly Border _foldersToggleHost = new();
     private ISidebarPanel _active;
 
     /// <summary>The header New button's menu, kept so a test can read and click it without a popup window.</summary>
@@ -352,7 +355,17 @@ internal sealed class SidebarView : UserControl
         _actions.Children.Add(BuildNewButton(palette));
 
         var toggle = IconButton("chevrons-up", "Collapse all folders", palette, ToggleAllFolders);
-        _actions.Children.Add(toggle);
+
+        // The toggle rides inside a wrapper so that a *disabled* button can still explain itself on hover.
+        // A tooltip belongs to the control it is set on, and a disabled control is exactly the one a pointer
+        // may never be delivered to — which would make "why is this dim?" the one question the button
+        // refuses to answer. The wrapper is always enabled, and takes the tip only while the button is not
+        // (see RefreshFoldersToggle), so there is never a second tooltip competing with the button's own.
+        // Transparent, not unpainted: a background-less panel is not hit-testable in Avalonia, and the
+        // pointer would sail straight through it.
+        _foldersToggleHost.Background = Brushes.Transparent;
+        _foldersToggleHost.Child = toggle;
+        _actions.Children.Add(_foldersToggleHost);
         return toggle;
     }
 
@@ -379,7 +392,10 @@ internal sealed class SidebarView : UserControl
     /// keyboard, or a revealed document — not only after the header pressed it.
     ///
     /// <para>A notebook with no folders in it gets a disabled button: there is nothing to expand and nothing to
-    /// collapse, and dimming it says so before the click rather than after.</para>
+    /// collapse, and dimming it says so before the click rather than after. Dimming says <em>that</em> it is
+    /// unavailable, though, never <em>why</em> — so hovering it now answers the question in words. Dim chrome
+    /// is otherwise a dead end: nothing else on screen accounts for it, and the user is left to guess whether
+    /// the button is broken, the notebook is empty, or they have missed a step.</para>
     /// </summary>
     private void RefreshFoldersToggle()
     {
@@ -391,11 +407,23 @@ internal sealed class SidebarView : UserControl
             icon.IconKey = collapsing ? "chevrons-up" : "chevrons-down";
         }
 
-        ToolTip.SetTip(FoldersToggle, label);
+        // The button is still called what it does — a screen reader should hear the action, not the
+        // obstacle — so the reason rides as its help text, the way the switcher row speaks "selected".
         AutomationProperties.SetName(FoldersToggle, label);
 
         FoldersToggle.IsEnabled = ActiveTree.HasExpandableFolder;
         FoldersToggle.Opacity = FoldersToggle.IsEnabled ? 1 : 0.4;
+
+        // Phrased from the offer the button is making, so the two never disagree. In practice that word is
+        // always "expanding" today — a tree with a folder open always has one to collapse, so it is never
+        // both offering Collapse and disabled — but the sentence is built from the same flag as the label
+        // rather than from that reasoning, which stops being true the moment either rule moves.
+        var reason = $"No folders available for {(collapsing ? "collapsing" : "expanding")}";
+
+        // Exactly one of the two carries the tip, so only one message can ever appear (see BuildActions).
+        ToolTip.SetTip(FoldersToggle, FoldersToggle.IsEnabled ? label : null);
+        ToolTip.SetTip(_foldersToggleHost, FoldersToggle.IsEnabled ? null : reason);
+        AutomationProperties.SetHelpText(FoldersToggle, FoldersToggle.IsEnabled ? null : reason);
     }
 
     /// <summary>
