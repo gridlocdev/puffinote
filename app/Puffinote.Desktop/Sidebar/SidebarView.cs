@@ -243,6 +243,14 @@ internal sealed class SidebarView : UserControl
     /// <summary>The id of the currently shown panel (test seam).</summary>
     internal string ActivePanelId => _active.Id;
 
+    /// <summary>
+    /// The panels the switcher row offers, in the order it draws them. The shell mirrors this into its command
+    /// catalog so every button in the row is also a command (PRD §7.4) — read from here rather than listed
+    /// again over there, because a row and a catalog that each keep their own list of the panels drift the
+    /// moment one gains a panel the other has never heard of.
+    /// </summary>
+    internal IReadOnlyList<ISidebarPanel> Panels => _panels;
+
     /// <summary>The header's collapse control (test seam — click it as a user would).</summary>
     internal Button CollapseButtonForTest { get; }
 

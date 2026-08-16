@@ -353,6 +353,16 @@ navigation PKM users expect. (The Command Menu stays commands-only; file navigat
   Rule #4 and Typage's single-catalog rule).
 - Command identity is namespaced (shell vs editor) so the shortcuts editor and conflict-detection (§7.6)
   can reason about where a command and its binding come from.
+- **The sidebar's icon row is in the catalog, button for button** (`view.sidebar.<panel>`, plus
+  `view.sidebar.settings` for the Settings button at its end): *Files (Sidebar)*, *Filter (Sidebar)*,
+  *Search (Sidebar)*, *Outline (Sidebar)*, *Recent (Sidebar)*, *Settings (Sidebar)*. A row of glyphs is a
+  fine way to move between things you can see and no way at all to move by keyboard. Each is named after the
+  button it stands for and suffixed **(Sidebar)**, because the palette fuzzy-ranks on *titles* and half of
+  these are words the app uses elsewhere — an editor's own Search and Outline commands sit in the same merged
+  list, and the suffix says which one you are about to get. Running one **reveals a collapsed sidebar** before
+  switching, since a command that changed panels behind a hidden sidebar would read as one that did nothing;
+  Filter and Search then take the caret as they always do (§7.2.3). No default gestures — they stay
+  rebindable in the shortcuts editor (§7.6).
 
 ### 7.5 Configuration & settings inheritance
 

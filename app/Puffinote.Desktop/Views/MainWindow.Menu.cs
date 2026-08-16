@@ -95,6 +95,28 @@ public partial class MainWindow
             new("shell.toggleSidebar", "Toggle Sidebar", "Show or hide the sidebar", Bound("shell.toggleSidebar", Shortcut.Cmd(Key.OemBackslash)),
                 ToggleSidebar),
 
+            // The sidebar's icon row, said in words: every button in it is also a command, so the Command Menu
+            // reaches each panel — and the keyboard reaches them at all. The row is a fine way to move between
+            // things you can see; it is no way to move between things you have to know the glyph for.
+            //
+            // Each is suffixed "(Sidebar)" because these are the titles a fuzzy search matches on (the palette
+            // scores titles, not descriptions), and half of them are words this app uses elsewhere: an editor's
+            // own Search and Outline commands sit in the same merged list. The suffix says which Search you are
+            // about to get before you press Return on it.
+            .. SidebarForTest.Panels.Select(panel => new AppCommand(
+                SidebarCommandId(panel.Id),
+                $"{panel.Title} (Sidebar)",
+                $"Show the {panel.Title} panel in the sidebar",
+                Bound(SidebarCommandId(panel.Id), null),
+                () => ShowSidebarPanel(panel.Id),
+                icon: panel.Icon)),
+
+            // The last button in that row, which is an action rather than a panel — and the one place the
+            // Command Menu could not otherwise take you by the name written on it, since the dialog it opens
+            // is called Preferences everywhere else.
+            new(SidebarCommandId("settings"), "Settings (Sidebar)", "Open Preferences, as the sidebar's Settings button does",
+                Bound(SidebarCommandId("settings"), null), ShowSettings, icon: "settings-2"),
+
             // The session-scoped twin of the Preferences toggle: this flips what you're looking at now and
             // writes nothing, so hiding the strip to read one long note doesn't quietly become your default.
             // No gesture out of the box — there's no platform convention for it, and unlike ⌘\ for the sidebar
@@ -277,6 +299,26 @@ public partial class MainWindow
     }
 
     /// <summary>Open the merged Command Palette (⌘K): Puffinote's shell commands + the active editor's catalog.</summary>
+    /// <summary>
+    /// The command id that shows a sidebar panel. A shortcuts.json key and a command id, so it follows the
+    /// shared-vocabulary rule: the id carries the panel's own id, exactly as the switcher tags its buttons.
+    /// </summary>
+    private static string SidebarCommandId(string panelId) => "view.sidebar." + panelId;
+
+    /// <summary>
+    /// Show a sidebar panel by id, as its switcher button does — but first make sure there is a sidebar to
+    /// show it in. Asking for Search from the Command Menu plainly means "show me the search panel", and a
+    /// command that switched panels behind a collapsed sidebar would read as one that did nothing at all.
+    ///
+    /// <para>Revealing before activating, so the panel's own focus rule wins: Filter and Search put the caret
+    /// in their box on activation, and expanding the sidebar afterwards would take it back.</para>
+    /// </summary>
+    private void ShowSidebarPanel(string panelId)
+    {
+        SetSidebarCollapsed(false);
+        SidebarForTest.Activate(panelId);
+    }
+
     private void ShowCommandPalette()
     {
         if (_overlayHost.IsOpen)
