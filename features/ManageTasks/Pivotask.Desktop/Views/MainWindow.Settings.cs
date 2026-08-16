@@ -45,7 +45,7 @@ public sealed partial class MainWindow
                 ["Board", "List"],
                 "Columns or grouped rows — the same tasks, read two ways."),
             ChoiceSetting.ForEnum<TaskFilter>("Show", () => s.Filter, v => s.Filter = v,
-                ["All tasks", "Starred", "Due tomorrow", "Due this week", "Unfinished"],
+                ["Unfinished", "All tasks", "Starred", "Due tomorrow", "Due this week"],
                 "The filter a board opens with. The View menu still switches it per session."),
         ]),
         new SettingsSection("Saving",

@@ -48,6 +48,10 @@ public static class TaskEditingCommands
                 () => view.ChooseLayout(BoardLayout.List),
                 isActive: () => view.Layout == BoardLayout.List, icon: "list"),
 
+            // TaskFilter's own order, which is the one the panel and Preferences use too.
+            new("filter.unfinished", "Unfinished", "Only tasks that aren't done.", null,
+                () => view.Filter = TaskFilter.Unfinished,
+                isActive: () => view.Filter == TaskFilter.Unfinished, icon: "square-check"),
             new("filter.all", "All Tasks", "Clear the filter.", null,
                 () => view.Filter = TaskFilter.All,
                 isActive: () => view.Filter == TaskFilter.All, icon: "layers"),
@@ -60,9 +64,6 @@ public static class TaskEditingCommands
             new("filter.dueThisWeek", "Due This Week", "Only tasks due by the end of this week, or overdue.", null,
                 () => view.Filter = TaskFilter.DueThisWeek,
                 isActive: () => view.Filter == TaskFilter.DueThisWeek, icon: "calendar"),
-            new("filter.unfinished", "Unfinished", "Only tasks that aren't done.", null,
-                () => view.Filter = TaskFilter.Unfinished,
-                isActive: () => view.Filter == TaskFilter.Unfinished, icon: "square-check"),
 
             new("edit.find", "Search…", "Search titles, notes, and steps.", Shortcut.Cmd(Key.F),
                 view.OpenFilters, icon: "search"),

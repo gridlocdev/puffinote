@@ -34,14 +34,15 @@ public sealed class TaskBoardView : UserControl
     private readonly ContentControl _switcher = new();
     private TopLevel? _keyHost;
 
-    /// <summary>The slices, in the order the menu lists them. One choice with five answers.</summary>
+    /// <summary>The slices, in <see cref="TaskFilter"/>'s own order — the one order the panel, the View
+    /// menu and Preferences all list them in. One choice with five answers.</summary>
     private static readonly (TaskFilter Filter, string Label)[] Slices =
     [
+        (TaskFilter.Unfinished, "Unfinished"),
         (TaskFilter.All, "All"),
         (TaskFilter.Starred, "Starred"),
         (TaskFilter.DueTomorrow, "Due tomorrow"),
         (TaskFilter.DueThisWeek, "Due this week"),
-        (TaskFilter.Unfinished, "Unfinished"),
     ];
 
     public TaskBoardView()

@@ -2,9 +2,23 @@ using Pivotask.Core.Model;
 
 namespace Pivotask.Core.Query;
 
-/// <summary>The slices a board can be read in. One set, shared by the board, the list, and the CLI.</summary>
+/// <summary>
+/// The slices a board can be read in. One set, shared by the board, the list, and the CLI — and one
+/// <em>order</em>: this declaration is what the filter panel lists, what the View menu lists, and what
+/// the Preferences drop-down offers, so there is no way for three lists of the same five things to
+/// disagree about their order.
+///
+/// <para><see cref="Unfinished"/> leads. "What is still on my plate" is the question a task board is
+/// opened to answer, and <see cref="All"/> is the one you drop back to when you want the record as well
+/// as the work — so the shortest reach goes to the slice that is asked for most, not to the widest one.
+/// (This is why <see cref="All"/> is no longer the zero value. Nothing depends on that: the filter is
+/// written to a config file by <em>name</em>, and every default is stated rather than inferred.)</para>
+/// </summary>
 public enum TaskFilter
 {
+    /// <summary>Not yet done.</summary>
+    Unfinished,
+
     All,
 
     /// <summary>Starred.</summary>
@@ -15,9 +29,6 @@ public enum TaskFilter
 
     /// <summary>Due on or before the last day of this calendar week, or already late.</summary>
     DueThisWeek,
-
-    /// <summary>Not yet done.</summary>
-    Unfinished,
 }
 
 /// <summary>
