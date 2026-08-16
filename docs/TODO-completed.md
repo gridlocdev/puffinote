@@ -666,15 +666,3 @@
     two-part filename tag — proposal 0004 §4's one open risk, retired rather than verified. The contents
     are unchanged and still JSON. Boards written before the rename still open everywhere (and `ptask`
     still discovers them); they are simply not what a save produces or what Finder is asked for.
-
-- [x] Add an Outlook-like sidebar at the very left of the screen that allows toggling between Todos / Calendar / Notes / Data.
-    - [x] Todos (placeholder)
-    - [x] Calendar (placeholder)
-    - [x] Notes (Puffinote's current UI)
-    - [x] Data (placeholder)
-
-    The **Workspace Rail** (the name is in the vocabulary table now, so the sidebar's panel switcher and
-    this are never called the same thing). Notes is the notebook, built once and kept alive while you are
-    elsewhere — an open tab, a scroll position and a selection all live in those controls. The other
-    three say what will live in them and that they are not built yet. Every entry is a shell command too,
-    so ⌘K and the View menu reach all four without the pointer.

@@ -168,23 +168,10 @@ CLI harness `CliHost`/`CliException`). Both editors already run their palette an
 
 ### 7.1 The notebook
 
-- **The Workspace Rail** runs down the far-left edge of the window: **Todos**, **Calendar**, **Notes**,
-  **Data**, top to bottom, one glyph and one word each. These are different *things to be doing* rather
-  than different views of one thing, which is why they get a destination each (Outlook's shape, and
-  Outlook's reason for it) instead of a mode buried in a menu. The active one wears a leading-edge accent
-  bar, a wash and a spoken "selected" — a shape as well as a colour, because colour alone is no signal to
-  a reader who cannot see it. Every entry is also a command, so the Command Menu and the View menu reach
-  all four without the pointer.
-  - **Notes** is the notebook: the sidebar, the tabs, the editors — everything else in this document. It
-    is the workspace the window opens in, and it is *kept alive* while you are elsewhere, because an open
-    tab, a scroll position and a selection all live in those controls.
-  - **Todos**, **Calendar** and **Data** are **not built**. Each shows its name, one sentence saying what
-    will live there (every `.pivotask` board in the notebook; the notebook's dated work on a calendar;
-    every `.ods` workbook in the notebook), and the words "Not built yet." A rail entry leading to a blank
-    page reads as a broken app; saying what is coming, where it will be, is the honest version.
-  - The rail is **not** the sidebar's panel switcher, and does not look like it. That one moves between
-    panels *within* the notebook (Files, Search, Outline, Recent) and collapses to nothing; this one is
-    always there, and carries a word under each glyph.
+- **The window is the notebook**: the sidebar, the tabs, the editors — everything else in this document.
+  There is no second destination beside it, and no strip of them down the edge of the window: the one
+  switcher in the shell is the sidebar's, moving between panels *within* the notebook (Files, Search,
+  Outline, Recent) and collapsing with it.
 - A **notebook is a single root folder** on disk. Puffinote opens one notebook at a time; the file tree is
   rooted at the notebook folder. Switching notebooks (Open Notebook…) prompts to save any dirty tabs, then reloads
   the tree and per-notebook state.

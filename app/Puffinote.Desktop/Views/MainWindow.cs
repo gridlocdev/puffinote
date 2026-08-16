@@ -7,7 +7,6 @@ using Puffinote.Components.Controls;
 using Puffinote.Components.Overlays;
 using Puffinote.Components.Shell;
 using Puffinote.Components.Theming;
-using Puffinote.Desktop.Controls;
 using Puffinote.Desktop.Panes;
 using Puffinote.Desktop.Shell;
 using Puffinote.Desktop.Sidebar;
@@ -45,11 +44,6 @@ public partial class MainWindow : Window
     private GridSplitter _splitter = null!;
     private Border _sidebarHandle = null!;
     private SidebarLayout _sidebarLayout = null!;
-
-    // The four workspaces the rail switches between (PRD §7.1). Only Notes is built; the other three are
-    // made on first visit and kept, so switching back and forth costs nothing.
-    private Panel _workspaceHost = null!;
-    private readonly Dictionary<Workspace, Control> _placeholders = [];
 
     // The notebook-scoped recent-files list (PRD §7.2.3): promotion, rename-remap, and delete-drop all live in
     // RecentFilesList; the shell mirrors changes into the sidebar's Recent panel + quick-open and persists them
@@ -265,16 +259,6 @@ public partial class MainWindow : Window
     /// <summary>The sidebar (test seam — drive the tree in end-to-end mutation tests).</summary>
     internal Sidebar.SidebarView SidebarForTest { get; } = new();
 
-    /// <summary>The workspace rail down the far-left edge (PRD §7.1) — Todos, Calendar, Notes, Data.</summary>
-    internal WorkspaceRail WorkspaceRailForTest { get; } = new();
-
-    /// <summary>The workspace currently on screen.</summary>
-    internal Workspace ActiveWorkspace
-    {
-        get => WorkspaceRailForTest.Active;
-        set => WorkspaceRailForTest.ClickForTest(Workspaces.Info(value).Title);
-    }
-
     /// <summary>
     /// The family's unified title bar: the active document's name, centred, in the app's own chrome.
     /// (Also the test seam for asserting what it names.)
@@ -349,38 +333,10 @@ public partial class MainWindow : Window
     internal Task SaveCurrentForTest() => SaveCurrentAsync();
 
     /// <summary>
-    /// The window's body: the workspace rail down the far-left edge, and beside it whichever workspace it
-    /// is pointing at. Notes is the notebook — the sidebar, the tabs, the editors, everything the shell was
-    /// before the rail existed — and the other three are placeholders that say what will live in them.
+    /// The window's body: the notebook — the sidebar (with its splitter and collapsed-state handle) beside
+    /// the tab host that carries the editors.
     /// </summary>
     private Control BuildBody(ThemePalette palette)
-    {
-        var notes = BuildNotesWorkspace(palette);
-        _workspaceHost = new Panel { Children = { notes } };
-
-        WorkspaceRailForTest.WorkspaceSelected += workspace =>
-        {
-            // Built once and kept: switching away from Notes and back must not tear the notebook down and
-            // reopen it, and the placeholders are cheap enough to keep too.
-            var view = workspace == Workspace.Notes
-                ? notes
-                : _placeholders.TryGetValue(workspace, out var made)
-                    ? made
-                    : _placeholders[workspace] = new WorkspacePlaceholder(Workspaces.Info(workspace));
-
-            _workspaceHost.Children.Clear();
-            _workspaceHost.Children.Add(view);
-            UpdatePaneChrome(); // the title bar names the document only while the notebook is on screen
-        };
-
-        var body = new DockPanel();
-        DockPanel.SetDock(WorkspaceRailForTest, Dock.Left);
-        body.Children.Add(WorkspaceRailForTest);
-        body.Children.Add(_workspaceHost);
-        return body;
-    }
-
-    private Control BuildNotesWorkspace(ThemePalette palette)
     {
         _sidebar = new Border
         {
