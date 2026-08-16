@@ -164,11 +164,15 @@ public class BoardViewTests
         Assert.Equal(["t1", "t2"], view.BoardForTest.CardsForTest.Select(c => c.Task.Id));
     }
 
-    [AvaloniaFact]
-    public void An_overdue_task_is_due_soon_however_late_it_is()
+    /// <summary>Both due filters open backwards without limit: an overdue task is the most urgent thing
+    /// either could name.</summary>
+    [AvaloniaTheory]
+    [InlineData(TaskFilter.DueTomorrow)]
+    [InlineData(TaskFilter.DueThisWeek)]
+    public void An_overdue_task_is_due_however_late_it_is(TaskFilter filter)
     {
         var (view, _) = Open();
-        view.Filter = TaskFilter.DueSoon;
+        view.Filter = filter;
         Dispatcher.UIThread.RunJobs();
 
         Assert.Equal(["t2"], view.BoardForTest.CardsForTest.Select(c => c.Task.Id));
@@ -1240,26 +1244,28 @@ public class BoardViewTests
     }
 
     /// <summary>
-    /// The Filter panel holds the search box and the four slices together, with a tick against the one in
+    /// The Filter panel holds the search box and the slices together, with a tick against the one in
     /// force — they are one job ("which of these tasks am I looking at"), so they are one panel.
     /// </summary>
     [AvaloniaFact]
-    public void The_filter_panel_holds_the_search_box_and_the_four_slices()
+    public void The_filter_panel_holds_the_search_box_and_every_slice()
     {
         var (view, _) = Open();
 
-        Assert.Equal(["All", "Starred", "Due soon", "Unfinished"], FilterRows(view).Select(Named));
+        Assert.Equal(
+            ["All", "Starred", "Due tomorrow", "Due this week", "Unfinished"],
+            FilterRows(view).Select(Named));
         Assert.Same(Search(view).Parent, FilterPanel(view)); // the search box is in the panel, not the strip
 
         // A tick, not a fill: in a vertical list that is what "this is the one" looks like, and it survives
         // a reader who cannot tell the fill from the ground.
-        Assert.Equal(["selected", null, null, null], FilterRows(view).Select(Help));
+        Assert.Equal(["selected", null, null, null, null], FilterRows(view).Select(Help));
 
         Row(view, "Starred").RaiseEvent(new Avalonia.Interactivity.RoutedEventArgs(Button.ClickEvent));
         Dispatcher.UIThread.RunJobs();
 
         Assert.Equal(TaskFilter.Starred, view.Filter);
-        Assert.Equal([null, "selected", null, null], FilterRows(view).Select(Help));
+        Assert.Equal([null, "selected", null, null, null], FilterRows(view).Select(Help));
     }
 
     /// <summary>

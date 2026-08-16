@@ -33,16 +33,25 @@ internal static class TaskCommands
         var group = new Option<string?>("--group", "-g") { Description = "Only this group" };
         var label = new Option<string?>("--label", "-l") { Description = "Only tasks with this label" };
         var starred = new Option<bool>("--starred") { Description = "Only starred tasks" };
-        var dueSoon = new Option<bool>("--due-soon") { Description = "Only tasks due within a few days (or overdue)" };
+        // Two windows, each named after where it stops. `--due-soon` is gone rather than kept as an alias
+        // for one of them: it was one flag that could honestly have meant either, which is the whole
+        // reason it was split, and a flag that quietly picks one of two meanings is worse than one that
+        // fails and tells you to say which you meant.
+        var dueTomorrow = new Option<bool>("--due-tomorrow") { Description = "Only tasks due today or tomorrow (or overdue)" };
+        var dueThisWeek = new Option<bool>("--due-this-week") { Description = "Only tasks due by the end of this week (or overdue)" };
         var open = new Option<bool>("--open") { Description = "Only tasks that aren't done" };
         var json = new Option<bool>("--json") { Description = "Emit JSON instead of a table" };
 
-        var command = new Command("list", "List tasks") { board, group, label, starred, dueSoon, open, json };
+        var command = new Command("list", "List tasks")
+        {
+            board, group, label, starred, dueTomorrow, dueThisWeek, open, json,
+        };
         command.SetAction(parse =>
         {
             var document = Workspace.Open(parse.GetValue(board));
             var filter = parse.GetValue(starred) ? TaskFilter.Starred
-                : parse.GetValue(dueSoon) ? TaskFilter.DueSoon
+                : parse.GetValue(dueTomorrow) ? TaskFilter.DueTomorrow
+                : parse.GetValue(dueThisWeek) ? TaskFilter.DueThisWeek
                 : parse.GetValue(open) ? TaskFilter.Unfinished
                 : TaskFilter.All;
 

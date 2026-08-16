@@ -94,7 +94,8 @@ public sealed class CliTests : IDisposable
     {
         Assert.DoesNotContain("Draft the Q3", Run("list", "--open").Out, StringComparison.Ordinal);
         Assert.Contains("Halden Co.", Run("list", "--starred").Out, StringComparison.Ordinal);
-        Assert.Contains("Halden Co.", Run("list", "--due-soon").Out, StringComparison.Ordinal);
+        Assert.Contains("Halden Co.", Run("list", "--due-tomorrow").Out, StringComparison.Ordinal);
+        Assert.Contains("Halden Co.", Run("list", "--due-this-week").Out, StringComparison.Ordinal);
         Assert.DoesNotContain("typeface", Run("list", "--starred").Out, StringComparison.Ordinal);
     }
 

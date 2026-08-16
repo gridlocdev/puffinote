@@ -114,6 +114,7 @@ public sealed class TaskBoardPaneTests : IDisposable
         using var pane = EditorPaneFactory.Create(WriteBoard())!;
 
         Assert.Contains(pane.Commands, c => c.Id == "task.add");
-        Assert.Contains(pane.Commands, c => c.Id == "filter.dueSoon");
+        Assert.Contains(pane.Commands, c => c.Id == "filter.dueTomorrow");
+        Assert.Contains(pane.Commands, c => c.Id == "filter.dueThisWeek");
     }
 }

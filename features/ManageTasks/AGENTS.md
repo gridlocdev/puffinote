@@ -60,7 +60,7 @@ rationale is [proposal 0004](../../docs/proposals/0004-pivotask.md), and the
 just build-pivotask
 just test-pivotask
 just test-filter SomeTest pivotask
-just run-pivotask-cli list --due-soon
+just run-pivotask-cli list --due-tomorrow
 just check                        # format-verify + build + test EVERY area — the gate
 ```
 

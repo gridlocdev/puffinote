@@ -138,8 +138,23 @@ made *on a board* is recorded in that board's file (§2), so it is not asked aga
 |---|---|
 | All | everything |
 | Starred | `important` |
-| Due soon | due today or tomorrow — **or overdue, however late**. A task three weeks late is the most "due soon" thing there is. The window is deliberately one day: this filter answers "what do I have to deal with now", and it is only useful while the answer is short enough to act on. Three days quietly made it "this week", which a board column already says. |
+| Due tomorrow | due today or tomorrow — **or overdue, however late**. The window is deliberately one day: this one answers "what do I have to deal with now", and it is only useful while the answer is short enough to act on. |
+| Due this week | due on or before the last day of **this calendar week** — or overdue, however late. |
 | Unfinished | not done |
+
+Both due filters open backwards without limit: a task three weeks late is the most urgent thing either
+could name, and it must not fall out of the list that exists to tell you about it. They differ only in
+how far *forward* they reach.
+
+*(They were one filter, "Due soon", and the name was the problem: "soon" is a word two people read as two
+different windows, so the filter could not be trusted without opening the source. Two names that each say
+where they stop is the fix, and it is worth one extra row in a menu.)*
+
+**"This week" is the calendar week, not a rolling seven days** — a filter with that name offering you
+something due next Wednesday on a Friday would be exactly the vagueness the split exists to end. It
+therefore shrinks as the week goes on, which is honest: by Saturday there genuinely is not much week
+left. The week starts where the *reader's* culture starts it (Monday in most of the world, Sunday in the
+US), because whose week it is is a fact about their calendar and not about ours.
 
 **Search** matches the title, the notes, **and the step text**. A checklist item is where the specific
 words usually are; a search that couldn't reach them would send you opening tasks one at a time to look.
@@ -184,7 +199,7 @@ Puffinote tab offer the same set under the same chords.
 | Undo / Redo | ⌘Z / ⇧⌘Z |
 | Add Task | ⇧⌘N |
 | Search | ⌘F |
-| Board / List, and the four filters | (menu) |
+| Board / List, and the five filters | (menu) |
 
 ⌘K is **not** Pivotask's: it opens the host's Command Menu, as in the sibling editors.
 
@@ -202,7 +217,7 @@ appearance once for every editor it hosts, and this file's value is what Pivotas
 A **full mutating verb set**, because task management is scriptable in a way text editing isn't:
 
 ```
-ptask list [--group G] [--label L] [--starred] [--due-soon] [--open] [--json]
+ptask list [--group G] [--label L] [--starred] [--due-tomorrow] [--due-this-week] [--open] [--json]
 ptask show <task>
 ptask add "title" [--group G] [--label L] [--due DATE] [--star]
 ptask done <task> | ptask undone <task>

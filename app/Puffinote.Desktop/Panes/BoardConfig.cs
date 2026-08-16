@@ -39,7 +39,7 @@ internal sealed record BoardConfig
                 ["Board", "List"],
                 "Columns or grouped rows — the same tasks, read two ways."),
             ChoiceSetting.ForEnum<TaskFilter>("Show", () => Filter, v => Filter = v,
-                ["All tasks", "Starred", "Due soon", "Unfinished"],
+                ["All tasks", "Starred", "Due tomorrow", "Due this week", "Unfinished"],
                 "The filter a board opens with. The View menu still switches it per session."),
         ]),
     ];

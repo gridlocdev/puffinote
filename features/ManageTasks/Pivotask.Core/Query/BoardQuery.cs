@@ -2,7 +2,7 @@ using Pivotask.Core.Model;
 
 namespace Pivotask.Core.Query;
 
-/// <summary>The four filters the prototype settled on. One set, shared by the board, the list, and the CLI.</summary>
+/// <summary>The slices a board can be read in. One set, shared by the board, the list, and the CLI.</summary>
 public enum TaskFilter
 {
     All,
@@ -10,8 +10,11 @@ public enum TaskFilter
     /// <summary>Starred.</summary>
     Starred,
 
-    /// <summary>Due today or tomorrow, or already late — see <see cref="BoardQuery.DueSoonWindow"/>.</summary>
-    DueSoon,
+    /// <summary>Due today or tomorrow, or already late.</summary>
+    DueTomorrow,
+
+    /// <summary>Due on or before the last day of this calendar week, or already late.</summary>
+    DueThisWeek,
 
     /// <summary>Not yet done.</summary>
     Unfinished,
@@ -20,21 +23,40 @@ public enum TaskFilter
 /// <summary>
 /// Filtering and searching, as pure functions over a board.
 ///
-/// <para>In Core, not in the control, for the reason the CLI exists: <c>ptask list --due-soon</c> and
-/// the board's "Due soon" tab have to agree about what "soon" means, and the only way to guarantee that
-/// is for there to be one answer. Phase 5's list view consumes the same seam Phase 2's board does, which
-/// is why it was an addition rather than a rework.</para>
+/// <para>In Core, not in the control, for the reason the CLI exists: <c>ptask list --due-tomorrow</c>
+/// and the board's "Due tomorrow" slice have to agree about which tasks that is, and the only way to
+/// guarantee it is for there to be one answer. Phase 5's list view consumes the same seam Phase 2's
+/// board does, which is why it was an addition rather than a rework.</para>
 /// </summary>
 public static class BoardQuery
 {
     /// <summary>
-    /// How many days ahead "due soon" reaches: <b>one</b> — today and tomorrow, plus everything already
-    /// late. This is the prototype's window (<c>dayDiff(t.due) &lt;= 1</c>), and the number matters: a
-    /// filter that answers "what do I have to deal with now" is only useful while its answer is short
-    /// enough to act on. Three days quietly turned it into "this week", which the board's own "This week"
-    /// column already is.
+    /// How many days ahead <see cref="TaskFilter.DueTomorrow"/> reaches: <b>one</b>. This is the
+    /// prototype's window (<c>dayDiff(t.due) &lt;= 1</c>), and the number matters: a filter that answers
+    /// "what do I have to deal with now" is only useful while its answer is short enough to act on.
     /// </summary>
-    public static readonly int DueSoonWindow = 1;
+    public static readonly int DueTomorrowWindow = 1;
+
+    /// <summary>
+    /// The last day of the calendar week containing <paramref name="today"/> — where
+    /// <see cref="TaskFilter.DueThisWeek"/> stops.
+    ///
+    /// <para>A calendar week, not a rolling seven days, because that is what the name says: a filter
+    /// called "this week" that on a Friday offered you something due next Wednesday would be the sort of
+    /// vagueness this pair of filters exists to end. The week starts where the <em>reader's</em> culture
+    /// starts it (Monday in most of the world, Sunday in the US), because "this week" is a fact about
+    /// their calendar and not about ours.</para>
+    ///
+    /// <para>It does shrink as the week goes on, and that is honest: by Saturday there genuinely is not
+    /// much week left, and the filter that says so is more useful than one that quietly means "the next
+    /// seven days" while calling itself something else.</para>
+    /// </summary>
+    public static DateOnly EndOfWeek(DateOnly today)
+    {
+        var starts = System.Globalization.CultureInfo.CurrentCulture.DateTimeFormat.FirstDayOfWeek;
+        int elapsed = (((int)today.DayOfWeek - (int)starts) + 7) % 7;
+        return today.AddDays(6 - elapsed);
+    }
 
     /// <summary>Whether <paramref name="task"/> passes <paramref name="filter"/> on <paramref name="today"/>.</summary>
     public static bool Matches(TaskItem task, TaskFilter filter, DateOnly today)
@@ -44,14 +66,18 @@ public static class BoardQuery
         {
             TaskFilter.Starred => task.Important,
 
-            // An overdue task is the most "due soon" thing there is, so the window opens backwards
-            // without limit — a task three weeks late should not fall out of the list that exists to
-            // tell you about it.
-            TaskFilter.DueSoon => task.Due is { } due && !task.Done && due <= today.AddDays(DueSoonWindow),
+            // Both due filters open backwards without limit: an overdue task is the most urgent thing
+            // either of them could name, and a task three weeks late must not fall out of the list that
+            // exists to tell you about it. They differ only in how far forward they reach.
+            TaskFilter.DueTomorrow => DueBy(task, today.AddDays(DueTomorrowWindow)),
+            TaskFilter.DueThisWeek => DueBy(task, EndOfWeek(today)),
             TaskFilter.Unfinished => !task.Done,
             _ => true,
         };
     }
+
+    private static bool DueBy(TaskItem task, DateOnly last) =>
+        task.Due is { } due && !task.Done && due <= last;
 
     /// <summary>
     /// Whether <paramref name="task"/> matches <paramref name="query"/>. Searches the title, the notes,

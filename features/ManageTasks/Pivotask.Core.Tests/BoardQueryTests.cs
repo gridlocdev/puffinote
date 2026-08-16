@@ -5,11 +5,12 @@ using Xunit;
 namespace Pivotask.Core.Tests;
 
 /// <summary>
-/// Filtering and searching. These live in Core so `ptask list --due-soon` and the board's "Due soon"
-/// tab cannot disagree about what "soon" means.
+/// Filtering and searching. These live in Core so `ptask list --due-tomorrow` and the board's "Due
+/// tomorrow" slice cannot disagree about which tasks that is.
 /// </summary>
 public class BoardQueryTests
 {
+    /// <summary>A Friday, so "this week" has a couple of days left in it and an end to test against.</summary>
     private static readonly DateOnly Today = new(2026, 8, 7);
 
     private static TaskItem Task(string title, int? dueInDays = null, bool done = false, bool important = false)
@@ -24,27 +25,63 @@ public class BoardQueryTests
     }
 
     [Theory]
-    [InlineData(-14, true)] // three weeks late is the most "due soon" thing there is
+    [InlineData(-14, true)] // three weeks late is the most urgent thing this filter could name
     [InlineData(0, true)]   // today
     [InlineData(1, true)]   // tomorrow — the edge of the window (the prototype's dayDiff <= 1)
-    [InlineData(2, false)]  // past it: that is "this week", which the board already has a column for
-    public void Due_soon_reaches_to_tomorrow_and_backward_without_limit(int days, bool expected) =>
-        Assert.Equal(expected, BoardQuery.Matches(Task("x", days), TaskFilter.DueSoon, Today));
+    [InlineData(2, false)]  // past it: that is the other due filter's job now
+    public void Due_tomorrow_reaches_to_tomorrow_and_backward_without_limit(int days, bool expected) =>
+        Assert.Equal(expected, BoardQuery.Matches(Task("x", days), TaskFilter.DueTomorrow, Today));
 
+    /// <summary>
+    /// "This week" is the calendar week, not a rolling seven days — a filter that on a Friday offered
+    /// something due next Wednesday would be the vagueness this pair of filters exists to end. Today is a
+    /// Friday, so the week ends two days out where the week starts on Monday, and tomorrow where it
+    /// starts on Sunday; both are asserted against <see cref="BoardQuery.EndOfWeek"/> rather than against
+    /// a number, because which day a week starts on is the reader's culture's business and not ours.
+    /// </summary>
     [Fact]
-    public void A_completed_task_is_never_due_soon()
+    public void Due_this_week_reaches_to_the_end_of_the_calendar_week()
     {
-        Assert.False(BoardQuery.Matches(Task("x", -1, done: true), TaskFilter.DueSoon, Today));
+        int last = BoardQuery.EndOfWeek(Today).DayNumber - Today.DayNumber;
+
+        Assert.True(BoardQuery.Matches(Task("x", -14), TaskFilter.DueThisWeek, Today)); // still overdue-inclusive
+        Assert.True(BoardQuery.Matches(Task("x", 0), TaskFilter.DueThisWeek, Today));
+        Assert.True(BoardQuery.Matches(Task("x", last), TaskFilter.DueThisWeek, Today));
+        Assert.False(BoardQuery.Matches(Task("x", last + 1), TaskFilter.DueThisWeek, Today));
+
+        // …and it is the wider of the two: everything due tomorrow is also due this week.
+        Assert.True(last >= BoardQuery.DueTomorrowWindow);
+    }
+
+    /// <summary>The week runs seven days and contains today, wherever the reader's culture starts it.</summary>
+    [Theory]
+    [InlineData(0)]
+    [InlineData(1)]
+    [InlineData(2)]
+    [InlineData(3)]
+    [InlineData(4)]
+    [InlineData(5)]
+    [InlineData(6)]
+    public void The_week_ends_within_the_next_seven_days_whatever_day_it_is(int offset)
+    {
+        var day = Today.AddDays(offset);
+        int left = BoardQuery.EndOfWeek(day).DayNumber - day.DayNumber;
+
+        Assert.InRange(left, 0, 6);
+        Assert.Equal(BoardQuery.EndOfWeek(day), BoardQuery.EndOfWeek(BoardQuery.EndOfWeek(day)));
+    }
+
+    [Theory]
+    [InlineData(TaskFilter.DueTomorrow)]
+    [InlineData(TaskFilter.DueThisWeek)]
+    public void A_completed_task_and_a_dateless_one_are_never_due(TaskFilter filter)
+    {
+        Assert.False(BoardQuery.Matches(Task("x", -1, done: true), filter, Today));
+        Assert.False(BoardQuery.Matches(Task("x"), filter, Today));
     }
 
     [Fact]
-    public void A_task_with_no_due_date_is_never_due_soon()
-    {
-        Assert.False(BoardQuery.Matches(Task("x"), TaskFilter.DueSoon, Today));
-    }
-
-    [Fact]
-    public void The_other_three_filters_are_what_they_say()
+    public void The_other_filters_are_what_they_say()
     {
         Assert.True(BoardQuery.Matches(Task("x", done: true), TaskFilter.All, Today));
         Assert.True(BoardQuery.Matches(Task("x", important: true), TaskFilter.Starred, Today));

@@ -23,7 +23,7 @@ Dates are dates: `YYYY-MM-DD`, no times, no timezones, no recurrence.
 just build-pivotask
 just test-pivotask
 just run-pivotask               # a GUI — needs a real display, not the devcontainer
-just run-pivotask-cli list --due-soon
+just run-pivotask-cli list --due-tomorrow
 ```
 
 Ship it:
@@ -38,7 +38,7 @@ Every install has an exact inverse (`uninstall-pivotask`, `uninstall-pivotask-ap
 ## The `ptask` CLI
 
 ```bash
-ptask list --due-soon                        # what's about to bite
+ptask list --due-tomorrow                    # what's about to bite
 ptask add "Renew the domain" --group "To do" --due 2026-09-01
 ptask done "Renew the domain"                # by id, or by part of the title
 ptask move k3f9a2b --group "In progress"
