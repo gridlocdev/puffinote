@@ -35,6 +35,10 @@ public sealed class TaskListView : UserControl
         // Margin on the rows rather than padding on the scroller, for the reason the board has it there:
         // padding shrinks the viewport without joining the extent, so the last row is clipped by it.
         _rows.Margin = new Thickness(12);
+
+        // The same paper the board lies on — one sheet under both readings, so switching views is not also
+        // a change of background colour.
+        Background = Tokens.Active.SurfaceInset;
         Content = new ScrollViewer { Content = _rows };
         Rebuild();
     }

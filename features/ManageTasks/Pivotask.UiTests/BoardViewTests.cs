@@ -622,6 +622,33 @@ public class BoardViewTests
     }
 
     /// <summary>
+    /// The paper is recessed and the columns are raised, not the other way round.
+    ///
+    /// <para>The board painted no background at all, so it wore whatever the platform theme gave the
+    /// window — a flat white sheet in light, a near-black one in dark — while the columns took the
+    /// <em>inset</em> token meant for a well. That is the prototype's design inverted: its body is
+    /// <c>--paper</c> and its columns and cards are <c>--surface</c>. Asserted against the tokens rather
+    /// than against colours, so it stays true in both variants.</para>
+    /// </summary>
+    [AvaloniaFact]
+    public void The_board_is_paper_and_its_columns_are_cards_lying_on_it()
+    {
+        var (view, _) = Open();
+        var palette = Puffinote.Components.Theming.Tokens.Active;
+
+        Assert.Same(palette.SurfaceInset, view.BoardForTest.Background);
+
+        var column = view.BoardForTest.GetLogicalDescendants().OfType<Border>().First(b => b.Width == 280);
+        Assert.Same(palette.Surface, column.Background);
+        Assert.Same(palette.Surface, view.BoardForTest.CardsForTest[0].Background);
+
+        // Both readings lie on the same sheet, so switching views is not also a change of colour.
+        view.Layout = BoardLayout.List;
+        Dispatcher.UIThread.RunJobs();
+        Assert.Same(palette.SurfaceInset, view.ListForTest.Background);
+    }
+
+    /// <summary>
     /// The board's trailing "add a list" is a column stub, not a shrink-wrapped label. It used to be a
     /// filled button the width of its own two words, which read as a control that had wandered in at the
     /// end of the row rather than as the next slot along.

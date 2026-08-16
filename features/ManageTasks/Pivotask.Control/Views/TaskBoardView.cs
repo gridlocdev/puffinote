@@ -61,21 +61,37 @@ public sealed class TaskBoardView : UserControl
         // what is below rather than what is in it. BoardHeader re-lays all three when the window gets too
         // narrow to hold them on one line — see its own notes.
         BuildLayoutSwitch();
-        _header = new BoardHeader(_search, _filters, _switcher, SetSwitchCompact)
+        var palette = Tokens.Active;
+        _header = new BoardHeader(_search, _filters, _switcher, SetSwitchCompact);
+
+        // Chrome, not paper: the strip is a raised surface with a hairline under it, and the board below
+        // is the recessed sheet the columns sit on. That contrast is the prototype's `--surface` bar over
+        // its `--paper` body, and it is the thing that says which layer you are looking at — the strip had
+        // been painting nothing at all, so it borrowed whatever the window was wearing and the two layers
+        // read as one.
+        var strip = new Border
         {
-            Margin = new Thickness(12, 8),
+            Background = palette.Surface,
+            BorderBrush = palette.SurfaceBorder,
+            BorderThickness = new Thickness(0, 0, 0, 1),
+            Padding = new Thickness(12, 8),
+            Child = _header,
         };
-        var strip = _header;
 
         // The board is scaled, the strip above it is not: zoom magnifies the tasks, and a filter row that
         // grew with them would eat the room the reader zoomed out to get. A LayoutTransformControl (rather
         // than a RenderTransform) is what makes the columns re-measure at the new size, so the cards
         // re-wrap and the scroll extent is honest instead of a magnified picture of the old layout.
         _zoomHost.Child = _surface;
+
+        // The paper is painted here as well as inside each view, because zoomed out the scaled view no
+        // longer fills the stage and the gap it leaves must be paper too, not the window's own colour.
+        var stage = new Border { Background = palette.SurfaceInset, Child = _zoomHost };
+
         var root = new DockPanel { LastChildFill = true };
         DockPanel.SetDock(strip, Dock.Top);
         root.Children.Add(strip);
-        root.Children.Add(_zoomHost);
+        root.Children.Add(stage);
 
         Content = new Panel { Children = { root, OverlayForTest } };
 

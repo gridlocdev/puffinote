@@ -1,0 +1,9 @@
+- [x] pivotask: The colors are different from the prototype screenshots, the empty background should be that grey color, and the groups should be white. Similarly, in dark theme, ensure that the background color and colors match the rest of the app instead of a dark black.![screenshot of pivotask with incorrect background](image.png)
+- [ ] pivotask: Only show the star icon when the star icon is filled in, don't need the outline as it's not frequently used and adds visual noise
+- [ ] pivotask: In the Tasks view, use a more minimal style, removing borders around the tasks themselves, and the highlight border around the group that you're dragging it into
+- [ ] pivotask: In the date picker, if the calendar is on the current year and month, change the visual of the current day so it's distinct enough to tell apart from other days
+- [ ] pivotask: draw a visible ghost of the task that you're dragging onto the cursor as you drag it, research online to see screenshot UI examples of this
+- [ ] pivotask: cmd+enter when editing any textbox on the popup modal should do the same as "done" button
+- [ ] pivotask: default new pivotasks to open in the "tasks" view
+- [ ] pivotask: in the pivotask file, store the last view it was opened in, either board or tasks view 
+- [ ] pivotask: allow reordering groups with clicking and dragging on the row or text with the group header

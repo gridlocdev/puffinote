@@ -41,6 +41,11 @@ public sealed class BoardView : UserControl
         // clipped by exactly that much however far you scroll — which is why the trailing "add a list"
         // could never be brought fully into view.
         _columns.Margin = new Thickness(12);
+
+        // The paper the columns sit on: the recessed token, not the window's default. A board that painted
+        // nothing wore whatever the platform theme decided — a flat white sheet in light, a near-black one
+        // in dark — and in both the columns lost the contrast that says they are objects lying on it.
+        Background = Tokens.Active.SurfaceInset;
         Content = new ScrollViewer
         {
             HorizontalScrollBarVisibility = ScrollBarVisibility.Auto,
@@ -178,7 +183,11 @@ public sealed class BoardView : UserControl
         var column = new Border
         {
             Width = 280,
-            Background = palette.SurfaceInset,
+
+            // A column is a raised card on the paper, so it takes the *surface* token and the board keeps
+            // the inset one. It was the other way round: the columns were the recessed wells and the sheet
+            // behind them was whatever the window happened to be, which is the prototype's design inverted.
+            Background = palette.Surface,
             BorderBrush = palette.SurfaceBorder,
             BorderThickness = new Thickness(1),
             CornerRadius = new CornerRadius(8),
