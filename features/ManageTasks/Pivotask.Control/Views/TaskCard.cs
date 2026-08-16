@@ -39,6 +39,9 @@ internal sealed class TaskCard : Border
     public TaskCard(Board board, TaskItem task, DateOnly today, bool flat = false)
     {
         Task = task;
+        _board = board;
+        _today = today;
+        _flat = flat;
         var palette = Tokens.Active;
 
         Background = palette.Surface;
@@ -205,6 +208,22 @@ internal sealed class TaskCard : Border
     }
 
     public TaskItem Task { get; }
+
+    /// <summary>What this card was built from, so it can build a second one of itself — see
+    /// <see cref="Duplicate"/>.</summary>
+    private readonly Board _board;
+    private readonly DateOnly _today;
+    private readonly bool _flat;
+
+    /// <summary>
+    /// A second card showing the same task, wired to nothing.
+    ///
+    /// <para>This is what a drag carries under the cursor. Building it from the same three arguments —
+    /// rather than snapshotting pixels or hand-drawing an approximation — is what guarantees the thing in
+    /// the air is the thing being moved: same chips, same due pill, same strikethrough, forever, without
+    /// a second card design to keep in step with this one.</para>
+    /// </summary>
+    internal TaskCard Duplicate() => new(_board, Task, _today, _flat);
 
     /// <summary>
     /// Set by <see cref="CardDrag"/> while this card is being dragged, and cleared when the next press

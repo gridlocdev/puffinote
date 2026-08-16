@@ -4,6 +4,7 @@ using Avalonia.Headless;
 using Avalonia.Headless.XUnit;
 using Avalonia.Input;
 using Avalonia.LogicalTree;
+using Avalonia.Media;
 using Avalonia.Threading;
 using Pivotask.Control.Views;
 using Pivotask.Core;
@@ -551,6 +552,54 @@ public class BoardViewTests
         Drag(card, Centre(view.BoardForTest.CardsForTest.First(c => c.Task.Id == "t3")));
 
         Assert.False(view.IsModalOpen);
+    }
+
+    /// <summary>
+    /// The card being dragged is drawn in the air, under the cursor.
+    ///
+    /// <para>A drag used to show a dimmed gap and a two-pixel line and nothing else — the card itself
+    /// stayed exactly where it was, so the gesture read as "nothing is happening" right up until the drop,
+    /// and <em>what</em> was being moved was something you had to remember rather than something you could
+    /// see. It is a real card built from the same task, so the thing in the air carries the same chips and
+    /// the same due pill as the thing being moved.</para>
+    /// </summary>
+    [AvaloniaFact]
+    public void A_dragged_card_lifts_onto_the_cursor_and_is_put_down_on_release()
+    {
+        var (view, _) = Open();
+        var window = (Window)TopLevel.GetTopLevel(view)!;
+        var card = view.BoardForTest.CardsForTest.First(c => c.Task.Id == "t1");
+        var onto = view.BoardForTest.CardsForTest.First(c => c.Task.Id == "t3");
+
+        static List<TaskCard> Ghosts(Visual surface) =>
+            [.. surface.GetLogicalDescendants().OfType<Canvas>().SelectMany(c => c.Children.OfType<TaskCard>())];
+
+        Assert.Empty(Ghosts(view.BoardForTest)); // nothing in the air until the gesture becomes a drag
+
+        var to = Centre(onto);
+        window.MouseDown(Centre(card), MouseButton.Left);
+        window.MouseMove(to);
+        Dispatcher.UIThread.RunJobs();
+
+        var ghost = Assert.Single(Ghosts(view.BoardForTest));
+        Assert.Same(card.Task, ghost.Task);              // the card in the air is the card being moved
+        Assert.Equal(0.35, card.Opacity);                // …and the gap it came from is still there
+        Assert.Equal(card.Bounds.Width, ghost.Width);
+        Assert.False(ghost.IsHitTestVisible);            // it must not answer the drag it is drawn for
+        Assert.IsType<RotateTransform>(ghost.RenderTransform);
+        Assert.NotEqual(default, ghost.BoxShadow);
+
+        // It hangs off the pointer at the point of the card it was picked up by — the middle, here —
+        // rather than snapping its own corner to the cursor.
+        var pointer = onto.TranslatePoint(
+            new Point(onto.Bounds.Width / 2, onto.Bounds.Height / 2), view.BoardForTest)!.Value;
+        Assert.Equal(pointer.X - (card.Bounds.Width / 2), Canvas.GetLeft(ghost), precision: 0);
+        Assert.Equal(pointer.Y - (card.Bounds.Height / 2), Canvas.GetTop(ghost), precision: 0);
+
+        window.MouseUp(to, MouseButton.Left);
+        Dispatcher.UIThread.RunJobs();
+
+        Assert.Empty(Ghosts(view.BoardForTest));
     }
 
     /// <summary>

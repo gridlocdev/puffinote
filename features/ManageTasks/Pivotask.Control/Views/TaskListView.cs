@@ -21,6 +21,10 @@ namespace Pivotask.Control.Views;
 public sealed class TaskListView : UserControl
 {
     private readonly StackPanel _rows = new() { Spacing = 2 };
+
+    /// <summary>The layer the card being dragged is drawn on — see <see cref="BoardView"/>'s.</summary>
+    private readonly Canvas _ghosts = new() { IsHitTestVisible = false };
+
     private readonly AddTaskState _add;
     private readonly CardDrag _drag;
     private readonly CardKeyboard _keyboard;
@@ -35,7 +39,7 @@ public sealed class TaskListView : UserControl
         // *grew* one under the pointer — a line appearing and disappearing around a whole screen of tasks,
         // nudging everything under it by a pixel. The insertion marker says where the card is going, which
         // is the question a drop actually has, and it says it more precisely than a highlighted box.
-        _drag = new CardDrag(this, () => Document, lightZones: false);
+        _drag = new CardDrag(this, () => Document, _ghosts, lightZones: false);
         _keyboard = new CardKeyboard(() => Document, _drag.Zones, sideBySide: false);
         // Margin on the rows rather than padding on the scroller, for the reason the board has it there:
         // padding shrinks the viewport without joining the extent, so the last row is clipped by it.
@@ -44,7 +48,7 @@ public sealed class TaskListView : UserControl
         // The same paper the board lies on — one sheet under both readings, so switching views is not also
         // a change of background colour.
         Background = Tokens.Active.SurfaceInset;
-        Content = new ScrollViewer { Content = _rows };
+        Content = new Panel { Children = { new ScrollViewer { Content = _rows }, _ghosts } };
         Rebuild();
     }
 

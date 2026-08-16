@@ -25,6 +25,11 @@ namespace Pivotask.Control.Views;
 public sealed class BoardView : UserControl
 {
     private readonly StackPanel _columns = new() { Orientation = Orientation.Horizontal, Spacing = 12 };
+
+    /// <summary>The layer the card being dragged is drawn on: over everything, part of nothing. Outside
+    /// the scroller on purpose, so the lifted card follows the pointer rather than the content under it.</summary>
+    private readonly Canvas _ghosts = new() { IsHitTestVisible = false };
+
     private readonly AddTaskState _add;
     private readonly CardDrag _drag;
     private readonly CardKeyboard _keyboard;
@@ -34,7 +39,7 @@ public sealed class BoardView : UserControl
     {
         _add = new AddTaskState { Rebuild = Rebuild };
         _gate = new GestureGate(this, Rebuild);
-        _drag = new CardDrag(this, () => Document);
+        _drag = new CardDrag(this, () => Document, _ghosts);
         _keyboard = new CardKeyboard(() => Document, _drag.Zones, sideBySide: true);
         // The inset is the columns' own margin, not the scroller's padding. A ScrollViewer's padding
         // shrinks the viewport without being counted in the extent, so the far edge of the content is
@@ -46,11 +51,18 @@ public sealed class BoardView : UserControl
         // nothing wore whatever the platform theme decided — a flat white sheet in light, a near-black one
         // in dark — and in both the columns lost the contrast that says they are objects lying on it.
         Background = Tokens.Active.SurfaceInset;
-        Content = new ScrollViewer
+        Content = new Panel
         {
-            HorizontalScrollBarVisibility = ScrollBarVisibility.Auto,
-            VerticalScrollBarVisibility = ScrollBarVisibility.Disabled,
-            Content = _columns,
+            Children =
+            {
+                new ScrollViewer
+                {
+                    HorizontalScrollBarVisibility = ScrollBarVisibility.Auto,
+                    VerticalScrollBarVisibility = ScrollBarVisibility.Disabled,
+                    Content = _columns,
+                },
+                _ghosts,
+            },
         };
 
         Rebuild();
