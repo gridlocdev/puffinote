@@ -136,16 +136,17 @@ made *on a board* is recorded in that board's file (§2), so it is not asked aga
 
 | Filter | Means |
 |---|---|
-| Unfinished | not done |
 | All | everything |
+| Unfinished | not done |
 | Starred | `important` |
 | Due tomorrow | due today or tomorrow — **or overdue, however late**. The window is deliberately one day: this one answers "what do I have to deal with now", and it is only useful while the answer is short enough to act on. |
 | Due this week | due on or before the last day of **this calendar week** — or overdue, however late. |
 
-**Unfinished leads**, and that order is the `TaskFilter` declaration itself — so the filter panel, the
-View menu and the Preferences drop-down cannot disagree about it. "What is still on my plate" is the
-question a task board is opened to answer; **All** is the one you drop back to when you want the record
-as well as the work. The shortest reach goes to the slice asked for most, not to the widest one.
+**All leads and Unfinished comes straight after it**, and that order is the `TaskFilter` declaration
+itself — so the filter panel, the View menu and the Preferences drop-down cannot disagree about it. All
+is the unfiltered board, the state the other four are departures from and the one you drop back to;
+Unfinished is next because "what is still on my plate" is the question a task board is opened to answer,
+so the shortest reach past "no filter" goes to the slice asked for most.
 
 Both due filters open backwards without limit: a task three weeks late is the most urgent thing either
 could name, and it must not fall out of the list that exists to tell you about it. They differ only in

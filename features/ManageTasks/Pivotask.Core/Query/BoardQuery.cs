@@ -8,18 +8,18 @@ namespace Pivotask.Core.Query;
 /// the Preferences drop-down offers, so there is no way for three lists of the same five things to
 /// disagree about their order.
 ///
-/// <para><see cref="Unfinished"/> leads. "What is still on my plate" is the question a task board is
-/// opened to answer, and <see cref="All"/> is the one you drop back to when you want the record as well
-/// as the work — so the shortest reach goes to the slice that is asked for most, not to the widest one.
-/// (This is why <see cref="All"/> is no longer the zero value. Nothing depends on that: the filter is
-/// written to a config file by <em>name</em>, and every default is stated rather than inferred.)</para>
+/// <para><see cref="All"/> leads, because it is the unfiltered board — the state the other four are
+/// departures from, and the one you drop back to. <see cref="Unfinished"/> comes straight after it:
+/// "what is still on my plate" is the question a task board is opened to answer, so the shortest reach
+/// past "no filter" goes to the slice asked for most rather than to the one that happens to have been
+/// written first.</para>
 /// </summary>
 public enum TaskFilter
 {
+    All,
+
     /// <summary>Not yet done.</summary>
     Unfinished,
-
-    All,
 
     /// <summary>Starred.</summary>
     Starred,

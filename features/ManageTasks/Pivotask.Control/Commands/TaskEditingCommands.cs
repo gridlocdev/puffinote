@@ -49,12 +49,12 @@ public static class TaskEditingCommands
                 isActive: () => view.Layout == BoardLayout.List, icon: "list"),
 
             // TaskFilter's own order, which is the one the panel and Preferences use too.
-            new("filter.unfinished", "Unfinished", "Only tasks that aren't done.", null,
-                () => view.Filter = TaskFilter.Unfinished,
-                isActive: () => view.Filter == TaskFilter.Unfinished, icon: "square-check"),
             new("filter.all", "All Tasks", "Clear the filter.", null,
                 () => view.Filter = TaskFilter.All,
                 isActive: () => view.Filter == TaskFilter.All, icon: "layers"),
+            new("filter.unfinished", "Unfinished", "Only tasks that aren't done.", null,
+                () => view.Filter = TaskFilter.Unfinished,
+                isActive: () => view.Filter == TaskFilter.Unfinished, icon: "square-check"),
             new("filter.starred", "Starred", "Only starred tasks.", null,
                 () => view.Filter = TaskFilter.Starred,
                 isActive: () => view.Filter == TaskFilter.Starred, icon: "star"),

@@ -212,7 +212,7 @@ public sealed partial class MainWindow : Window
         foreach (var id in new[]
                  {
                      "view.board", "view.list", null,
-                     "filter.unfinished", "filter.all", "filter.starred", "filter.dueTomorrow", "filter.dueThisWeek", null,
+                     "filter.all", "filter.unfinished", "filter.starred", "filter.dueTomorrow", "filter.dueThisWeek", null,
                      ZoomCommands.ZoomInId, ZoomCommands.ZoomOutId, ZoomCommands.ActualSizeId,
                  })
         {
@@ -285,8 +285,8 @@ public sealed partial class MainWindow : Window
         view.Items.Add(Item("_Board", "view.board"));
         view.Items.Add(Item("_List", "view.list"));
         view.Items.Add(new Separator());
-        view.Items.Add(Item("_Unfinished", "filter.unfinished"));
         view.Items.Add(Item("_All", "filter.all"));
+        view.Items.Add(Item("_Unfinished", "filter.unfinished"));
         view.Items.Add(Item("_Starred", "filter.starred"));
         view.Items.Add(Item("Due _Tomorrow", "filter.dueTomorrow"));
         view.Items.Add(Item("Due This _Week", "filter.dueThisWeek"));

@@ -38,8 +38,8 @@ public sealed class TaskBoardView : UserControl
     /// menu and Preferences all list them in. One choice with five answers.</summary>
     private static readonly (TaskFilter Filter, string Label)[] Slices =
     [
-        (TaskFilter.Unfinished, "Unfinished"),
         (TaskFilter.All, "All"),
+        (TaskFilter.Unfinished, "Unfinished"),
         (TaskFilter.Starred, "Starred"),
         (TaskFilter.DueTomorrow, "Due tomorrow"),
         (TaskFilter.DueThisWeek, "Due this week"),

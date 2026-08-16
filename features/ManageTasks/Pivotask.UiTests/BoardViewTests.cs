@@ -1252,16 +1252,17 @@ public class BoardViewTests
     {
         var (view, _) = Open();
 
-        // Unfinished leads: "what is still on my plate" is the question a board is opened to answer, and
-        // All is the one you drop back to when you want the record as well as the work.
+        // All leads — it is the unfiltered board, the state the other four are departures from — and
+        // Unfinished comes straight after it, because "what is still on my plate" is the question a board
+        // is opened to answer.
         Assert.Equal(
-            ["Unfinished", "All", "Starred", "Due tomorrow", "Due this week"],
+            ["All", "Unfinished", "Starred", "Due tomorrow", "Due this week"],
             FilterRows(view).Select(Named));
         Assert.Same(Search(view).Parent, FilterPanel(view)); // the search box is in the panel, not the strip
 
         // A tick, not a fill: in a vertical list that is what "this is the one" looks like, and it survives
         // a reader who cannot tell the fill from the ground.
-        Assert.Equal([null, "selected", null, null, null], FilterRows(view).Select(Help));
+        Assert.Equal(["selected", null, null, null, null], FilterRows(view).Select(Help));
 
         Row(view, "Starred").RaiseEvent(new Avalonia.Interactivity.RoutedEventArgs(Button.ClickEvent));
         Dispatcher.UIThread.RunJobs();

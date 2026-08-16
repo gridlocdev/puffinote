@@ -95,7 +95,7 @@ public class SettingsTests : IDisposable
 
         var combos = form.GetLogicalDescendants().OfType<ComboBox>().ToList();
         combos[1].SelectedIndex = 0; // Board     (combos[0] is Appearance ▸ Theme)
-        combos[2].SelectedIndex = 0; // Unfinished — TaskFilter's first, and the drop-down's first
+        combos[2].SelectedIndex = 1; // Unfinished — TaskFilter's second, right after All
         form.GetLogicalDescendants().OfType<NumericUpDown>().Single().Value = 60m; // auto-save
 
         Assert.Equal(BoardLayout.List, settings.Layout); // nothing written until the dialog is accepted
