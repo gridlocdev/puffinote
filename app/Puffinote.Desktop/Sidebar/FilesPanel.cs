@@ -20,7 +20,7 @@ namespace Puffinote.Desktop.Sidebar;
 /// you to where you came from (the folder you entered it from, or the whole notebook). The panel owns that trail
 /// and re-surfaces file-activation as an absolute path so the shell opens the file into a tab.
 /// </summary>
-internal sealed class FilesPanel : ISidebarPanel
+internal sealed class FilesPanel : IFileTreePanel
 {
     private readonly FileTreeView _tree = new();
     private readonly TextBlock _folderLabel;
@@ -29,7 +29,11 @@ internal sealed class FilesPanel : ISidebarPanel
     private readonly Border _divider;
     private readonly DockPanel _view;
 
-    private NotebookNode? _root;
+    /// <summary>The open notebook, whatever the tree is currently scoped to inside it.</summary>
+    private NotebookNode? Root { get; set; }
+
+    /// <summary>The name filter in force, kept so a change of scope can re-apply it (<see cref="ApplyScope"/>).</summary>
+    private FileTreeFilter? Filter { get; set; }
 
     /// <summary>
     /// The folders entered so far, outermost first — the last one is what the tree is rooted at, and an empty
@@ -125,12 +129,27 @@ internal sealed class FilesPanel : ISidebarPanel
     /// <summary>The tree's selected node, or null.</summary>
     public NotebookNode? SelectedNode => _tree.SelectedNode;
 
+    /// <summary>
+    /// The node the tree is rooted at right now: the notebook, or the folder that has been entered. What a
+    /// name filter is built over, so filtering inside an entered folder searches that folder and not the
+    /// notebook around it — the bar above the tree says the sidebar is showing one folder, and a filter that
+    /// quietly reached past it would make that a lie.
+    /// </summary>
+    internal NotebookNode? DisplayRoot => Scope is { } scope ? new NotebookNode(scope, isDirectory: true) : Root;
+
+    /// <summary>Show only the entries <paramref name="filter"/> keeps; null shows the whole tree again.</summary>
+    public void ApplyFilter(FileTreeFilter? filter)
+    {
+        Filter = filter;
+        _tree.ApplyFilter(filter);
+    }
+
     public void Focus() => _tree.FocusTree();
 
     /// <summary>Rebuild the tree for a newly opened notebook (or clear it when <paramref name="root"/> is null).</summary>
     public void SetRoot(NotebookNode? root)
     {
-        _root = root;
+        Root = root;
         _trail.Clear(); // a new notebook is never opened part-way inside a folder
         _tree.SetRoot(root);
         RenderScope();
@@ -206,10 +225,13 @@ internal sealed class FilesPanel : ISidebarPanel
 
     private void ApplyScope()
     {
-        var displayRoot = Scope is { } scope ? new NotebookNode(scope, isDirectory: true) : _root;
-        if (displayRoot is not null)
+        if (DisplayRoot is { } displayRoot)
         {
             _tree.SetScope(displayRoot);
+
+            // Re-asserted because SetScope resets expansion: a filter that had opened the folders above its
+            // matches would otherwise land in the entered folder with every one of them shut.
+            _tree.ApplyFilter(Filter);
         }
 
         RenderScope();

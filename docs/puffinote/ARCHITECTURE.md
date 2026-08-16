@@ -239,9 +239,14 @@ editors. `IEditorPane.SaveAsync()` calls the editor's save; Puffinote never writ
 
 ## 10. Sidebar panels & search
 
-Panels are switchable and each keyboard-focusable (PRD §7.2): **file tree**, **notebook search**, **outline**,
-**recent**.
+Panels are switchable and each keyboard-focusable (PRD §7.2): **file tree**, **filter**, **notebook search**,
+**outline**, **recent**.
 
+- **Filter** (`Sidebar/FilterPanel`) is the file tree with a query box over it: `FileTreeFilter` (in `Shell/`,
+  pure filesystem logic) walks the notebook off the UI thread and answers which paths survive a name match,
+  and `FileTreeView.ApplyFilter` narrows the rows to them. Files and Filter are two instances of the same
+  tree, so both implement `IFileTreePanel` and the `SidebarView` wires the tree's events, and fans the
+  shell's root/refresh/active-document calls out, exactly once for the pair.
 - **Notebook search** (`Search/NotebookIndex`): a background full-text index over the notebook. Notes index raw
   Markdown; sheets index cell **contents** via `Cellestra.Core` (the same read path the CLI uses). Indexing
   status is shown, never blocks; the index is stored in `.puffinote/` (git-ignored). Results open the hit
@@ -294,7 +299,7 @@ app/                                     # the composite product
 │   │   ├── CommandMerge.cs              # shell catalog ⊕ the active pane's catalog (§7)
 │   │   └── ShortcutConflictScanner.cs   # editor bindings shadowed by a reserved key (§8)
 │   ├── Shell/
-│   │   ├── NotebookService.cs  NotebookNode.cs  NotebookPaths.cs  PathScope.cs
+│   │   ├── NotebookService.cs  NotebookNode.cs  NotebookPaths.cs  PathScope.cs  FileTreeFilter.cs
 │   │   ├── NotebookMutations.cs  NotebookWatcher.cs  SystemFileManager.cs
 │   │   ├── PuffinoteSettings.cs  AppState.cs  SessionStore.cs   # per-notebook + per-user state
 │   │   ├── RecentFilesList.cs
@@ -309,9 +314,9 @@ app/                                     # the composite product
 │   │   │                                 #   an editor's desktop shell
 │   │   └── TabHost.cs  TabStripScroll.cs # the tab strip and the panes it mounts (§6)
 │   ├── Controls/ (FileTreeView.cs, FileGlyph.cs)
-│   ├── Sidebar/                          # the panel host and its four panels (§10)
-│   │   ├── SidebarView.cs  SidebarLayout.cs  SidebarSwipe.cs  ISidebarPanel.cs
-│   │   ├── FilesPanel.cs  SearchPanel.cs  OutlinePanel.cs  RecentPanel.cs
+│   ├── Sidebar/                          # the panel host and its five panels (§10)
+│   │   ├── SidebarView.cs  SidebarLayout.cs  SidebarSwipe.cs  ISidebarPanel.cs  IFileTreePanel.cs
+│   │   ├── FilesPanel.cs  FilterPanel.cs  SearchPanel.cs  OutlinePanel.cs  RecentPanel.cs
 │   │   └── KeyboardListView.cs  QuickOpen.cs
 │   ├── Search/ (NotebookSearchService.cs, SearchIndexCache.cs, SearchQuery.cs)
 │   └── Views/                            # MainWindow, split by concern across partials

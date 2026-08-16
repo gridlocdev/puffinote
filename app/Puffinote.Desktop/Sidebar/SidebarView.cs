@@ -26,10 +26,17 @@ internal sealed class SidebarView : UserControl
     internal const double ChromeTopInset = 2;
 
     private readonly FilesPanel _files = new();
+
+    /// <summary>The Filter panel: the same tree, narrowed to what you type (also the seam a test types into).</summary>
+    internal FilterPanel FilterPanelForTest { get; } = new();
+
     private readonly SearchPanel _search = new();
     private readonly OutlinePanel _outline = new();
     private readonly RecentPanel _recent = new();
     private readonly List<ISidebarPanel> _panels;
+
+    /// <summary>The two panels that are the file tree — everything the shell does to "the tree" reaches both.</summary>
+    private readonly IReadOnlyList<IFileTreePanel> _trees;
 
     // Normal case, not caps. All-caps costs legibility — it flattens the word-shapes a reader scans by — and a
     // folder name is content, not a label. Letter-spacing and weight carry the "this is a header" job instead.
@@ -68,23 +75,18 @@ internal sealed class SidebarView : UserControl
 
     public SidebarView()
     {
-        _panels = [_files, _search, _outline, _recent];
+        // Files first, then the same tree with a filter box over it, then the three lists.
+        _panels = [_files, FilterPanelForTest, _search, _outline, _recent];
+        _trees = [_files, FilterPanelForTest];
         _active = _files;
 
-        _files.FileActivated += path => FileActivated?.Invoke(path);
+        foreach (var tree in _trees)
+        {
+            Wire(tree);
+        }
+
         _search.FileActivated += path => FileActivated?.Invoke(path);
         _recent.FileActivated += path => FileActivated?.Invoke(path);
-        _files.SelectionChanged += node => SelectionChanged?.Invoke(node);
-        _files.RenameRequested += node => RenameRequested?.Invoke(node);
-        _files.DeleteRequested += node => DeleteRequested?.Invoke(node);
-        _files.NewNoteRequested += node => NewNoteRequested?.Invoke(node);
-        _files.NewSpreadsheetRequested += node => NewSpreadsheetRequested?.Invoke(node);
-        _files.NewTaskboardRequested += node => NewTaskboardRequested?.Invoke(node);
-        _files.NewFileRequested += node => NewFileRequested?.Invoke(node);
-        _files.NewFolderRequested += node => NewFolderRequested?.Invoke(node);
-        _files.MoveRequested += (node, directory) => MoveRequested?.Invoke(node, directory);
-        _files.RevealRequested += node => RevealRequested?.Invoke(node);
-        _files.OpenExternallyRequested += node => OpenExternallyRequested?.Invoke(node);
 
         var palette = Tokens.Active;
 
@@ -95,7 +97,11 @@ internal sealed class SidebarView : UserControl
 
         BuildSwitcher();
         FoldersToggle = BuildActions(palette);
-        _files.ExpansionChanged += RefreshFoldersToggle;
+        foreach (var tree in _trees)
+        {
+            tree.ExpansionChanged += RefreshFoldersToggle;
+        }
+
         RefreshFoldersToggle();
         _body.Child = _active.View;
 
@@ -126,6 +132,27 @@ internal sealed class SidebarView : UserControl
                 _body,
             },
         };
+    }
+
+    /// <summary>
+    /// Hand one file-tree panel's requests on to the shell. Said once and applied to both panels, because the
+    /// Files panel and the Filter panel are the same tree: a menu entry that works in one and not the other
+    /// would be a difference nobody could account for.
+    /// </summary>
+    private void Wire(IFileTreePanel tree)
+    {
+        tree.FileActivated += path => FileActivated?.Invoke(path);
+        tree.SelectionChanged += node => SelectionChanged?.Invoke(node);
+        tree.RenameRequested += node => RenameRequested?.Invoke(node);
+        tree.DeleteRequested += node => DeleteRequested?.Invoke(node);
+        tree.NewNoteRequested += node => NewNoteRequested?.Invoke(node);
+        tree.NewSpreadsheetRequested += node => NewSpreadsheetRequested?.Invoke(node);
+        tree.NewTaskboardRequested += node => NewTaskboardRequested?.Invoke(node);
+        tree.NewFileRequested += node => NewFileRequested?.Invoke(node);
+        tree.NewFolderRequested += node => NewFolderRequested?.Invoke(node);
+        tree.MoveRequested += (node, directory) => MoveRequested?.Invoke(node, directory);
+        tree.RevealRequested += node => RevealRequested?.Invoke(node);
+        tree.OpenExternallyRequested += node => OpenExternallyRequested?.Invoke(node);
     }
 
     /// <summary>Raised when a file is activated in any panel (tree or recent), to open it in a tab.</summary>
@@ -159,14 +186,33 @@ internal sealed class SidebarView : UserControl
     public event Action<NotebookNode>? RevealRequested;
     public event Action<NotebookNode>? OpenExternallyRequested;
 
+    /// <summary>
+    /// The tree the user is looking at: the Filter panel's while they are in it, the Files panel's otherwise.
+    /// Rename, Delete and the New menu act on a selection, and the selection they must mean is the one on
+    /// screen — acting on a row hidden behind another panel is how a file nobody was looking at gets renamed.
+    /// </summary>
+    private IFileTreePanel ActiveTree => _active as IFileTreePanel ?? _files;
+
     /// <summary>The file tree's selected node, or null.</summary>
-    public NotebookNode? SelectedTreeNode => _files.SelectedNode;
+    public NotebookNode? SelectedTreeNode => ActiveTree.SelectedNode;
 
     /// <summary>Re-read the file tree from disk after a mutation.</summary>
-    public void RefreshTree() => _files.Refresh();
+    public void RefreshTree()
+    {
+        foreach (var tree in _trees)
+        {
+            tree.Refresh();
+        }
+    }
 
     /// <summary>Tell the file tree which document is open in the active tab, so it alone is drawn in bold.</summary>
-    public void SetActiveDocument(string? path) => _files.SetActiveDocument(path);
+    public void SetActiveDocument(string? path)
+    {
+        foreach (var tree in _trees)
+        {
+            tree.SetActiveDocument(path);
+        }
+    }
 
     /// <summary>
     /// Whether the file tree writes each file's extension after its name (the preference, and the session-only
@@ -175,7 +221,13 @@ internal sealed class SidebarView : UserControl
     public bool ShowFileExtensions
     {
         get => _files.ShowExtensions;
-        set => _files.ShowExtensions = value;
+        set
+        {
+            foreach (var tree in _trees)
+            {
+                tree.ShowExtensions = value;
+            }
+        }
     }
 
     /// <summary>Reveal and select <paramref name="path"/> in the file tree (switching to the Files panel).</summary>
@@ -215,7 +267,10 @@ internal sealed class SidebarView : UserControl
         _header.Text = root is { } r ? r.Name : "No notebook open";
         ToolTip.SetTip(_header, root?.Path); // the full path is one hover away, without shouting it in the header
         _actions.IsVisible = root is not null;
-        _files.SetRoot(root);
+        foreach (var tree in _trees)
+        {
+            tree.SetRoot(root);
+        }
     }
 
     /// <summary>Update the recent-files panel with <paramref name="paths"/> (most-recent first).</summary>
@@ -248,6 +303,10 @@ internal sealed class SidebarView : UserControl
         _active = panel;
         _body.Child = panel.View;
         RefreshSwitcher();
+
+        // Both tree panels keep their own open folders, and one of them may not be a tree at all, so the
+        // header's toggle has to re-read whichever tree the switch just put on screen.
+        RefreshFoldersToggle();
         PanelActivated?.Invoke(panel.Id);
     }
 
@@ -281,13 +340,13 @@ internal sealed class SidebarView : UserControl
     /// </summary>
     private void ToggleAllFolders()
     {
-        if (_files.AnyFolderExpanded)
+        if (ActiveTree.AnyFolderExpanded)
         {
-            _files.CollapseAll();
+            ActiveTree.CollapseAll();
         }
         else
         {
-            _files.ExpandAll();
+            ActiveTree.ExpandAll();
         }
     }
 
@@ -301,7 +360,7 @@ internal sealed class SidebarView : UserControl
     /// </summary>
     private void RefreshFoldersToggle()
     {
-        var collapsing = _files.AnyFolderExpanded;
+        var collapsing = ActiveTree.AnyFolderExpanded;
         var label = collapsing ? "Collapse all folders" : "Expand all folders";
 
         if (FoldersToggle.Content is LucideIcon icon)
@@ -312,7 +371,7 @@ internal sealed class SidebarView : UserControl
         ToolTip.SetTip(FoldersToggle, label);
         AutomationProperties.SetName(FoldersToggle, label);
 
-        FoldersToggle.IsEnabled = _files.HasExpandableFolder;
+        FoldersToggle.IsEnabled = ActiveTree.HasExpandableFolder;
         FoldersToggle.Opacity = FoldersToggle.IsEnabled ? 1 : 0.4;
     }
 
@@ -323,18 +382,19 @@ internal sealed class SidebarView : UserControl
     /// notebook can hold in one glance and keeps the header at one glyph wide.
     ///
     /// <para>Folder leads, then the three document types the shell knows how to seed, then the escape hatch for
-    /// everything else. The target folder is read at <em>click</em> time (<see cref="FilesPanel.SelectedNode"/>),
-    /// so the menu acts on the selection you can see, exactly as the tree's own context menu does.</para>
+    /// everything else. The target folder is read at <em>click</em> time, from whichever tree is on screen
+    /// (<see cref="ActiveTree"/>), so the menu acts on the selection you can see, exactly as the tree's own
+    /// context menu does.</para>
     /// </summary>
     private Button BuildNewButton(ThemePalette palette)
     {
         _newItems =
         [
-            MenuEntry("New Folder…", () => NewFolderRequested?.Invoke(_files.SelectedNode)),
-            MenuEntry("New Note…", () => NewNoteRequested?.Invoke(_files.SelectedNode)),
-            MenuEntry("New Spreadsheet…", () => NewSpreadsheetRequested?.Invoke(_files.SelectedNode)),
-            MenuEntry("New Taskboard…", () => NewTaskboardRequested?.Invoke(_files.SelectedNode)),
-            MenuEntry("New File…", () => NewFileRequested?.Invoke(_files.SelectedNode)),
+            MenuEntry("New Folder…", () => NewFolderRequested?.Invoke(ActiveTree.SelectedNode)),
+            MenuEntry("New Note…", () => NewNoteRequested?.Invoke(ActiveTree.SelectedNode)),
+            MenuEntry("New Spreadsheet…", () => NewSpreadsheetRequested?.Invoke(ActiveTree.SelectedNode)),
+            MenuEntry("New Taskboard…", () => NewTaskboardRequested?.Invoke(ActiveTree.SelectedNode)),
+            MenuEntry("New File…", () => NewFileRequested?.Invoke(ActiveTree.SelectedNode)),
         ];
 
         var button = IconButtonChrome("plus", "New", palette);

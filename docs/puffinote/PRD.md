@@ -170,8 +170,8 @@ CLI harness `CliHost`/`CliException`). Both editors already run their palette an
 
 - **The window is the notebook**: the sidebar, the tabs, the editors — everything else in this document.
   There is no second destination beside it, and no strip of them down the edge of the window: the one
-  switcher in the shell is the sidebar's, moving between panels *within* the notebook (Files, Search,
-  Outline, Recent) and collapsing with it.
+  switcher in the shell is the sidebar's, moving between panels *within* the notebook (Files, Filter,
+  Search, Outline, Recent) and collapsing with it.
 - A **notebook is a single root folder** on disk. Puffinote opens one notebook at a time; the file tree is
   rooted at the notebook folder. Switching notebooks (Open Notebook…) prompts to save any dirty tabs, then reloads
   the tree and per-notebook state.
@@ -249,10 +249,24 @@ The sidebar must be **fully operable with the keyboard alone**:
 - The tree exposes **automation peers** (roles/labels) and a visible focus ring; concealed/decorative
   elements never remove content from the accessibility tree (carried from both AGENTS files).
 
-#### 7.2.3 Search & outline & recent (sidebar panels, 1.0)
+#### 7.2.3 Filter & search & outline & recent (sidebar panels, 1.0)
 
-Alongside the file tree, 1.0 ships three panels (switchable, each keyboard-focusable):
+Alongside the file tree, 1.0 ships four panels (switchable, each keyboard-focusable):
 
+- **Filter** — the file tree again, narrowed as you type to the entries whose **names** contain what you
+  typed: a box under the switcher row, and the tree beneath it. The comparison is case-insensitive, a
+  substring rather than a prefix, and runs against the **whole** name, **extension included** — typing `md`
+  is how you ask for your notes, whether or not the tree is currently drawing suffixes. What survives is the
+  matches, the folders **above** them (a filtered tree is still a tree, and a match four levels down has to
+  be shown where it lives), and everything **inside** a matching folder (a folder in a file tree *is* its
+  contents). The folders leading to matches open themselves, so a match is a row you can see rather than one
+  behind a chevron; they are only opened, not held open, and clearing the box gives the whole notebook back
+  around what you found. A line under the box counts the matches, or says "No matches" — an empty tree with
+  nothing above it reads as a notebook that has lost its files. It is the same tree throughout, so rows,
+  glyphs, the keyboard map, the context menu and drag all behave exactly as they do in Files; this is a
+  different *view* of the notebook, which is what the switcher row is for, and the unfiltered tree stays one
+  click away with its own open folders intact. It is **not** notebook search (below): that reads the insides
+  of files and gives back a list of hits; this reads names and gives back a tree.
 - **Notebook-wide search** — full-text search across the notebook. Notes search the raw Markdown; sheets search
   cell **contents** (text/values) where feasible via `Cellestra.Core`/the CLI engine. Results are a
   keyboard-navigable list that opens the hit in a tab. Indexing runs in the background (status shown, non

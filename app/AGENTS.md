@@ -59,8 +59,9 @@ seam — Phase 1+), `Controls/`, `Panels/`, `Views/`. `Puffinote.Cli/` — the r
 extend the tree in ARCHITECTURE §13. When in doubt, **stop and ask**, then record the resolution in the doc.
 
 **The window has one strip of icons: the sidebar's.** Its switcher row moves between panels *inside* the
-notebook (Files, Search, Outline, Recent) and collapses with the sidebar, so a new way of looking at the
-notebook goes there. The shell used to carry a second strip — a workspace rail down the far-left edge,
+notebook (Files, Filter, Search, Outline, Recent) and collapses with the sidebar, so a new way of looking at
+the notebook goes there. Two of those panels *are* the file tree — Files and Filter — so what the shell asks
+of "the tree" is said once, through `IFileTreePanel`, and reaches both. The shell used to carry a second strip — a workspace rail down the far-left edge,
 offering Todos / Calendar / Notes / Data — and it is **gone**, along with the placeholder pages behind its
 three unbuilt entries: those workspaces are no longer planned (PRD §7.1). Puffinote is the notebook, and
 the window shows it and nothing else.

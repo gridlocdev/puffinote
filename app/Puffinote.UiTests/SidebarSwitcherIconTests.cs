@@ -26,7 +26,7 @@ public sealed class SidebarSwitcherIconTests
     public void EveryNavItem_IsAGlyph_ThatIsActuallyVendored()
     {
         var buttons = Switcher(new SidebarView());
-        Assert.Equal(4, buttons.Count);
+        Assert.Equal(5, buttons.Count);
 
         foreach (var button in buttons)
         {
@@ -44,7 +44,8 @@ public sealed class SidebarSwitcherIconTests
 
         foreach (var (tag, label) in new[]
         {
-            ("files", "Files"), ("search", "Search"), ("outline", "Outline"), ("recent", "Recent"),
+            ("files", "Files"), ("filter", "Filter"), ("search", "Search"), ("outline", "Outline"),
+            ("recent", "Recent"),
         })
         {
             var button = Switcher(sidebar).Single(b => (string?)b.Tag == tag);

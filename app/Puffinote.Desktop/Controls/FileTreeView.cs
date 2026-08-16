@@ -72,6 +72,9 @@ internal sealed partial class FileTreeView : UserControl
     private readonly ListBox _list;
     private NotebookNode? _root;
     private readonly HashSet<string> _expanded = new(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>The name filter in force, or null when the tree shows the notebook whole (<see cref="ApplyFilter"/>).</summary>
+    private FileTreeFilter? _filter;
     private string? _activePath;
     private string _typeahead = string.Empty;
     private DateTime _lastKeystroke = DateTime.MinValue;
@@ -356,7 +359,7 @@ internal sealed partial class FileTreeView : UserControl
 
     private void ExpandDescendants(NotebookNode directory)
     {
-        foreach (var child in directory.EnumerateChildren())
+        foreach (var child in VisibleChildren(directory))
         {
             if (child.IsDirectory)
             {
@@ -368,6 +371,43 @@ internal sealed partial class FileTreeView : UserControl
 
     /// <summary>Re-read the tree from disk, preserving expansion and (when it still exists) the selection.</summary>
     public void Refresh() => Rebuild(selectPath: SelectedNode?.Path);
+
+    /// <summary>
+    /// Show only what <paramref name="filter"/> keeps (null shows the notebook whole again) — the sidebar's
+    /// Filter panel, typing. The rows, the glyphs, the keyboard map and the context menu are the tree's
+    /// ordinary ones throughout: this narrows <em>which</em> entries are rows, and changes nothing about what
+    /// a row is or what you can do to it.
+    ///
+    /// <para>The folders leading to the matches are opened as the filter is applied, so the matches are on
+    /// screen rather than one click each below a chevron. They are only <em>opened</em>, not held open: the
+    /// twisty, Left/Right and Collapse All still work while a filter is on, because a filtered tree is still
+    /// a tree and folding one of its branches is a reasonable thing to want.</para>
+    /// </summary>
+    public void ApplyFilter(FileTreeFilter? filter)
+    {
+        _filter = filter;
+        if (filter is not null)
+        {
+            foreach (var folder in filter.FoldersToOpen)
+            {
+                _expanded.Add(folder);
+            }
+        }
+
+        Rebuild(selectPath: SelectedNode?.Path);
+    }
+
+    /// <summary>
+    /// <paramref name="directory"/>'s children as the tree currently shows them — all of them, or only those
+    /// the filter keeps. Every question the tree asks about a folder's contents goes through here, so a
+    /// filtered folder is empty in the same breath for the rows it lays out, the chevron it draws, and the
+    /// header's expand/collapse toggle. (Read afresh from disk each time, as the unfiltered tree always has.)
+    /// </summary>
+    private IReadOnlyList<NotebookNode> VisibleChildren(NotebookNode directory)
+    {
+        var children = directory.EnumerateChildren();
+        return _filter is null ? children : [.. children.Where(child => _filter.Keeps(child.Path))];
+    }
 
     /// <summary>Expand the ancestors of <paramref name="path"/>, then select and reveal it.</summary>
     public void SelectPath(string path)
@@ -470,7 +510,7 @@ internal sealed partial class FileTreeView : UserControl
         // anything to open?" needs a look inside the collapsed folders — but only until the first one that has
         // something in it, so in practice this is one directory read, and none at all once a folder is open.
         HasExpandableFolder = AnyFolderExpanded
-            || rows.Any(r => r.Node.IsDirectory && r.Node.EnumerateChildren().Count > 0);
+            || rows.Any(r => r.Node.IsDirectory && VisibleChildren(r.Node).Count > 0);
 
         _list.ItemsSource = rows;
 
@@ -502,7 +542,7 @@ internal sealed partial class FileTreeView : UserControl
         }
 
         var added = false;
-        foreach (var child in directory.EnumerateChildren())
+        foreach (var child in VisibleChildren(directory))
         {
             rows.Add(new Row(child, depth));
             added = true;
@@ -613,7 +653,7 @@ internal sealed partial class FileTreeView : UserControl
         // empty? An *expandable* folder gets a chevron that turns; an empty one gets none, and so reads as
         // having nothing to open rather than as something the user failed to click. Files reserve the same slot
         // (drawn empty) so every name stays aligned under its siblings.
-        var expandable = row.Node.IsDirectory && row.Node.EnumerateChildren().Count > 0;
+        var expandable = row.Node.IsDirectory && VisibleChildren(row.Node).Count > 0;
         Control disclosure = expandable
             ? new LucideIcon
             {
@@ -1015,7 +1055,7 @@ internal sealed partial class FileTreeView : UserControl
 
         // An empty folder has nothing to open, so it is offered no toggle — the same rule the row's disclosure
         // chevron follows (see BuildRow), said in words.
-        if (folder.EnumerateChildren().Count > 0)
+        if (VisibleChildren(folder).Count > 0)
         {
             bool expanded = _expanded.Contains(folder.Path);
             items.Add(Item(expanded ? "Collapse" : "Expand", () => Toggle(folder)));

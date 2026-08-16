@@ -276,7 +276,7 @@ internal sealed partial class FileTreeView
     {
         var folder = hovered is { IsDirectory: true } directory
             && !_expanded.Contains(directory.Path)
-            && directory.EnumerateChildren().Count > 0
+            && VisibleChildren(directory).Count > 0
                 ? directory.Path
                 : null;
 

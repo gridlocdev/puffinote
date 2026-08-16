@@ -666,3 +666,19 @@
     two-part filename tag — proposal 0004 §4's one open risk, retired rather than verified. The contents
     are unchanged and still JSON. Boards written before the rename still open everywhere (and `ptask`
     still discovers them); they are simply not what a save produces or what Finder is asked for.
+
+- [x] Puffinote: add a "Filter" button to the sidebar, which repeats the same kind of interface as the main files pane tree, but as you type into a textbox just below the icon button row, it only shows folders and files that contain those characters. (this includes file extensions)
+
+    A fifth panel on the switcher row, and it is the file tree — not a list that looks like one. Files and
+    Filter are two instances of the same control, so rows, glyphs, indent guides, the keyboard map, the
+    context menu and drag are the tree's own in both; the panel adds a box and narrows which entries are
+    rows. What the shell asks of "the tree" is now said once through `IFileTreePanel` and reaches both, so
+    neither can drift into having a menu entry the other lacks.
+
+    The rule (`FileTreeFilter`, pure and unit-tested): a case-insensitive substring of the **whole** name,
+    extension included — `md` is how you ask for your notes, whether or not the tree is drawing suffixes.
+    Kept are the matches, the folders above them, and everything inside a folder that matched, because a
+    folder in a file tree *is* its contents. The folders leading to matches open themselves and are not held
+    open, so clearing the box gives the notebook back around what you found. The walk is the whole notebook
+    per query, so it is debounced and runs off the UI thread — it touches nothing but paths, which is what
+    makes that safe.
