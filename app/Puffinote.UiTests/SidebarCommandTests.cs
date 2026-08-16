@@ -47,11 +47,17 @@ public sealed class SidebarCommandTests : IDisposable
         foreach (var expected in new[]
         {
             "Files (Sidebar)", "Filter (Sidebar)", "Search (Sidebar)",
-            "Outline (Sidebar)", "Recent (Sidebar)", "Settings (Sidebar)",
+            "Outline (Sidebar)", "Recent (Sidebar)",
         })
         {
             Assert.Contains(expected, titles);
         }
+
+        // …and the Settings button carries no suffix. On a panel it disambiguates — it says which Search
+        // you are about to get. On this one it read as a claim about the subject: "Settings (Sidebar)"
+        // looks like settings *for* the sidebar, which is a screen this app does not have.
+        Assert.Contains("Settings", titles);
+        Assert.DoesNotContain("Settings (Sidebar)", titles);
     }
 
     [AvaloniaFact]

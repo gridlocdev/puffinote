@@ -114,7 +114,14 @@ public partial class MainWindow
             // The last button in that row, which is an action rather than a panel — and the one place the
             // Command Menu could not otherwise take you by the name written on it, since the dialog it opens
             // is called Preferences everywhere else.
-            new(SidebarCommandId("settings"), "Settings (Sidebar)", "Open Preferences, as the sidebar's Settings button does",
+            //
+            // No "(Sidebar)" suffix on this one, unlike the panels above. There it disambiguates — it says
+            // which Search you are about to get. Here it read as a claim about the *subject*: "Settings
+            // (Sidebar)" looks like settings for the sidebar, which is a screen this app does not have. And
+            // it is not needed for its other job either: "Settings" collides with nothing, and anyone who
+            // types "preferences" is already answered by shell.preferences, which is what the dialog is
+            // called everywhere else.
+            new(SidebarCommandId("settings"), "Settings", "Open Preferences, as the sidebar's Settings button does",
                 Bound(SidebarCommandId("settings"), null), ShowSettings, icon: "settings-2"),
 
             // The session-scoped twin of the Preferences toggle: this flips what you're looking at now and
