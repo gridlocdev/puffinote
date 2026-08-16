@@ -80,6 +80,9 @@ internal sealed class FilterPanel : IFileTreePanel
 
     public Control View { get; }
 
+    /// <summary>True: you came here to type, and the tree below is empty of meaning until you have.</summary>
+    public bool FocusOnActivate => true;
+
     // The tree's own events, straight through: this panel owns the box, not the tree's behaviour. Delegated
     // rather than re-raised so a handler added here is added to the tree itself — there is no second list of
     // subscribers to keep in step, and nothing to forget to forward.

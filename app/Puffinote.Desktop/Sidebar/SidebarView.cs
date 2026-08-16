@@ -295,8 +295,16 @@ internal sealed class SidebarView : UserControl
     /// <summary>Show the panel with <paramref name="id"/> (no-op for an unknown id).</summary>
     public void Activate(string id)
     {
-        if (_panels.FirstOrDefault(p => p.Id == id) is not { } panel || ReferenceEquals(panel, _active))
+        if (_panels.FirstOrDefault(p => p.Id == id) is not { } panel)
         {
+            return;
+        }
+
+        if (ReferenceEquals(panel, _active))
+        {
+            // Already here. Pressing Search or Filter again is how you get back into the box after clicking
+            // down into the results, so that one gesture still has to do something.
+            FocusIfTypedInto(panel);
             return;
         }
 
@@ -307,7 +315,22 @@ internal sealed class SidebarView : UserControl
         // Both tree panels keep their own open folders, and one of them may not be a tree at all, so the
         // header's toggle has to re-read whichever tree the switch just put on screen.
         RefreshFoldersToggle();
+        FocusIfTypedInto(panel);
         PanelActivated?.Invoke(panel.Id);
+    }
+
+    /// <summary>
+    /// Put the keyboard in a panel that is typed into (<see cref="ISidebarPanel.FocusOnActivate"/>) — the box
+    /// is what the user came for, so landing anywhere else costs a click that has nothing else to do.
+    ///
+    /// <para>After the view is mounted, because a control cannot take focus before it is in the tree.</para>
+    /// </summary>
+    private static void FocusIfTypedInto(ISidebarPanel panel)
+    {
+        if (panel.FocusOnActivate)
+        {
+            panel.Focus();
+        }
     }
 
     /// <summary>

@@ -36,6 +36,9 @@ internal sealed class RecentPanel : ISidebarPanel
 
     public Control View => _list;
 
+    /// <summary>False: a list you read and click; nothing here is typed into.</summary>
+    public bool FocusOnActivate => false;
+
     /// <summary>Raised when a recent entry is activated (a single click / Enter), to open it in a tab.</summary>
     public event Action<string>? FileActivated;
 

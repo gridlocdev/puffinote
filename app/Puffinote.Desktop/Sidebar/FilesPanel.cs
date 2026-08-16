@@ -104,6 +104,9 @@ internal sealed class FilesPanel : IFileTreePanel
 
     public Control View => _view;
 
+    /// <summary>False: the tree is for reading, and the shell activates this panel on the user's behalf.</summary>
+    public bool FocusOnActivate => false;
+
     /// <summary>Raised when a file is activated in the tree (double-click / Enter).</summary>
     public event Action<string>? FileActivated;
 

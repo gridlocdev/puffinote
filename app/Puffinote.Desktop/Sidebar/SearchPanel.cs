@@ -68,6 +68,9 @@ internal sealed class SearchPanel : ISidebarPanel
 
     public Control View { get; }
 
+    /// <summary>True: the box is the panel, and a search nobody can type into is no search at all.</summary>
+    public bool FocusOnActivate => true;
+
     /// <summary>Raised when a result is activated (Enter / a single click), to open it in a tab.</summary>
     public event Action<string>? FileActivated;
 

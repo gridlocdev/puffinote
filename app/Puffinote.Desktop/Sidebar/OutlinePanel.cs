@@ -34,6 +34,9 @@ internal sealed class OutlinePanel : ISidebarPanel
 
     public Control View => _list;
 
+    /// <summary>False: an outline is a thing you look at, and Down from the tree reaches it anyway.</summary>
+    public bool FocusOnActivate => false;
+
     public void Focus() => _list.FocusList();
 
     /// <summary>Show <paramref name="items"/> (the active document's structure, or empty).</summary>

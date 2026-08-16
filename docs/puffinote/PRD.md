@@ -251,7 +251,13 @@ The sidebar must be **fully operable with the keyboard alone**:
 
 #### 7.2.3 Filter & search & outline & recent (sidebar panels, 1.0)
 
-Alongside the file tree, 1.0 ships four panels (switchable, each keyboard-focusable):
+Alongside the file tree, 1.0 ships four panels (switchable, each keyboard-focusable). **Switching to a panel
+that is typed into — Filter or Search — puts the caret in its box**, including when you press its switcher
+button again from elsewhere in the panel; their box *is* the panel, and the panel does nothing until
+something is typed, so a click to reach the field is a click with no other purpose. The three you read
+(Files, Outline, Recent) leave the keyboard where it was: the shell activates Files on the user's behalf when
+it reveals the active document, and taking focus for that would land the next keystroke in the sidebar rather
+than in the sentence being written.
 
 - **Filter** — the file tree again, narrowed as you type to the entries whose **names** contain what you
   typed: a box under the switcher row, and the tree beneath it. The comparison is case-insensitive, a
