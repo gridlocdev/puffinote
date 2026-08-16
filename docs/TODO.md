@@ -5,5 +5,5 @@
 - [x] pivotask: draw a visible ghost of the task that you're dragging onto the cursor as you drag it, research online to see screenshot UI examples of this
 - [x] pivotask: cmd+enter when editing any textbox on the popup modal should do the same as "done" button
 - [x] pivotask: default new pivotasks to open in the "tasks" view
-- [ ] pivotask: in the pivotask file, store the last view it was opened in, either board or tasks view 
+- [x] pivotask: in the pivotask file, store the last view it was opened in, either board or tasks view 
 - [ ] pivotask: allow reordering groups with clicking and dragging on the row or text with the group header

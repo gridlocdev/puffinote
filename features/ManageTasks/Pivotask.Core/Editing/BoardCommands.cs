@@ -137,6 +137,21 @@ public static class BoardCommands
             _ => group.FoldDone = fold, _ => group.FoldDone = before);
     }
 
+    /// <summary>
+    /// Record which reading this board is left in.
+    ///
+    /// <para>A command like every other change to a board, for the reason golden rule 3 gives and the
+    /// reason <see cref="SetCollapsed"/> is one: the view is written to the file, so it is a change to the
+    /// document, and a change to the document that ⌘Z could not reach would be the one exception nobody
+    /// could predict.</para>
+    /// </summary>
+    public static IBoardCommand SetView(Board board, BoardLayout view)
+    {
+        ArgumentNullException.ThrowIfNull(board);
+        var before = board.View;
+        return new Action("Change View", b => b.View = view, b => b.View = before);
+    }
+
     // ---- Tasks ------------------------------------------------------------
 
     public static IBoardCommand AddTask(TaskGroup group, TaskItem task, int? index = null)
@@ -365,6 +380,7 @@ public static class BoardCommands
     {
         var source = BoardCodec.Read(json);
 
+        board.View = source.View;
         board.Groups.Clear();
         board.Groups.AddRange(source.Groups);
 

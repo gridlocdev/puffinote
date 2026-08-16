@@ -15,6 +15,22 @@ public sealed class Board
     /// rather than mangled — see <c>BoardCodec</c>.</summary>
     public const int CurrentVersion = 1;
 
+    /// <summary>
+    /// Which reading this board was last left in, or null when nobody has said.
+    ///
+    /// <para>Persisted for the reason <see cref="TaskGroup.Collapsed"/> is: it is a view state, but it is
+    /// <em>this board's</em> view state, and it belongs with the board rather than with the machine that
+    /// happened to open it. A board of twelve wide columns and a board of three checklists want different
+    /// readings, and answering that question once per board — instead of once per person, in a settings
+    /// file, for every board they will ever open — is the difference between a preference and a fact.</para>
+    ///
+    /// <para>Null rather than a default value on purpose. "Nobody has said" and "somebody chose the list"
+    /// are different, and only the first may be overridden by the reader's own <c>Open in</c> preference —
+    /// so a board that has never been switched also never gains a <c>view</c> key, and opening one does
+    /// not show up as a diff in a repository.</para>
+    /// </summary>
+    public BoardLayout? View { get; set; }
+
     public List<TaskGroup> Groups { get; init; } = [];
 
     /// <summary>

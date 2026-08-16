@@ -42,6 +42,7 @@ public static class BoardCodec
     private static class Keys
     {
         public const string Version = "version";
+        public const string View = "view";
         public const string Labels = "labels";
         public const string Groups = "groups";
         public const string Id = "id";
@@ -86,7 +87,7 @@ public static class BoardCodec
                 "Opening it would mean guessing at fields that didn't exist yet, so it hasn't been opened.");
         }
 
-        var board = new Board();
+        var board = new Board { View = ParseView(String(root, Keys.View)) };
         foreach (var label in Array(root, Keys.Labels))
         {
             board.Labels.Add(new Label
@@ -150,7 +151,7 @@ public static class BoardCodec
             board.Groups.Add(target);
         }
 
-        foreach (var (key, value) in Rest(root, Keys.Version, Keys.Labels, Keys.Groups))
+        foreach (var (key, value) in Rest(root, Keys.Version, Keys.View, Keys.Labels, Keys.Groups))
         {
             board.Unknown[key] = value;
         }
@@ -174,6 +175,15 @@ public static class BoardCodec
         {
             writer.WriteStartObject();
             writer.WriteNumber(Keys.Version, Board.CurrentVersion);
+
+            // Written only once somebody has chosen a reading. An absent key and a key holding the
+            // default are different answers — the first is "nobody has said", which the reader's own
+            // Open in preference is allowed to answer, and the second is this board's own choice. It is
+            // also what keeps opening an old board out of a diff: no choice made, no key added.
+            if (board.View is { } view)
+            {
+                writer.WriteString(Keys.View, Spell(view));
+            }
 
             writer.WriteStartArray(Keys.Labels);
             foreach (var label in board.Labels)
@@ -269,6 +279,21 @@ public static class BoardCodec
             value.WriteTo(writer);
         }
     }
+
+    /// <summary>How a reading is spelled in the file: lower case, like every other word in it.</summary>
+    private static string Spell(BoardLayout view) => view == BoardLayout.List ? "list" : "board";
+
+    /// <summary>
+    /// The reading <paramref name="text"/> names, or null for absent — <em>and</em> for a word this build
+    /// doesn't know. A file is hand-edited here; a typo in the one field that decides which of two views
+    /// opens should leave the board opening in the reader's usual one, not refuse to open it.
+    /// </summary>
+    private static BoardLayout? ParseView(string? text) => text?.ToUpperInvariant() switch
+    {
+        "BOARD" => BoardLayout.Board,
+        "LIST" => BoardLayout.List,
+        _ => null,
+    };
 
     // ---- Reading helpers --------------------------------------------------
 

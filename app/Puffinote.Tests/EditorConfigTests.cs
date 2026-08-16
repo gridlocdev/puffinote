@@ -43,7 +43,7 @@ public sealed class EditorConfigTests : IDisposable
         Assert.Equal(13, plainText.FontSize);
 
         var tasks = BoardConfig.Load(At("nope.json"));
-        Assert.Equal(Pivotask.Control.Views.BoardLayout.List, tasks.Layout); // Pivotask's defaults
+        Assert.Equal(Pivotask.Core.Model.BoardLayout.List, tasks.Layout); // Pivotask's defaults
         Assert.Equal(Pivotask.Core.Query.TaskFilter.All, tasks.Filter);
     }
 

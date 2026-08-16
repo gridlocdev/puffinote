@@ -18,13 +18,6 @@ using Puffinote.Components.Theming;
 
 namespace Pivotask.Control.Views;
 
-/// <summary>Board or list — two readings of the same tasks, sharing one filter and one search box.</summary>
-public enum BoardLayout
-{
-    Board,
-    List,
-}
-
 /// <summary>
 /// The embeddable composite: the filter/search strip, the board (or list) under it, the task dialog over
 /// it, and the one command catalog that acts on the document. A host — the standalone Pivotask window,
@@ -116,8 +109,15 @@ public sealed class TaskBoardView : UserControl
             field = value;
             BoardForTest.Document = value;
             ListForTest.Document = value;
+            AdoptRecordedLayout();
             DocumentChanged?.Invoke(this, EventArgs.Empty);
-            value.Changed += (_, _) => DocumentChanged?.Invoke(this, EventArgs.Empty);
+            value.Changed += (_, _) =>
+            {
+                // Also on every change, so undoing a view switch takes the view back with it — and so a
+                // board that arrived from disk under the edits is read in the reading it names.
+                AdoptRecordedLayout();
+                DocumentChanged?.Invoke(this, EventArgs.Empty);
+            };
         }
     } = new();
 
@@ -139,10 +139,43 @@ public sealed class TaskBoardView : UserControl
         get;
         set
         {
+            if (field == value)
+            {
+                return;
+            }
+
             field = value;
             ApplyLayout();
         }
     } = BoardLayout.List;
+
+    /// <summary>
+    /// Switch the view <em>because somebody asked for it</em> — the switch, the V key, the View menu — and
+    /// record the choice in the board, where it survives the session.
+    ///
+    /// <para>Distinct from setting <see cref="Layout"/>, which is a host applying a setting or restoring a
+    /// state and must leave no trace: pushing "columns" at a brand-new board because that is what this
+    /// machine's <c>Open in</c> says would make an untitled board dirty before anyone had typed anything
+    /// into it, and would overwrite the choice a <em>different</em> board had already recorded.</para>
+    /// </summary>
+    internal void ChooseLayout(BoardLayout layout)
+    {
+        Layout = layout;
+        if (Document.Board.View != layout)
+        {
+            Document.Execute(BoardCommands.SetView(Document.Board, layout));
+        }
+    }
+
+    /// <summary>Open in the reading this board names, if it names one. A board that has never been
+    /// switched says nothing, and the reader's own <c>Open in</c> preference stands.</summary>
+    private void AdoptRecordedLayout()
+    {
+        if (Document.Board.View is { } recorded)
+        {
+            Layout = recorded;
+        }
+    }
 
     public TaskFilter Filter
     {
@@ -316,7 +349,7 @@ public sealed class TaskBoardView : UserControl
         }
         else if (e.Key == Key.V)
         {
-            Layout = Layout == BoardLayout.Board ? BoardLayout.List : BoardLayout.Board;
+            ChooseLayout(Layout == BoardLayout.Board ? BoardLayout.List : BoardLayout.Board);
             e.Handled = true;
         }
     }
@@ -481,7 +514,7 @@ public sealed class TaskBoardView : UserControl
             Avalonia.Automation.AutomationProperties.SetHelpText(button, active ? "selected" : null);
 
             var captured = layout;
-            button.Click += (_, _) => Layout = captured;
+            button.Click += (_, _) => ChooseLayout(captured);
             group.Children.Add(button);
         }
 

@@ -12,7 +12,7 @@ from. This document is what it does.
 ## 1. The document
 
 ```
-Board
+Board             { view?, labels[], groups[] }
 ├── labels[]       { id, name, color }
 └── groups[]       { id, name, collapsed, foldDone, tasks[] }
     └── tasks[]    { id, title, notes, due, important, done, steps[], labels[] }
@@ -51,6 +51,19 @@ by a due date, and the moment a time is stored, the question of *whose* Thursday
 
 **Labels live in the document**, referenced by id from tasks. Fixed palettes don't survive contact with
 real users.
+
+**The reading lives in the document too.** `"view"` — `"board"` or `"list"` — is the reading this board
+was last switched to, and it is what the board opens in next time, on any machine. Which reading suits a
+board is a fact about the board: twelve wide columns want one thing and three checklists want another,
+and answering that once per board beats answering it once per person for every board they will ever open.
+It is persisted for the same reason `collapsed` is, and changed the same way — through a command, so ⌘Z
+reaches it like every other change.
+
+The key is **absent** until somebody switches, and only then written. "Nobody has said" and "somebody
+chose the list" are different answers: the first is the one the reader's own **Open in** preference is
+allowed to settle, and keeping it absent is also what stops a build that understands the key from adding
+a line to every board it opens. A `view` this build doesn't recognise reads as absent — this file is
+hand-edited, and a typo in the field that picks between two views must not cost you the board.
 
 **Notes are plain text**, never Markdown. A note attached to a task is a sentence or two; if it genuinely
 wants to be a document, that document is a `.md` file.
@@ -100,7 +113,8 @@ be added later without reworking the board.
 **A board opens in the List** unless something says otherwise. Columns are the better picture of a board
 whose shape you already know; rows are the better reading of one you don't — which every board is on the
 day it is made, and which any board is to someone opening it for the first time. Wanting columns is said
-once — with a press of V, from the View menu, or as **Board → Open in** in Preferences.
+once — with a press of V, from the View menu, or as **Board → Open in** in Preferences — and a switch
+made *on a board* is recorded in that board's file (§2), so it is not asked again for that board.
 
 | Filter | Means |
 |---|---|

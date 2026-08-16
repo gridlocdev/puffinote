@@ -62,6 +62,68 @@ public class BoardViewTests
         Assert.Equal(BoardLayout.List, new TaskBoardView().Layout);
     }
 
+    /// <summary>
+    /// A board that names a reading opens in it, whatever this machine's preference says.
+    ///
+    /// <para>Which reading suits a board is a fact about the board — twelve wide columns want one thing,
+    /// three checklists another — so it belongs with the board rather than with whoever opened it last.
+    /// The preference is what answers for a board that has never said.</para>
+    /// </summary>
+    [AvaloniaFact]
+    public void A_board_that_names_a_reading_opens_in_it()
+    {
+        var board = new Board { View = BoardLayout.Board };
+        board.Groups.Add(new TaskGroup { Id = "g1", Name = "Inbox" });
+
+        // The host has already pushed its own preference in, as a host does before it loads anything.
+        var view = new TaskBoardView { Layout = BoardLayout.List };
+        var window = new Window { Width = 900, Height = 600, Content = view };
+        window.Show();
+
+        view.Document = new BoardDocument(board);
+        Dispatcher.UIThread.RunJobs();
+
+        Assert.Equal(BoardLayout.Board, view.Layout);
+    }
+
+    /// <summary>
+    /// Switching the view writes the choice into the board — undoably, like every other change to one —
+    /// while a host applying a setting leaves no trace.
+    ///
+    /// <para>That difference is the whole design. Pushing "columns" at a board because this machine's
+    /// <c>Open in</c> says so would make an untitled board dirty before anyone had typed into it, and
+    /// would overwrite the choice a different board had already recorded.</para>
+    /// </summary>
+    [AvaloniaFact]
+    public void Choosing_a_view_is_recorded_in_the_board_and_applying_a_setting_is_not()
+    {
+        var (view, document) = Open();
+        Assert.Null(document.Board.View);   // opened as a board by the host, not by a choice
+        Assert.False(document.CanUndo);
+
+        // A host restoring a state or applying a preference.
+        view.Layout = BoardLayout.List;
+        Dispatcher.UIThread.RunJobs();
+        Assert.Null(document.Board.View);
+        Assert.False(document.CanUndo);
+
+        // A person pressing the switch.
+        view.GetLogicalDescendants().OfType<Button>()
+            .First(b => Avalonia.Automation.AutomationProperties.GetName(b) == "Board view")
+            .RaiseEvent(new Avalonia.Interactivity.RoutedEventArgs(Button.ClickEvent));
+        Dispatcher.UIThread.RunJobs();
+
+        Assert.Equal(BoardLayout.Board, view.Layout);
+        Assert.Equal(BoardLayout.Board, document.Board.View);
+        Assert.Equal("Change View", document.UndoLabel);
+
+        // …and undoing it takes the view back with it, rather than leaving the board saying one thing
+        // and showing another.
+        document.Undo();
+        Dispatcher.UIThread.RunJobs();
+        Assert.Null(document.Board.View);
+    }
+
     [AvaloniaFact]
     public void The_board_draws_one_column_per_group_and_one_card_per_task()
     {

@@ -3,7 +3,7 @@ using Avalonia.Headless.XUnit;
 using Avalonia.Input;
 using Avalonia.LogicalTree;
 using Avalonia.Threading;
-using Pivotask.Control.Views;
+using Pivotask.Core.Model;
 using Pivotask.Core.Query;
 using Pivotask.Desktop.Services;
 using Pivotask.Desktop.Views;

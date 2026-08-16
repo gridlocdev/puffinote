@@ -57,6 +57,65 @@ public class BoardCodecTests
         Assert.Equal(once, twice);
     }
 
+    /// <summary>
+    /// The reading a board was left in travels with the board.
+    ///
+    /// <para>A view state, but <em>this board's</em> view state — a board of twelve wide columns and a
+    /// board of three checklists want different readings, and answering that once per board beats
+    /// answering it once per person for every board they will ever open. Same reason
+    /// <c>collapsed</c> is in the file.</para>
+    /// </summary>
+    [Fact]
+    public void The_reading_a_board_was_left_in_travels_with_the_board()
+    {
+        var board = Sample();
+        board.View = BoardLayout.Board;
+
+        string json = BoardCodec.Write(board);
+        Assert.Contains("\"view\": \"board\"", json, StringComparison.Ordinal);
+        Assert.Equal(BoardLayout.Board, BoardCodec.Read(json).View);
+
+        board.View = BoardLayout.List;
+        Assert.Equal(BoardLayout.List, BoardCodec.Read(BoardCodec.Write(board)).View);
+    }
+
+    /// <summary>
+    /// A board nobody has switched has no <c>view</c> key at all — so opening one, in a build that
+    /// understands the key, is not a diff. "Nobody has said" and "somebody chose the default" are
+    /// different answers, and only the first may be overridden by the reader's own preference.
+    /// </summary>
+    [Fact]
+    public void A_board_nobody_has_switched_gains_no_view_key()
+    {
+        string json = BoardCodec.Write(Sample());
+
+        Assert.DoesNotContain("\"view\"", json, StringComparison.Ordinal);
+        Assert.Null(BoardCodec.Read(json).View);
+    }
+
+    /// <summary>
+    /// A word this build doesn't know in that one field reads as "nobody has said", not as an error. The
+    /// file is hand-edited, and a typo in the field that picks between two views must not cost you the
+    /// board.
+    /// </summary>
+    [Fact]
+    public void A_view_this_build_does_not_know_costs_that_field_and_nothing_else()
+    {
+        const string json = """
+        {
+          "version": 1,
+          "view": "kanban",
+          "labels": [],
+          "groups": [ { "id": "g1", "name": "Inbox", "collapsed": false, "foldDone": false, "tasks": [] } ]
+        }
+        """;
+
+        var board = BoardCodec.Read(json);
+
+        Assert.Null(board.View);
+        Assert.Equal("Inbox", board.Groups[0].Name); // …and the rest of the file is still there
+    }
+
     [Fact]
     public void The_file_ends_with_a_newline_and_uses_lf()
     {

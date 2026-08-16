@@ -1,5 +1,5 @@
 using Avalonia;
-using Pivotask.Control.Views;
+using Pivotask.Core.Model;
 using Pivotask.Core.Query;
 using Pivotask.Desktop.Services;
 using Puffinote.Components.Controls;

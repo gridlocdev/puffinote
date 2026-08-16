@@ -36,11 +36,13 @@ public static class TaskEditingCommands
             new("task.addGroup", "Add Group", "Add a column to the board.", null,
                 () => view.Document.Execute(BoardCommands.AddGroup("New group")), icon: "columns-plus"),
 
+            // ChooseLayout, not the Layout property: picking a view from a menu is a person choosing one,
+            // and the board records what it was last chosen to be.
             new("view.board", "Board View", "Show the tasks as columns.", null,
-                () => view.Layout = BoardLayout.Board,
+                () => view.ChooseLayout(BoardLayout.Board),
                 isActive: () => view.Layout == BoardLayout.Board, icon: "layout-grid"),
             new("view.list", "List View", "Show the tasks as grouped rows.", null,
-                () => view.Layout = BoardLayout.List,
+                () => view.ChooseLayout(BoardLayout.List),
                 isActive: () => view.Layout == BoardLayout.List, icon: "list"),
 
             new("filter.all", "All Tasks", "Clear the filter.", null,

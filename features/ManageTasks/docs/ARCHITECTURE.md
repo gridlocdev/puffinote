@@ -52,6 +52,11 @@ must not be shared; Cellestra's `IEditCommand` shape is the closer model, and th
 does not do for you. Each model object carries an `Unknown` dictionary; the writer emits it last, ordered,
 so an unknown field lands in the same place every time and the file does not churn.
 
+`BoardLayout` — board or list — lives in `Pivotask.Core.Model`, not in the control, because the board
+*records* which of the two it was last read in (`Board.View`, PRD §2) and the file format's fields are
+the model's to name. An enum is not a UI dependency: nothing in Core knows what a column looks like, only
+that there are two ways to read a board and which one this file was left in.
+
 ## 4. The control
 
 `TaskBoardView` is the composite: the filter/search strip, the board or list under it, the task dialog

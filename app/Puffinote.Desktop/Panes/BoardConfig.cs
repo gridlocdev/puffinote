@@ -1,4 +1,4 @@
-using Pivotask.Control.Views;
+using Pivotask.Core.Model;
 using Pivotask.Core.Query;
 using Puffinote.Components.Controls;
 using Puffinote.Components.Shell;

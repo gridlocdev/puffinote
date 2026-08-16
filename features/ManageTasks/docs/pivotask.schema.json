@@ -11,6 +11,11 @@
       "type": "integer",
       "const": 1
     },
+    "view": {
+      "description": "The reading this board was last switched to, and the one it opens in next time, on any machine. Absent until somebody switches: 'nobody has said' is a different answer from 'somebody chose the list', and only the first is settled by the reader's own Open in preference (§2).",
+      "type": "string",
+      "enum": ["board", "list"]
+    },
     "labels": {
       "description": "The board's label vocabulary, referenced by id from tasks. In the document, not a constant: fixed palettes don't survive contact with real users (§4).",
       "type": "array",

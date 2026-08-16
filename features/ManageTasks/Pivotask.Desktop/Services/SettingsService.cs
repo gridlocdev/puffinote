@@ -1,6 +1,6 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
-using Pivotask.Control.Views;
+using Pivotask.Core.Model;
 using Pivotask.Core.Query;
 using Puffinote.Components.Shell;
 using Puffinote.Components.Theming;
