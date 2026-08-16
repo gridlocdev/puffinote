@@ -214,6 +214,54 @@ public sealed class PreferencesTests
         }
     }
 
+    /// <summary>
+    /// The way out of the dialog is <em>inside</em> the dialog.
+    ///
+    /// <para>The card was a StackPanel, which arranges every child at the height it asks for and treats the
+    /// card's own MaxHeight as somebody else's problem. Once Preferences grew a fifth tab its content
+    /// outgrew the card and OK and Cancel were drawn below its bottom edge, floating on the page behind —
+    /// still clickable, but plainly not part of the thing they belonged to.</para>
+    ///
+    /// <para>Asserted on every tab, because which one is showing decides how tall the content is, and on
+    /// each of the five separately rather than on the tallest: a card that fits four tabs and spills on the
+    /// fifth is the bug this is here to catch.</para>
+    /// </summary>
+    [AvaloniaFact]
+    public void Every_tab_keeps_the_dialogs_buttons_inside_its_card()
+    {
+        var window = new MainWindow(new NotebookService()) { Width = 1200, Height = 900 };
+        window.Show();
+        window.InvokeShellForTest("shell.preferences");
+        Dispatcher.UIThread.RunJobs();
+
+        var overlay = Overlay(window);
+        var tabs = Tabs(overlay);
+
+        // The floating card itself — the edge a reader actually sees.
+        var card = overlay.GetVisualDescendants().OfType<Border>()
+            .First(b => b.GetLogicalDescendants().OfType<TabbedSettingsView>().Any());
+
+        foreach (var title in tabs.Tabs.Select(t => t.Title))
+        {
+            tabs.SelectedTitle = title;
+            window.UpdateLayout();
+            Dispatcher.UIThread.RunJobs();
+            window.UpdateLayout();
+
+            foreach (var button in overlay.GetLogicalDescendants().OfType<Button>()
+                         .Where(b => b.IsDefault || b.IsCancel))
+            {
+                double bottom = button.TranslatePoint(new Point(0, 0), card)!.Value.Y + button.Bounds.Height;
+                Assert.True(
+                    bottom <= card.Bounds.Height,
+                    $"on “{title}”, {button.Content} ends at {bottom} in a {card.Bounds.Height}-tall card");
+            }
+        }
+
+        overlay.TryCancel();
+        Dispatcher.UIThread.RunJobs();
+    }
+
     // ---- one tab per app ---------------------------------------------------------------------------
 
     [AvaloniaFact]

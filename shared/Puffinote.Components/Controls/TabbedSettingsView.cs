@@ -35,7 +35,17 @@ public sealed class TabbedSettingsView : UserControl
     private readonly StackPanel _strip = new() { Orientation = Orientation.Horizontal, Spacing = 4 };
     private readonly ContentControl _body = new();
 
-    public TabbedSettingsView(IReadOnlyList<SettingsTab> tabs, double width = 380)
+    /// <summary>
+    /// Build the dialog over <paramref name="tabs"/>.
+    ///
+    /// <para><paramref name="width"/> governs the whole thing — the strip, the body, and every page's form,
+    /// which is set to match rather than keeping the width it was constructed with. A tabbed dialog is
+    /// wider than a single-subject one by nature: the strip has to hold every subject's name on one line,
+    /// and at the single-page width the five names ran wider than the form under them, so the form looked
+    /// like a narrow column someone had left inside a wider box. One number, applied everywhere, is what
+    /// stops the two disagreeing.</para>
+    /// </summary>
+    public TabbedSettingsView(IReadOnlyList<SettingsTab> tabs, double width = 620)
     {
         if (tabs is null || tabs.Count == 0)
         {
@@ -46,14 +56,21 @@ public sealed class TabbedSettingsView : UserControl
 
         // The pages are built once and kept: a control has one parent, so rebuilding a page on every tab
         // switch would re-parent its form — and lose whatever had been typed into it.
+        foreach (var tab in tabs)
+        {
+            tab.Form.FormWidth = width;
+        }
+
         _pages = [.. tabs.Select(Page)];
 
-        Content = new StackPanel
-        {
-            Spacing = 12,
-            Width = width,
-            Children = { _strip, _body },
-        };
+        // Docked, not stacked, so the page is handed what is left under the strip and its own scroller
+        // takes the strain. Stacked, a page taller than the card grew straight through the bottom of it.
+        _strip.Margin = new Thickness(0, 0, 0, 12);
+        var layout = new DockPanel { LastChildFill = true, Width = width };
+        DockPanel.SetDock(_strip, Dock.Top);
+        layout.Children.Add(_strip);
+        layout.Children.Add(_body);
+        Content = layout;
 
         SelectedIndex = 0;
     }
@@ -164,36 +181,36 @@ public sealed class TabbedSettingsView : UserControl
         };
         open.Click += (_, _) => OpenConfigFileRequested?.Invoke(tab);
 
-        return new StackPanel
+        var escape = new Border
         {
-            Spacing = 6,
-            Children =
+            BorderBrush = Tokens.Active.SurfaceBorder,
+            BorderThickness = new Thickness(0, 1, 0, 0),
+            Margin = new Thickness(0, 14, 0, 0),
+            Padding = new Thickness(0, 10, 0, 0),
+            Child = new StackPanel
             {
-                tab.Form,
-                new Border
+                Spacing = 6,
+                Children =
                 {
-                    BorderBrush = Tokens.Active.SurfaceBorder,
-                    BorderThickness = new Thickness(0, 1, 0, 0),
-                    Margin = new Thickness(0, 8, 0, 0),
-                    Padding = new Thickness(0, 10, 0, 0),
-                    Child = new StackPanel
+                    open,
+                    new TextBlock
                     {
-                        Spacing = 6,
-                        Children =
-                        {
-                            open,
-                            new TextBlock
-                            {
-                                Text = $"Opens {path} in your default editor — every setting is in there, "
-                                    + "including the ones this dialog doesn't show.",
-                                FontSize = 11,
-                                Foreground = Tokens.Active.MutedText,
-                                TextWrapping = TextWrapping.Wrap,
-                            },
-                        },
+                        Text = $"Opens {path} in your default editor — every setting is in there, "
+                            + "including the ones this dialog doesn't show.",
+                        FontSize = 11,
+                        Foreground = Tokens.Active.MutedText,
+                        TextWrapping = TextWrapping.Wrap,
                     },
                 },
             },
         };
+
+        // The escape hatch is pinned under the form rather than stacked after it: it is two short lines and
+        // the form is the part that can be any height, so the form is the one that should give way.
+        var layout = new DockPanel { LastChildFill = true };
+        DockPanel.SetDock(escape, Dock.Bottom);
+        layout.Children.Add(escape);
+        layout.Children.Add(tab.Form);
+        return layout;
     }
 }

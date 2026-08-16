@@ -391,6 +391,14 @@ navigation PKM users expect. (The Command Menu stays commands-only; file navigat
   writing *that editor's own config file* — the same file it reads when it runs standalone. Tabs are named
   for **what they change, not for the program that changes it**: someone looking for how their notes indent
   has no reason to know a note editor is called Typage.
+  - **The tabbed dialog is wider than a single-subject one**, and one number governs the strip, the body
+    and every page's form alike. A strip that has to hold five subjects on one line is wider than a column
+    of settings rows needs to be, and when the two were sized separately the form read as a narrow column
+    left inside a wider box.
+  - **A dialog's content gives way, never its chrome.** The card is bounded, and inside it the title and the
+    OK/Cancel row are pinned while the body takes what is left and scrolls — so a form that outgrows the
+    card scrolls rather than pushing the way out of the dialog off the bottom of it. The card's inset is the
+    family's 24: a big surface needs a bigger margin to sit still in than a question and two buttons do.
   - **Puffinote reads and writes those files through per-editor mirrors** (`EditorConfig` and friends),
     never by referencing an editor's desktop shell (§9, one-way layering). A mirror models the subset of a
     file Puffinote can act on, defaulted to that editor's own defaults, and **writes back by merging**: keys

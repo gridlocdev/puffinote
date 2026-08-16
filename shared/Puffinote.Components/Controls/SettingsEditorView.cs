@@ -199,10 +199,12 @@ public sealed record SettingsSection(string Title, IReadOnlyList<SettingsField> 
 public sealed class SettingsEditorView : UserControl
 {
     private readonly List<SettingsField> _fields = [];
+    private readonly StackPanel _rows;
 
     public SettingsEditorView(IEnumerable<SettingsSection> sections, double width = 360)
     {
         var stack = new StackPanel { Spacing = 2, Width = width };
+        _rows = stack;
         var first = true;
 
         foreach (var section in sections)
@@ -231,6 +233,21 @@ public sealed class SettingsEditorView : UserControl
 
     /// <summary>The fields on this form, in declaration order (the seam the UI tests drive).</summary>
     public IReadOnlyList<SettingsField> Fields => _fields;
+
+    /// <summary>
+    /// How wide the rows are laid out. Fixed rather than stretched, because the card sizes itself to its
+    /// content and a form that shrink-wrapped would be as wide as whichever row happened to be longest.
+    /// <para>
+    /// Settable after construction so a container can impose <em>its</em> width on the forms it was handed
+    /// — <see cref="TabbedSettingsView"/> does, since the caller builds each page's form long before it
+    /// knows how wide the tab strip needs the dialog to be.
+    /// </para>
+    /// </summary>
+    public double FormWidth
+    {
+        get => _rows.Width;
+        set => _rows.Width = value;
+    }
 
     /// <summary>Write every field's edited value back through its setter.</summary>
     public void Commit()

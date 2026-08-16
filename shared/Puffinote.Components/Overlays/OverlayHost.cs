@@ -142,30 +142,44 @@ public sealed class OverlayHost : Panel
     /// <summary>Wrap a modal body in a themed floating card (title + shadow) with Tab trapped inside it.</summary>
     private Border BuildChrome(Control body, string title)
     {
-        var stack = new StackPanel { Spacing = 10 };
+        // A DockPanel, not a StackPanel. A StackPanel arranges every child at the height it *asks* for and
+        // reads the card's MaxHeight as somebody else's problem, so a dialog whose content outgrew the card
+        // was drawn spilling over its own bottom edge — a modal with its OK and Cancel floating on the page
+        // below it, which is what Preferences did once it grew a fifth tab. Docking hands the body whatever
+        // is left after the title and lets it squeeze; anything with a scroller inside then scrolls, which
+        // is what a settings form is built to do.
+        var layout = new DockPanel { LastChildFill = true };
         if (!string.IsNullOrEmpty(title))
         {
-            stack.Children.Add(new TextBlock
+            var heading = new TextBlock
             {
                 Text = title,
                 FontWeight = FontWeight.SemiBold,
                 FontSize = 14,
-            });
+                Margin = new Thickness(0, 0, 0, 10), // a DockPanel has no Spacing; the gap rides on the title
+            };
+            DockPanel.SetDock(heading, Dock.Top);
+            layout.Children.Add(heading);
         }
 
-        stack.Children.Add(body);
+        layout.Children.Add(body);
 
         var chrome = new Border
         {
-            MaxWidth = 560,
+            MaxWidth = 760,
             MaxHeight = 640,
             Background = Tokens.For(ActualThemeVariant).Surface,
             CornerRadius = new CornerRadius(8),
-            Padding = new Thickness(16),
+
+            // The family's card inset, the same 24 the task dialog's body uses. Sixteen was drawn for the
+            // small dialogs — a question and two buttons — and on a full settings form it put a scrolling
+            // list of rows within a hair of the card's edge, so the card read as a frame around the content
+            // rather than as the thing holding it. A big surface needs a bigger margin to sit still in.
+            Padding = new Thickness(24),
             VerticalAlignment = VerticalAlignment.Center,
             HorizontalAlignment = HorizontalAlignment.Center,
             BoxShadow = new BoxShadows(new BoxShadow { Blur = 16, OffsetY = 4, Color = Color.FromArgb(0x40, 0, 0, 0) }),
-            Child = stack,
+            Child = layout,
         };
         // Trap Tab within the card so focus cycles through its own fields and never escapes to whatever
         // is behind the overlay (a dialog's sub-modals set their own Cycle scope inside this one).
