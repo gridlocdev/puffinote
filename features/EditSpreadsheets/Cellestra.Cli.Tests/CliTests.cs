@@ -291,6 +291,70 @@ public sealed class CliTests : IDisposable
         Assert.Equal("", Run("get", ods, "A4").Out.Trim()); // the duplicate row was cleared
     }
 
+    /// <summary>A CSV of text cells — the shape Clean Up exists for.</summary>
+    private string MessyBook()
+    {
+        string csv = Path2("messy.csv");
+        string ods = Path2("messy.ods");
+        File.WriteAllText(csv, "Region,Revenue\nWest,  1200.50 \nEast,900\n");
+        Run("import", csv, "--into", ods, "--sheet", "Sheet1");
+        return ods;
+    }
+
+    [Fact]
+    public void Clean_up_dry_run_reports_without_writing()
+    {
+        string ods = MessyBook();
+        var before = File.GetLastWriteTimeUtc(ods);
+
+        var (exit, output, _) = Run("clean-up", ods, "--dry-run", "--locale", "en-US");
+
+        Assert.Equal(0, exit);
+        Assert.Contains("Sheet1:", output, StringComparison.Ordinal);
+        Assert.Equal(before, File.GetLastWriteTimeUtc(ods));
+    }
+
+    [Fact]
+    public void Clean_up_refuses_to_overwrite_without_being_told_to()
+    {
+        string ods = MessyBook();
+
+        var (exit, _, err) = Run("clean-up", ods);
+
+        Assert.NotEqual(0, exit);
+        Assert.Contains("--in-place", err, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Clean_up_formats_the_workbook_and_settles_after_one_pass()
+    {
+        string ods = MessyBook();
+
+        Assert.Equal(0, Run("clean-up", ods, "--in-place", "--locale", "en-US").Exit);
+
+        // The trimmed text is a real number now, and the header row is frozen — through a save.
+        var sheet = OdsReader.Read(File.OpenRead(ods)).FindSheet("Sheet1")!;
+        Assert.Equal(1200.5, sheet.GetValue(1, 1).AsNumber);
+        Assert.Equal(1, sheet.FrozenRows);
+
+        // Idempotent: a second pass has nothing left to say.
+        Assert.Contains("Nothing to clean up.", Run("clean-up", ods, "--dry-run", "--locale", "en-US").Out, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Clean_up_can_be_narrowed_to_one_sheet()
+    {
+        string ods = MessyBook();
+        Run("add-sheet", ods, "Other");
+        Run("set", ods, "Other.A1", "Label", "--in-place");
+        Run("set", ods, "Other.A2", "7", "--in-place");
+
+        var (exit, output, _) = Run("clean-up", ods, "--sheet", "Sheet1", "--dry-run", "--locale", "en-US");
+
+        Assert.Equal(0, exit);
+        Assert.DoesNotContain("Other:", output, StringComparison.Ordinal);
+    }
+
     [Fact]
     public void Split_separates_a_delimited_column()
     {

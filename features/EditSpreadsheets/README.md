@@ -93,6 +93,7 @@ cellestra validate budget.ods              # exit 1 on any #REF!/#VALUE!/circula
 cellestra diff before.ods after.ods        # cell-by-cell diff (exit 1 if they differ)
 cellestra stats budget.ods Sheet1.A1:A100  # sum/avg/count/min/max over a range
 cellestra find budget.ods "TODO" --regex   # search values and/or formulas
+cellestra clean-up budget.ods --dry-run    # what Clean Up would format, without writing
 cellestra functions VLOOKUP                # describe a built-in function
 ```
 

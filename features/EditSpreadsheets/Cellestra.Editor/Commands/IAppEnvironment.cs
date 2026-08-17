@@ -148,6 +148,12 @@ public interface IAppEnvironment
 
     void ToggleFreezePanes();
 
+    /// <summary>
+    /// Run Clean Up (PRD §8.17) over the active sheet, or every sheet when
+    /// <paramref name="wholeWorkbook"/> is true, as one undoable step, and narrate what it did.
+    /// </summary>
+    void RunCleanUp(bool wholeWorkbook);
+
     /// <summary>Display the keyboard shortcuts reference.</summary>
     void ShowKeyboardShortcuts();
 

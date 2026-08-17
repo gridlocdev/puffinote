@@ -43,6 +43,7 @@ public static class CliApplication
 
             // Data, structural, and layout edits — parity with the desktop app's Data/Insert menus.
             DataCommands.Sort(),
+            DataCommands.CleanUp(),
             DataCommands.RemoveDuplicates(),
             DataCommands.Split(),
             DataCommands.Table(),

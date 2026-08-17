@@ -250,10 +250,11 @@ features/EditSpreadsheets/          # the spreadsheet-editor feature (the whole 
 │   │   ├── Dependencies/ (DependencyGraph, RecalculationEngine, DirtyTracker,
 │   │   │                  CircularReferenceException)
 │   │   ├── Styling/ (CellStyle, Font, Fill, Border, Alignment,
-│   │   │             NumberFormat, NumberFormatParser, StylePool)
+│   │   │             NumberFormat, NumberFormatParser, StylePool,
+│   │   │             ITextMeasurer/ApproximateTextMeasurer)   # PRD §8.17
 │   │   ├── Data/ (Table, FilterSpec, SortSpec, SortEngine, FilterEngine,
 │   │   │          TableAutoExpand, DataValidation, ValidationRule,
-│   │   │          DuplicateRemover, TextToColumns)
+│   │   │          DuplicateRemover, TextToColumns, CleanUp)
 │   │   ├── Editing/ (IEditCommand, SetCellValueCommand, InsertRowCommand,
 │   │   │             DeleteRangeCommand, MergeCellsCommand, SetRowVisibilityCommand,
 │   │   │             CreateTableCommand, SortRangeCommand, ApplyFilterCommand,

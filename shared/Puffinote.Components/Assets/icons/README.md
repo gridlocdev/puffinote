@@ -8,11 +8,12 @@ Lucide source glyph (`align-left` ← `text-align-start`, `filter` ← `funnel`)
 stroked by `Controls/Icons/LucideIcons.cs`. To add one, drop the 24×24 `fill="none"` SVG here and
 reference its file name as a command's `Icon` key in `AppCommands`.
 
-`move-decimal-left` / `move-decimal-right` / `markdown` are first-party glyphs drawn in the same
-24×24, `fill="none"`, stroke-2 Lucide style (Lucide has neither a decimal-shift nor a Markdown
-icon). The first two back the Increase/Decrease Decimal commands; `markdown` is the file-tree glyph
-for `.md` notes — Puffinote's primary file type, which had to be distinguishable at a glance from
-plain text.
+`move-decimal-left` / `move-decimal-right` / `markdown` / `sparkles` are first-party glyphs drawn in
+the same 24×24, `fill="none"`, stroke-2 Lucide style (Lucide has neither a decimal-shift nor a
+Markdown icon). The first two back the Increase/Decrease Decimal commands; `markdown` is the
+file-tree glyph for `.md` notes — Puffinote's primary file type, which had to be distinguishable at
+a glance from plain text; `sparkles` (a wand and two stars) backs Cellestra's Clean Up commands,
+where the sibling `paintbrush` was already the Format Painter's.
 
 A glyph whose outline is a single closed path (e.g. `star`) can also be drawn solid, via
 `LucideIcon.IsFilled` — a second, non-colour channel for a two-state control.

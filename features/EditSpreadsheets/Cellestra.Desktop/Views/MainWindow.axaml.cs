@@ -334,7 +334,7 @@ public partial class MainWindow : Window, IEditorHost
             "edit.find", "edit.findReplace", null, "edit.autoSum");
         edit.Menu!.Items.Add(Submenu("Fill", "fill.down", "fill.right")); // Edit ▸ Fill ▸ Down / Right (PRD §6.2)
         menu.Items.Add(edit);
-        var format = Submenu("Format", "format.cells", null, "format.bold", "format.italic", "format.underline", null,
+        var format = Submenu("Format", "format.cleanUpSheet", "format.cleanUpWorkbook", null, "format.cells", null, "format.bold", "format.italic", "format.underline", null,
             "format.alignLeft", "format.alignCenter", "format.alignRight", null,
             "format.alignTop", "format.alignMiddle", "format.alignBottom", null, "format.wrap", null,
             "format.currency", "format.percent", "format.date", null, "format.merge");
@@ -347,7 +347,7 @@ public partial class MainWindow : Window, IEditorHost
             "insert.sheet", "data.createTable", "insert.function", "insert.namedRange", "insert.hyperlink", null, "sheet.rename", "sheet.delete"));
         menu.Items.Add(Submenu("Data", "data.sortAsc", "data.sortDesc", "data.customSort", "data.sortAndFilter", null,
             "data.toggleFilter", "data.clearFilter", null, "data.createTable", "data.autofitColumns", "data.removeDuplicates",
-            "data.textToColumns", "data.validation", null, "formula.recalc"));
+            "data.textToColumns", "data.validation", null, "format.cleanUpSheet", "format.cleanUpWorkbook", null, "formula.recalc"));
         menu.Items.Add(Submenu("View", "view.commandMenu", "view.goToSheet", null, "view.zoomIn", "view.zoomOut", "view.actualSize", null,
             "view.commandBarVisible", "view.commandBarCollapsed", "view.commandBarHidden", null, "view.freezePanes", null, "view.radialSettings", "app.preferences"));
         menu.Items.Add(Submenu("Help", "help.shortcuts", null, "help.about"));

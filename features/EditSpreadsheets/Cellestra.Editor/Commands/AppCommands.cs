@@ -154,6 +154,14 @@ public sealed class AppCommands
             () => StepDecimals(e, -1), canExecute: () => CanStepDecimals(e), icon: "move-decimal-right"),
         new("format.cells", "Format Cells…", "Open the full cell-formatting dialog.", Shortcut.Cmd(Key.D1), () => e.ShowFormatCellsDialog(), icon: "settings-2"),
 
+        // Clean Up (PRD §8.17): one command that reads what a sheet holds and formats it accordingly.
+        // Two of them rather than one scope-guessing command — "this sheet" and "all of them" differ by
+        // how much of the document a single undo covers, which is not a thing to leave to a heuristic.
+        new("format.cleanUpSheet", "Clean Up Sheet", "Format this sheet from its contents: style the header, give each column one number format, fix alignment, and fit the columns.",
+            null, () => e.RunCleanUp(wholeWorkbook: false), icon: "sparkles"),
+        new("format.cleanUpWorkbook", "Clean Up Workbook", "Clean up every sheet in the workbook, in one undoable step.",
+            null, () => e.RunCleanUp(wholeWorkbook: true), icon: "sparkles"),
+
         // Format ▸ Rows / Columns (PRD §6.2, §8.14) — the line-level commands, which are also what a
         // row or column header's context menu is for. Each is disabled rather than hidden when the
         // selection spans every line of its axis (a whole-column selection selects every row): sizing

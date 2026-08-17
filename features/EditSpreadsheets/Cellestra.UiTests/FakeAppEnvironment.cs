@@ -72,6 +72,7 @@ internal sealed class FakeAppEnvironment : IAppEnvironment
 
     public void FitColumns(int left, int right) => throw Nope();
     public void ToggleFreezePanes() => throw Nope();
+    public void RunCleanUp(bool wholeWorkbook) => throw Nope();
     public void ShowKeyboardShortcuts() => throw Nope();
     public void ShowRadialSettings() => throw Nope();
     public void ShowPreferences() => throw Nope();

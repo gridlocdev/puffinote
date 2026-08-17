@@ -93,6 +93,74 @@ internal static class DataCommands
         return command;
     }
 
+    // ---- Clean up ---------------------------------------------------------
+
+    /// <summary>
+    /// The headless face of the app's Clean Up commands (PRD §8.17). Whole workbook by default —
+    /// <c>--sheet</c> narrows it to one, which is the same split the app's two commands make. The
+    /// plan comes from the same Core reader the app uses, so <c>--dry-run</c> reports exactly what
+    /// the app would do, and does it with the estimating text measurer (there is no display here, so
+    /// a fitted column can sit a pixel or two off what the app would measure).
+    /// </summary>
+    public static Command CleanUp()
+    {
+        var file = Options.File();
+        var sheet = Options.Sheet();
+        var dryRun = new Option<bool>("--dry-run") { Description = "Report what would change, and write nothing" };
+        var inPlace = Options.InPlace();
+        var output = Options.Output();
+        var locale = Options.Locale();
+        var command = new Command("clean-up", "Format a workbook from its contents: header, number formats, alignment, and column widths")
+        {
+            file, sheet, dryRun, inPlace, output, locale,
+        };
+
+        command.SetAction(parse =>
+        {
+            string path = parse.GetValue(file)!;
+            bool preview = parse.GetValue(dryRun);
+
+            // Resolve the destination before reading the file, so "refusing to overwrite" is the first
+            // thing you hear rather than the last — and is never said at all for a --dry-run.
+            string? target = preview ? null : Options.EditTarget(path, parse.GetValue(inPlace), parse.GetValue(output));
+            var culture = Locale.Resolve(parse.GetValue(locale));
+            var loaded = Workspace.Load(path, WorkbookFormat.Ods, culture);
+            var effective = culture ?? loaded.Workbook.Settings.EffectiveLocale;
+
+            string? name = parse.GetValue(sheet);
+            var plan = name is null
+                ? Cellestra.Core.Data.CleanUp.ForWorkbook(loaded.Workbook, effective)
+                : Cellestra.Core.Data.CleanUp.ForSheet(loaded.Workbook, Cells.PickSheet(loaded.Workbook, name), effective);
+
+            if (plan.IsEmpty)
+            {
+                Console.Out.WriteLine("Nothing to clean up.");
+                return 0;
+            }
+
+            foreach (var note in plan.Notes)
+            {
+                Console.Out.WriteLine(note.ToString());
+            }
+
+            if (preview)
+            {
+                return 0;
+            }
+
+            foreach (var edit in plan.Edits)
+            {
+                edit.Apply(loaded.Workbook);
+            }
+
+            Workspace.Recalculate(loaded.Workbook);
+            Workspace.SaveOds(loaded.Workbook, loaded.Package, target!);
+            return 0;
+        });
+
+        return command;
+    }
+
     // ---- Text to columns --------------------------------------------------
 
     public static Command Split()

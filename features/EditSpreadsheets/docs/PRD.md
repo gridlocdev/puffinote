@@ -101,6 +101,7 @@ If I open a Cellestra-saved file in LibreOffice and notice nothing wrong, the ba
 - Font family, size, bold/italic/underline/strikethrough, text color.
 - Cell background fills and borders.
 - Text alignment (horizontal and vertical) and wrapping.
+- **Clean Up Sheet / Clean Up Workbook** — one command that reads what the sheet holds and formats it accordingly: a styled, frozen header row, one inferred number format per column, alignment back to the type-driven default, columns fitted to their contents, plus the two safe data tidies (stray whitespace, numbers stored as text). One undo step (§8.17).
 
 ## 5. Key user flows
 
@@ -462,7 +463,7 @@ A second face on the same brain (`ARCHITECTURE.md` §1): the `cellestra` binary 
 
 **Extras:** `new`, `import`/`export`, `stats`, `find` (`--regex`, `--in values|formulas`), `diff` (**non-zero exit on differences**), `functions` (list / describe — same metadata as the in-app reference), `add-sheet` / `rename-sheet` / `delete-sheet`, `apply <file> <edits.json>` (batch edits, `-` for stdin), `open` (hand off to the GUI), `completions <shell>`.
 
-**Data, structural & layout edits (desktop parity):** the operations the Data/Insert menus expose, driving the same Core builders the GUI does (all honour `--in-place`/`-o`, write atomically, and preserve unmodeled content): `sort <range> --by B,A:desc [--no-header]`, `remove-duplicates <range> [--columns A,C]`, `split <column> -d <char>` (text-to-columns), `table <range> [--name N] [--no-header]`, `data-validation <range> (--list "a,b,c" | --source <range>)`, `name add|list|remove` (named ranges), `hyperlink <cell> <url> | --remove`, `insert-rows`/`delete-rows`/`insert-cols`/`delete-cols <at> [--count N]`, `hide-rows`/`show-rows`/`hide-cols`/`show-cols <lines>`, and `merge <range>`/`unmerge <cell>`. **Chart sheets** (Insert ▸ Chart Sheet) come from `chart --type <kind> (--from <range> | --values <range>…) [--categories|--x-values|--bubble-sizes|--names|--stacking|--title|--x-title|--y-title|--no-legend]`: `--from` seeds categories+series from a tabular range (header row → series names) the way the GUI seeds from a selection, or each field can be wired explicitly. The command accepts only the fields a given type can plot (a scatter needs `--x-values`, a bubble also `--bubble-sizes`, a pie/doughnut a single series, stacking only on column/bar/area) and the chart round-trips as an ODF embedded object — same as a GUI-made one.
+**Data, structural & layout edits (desktop parity):** the operations the Data/Insert menus expose, driving the same Core builders the GUI does (all honour `--in-place`/`-o`, write atomically, and preserve unmodeled content): `sort <range> --by B,A:desc [--no-header]`, `remove-duplicates <range> [--columns A,C]`, `split <column> -d <char>` (text-to-columns), `table <range> [--name N] [--no-header]`, `data-validation <range> (--list "a,b,c" | --source <range>)`, `name add|list|remove` (named ranges), `hyperlink <cell> <url> | --remove`, `insert-rows`/`delete-rows`/`insert-cols`/`delete-cols <at> [--count N]`, `hide-rows`/`show-rows`/`hide-cols`/`show-cols <lines>`, `merge <range>`/`unmerge <cell>`, and `clean-up [--sheet S] [--dry-run]` (§8.17 — whole workbook by default; `--dry-run` reports the plan on stdout and writes nothing, so it needs neither `--in-place` nor `-o`). **Chart sheets** (Insert ▸ Chart Sheet) come from `chart --type <kind> (--from <range> | --values <range>…) [--categories|--x-values|--bubble-sizes|--names|--stacking|--title|--x-title|--y-title|--no-legend]`: `--from` seeds categories+series from a tabular range (header row → series names) the way the GUI seeds from a selection, or each field can be wired explicitly. The command accepts only the fields a given type can plot (a scatter needs `--x-values`, a bubble also `--bubble-sizes`, a pie/doughnut a single series, stacking only on column/bar/area) and the chart round-trips as an ODF embedded object — same as a GUI-made one.
 
 **Conventions (these matter more than any single command):**
 - **Pipe-friendly:** `--format table|csv|tsv|json`; read commands default to stdout; `-` means stdin/stdout.
@@ -471,6 +472,67 @@ A second face on the same brain (`ARCHITECTURE.md` §1): the `cellestra` binary 
 - **Exit codes are first-class:** `validate` and `diff` return non-zero so they slot into CI and pre-commit hooks.
 - **Same engine, same rules:** evaluation, OpenFormula translation, and locale handling are identical to the app, with a `--locale` override for scripting; `recalc` matches what the GUI would show.
 - **No network, ever.**
+
+### 8.17 Clean Up
+
+**Two commands, not one:** **Clean Up Sheet** (`format.cleanUpSheet`) and **Clean Up Workbook**
+(`format.cleanUpWorkbook`). Each is a **single undoable step**, so one ⌘Z puts back everything it did.
+Which scope a run covers is the user's to say, not a heuristic's — how much of a document one undo
+covers is not a thing to guess. The headless face is `cellestra clean-up` (§8.16).
+
+**What it works on.** Every **contiguous data block** on the sheet — the same "current region" Sort,
+Filter, and Table act on (§8.11) — found by walking the populated cells rather than the used range. A
+lone cell is not a block. A chart sheet has no grid to read and is skipped.
+
+**Header detection** is `DataRegion.LooksLikeHeader` asked through the coercion below: a first row of
+labels over a body that holds (or would hold) numbers. The plain rule is not enough for the case Clean
+Up exists for — a CSV import stores every cell as text, so "the body holds something non-text" finds
+nothing and every header goes unrecognized.
+
+**What it changes, per block:**
+
+| Move | Rule |
+|---|---|
+| **Header emphasis** | Bold, centred, on the royal-blue fill a new table's header gets (`Defaults.TableHeaderFillArgb` / `TableHeaderTextArgb`) — a cleaned-up block and a table look like they came from the same program. |
+| **Freeze** | The **topmost** block's header row is frozen (`FrozenRows`); columns are never frozen. A second block further down does not move the pane. |
+| **Number format** | One format per column, inferred from that column's values: a date code for an all-date column; `0.0…%` for percentages; `<symbol>#,##0.00` for currency; `#,##0` for whole numbers reaching 1,000; `#,##0.00…` otherwise, to the most decimals typed in the column (minimum 2, maximum 4). Whole numbers below 1,000 stay **General** — a separator there is noise. |
+| **Alignment** | Body cells return to **General** — left for text, right for numbers (§8.8), the alignment that stays right when a column's contents change. Header cells are centred. |
+| **Column width** | Each column is fitted to the widest thing it will hold **after** the clean-up (the planned value under the planned style), padded and clamped exactly as the header-border double-click fits it (§8.14). A **Wrap Text** cell abstains — its text was told to fold at the column's edge. |
+| **Whitespace** | Leading/trailing whitespace is trimmed from text cells; a whitespace-only cell is cleared. |
+| **Numbers stored as text** | Text that is a number, currency amount, percentage, or date becomes that value — read through the same `InputParser` the cell editor uses, so a cleaned-up cell and a retyped one land identically. |
+
+**What it deliberately does not do** — these are the guarantees, and they are why it is safe to run on
+a document you did not write:
+
+- **Formulas are never rewritten.** A formula's result still votes on its column's format; the formula
+  itself is untouched.
+- **A chosen number format is never overwritten.** Only a still-**General** cell takes the inferred
+  format. Clean Up formats what was never formatted; it does not overrule what was.
+- **Coercion is all-or-nothing per column.** Text becomes numbers only when every non-empty body cell
+  in the column is (or would become) numeric. One `007` among labels means the column is left alone.
+- **Identifiers stay text.** A leading-zero digit run (`007`, an area code, a zip) and any digit string
+  too long to survive a `double` are identifiers, not numbers — and a column containing one is not
+  coerced at all.
+- **No banded rows, rules, or borders.** Static fills are the only way to draw them (conditional
+  formatting is a non-goal, §9), and a striped block that cannot restripe when rows are inserted is
+  worse than an unstriped one.
+- **It settles.** Running it a second time changes nothing and costs no undo step; so does running it
+  after a save and reopen. The report says what it *did*, never what it looked at.
+
+**Reporting.** Each run narrates one line per sheet — "Sheet1: tidied 2 cells, formatted 2 columns,
+styled 1 header row, froze the header row, resized 3 columns" — in the status line in the app and on
+stdout in the CLI. Most of what Clean Up does is quiet, and a user who cannot tell whether it ran will
+run it again.
+
+**Text measurement.** Fitting a column needs a font stack, and Core has none. The app supplies a
+typeface-backed measurer (the same `FormattedText` the grid draws with); the CLI, which has no display,
+falls back to Core's `ApproximateTextMeasurer` — a per-character estimate, so a CLI-fitted column can
+sit a pixel or two off what the app would measure.
+
+**Frozen panes persist.** Clean Up freezes a header row and the CLI then writes the file, so the freeze
+had to survive a save: `FrozenRows`/`FrozenColumns` round-trip through `settings.xml`, in the `Tables`
+map of a view, where LibreOffice reads them (split mode `2` = frozen; mode `1` is a movable split and
+is **not** read as a freeze).
 
 ## 9. Non-goals (deliberately NOT in v1)
 
@@ -489,7 +551,7 @@ Intentional exclusions, not oversights.
 - **Cell comments / notes** (why there's no "Review" menu).
 - **Cross-platform builds.** Mac first; the architecture keeps the door open but Windows/Linux are not a v1 promise.
 - **Mobile / web versions.**
-- **Conditional formatting.**
+- **Conditional formatting.** (Clean Up, §8.17, infers static formatting from a column's contents once, on request — it is not a rule that re-evaluates as the data changes, and it deliberately draws no banded rows for that reason.)
 
 ## 10. Decisions (previously open questions, now resolved)
 

@@ -320,6 +320,34 @@ public static class EditCommands
             });
     }
 
+    /// <summary>
+    /// Set the frozen-pane split, undoably. The grid's own ⌘-driven toggle writes
+    /// <see cref="Worksheet.FrozenRows"/>/<see cref="Worksheet.FrozenColumns"/> directly — freezing is
+    /// a view state you flip back as easily as you flipped it. Clean Up freezes as one part of a larger
+    /// step, and a step you undo has to put the panes back too, so it goes through here.
+    /// </summary>
+    public static IEditCommand SetFrozenPanes(string sheet, int rows, int columns)
+    {
+        int previousRows = 0, previousColumns = 0;
+        return new ActionCommand("Freeze Panes",
+            wb =>
+            {
+                var ws = Sheet(wb, sheet);
+                previousRows = ws.FrozenRows;
+                previousColumns = ws.FrozenColumns;
+                ws.FrozenRows = rows;
+                ws.FrozenColumns = columns;
+                return EditResult.None;
+            },
+            wb =>
+            {
+                var ws = Sheet(wb, sheet);
+                ws.FrozenRows = previousRows;
+                ws.FrozenColumns = previousColumns;
+                return EditResult.None;
+            });
+    }
+
     public static IEditCommand SetColumnsHidden(string sheet, int firstColumn, int lastColumn, bool hidden)
     {
         bool[] previous = new bool[lastColumn - firstColumn + 1];

@@ -5,6 +5,7 @@ using Cellestra.Core.Editing;
 using Cellestra.Core.Model;
 using Cellestra.Desktop.Commands;
 using Cellestra.Desktop.Controls.SpreadsheetGrid;
+using Cellestra.Desktop.Services;
 using Cellestra.Desktop.Views.Dialogs;
 using Puffinote.Components.Commands;
 using Puffinote.Components.Controls.Icons;
@@ -326,6 +327,32 @@ public partial class SpreadsheetEditorView
     {
         Grid.ToggleFreezePanes();
         Refresh();
+    }
+
+    /// <summary>
+    /// Clean Up (PRD §8.17). The whole reading of the sheet lives in Core, so the app and the
+    /// <c>cellestra clean-up</c> CLI reach the same conclusions; the app's contribution is a real
+    /// typeface to measure with and a line saying what changed, since most of what Clean Up does is
+    /// quiet and a user who can't tell whether it ran will run it again.
+    /// </summary>
+    public void RunCleanUp(bool wholeWorkbook)
+    {
+        var workbook = Session.Workbook;
+        var culture = workbook.Settings.EffectiveLocale;
+        var plan = wholeWorkbook
+            ? Cellestra.Core.Data.CleanUp.ForWorkbook(workbook, culture, TypefaceTextMeasurer.Instance)
+            : Cellestra.Core.Data.CleanUp.ForSheet(workbook, Session.ActiveSheet, culture, TypefaceTextMeasurer.Instance);
+
+        string label = wholeWorkbook ? Cellestra.Core.Data.CleanUp.WorkbookLabel : Cellestra.Core.Data.CleanUp.SheetLabel;
+        if (plan.ToCommand(label) is not { } command)
+        {
+            Narrate(plan.Summary);
+            return;
+        }
+
+        Session.Execute(command);
+        Refresh();
+        Narrate(plan.Summary);
     }
 
     public void ShowKeyboardShortcuts() => _ = ShowModalAsync(new KeyboardShortcutsDialog(Commands));

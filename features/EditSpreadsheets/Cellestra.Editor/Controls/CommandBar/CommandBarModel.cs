@@ -70,8 +70,10 @@ public static class CommandBarModel
         new CommandBarGroup("Insert",
             ["insert.rowsAbove", "insert.columnsLeft"],
             ["insert.sheet", "data.createTable"]),
+        // Clean Up leads the Data group: it is the one-click "make this readable" action, and what it
+        // reads to decide is the data — the same region Sort, Filter and Table act on.
         new CommandBarGroup("Data",
-            ["data.sortAsc", "data.sortDesc", "data.sortAndFilter"],
-            ["data.customSort", "data.toggleFilter", "data.clearFilter", "data.removeDuplicates", "data.textToColumns", "data.validation"]),
+            ["format.cleanUpSheet", "data.sortAsc", "data.sortDesc", "data.sortAndFilter"],
+            ["format.cleanUpWorkbook", "data.customSort", "data.toggleFilter", "data.clearFilter", "data.removeDuplicates", "data.textToColumns", "data.validation"]),
     ];
 }
