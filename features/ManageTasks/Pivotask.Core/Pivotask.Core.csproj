@@ -14,7 +14,7 @@
 
   <ItemGroup>
     <InternalsVisibleTo Include="Pivotask.Core.Tests" />
-    <InternalsVisibleTo Include="ptask" />
+    <InternalsVisibleTo Include="pivotask" />
   </ItemGroup>
 
 </Project>

@@ -29,26 +29,27 @@ just run-pivotask-cli list --due-tomorrow
 Ship it:
 
 ```bash
-just install-pivotask           # the `ptask` CLI onto PATH
+just install-pivotask           # the `pivotask` CLI onto PATH
 just install-pivotask-app       # Pivotask.app into /Applications (macOS)
 ```
 
 Every install has an exact inverse (`uninstall-pivotask`, `uninstall-pivotask-app`).
 
-## The `ptask` CLI
+## The `pivotask` CLI
 
 ```bash
-ptask list --due-tomorrow                    # what's about to bite
-ptask add "Renew the domain" --group "To do" --due 2026-09-01
-ptask done "Renew the domain"                # by id, or by part of the title
-ptask move k3f9a2b --group "In progress"
-ptask show k3f9a2b
-ptask groups
+pivotask work.pivotask                          # open the board in the app
+pivotask list --due-tomorrow                    # what's about to bite
+pivotask add "Renew the domain" --group "To do" --due 2026-09-01
+pivotask done "Renew the domain"                # by id, or by part of the title
+pivotask move k3f9a2b --group "In progress"
+pivotask show k3f9a2b
+pivotask groups
 ```
 
 It finds the single `*.pivotask` in the working directory on its own (boards written before the rename,
 `*.pivotask.json`, count too). With none, or with several,
-it says what to do instead — guessing which board `ptask done` meant is the kind of help that loses work.
+it says what to do instead — guessing which board `pivotask done` meant is the kind of help that loses work.
 
 ## Docs
 

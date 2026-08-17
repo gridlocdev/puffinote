@@ -84,6 +84,15 @@ public partial class MainWindow
     }
 
     /// <summary>
+    /// Test seam: take down whatever dialog is on the overlay, exactly as Esc or a backdrop click would.
+    /// A headless suite has nobody to dismiss one, and a modal left standing takes the whole run down
+    /// with it. Cancels rather than closing the host out from under it, which matters the moment
+    /// something <em>awaits</em> the answer: closing the host clears the card without resolving the
+    /// awaiter, so the test hangs on a question that no longer exists.
+    /// </summary>
+    internal void DismissDialogForTest() => _overlayHost.TryCancel();
+
+    /// <summary>
     /// A yes/no prompt shown as an internal modal in the shared overlay host (no separate OS window).
     /// Confirm is not the default button, and Esc / backdrop deny — so a stray Enter can't trigger a
     /// destructive action. Returns true only when the user confirms.

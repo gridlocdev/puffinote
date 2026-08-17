@@ -1,7 +1,5 @@
 using System.CommandLine;
-using System.Diagnostics;
 using System.Globalization;
-using System.Runtime.InteropServices;
 using System.Text.Json;
 using System.Text.RegularExpressions;
 using Cellestra.Cli.Infrastructure;
@@ -418,39 +416,19 @@ internal static class ExtraCommands
         return command;
     }
 
+    /// <summary>
+    /// The explicit spelling of what <c>cellestra &lt;file&gt;</c> also does. Both go through the
+    /// family's shared launcher, which on macOS asks Launch Services for the installed bundle — the
+    /// only route that reaches an already-running Cellestra rather than starting a second one, and the
+    /// only one that exists at all once the app is installed as a bundle rather than published beside
+    /// this binary.
+    /// </summary>
     public static Command Open()
     {
         var file = Options.File("file", "Workbook to open in the Cellestra GUI");
         var command = new Command("open", "Open a workbook in the Cellestra desktop app") { file };
 
-        command.SetAction(parse =>
-        {
-            string path = Path.GetFullPath(parse.GetValue(file)!);
-            if (!File.Exists(path))
-            {
-                throw new CliException($"File not found: {path}");
-            }
-
-            string? desktop = FindDesktopExecutable();
-            try
-            {
-                if (desktop is not null)
-                {
-                    Process.Start(new ProcessStartInfo(desktop, $"\"{path}\"") { UseShellExecute = false });
-                }
-                else
-                {
-                    // Fall back to the OS default handler for the file.
-                    Process.Start(new ProcessStartInfo(path) { UseShellExecute = true });
-                }
-            }
-            catch (Exception ex)
-            {
-                throw new CliException($"Could not launch the GUI: {ex.Message}");
-            }
-
-            return 0;
-        });
+        command.SetAction(parse => Workspace.Launch(Path.GetFullPath(parse.GetValue(file)!)));
 
         return command;
     }
@@ -527,17 +505,4 @@ internal static class ExtraCommands
     }
 
     private static string ReadCsv(string path) => path == "-" ? Console.In.ReadToEnd() : File.ReadAllText(path);
-
-    private static string? FindDesktopExecutable()
-    {
-        string baseDir = AppContext.BaseDirectory;
-        string exeName = RuntimeInformation.IsOSPlatform(OSPlatform.Windows) ? "Cellestra.Desktop.exe" : "Cellestra.Desktop";
-        string[] candidates =
-        [
-            Path.Combine(baseDir, exeName),
-            Path.Combine(baseDir, "..", "..", "..", "..", "Cellestra.Desktop", "bin", "Debug", "net10.0", exeName),
-        ];
-
-        return candidates.FirstOrDefault(File.Exists);
-    }
 }

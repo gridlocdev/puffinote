@@ -5,7 +5,7 @@ using Xunit;
 namespace Pivotask.Core.Tests;
 
 /// <summary>
-/// Filtering and searching. These live in Core so `ptask list --due-tomorrow` and the board's "Due
+/// Filtering and searching. These live in Core so `pivotask list --due-tomorrow` and the board's "Due
 /// tomorrow" slice cannot disagree about which tasks that is.
 /// </summary>
 public class BoardQueryTests

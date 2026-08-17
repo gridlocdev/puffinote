@@ -115,9 +115,14 @@ public sealed partial class MainWindow
         [.. ConvertibleFormats.Select(f => f.DisplayName)];
 
     /// <summary>
-    /// Test seam: take down whatever notice is on the overlay, as clicking its button would. Opening a
-    /// file whose encoding was guessed raises one, and a headless suite has nobody to dismiss it — a modal
-    /// left standing takes the whole test run down with it.
+    /// Test seam: take down whatever dialog is on the overlay, exactly as Esc or a backdrop click would.
+    /// Opening a file whose encoding was guessed raises one, and a headless suite has nobody to dismiss
+    /// it — a modal left standing takes the whole test run down with it.
+    /// <para>
+    /// Cancels the dialog rather than closing the host out from under it, which matters the moment
+    /// something <em>awaits</em> the answer: closing the host clears the card without resolving the
+    /// awaiter, so the test hangs on a question that no longer exists.
+    /// </para>
     /// </summary>
-    internal void DismissDialogForTest() => _overlay.Close();
+    internal void DismissDialogForTest() => _overlay.TryCancel();
 }

@@ -12,7 +12,7 @@ namespace Pivotask.Cli.Tests;
 [Collection("cli")]
 public sealed class CliTests : IDisposable
 {
-    private readonly DirectoryInfo _scratch = Directory.CreateTempSubdirectory("ptask-tests");
+    private readonly DirectoryInfo _scratch = Directory.CreateTempSubdirectory("pivotask-tests");
     private readonly TextWriter _stdout = Console.Out;
     private readonly TextWriter _stderr = Console.Error;
     private readonly string _cwd = Directory.GetCurrentDirectory();
@@ -236,7 +236,7 @@ public sealed class CliTests : IDisposable
     [Fact]
     public void Two_boards_here_is_a_question_not_a_guess()
     {
-        // Guessing which board `ptask done` meant is the kind of help that loses work.
+        // Guessing which board `pivotask done` meant is the kind of help that loses work.
         File.Copy(_board, Path.Combine(_scratch.FullName, "other.pivotask"));
 
         Assert.Contains("Say which one with --board", Error("groups"), StringComparison.Ordinal);
@@ -256,7 +256,7 @@ public sealed class CliTests : IDisposable
         File.WriteAllText(_board, """{ "version": 99, "groups": [], "labels": [] }""");
 
         string error = Error("list");
-        Assert.StartsWith("ptask:", error, StringComparison.Ordinal);
+        Assert.StartsWith("pivotask:", error, StringComparison.Ordinal);
         Assert.Contains("newer Pivotask", error, StringComparison.Ordinal);
     }
 
@@ -269,6 +269,37 @@ public sealed class CliTests : IDisposable
         string after = File.ReadAllText(_board);
 
         Assert.Equal(after, BoardCodec.Write(BoardCodec.Read(after)));
+    }
+
+    // ---- `pivotask <board>` — the launcher at the root of the verb set -----
+    // Launching the GUI itself can't be asserted in a headless container; what is asserted is everything
+    // that has to be decided before anything launches.
+
+    [Fact]
+    public void Launching_a_board_that_does_not_exist_is_refused_before_anything_launches()
+    {
+        string error = Error(Path.Combine(_scratch.FullName, "nope.pivotask"));
+        Assert.Contains("does not exist", error, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void An_argument_that_is_not_a_board_names_both_readings()
+    {
+        // Far more likely a mistyped verb than a board, so the error says so rather than letting the app
+        // open and put up its own dialog.
+        string error = Error("lst");
+        Assert.Contains("isn't a board Pivotask opens", error, StringComparison.Ordinal);
+        Assert.Contains("pivotask --help", error, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Bare_pivotask_still_prints_help_rather_than_launching()
+    {
+        // This is a verb set first and a launcher second: the verb list is what the bare name came for.
+        var (exit, output) = Run();
+        Assert.Equal(0, exit);
+        Assert.Contains("Usage", output, StringComparison.Ordinal);
+        Assert.Contains("groups", output, StringComparison.Ordinal);
     }
 
     [Fact]

@@ -7,7 +7,7 @@ namespace Pivotask.Core.Model;
 /// Short, opaque, collision-resistant ids for groups, tasks, steps, and labels.
 ///
 /// <para>Seven base-36 characters, from a cryptographic RNG. Short because a human reads these in a
-/// <c>git diff</c> and types them at the CLI (<c>ptask done k3f9a2b</c>); random rather than sequential
+/// <c>git diff</c> and types them at the CLI (<c>pivotask done k3f9a2b</c>); random rather than sequential
 /// because two people adding a task on two branches must not produce the same id, which is exactly what
 /// a counter would do. Base-36 rather than hex so seven characters carry 36 bits instead of 28.</para>
 /// </summary>

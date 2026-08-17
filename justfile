@@ -18,7 +18,7 @@
 #   just test-typage      one area's suite (recipes read verb-first: test-puffinote, publish-cellestra-app)
 #   just test-filter SomeTest typage    run a subset while iterating
 #   just publish          self-contained Release builds of every app into artifacts/
-#   just install          put the CLIs (puffinote, typage, cellestra, pltn, ptask) on PATH
+#   just install          put the CLIs (puffinote, typage, cellestra, plaintain, pivotask) on PATH
 #   just publish-app      macOS .app bundles for every app (macOS only)
 #   just install-app      ...and copy them into /Applications
 #
@@ -540,7 +540,7 @@ clean-plaintain:
 run-plaintain:
     {{ DOTNET }} run --project {{ PLAINTAIN_DESKTOP }}
 
-# Run the pltn CLI: just run-plaintain-cli info server.log
+# Run the plaintain CLI: just run-plaintain-cli info server.log
 [group('plaintain')]
 run-plaintain-cli *ARGS:
     {{ DOTNET }} run --project {{ PLAINTAIN_CLI }} -- {{ ARGS }}
@@ -551,11 +551,11 @@ run-plaintain-cli *ARGS:
 bench-plaintain *ARGS:
     {{ DOTNET }} run -c Release --project {{ PLAINTAIN_BENCH }} -- {{ ARGS }}
 
-# Publish the pltn CLI + Plaintain shell to artifacts/plaintain/<rid>/
+# Publish the plaintain CLI + Plaintain shell to artifacts/plaintain/<rid>/
 [group('plaintain')]
 publish-plaintain: publish-plaintain-cli publish-plaintain-desktop
 
-# Publish the `pltn` CLI (single self-contained file)
+# Publish the `plaintain` CLI (single self-contained file)
 [group('plaintain')]
 publish-plaintain-cli:
     {{ DOTNET }} publish {{ PLAINTAIN_CLI }} {{ PUBLISH_CLI_FLAGS }} -o {{ PLAINTAIN_OUT }}/cli
@@ -570,12 +570,12 @@ publish-plaintain-desktop:
 publish-plaintain-app:
     CONFIG={{ CONFIG }} RID={{ RID }} OUT={{ PLAINTAIN_OUT }} {{ PACKAGE_MAC }} plaintain
 
-# Install the `pltn` CLI into PREFIX/bin (default ~/.local/bin)
+# Install the `plaintain` CLI into PREFIX/bin (default ~/.local/bin)
 [group('plaintain')]
 install-plaintain: publish-plaintain-cli
     @mkdir -p "{{ BINDIR }}"
-    install -m 0755 {{ PLAINTAIN_OUT }}/cli/pltn "{{ BINDIR }}/pltn"
-    @echo "installed {{ BINDIR }}/pltn — make sure {{ BINDIR }} is on your PATH"
+    install -m 0755 {{ PLAINTAIN_OUT }}/cli/plaintain "{{ BINDIR }}/plaintain"
+    @echo "installed {{ BINDIR }}/plaintain — make sure {{ BINDIR }} is on your PATH"
 
 # Install Plaintain.app into APPS_DIR (default /Applications, macOS only)
 [group('plaintain')]
@@ -593,11 +593,14 @@ unpublish-plaintain:
     @rmdir "{{ ARTIFACTS }}" 2>/dev/null || true
     @echo "removed {{ PLAINTAIN_OUT }}"
 
-# Remove the installed `pltn` CLI from PREFIX/bin
+# Remove the installed `plaintain` CLI from PREFIX/bin
 [group('plaintain')]
 uninstall-plaintain:
-    rm -f "{{ BINDIR }}/pltn"
-    @echo "removed {{ BINDIR }}/pltn"
+    rm -f "{{ BINDIR }}/plaintain"
+    @# `pltn` is the name this CLI shipped under before it took the app's own; an earlier install left
+    @# one on PATH that nothing here would ever remove again.
+    @rm -f "{{ BINDIR }}/pltn"
+    @echo "removed {{ BINDIR }}/plaintain"
 
 # Remove Plaintain.app from APPS_DIR (the inverse of install-plaintain-app; macOS only)
 [group('plaintain')]
@@ -646,16 +649,16 @@ clean-pivotask:
 run-pivotask:
     {{ DOTNET }} run --project {{ PIVOTASK_DESKTOP }}
 
-# Run the ptask CLI: just run-pivotask-cli list --due-soon
+# Run the pivotask CLI: just run-pivotask-cli list --due-soon
 [group('pivotask')]
 run-pivotask-cli *ARGS:
     {{ DOTNET }} run --project {{ PIVOTASK_CLI }} -- {{ ARGS }}
 
-# Publish the ptask CLI + Pivotask app to artifacts/pivotask/<rid>/
+# Publish the pivotask CLI + Pivotask app to artifacts/pivotask/<rid>/
 [group('pivotask')]
 publish-pivotask: publish-pivotask-cli publish-pivotask-desktop
 
-# Publish the `ptask` CLI (single self-contained file)
+# Publish the `pivotask` CLI (single self-contained file)
 [group('pivotask')]
 publish-pivotask-cli:
     {{ DOTNET }} publish {{ PIVOTASK_CLI }} {{ PUBLISH_CLI_FLAGS }} -o {{ PIVOTASK_OUT }}/cli
@@ -676,12 +679,12 @@ publish-pivotask-app:
 verify-pivotask-file-claim *APP:
     ./build/verify-mac-file-claim.sh {{ APP }}
 
-# Install the `ptask` CLI into PREFIX/bin (default ~/.local/bin)
+# Install the `pivotask` CLI into PREFIX/bin (default ~/.local/bin)
 [group('pivotask')]
 install-pivotask: publish-pivotask-cli
     @mkdir -p "{{ BINDIR }}"
-    install -m 0755 {{ PIVOTASK_OUT }}/cli/ptask "{{ BINDIR }}/ptask"
-    @echo "installed {{ BINDIR }}/ptask — make sure {{ BINDIR }} is on your PATH"
+    install -m 0755 {{ PIVOTASK_OUT }}/cli/pivotask "{{ BINDIR }}/pivotask"
+    @echo "installed {{ BINDIR }}/pivotask — make sure {{ BINDIR }} is on your PATH"
 
 # Install Pivotask.app into APPS_DIR (default /Applications, macOS only)
 [group('pivotask')]
@@ -699,11 +702,14 @@ unpublish-pivotask:
     @rmdir "{{ ARTIFACTS }}" 2>/dev/null || true
     @echo "removed {{ PIVOTASK_OUT }}"
 
-# Remove the installed `ptask` CLI from PREFIX/bin
+# Remove the installed `pivotask` CLI from PREFIX/bin
 [group('pivotask')]
 uninstall-pivotask:
-    rm -f "{{ BINDIR }}/ptask"
-    @echo "removed {{ BINDIR }}/ptask"
+    rm -f "{{ BINDIR }}/pivotask"
+    @# `ptask` is the name this CLI shipped under before it took the app's own; an earlier install left
+    @# one on PATH that nothing here would ever remove again.
+    @rm -f "{{ BINDIR }}/ptask"
+    @echo "removed {{ BINDIR }}/pivotask"
 
 # Remove Pivotask.app from APPS_DIR (the inverse of install-pivotask-app; macOS only)
 [group('pivotask')]

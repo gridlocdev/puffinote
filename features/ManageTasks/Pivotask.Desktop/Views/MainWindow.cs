@@ -117,6 +117,31 @@ public sealed partial class MainWindow : Window
     public void OpenPath(string path) => OpenPath(path, reloading: false);
 
     /// <summary>
+    /// Open a board the desktop handed us: Finder's "Open With", a double-click on a <c>.pivotask</c>, a
+    /// second <c>pivotask &lt;board&gt;</c> against a process that is already running. Unlike the launch
+    /// argument this can arrive over a board someone is in the middle of editing, so it asks before
+    /// discarding one — and it brings the window forward, because the click that sent the board was a
+    /// request to look at it.
+    /// </summary>
+    public void OpenFromDesktop(string path) => _ = OpenFromDesktopAsync(path);
+
+    private async Task OpenFromDesktopAsync(string path)
+    {
+        // Whatever modal is up owns the screen, and the overlay shows one card at a time — raising the
+        // discard prompt now would clear that one without ever answering it.
+        await _overlay.WaitUntilClosedAsync();
+
+        if (await EnsureCanDiscardAsync())
+        {
+            OpenPath(path);
+            Activate();
+        }
+    }
+
+    /// <summary>Test seam: the "Open With" arrival, awaitable rather than fire-and-forget.</summary>
+    internal Task OpenFromDesktopForTest(string path) => OpenFromDesktopAsync(path);
+
+    /// <summary>
     /// Open <paramref name="path"/>, replacing whatever is open. <paramref name="reloading"/> says this is
     /// the <em>same</em> board being taken again after the file changed underneath, and the difference is
     /// the history: the disk version lands as one undoable step instead of as a new document, so ⌘Z gives
@@ -517,4 +542,13 @@ public sealed partial class MainWindow : Window
     }
 
     internal void SaveForTest(string path) => Write(path);
+
+    /// <summary>
+    /// Test seam: take down whatever dialog is on the overlay, exactly as Esc or a backdrop click would.
+    /// A headless suite has nobody to dismiss one, and a modal left standing takes the whole run down
+    /// with it. Cancels rather than closing the host out from under it, which matters the moment
+    /// something <em>awaits</em> the answer: closing the host clears the card without resolving the
+    /// awaiter, so the test hangs on a question that no longer exists.
+    /// </summary>
+    internal void DismissDialogForTest() => _overlay.TryCancel();
 }

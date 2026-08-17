@@ -8,7 +8,7 @@ conventions of the sibling features — same repo, same tooling, same golden-rul
 ## What this project is
 
 **Pivotask** is a Trello-inspired task board. One board lives in one JSON file, named with the
-extension **`.pivotask`**. Its CLI is **`ptask`**.
+extension **`.pivotask`**. Its CLI is **`pivotask`**.
 
 It is the family's **first non-text editor**, and that changes what it shares: not
 `Puffinote.Text` — there is no piece table here, no grapheme navigation, no encoding round-trip — but
@@ -50,7 +50,7 @@ rationale is [proposal 0004](../../docs/proposals/0004-pivotask.md), and the
 - **The board, the list, the task dialog, and every command that acts on the board** →
   `Pivotask.Control/`. Puffinote embeds this.
 - **Shell** → `Pivotask.Desktop/` — window, menu, file dialogs, status bar.
-- **CLI** → `Pivotask.Cli/` (`ptask`). A full mutating verb set: a task CLI that can't add a task isn't
+- **CLI** → `Pivotask.Cli/` (`pivotask`). A full mutating verb set: a task CLI that can't add a task isn't
   worth shipping (§10.5).
 - **Tests** → `Pivotask.Core.Tests/` (most of them), `Pivotask.UiTests/`, `Pivotask.Cli.Tests/`.
 
@@ -67,7 +67,7 @@ just check                        # format-verify + build + test EVERY area — 
 **Definition of done:** `just check` passes. Warnings are errors, so "builds" means zero warnings.
 
 **Verifying changes.** The devcontainer is headless: `just run-pivotask` fails environmentally, and that
-is not a regression. Verify through `Pivotask.Core.Tests`, `Pivotask.UiTests`, or `ptask` — the CLI is a
+is not a regression. Verify through `Pivotask.Core.Tests`, `Pivotask.UiTests`, or `pivotask` — the CLI is a
 first-class way to check behaviour here, which is much of why it landed before the GUI.
 
 ## Working in this codebase (gotchas)
@@ -80,5 +80,11 @@ first-class way to check behaviour here, which is much of why it landed before t
   model. If a board ever gets big enough for this to show, *that* is when to virtualize.
 - **Dirty is measured against the serialized form**, not an edit counter — so an edit and its undo leave
   the document clean, which is what a person means by "I haven't changed anything".
+- **A never-saved `BoardDocument` is therefore *always* dirty**: it compares against `_savedText`, which
+  is empty until something writes, while the starter board serializes to real JSON. That is correct for
+  the app — those starter groups genuinely aren't on disk anywhere — and it is a trap for a headless
+  test: a window straight from the constructor raises the discard prompt on any open, nobody is there to
+  answer it, and the run **hangs** rather than failing (see the repo guide's two-ways-a-UiTests-run-hangs
+  note). Open a saved board first; `OpenFromDesktopTests` and `ExternalChangeTests` both do.
 - **`Pivotask.Core.Model.Label` collides with `Avalonia.Controls.Label`** in any file that uses both.
   Qualify one.

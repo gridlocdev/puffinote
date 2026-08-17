@@ -56,27 +56,36 @@ public partial class App : Application
             var window = new MainWindow();
             desktop.MainWindow = window;
 
-            // Open a spreadsheet passed on the command line. This is the double-click / "Open With"
-            // path for the .ods association the bundle claims (Info.plist), which until now landed in
-            // an empty workbook — macOS hands the app its document as argv[1]. Fire-and-forget is
-            // deliberate: OpenPathAsync owns its own busy overlay and error dialog, and does the
-            // deserialize + recalc off the UI thread, so the window still paints while a large file loads.
-            if (DocumentToOpen(desktop.Args) is { } path)
+            // Open a spreadsheet passed on the command line — `cellestra <file>`, and the file
+            // association on the platforms whose shell launches an app with the document in argv.
+            // Fire-and-forget is deliberate: OpenPathAsync owns its own busy overlay and error dialog,
+            // and does the deserialize + recalc off the UI thread, so the window still paints while a
+            // large file loads.
+            if (DocumentToOpen(desktop.Args ?? []) is { } path)
             {
                 _ = window.OpenPathAsync(path);
             }
+
+            // macOS is not one of those platforms, which is what kept the .ods association the bundle
+            // claims (Info.plist) landing in an empty workbook: Finder hands a *bundled* app its
+            // document as an Apple Event, and argv never sees it. See DocumentActivation. OpenPathAsync
+            // already guards unsaved changes, so an arrival over live work asks before replacing it.
+            DocumentActivation.Install(this, files =>
+            {
+                if (DocumentToOpen(files) is { } path)
+                {
+                    _ = window.OpenPathAsync(path);
+                }
+            });
         }
 
         base.OnFrameworkInitializationCompleted();
     }
 
     /// <summary>
-    /// The document to open at launch, or null to start on a blank workbook. Only the first argument
-    /// counts (one window, one document) and only when it names an existing file: a shell can pass
-    /// options or a stale path, and greeting someone with an error dialog before the window has even
-    /// painted is worse than starting empty. Pure and internal so the arg handling is testable
-    /// without standing up a window.
+    /// The document to open, or null to stay on the workbook that is already there. Pure and internal so
+    /// both arrival routes are testable without standing up a window.
     /// </summary>
-    internal static string? DocumentToOpen(string[]? args) =>
-        args is [string first, ..] && File.Exists(first) ? first : null;
+    internal static string? DocumentToOpen(IReadOnlyList<string?>? candidates) =>
+        DocumentActivation.FirstExistingFile(candidates);
 }

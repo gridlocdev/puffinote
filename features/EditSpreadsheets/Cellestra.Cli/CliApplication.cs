@@ -1,5 +1,6 @@
 using System.CommandLine;
 using Cellestra.Cli.Commands;
+using Cellestra.Cli.Infrastructure;
 using Puffinote.Components.Core.Cli;
 
 namespace Cellestra.Cli;
@@ -12,7 +13,7 @@ public static class CliApplication
 {
     public static RootCommand BuildRoot()
     {
-        return new RootCommand("Cellestra — a keyboard-friendly .ods spreadsheet toolkit for scripts and CI.")
+        var root = new RootCommand("Cellestra — a keyboard-friendly .ods spreadsheet toolkit for scripts and CI.")
         {
             // Baseline — the genuinely useful core.
             BaselineCommands.Convert(),
@@ -62,6 +63,21 @@ public static class CliApplication
             // Chart sheets — the headless face of Insert ▸ Chart Sheet.
             ChartCommands.Chart(),
         };
+
+        // `cellestra <file>` with no verb opens the workbook in the app, the way every CLI in the family
+        // opens its own documents; `cellestra open <file>` is the same thing said explicitly, and
+        // predates it. Bare `cellestra` still prints help: this is a toolkit first and a launcher
+        // second, and the list of verbs is what someone typing the bare name came for.
+        var file = new Argument<string?>("file")
+        {
+            Description = "Workbook to open in Cellestra",
+            Arity = ArgumentArity.ZeroOrOne,
+        };
+        root.Add(file);
+        root.SetAction(parse => parse.GetValue(file) is { } path
+            ? Workspace.Launch(path)
+            : root.Parse(["--help"]).Invoke());
+        return root;
     }
 
     public static int Run(string[] args) =>

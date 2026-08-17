@@ -187,6 +187,15 @@ file) into a clean `typage: …` line with exit 1 and lets bugs surface loudly. 
 loads text (`-` = stdin) and writes atomically (`-` = stdout). Commands: `html`, `cat`, `tokens`,
 `stats`, `outline`.
 
+At the root of that tree sits the launcher: **`typage <file>` opens the document in the app**, through
+the family's shared `AppLauncher` (see the repo guide's
+[Opening a document](../../../AGENTS.md#opening-a-document)). Which files those are is
+`Engine/Markdown/MarkdownFiles` — one list, read by this and by the desktop Open dialog's filter, so the
+two cannot come to disagree; `Info.plist` is the third reader and the one place it is spelled twice.
+An argument that isn't one of them is refused here rather than passed on, because at the root of a verb
+set a stray token is far more likely a mistyped command, and the message names both readings. Bare
+`typage` prints help: this is a toolkit first and a launcher second.
+
 ## 8. Threading model
 
 The UI thread owns edits. Because `TextDocument` snapshots are immutable, a background tokenizer can read

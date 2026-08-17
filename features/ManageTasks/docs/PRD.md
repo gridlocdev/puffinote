@@ -105,7 +105,7 @@ what keeps a column of plain one-line tasks from looking like a form.
   height. Both go through the same undoable `MoveTask` a drop does, so ⌘Z reverses either identically.
   ⌥⇧-arrow is the family's existing idiom, not a new one: it is what Cellestra's grid does to a cell's
   contents and what the radial settings list does to a segment. This is the path the design has always
-  said must exist (`ptask move`, and the Move command), so the feature is never blocked on drag-and-drop
+  said must exist (`pivotask move`, and the Move command), so the feature is never blocked on drag-and-drop
   feeling right — and a board that can only be rearranged by dragging is a board somebody cannot rearrange
   at all.
 - **Overdue** is the one card state that gets a colour of its own. Everything else stays chrome-muted,
@@ -218,28 +218,32 @@ the choice back for good. It applies the moment the dialog is accepted, board in
 for the next launch. Embedded in Puffinote, this setting isn't Pivotask's to make — the shell settles
 appearance once for every editor it hosts, and this file's value is what Pivotask wears standalone.
 
-## 8. The `ptask` CLI
+## 8. The `pivotask` CLI
 
 A **full mutating verb set**, because task management is scriptable in a way text editing isn't:
 
 ```
-ptask list [--group G] [--label L] [--starred] [--due-tomorrow] [--due-this-week] [--open] [--json]
-ptask show <task>
-ptask add "title" [--group G] [--label L] [--due DATE] [--star]
-ptask done <task> | ptask undone <task>
-ptask move <task> --group G [--before <task>]
-ptask groups
+pivotask list [--group G] [--label L] [--starred] [--due-tomorrow] [--due-this-week] [--open] [--json]
+pivotask show <task>
+pivotask add "title" [--group G] [--label L] [--due DATE] [--star]
+pivotask done <task> | pivotask undone <task>
+pivotask move <task> --group G [--before <task>]
+pivotask groups
 ```
 
 A task is named by id **or by part of its title** — ids are what a script uses, titles are how a person
 refers to their own tasks. An ambiguous title lists the candidates rather than picking one.
 
 The board is found automatically when there is exactly one `*.pivotask` (or legacy `*.pivotask.json`) in the working directory.
-With none, or with several, it says what to do instead: guessing which board `ptask done` meant is the
+With none, or with several, it says what to do instead: guessing which board `pivotask done` meant is the
 kind of help that loses work.
 
-The binary is `ptask`, not `pivotask` — a task CLI is typed many times a day and an editor's is not. The
-app, assembly, bundle, and justfile recipes stay `Pivotask`.
+The binary is `pivotask` — the app's own name, as every CLI in the family now is. Proposal 0004 §10.2
+shortened it to `ptask` on the grounds that a task CLI is typed many times a day; that reasoning held for
+one app and cost the family a second naming scheme, so it was reversed. Someone who types this often can
+alias it; nobody can alias away having to remember which two of the five were abbreviated. **There is no
+compatibility shim** — `ptask` is simply gone after a reinstall, which is what `just uninstall` before
+`just install` is for.
 
 ## 9. Non-goals
 

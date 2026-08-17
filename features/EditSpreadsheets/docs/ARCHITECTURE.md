@@ -346,6 +346,12 @@ features/EditSpreadsheets/          # the spreadsheet-editor feature (the whole 
 ## 14. Build & packaging
 `dotnet run` for development. `just publish-cellestra-app` (the repo-root `build/package-mac.sh`, shared by all three family apps) produces a notarized macOS `.app` (bundle id `com.cellestra.Cellestra`), registers the `.ods` association via `Cellestra.Desktop/Info.plist`, and signs/notarizes with Apple tooling so it opens files on double-click without warnings.
 
+**Opening a workbook from outside the app.** `cellestra <file>` — and `cellestra open <file>`, the same
+thing said explicitly — launch the app through the family's shared `AppLauncher`; the double-click and
+"Open With" that the `.ods` claim above earns arrive as an Apple Event, which `DocumentActivation` routes
+to the same `OpenPathAsync` argv uses. Registering the type and reading only `args[0]` is what left every
+association opening an empty workbook. See the repo guide's [Opening a document](../../../AGENTS.md#opening-a-document); do not fork either half. `Workspace.IsWorkbook` is what the CLI will accept — `.ods` only, since CSV and TSV are formats it *converts*, not documents the app edits.
+
 ## 15. Things that will genuinely evolve
 - The function library (grows over time).
 - Edge cases in verbatim `.ods` preservation as unusual files turn up.

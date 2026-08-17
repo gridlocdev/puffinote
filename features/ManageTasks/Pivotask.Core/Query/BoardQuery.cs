@@ -34,7 +34,7 @@ public enum TaskFilter
 /// <summary>
 /// Filtering and searching, as pure functions over a board.
 ///
-/// <para>In Core, not in the control, for the reason the CLI exists: <c>ptask list --due-tomorrow</c>
+/// <para>In Core, not in the control, for the reason the CLI exists: <c>pivotask list --due-tomorrow</c>
 /// and the board's "Due tomorrow" slice have to agree about which tasks that is, and the only way to
 /// guarantee it is for there to be one answer. Phase 5's list view consumes the same seam Phase 2's
 /// board does, which is why it was an addition rather than a rework.</para>

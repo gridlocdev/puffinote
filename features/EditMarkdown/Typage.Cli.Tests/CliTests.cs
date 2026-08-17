@@ -125,4 +125,37 @@ public class CliTests : IDisposable
         Assert.Contains("typage:", err);
         Assert.Contains("File not found", err);
     }
+
+    // ---- `typage <file>` — the launcher at the root of the verb set --------
+    // Launching the GUI itself can't be asserted in a headless container; what is asserted is everything
+    // that has to be decided before anything launches.
+
+    [Fact]
+    public void Launching_a_file_that_does_not_exist_is_refused_before_anything_launches()
+    {
+        var (code, _, err) = Run(Path.Combine(_temp, "nope.md"));
+        Assert.Equal(1, code);
+        Assert.Contains("does not exist", err, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void An_argument_that_is_not_a_document_names_both_readings()
+    {
+        // Far more likely a mistyped verb than a file, so the error says so rather than letting the app
+        // open and put up its own dialog.
+        var (code, _, err) = Run("statz");
+        Assert.Equal(1, code);
+        Assert.Contains("isn't a document Typage opens", err, StringComparison.Ordinal);
+        Assert.Contains("typage --help", err, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Bare_typage_still_prints_help_rather_than_launching()
+    {
+        // This is a toolkit first and a launcher second: the verb list is what the bare name came for.
+        var (code, output, _) = Run();
+        Assert.Equal(0, code);
+        Assert.Contains("Usage", output, StringComparison.Ordinal);
+        Assert.Contains("outline", output, StringComparison.Ordinal);
+    }
 }

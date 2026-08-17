@@ -1,20 +1,22 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <!--
-    `ptask` — the second consumer of Pivotask.Core, and a genuinely useful one. Task management is
+    `pivotask` — the second consumer of Pivotask.Core, and a genuinely useful one. Task management is
     scriptable in a way text editing isn't, so this ships a full mutating verb set (proposal 0004 §10.5)
     and landed *before* the GUI, which is what got the core's API exercised while it was still cheap to
     change.
 
-    The binary is short (`ptask`, not `pivotask`) because a task CLI is typed many times a day and an
-    editor's is not — §10.2. The app, assembly, bundle, and justfile recipes stay Pivotask.
+    The binary is the app's name. Proposal 0004 §10.2 shortened it to `ptask` on the grounds that a task
+    CLI is typed many times a day; that was reversed — every CLI in the family is now named for its app,
+    and someone who types this often has a shell alias for it in a way they don't have a memory for which
+    two of the five got abbreviated.
 
     GOLDEN RULE: no Avalonia, no network.
   -->
   <PropertyGroup>
     <OutputType>Exe</OutputType>
     <RootNamespace>Pivotask.Cli</RootNamespace>
-    <AssemblyName>ptask</AssemblyName>
+    <AssemblyName>pivotask</AssemblyName>
   </PropertyGroup>
 
   <ItemGroup>

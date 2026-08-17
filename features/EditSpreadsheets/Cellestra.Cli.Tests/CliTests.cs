@@ -523,4 +523,37 @@ public sealed class CliTests : IDisposable
         Assert.Equal(1, exit);
         Assert.Contains("stacking", err, StringComparison.OrdinalIgnoreCase);
     }
+
+    // ---- `cellestra <file>` — the launcher at the root of the verb set -----
+    // Launching the GUI itself can't be asserted in a headless container; what is asserted is everything
+    // that has to be decided before anything launches.
+
+    [Fact]
+    public void Launching_a_workbook_that_does_not_exist_is_refused_before_anything_launches()
+    {
+        var (exit, _, err) = Run(Path2("nope.ods"));
+        Assert.Equal(1, exit);
+        Assert.Contains("does not exist", err, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void An_argument_that_is_not_a_workbook_names_both_readings()
+    {
+        // Far more likely a mistyped verb than a workbook, so the error says so rather than letting the
+        // app open and put up its own dialog.
+        var (exit, _, err) = Run("recal");
+        Assert.Equal(1, exit);
+        Assert.Contains("isn't a workbook Cellestra opens", err, StringComparison.Ordinal);
+        Assert.Contains("cellestra --help", err, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Bare_cellestra_still_prints_help_rather_than_launching()
+    {
+        // This is a toolkit first and a launcher second: the verb list is what the bare name came for.
+        var (exit, output, _) = Run();
+        Assert.Equal(0, exit);
+        Assert.Contains("Usage", output, StringComparison.Ordinal);
+        Assert.Contains("recalc", output, StringComparison.Ordinal);
+    }
 }

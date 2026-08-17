@@ -266,6 +266,16 @@ Panels are switchable and each keyboard-focusable (PRD §7.2): **file tree**, **
   the sub-CLIs' own command definitions** (single source of truth — the standalone `typage`/`cellestra`
   binaries keep working unchanged), and `puffinote <notebook-command>` adds tree/search/info scoped to the
   notebook. The router composes the three command trees under one `System.CommandLine` root.
+- **`puffinote <path>` opens the shell on it**, the way every CLI in the family opens its own app. The
+  shell's document is a *notebook*, so a folder is the ordinary case; a file opens the notebook that holds
+  it with that document already on screen — unless a notebook containing it is already open, where
+  changing notebooks would be a much bigger answer than the question. Bare `puffinote` still prints help:
+  the routed sub-CLIs are what someone typing the bare name came for.
+- On macOS that launch reaches the installed bundle through Launch Services, so the path arrives as an
+  Apple Event and never in argv — the same route "Open With ▸ Puffinote" and a double-click on a folder
+  use. `App` handles both through one `PathToOpen` rule, on the family's shared `AppLauncher` /
+  `DocumentActivation`. See the repo guide's [Opening a document](../../AGENTS.md#opening-a-document), and
+  do not fork either half.
 
 ---
 

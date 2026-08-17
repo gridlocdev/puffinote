@@ -12,6 +12,7 @@ using Puffinote.Text.Document;
 using Typage.Control.Controls;
 using Typage.Control.Views;
 using Typage.Desktop.Services;
+using Typage.Engine.Markdown;
 
 namespace Typage.Desktop.Views;
 
@@ -112,7 +113,7 @@ public partial class MainWindow : Window
 
     private static readonly FilePickerFileType MarkdownType = new("Markdown")
     {
-        Patterns = ["*.md", "*.markdown", "*.mdown", "*.txt"],
+        Patterns = MarkdownFiles.Patterns,
     };
 
     public MainWindow(SettingsService settings)

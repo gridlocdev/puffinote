@@ -10,7 +10,7 @@ How the task board is put together. What it does and why is [PRD.md](PRD.md); th
 | `Pivotask.Core` | The model, the JSON codec, every mutation as an undoable command, filter/search. **Zero UI.** Where most logic and tests live. |
 | `Pivotask.Control` | The Avalonia control library: `TaskBoardView` (the embeddable composite), `BoardView`, `TaskListView`, `TaskCard`, `TaskDialog`, and the one catalog `TaskEditingCommands`. **This is what Puffinote embeds.** |
 | `Pivotask.Desktop` | The standalone shell (assembly `Pivotask`): window, menu, file dialogs, status bar. Thin. |
-| `Pivotask.Cli` | `ptask` — a full mutating verb set. No Avalonia. |
+| `Pivotask.Cli` | `pivotask` — a full mutating verb set. No Avalonia. |
 | `Pivotask.Core.Tests` / `Pivotask.UiTests` / `Pivotask.Cli.Tests` | |
 
 Dependency direction is strictly **shell → control → core**. Nothing references Puffinote.
@@ -102,5 +102,15 @@ real structure to lend, and it maps onto the existing outline contract without c
 extension needs an **exported custom UTI** (`com.pivotask.board`, conforming to `public.json`, with a
 two-part filename-extension tag). macOS does support this — `.tar.gz` works the same way — but **it must
 be verified on a real Mac**. If it doesn't hold, §10.3 settles the fallback: ship with no document-type
-claim at all, and Pivotask opens via the app, `ptask`, and Puffinote. Bare `json` is not claimed at any
+claim at all, and Pivotask opens via the app, `pivotask`, and Puffinote. Bare `json` is not claimed at any
 rank.
+
+**Whether the claim holds or not, a board still has to arrive.** `pivotask <board>` opens one in the app;
+on macOS that reaches the installed bundle through Launch Services, so the board comes in as an Apple
+Event rather than in argv — the same route "Open With" uses, and the one an app that reads only
+`args[0]` drops on the floor. `App` handles both, and the mechanism is the family's (`AppLauncher`,
+`DocumentActivation`): see the repo guide's
+[Opening a document](../../../AGENTS.md#opening-a-document), and do not fork it. An activation can land
+over a board being edited, so it goes through `MainWindow.OpenFromDesktop`, which waits out any open
+modal and then asks before discarding unsaved work. `Workspace.IsBoard` decides what counts, by suffix
+under both spellings (golden rule #5) — anything else is refused as a probable mistyped verb.

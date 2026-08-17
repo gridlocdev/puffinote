@@ -16,7 +16,7 @@ public static class CliApplication
 {
     public static RootCommand BuildRoot()
     {
-        return new RootCommand(
+        var root = new RootCommand(
             "puffinote — a unified notebook, Markdown, and spreadsheet toolkit (routes to typage and cellestra).")
         {
             // Notebook-scoped commands — the headless face of the sidebar's file tree + search (PRD §7.2).
@@ -29,6 +29,22 @@ public static class CliApplication
             Router.Markdown(),
             Router.Sheet(),
         };
+
+        // `puffinote <path>` with no verb opens the shell on it, the way every CLI in the family opens
+        // its own app. The shell's document is a *notebook*, so a folder is the ordinary case; a file
+        // opens the notebook that contains it with that document already on screen, which is what
+        // "Open With ▸ Puffinote" on a note does and so is what this should do too. Bare `puffinote`
+        // still prints help — the routed sub-CLIs are what someone typing the bare name came for.
+        var path = new Argument<string?>("path")
+        {
+            Description = "Notebook folder, or a document inside one, to open in Puffinote",
+            Arity = ArgumentArity.ZeroOrOne,
+        };
+        root.Add(path);
+        root.SetAction(parse => parse.GetValue(path) is { } target
+            ? AppLauncher.Open("Puffinote", target)
+            : root.Parse(["--help"]).Invoke());
+        return root;
     }
 
     public static int Run(string[] args) =>

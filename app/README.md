@@ -39,3 +39,9 @@ just install-puffinote-app      # Puffinote.app → /Applications (macOS only)
 
 The bundle declares itself a handler for *folders*, not for `.md`/`.ods` — Puffinote opens a notebook
 (see `Puffinote.Desktop/Info.plist`), and the file associations stay with the standalone editors.
+
+```bash
+puffinote ~/notes               # open the notebook
+puffinote ~/notes/todo.md       # …and one document in it: a file names the notebook that holds it
+puffinote                       # the command list; the routed sub-CLIs are what the bare name is for
+```

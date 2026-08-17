@@ -10,7 +10,7 @@ conventions of the sibling features ([Typage](../EditMarkdown/AGENTS.md),
 
 **Plaintain** (**plain** + **plantain**) is a Notepad-class plaintext editor: the tool you reach for
 when a file is "just text" and a Markdown editor would only get in the way. It opens *any* decodable
-file, claims `.txt` and friends in Finder, and its CLI is **`pltn`**.
+file, claims `.txt` and friends in Finder, and its CLI is **`plaintain`**.
 
 It is the family's third standalone editor, and — like the other two — Puffinote composes it. Puffinote
 embeds `Plaintain.Control` **unchanged**, so anything that acts on the open document belongs in that
@@ -51,7 +51,7 @@ for process.
 - **The surface, and every command that acts on the document** → `Plaintain.Control/`
   (`Controls/`, `Views/`, `Commands/`). Puffinote embeds this.
 - **Shell** → `Plaintain.Desktop/` — window, menu, file dialogs, recents, settings, status bar.
-- **CLI** → `Plaintain.Cli/` (`pltn`). A launcher plus one read-only verb; it does not grow a verb set.
+- **CLI** → `Plaintain.Cli/` (`plaintain`). A launcher plus one read-only verb; it does not grow a verb set.
 - **Tests** → `Plaintain.UiTests/` (headless Avalonia — the gate, since the container can't launch a
   GUI) and `Plaintain.Cli.Tests/`.
 
@@ -70,7 +70,7 @@ just check                        # format-verify + build + test EVERY area — 
 `just test-plaintain`.
 
 **Verifying changes.** The devcontainer is headless: `just run-plaintain` fails environmentally, and
-that is not a regression. Verify through `Plaintain.UiTests` or `pltn info`.
+that is not a regression. Verify through `Plaintain.UiTests` or `plaintain info`.
 
 ## Working in this codebase (gotchas)
 

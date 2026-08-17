@@ -23,7 +23,7 @@
     <InternalsVisibleTo Include="Puffinote.Text.Tests" />
     <InternalsVisibleTo Include="Typage.Engine.Tests" />
     <InternalsVisibleTo Include="typage" />
-    <InternalsVisibleTo Include="pltn" />
+    <InternalsVisibleTo Include="plaintain" />
   </ItemGroup>
 
 </Project>

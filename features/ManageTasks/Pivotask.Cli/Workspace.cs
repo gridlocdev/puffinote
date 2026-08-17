@@ -22,7 +22,7 @@ internal static class Workspace
     /// <c>*.pivotask</c> in the working directory.
     ///
     /// <para>Exactly one: with none there is nothing to act on, and with several, guessing which board
-    /// <c>ptask done</c> meant is the kind of help that loses work. Both cases say what to do instead.</para>
+    /// <c>pivotask done</c> meant is the kind of help that loses work. Both cases say what to do instead.</para>
     /// </summary>
     public static BoardDocument Open(string? path)
     {
@@ -33,6 +33,29 @@ internal static class Workspace
         }
 
         return BoardDocument.Open(resolved);
+    }
+
+    /// <summary>Whether <paramref name="path"/> names a board, under either spelling (golden rule #5:
+    /// matched by suffix, because <c>GetExtension</c> of the legacy name is <c>.json</c>).</summary>
+    public static bool IsBoard(string path) =>
+        path.EndsWith(Suffix, StringComparison.OrdinalIgnoreCase)
+        || path.EndsWith(LegacySuffix, StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// Open a board in the Pivotask desktop app. Anything that isn't a board is refused here rather than
+    /// in the app's error dialog: at the root of a verb set, an unrecognized argument is far more likely
+    /// to be a mistyped command than a document.
+    /// </summary>
+    public static int Launch(string path)
+    {
+        if (!IsBoard(path))
+        {
+            throw new CliException(
+                $"'{path}' isn't a board Pivotask opens (*{Suffix}). " +
+                "If you meant a command, `pivotask --help` lists them.");
+        }
+
+        return AppLauncher.Open("Pivotask", path);
     }
 
     private static string Discover()

@@ -27,6 +27,31 @@ public sealed partial class MainWindow
     public void OpenPath(string path) => OpenPath(path, reloading: false);
 
     /// <summary>
+    /// Open a file the desktop handed us: Finder's "Open With", a double-click on a claimed <c>.txt</c>,
+    /// a second <c>plaintain &lt;file&gt;</c> against a process that is already running. Unlike the launch
+    /// argument, this can arrive over a document someone is in the middle of editing, so it asks before
+    /// discarding one — and it brings the window forward, because the click that sent the file was a
+    /// request to look at it.
+    /// </summary>
+    public void OpenFromDesktop(string path) => _ = OpenFromDesktopAsync(path);
+
+    private async Task OpenFromDesktopAsync(string path)
+    {
+        // Whatever modal is up owns the screen, and at launch that is the crash-recovery prompt — whose
+        // answer decides what is even in the buffer this open would replace.
+        await _overlay.WaitUntilClosedAsync();
+
+        if (await EnsureCanDiscardAsync())
+        {
+            OpenPath(path);
+            Activate();
+        }
+    }
+
+    /// <summary>Test seam: the "Open With" arrival, awaitable rather than fire-and-forget.</summary>
+    internal Task OpenFromDesktopForTest(string path) => OpenFromDesktopAsync(path);
+
+    /// <summary>
     /// Open <paramref name="path"/> into the window. <paramref name="reloading"/> says this is the
     /// <em>same</em> file being taken again after something else wrote to it, which differs in the one way
     /// that matters to the reader: the disk version lands as an undoable step rather than as a fresh

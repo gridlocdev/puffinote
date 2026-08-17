@@ -293,7 +293,7 @@ internal sealed class TaskDialog : ModalDialog<bool>
     ///
     /// <para>The list picker is not decoration — it was the <em>only</em> thing missing that made moving a
     /// task a drag-and-drop-or-nothing affair in the GUI. Proposal 0004 §7 says the feature must never be
-    /// blocked on drag feeling right, and `ptask move` cannot be the only alternative for someone who is
+    /// blocked on drag feeling right, and `pivotask move` cannot be the only alternative for someone who is
     /// looking at the task on screen.</para>
     /// </summary>
     private void RebuildHead()

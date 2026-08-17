@@ -100,7 +100,12 @@ just install-typage-app         # Typage.app → /Applications (macOS only)
 ```
 
 `Typage.app` owns the `.md` association (`Typage.Desktop/Info.plist`), so double-clicking a Markdown
-file opens it here — the desktop shell opens the path it is launched with.
+file — or "Open With ▸ Typage", or `typage notes.md` — opens it here.
+
+```bash
+typage notes.md                 # open the document in Typage
+typage                          # the verb list; this is a toolkit first and a launcher second
+```
 
 ## What's built, and what's not
 

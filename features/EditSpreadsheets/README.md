@@ -83,6 +83,7 @@ cellestra cat budget.ods --sheet Q3 --range A1:D10
 A few things it can do:
 
 ```bash
+cellestra budget.ods                       # open the workbook in the app
 cellestra convert data.csv data.ods       # CSV ⇄ .ods, both directions
 cellestra get  budget.ods Totals.B7        # read one cell's value (or --formula)
 cellestra set  budget.ods Totals.B7 "=SUM(B1:B6)"   # edit and save atomically
@@ -95,7 +96,7 @@ cellestra find budget.ods "TODO" --regex   # search values and/or formulas
 cellestra functions VLOOKUP                # describe a built-in function
 ```
 
-That's the core; the full surface also covers `new`/`import`/`export`, batch edits from JSON (`apply`), sheet management, the desktop Data/Insert edits (`sort`, `remove-duplicates`, `split`, `table`, `validation`, `name`, `hyperlink`, insert/delete/hide/show rows & columns, `merge`/`unmerge`), `chart` sheets, opening a file in the GUI (`open`), and shell `completions`. Run `cellestra --help`, or `cellestra <command> --help`, for the details.
+That's the core; the full surface also covers `new`/`import`/`export`, batch edits from JSON (`apply`), sheet management, the desktop Data/Insert edits (`sort`, `remove-duplicates`, `split`, `table`, `validation`, `name`, `hyperlink`, insert/delete/hide/show rows & columns, `merge`/`unmerge`), `chart` sheets, opening a file in the GUI (`open`, the explicit spelling of `cellestra <file>`), and shell `completions`. Run `cellestra --help`, or `cellestra <command> --help`, for the details.
 
 ## Running the tests
 

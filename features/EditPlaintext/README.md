@@ -28,21 +28,21 @@ just run-plaintain-cli info server.log
 Ship it:
 
 ```bash
-just install-plaintain        # the `pltn` CLI onto PATH
+just install-plaintain        # the `plaintain` CLI onto PATH
 just install-plaintain-app    # Plaintain.app into /Applications (macOS)
 ```
 
 Every install has an exact inverse (`uninstall-plaintain`, `uninstall-plaintain-app`).
 
-## The `pltn` CLI
+## The `plaintain` CLI
 
 ```bash
-pltn server.log          # open it in Plaintain
-pltn                     # open Plaintain, empty
-pltn info server.log     # encoding, line endings, and line/word/character/byte counts
+plaintain server.log          # open it in Plaintain
+plaintain                     # open Plaintain, empty
+plaintain info server.log     # encoding, line endings, and line/word/character/byte counts
 ```
 
-`pltn info` exits non-zero when the encoding had to be guessed, so a script can branch on "this isn't
+`plaintain info` exits non-zero when the encoding had to be guessed, so a script can branch on "this isn't
 text I can vouch for" without parsing the output.
 
 ## Docs

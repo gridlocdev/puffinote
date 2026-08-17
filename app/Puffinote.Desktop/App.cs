@@ -97,19 +97,40 @@ public class App : Application
             var window = new MainWindow(notebook);
             desktop.MainWindow = window;
 
-            // Open a notebook (folder) passed on the command line; otherwise reopen the last one from the
-            // previous session (PRD §5), prompting if that folder has since moved.
-            var args = desktop.Args ?? [];
-            if (args.Length > 0 && Directory.Exists(args[0]))
+            // Open what the command line named — `puffinote <notebook>`, or `puffinote <file>` for a
+            // document inside one; otherwise reopen the last notebook from the previous session (PRD §5),
+            // prompting if that folder has since moved.
+            if (PathToOpen(desktop.Args ?? []) is { } path)
             {
-                window.OpenNotebook(args[0]);
+                window.OpenFromDesktop(path);
             }
             else
             {
                 window.RestoreLastNotebook();
             }
+
+            // The command line is not how a Mac hands an app a document: Finder's "Open With", a
+            // double-click, and `open -a Puffinote <path>` all arrive as an Apple Event that argv never
+            // sees — which is what left the shell on its remembered notebook with the file dropped on
+            // the floor. See DocumentActivation.
+            DocumentActivation.Install(this, paths =>
+            {
+                if (PathToOpen(paths) is { } path)
+                {
+                    window.OpenFromDesktop(path);
+                }
+            });
         }
 
         base.OnFrameworkInitializationCompleted();
     }
+
+    /// <summary>
+    /// The path to open, or null to leave the shell on the notebook it would otherwise restore. A folder
+    /// and a file both count here — unlike the editors, the shell's document is a notebook, and a file is
+    /// how someone names one document inside it. Pure and internal so both arrival routes are testable
+    /// without a window.
+    /// </summary>
+    internal static string? PathToOpen(IReadOnlyList<string?>? candidates) =>
+        DocumentActivation.FirstExistingPath(candidates);
 }

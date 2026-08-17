@@ -61,14 +61,33 @@ public class App : Application
             var window = new MainWindow(settings);
             desktop.MainWindow = window;
 
-            // Open a file passed on the command line (file association / "Open With" / CLI arg).
-            var args = desktop.Args ?? [];
-            if (args.Length > 0 && File.Exists(args[0]))
+            // Open a file passed on the command line — `typage <file>`, and the file association on the
+            // platforms whose shell launches an app with the document in argv.
+            if (DocumentToOpen(desktop.Args ?? []) is { } path)
             {
-                window.OpenPath(args[0]);
+                window.OpenPath(path);
             }
+
+            // macOS is not one of those platforms, which is what made "Open With" — and `typage <file>`,
+            // which goes through Launch Services — land on an empty "Untitled" document: Finder hands a
+            // *bundled* app its document as an Apple Event, and argv never sees it. See
+            // DocumentActivation, which is where the whole family's half of that bargain lives.
+            DocumentActivation.Install(this, files =>
+            {
+                if (DocumentToOpen(files) is { } path)
+                {
+                    window.OpenFromDesktop(path);
+                }
+            });
         }
 
         base.OnFrameworkInitializationCompleted();
     }
+
+    /// <summary>
+    /// The document to open, or null to stay on the document that is already there. Pure and internal so
+    /// both arrival routes are testable without a window.
+    /// </summary>
+    internal static string? DocumentToOpen(IReadOnlyList<string?>? candidates) =>
+        DocumentActivation.FirstExistingFile(candidates);
 }

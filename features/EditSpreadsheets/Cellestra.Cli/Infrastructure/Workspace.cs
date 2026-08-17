@@ -25,6 +25,31 @@ public sealed record LoadedWorkbook(Workbook Workbook, OdsPackage? Package);
 /// </summary>
 public static class Workspace
 {
+    /// <summary>The one extension the desktop app opens. CSV and TSV are formats the CLI converts, not
+    /// documents Cellestra edits — <c>cellestra import</c> is the route for those.</summary>
+    public const string SpreadsheetExtension = ".ods";
+
+    /// <summary>Whether <paramref name="path"/> names a workbook the desktop app opens.</summary>
+    public static bool IsWorkbook(string path) =>
+        Path.GetExtension(path).Equals(SpreadsheetExtension, StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// Open a workbook in the Cellestra desktop app. Refuses anything that isn't a <c>.ods</c>: at the
+    /// root of the command tree an unknown argument is much more likely to be a mistyped verb than a
+    /// workbook, and the app's own error dialog is a worse place to learn that than this line is.
+    /// </summary>
+    public static int Launch(string path)
+    {
+        if (!IsWorkbook(path))
+        {
+            throw new CliException(
+                $"'{path}' isn't a workbook Cellestra opens ({SpreadsheetExtension}). " +
+                "If you meant a command, `cellestra --help` lists them.");
+        }
+
+        return AppLauncher.Open("Cellestra", path);
+    }
+
     /// <summary>Pick a format from an explicit override, else the file extension.</summary>
     public static WorkbookFormat DetectFormat(string path, WorkbookFormat? explicitFormat)
     {

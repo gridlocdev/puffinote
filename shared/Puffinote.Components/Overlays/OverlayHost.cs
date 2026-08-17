@@ -97,6 +97,31 @@ public sealed class OverlayHost : Panel
     }
 
     /// <summary>
+    /// Resolve once nothing is on the overlay — immediately, when nothing is. For work that arrives from
+    /// outside the window and has to wait its turn: the host shows one card at a time, so raising a
+    /// second prompt over the first would clear a question nobody answered. The document a desktop
+    /// "Open With" hands a running app is exactly that case — at launch the card already up is the
+    /// crash-recovery prompt, whose answer decides what is even in the buffer the open would replace.
+    /// </summary>
+    public Task WaitUntilClosedAsync()
+    {
+        if (!IsOpen)
+        {
+            return Task.CompletedTask;
+        }
+
+        var closed = new TaskCompletionSource();
+        void OnClosed(object? sender, EventArgs e)
+        {
+            Closed -= OnClosed;
+            closed.SetResult();
+        }
+
+        Closed += OnClosed;
+        return closed.Task;
+    }
+
+    /// <summary>
     /// Dismiss the open overlay as a backdrop click would (cancel a modal so its awaiter resolves to the
     /// cancel result, or close a palette). Returns false if nothing is open — let the key fall through.
     /// </summary>

@@ -9,7 +9,7 @@ rationale is [proposal 0003](../../../docs/proposals/0003-plaintain.md).
 |---|---|
 | `Plaintain.Control` | The Avalonia control library: `PlainTextEditor` (the custom-drawn surface), `PlainTextEditorView` (the embeddable composite), `FindBar`, and the one command catalog `PlainTextEditingCommands`. **This is what Puffinote embeds.** |
 | `Plaintain.Desktop` | The standalone shell (assembly `Plaintain`): window, menu, status bar, file dialogs, recents, settings. Thin. |
-| `Plaintain.Cli` | `pltn` — a launcher plus one read-only verb. No Avalonia. |
+| `Plaintain.Cli` | `plaintain` — a launcher plus one read-only verb. No Avalonia. |
 | `Plaintain.UiTests` | Headless Avalonia. The gate, since the devcontainer can't launch a GUI. |
 | `Plaintain.Cli.Tests` | End-to-end, in-process, over the same `CliApplication.Run`. |
 | `Plaintain.Benchmarks` | BenchmarkDotNet over the 50 MB load path and the geometry claim (§3.3). References only `Puffinote.Text`, so it runs without a display. `just bench-plaintain`. |
@@ -139,3 +139,23 @@ is still the editor's — it acts on the document — and only the prompt is the
 is shared with the other apps and must not be forked. The justfile carries the full recipe set, each
 install with its exact inverse (including the `lsregister -u` withdrawal that removes the file-type
 claims when the bundle goes).
+
+**A claimed file arrives two ways, and only one of them is argv.** A launch argument comes in as
+`desktop.Args`, read once at startup. macOS does not use it: Finder's "Open With", a double-click on a
+claimed `.txt`, and `plaintain <file>` itself — which reaches the installed bundle through Launch
+Services — all send a *bundled* app an Apple Event, which Avalonia surfaces as
+`IActivatableLifetime.Activated` carrying `FileActivatedEventArgs`. Claiming the type in `Info.plist`
+without handling that event is what opened the association onto an empty "Untitled" buffer, with the
+file dropped on the floor. `App` handles both, through one `DocumentToOpen` rule — first candidate, must
+exist on disk. The mechanism is the family's (`DocumentActivation`, `AppLauncher`) rather than
+Plaintain's; the repo guide's [Opening a document](../../../AGENTS.md#opening-a-document) is the
+reference, and this must not be forked.
+
+The two arrivals differ in one way that reaches the user: an argument lands before anything is on
+screen, while an activation can land over a document being edited (and over the crash-recovery prompt).
+So the activation goes through `MainWindow.OpenFromDesktop`, which waits out any open modal — the
+overlay hosts one card at a time — and then asks before discarding unsaved work.
+
+**`plaintain <file>` takes any path that exists**, with no extension test, because "opens anything
+decodable" is the product (§1). The sibling CLIs refuse an extension their app doesn't open; here that
+would be a list of every extension in the world minus a few, which is not a list.

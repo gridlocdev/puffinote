@@ -4,13 +4,13 @@ using Xunit;
 namespace Plaintain.Cli.Tests;
 
 /// <summary>
-/// `pltn info` end to end. One class, run sequentially, because these redirect the process-global
+/// `plaintain info` end to end. One class, run sequentially, because these redirect the process-global
 /// <see cref="Console"/> — the same arrangement the sibling CLIs' tests use.
 /// </summary>
 [Collection("cli")]
 public sealed class CliTests : IDisposable
 {
-    private readonly DirectoryInfo _scratch = Directory.CreateTempSubdirectory("pltn-tests");
+    private readonly DirectoryInfo _scratch = Directory.CreateTempSubdirectory("plaintain-tests");
     private readonly TextWriter _stdout = Console.Out;
     private readonly TextWriter _stderr = Console.Error;
 
@@ -88,7 +88,7 @@ public sealed class CliTests : IDisposable
         int exit = CliApplication.Run(["info", Path.Combine(_scratch.FullName, "nope.txt")]);
 
         Assert.Equal(1, exit);
-        Assert.StartsWith("pltn:", errors.ToString(), StringComparison.Ordinal);
+        Assert.StartsWith("plaintain:", errors.ToString(), StringComparison.Ordinal);
     }
 
     [Fact]

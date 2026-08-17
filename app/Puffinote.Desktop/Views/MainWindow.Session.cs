@@ -9,6 +9,45 @@ public partial class MainWindow
     internal string? OpenNotebookPathForTest => _notebook.RootPath;
 
     /// <summary>
+    /// Open what the desktop or the command line handed the shell. A folder is a notebook, which is the
+    /// ordinary case. A file is a document, and the notebook that holds it is the folder it sits in —
+    /// unless a notebook containing it is already open, where changing notebooks would be a far bigger
+    /// answer than the question asked. Either way the window comes forward, because the click or the
+    /// command that sent the path was a request to look at it.
+    /// </summary>
+    public void OpenFromDesktop(string path) => _ = OpenFromDesktopAsync(path);
+
+    internal async Task OpenFromDesktopAsync(string path)
+    {
+        if (Directory.Exists(path))
+        {
+            OpenNotebook(path);
+            Activate();
+            return;
+        }
+
+        if (!File.Exists(path))
+        {
+            return;
+        }
+
+        string full = System.IO.Path.GetFullPath(path);
+        if (!IsInsideOpenNotebook(full) && System.IO.Path.GetDirectoryName(full) is { } folder)
+        {
+            OpenNotebook(folder);
+        }
+
+        await OpenFileAsync(full);
+        Activate();
+    }
+
+    private bool IsInsideOpenNotebook(string fullPath) =>
+        _notebook.RootPath is { } root
+        && fullPath.StartsWith(
+            System.IO.Path.TrimEndingDirectorySeparator(System.IO.Path.GetFullPath(root)) + System.IO.Path.DirectorySeparatorChar,
+            StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>
     /// On a plain launch (no notebook on the command line), reopen the notebook from the last session (PRD §5).
     /// If that folder has since moved or been deleted, show a modal offering to open another instead. A launch
     /// where nothing was ever opened simply starts on the empty shell.

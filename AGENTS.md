@@ -54,6 +54,7 @@ rule-of-three review to Phase 5; it has been done, and its answers are worth not
 | The find bars' **match wording** ("3 of 17" / "No results") | **Promoted** → `Puffinote.Text`'s `SearchStatus`. Two apps showed the reader the same phrases, they agreed exactly, and nothing but luck was keeping them agreeing. The shared-vocabulary rule below covers a phrase for the same reason it covers a name. |
 | Pivotask's **label chip** and **due pill** | **Not promoted.** They are already one function inside Pivotask (`TaskCard.Chip`) serving four callers, and no other app has anything of the shape. That is a local abstraction doing its job, not duplication. |
 | The **one-file watcher** and **file stamp** | **Promoted** → `OpenFileWatcher`, `FileStamp`. Five apps needed the identical, fiddly plumbing. |
+| **Launching an app on a document** (from its CLI) and **receiving one** (from the desktop) | **Promoted** → `AppLauncher` (`Puffinote.Components.Core`), `DocumentActivation` (`Puffinote.Components`). Five CLIs and five shells, and the half that was missing was missing from four of them at once — see [Opening a document](#opening-a-document). |
 | The **crash-recovery snapshot** | **Promoted** → `RecoveryService`. Two text editors, nothing app-specific once the app name is a parameter. Stays text-shaped: a workbook is not a string. |
 | The **macOS app menu** and **About card** | **Promoted** → `MacAppMenu`, `AboutDialog`. Five apps, four strings' difference. |
 
@@ -126,8 +127,20 @@ like a flake:
   *decision* from the *prompt* for exactly this reason, and test the decision) or dismiss it through a
   seam that calls `OverlayHost.Close()`.
 
+  **Never block on a `Task` in one of these tests** — `.Result`, `.Wait()`, `.GetAwaiter().GetResult()`.
+  Its continuations need the UI thread, which is the thread you just blocked, so a prompt that never got
+  answered deadlocks the whole run instead of failing the one case. Pump and assert instead:
+  `Dispatcher.UIThread.RunJobs(); Assert.True(task.IsCompleted, "…still waiting on a dialog");` and only
+  then unwrap it. The `Settle` helper in the `OpenFromDesktopTests` of Typage, Pivotask, and Puffinote is
+  that, three lines.
+
+  Check what the window's document *is* before assuming it is clean: Pivotask's never-saved
+  `BoardDocument` compares dirty by construction, so a fresh window there prompts on every open (its
+  [area guide](features/ManageTasks/AGENTS.md) explains why).
+
 Bisect with `dotnet test <project>.csproj --no-build --filter "FullyQualifiedName~<Name>"` before
-suspecting anything else.
+suspecting anything else — and give it a hard `timeout`, so a hang costs you seconds rather than the
+suite's full 60s-to-10min death.
 
 **Never run two `dotnet build`/`dotnet test` invocations at once** — concurrent runs deadlock on the MSBuild-node and build-output locks and hang indefinitely, and they are also what gets a container OOM-killed: each build brings MSBuild worker nodes (one per core by default), a Roslyn `VBCSCompiler` that outlives it, restore, and a `testhost` per test project. (This is why `just check` is serial — recipe dependencies run one at a time, in the order written.) If it happens: kill the `dotnet`/`testhost`/`MSBuild` processes, `dotnet build-server shutdown`, retry.
 
@@ -138,6 +151,26 @@ flock -w 900 /tmp/dotnet-build.lock dotnet build features/EditMarkdown/Typage.sl
 ```
 
 **If a build sits there having printed `agentbox: waiting for the dotnet build lock`, it is queued, not hung** — some container wraps `dotnet` in exactly that lock, so a build starts only once the one ahead of it finishes. Let it block. Killing `dotnet`/`MSBuild`/`testhost` or rerunning the command in another shell is the wrong move, and it is the move the "if a suite runs for minutes, it is hung" rule above would otherwise push you toward. The message names the holder (pid, working directory, command line); a `dotnet` that exits **199** never built anything — it timed out waiting, which is not a build failure, so re-run it (optionally with a longer `AGENTBOX_BUILD_LOCK_WAIT`) rather than going looking for a compile error. Locks are held by a live process and released when it exits, so there is never a stale lock file to clear by hand.
+
+**Never pipe a build's output — redirect it to a file.** `dotnet build … | tail` (or `| grep`, or any
+pipe) reads as a ten-minute hang and is not one: the build spawns `VBCSCompiler`, Roslyn's shared
+compiler server, which **outlives it by design** — idling ~10 minutes before exiting — while still
+holding the stdout it inherited. The reader on the far end of the pipe therefore never sees EOF, and the
+command blocks for that whole idle timeout after `dotnet` has already exited, verdict and all. Measured:
+a Cellestra build that finished in 6.2s with `Build FAILED` sat on the pipe for 600s. Every solution here
+builds in **3–8 seconds**, so anything longer is this, not a slow build. Write to a log and read the log:
+
+```bash
+LOG=$(mktemp); flock -w 1800 /tmp/dotnet-build.lock \
+  dotnet build features/EditSpreadsheets/Cellestra.slnx -m:2 -p:UseSharedCompilation=false -nodeReuse:false \
+  > "$LOG" 2>&1 < /dev/null
+grep -E "error|Warning\(s\)|Error\(s\)" "$LOG"
+```
+
+`-p:UseSharedCompilation=false` is what stops the server outliving the build in the first place;
+`DOTNET_CLI_USE_MSBUILD_SERVER=0` does **not** cover it (that is the MSBuild server, a different
+process). To free one that is already stuck: `dotnet build-server shutdown`, then `pkill -f VBCSCompiler`.
+This is a third thing that looks like the build lock and isn't — check it before the two above.
 
 Memory-wise, a container running more than one worktree wants `DOTNET_gcServer=0` (workstation GC — the biggest single win, since Server GC reserves a heap per logical core), `MSBUILDDISABLENODEREUSE=1`, and `DOTNET_CLI_USE_MSBUILD_SERVER=0`; pass `-m:2` to `dotnet build` rather than letting MSBuild fan out to every core, and run `dotnet build-server shutdown` between tasks to reclaim the lingering compiler server. `.devcontainer/devcontainer.json` sets those three vars — a container it didn't build (an agent sandbox) does not have them.
 
@@ -159,6 +192,39 @@ dotnet run --project app/Puffinote.Cli -- info            # summarize the notebo
 dotnet run --project app/Puffinote.Cli -- search "todo"   # full-text search the notebook (notes + sheet cells)
 dotnet run --project app/Puffinote.Cli -- md --help       # route into Typage's commands; `sheet …` routes to Cellestra
 ```
+
+## Opening a document
+
+**Every CLI is named for its app, and opens its app's documents.** `puffinote`, `typage`, `cellestra`,
+`plaintain`, `pivotask` — no abbreviations. (Two of them shipped as `pltn` and `ptask`; that is reversed,
+with no compatibility shim. `just uninstall-plaintain` / `-pivotask` remove the old binary too, since
+nothing else ever would.) A first argument naming a document opens it in the app:
+
+```bash
+typage notes.md          cellestra budget.ods       pivotask work.pivotask
+plaintain server.log     puffinote ~/notes          puffinote ~/notes/todo.md
+```
+
+The four editors take a file, and refuse an argument whose extension they don't open — at the root of a
+verb set, an unrecognized token is far more likely a mistyped command than a document, and the error says
+both. Plaintain is the exception, because it opens *anything decodable*, so the only thing it can refuse
+is a path naming nothing. Puffinote takes a folder (a notebook) or a file (a document, plus the notebook
+holding it). Bare `typage`/`cellestra`/`pivotask`/`puffinote` still print help — they are toolkits first
+and launchers second — while bare `plaintain` opens an empty window, which is what a launcher does.
+
+**A document arrives two ways, and only one of them is argv.** A launch argument comes in as
+`desktop.Args`, read once at startup. macOS does not use it: Finder's "Open With", a double-click on a
+claimed extension, and `open -a <App> <file>` — which is how every CLI here reaches an *installed* app,
+running or not — all send a **bundled** app an Apple Event, which Avalonia surfaces as
+`IActivatableLifetime.Activated` carrying `FileActivatedEventArgs`. Claiming a type in `Info.plist` and
+handling only `args[0]` is what opened every association onto an empty "Untitled" document with the file
+dropped on the floor. Both halves are shared and must not be forked: **`AppLauncher`** (CLI side) and
+**`DocumentActivation`** (app side). Every `App` handles both routes through one `DocumentToOpen` rule.
+
+The two arrivals differ in one way that reaches the user: an argument lands before anything is on screen,
+while an activation can land over a document being edited — so it goes through the window's
+`OpenFromDesktop`, which waits out any open modal (`OverlayHost.WaitUntilClosedAsync` — the host shows one
+card at a time) and then asks before discarding unsaved work.
 
 ## Shared vocabulary
 

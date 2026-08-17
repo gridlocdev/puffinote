@@ -38,7 +38,7 @@ and writes it back byte for byte.
 
 ## 4. Files
 
-- **Open** via the CLI (`pltn <file>`), Finder association / "Open With", the in-app dialog, or a
+- **Open** via the CLI (`plaintain <file>`), Finder association / "Open With", the in-app dialog, or a
   Puffinote tab. Opening while dirty prompts.
 - **Encoding decision tree** (implemented in `shared/Puffinote.Text`'s `TextFileCodec`):
   BOM present → believe it. No BOM → **validate** as UTF-8 with a throwing decoder, not assume it.
@@ -183,9 +183,9 @@ claimed as Owner: that is a fight with every editor on the machine, and one user
 
 Inside Puffinote extensions matter less — a decode probe on the first few KB is the real gate.
 
-## 9. The `pltn` CLI
+## 9. The `plaintain` CLI
 
-A **launcher plus exactly one read-only verb**. `pltn <file>` opens the file in the app; `pltn info
+A **launcher plus exactly one read-only verb**. `plaintain <file>` opens the file in the app; `plaintain info
 <file>` prints encoding, line endings, and line/word/character/byte counts, exiting non-zero when the
 encoding had to be guessed so a script can branch on it. The verb exists so a headless container has
 something to assert against — it is not the start of a verb surface.
