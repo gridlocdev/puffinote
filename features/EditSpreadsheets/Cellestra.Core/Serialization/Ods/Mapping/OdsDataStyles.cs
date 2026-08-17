@@ -23,7 +23,8 @@ public static class OdsDataStyles
         return format.Kind switch
         {
             NumberFormatKind.Percent => Percentage(name, format.Code),
-            NumberFormatKind.Number or NumberFormatKind.Currency or NumberFormatKind.Scientific => NumberStyle(name, format.Code),
+            NumberFormatKind.Currency => Currency(name, format.Code) ?? NumberStyle(name, format.Code),
+            NumberFormatKind.Number or NumberFormatKind.Scientific => NumberStyle(name, format.Code),
             NumberFormatKind.Date or NumberFormatKind.DateTime or NumberFormatKind.Time => DateStyle(name, format.Code),
             _ => null,
         };
@@ -37,7 +38,7 @@ public static class OdsDataStyles
         {
             "percentage-style" => PercentCode(dataStyle),
             "number-style" => NumberCode(dataStyle),
-            "currency-style" => NumberCode(dataStyle),
+            "currency-style" => CurrencyCode(dataStyle),
             "date-style" => DateCode(dataStyle),
             _ => "General",
         };
@@ -57,6 +58,78 @@ public static class OdsDataStyles
 
         return new XElement(Number + "number-style", new XAttribute(Style + "name", name), number);
     }
+
+    /// <summary>
+    /// A <c>number:currency-style</c> — the only ODF style that carries the currency symbol. Writing a
+    /// currency format as a plain <c>number:number-style</c> drops the symbol, so the file reopened as a
+    /// thousands-separated number: the format survived, the fact that it was money did not.
+    /// </summary>
+    /// <remarks>
+    /// The code is split at its numeric core (the run of <c>#0,.</c>): what precedes and follows it is
+    /// literal text, and whichever side holds the currency symbol becomes <c>number:currency-symbol</c>.
+    /// That covers a leading symbol (<c>$#,##0.00</c>) and a trailing one (<c>#,##0.00 €</c>) alike.
+    /// Returns null when the code has no numeric core to build around, leaving the caller its fallback.
+    /// </remarks>
+    private static XElement? Currency(string name, string code)
+    {
+        int start = code.IndexOfAny(['#', '0']);
+        if (start < 0)
+        {
+            return null;
+        }
+
+        int end = start;
+        while (end < code.Length && code[end] is '#' or '0' or ',' or '.')
+        {
+            end++;
+        }
+
+        string core = code[start..end];
+        var style = new XElement(Number + "currency-style", new XAttribute(Style + "name", name));
+        AddLiteral(style, code[..start]);
+        style.Add(new XElement(Number + "number",
+            new XAttribute(Number + "decimal-places", DecimalPlaces(core)),
+            new XAttribute(Number + "min-integer-digits", 1),
+            new XAttribute(Number + "grouping", core.Contains(',', StringComparison.Ordinal) ? "true" : "false")));
+        AddLiteral(style, code[end..]);
+        return style;
+    }
+
+    /// <summary>Append a literal run either side of the number, splitting the currency symbol out of it.</summary>
+    private static void AddLiteral(XElement style, string text)
+    {
+        if (text.Length == 0)
+        {
+            return;
+        }
+
+        var pending = new System.Text.StringBuilder();
+        void Flush()
+        {
+            if (pending.Length > 0)
+            {
+                style.Add(new XElement(Number + "text", pending.ToString()));
+                pending.Clear();
+            }
+        }
+
+        foreach (char c in text)
+        {
+            if (IsCurrencySymbol(c))
+            {
+                Flush();
+                style.Add(new XElement(Number + "currency-symbol", c.ToString()));
+            }
+            else
+            {
+                pending.Append(c);
+            }
+        }
+
+        Flush();
+    }
+
+    private static bool IsCurrencySymbol(char c) => c is '$' or '€' or '£' or '¥' or '¤';
 
     private static XElement Percentage(string name, string code)
     {
@@ -158,13 +231,42 @@ public static class OdsDataStyles
         return count;
     }
 
-    private static string NumberCode(XElement style)
+    private static string NumberCode(XElement style) => NumberCore(style.Element(Number + "number"));
+
+    /// <summary>The numeric part of a code — <c>#,##0.00</c> — from a <c>number:number</c> element.</summary>
+    private static string NumberCore(XElement? number)
     {
-        var number = style.Element(Number + "number");
         int decimals = ReadDecimals(number);
         bool grouping = number?.Attribute(Number + "grouping")?.Value == "true";
         string integer = grouping ? "#,##0" : "0";
         return decimals > 0 ? integer + "." + new string('0', decimals) : integer;
+    }
+
+    /// <summary>
+    /// Rebuild a currency code by walking the style's children in document order, so the symbol lands
+    /// back on the side the file put it. Anything else ODF allows in there (a colour, a negative-value
+    /// <c>style:map</c>) isn't part of the code and is skipped.
+    /// </summary>
+    private static string CurrencyCode(XElement style)
+    {
+        var sb = new System.Text.StringBuilder();
+        foreach (var child in style.Elements())
+        {
+            switch (child.Name.LocalName)
+            {
+                case "currency-symbol":
+                case "text":
+                    sb.Append(child.Value);
+                    break;
+                case "number":
+                    sb.Append(NumberCore(child));
+                    break;
+            }
+        }
+
+        // A currency style with no symbol is just a number; keep the code honest rather than
+        // classifying it as money on the strength of the element name alone.
+        return sb.Length > 0 ? sb.ToString() : NumberCode(style);
     }
 
     private static string PercentCode(XElement style)
