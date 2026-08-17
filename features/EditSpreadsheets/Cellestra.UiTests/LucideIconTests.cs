@@ -22,6 +22,9 @@ public class LucideIconTests
     [InlineData("grid-2x2")]          // All Borders glyph
     [InlineData("square")]            // Outer Border glyph
     [InlineData("square-x")]          // No Border glyph
+    [InlineData("eye-off")]           // Hide Rows / Hide Columns glyph
+    [InlineData("move-vertical")]     // Row Height… glyph — exercises <polyline> + <line>
+    [InlineData("move-horizontal")]   // Column Width… glyph
     public void Vendored_glyph_parses_to_non_empty_geometry(string key)
     {
         var geometry = LucideIcons.Get(key);

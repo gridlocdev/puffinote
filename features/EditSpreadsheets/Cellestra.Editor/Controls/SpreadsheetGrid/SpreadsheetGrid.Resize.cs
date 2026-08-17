@@ -16,8 +16,10 @@ namespace Cellestra.Desktop.Controls.SpreadsheetGrid;
 /// </summary>
 public sealed partial class SpreadsheetGrid
 {
-    private const double MinColumnWidth = 16;
-    private const double MinRowHeight = 8;
+    // The floor a drag can resize to — and the same floor the Column Width… / Row Height… prompts
+    // clamp a typed size to, so no route can leave a line too thin to grab back.
+    internal const double MinColumnWidth = 16;
+    internal const double MinRowHeight = 8;
 
     private static readonly Cursor ResizeColumnCursor = new(StandardCursorType.SizeWestEast);
     private static readonly Cursor ResizeRowCursor = new(StandardCursorType.SizeNorthSouth);

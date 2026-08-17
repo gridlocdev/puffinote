@@ -339,6 +339,8 @@ public partial class MainWindow : Window, IEditorHost
             "format.currency", "format.percent", "format.date", null, "format.merge");
         format.Menu!.Items.Add(Submenu("Borders", "format.borderAll", "format.borderOutline",
             "format.borderTop", "format.borderBottom", "format.borderLeft", "format.borderRight", null, "format.borderNone"));
+        format.Menu!.Items.Add(Submenu("Rows", "format.rowHeight", "format.hideRows", "format.unhideRows"));
+        format.Menu!.Items.Add(Submenu("Columns", "format.columnWidth", "format.hideColumns", "format.unhideColumns"));
         menu.Items.Add(format);
         menu.Items.Add(Submenu("Insert", "insert.rowsAbove", "insert.columnsLeft", "edit.deleteRows", "edit.deleteColumns", null,
             "insert.sheet", "data.createTable", "insert.function", "insert.namedRange", "insert.hyperlink", null, "sheet.rename", "sheet.delete"));

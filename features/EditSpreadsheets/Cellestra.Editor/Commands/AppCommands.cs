@@ -144,6 +144,27 @@ public sealed class AppCommands
             () => StepDecimals(e, -1), canExecute: () => CanStepDecimals(e), icon: "move-decimal-right"),
         new("format.cells", "Format Cells…", "Open the full cell-formatting dialog.", Shortcut.Cmd(Key.D1), () => e.ShowFormatCellsDialog(), icon: "settings-2"),
 
+        // Format ▸ Rows / Columns (PRD §6.2, §8.14) — the line-level commands, which are also what a
+        // row or column header's context menu is for. Each is disabled rather than hidden when the
+        // selection spans every line of its axis (a whole-column selection selects every row): sizing
+        // or hiding a million rows is never what was meant, and the same rule already guards Delete Rows.
+        new("format.rowHeight", "Row Height…", "Set an exact height for the selected rows.", null, () => e.ShowRowHeightDialog(),
+            canExecute: () => !SpansEveryRow(e), icon: "move-vertical"),
+        new("format.hideRows", "Hide Rows", "Hide the selected rows; their data and formulas stay.",
+            Shortcut.Bare(Key.D9, KeyModifiers.Control), () => HideLines(e, rows: true),
+            canExecute: () => !SpansEveryRow(e), icon: "eye-off"),
+        new("format.unhideRows", "Unhide Rows", "Show the hidden rows in or beside the selection.",
+            Shortcut.Bare(Key.D9, KeyModifiers.Control | KeyModifiers.Shift), () => UnhideLines(e, rows: true),
+            canExecute: () => RowsToUnhide(e).Count > 0, icon: "eye"),
+        new("format.columnWidth", "Column Width…", "Set an exact width for the selected columns.", null, () => e.ShowColumnWidthDialog(),
+            canExecute: () => !SpansEveryColumn(e), icon: "move-horizontal"),
+        new("format.hideColumns", "Hide Columns", "Hide the selected columns; their data and formulas stay.",
+            Shortcut.Bare(Key.D0, KeyModifiers.Control), () => HideLines(e, rows: false),
+            canExecute: () => !SpansEveryColumn(e), icon: "eye-off"),
+        new("format.unhideColumns", "Unhide Columns", "Show the hidden columns in or beside the selection.",
+            Shortcut.Bare(Key.D0, KeyModifiers.Control | KeyModifiers.Shift), () => UnhideLines(e, rows: false),
+            canExecute: () => ColumnsToUnhide(e).Count > 0, icon: "eye"),
+
         // "Format Selection As: <data-type>" — one entry per data type, surfaced in the Command Palette
         // (PRD §6.7). Each sets a specific number format outright (vs. the command-bar toggles above).
         new("format.asAutomatic", "Format Selection As: Automatic", "Use the general (automatic) number format.",
@@ -624,6 +645,76 @@ public sealed class AppCommands
         e.Session.Execute(new StructuralEditCommand(sheet.Name, StructuralAxis.Column, StructuralOperation.Delete, e.Selection.Left, count));
         e.Refresh();
     }
+
+    // ---- Rows & columns: hide / unhide ------------------------------------
+
+    /// <summary>True when the selection covers every row of the sheet (what a column header selects).</summary>
+    private static bool SpansEveryRow(IAppEnvironment e) =>
+        e.Selection.Bottom - e.Selection.Top + 1 >= Cellestra.Core.Model.SheetDimensions.MaxRows;
+
+    /// <summary>True when the selection covers every column of the sheet (what a row header selects).</summary>
+    private static bool SpansEveryColumn(IAppEnvironment e) =>
+        e.Selection.Right - e.Selection.Left + 1 >= Cellestra.Core.Model.SheetDimensions.MaxColumns;
+
+    private static IReadOnlyList<(int First, int Last)> RowsToUnhide(IAppEnvironment e) =>
+        HiddenLines.RowsToUnhide(e.Session.ActiveSheet, e.Selection.Top, e.Selection.Bottom);
+
+    private static IReadOnlyList<(int First, int Last)> ColumnsToUnhide(IAppEnvironment e) =>
+        HiddenLines.ColumnsToUnhide(e.Session.ActiveSheet, e.Selection.Left, e.Selection.Right);
+
+    /// <summary>
+    /// Hide the selected rows (or columns) — ODF visibility only, so the data and formulas are
+    /// untouched (PRD §8.14). Hidden lines leave nothing on screen to click, so the narration names
+    /// the way back rather than leaving the user to find it.
+    /// </summary>
+    private static void HideLines(IAppEnvironment e, bool rows)
+    {
+        if (rows ? SpansEveryRow(e) : SpansEveryColumn(e))
+        {
+            return;
+        }
+
+        string sheet = e.Session.ActiveSheet.Name;
+        var selection = e.Selection;
+        int count = rows ? selection.Bottom - selection.Top + 1 : selection.Right - selection.Left + 1;
+        e.Session.Execute(rows
+            ? EditCommands.SetRowsHidden(sheet, selection.Top, selection.Bottom, true)
+            : EditCommands.SetColumnsHidden(sheet, selection.Left, selection.Right, true));
+        e.Refresh();
+        e.Narrate(rows
+            ? $"Hid {Plural(count, "row")} — ⌃⇧9 unhides them."
+            : $"Hid {Plural(count, "column")} — ⌃⇧0 unhides them.");
+    }
+
+    /// <summary>
+    /// Unhide the hidden rows (or columns) the selection reaches — see <see cref="HiddenLines"/> for
+    /// which those are. One undoable step, and only the hidden runs are touched, so unhiding from a
+    /// select-all costs what is hidden rather than what is selected.
+    /// </summary>
+    private static void UnhideLines(IAppEnvironment e, bool rows)
+    {
+        var runs = rows ? RowsToUnhide(e) : ColumnsToUnhide(e);
+        if (runs.Count == 0)
+        {
+            e.Narrate(rows ? "No hidden rows next to the selection." : "No hidden columns next to the selection.");
+            return;
+        }
+
+        string sheet = e.Session.ActiveSheet.Name;
+        string label = rows ? "Unhide Rows" : "Unhide Columns";
+        var parts = runs
+            .Select(run => rows
+                ? EditCommands.SetRowsHidden(sheet, run.First, run.Last, false)
+                : EditCommands.SetColumnsHidden(sheet, run.First, run.Last, false))
+            .ToList();
+
+        e.Session.Execute(parts.Count == 1 ? parts[0] : EditCommands.Composite(label, parts));
+        e.Refresh();
+        int count = runs.Sum(run => run.Last - run.First + 1);
+        e.Narrate($"Unhid {Plural(count, rows ? "row" : "column")}");
+    }
+
+    private static string Plural(int count, string noun) => count == 1 ? $"1 {noun}" : $"{count} {noun}s";
 
     // ---- Data -------------------------------------------------------------
 

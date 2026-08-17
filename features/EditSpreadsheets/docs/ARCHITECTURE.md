@@ -257,7 +257,8 @@ features/EditSpreadsheets/          # the spreadsheet-editor feature (the whole 
 │   │   ├── Editing/ (IEditCommand, SetCellValueCommand, InsertRowCommand,
 │   │   │             DeleteRangeCommand, MergeCellsCommand, SetRowVisibilityCommand,
 │   │   │             CreateTableCommand, SortRangeCommand, ApplyFilterCommand,
-│   │   │             SetValidationCommand, RemoveDuplicatesCommand, TextToColumnsCommand)
+│   │   │             SetValidationCommand, RemoveDuplicatesCommand, TextToColumnsCommand,
+│   │   │             HiddenLines)
 │   │   └── Serialization/
 │   │       ├── IWorkbookSerializer.cs
 │   │       ├── Csv/ (CsvReader, CsvWriter, CsvOptions)   # PRD §8.4

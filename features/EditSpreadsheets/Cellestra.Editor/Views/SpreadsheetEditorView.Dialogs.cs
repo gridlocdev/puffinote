@@ -1,4 +1,6 @@
+using System.Globalization;
 using Avalonia.Controls;
+using Cellestra.Core;
 using Cellestra.Core.Editing;
 using Cellestra.Core.Model;
 using Cellestra.Desktop.Commands;
@@ -33,17 +35,36 @@ public partial class SpreadsheetEditorView
 
             if (Commands.ById(id) is { } command)
             {
-                flyout.Items.Add(new MenuItem
-                {
-                    Header = command.Title,
-                    InputGesture = command.Gesture,
-                    Icon = command.Icon is null ? null : new LucideIcon { IconKey = command.Icon, Size = 15 },
-                    Command = new RelayCommand(() => command.Execute(), () => command.IsEnabled),
-                });
+                flyout.Items.Add(MenuRow(command));
             }
         }
 
         return flyout;
+    }
+
+    /// <summary>
+    /// One context-menu row for a catalog command: icon, title, shortcut, and its enabled state. A
+    /// command that reports a toggle state (Merge Cells is lit while the active cell is in a merge, the
+    /// way the command bar shows it) renders as a checkbox, so the menu answers "is this already on?"
+    /// rather than only offering the flip.
+    /// </summary>
+    private static MenuItem MenuRow(AppCommand command)
+    {
+        var row = new MenuItem
+        {
+            Header = command.Title,
+            InputGesture = command.Gesture,
+            Icon = command.Icon is null ? null : new LucideIcon { IconKey = command.Icon, Size = 15 },
+            Command = new RelayCommand(() => command.Execute(), () => command.IsEnabled),
+        };
+
+        if (command.IsActive is not null)
+        {
+            row.ToggleType = MenuItemToggleType.CheckBox;
+            row.IsChecked = command.IsToggleActive;
+        }
+
+        return row;
     }
 
     private void OnGridContextRequested(object? sender, Avalonia.Input.ContextRequestedEventArgs e)
@@ -65,28 +86,13 @@ public partial class SpreadsheetEditorView
 
     private void ShowCellContextMenu(SpreadsheetGrid.ContextTarget target)
     {
-        MenuFlyout? flyout = target switch
-        {
-            SpreadsheetGrid.ContextTarget.None => null,
-            SpreadsheetGrid.ContextTarget.ColumnHeader => BuildCommandFlyout(
-                "edit.cut", "edit.copy", "edit.paste", null,
-                "insert.columnsLeft", "edit.deleteColumns", null,
-                "edit.delete", "edit.clearFormats"),
-            SpreadsheetGrid.ContextTarget.RowHeader => BuildCommandFlyout(
-                "edit.cut", "edit.copy", "edit.paste", null,
-                "insert.rowsAbove", "edit.deleteRows", null,
-                "edit.delete", "edit.clearFormats"),
-            _ => BuildCommandFlyout(
-                "edit.cut", "edit.copy", "edit.paste", null,
-                "insert.rowsAbove", "insert.columnsLeft", null,
-                "edit.delete", "edit.clearFormats", "edit.clearAll", null,
-                "format.cells"),
-        };
-
-        if (flyout is null)
+        var ids = GridContextMenu.Ids(target);
+        if (ids.Count == 0)
         {
             return; // right-clicked the header corner — nothing to offer
         }
+
+        var flyout = BuildCommandFlyout([.. ids]);
 
         // Inside a table, offer the table-specific actions (task 5: designate a header column). The
         // command's IsActive shows a check when the first column is already a header column.
@@ -98,26 +104,71 @@ public partial class SpreadsheetEditorView
             // Right-clicking any cell in a table offers the Sort & Filter dialog for that table (#1).
             if (Commands.ById("data.sortAndFilter") is { } sortAndFilter)
             {
-                flyout.Items.Add(new MenuItem
-                {
-                    Header = sortAndFilter.Title,
-                    InputGesture = sortAndFilter.Gesture,
-                    Icon = sortAndFilter.Icon is null ? null : new LucideIcon { IconKey = sortAndFilter.Icon, Size = 15 },
-                    Command = new RelayCommand(() => sortAndFilter.Execute(), () => sortAndFilter.IsEnabled),
-                });
+                flyout.Items.Add(MenuRow(sortAndFilter));
             }
 
-            flyout.Items.Add(new MenuItem
-            {
-                Header = headerColumn.Title,
-                Icon = headerColumn.Icon is null ? null : new LucideIcon { IconKey = headerColumn.Icon, Size = 15 },
-                Command = new RelayCommand(() => headerColumn.Execute(), () => headerColumn.IsEnabled),
-                ToggleType = MenuItemToggleType.CheckBox,
-                IsChecked = headerColumn.IsToggleActive,
-            });
+            flyout.Items.Add(MenuRow(headerColumn));
         }
 
         flyout.ShowAt(Grid, showAtPointer: true);
+    }
+
+    // A hand-typed size is clamped to the same floor the drag-resize enforces, and to a ceiling that
+    // keeps a typo (600000 for 600) from leaving one unusable line filling the window. Both are
+    // undoable, so the ceiling is a guard rail, not a rule about what sizes are legitimate.
+    private const double MaxLineSize = 2000;
+
+    public void ShowRowHeightDialog() => _ = SetLineSizeAsync(rows: true);
+
+    public void ShowColumnWidthDialog() => _ = SetLineSizeAsync(rows: false);
+
+    /// <summary>
+    /// Row Height… / Column Width… (PRD §6.2): prompt for an exact size in pixels — the unit the model
+    /// keeps and the drag-resize reports — seeded from the first selected line, and apply it to every
+    /// selected line as one undoable step.
+    /// </summary>
+    private async Task SetLineSizeAsync(bool rows)
+    {
+        var sheet = Session.ActiveSheet;
+        var culture = Session.Workbook.Settings.EffectiveLocale;
+        int first = rows ? Selection.Top : Selection.Left;
+        int last = rows ? Selection.Bottom : Selection.Right;
+
+        // The catalog disables both commands when the selection spans the whole axis; this is the same
+        // rule where the method is reachable directly, so the loop below can never run a million times.
+        if (last - first + 1 >= (rows ? SheetDimensions.MaxRows : SheetDimensions.MaxColumns))
+        {
+            return;
+        }
+
+        double current = rows ? sheet.GetRowHeight(first) : sheet.GetColumnWidth(first);
+        string? entry = await ShowModalAsync(new TextPromptDialog(
+            rows ? "Row height" : "Column width", "Pixels", current.ToString("0.##", culture)));
+        if (entry is null)
+        {
+            return;
+        }
+
+        if (!double.TryParse(entry, NumberStyles.Float, culture, out double size))
+        {
+            double fallback = rows ? Defaults.RowHeight : Defaults.ColumnWidth;
+            ShowMessage(rows ? "That isn't a height" : "That isn't a width",
+                $"“{entry}” isn't a number. Enter a size in pixels — the default is {fallback.ToString("0.##", culture)}.");
+            return;
+        }
+
+        size = Math.Clamp(size, rows ? SpreadsheetGrid.MinRowHeight : SpreadsheetGrid.MinColumnWidth, MaxLineSize);
+
+        var parts = new List<IEditCommand>();
+        for (int line = first; line <= last; line++)
+        {
+            parts.Add(rows
+                ? EditCommands.SetRowHeight(sheet.Name, line, size)
+                : EditCommands.SetColumnWidth(sheet.Name, line, size));
+        }
+
+        Session.Execute(parts.Count == 1 ? parts[0] : EditCommands.Composite(rows ? "Row Height" : "Column Width", parts));
+        Refresh();
     }
 
     public void ToggleFilter()

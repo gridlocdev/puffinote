@@ -117,6 +117,12 @@ public interface IAppEnvironment
 
     void ShowFormatCellsDialog();
 
+    /// <summary>Prompt for an exact height (in pixels) and apply it to the selected rows.</summary>
+    void ShowRowHeightDialog();
+
+    /// <summary>Prompt for an exact width (in pixels) and apply it to the selected columns.</summary>
+    void ShowColumnWidthDialog();
+
     // ---- Insert menu (function picker / named ranges / hyperlinks) ---------
 
     /// <summary>Open the Insert Function picker; choosing a function seeds <c>=NAME(</c> and enters edit mode.</summary>
