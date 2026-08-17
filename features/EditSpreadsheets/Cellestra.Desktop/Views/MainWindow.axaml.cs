@@ -335,7 +335,8 @@ public partial class MainWindow : Window, IEditorHost
         edit.Menu!.Items.Add(Submenu("Fill", "fill.down", "fill.right")); // Edit ▸ Fill ▸ Down / Right (PRD §6.2)
         menu.Items.Add(edit);
         var format = Submenu("Format", "format.cells", null, "format.bold", "format.italic", "format.underline", null,
-            "format.alignLeft", "format.alignCenter", "format.alignRight", "format.wrap", null,
+            "format.alignLeft", "format.alignCenter", "format.alignRight", null,
+            "format.alignTop", "format.alignMiddle", "format.alignBottom", null, "format.wrap", null,
             "format.currency", "format.percent", "format.date", null, "format.merge");
         format.Menu!.Items.Add(Submenu("Borders", "format.borderAll", "format.borderOutline",
             "format.borderTop", "format.borderBottom", "format.borderLeft", "format.borderRight", null, "format.borderNone"));

@@ -3,9 +3,9 @@ using Avalonia.Controls;
 using Avalonia.Layout;
 using Avalonia.Media;
 using Cellestra.Desktop.Commands;
+using Puffinote.Components.Commands;
 using Puffinote.Components.Controls.CommandBar;
 using Puffinote.Components.Controls.Icons;
-using VAlign = Cellestra.Core.Styling.VerticalAlignment;
 
 namespace Cellestra.Desktop.Controls.CommandBar;
 
@@ -13,23 +13,23 @@ public static partial class CommandBarDrawer
 {
     // ---- Align-group extra: vertical alignment ----------------------------
 
+    // The vertical-alignment commands, by catalog id (Golden Rule #4). These buttons used to define
+    // the three actions themselves, which is why vertical alignment reached the bar and nothing else —
+    // not the Command Menu, not the menu bar, not the radial. The catalog owns them now; this section
+    // only lays them out, keeping the axis on one row of icons rather than three labelled rows.
+    private static readonly string[] VerticalAlignIds =
+        ["format.alignTop", "format.alignMiddle", "format.alignBottom"];
+
     private static Control VerticalAlignSection(IAppEnvironment env, Action close, out Action refresh)
     {
         var row = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 6 };
         var repainters = new List<Action>();
 
-        (string Label, VAlign Value, string Icon)[] options =
-        [
-            ("Top", VAlign.Top, "align-vertical-justify-start"),
-            ("Middle", VAlign.Middle, "align-vertical-justify-center"),
-            ("Bottom", VAlign.Bottom, "align-vertical-justify-end"),
-        ];
-
-        foreach (var (label, value, iconKey) in options)
+        foreach (var command in VerticalAlignIds.Select(env.Commands.ById).OfType<AppCommand>())
         {
             var icon = new LucideIcon
             {
-                IconKey = iconKey,
+                IconKey = command.Icon,
                 Size = 17,
                 HorizontalAlignment = HorizontalAlignment.Center,
                 VerticalAlignment = VerticalAlignment.Center,
@@ -46,8 +46,8 @@ public static partial class CommandBarDrawer
                 BorderThickness = default,
                 CornerRadius = new CornerRadius(6),
             };
-            ToolTip.SetTip(button, $"Align {label}");
-            Avalonia.Automation.AutomationProperties.SetName(button, $"Align {label}");
+            ToolTip.SetTip(button, command.Title);
+            Avalonia.Automation.AutomationProperties.SetName(button, command.Title);
 
             bool on = false;
             bool hover = false;
@@ -62,16 +62,17 @@ public static partial class CommandBarDrawer
                 hover = false;
                 Paint();
             };
+            var captured = command;
             button.Click += (_, _) =>
             {
-                env.ApplyCellStyle(s => s.WithAlignment(s.Alignment with { Vertical = value }), "Vertical align");
-                env.Narrate($"Align {label.ToLowerInvariant()} · {env.Selection.ActiveAddress}");
+                captured.Execute();
+                env.Narrate($"{captured.Title} · {env.Selection.ActiveAddress}");
                 close();
             };
 
             repainters.Add(() =>
             {
-                on = ActiveStyle(env).Alignment.Vertical == value;
+                on = captured.IsToggleActive;
                 Paint();
                 if (on)
                 {

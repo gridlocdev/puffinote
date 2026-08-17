@@ -124,12 +124,22 @@ public sealed class AppCommands
             isActive: () => ActiveStyle(e).Font.Underline, icon: "underline"),
         new("format.strikethrough", "Strikethrough", "Draw a line through the text.", Shortcut.Cmd(Key.X, KeyModifiers.Shift),
             () => ToggleFont(e, f => f.Strikethrough, (f, v) => f.WithStrikethrough(v)), isActive: () => ActiveStyle(e).Font.Strikethrough, icon: "strikethrough"),
-        new("format.alignLeft", "Align Left", "Align contents to the left.", null, () => SetAlignment(e, HorizontalAlignment.Left),
+        // Alignment comes in two axes, and each one's names are qualified by its axis. "Align Center"
+        // alone is two different commands in a searchable list — the one that moves text across the
+        // cell and the one that moves it down it — and neither reading is more obvious than the other.
+        new("format.alignLeft", "Align Left (Horizontal)", "Align contents to the left.", null, () => SetAlignment(e, HorizontalAlignment.Left),
             isActive: () => ActiveStyle(e).Alignment.Horizontal == HorizontalAlignment.Left, icon: "align-left"),
-        new("format.alignCenter", "Align Center", "Centre contents in the cell.", null, () => SetAlignment(e, HorizontalAlignment.Center),
+        new("format.alignCenter", "Align Center (Horizontal)", "Centre contents in the cell.", null, () => SetAlignment(e, HorizontalAlignment.Center),
             isActive: () => ActiveStyle(e).Alignment.Horizontal == HorizontalAlignment.Center, icon: "align-center"),
-        new("format.alignRight", "Align Right", "Align contents to the right.", null, () => SetAlignment(e, HorizontalAlignment.Right),
+        new("format.alignRight", "Align Right (Horizontal)", "Align contents to the right.", null, () => SetAlignment(e, HorizontalAlignment.Right),
             isActive: () => ActiveStyle(e).Alignment.Horizontal == HorizontalAlignment.Right, icon: "align-right"),
+        new("format.alignTop", "Align Top (Vertical)", "Sit contents at the top of the cell.", null, () => SetVerticalAlignment(e, VerticalAlignment.Top),
+            isActive: () => ActiveStyle(e).Alignment.Vertical == VerticalAlignment.Top, icon: "align-vertical-justify-start"),
+        new("format.alignMiddle", "Align Middle (Vertical)", "Centre contents between the top and bottom of the cell.", null,
+            () => SetVerticalAlignment(e, VerticalAlignment.Middle),
+            isActive: () => ActiveStyle(e).Alignment.Vertical == VerticalAlignment.Middle, icon: "align-vertical-justify-center"),
+        new("format.alignBottom", "Align Bottom (Vertical)", "Sit contents at the bottom of the cell.", null, () => SetVerticalAlignment(e, VerticalAlignment.Bottom),
+            isActive: () => ActiveStyle(e).Alignment.Vertical == VerticalAlignment.Bottom, icon: "align-vertical-justify-end"),
         new("format.wrap", "Wrap Text", "Wrap long text onto multiple lines.", null, () => ToggleWrap(e),
             isActive: () => ActiveStyle(e).Alignment.WrapText, icon: "wrap-text"),
         new("format.currency", "Currency", "Format the number as currency.", null, () => ToggleNumberFormat(e, CurrencyFormat, NumberFormatKind.Currency),
@@ -286,22 +296,46 @@ public sealed class AppCommands
     private static readonly NumberFormat ScientificFormatPreset = new("0.00E+00");
     private static readonly NumberFormat TimeFormatPreset = new("hh:mm:ss");
 
+    /// <summary>
+    /// Merge Cells, which is a toggle: run on a merge, it unmerges.
+    /// <para>
+    /// Clicking a merged cell selects the <em>whole</em> merge (see <c>SelectCellOrMerge</c>), so the
+    /// selection there is a multi-cell range — which used to take the merge branch and ask
+    /// <c>AddMerge</c> to overlap a region that already existed, whose refusal is an exception nothing
+    /// caught. So "the selection is exactly one existing merge" is the shape of a click on a merged
+    /// cell, and it means unmerge.
+    /// </para>
+    /// <para>
+    /// A selection that merely <em>spans</em> merges is a genuine merge of a bigger block: it absorbs
+    /// them, unmerging each before merging the whole, as one undoable step. That is what every
+    /// spreadsheet does, and it is the only reading that doesn't leave the command dead on a selection
+    /// that happens to touch a merge.
+    /// </para>
+    /// </summary>
     private static void MergeCells(IAppEnvironment e)
     {
-        var sheet = e.Session.ActiveSheet;
-        if (e.Selection.IsSingleCell)
-        {
-            // Toggle: unmerge if the active cell is in a merge.
-            if (sheet.FindMerge(e.Selection.ActiveRow, e.Selection.ActiveColumn) is not null)
-            {
-                e.Session.Execute(Cellestra.Core.Editing.EditCommands.UnmergeCells(sheet.Name, e.Selection.ActiveRow, e.Selection.ActiveColumn));
-                e.Refresh();
-            }
+        var session = e.Session;
+        var sheet = session.ActiveSheet;
+        var range = e.Selection.Range;
+        var overlapping = sheet.MergedRegions.Where(m => m.Range.Intersects(range)).ToList();
 
+        if (overlapping.Count == 1 && (range.IsSingleCell || overlapping[0].Range == range))
+        {
+            var merge = overlapping[0].Range;
+            session.Execute(EditCommands.UnmergeCells(sheet.Name, merge.Top, merge.Left));
+            e.Refresh();
             return;
         }
 
-        e.Session.Execute(Cellestra.Core.Editing.EditCommands.MergeCells(sheet.Name, e.Selection.Range));
+        if (range.IsSingleCell)
+        {
+            return; // one cell, not in a merge — there is nothing to combine
+        }
+
+        var parts = new List<IEditCommand>();
+        parts.AddRange(overlapping.Select(m => EditCommands.UnmergeCells(sheet.Name, m.Range.Top, m.Range.Left)));
+        parts.Add(EditCommands.MergeCells(sheet.Name, range));
+        session.Execute(parts.Count == 1 ? parts[0] : EditCommands.Composite("Merge Cells", parts));
         e.Refresh();
     }
 
@@ -511,6 +545,14 @@ public sealed class AppCommands
         var session = e.Session;
         session.Execute(EditCommands.ApplyStyle(session.Workbook, session.ActiveSheet.Name, e.Selection.Range,
             s => s.WithAlignment(s.Alignment with { Horizontal = horizontal }), "Align"));
+        e.Refresh();
+    }
+
+    private static void SetVerticalAlignment(IAppEnvironment e, VerticalAlignment vertical)
+    {
+        var session = e.Session;
+        session.Execute(EditCommands.ApplyStyle(session.Workbook, session.ActiveSheet.Name, e.Selection.Range,
+            s => s.WithAlignment(s.Alignment with { Vertical = vertical }), "Vertical align"));
         e.Refresh();
     }
 

@@ -172,7 +172,7 @@ Everything reachable in the command bar is also reachable in the menu bar, the C
 | **File** | New (⌘N) · Open… (⌘O) · Open Recent → · Close (⌘W) · Save (⌘S) · Save As… (⇧⌘S) · Import → CSV… · Export → CSV… |
 | **Edit** | Undo (⌘Z) · Redo (⇧⌘Z) · Cut (⌘X) · Copy (⌘C) · Paste (⌘V) · Paste Special… (⌥⌘V) · Delete · Select All (⌘A) · Find → Find… (⌘F), Find & Replace… (⌥⌘F) · Fill → Down (⌘D), Right (⌘R) |
 | **Insert** | Rows Above · Rows Below · Columns Left · Columns Right · Sheet · Table (⌘T) · Function… (⌃⌥F) · Named Range… · Hyperlink… |
-| **Format** | Cells… (⌘1) · Number → … · Bold (⌘B), Italic (⌘I), Underline (⌘U), Strikethrough (⌘⇧X) · Alignment → … · Borders → … · Merge Cells · Rows → Row Height…, Hide Rows (⌃9), Unhide Rows (⌃⇧9) · Columns → Column Width…, Hide Columns (⌃0), Unhide Columns (⌃⇧0) |
+| **Format** | Cells… (⌘1) · Number → … · Bold (⌘B), Italic (⌘I), Underline (⌘U), Strikethrough (⌘⇧X) · Alignment → Align Left/Center/Right (Horizontal), Align Top/Middle/Bottom (Vertical) · Borders → … · Merge Cells · Rows → Row Height…, Hide Rows (⌃9), Unhide Rows (⌃⇧9) · Columns → Column Width…, Hide Columns (⌃0), Unhide Columns (⌃⇧0) |
 | **Data** | Sort… · Sort & Filter… (⇧⌘F) · Filter · Clear Filter · Remove Duplicates… · Text to Columns… · Data Validation… · Recalculate (F9) · Calculation → Automatic / Manual · Named Ranges… · Import CSV… · Export CSV… |
 | **View** | Command Menu… (⌘K) · Go to Sheet… (⌘⇧P) · Zoom In (⌘=) · Zoom Out (⌘−) · Actual Size (⌥⌘0) · Gridlines · Headers · Formula Bar · Status Bar · Freeze Panes |
 | **Window** | Minimize (⌘M) · Zoom · (standard macOS window items) |
@@ -190,7 +190,7 @@ One row, grouped by task. Each **group** shows its 2–3 most-used tools as icon
 |---|---|---|---|
 | **Edit** | Undo (⌘Z) · Redo (⇧⌘Z) | Cut (⌘X) · Copy (⌘C) · Paste (⌘V) · Clear Contents | — |
 | **Text** | Bold (⌘B) · Italic (⌘I) · Underline (⌘U) | Strikethrough (⌘⇧X) · Cells… (⌘1) · **Font size** stepper · **Text colour** swatches · **Cell fill** swatches | Bold/Italic/Underline/Strikethrough light up when on; size and colour preview live on hover (below) |
-| **Align** | Align Left · Center · Right | Wrap Text · Merge Cells | The active alignment is the lit one |
+| **Align** | Align Left · Center · Right (Horizontal) | Align Top · Middle · Bottom (Vertical) · Wrap Text · Merge Cells | The active alignment is the lit one, on each axis |
 | **Numbers** | Currency · Percent | Date | Disabled when the active cell holds text (error prevention) |
 | **Insert** | Rows Above · Columns Left | Sheet · Table (⌘T) | — |
 | **Data** | Sort Ascending · Sort & Filter… (⇧⌘F) | Sort Descending · Sort… · Filter · Clear Filter · Remove Duplicates… · Text to Columns… · Data Validation… | Filter lights up while a filter is active |
@@ -536,6 +536,8 @@ editing match spreadsheet muscle memory (§3 *Feel*). Each is implemented and te
 | Column auto-fit | A **Wrap Text** cell gets no vote in how wide its column should be — it was told to fold at the column's edge, so measuring it flat would ask for a paragraph's width and undo the wrap. Applies to the header double-click and to **Auto-fit Columns** (Data menu), which fits the whole **table** when the active cell is in one, and the selected columns otherwise. |
 | Table column width | Committing an edit inside a table **widens** that column to fit the new value — a table is a declared shape, so a value too wide for its column means the column is the wrong width. Widen-only: a width set by hand is never clawed back, and cells outside a table never resize anything. |
 | Inline editor colours | The editor paints the surface the cell is drawn over (its fill, else the table band, else the canvas), and guarantees its text can be read on it: ink below a 3:1 contrast ratio falls back to the theme's default text colour. Anything readable is left exactly as the document chose it. |
+| Merge Cells is a toggle | Clicking a merged cell selects the **whole** merge, so "the selection is exactly one existing merged region" is what a click on merged cells looks like — and Merge Cells there **unmerges**. A selection that merely *spans* merges is a real merge of a bigger block: it **absorbs** them (unmerge each, then merge the whole) as one undoable step. Merging never overlaps an existing region, which the model refuses outright. |
+| Alignment names carry their axis | "Align Center" is two commands — across the cell and down it — so every alignment command is named for its axis: **Align Left/Center/Right (Horizontal)**, **Align Top/Middle/Bottom (Vertical)**. Both axes are ordinary catalog commands, so both reach the Command Menu, the menu bar, the radial, and rebindable shortcuts; the command bar's Align drawer only lays the vertical three out, it doesn't define them. |
 | Inserted rows/cols | Inherit the formatting of the line before them. |
 | Sheet names | Validated: non-empty, ≤31 chars, no `: \ / ? * [ ]`, no edge apostrophe; uniqueness enforced. Deleting a referenced sheet rewrites dependents to `#REF!`. |
 
