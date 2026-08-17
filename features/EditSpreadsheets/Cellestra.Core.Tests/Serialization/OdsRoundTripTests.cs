@@ -218,6 +218,58 @@ public class OdsRoundTripTests
         Assert.Equal("first\nsecond", RoundTrip(workbook).ActiveSheet.GetValue(0, 0).AsText);
     }
 
+    /// <summary>
+    /// Frozen panes live in settings.xml, in the Tables map of a view — the place LibreOffice reads
+    /// them from. Before this they were session-only, so freezing a header row and saving lost it.
+    /// </summary>
+    [Fact]
+    public void Frozen_panes_survive()
+    {
+        var workbook = BuildSample();
+        workbook.FindSheet("Sheet1")!.FrozenRows = 1;
+        workbook.FindSheet("Sheet1")!.FrozenColumns = 2;
+
+        var result = RoundTrip(workbook);
+
+        Assert.Equal(1, result.FindSheet("Sheet1")!.FrozenRows);
+        Assert.Equal(2, result.FindSheet("Sheet1")!.FrozenColumns);
+        Assert.Equal(0, result.FindSheet("Sheet2")!.FrozenRows);
+    }
+
+    /// <summary>
+    /// A movable split (mode 1) is not a freeze. Reading its position as frozen lines would lock rows
+    /// nobody asked to lock — in a file written by another program, on open.
+    /// </summary>
+    [Fact]
+    public void A_movable_split_is_not_read_as_a_freeze()
+    {
+        var workbook = Workbook.CreateNew();
+        OdsSupportXml.ApplySettings(
+            """
+            <?xml version="1.0" encoding="UTF-8"?>
+            <office:document-settings xmlns:office="urn:oasis:names:tc:opendocument:xmlns:office:1.0"
+                                      xmlns:config="urn:oasis:names:tc:opendocument:xmlns:config:1.0">
+              <office:settings>
+                <config:config-item-set config:name="ooo:view-settings">
+                  <config:config-item-map-indexed config:name="Views">
+                    <config:config-item-map-entry>
+                      <config:config-item-map-named config:name="Tables">
+                        <config:config-item-map-entry config:name="Sheet1">
+                          <config:config-item config:name="VerticalSplitMode" config:type="short">1</config:config-item>
+                          <config:config-item config:name="VerticalSplitPosition" config:type="int">3</config:config-item>
+                        </config:config-item-map-entry>
+                      </config:config-item-map-named>
+                    </config:config-item-map-entry>
+                  </config:config-item-map-indexed>
+                </config:config-item-set>
+              </office:settings>
+            </office:document-settings>
+            """,
+            workbook);
+
+        Assert.Equal(0, workbook.ActiveSheet.FrozenRows);
+    }
+
     [Fact]
     public void Mimetype_is_first_and_stored_uncompressed()
     {

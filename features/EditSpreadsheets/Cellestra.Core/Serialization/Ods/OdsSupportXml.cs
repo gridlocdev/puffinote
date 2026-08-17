@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Xml.Linq;
 using Cellestra.Core.Model;
 using static Cellestra.Core.Serialization.Ods.OdsXmlNames;
@@ -9,6 +10,19 @@ public static class OdsSupportXml
 {
     private const string CalcModeItem = "CellestraCalculationMode";
     private const string ActiveTableItem = "ActiveTable";
+    private const string ViewsItem = "Views";
+    private const string ViewIdItem = "ViewId";
+    private const string TablesItem = "Tables";
+    private const string HorizontalSplitModeItem = "HorizontalSplitMode";
+    private const string VerticalSplitModeItem = "VerticalSplitMode";
+    private const string HorizontalSplitPositionItem = "HorizontalSplitPosition";
+    private const string VerticalSplitPositionItem = "VerticalSplitPosition";
+    private const string PositionRightItem = "PositionRight";
+    private const string PositionBottomItem = "PositionBottom";
+
+    /// <summary>ODF/LibreOffice split mode: 0 none, 1 a movable split, 2 a freeze. Only 2 is a freeze.</summary>
+    private const string FrozenSplitMode = "2";
+    private const string NoSplitMode = "0";
 
     public static XDocument BuildMeta()
     {
@@ -45,9 +59,20 @@ public static class OdsSupportXml
             ? workbook.Worksheets[Math.Clamp(workbook.Settings.ActiveSheetIndex, 0, workbook.SheetCount - 1)].Name
             : string.Empty;
 
+        // The frozen panes and the active sheet live where LibreOffice looks for them: inside a view
+        // in ooo:view-settings, with one Tables entry per sheet that has a freeze. Freezing used to be
+        // session-only — it survived neither a save nor `cellestra clean-up`, which freezes a header
+        // row and then writes the file.
+        var view = new XElement(Config + "config-item-map-entry",
+            ConfigItem(ViewIdItem, "string", "view1"),
+            Tables(workbook),
+            ConfigItem(ActiveTableItem, "string", activeSheet));
+
         var itemSet = new XElement(Config + "config-item-set",
             new XAttribute(Config + "name", "ooo:view-settings"),
-            ConfigItem(ActiveTableItem, "string", activeSheet),
+            new XElement(Config + "config-item-map-indexed",
+                new XAttribute(Config + "name", ViewsItem),
+                view),
             ConfigItem(CalcModeItem, "string", workbook.Settings.CalculationMode.ToString()));
 
         var root = new XElement(Office + "document-settings",
@@ -59,6 +84,36 @@ public static class OdsSupportXml
         return new XDocument(new XDeclaration("1.0", "UTF-8", null), root);
     }
 
+    /// <summary>
+    /// One <c>Tables</c> map holding the frozen-pane state of every sheet that has one. Sheets with no
+    /// freeze are left out rather than written as zeroes — an absent entry already means "no panes".
+    /// </summary>
+    private static XElement Tables(Workbook workbook)
+    {
+        var tables = new XElement(Config + "config-item-map-named", new XAttribute(Config + "name", TablesItem));
+        foreach (var sheet in workbook.Worksheets)
+        {
+            if (sheet.FrozenRows <= 0 && sheet.FrozenColumns <= 0)
+            {
+                continue;
+            }
+
+            tables.Add(new XElement(Config + "config-item-map-entry",
+                new XAttribute(Config + "name", sheet.Name),
+                ConfigItem(HorizontalSplitModeItem, "short", sheet.FrozenColumns > 0 ? FrozenSplitMode : NoSplitMode),
+                ConfigItem(VerticalSplitModeItem, "short", sheet.FrozenRows > 0 ? FrozenSplitMode : NoSplitMode),
+                ConfigItem(HorizontalSplitPositionItem, "int", Count(sheet.FrozenColumns)),
+                ConfigItem(VerticalSplitPositionItem, "int", Count(sheet.FrozenRows)),
+                // Where the unfrozen pane starts — the same line, since a freeze splits exactly there.
+                ConfigItem(PositionRightItem, "int", Count(sheet.FrozenColumns)),
+                ConfigItem(PositionBottomItem, "int", Count(sheet.FrozenRows))));
+        }
+
+        return tables;
+    }
+
+    private static string Count(int value) => value.ToString(CultureInfo.InvariantCulture);
+
     public static void ApplySettings(string settingsXml, Workbook workbook)
     {
         XDocument document;
@@ -69,6 +124,18 @@ public static class OdsSupportXml
         catch (System.Xml.XmlException)
         {
             return;
+        }
+
+        foreach (var entry in document.Descendants(Config + "config-item-map-entry"))
+        {
+            if (entry.Attribute(Config + "name")?.Value is not { } sheetName ||
+                workbook.FindSheet(sheetName) is not { } sheet)
+            {
+                continue;
+            }
+
+            sheet.FrozenColumns = FrozenLines(entry, HorizontalSplitModeItem, HorizontalSplitPositionItem);
+            sheet.FrozenRows = FrozenLines(entry, VerticalSplitModeItem, VerticalSplitPositionItem);
         }
 
         foreach (var item in document.Descendants(Config + "config-item"))
@@ -88,6 +155,27 @@ public static class OdsSupportXml
             }
         }
     }
+
+    /// <summary>
+    /// How many lines a pane holds frozen on one axis: the position, but only when the mode says the
+    /// split is a freeze. A mode-1 split is a scroll divider the user can drag, not frozen headers,
+    /// and reading it as one would lock rows nobody asked to lock.
+    /// </summary>
+    private static int FrozenLines(XElement entry, string modeItem, string positionItem)
+    {
+        if (ItemValue(entry, modeItem) != FrozenSplitMode)
+        {
+            return 0;
+        }
+
+        return int.TryParse(ItemValue(entry, positionItem), NumberStyles.Integer, CultureInfo.InvariantCulture, out int lines) && lines > 0
+            ? lines
+            : 0;
+    }
+
+    private static string? ItemValue(XElement entry, string name) =>
+        entry.Elements(Config + "config-item")
+            .FirstOrDefault(item => item.Attribute(Config + "name")?.Value == name)?.Value;
 
     public static XDocument BuildManifest(IEnumerable<string> parts, IEnumerable<string>? chartObjectDirs = null)
     {
