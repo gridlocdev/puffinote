@@ -15,16 +15,28 @@ public static class OdsDataStyles
     /// <summary>Build the ODF data-style element for a format, or null for General/Text.</summary>
     public static XElement? Build(string name, NumberFormat format)
     {
-        if (format.IsGeneral || format.Code == "@")
+        if (format.IsGeneral)
         {
             return null;
+        }
+
+        // Text ("@") is a style, not the absence of one: it is what stops a cell parsing its content as
+        // a number. Returning null here wrote no data style at all, so the cell reopened as Automatic
+        // and its content went back to being interpreted.
+        if (format.Code == "@")
+        {
+            return new XElement(Number + "text-style",
+                new XAttribute(Style + "name", name),
+                new XElement(Number + "text-content"));
         }
 
         return format.Kind switch
         {
             NumberFormatKind.Percent => Percentage(name, format.Code),
             NumberFormatKind.Currency => Currency(name, format.Code) ?? NumberStyle(name, format.Code),
-            NumberFormatKind.Number or NumberFormatKind.Scientific => NumberStyle(name, format.Code),
+            NumberFormatKind.Scientific => Scientific(name, format.Code),
+            NumberFormatKind.Fraction => Fraction(name, format.Code),
+            NumberFormatKind.Number => NumberStyle(name, format.Code),
             NumberFormatKind.Date or NumberFormatKind.DateTime or NumberFormatKind.Time => DateStyle(name, format.Code),
             _ => null,
         };
@@ -40,6 +52,7 @@ public static class OdsDataStyles
             "number-style" => NumberCode(dataStyle),
             "currency-style" => CurrencyCode(dataStyle),
             "date-style" => DateCode(dataStyle),
+            "text-style" => "@",
             _ => "General",
         };
     }
@@ -57,6 +70,86 @@ public static class OdsDataStyles
         }
 
         return new XElement(Number + "number-style", new XAttribute(Style + "name", name), number);
+    }
+
+    /// <summary>
+    /// A <c>number:number-style</c> holding a <c>number:scientific-number</c> — ODF's exponent format.
+    /// Written as a plain <c>number:number</c>, <c>0.00E+00</c> reopened as <c>0.00</c>: the exponent
+    /// is carried by the element type, and there is nowhere else to put it.
+    /// </summary>
+    private static XElement Scientific(string name, string code)
+    {
+        int e = code.IndexOf('E', StringComparison.OrdinalIgnoreCase);
+        int exponentDigits = 0;
+        for (int i = e + 1; i < code.Length; i++)
+        {
+            if (code[i] is '0' or '#')
+            {
+                exponentDigits++;
+            }
+            else if (code[i] is not ('+' or '-'))
+            {
+                break;
+            }
+        }
+
+        return new XElement(Number + "number-style",
+            new XAttribute(Style + "name", name),
+            new XElement(Number + "scientific-number",
+                new XAttribute(Number + "decimal-places", DecimalPlaces(code)),
+                new XAttribute(Number + "min-integer-digits", IntegerDigits(code)),
+                new XAttribute(Number + "min-exponent-digits", Math.Max(1, exponentDigits))));
+    }
+
+    /// <summary>
+    /// A <c>number:number-style</c> holding a <c>number:fraction</c> (<c># ?/?</c>). Cellestra doesn't
+    /// render fractions, but a format it can't draw is still a format the file chose — dropping it to
+    /// General on save would rewrite someone else's document to say something it didn't.
+    /// </summary>
+    private static XElement Fraction(string name, string code)
+    {
+        int slash = code.IndexOf('/', StringComparison.Ordinal);
+        int numerator = CountPlaceholders(code, slash < 0 ? 0 : slash - 1, -1);
+        int denominator = CountPlaceholders(code, slash + 1, +1);
+
+        return new XElement(Number + "number-style",
+            new XAttribute(Style + "name", name),
+            new XElement(Number + "fraction",
+                new XAttribute(Number + "min-integer-digits", code.Contains('#', StringComparison.Ordinal) ? 0 : 1),
+                new XAttribute(Number + "min-numerator-digits", numerator),
+                new XAttribute(Number + "min-denominator-digits", denominator)));
+    }
+
+    /// <summary>Count the run of <c>?</c>/<c>0</c>/<c>#</c> placeholders from <paramref name="start"/> in <paramref name="step"/>'s direction.</summary>
+    private static int CountPlaceholders(string code, int start, int step)
+    {
+        int count = 0;
+        for (int i = start; i >= 0 && i < code.Length && code[i] is '?' or '0' or '#'; i += step)
+        {
+            count++;
+        }
+
+        return Math.Max(1, count);
+    }
+
+    /// <summary>How many leading digit placeholders a code asks for — the <c>0</c>s before its decimal point.</summary>
+    private static int IntegerDigits(string code)
+    {
+        int count = 0;
+        foreach (char c in code)
+        {
+            if (c == '.')
+            {
+                break;
+            }
+
+            if (c == '0')
+            {
+                count++;
+            }
+        }
+
+        return Math.Max(1, count);
     }
 
     /// <summary>
@@ -134,11 +227,17 @@ public static class OdsDataStyles
     private static XElement Percentage(string name, string code)
     {
         int decimals = DecimalPlaces(code);
+        var number = new XElement(Number + "number",
+            new XAttribute(Number + "decimal-places", decimals),
+            new XAttribute(Number + "min-integer-digits", 1));
+        if (code.Contains(',', StringComparison.Ordinal))
+        {
+            number.Add(new XAttribute(Number + "grouping", "true"));
+        }
+
         return new XElement(Number + "percentage-style",
             new XAttribute(Style + "name", name),
-            new XElement(Number + "number",
-                new XAttribute(Number + "decimal-places", decimals),
-                new XAttribute(Number + "min-integer-digits", 1)),
+            number,
             new XElement(Number + "text", "%"));
     }
 
@@ -231,7 +330,34 @@ public static class OdsDataStyles
         return count;
     }
 
-    private static string NumberCode(XElement style) => NumberCore(style.Element(Number + "number"));
+    private static string NumberCode(XElement style)
+    {
+        if (style.Element(Number + "fraction") is { } fraction)
+        {
+            string whole = ReadDigits(fraction, "min-integer-digits", 0) > 0 ? "0" : "#";
+            return whole + " " + new string('?', ReadDigits(fraction, "min-numerator-digits", 1))
+                + "/" + new string('?', ReadDigits(fraction, "min-denominator-digits", 1));
+        }
+
+        if (style.Element(Number + "scientific-number") is { } scientific)
+        {
+            int decimals = ReadDecimals(scientific);
+            string mantissa = new('0', ReadDigits(scientific, "min-integer-digits", 1));
+            if (decimals > 0)
+            {
+                mantissa += "." + new string('0', decimals);
+            }
+
+            return mantissa + "E+" + new string('0', ReadDigits(scientific, "min-exponent-digits", 2));
+        }
+
+        return NumberCore(style.Element(Number + "number"));
+    }
+
+    private static int ReadDigits(XElement element, string attribute, int fallback) =>
+        int.TryParse(element.Attribute(Number + attribute)?.Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out int d)
+            ? d
+            : fallback;
 
     /// <summary>The numeric part of a code — <c>#,##0.00</c> — from a <c>number:number</c> element.</summary>
     private static string NumberCore(XElement? number)
@@ -269,11 +395,7 @@ public static class OdsDataStyles
         return sb.Length > 0 ? sb.ToString() : NumberCode(style);
     }
 
-    private static string PercentCode(XElement style)
-    {
-        int decimals = ReadDecimals(style.Element(Number + "number"));
-        return decimals > 0 ? "0." + new string('0', decimals) + "%" : "0%";
-    }
+    private static string PercentCode(XElement style) => NumberCore(style.Element(Number + "number")) + "%";
 
     private static string DateCode(XElement style)
     {
@@ -286,7 +408,11 @@ public static class OdsDataStyles
                     sb.Append(child.Attribute(Number + "style")?.Value == "long" ? "yyyy" : "yy");
                     break;
                 case "month":
-                    sb.Append(child.Attribute(Number + "style")?.Value == "long" ? "mm" : "m");
+                    // A textual month is a different token, not a longer one: mmmm is "January" where
+                    // mm is "01". Reading both back as m/mm turned every month name into a number.
+                    bool textual = child.Attribute(Number + "textual")?.Value == "true";
+                    bool longForm = child.Attribute(Number + "style")?.Value == "long";
+                    sb.Append(textual ? (longForm ? "mmmm" : "mmm") : longForm ? "mm" : "m");
                     break;
                 case "day":
                     sb.Append(child.Attribute(Number + "style")?.Value == "long" ? "dd" : "d");

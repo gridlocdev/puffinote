@@ -196,14 +196,26 @@ public static partial class OdsContentXml
             bool hidden = element.Attribute(Table + "visibility")?.Value is "collapse" or "filter";
             double? height = styleName is not null && rowHeights.TryGetValue(styleName, out var h) ? h : null;
 
+            // The row's default cell style — the row-level twin of a column's, which every writer uses
+            // to say "this whole row is formatted like so" without touching a cell.
+            string? defaultCellStyle = element.Attribute(Table + "default-cell-style-name")?.Value;
+            int? defaultStyleId = defaultCellStyle is not null && styleLookup.TryGetValue(defaultCellStyle, out int id)
+                ? id
+                : null;
+
             for (int i = 0; i < repeat; i++, row++)
             {
-                if (height is not null || hidden)
+                if (height is not null || hidden || defaultStyleId is not null)
                 {
                     var model = sheet.GetOrCreateRow(row);
                     if (height is not null)
                     {
                         model.Height = height.Value;
+                    }
+
+                    if (defaultStyleId is not null)
+                    {
+                        model.StyleId = defaultStyleId.Value;
                     }
 
                     model.Hidden = hidden;

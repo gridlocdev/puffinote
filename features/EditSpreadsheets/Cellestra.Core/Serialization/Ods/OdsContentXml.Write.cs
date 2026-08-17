@@ -217,6 +217,14 @@ public static partial class OdsContentXml
             element.Add(new XAttribute(Table + "visibility", "collapse"));
         }
 
+        // A whole formatted row travels the same way a formatted column does — one attribute, no style
+        // on any cell. Rows used to skip this, so a row-level format (which only another editor can
+        // author today, but which the model resolves through in EffectiveStyleId) was dropped on save.
+        if (rowModel is { StyleId: var rowStyle } && rowStyle != StylePool.DefaultId)
+        {
+            element.Add(new XAttribute(Table + "default-cell-style-name", registry.CellStyle(rowStyle)));
+        }
+
         int column = 0;
         while (column <= lastColumn)
         {
