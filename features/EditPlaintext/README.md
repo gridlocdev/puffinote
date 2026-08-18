@@ -28,11 +28,12 @@ just run-plaintain-cli info server.log
 Ship it:
 
 ```bash
-just install-plaintain        # the `plaintain` CLI onto PATH
-just install-plaintain-app    # Plaintain.app into /Applications (macOS)
+just install-plaintain        # both halves: the `plaintain` CLI onto PATH + Plaintain.app (macOS)
+just install-plaintain-cli    # only the CLI
+just install-plaintain-app    # only Plaintain.app into /Applications (macOS)
 ```
 
-Every install has an exact inverse (`uninstall-plaintain`, `uninstall-plaintain-app`).
+Every install has an exact inverse (`uninstall-plaintain`, `-plaintain-cli`, `-plaintain-app`).
 
 ## The `plaintain` CLI
 

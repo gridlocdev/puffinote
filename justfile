@@ -18,15 +18,18 @@
 #   just test-typage      one area's suite (recipes read verb-first: test-puffinote, publish-cellestra-app)
 #   just test-filter SomeTest typage    run a subset while iterating
 #   just publish          self-contained Release builds of every app into artifacts/
-#   just install          put the CLIs (puffinote, typage, cellestra, plaintain, pivotask) on PATH
+#   just install          every app, both halves: its CLI onto PATH, and on macOS its .app
+#                         into /Applications (elsewhere there is no .app, so the CLI alone)
+#   just install-cli      only the CLIs (puffinote, typage, cellestra, plaintain, pivotask)
 #   just publish-app      macOS .app bundles for every app (macOS only)
 #   just install-app      ...and copy them into /Applications
 #
 # Every install has an inverse that undoes exactly what it did, and nothing else:
 #   just publish ↔ just unpublish            what publish wrote under artifacts/, for this RID
-#   just install ↔ just uninstall            the CLIs in PREFIX/bin
-#   just install-app ↔ just uninstall-app    the .app bundles in APPS_DIR (also withdraws their
-#                                            Launch Services file-type claims)
+#   just install ↔ just uninstall            both halves of every app (CLI + .app)
+#   just install-cli ↔ just uninstall-cli    only the CLIs in PREFIX/bin
+#   just install-app ↔ just uninstall-app    only the .app bundles in APPS_DIR (also withdraws
+#                                            their Launch Services file-type claims)
 # `unpublish` is RID-precise, so a cross-published osx-x64 tree survives `just unpublish` on an
 # arm64 host; `just clean` is the blunt one and removes artifacts/ entirely.
 # Neither uninstall touches PREFIX/bin itself (it predates us and is on your PATH) or an app's
@@ -168,13 +171,21 @@ publish: publish-puffinote publish-typage publish-cellestra publish-plaintain pu
 [group('all areas')]
 unpublish: unpublish-puffinote unpublish-typage unpublish-cellestra unpublish-plaintain unpublish-pivotask
 
-# Install every CLI into PREFIX/bin (default ~/.local/bin)
+# Install every app, both halves: CLI onto PATH + .app into APPS_DIR (CLI alone off macOS)
 [group('all areas')]
 install: install-puffinote install-typage install-cellestra install-plaintain install-pivotask
 
-# Remove every installed CLI from PREFIX/bin
+# Remove everything install put there — every CLI, and on macOS every .app
 [group('all areas')]
 uninstall: uninstall-puffinote uninstall-typage uninstall-cellestra uninstall-plaintain uninstall-pivotask
+
+# Install only the CLIs into PREFIX/bin (default ~/.local/bin)
+[group('all areas')]
+install-cli: install-puffinote-cli install-typage-cli install-cellestra-cli install-plaintain-cli install-pivotask-cli
+
+# Remove every installed CLI from PREFIX/bin (the inverse of install-cli)
+[group('all areas')]
+uninstall-cli: uninstall-puffinote-cli uninstall-typage-cli uninstall-cellestra-cli uninstall-plaintain-cli uninstall-pivotask-cli
 
 # Build every macOS .app bundle (macOS only)
 [group('all areas')]
@@ -253,7 +264,7 @@ publish-puffinote-app:
 
 # Install the `puffinote` CLI into PREFIX/bin (default ~/.local/bin)
 [group('puffinote')]
-install-puffinote: publish-puffinote-cli
+install-puffinote-cli: publish-puffinote-cli
     @mkdir -p "{{ BINDIR }}"
     install -m 0755 {{ PUFFINOTE_OUT }}/cli/puffinote "{{ BINDIR }}/puffinote"
     @echo "installed {{ BINDIR }}/puffinote — make sure {{ BINDIR }} is on your PATH"
@@ -266,6 +277,16 @@ install-puffinote-app: publish-puffinote-app
     cp -R {{ PUFFINOTE_OUT }}/Puffinote.app "{{ APPS_DIR }}/Puffinote.app"
     @echo "installed {{ APPS_DIR }}/Puffinote.app"
 
+# Install Puffinote whole: the `puffinote` CLI, and Puffinote.app beside it
+[group('puffinote')]
+[macos]
+install-puffinote: install-puffinote-cli install-puffinote-app
+
+# Install Puffinote whole — off macOS there is no .app, so the CLI is the whole app
+[group('puffinote')]
+[linux]
+install-puffinote: install-puffinote-cli
+
 # Remove Puffinote's published output for this RID (the inverse of publish-puffinote)
 [group('puffinote')]
 unpublish-puffinote:
@@ -276,7 +297,7 @@ unpublish-puffinote:
 
 # Remove the installed `puffinote` CLI from PREFIX/bin
 [group('puffinote')]
-uninstall-puffinote:
+uninstall-puffinote-cli:
     rm -f "{{ BINDIR }}/puffinote"
     @echo "removed {{ BINDIR }}/puffinote"
 
@@ -286,6 +307,16 @@ uninstall-puffinote-app:
     @{{ LSREGISTER }} -u "{{ APPS_DIR }}/Puffinote.app" >/dev/null 2>&1 || true
     rm -rf "{{ APPS_DIR }}/Puffinote.app"
     @echo "removed {{ APPS_DIR }}/Puffinote.app"
+
+# Remove Puffinote whole: the CLI and Puffinote.app (the inverse of install-puffinote)
+[group('puffinote')]
+[macos]
+uninstall-puffinote: uninstall-puffinote-cli uninstall-puffinote-app
+
+# Remove Puffinote whole — off macOS there is no .app, so the CLI is the whole app
+[group('puffinote')]
+[linux]
+uninstall-puffinote: uninstall-puffinote-cli
 
 # ==============================================================================
 # Typage — the Markdown editor (features/EditMarkdown/)
@@ -357,7 +388,7 @@ publish-typage-app:
 
 # Install the `typage` CLI into PREFIX/bin (default ~/.local/bin)
 [group('typage')]
-install-typage: publish-typage-cli
+install-typage-cli: publish-typage-cli
     @mkdir -p "{{ BINDIR }}"
     install -m 0755 {{ TYPAGE_OUT }}/cli/typage "{{ BINDIR }}/typage"
     @echo "installed {{ BINDIR }}/typage — make sure {{ BINDIR }} is on your PATH"
@@ -370,6 +401,16 @@ install-typage-app: publish-typage-app
     cp -R {{ TYPAGE_OUT }}/Typage.app "{{ APPS_DIR }}/Typage.app"
     @echo "installed {{ APPS_DIR }}/Typage.app"
 
+# Install Typage whole: the `typage` CLI, and Typage.app beside it
+[group('typage')]
+[macos]
+install-typage: install-typage-cli install-typage-app
+
+# Install Typage whole — off macOS there is no .app, so the CLI is the whole app
+[group('typage')]
+[linux]
+install-typage: install-typage-cli
+
 # Remove Typage's published output for this RID (the inverse of publish-typage)
 [group('typage')]
 unpublish-typage:
@@ -380,7 +421,7 @@ unpublish-typage:
 
 # Remove the installed `typage` CLI from PREFIX/bin
 [group('typage')]
-uninstall-typage:
+uninstall-typage-cli:
     rm -f "{{ BINDIR }}/typage"
     @echo "removed {{ BINDIR }}/typage"
 
@@ -390,6 +431,16 @@ uninstall-typage-app:
     @{{ LSREGISTER }} -u "{{ APPS_DIR }}/Typage.app" >/dev/null 2>&1 || true
     rm -rf "{{ APPS_DIR }}/Typage.app"
     @echo "removed {{ APPS_DIR }}/Typage.app"
+
+# Remove Typage whole: the CLI and Typage.app (the inverse of install-typage)
+[group('typage')]
+[macos]
+uninstall-typage: uninstall-typage-cli uninstall-typage-app
+
+# Remove Typage whole — off macOS there is no .app, so the CLI is the whole app
+[group('typage')]
+[linux]
+uninstall-typage: uninstall-typage-cli
 
 # ==============================================================================
 # Cellestra — the spreadsheet editor (features/EditSpreadsheets/)
@@ -466,7 +517,7 @@ publish-cellestra-app:
 
 # Install the `cellestra` CLI into PREFIX/bin (default ~/.local/bin)
 [group('cellestra')]
-install-cellestra: publish-cellestra-cli
+install-cellestra-cli: publish-cellestra-cli
     @mkdir -p "{{ BINDIR }}"
     install -m 0755 {{ CELLESTRA_OUT }}/cli/cellestra "{{ BINDIR }}/cellestra"
     @echo "installed {{ BINDIR }}/cellestra — make sure {{ BINDIR }} is on your PATH"
@@ -479,6 +530,16 @@ install-cellestra-app: publish-cellestra-app
     cp -R {{ CELLESTRA_OUT }}/Cellestra.app "{{ APPS_DIR }}/Cellestra.app"
     @echo "installed {{ APPS_DIR }}/Cellestra.app"
 
+# Install Cellestra whole: the `cellestra` CLI, and Cellestra.app beside it
+[group('cellestra')]
+[macos]
+install-cellestra: install-cellestra-cli install-cellestra-app
+
+# Install Cellestra whole — off macOS there is no .app, so the CLI is the whole app
+[group('cellestra')]
+[linux]
+install-cellestra: install-cellestra-cli
+
 # Remove Cellestra's published output for this RID (the inverse of publish-cellestra)
 [group('cellestra')]
 unpublish-cellestra:
@@ -489,7 +550,7 @@ unpublish-cellestra:
 
 # Remove the installed `cellestra` CLI from PREFIX/bin
 [group('cellestra')]
-uninstall-cellestra:
+uninstall-cellestra-cli:
     rm -f "{{ BINDIR }}/cellestra"
     @echo "removed {{ BINDIR }}/cellestra"
 
@@ -499,6 +560,16 @@ uninstall-cellestra-app:
     @{{ LSREGISTER }} -u "{{ APPS_DIR }}/Cellestra.app" >/dev/null 2>&1 || true
     rm -rf "{{ APPS_DIR }}/Cellestra.app"
     @echo "removed {{ APPS_DIR }}/Cellestra.app"
+
+# Remove Cellestra whole: the CLI and Cellestra.app (the inverse of install-cellestra)
+[group('cellestra')]
+[macos]
+uninstall-cellestra: uninstall-cellestra-cli uninstall-cellestra-app
+
+# Remove Cellestra whole — off macOS there is no .app, so the CLI is the whole app
+[group('cellestra')]
+[linux]
+uninstall-cellestra: uninstall-cellestra-cli
 
 
 # ==============================================================================
@@ -572,7 +643,7 @@ publish-plaintain-app:
 
 # Install the `plaintain` CLI into PREFIX/bin (default ~/.local/bin)
 [group('plaintain')]
-install-plaintain: publish-plaintain-cli
+install-plaintain-cli: publish-plaintain-cli
     @mkdir -p "{{ BINDIR }}"
     install -m 0755 {{ PLAINTAIN_OUT }}/cli/plaintain "{{ BINDIR }}/plaintain"
     @echo "installed {{ BINDIR }}/plaintain — make sure {{ BINDIR }} is on your PATH"
@@ -585,6 +656,16 @@ install-plaintain-app: publish-plaintain-app
     cp -R {{ PLAINTAIN_OUT }}/Plaintain.app "{{ APPS_DIR }}/Plaintain.app"
     @echo "installed {{ APPS_DIR }}/Plaintain.app"
 
+# Install Plaintain whole: the `plaintain` CLI, and Plaintain.app beside it
+[group('plaintain')]
+[macos]
+install-plaintain: install-plaintain-cli install-plaintain-app
+
+# Install Plaintain whole — off macOS there is no .app, so the CLI is the whole app
+[group('plaintain')]
+[linux]
+install-plaintain: install-plaintain-cli
+
 # Remove Plaintain's published output for this RID (the inverse of publish-plaintain)
 [group('plaintain')]
 unpublish-plaintain:
@@ -595,7 +676,7 @@ unpublish-plaintain:
 
 # Remove the installed `plaintain` CLI from PREFIX/bin
 [group('plaintain')]
-uninstall-plaintain:
+uninstall-plaintain-cli:
     rm -f "{{ BINDIR }}/plaintain"
     @# `pltn` is the name this CLI shipped under before it took the app's own; an earlier install left
     @# one on PATH that nothing here would ever remove again.
@@ -608,6 +689,16 @@ uninstall-plaintain-app:
     @{{ LSREGISTER }} -u "{{ APPS_DIR }}/Plaintain.app" >/dev/null 2>&1 || true
     rm -rf "{{ APPS_DIR }}/Plaintain.app"
     @echo "removed {{ APPS_DIR }}/Plaintain.app"
+
+# Remove Plaintain whole: the CLI and Plaintain.app (the inverse of install-plaintain)
+[group('plaintain')]
+[macos]
+uninstall-plaintain: uninstall-plaintain-cli uninstall-plaintain-app
+
+# Remove Plaintain whole — off macOS there is no .app, so the CLI is the whole app
+[group('plaintain')]
+[linux]
+uninstall-plaintain: uninstall-plaintain-cli
 
 
 # ==============================================================================
@@ -681,7 +772,7 @@ verify-pivotask-file-claim *APP:
 
 # Install the `pivotask` CLI into PREFIX/bin (default ~/.local/bin)
 [group('pivotask')]
-install-pivotask: publish-pivotask-cli
+install-pivotask-cli: publish-pivotask-cli
     @mkdir -p "{{ BINDIR }}"
     install -m 0755 {{ PIVOTASK_OUT }}/cli/pivotask "{{ BINDIR }}/pivotask"
     @echo "installed {{ BINDIR }}/pivotask — make sure {{ BINDIR }} is on your PATH"
@@ -694,6 +785,16 @@ install-pivotask-app: publish-pivotask-app
     cp -R {{ PIVOTASK_OUT }}/Pivotask.app "{{ APPS_DIR }}/Pivotask.app"
     @echo "installed {{ APPS_DIR }}/Pivotask.app"
 
+# Install Pivotask whole: the `pivotask` CLI, and Pivotask.app beside it
+[group('pivotask')]
+[macos]
+install-pivotask: install-pivotask-cli install-pivotask-app
+
+# Install Pivotask whole — off macOS there is no .app, so the CLI is the whole app
+[group('pivotask')]
+[linux]
+install-pivotask: install-pivotask-cli
+
 # Remove Pivotask's published output for this RID (the inverse of publish-pivotask)
 [group('pivotask')]
 unpublish-pivotask:
@@ -704,7 +805,7 @@ unpublish-pivotask:
 
 # Remove the installed `pivotask` CLI from PREFIX/bin
 [group('pivotask')]
-uninstall-pivotask:
+uninstall-pivotask-cli:
     rm -f "{{ BINDIR }}/pivotask"
     @# `ptask` is the name this CLI shipped under before it took the app's own; an earlier install left
     @# one on PATH that nothing here would ever remove again.
@@ -717,6 +818,16 @@ uninstall-pivotask-app:
     @{{ LSREGISTER }} -u "{{ APPS_DIR }}/Pivotask.app" >/dev/null 2>&1 || true
     rm -rf "{{ APPS_DIR }}/Pivotask.app"
     @echo "removed {{ APPS_DIR }}/Pivotask.app"
+
+# Remove Pivotask whole: the CLI and Pivotask.app (the inverse of install-pivotask)
+[group('pivotask')]
+[macos]
+uninstall-pivotask: uninstall-pivotask-cli uninstall-pivotask-app
+
+# Remove Pivotask whole — off macOS there is no .app, so the CLI is the whole app
+[group('pivotask')]
+[linux]
+uninstall-pivotask: uninstall-pivotask-cli
 
 # ==============================================================================
 # Iterating on a single test / subset (prefer this while developing)

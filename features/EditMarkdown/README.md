@@ -95,8 +95,9 @@ From the repo root:
 
 ```bash
 just publish-typage             # CLI + editor, self-contained → artifacts/typage/<rid>/
-just install-typage             # the `typage` CLI onto PATH
-just install-typage-app         # Typage.app → /Applications (macOS only)
+just install-typage             # both halves: the `typage` CLI onto PATH + Typage.app (macOS)
+just install-typage-cli         # only the CLI
+just install-typage-app         # only Typage.app → /Applications (macOS only)
 ```
 
 `Typage.app` owns the `.md` association (`Typage.Desktop/Info.plist`), so double-clicking a Markdown

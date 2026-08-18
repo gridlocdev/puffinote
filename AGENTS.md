@@ -99,7 +99,9 @@ export CELLESTRA_HEADLESS_NULL_DRAWING=1
 
 ```bash
 just publish                              # CLI + desktop, self-contained Release → artifacts/<app>/<rid>/
-just install                              # every CLI onto PATH (override: just PREFIX=/usr/local install)
+just install                              # every app, both halves: CLI onto PATH + .app into /Applications
+                                          #   (CLI alone off macOS; override: just PREFIX=/usr/local install)
+just install-cli                          # only the CLIs — what a Linux container can install
 just publish-typage-app                   # artifacts/typage/<rid>/Typage.app  (also: just install-app)
 ```
 
@@ -107,8 +109,8 @@ Bundle metadata is per app (`<App>.Desktop/Info.plist`); the bundling, signing, 
 shared in `build/package-mac.sh` — extend that script rather than adding a per-area copy.
 
 Everything here has an exact inverse — `just unpublish` for what publish wrote under `artifacts/`,
-`just uninstall` for the CLIs, `just uninstall-app` for the bundles (which also withdraws their Launch
-Services file-type claims). `unpublish` is RID-precise, so a cross-published `osx-x64` tree survives it;
+`just uninstall` for both halves of every app, `just uninstall-cli` for the CLIs alone, `just
+uninstall-app` for the bundles alone (which also withdraws their Launch Services file-type claims). `unpublish` is RID-precise, so a cross-published `osx-x64` tree survives it;
 `just clean` is the blunt one and takes `artifacts/` entirely. No inverse removes `PREFIX/bin` itself or
 an app's user data under `~/Library/Application Support`: uninstalling a tool is not consent to delete
 someone's documents, settings, or unsaved-work snapshots.

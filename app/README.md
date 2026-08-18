@@ -33,8 +33,9 @@ From the repo root:
 
 ```bash
 just publish-puffinote          # CLI + shell, self-contained → artifacts/puffinote/<rid>/
-just install-puffinote          # the `puffinote` CLI onto PATH
-just install-puffinote-app      # Puffinote.app → /Applications (macOS only)
+just install-puffinote          # both halves: the `puffinote` CLI onto PATH + Puffinote.app (macOS)
+just install-puffinote-cli      # only the CLI
+just install-puffinote-app      # only Puffinote.app → /Applications (macOS only)
 ```
 
 The bundle declares itself a handler for *folders*, not for `.md`/`.ods` — Puffinote opens a notebook

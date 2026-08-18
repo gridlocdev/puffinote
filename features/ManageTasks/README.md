@@ -29,11 +29,12 @@ just run-pivotask-cli list --due-tomorrow
 Ship it:
 
 ```bash
-just install-pivotask           # the `pivotask` CLI onto PATH
-just install-pivotask-app       # Pivotask.app into /Applications (macOS)
+just install-pivotask           # both halves: the `pivotask` CLI onto PATH + Pivotask.app (macOS)
+just install-pivotask-cli       # only the CLI
+just install-pivotask-app       # only Pivotask.app into /Applications (macOS)
 ```
 
-Every install has an exact inverse (`uninstall-pivotask`, `uninstall-pivotask-app`).
+Every install has an exact inverse (`uninstall-pivotask`, `-pivotask-cli`, `-pivotask-app`).
 
 ## The `pivotask` CLI
 
