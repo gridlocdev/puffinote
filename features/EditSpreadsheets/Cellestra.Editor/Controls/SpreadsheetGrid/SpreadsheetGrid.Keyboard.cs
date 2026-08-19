@@ -136,7 +136,10 @@ public sealed partial class SpreadsheetGrid
                 return;
         }
 
-        EnsureVisible(Selection.ActiveRow, Selection.ActiveColumn);
+        // Follow the extent, not the active cell: on a plain move they are the same cell, and on a
+        // Shift+extension the extent is the edge that just grew — the active cell stayed pinned at
+        // the anchor and may be nowhere near the action.
+        EnsureVisible(Selection.ExtentRow, Selection.ExtentColumn);
         e.Handled = true;
     }
 
@@ -178,15 +181,17 @@ public sealed partial class SpreadsheetGrid
     }
 
     /// <summary>
-    /// Move (or extend) the active cell by one step, skipping over any merged region: a step starts
+    /// Move (or extend) the selection by one step, skipping over any merged region: a step starts
     /// from the current merge's edge and lands on the cell past it, and entering a merge selects the
-    /// whole span. Falls back to a plain one-cell step when there are no merges in the way.
+    /// whole span. Falls back to a plain one-cell step when there are no merges in the way. An
+    /// extension steps from the selection's <em>extent</em> — the moving corner — because the active
+    /// cell stays pinned at the anchor while Shift grows the rectangle.
     /// </summary>
     private void MoveStep(int rowDelta, int columnDelta, bool extend)
     {
         var sheet = Sheet;
-        int row = Selection.ActiveRow;
-        int column = Selection.ActiveColumn;
+        int row = extend ? Selection.ExtentRow : Selection.ActiveRow;
+        int column = extend ? Selection.ExtentColumn : Selection.ActiveColumn;
         var (targetRow, targetColumn) = sheet?.StepOverMerges(row, column, rowDelta, columnDelta)
             ?? (Math.Clamp(row + rowDelta, 0, SheetDimensions.MaxRows - 1),
                 Math.Clamp(column + columnDelta, 0, SheetDimensions.MaxColumns - 1));
@@ -216,8 +221,11 @@ public sealed partial class SpreadsheetGrid
             return;
         }
 
+        // An extending jump starts from the moving corner, same as MoveStep.
+        int row = extend ? Selection.ExtentRow : Selection.ActiveRow;
+        int column = extend ? Selection.ExtentColumn : Selection.ActiveColumn;
         var (targetRow, targetColumn) = Cellestra.Core.Data.EdgeNavigator.FindEdge(
-            sheet, Selection.ActiveRow, Selection.ActiveColumn, rowDelta, columnDelta);
+            sheet, row, column, rowDelta, columnDelta);
         Move(targetRow, targetColumn, extend);
     }
 

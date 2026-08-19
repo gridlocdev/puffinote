@@ -6,26 +6,39 @@ namespace Cellestra.Desktop.Controls.SpreadsheetGrid;
 /// The current cell selection: an active cell plus a rectangular range (anchored when the user
 /// extends with Shift), optionally with additional disjoint ranges added by Cmd+click (#27/#28).
 /// The active cell lives in the most recent range. Pure UI state — never undoable (PRD §8.5).
+/// <para>
+/// The rectangle spans the <b>anchor</b> (where the gesture started) and the <b>extent</b> (the
+/// corner a drag or Shift+extension steers). The active cell is a third, independent position: it
+/// stays pinned — at the anchor for a plain click-and-drag — while the extent tracks the cursor,
+/// which is how every other spreadsheet holds it. Before the extent existed the active cell doubled
+/// as the moving corner, so the active outline chased the cursor across the drag.
+/// </para>
 /// </summary>
 public sealed class GridSelection
 {
     private int _anchorRow;
     private int _anchorColumn;
 
-    // Ranges committed by earlier Cmd+clicks; the live anchor/active rectangle is appended to these.
+    // Ranges committed by earlier Cmd+clicks; the live anchor/extent rectangle is appended to these.
     private readonly List<CellRange> _committed = [];
 
     public int ActiveRow { get; private set; }
 
     public int ActiveColumn { get; private set; }
 
-    public int Top => Math.Min(_anchorRow, ActiveRow);
+    /// <summary>The moving corner's row — where the next Shift+step extends from (not the active cell).</summary>
+    public int ExtentRow { get; private set; }
 
-    public int Bottom => Math.Max(_anchorRow, ActiveRow);
+    /// <summary>The moving corner's column — where the next Shift+step extends from (not the active cell).</summary>
+    public int ExtentColumn { get; private set; }
 
-    public int Left => Math.Min(_anchorColumn, ActiveColumn);
+    public int Top => Math.Min(_anchorRow, ExtentRow);
 
-    public int Right => Math.Max(_anchorColumn, ActiveColumn);
+    public int Bottom => Math.Max(_anchorRow, ExtentRow);
+
+    public int Left => Math.Min(_anchorColumn, ExtentColumn);
+
+    public int Right => Math.Max(_anchorColumn, ExtentColumn);
 
     public bool IsSingleCell => Top == Bottom && Left == Right;
 
@@ -52,8 +65,8 @@ public sealed class GridSelection
     public void MoveTo(int row, int column)
     {
         _committed.Clear();
-        ActiveRow = _anchorRow = ClampRow(row);
-        ActiveColumn = _anchorColumn = ClampColumn(column);
+        ActiveRow = _anchorRow = ExtentRow = ClampRow(row);
+        ActiveColumn = _anchorColumn = ExtentColumn = ClampColumn(column);
         Changed?.Invoke(this, EventArgs.Empty);
     }
 
@@ -67,8 +80,8 @@ public sealed class GridSelection
     public void AddPoint(int row, int column)
     {
         _committed.Add(Range);
-        ActiveRow = _anchorRow = ClampRow(row);
-        ActiveColumn = _anchorColumn = ClampColumn(column);
+        ActiveRow = _anchorRow = ExtentRow = ClampRow(row);
+        ActiveColumn = _anchorColumn = ExtentColumn = ClampColumn(column);
         Changed?.Invoke(this, EventArgs.Empty);
     }
 
@@ -78,20 +91,22 @@ public sealed class GridSelection
         _committed.Add(Range);
         _anchorRow = ClampRow(top);
         _anchorColumn = ClampColumn(left);
-        ActiveRow = ClampRow(bottom);
-        ActiveColumn = ClampColumn(right);
+        ActiveRow = ExtentRow = ClampRow(bottom);
+        ActiveColumn = ExtentColumn = ClampColumn(right);
         Changed?.Invoke(this, EventArgs.Empty);
     }
 
     /// <summary>
     /// Shift+click a row header: extend a full-width band from the anchored row to this one, so
-    /// clicking row 2's header then Shift+clicking row 5's selects rows 2–5 entirely (#3).
+    /// clicking row 2's header then Shift+clicking row 5's selects rows 2–5 entirely (#3). The
+    /// active cell stays where it was, like any other extension.
     /// </summary>
     public void ExtendRowBand(int row)
     {
         _anchorColumn = 0;
-        ActiveColumn = ClampColumn(SheetDimensions.MaxColumns - 1);
-        ActiveRow = ClampRow(row);
+        ExtentColumn = ClampColumn(SheetDimensions.MaxColumns - 1);
+        ExtentRow = ClampRow(row);
+        EnsureActiveInside();
         Changed?.Invoke(this, EventArgs.Empty);
     }
 
@@ -99,22 +114,43 @@ public sealed class GridSelection
     public void ExtendColumnBand(int column)
     {
         _anchorRow = 0;
-        ActiveRow = ClampRow(SheetDimensions.MaxRows - 1);
-        ActiveColumn = ClampColumn(column);
-        Changed?.Invoke(this, EventArgs.Empty);
-    }
-
-    /// <summary>Extend the selection to a new active cell, keeping the anchor.</summary>
-    public void ExtendTo(int row, int column)
-    {
-        ActiveRow = ClampRow(row);
-        ActiveColumn = ClampColumn(column);
+        ExtentRow = ClampRow(SheetDimensions.MaxRows - 1);
+        ExtentColumn = ClampColumn(column);
+        EnsureActiveInside();
         Changed?.Invoke(this, EventArgs.Empty);
     }
 
     /// <summary>
+    /// Extend the selection's moving corner to a new cell, keeping the anchor — and keeping the
+    /// active cell pinned where the gesture started, the way every other spreadsheet drags: the
+    /// bold outline stays on the first cell while the rectangle grows toward the cursor.
+    /// </summary>
+    public void ExtendTo(int row, int column)
+    {
+        ExtentRow = ClampRow(row);
+        ExtentColumn = ClampColumn(column);
+        EnsureActiveInside();
+        Changed?.Invoke(this, EventArgs.Empty);
+    }
+
+    /// <summary>
+    /// The active cell must always be inside the live rectangle; if an extension shrank the
+    /// rectangle past it (possible when the active cell sat at the old extent, e.g. after a merge
+    /// selection), it falls back to the anchor corner.
+    /// </summary>
+    private void EnsureActiveInside()
+    {
+        if (ActiveRow < Top || ActiveRow > Bottom || ActiveColumn < Left || ActiveColumn > Right)
+        {
+            ActiveRow = _anchorRow;
+            ActiveColumn = _anchorColumn;
+        }
+    }
+
+    /// <summary>
     /// Select an explicit rectangle, anchored at its top-left and leaving the active cell at its
-    /// <b>bottom-right</b> — as though the rectangle had just been dragged out from its first corner.
+    /// <b>bottom-right</b>. (A drag no longer works this way — dragging pins the active cell at the
+    /// first corner — but this API's callers rely on the bottom-right placement, so it stands.)
     /// <para>
     /// This comment used to say "top-left", which is not what the code below does and never was. Where the
     /// active cell has to be the <em>first</em> corner instead — a reference someone typed into the Name Box,
@@ -126,8 +162,8 @@ public sealed class GridSelection
         _committed.Clear();
         _anchorRow = ClampRow(top);
         _anchorColumn = ClampColumn(left);
-        ActiveRow = ClampRow(bottom);
-        ActiveColumn = ClampColumn(right);
+        ActiveRow = ExtentRow = ClampRow(bottom);
+        ActiveColumn = ExtentColumn = ClampColumn(right);
         Changed?.Invoke(this, EventArgs.Empty);
     }
 
@@ -139,8 +175,8 @@ public sealed class GridSelection
     public void Restore(int top, int left, int bottom, int right, int activeRow, int activeColumn)
     {
         _committed.Clear();
-        ActiveRow = ClampRow(activeRow);
-        ActiveColumn = ClampColumn(activeColumn);
+        ActiveRow = ExtentRow = ClampRow(activeRow);
+        ActiveColumn = ExtentColumn = ClampColumn(activeColumn);
         _anchorRow = ClampRow(activeRow == top ? bottom : top);
         _anchorColumn = ClampColumn(activeColumn == left ? right : left);
         Changed?.Invoke(this, EventArgs.Empty);

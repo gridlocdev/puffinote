@@ -44,6 +44,25 @@ public class GridNavigationTests
         Assert.Equal(2, window.Editor.Selection.Bottom); // selection now spans A1:A3
     }
 
+    [AvaloniaFact]
+    public void Shift_arrow_grows_from_the_extent_and_pins_the_active_cell()
+    {
+        // Each Shift+arrow steps the selection's moving corner, not the active cell — so pressing
+        // it twice grows the rectangle two rows while the active outline stays on the start cell.
+        var window = new MainWindow();
+        window.Show();
+        window.Editor.Selection.MoveTo(0, 0);
+
+        window.Editor.Grid.NavigateForTest(1, 0, extend: true); // Shift+Down
+        window.Editor.Grid.NavigateForTest(1, 0, extend: true); // Shift+Down again
+
+        var selection = window.Editor.Selection;
+        Assert.Equal(0, selection.ActiveRow); // pinned where the selection started
+        Assert.Equal(0, selection.ActiveColumn);
+        Assert.Equal(2, selection.ExtentRow); // the corner stepped twice
+        Assert.Equal((0, 2), (selection.Top, selection.Bottom));
+    }
+
     [Fact]
     public void Shift_click_row_header_selects_the_band_between_anchors()
     {

@@ -26,6 +26,36 @@ public class GridSelectionTests
     }
 
     [Fact]
+    public void Extending_pins_the_active_cell_at_the_anchor()
+    {
+        // Click-and-drag (and Shift+extension): the bold active outline stays on the first cell
+        // while the rectangle's moving corner tracks the cursor — like every other spreadsheet.
+        var selection = new GridSelection();
+        selection.MoveTo(2, 1);
+        selection.ExtendTo(5, 4);
+
+        Assert.Equal(2, selection.ActiveRow);
+        Assert.Equal(1, selection.ActiveColumn);
+        Assert.Equal(5, selection.ExtentRow);
+        Assert.Equal(4, selection.ExtentColumn);
+        Assert.Equal((2, 1, 5, 4), (selection.Top, selection.Left, selection.Bottom, selection.Right));
+    }
+
+    [Fact]
+    public void Extending_up_and_left_past_the_anchor_still_pins_the_active_cell()
+    {
+        // Dragging the other way: the anchor becomes the rectangle's bottom-right, and the active
+        // cell stays on it.
+        var selection = new GridSelection();
+        selection.MoveTo(3, 3);
+        selection.ExtendTo(0, 0);
+
+        Assert.Equal(3, selection.ActiveRow);
+        Assert.Equal(3, selection.ActiveColumn);
+        Assert.Equal((0, 0, 3, 3), (selection.Top, selection.Left, selection.Bottom, selection.Right));
+    }
+
+    [Fact]
     public void CollapseToOrigin_returns_to_the_anchored_start_cell()
     {
         var selection = new GridSelection();
