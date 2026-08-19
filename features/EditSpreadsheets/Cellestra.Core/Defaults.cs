@@ -35,14 +35,17 @@ public static class Defaults
     public const uint TextColorArgb = 0xFF000000;
 
     /// <summary>
-    /// Default fill for a new table's header row, ARGB — a saturated royal blue (<c>#1E4FB5</c>).
-    /// Paired with white, bold text (<see cref="TableHeaderTextArgb"/>); contrast ≈ 7.39:1 with
-    /// white, well past WCAG AA (4.5:1) and AAA (7:1) for legible header labels.
+    /// Fill for the header row <b>Clean Up (§8.17)</b> writes into a cleaned block, ARGB — the same
+    /// neutral grey the grid's light-theme table-header band uses (<c>#C6C6C6</c>), so a cleaned-up
+    /// block and a table look like they came from the same program. Clean Up writes real, static
+    /// formatting on purpose (that is its job); a <em>table's</em> header look, by contrast, is theme
+    /// chrome painted by the grid and is never baked into cells. Paired with black, bold text
+    /// (<see cref="TableHeaderTextArgb"/>); contrast ≈ 12:1, well past WCAG AAA (7:1).
     /// </summary>
-    public const uint TableHeaderFillArgb = 0xFF1E4FB5;
+    public const uint TableHeaderFillArgb = 0xFFC6C6C6;
 
-    /// <summary>Default text color for a new table's header row, ARGB. Opaque white (on the royal-blue fill).</summary>
-    public const uint TableHeaderTextArgb = 0xFFFFFFFF;
+    /// <summary>Text color for Clean Up's header row, ARGB. Opaque black (on the grey fill).</summary>
+    public const uint TableHeaderTextArgb = 0xFF000000;
 
     /// <summary>
     /// Generate the next unused default sheet name given the names already in use

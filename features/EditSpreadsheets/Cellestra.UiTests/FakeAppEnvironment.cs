@@ -59,6 +59,7 @@ internal sealed class FakeAppEnvironment : IAppEnvironment
     public void ShowTextToColumnsDialog() => throw Nope();
     public void ShowDataValidationDialog() => throw Nope();
     public void ToggleTableHeaderColumn() => throw Nope();
+    public void ToggleTableBandedRows() => throw Nope();
     public void ShowFindReplace(bool replace) => throw Nope();
     public void ShowFormatCellsDialog() => throw Nope();
     public void ShowRowHeightDialog() => throw Nope();

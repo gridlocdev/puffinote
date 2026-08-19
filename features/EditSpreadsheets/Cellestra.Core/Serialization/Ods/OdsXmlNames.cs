@@ -17,6 +17,14 @@ public static class OdsXmlNames
     public static readonly XNamespace Xlink = "http://www.w3.org/1999/xlink";
     public static readonly XNamespace Draw = "urn:oasis:names:tc:opendocument:xmlns:drawing:1.0";
 
+    /// <summary>
+    /// Cellestra's own extension namespace, for the handful of table facts ODF has no attribute for
+    /// (a header <em>column</em>, banded rows). ODF permits foreign attributes; LibreOffice opens the
+    /// file untroubled and simply ignores them. Written only when a flag is on, so a workbook that
+    /// uses no Cellestra-specific feature serializes to pure vocabulary ODF.
+    /// </summary>
+    public static readonly XNamespace CellestraNs = "urn:cellestra:names:table:1.0";
+
     /// <summary>The ODF media type of an embedded chart sub-document (its object directory).</summary>
     public const string ChartMediaType = "application/vnd.oasis.opendocument.chart";
 
@@ -36,6 +44,10 @@ public static class OdsXmlNames
     public const string Operator = "operator";
     public const string DataType = "data-type";
     public const string ContainsHeader = "contains-header";
+
+    // ---- cellestra:* extension attributes on table:database-range --------
+    public const string HeaderColumn = "header-column";
+    public const string BandedRows = "banded-rows";
 
     // ---- table:content-validation (data validation round-trip, ODF §9.4.5) ----
     public const string ContentValidations = "content-validations";

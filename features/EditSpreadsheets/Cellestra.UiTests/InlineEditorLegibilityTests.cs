@@ -55,6 +55,32 @@ public class InlineEditorLegibilityTests
     }
 
     [AvaloniaFact]
+    public void Editing_inside_a_table_uses_light_ink_in_dark_mode()
+    {
+        // A table's header band and canvas are both dark surfaces in dark mode, and the header cells
+        // carry no baked colours — so opening any table cell for editing must type in the theme's
+        // light ink, not dark-on-dark.
+        var window = TableWindow();
+        window.RequestedThemeVariant = Avalonia.Styling.ThemeVariant.Dark;
+        Avalonia.Threading.Dispatcher.UIThread.RunJobs();
+        IAppEnvironment env = window.Editor;
+        var grid = window.Editor.Grid;
+
+        foreach (int row in new[] { 0, 1 }) // the header cell, then a data cell
+        {
+            env.Selection.MoveTo(row, 0);
+            grid.BeginEdit(null);
+
+            var fill = ArgbColor.FromArgb(grid.EditorFill.A, grid.EditorFill.R, grid.EditorFill.G, grid.EditorFill.B);
+            var ink = ArgbColor.FromArgb(grid.EditorInk.A, grid.EditorInk.R, grid.EditorInk.G, grid.EditorInk.B);
+            Assert.True(ink.R > 180, $"row {row}: dark-mode editor ink should be light, was {ink.ToHex()}");
+            Assert.True(Contrast.Ratio(ink, fill) >= 3.0, $"row {row}: ink {ink.ToHex()} on {fill.ToHex()} is unreadable");
+
+            grid.CommitEditForTest();
+        }
+    }
+
+    [AvaloniaFact]
     public void A_readable_font_colour_is_left_exactly_as_the_document_chose_it()
     {
         // The guard only rescues ink that is genuinely invisible. A colour is document data, and quietly

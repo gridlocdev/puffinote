@@ -80,11 +80,15 @@ public sealed partial class SpreadsheetGrid
         _editor.TextWrapping = style.Alignment.WrapText ? TextWrapping.Wrap : TextWrapping.NoWrap;
 
         var value = cell?.Value ?? CellValue.Empty;
-        var background = EditorBackground(style, Selection.ActiveRow, Selection.ActiveColumn);
+        var background = CellBackground(style, Selection.ActiveRow, Selection.ActiveColumn);
         _editor.Background = new SolidColorBrush(ToColor(background));
 
         // Use the cell's text colour, but not the crimson error colour — you're typing a replacement.
-        var ink = value.IsError ? _palette.DefaultText : TextBrushFor(style, value);
+        // Both the ink and the surface come from the same resolution the drawn cell uses, so opening a
+        // cell for editing can never change which of the two you can see.
+        var ink = value.IsError
+            ? Legible(_palette.DefaultText, background)
+            : TextBrushFor(style, value, background);
         _editor.Foreground = Legible(ink, background);
 
         // Mirror the cell's horizontal alignment so an Align command applied mid-edit shifts the text;
@@ -98,11 +102,12 @@ public sealed partial class SpreadsheetGrid
     }
 
     /// <summary>
-    /// The colour the inline editor paints behind the text: the cell's own fill, else the table band it
-    /// sits in, else the canvas. Painting plain canvas over a banded row made the cell blink white the
+    /// The colour painted behind a cell's text: the cell's own fill, else the table band it sits in,
+    /// else the canvas. Both the drawn cell and the inline editor resolve their ink against this, so
+    /// the two always agree. Painting plain canvas over a banded row made the cell blink white the
     /// moment you opened it — and, for a table header, put white header text on a white surface.
     /// </summary>
-    private ArgbColor EditorBackground(CellStyle style, int row, int column)
+    private ArgbColor CellBackground(CellStyle style, int row, int column)
     {
         if (style.Fill.HasBackground)
         {
@@ -129,41 +134,69 @@ public sealed partial class SpreadsheetGrid
             }
 
             bool isHeaderRow = table.HasHeader && row == table.Range.Top;
-            if (isHeaderRow || (table.HasHeaderColumn && column == table.Range.Left))
+            if (isHeaderRow)
             {
                 return FromBrush(_palette.TableHeaderBand);
             }
 
+            if (table.HasHeaderColumn && column == table.Range.Left)
+            {
+                return FromBrush(_palette.TableHeaderColumnBand);
+            }
+
             int dataIndex = row - table.Range.Top - (table.HasHeader ? 1 : 0);
-            return dataIndex % 2 == 1 ? FromBrush(_palette.TableRowBand) : null;
+            if (table.HasBandedRows && dataIndex % 2 == 1)
+            {
+                // The stripe is translucent chrome; flatten it onto the canvas so the editor gets a
+                // real surface to paint and the contrast check measures what the eye actually sees.
+                return Over(FromBrush(_palette.TableRowBand), FromBrush(_palette.Canvas));
+            }
+
+            return null;
         }
 
         return null;
     }
 
+    /// <summary>Source-over alpha composite: <paramref name="top"/> flattened onto an opaque <paramref name="bottom"/>.</summary>
+    private static ArgbColor Over(ArgbColor top, ArgbColor bottom)
+    {
+        double a = top.A / 255.0;
+        return ArgbColor.FromRgb(
+            (byte)Math.Round(top.R * a + bottom.R * (1 - a)),
+            (byte)Math.Round(top.G * a + bottom.G * (1 - a)),
+            (byte)Math.Round(top.B * a + bottom.B * (1 - a)));
+    }
+
     /// <summary>
-    /// The contrast floor the inline editor's text has to clear against the surface behind it. 3:1 is
-    /// WCAG 2.2's non-text/large-text floor rather than the 4.5:1 body-text one, deliberately: a cell's
-    /// font colour is document data, and overriding a merely-lowish-contrast choice would misreport
-    /// what the document says. This threshold only catches ink that is genuinely unreadable.
+    /// The contrast floor a cell's text has to clear against the surface behind it, drawn or being
+    /// edited. 3:1 is WCAG 2.2's non-text/large-text floor rather than the 4.5:1 body-text one,
+    /// deliberately: a cell's font colour is document data, and overriding a merely-lowish-contrast
+    /// choice would misreport what the document says. This threshold only catches ink that is
+    /// genuinely unreadable.
     /// </summary>
-    private const double EditorInkFloor = 3.0;
+    private const double InkContrastFloor = 3.0;
+
+    /// <summary>Whether <paramref name="ink"/> clears <see cref="InkContrastFloor"/> on <paramref name="background"/>.</summary>
+    private static bool Readable(IBrush ink, ArgbColor background) =>
+        ink is not ISolidColorBrush solid || Contrast.Ratio(FromColor(solid.Color), background) >= InkContrastFloor;
 
     /// <summary>
     /// <paramref name="ink"/>, unless it would be invisible on <paramref name="background"/> — in which
-    /// case the theme's default text colour, or black/white if even that doesn't read. A table header
-    /// styled with white text is the case that forces this: the header band it was chosen against is
-    /// the grid's chrome, not the cell's fill, so the editor could paint white on white.
+    /// case the theme's default text colour, or black/white if even that doesn't read. Two cases force
+    /// this. A table header styled with white text: the header band it was chosen against is the grid's
+    /// chrome, not the cell's fill, so the editor could paint white on white. And, in dark mode, any
+    /// cell the document filled light: the theme's own body ink is pale there, and pale ink on a pale
+    /// fill is the same invisibility read from the other end.
     /// </summary>
     private IBrush Legible(IBrush ink, ArgbColor background)
     {
-        if (ink is not ISolidColorBrush solid || Contrast.Ratio(FromColor(solid.Color), background) >= EditorInkFloor)
+        if (Readable(ink, background))
         {
             return ink;
         }
 
-        if (_palette.DefaultText is ISolidColorBrush themed
-            && Contrast.Ratio(FromColor(themed.Color), background) >= EditorInkFloor)
+        if (Readable(_palette.DefaultText, background))
         {
             return _palette.DefaultText;
         }

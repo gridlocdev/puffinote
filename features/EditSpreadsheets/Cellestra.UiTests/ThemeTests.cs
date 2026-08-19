@@ -3,6 +3,7 @@ using Avalonia.Headless.XUnit;
 using Avalonia.Media;
 using Avalonia.Styling;
 using Avalonia.Threading;
+using Cellestra.Core;
 using Cellestra.Core.Styling;
 using Cellestra.Core.Values;
 using Cellestra.Desktop.Controls.SpreadsheetGrid;
@@ -81,6 +82,49 @@ public class ThemeTests
 
         var light = ((ISolidColorBrush)view.TabBackgroundForTest(0)!).Color;
         Assert.True(light.R > 200, $"active tab should be bright in light theme, was {light}");
+    }
+
+    [AvaloniaFact]
+    public void Automatic_text_on_a_light_fill_stays_dark_in_dark_theme()
+    {
+        // The dark theme's body ink is pale, and a table header (or any cell the document filled light)
+        // is a pale surface — so following the theme alone drew pale-on-pale. Automatic ink is the app's
+        // choice, so it has to follow what is behind it, not just the theme.
+        var grid = new SpreadsheetGrid();
+        var window = new Window { Content = grid, RequestedThemeVariant = ThemeVariant.Dark };
+        window.Show();
+        Dispatcher.UIThread.RunJobs();
+
+        var header = CellStyle.Default
+            .WithFill(Fill.Solid(new ArgbColor(Defaults.TableHeaderFillArgb)));
+        var ink = grid.ResolvedTextColor(header, CellValue.Text("All Sites"));
+
+        Assert.True(ink.R < 80, $"text on a light fill should stay dark in dark theme, was {ink}");
+        Assert.True(Contrast.Ratio(
+            ArgbColor.FromRgb(ink.R, ink.G, ink.B),
+            new ArgbColor(Defaults.TableHeaderFillArgb)) >= 3.0);
+    }
+
+    [AvaloniaTheory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void Light_document_fills_carry_readable_text_in_either_theme(bool dark)
+    {
+        // Fills the app itself can write (Clean Up's header grey) plus the greys the light-theme
+        // header bands use — automatic ink over any of them must clear the contrast floor in both
+        // themes, or a table saved by an old build (fills baked) goes unreadable in dark mode.
+        var grid = new SpreadsheetGrid();
+        var window = new Window { Content = grid, RequestedThemeVariant = dark ? ThemeVariant.Dark : ThemeVariant.Light };
+        window.Show();
+        Dispatcher.UIThread.RunJobs();
+
+        foreach (uint fill in new[] { Defaults.TableHeaderFillArgb, 0xFFDCDCDCu })
+        {
+            var style = CellStyle.Default.WithFill(Fill.Solid(new ArgbColor(fill)));
+            var ink = grid.ResolvedTextColor(style, CellValue.Text("Male"));
+            double ratio = Contrast.Ratio(ArgbColor.FromRgb(ink.R, ink.G, ink.B), new ArgbColor(fill));
+            Assert.True(ratio >= 4.5, $"ink {ink} on fill {fill:X} was only {ratio:F2}:1");
+        }
     }
 
     [AvaloniaFact]

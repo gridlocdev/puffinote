@@ -447,10 +447,11 @@ public static class DataEditCommands
             });
 
     /// <summary>
-    /// Create a table and, when it has a header row, give that row a sensible contrasting default
-    /// style (the green accent fill with bold white text) so it stands out. One undoable step: the
-    /// table is registered and the header cells are restyled together. Header styling is plain cell
-    /// fills/fonts on the range — no structured references — so it round-trips to ODS.
+    /// Create a table and, when it has a header row, bold that row so it stands out. One undoable
+    /// step: the table is registered and the header cells are emboldened together. Bold is the only
+    /// thing written into the cells — the header's grey band is theme chrome the grid paints from
+    /// the table's flags (PRD §8.10), never a baked fill, so the table reads right in light and dark
+    /// mode alike and no colour edit pollutes the document.
     /// </summary>
     public static IEditCommand CreateTable(Workbook workbook, string sheet, Table table)
     {
@@ -484,26 +485,28 @@ public static class DataEditCommands
         return EditCommands.Composite("Create Table", [add, fillHeaders, styleHeader]);
     }
 
-    /// <summary>The default header style: bold white text on the green accent fill (PRD §8.10).</summary>
-    public static CellStyle StyleTableHeader(CellStyle style)
-    {
-        var fill = Fill.Solid(new ArgbColor(Defaults.TableHeaderFillArgb));
-        var font = style.Font with { Bold = true, Color = new ArgbColor(Defaults.TableHeaderTextArgb) };
-        return style.WithFill(fill).WithFont(font);
-    }
+    /// <summary>
+    /// The header emphasis written into a table's header cells: <b>bold, and nothing else</b>. The
+    /// grey band, its light/dark variants, alignment — all of that is the grid's chrome (PRD §8.10);
+    /// only the emphasis is document formatting, so it survives a round-trip without freezing one
+    /// theme's colours into the file.
+    /// </summary>
+    public static CellStyle StyleTableHeader(CellStyle style) =>
+        style.WithFont(style.Font with { Bold = true });
 
-    /// <summary>Strip the header look back to the default (no fill, regular black text) — the inverse of <see cref="StyleTableHeader"/>.</summary>
-    public static CellStyle ClearTableHeader(CellStyle style)
-    {
-        var font = style.Font with { Bold = false, Color = ArgbColor.Black };
-        return style.WithFill(Fill.None).WithFont(font);
-    }
+    /// <summary>
+    /// The inverse of <see cref="StyleTableHeader"/>: un-bold, touching nothing else — a fill or
+    /// colour the user chose themselves is not this command's to take back.
+    /// </summary>
+    public static CellStyle ClearTableHeader(CellStyle style) =>
+        style.WithFont(style.Font with { Bold = false });
 
     /// <summary>
     /// Designate (or clear) a table's first column as a header column (task 5): the first column's
-    /// cells take the header look — bold, on the header fill, exactly like the header row — and the
-    /// table's <see cref="Table.HasHeaderColumn"/> flag flips. One undoable step. The header-row cell
-    /// at the corner is left to the row's own styling, so toggling the column never disturbs it.
+    /// cells are bolded like the header row's, and the table's <see cref="Table.HasHeaderColumn"/>
+    /// flag flips — which is what tells the grid to paint the theme's header-column band under them.
+    /// One undoable step. The header-row cell at the corner is left to the row's own styling, so
+    /// toggling the column never disturbs it.
     /// </summary>
     public static IEditCommand SetTableHeaderColumn(Workbook workbook, string sheet, Table table, bool enabled)
     {
@@ -533,6 +536,28 @@ public static class DataEditCommands
         var style = EditCommands.ApplyStyle(workbook, sheet, columnRange,
             enabled ? StyleTableHeader : ClearTableHeader, "Header Column");
         return EditCommands.Composite("Header Column", [flip, style]);
+    }
+
+    /// <summary>
+    /// Turn a table's banded rows on or off (PRD §8.10). Pure flag flip, one undoable step: banding
+    /// is chrome the grid paints from <see cref="Table.HasBandedRows"/> — a muted tint of the header
+    /// band on alternate data rows — so there are no cells to restyle and nothing enters the undo
+    /// history but the flag.
+    /// </summary>
+    public static IEditCommand SetTableBandedRows(string sheet, Table table, bool enabled)
+    {
+        var replaced = table with { HasBandedRows = enabled };
+        return new ActionCommand("Banded Rows",
+            wb =>
+            {
+                Sheet(wb, sheet).ReplaceTable(table, replaced);
+                return EditResult.None;
+            },
+            wb =>
+            {
+                Sheet(wb, sheet).ReplaceTable(replaced, table);
+                return EditResult.None;
+            });
     }
 
     public static IEditCommand RemoveTable(string sheet, Table table) =>

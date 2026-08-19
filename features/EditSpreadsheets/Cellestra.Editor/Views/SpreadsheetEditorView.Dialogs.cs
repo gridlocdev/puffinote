@@ -109,6 +109,11 @@ public partial class SpreadsheetEditorView
             }
 
             flyout.Items.Add(MenuRow(headerColumn));
+
+            if (Commands.ById("data.bandedRows") is { } bandedRows)
+            {
+                flyout.Items.Add(MenuRow(bandedRows));
+            }
         }
 
         flyout.ShowAt(Grid, showAtPointer: true);
@@ -207,6 +212,19 @@ public partial class SpreadsheetEditorView
             Session.Workbook, Session.ActiveSheet.Name, table, !table.HasHeaderColumn));
         Refresh();
         Narrate(table.HasHeaderColumn ? "Removed header column" : "Added header column");
+    }
+
+    public void ToggleTableBandedRows()
+    {
+        if (ActiveTable is not { } table)
+        {
+            return;
+        }
+
+        Session.Execute(DataEditCommands.SetTableBandedRows(
+            Session.ActiveSheet.Name, table, !table.HasBandedRows));
+        Refresh();
+        Narrate(table.HasBandedRows ? "Removed banded rows" : "Added banded rows");
     }
 
     public async void ShowSortDialog()

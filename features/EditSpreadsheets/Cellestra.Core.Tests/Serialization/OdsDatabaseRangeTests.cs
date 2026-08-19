@@ -22,6 +22,49 @@ public class OdsDatabaseRangeTests
         return OdsReader.Read(stream);
     }
 
+    [Fact]
+    public void Header_column_and_banded_rows_flags_round_trip()
+    {
+        // Both looks are theme chrome painted from the table's flags — nothing is baked into cells —
+        // so the flags themselves must survive as cellestra:* attributes on the database range, or a
+        // reopened workbook silently loses its header column and banding.
+        var workbook = Workbook.CreateNew();
+        var sheet = workbook.ActiveSheet;
+        sheet.SetValue(0, 0, CellValue.Text("Site"));
+        sheet.SetValue(1, 0, CellValue.Text("All Sites"));
+        sheet.AddTable(new Table("T", CellRange.Parse("A1:B3"), HasHeader: true)
+        {
+            HasHeaderColumn = true,
+            HasBandedRows = true,
+        });
+
+        var table = Assert.Single(RoundTrip(workbook).FindSheet("Sheet1")!.Tables);
+        Assert.True(table.HasHeaderColumn);
+        Assert.True(table.HasBandedRows);
+    }
+
+    [Fact]
+    public void A_table_without_the_flags_writes_no_cellestra_attributes()
+    {
+        // Off is the default and stays invisible in the file: a workbook that uses no
+        // Cellestra-specific feature serializes to pure vocabulary ODF.
+        var workbook = Workbook.CreateNew();
+        var sheet = workbook.ActiveSheet;
+        sheet.SetValue(0, 0, CellValue.Text("Site"));
+        sheet.AddTable(new Table("T", CellRange.Parse("A1:B3"), HasHeader: true));
+
+        byte[] bytes = OdsWriter.WriteToBytes(workbook);
+        using var zip = new System.IO.Compression.ZipArchive(new MemoryStream(bytes));
+        using var reader = new StreamReader(zip.GetEntry("content.xml")!.Open());
+        string content = reader.ReadToEnd();
+
+        Assert.DoesNotContain("urn:cellestra", content, StringComparison.Ordinal);
+
+        var table = Assert.Single(RoundTrip(workbook).FindSheet("Sheet1")!.Tables);
+        Assert.False(table.HasHeaderColumn);
+        Assert.False(table.HasBandedRows);
+    }
+
     private static Workbook BuildWithSheetFilter()
     {
         var workbook = Workbook.CreateNew();

@@ -18,8 +18,6 @@ namespace Cellestra.Desktop.Controls.SpreadsheetGrid;
 /// </summary>
 public sealed partial class SpreadsheetGrid
 {
-    private static readonly Color TableBorder = Color.FromRgb(0x4A, 0x7E, 0xBB);
-
     private readonly Canvas _popupLayer = new() { IsHitTestVisible = true };
     private readonly List<(Rect Rect, int Column, CellRange Range, bool HasHeader)> _filterButtons = [];
     private (Rect Rect, DataValidation Rule)? _validationButton;
@@ -53,17 +51,20 @@ public sealed partial class SpreadsheetGrid
                 {
                     context.FillRectangle(_palette.TableHeaderBand, rowRect);
                 }
-                else if (dataIndex % 2 == 1)
+                else if (table.HasBandedRows && dataIndex % 2 == 1)
                 {
+                    // Banding is opt-in (off by default) and a muted, translucent tint of the header
+                    // band — its alpha composites over the canvas painted before it.
                     context.FillRectangle(_palette.TableRowBand, rowRect);
                 }
 
-                // A designated header column gets the header band on its first cell, mirroring the
-                // header row (task 5) — the cell's own header fill draws over it where styled.
+                // A designated header column gets its own, quieter band on its first cell (task 5) —
+                // a step lighter than the header row's, so the two headers stay told apart. A fill
+                // the user applied themselves is document data and draws over it.
                 if (table.HasHeaderColumn && !isHeader
                     && TryGetCellRect(row, table.Range.Left, out var headerCell))
                 {
-                    context.FillRectangle(_palette.TableHeaderBand, headerCell);
+                    context.FillRectangle(_palette.TableHeaderColumnBand, headerCell);
                 }
             }
         }
@@ -76,11 +77,15 @@ public sealed partial class SpreadsheetGrid
         _filterButtons.Clear();
         _validationButton = null;
 
+        // The table's outline is drawn in the header band's own colour, so the frame and the header
+        // read as one piece of chrome — and follow the theme together.
+        var tableBorder = new Pen(_palette.TableHeaderBand, 1.2);
+
         foreach (var table in sheet.Tables)
         {
             if (TryGetRegionRect(table.Range.Top, table.Range.Left, table.Range.Bottom, table.Range.Right, out var border))
             {
-                context.DrawRectangle(null, new Pen(new SolidColorBrush(TableBorder), 1.2), border);
+                context.DrawRectangle(null, tableBorder, border);
             }
 
             if (table.HasHeader)
@@ -116,7 +121,7 @@ public sealed partial class SpreadsheetGrid
             double size = Math.Min(14, cellRect.Height - 2);
             var button = new Rect(cellRect.Right - size - 2, cellRect.Y + (cellRect.Height - size) / 2, size, size);
             context.FillRectangle(_palette.HeaderFill, button);
-            context.DrawRectangle(null, new Pen(new SolidColorBrush(TableBorder)), button);
+            context.DrawRectangle(null, new Pen(_palette.TableHeaderBand), button);
             DrawGlyph(context, "▾", button);
             _filterButtons.Add((button, col, range, hasHeader));
         }

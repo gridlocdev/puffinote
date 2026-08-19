@@ -14,11 +14,20 @@ public sealed record Table(string Name, CellRange Range, bool HasHeader = true)
     public SortSpec? Sort { get; init; }
 
     /// <summary>
-    /// When set, the table's first column is styled like the header row — bold, on the header fill —
-    /// to read as a row-label header (task 5). The styling lives on the cells (so it round-trips as
-    /// ordinary cell formatting); this flag tracks the designation for toggling and banding.
+    /// When set, the table's first column reads as row labels: its cells are bolded (ordinary cell
+    /// formatting, so the emphasis round-trips) and the grid paints the theme's header-column band
+    /// under them — the band is chrome, not formatting, so it follows light/dark mode. The flag
+    /// itself round-trips as a Cellestra attribute on the table's <c>table:database-range</c>.
     /// </summary>
     public bool HasHeaderColumn { get; init; }
+
+    /// <summary>
+    /// When set, the grid stripes the table's alternate data rows with a muted tint of the header
+    /// band. Off by default — banding is a reading aid the user opts into, not part of what a table
+    /// is — and pure chrome: no fills are written into cells, and the flag round-trips the same way
+    /// as <see cref="HasHeaderColumn"/>.
+    /// </summary>
+    public bool HasBandedRows { get; init; }
 
     /// <summary>The header row's column labels, when the table has a header.</summary>
     public IReadOnlyList<string> HeaderLabels(Worksheet sheet)

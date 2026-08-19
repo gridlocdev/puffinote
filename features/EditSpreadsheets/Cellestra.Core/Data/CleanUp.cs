@@ -336,9 +336,11 @@ public static class CleanUp
     }
 
     /// <summary>
-    /// Make the header row read as one: bold, centred, on the same royal blue a new table's header
-    /// gets (<see cref="Defaults.TableHeaderFillArgb"/>), so a cleaned-up block and a table look like
-    /// they came from the same program — which they did.
+    /// Make the header row read as one: bold, centred, on the same grey the grid's light-theme table
+    /// header band uses (<see cref="Defaults.TableHeaderFillArgb"/>), so a cleaned-up block and a
+    /// table look like they came from the same program. Unlike a table's — whose band is theme chrome —
+    /// this fill is deliberately real formatting: writing what the sheet should look like is Clean
+    /// Up's entire job (§8.17).
     /// </summary>
     private static bool StyleHeader(CellRange block, Func<int, int, CellStyle> current, Func<int, int, CellStyle, bool> restyle)
     {

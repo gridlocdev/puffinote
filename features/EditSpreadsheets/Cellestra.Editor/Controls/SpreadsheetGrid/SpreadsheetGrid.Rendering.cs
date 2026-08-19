@@ -220,7 +220,10 @@ public sealed partial class SpreadsheetGrid
         double fontSize = style.Font.SizePoints * 96.0 / 72.0 * Zoom;
         // A hyperlink draws in the themed link colour and is always underlined, regardless of the
         // cell's own font colour/decorations, so links read as links in both light and dark mode.
-        var brush = isLink ? _palette.Hyperlink : TextBrushFor(style, cell.Value);
+        // Both colours are resolved against what is painted behind this cell — its own fill, the table
+        // band under it, or the canvas — so neither can end up drawn in the surface's own colour.
+        var background = CellBackground(style, row, column);
+        var brush = isLink ? HyperlinkBrushFor(background) : TextBrushFor(style, cell.Value, background);
 
         var formatted = new FormattedText(text, CultureInfo.CurrentCulture, FlowDirection.LeftToRight,
             typeface, fontSize, brush);
@@ -377,21 +380,58 @@ public sealed partial class SpreadsheetGrid
         context.DrawText(hashes, new Point(tx, Math.Max(rect.Y, ty)));
     }
 
-    /// <summary>Test seam: the color a cell's text would be drawn in, for the current theme.</summary>
-    internal Color ResolvedTextColor(CellStyle style, CellValue value) => ((ISolidColorBrush)TextBrushFor(style, value)).Color;
+    /// <summary>
+    /// Test seam: the color a cell's text would be drawn in, for the current theme, on whatever the
+    /// cell's own style puts behind it (its fill, else the bare canvas).
+    /// </summary>
+    internal Color ResolvedTextColor(CellStyle style, CellValue value) =>
+        ((ISolidColorBrush)TextBrushFor(style, value, StyleBackground(style))).Color;
 
-    private IBrush TextBrushFor(CellStyle style, CellValue value)
+    /// <summary>The surface a cell's own style puts behind its text: its fill, else the themed canvas.</summary>
+    private ArgbColor StyleBackground(CellStyle style) =>
+        style.Fill.HasBackground ? style.Fill.Background!.Value : FromBrush(_palette.Canvas);
+
+    /// <summary>
+    /// The brush a cell's text is drawn with, given what is actually painted behind it.
+    /// <para>
+    /// The default/"automatic" font color — transparent, or the default black — is the app's choice,
+    /// not the document's, so the app owns keeping it readable: it takes the theme's body ink, then
+    /// gives way to whichever pole the surface isn't when that ink would vanish into the surface. That
+    /// last step is what stops a light-filled cell (a table header, or any fill the document chose)
+    /// from drawing pale-on-pale in dark mode. An explicitly chosen non-black color is document data
+    /// and is drawn as-is — overriding it would misreport what the document says.
+    /// </para>
+    /// </summary>
+    private IBrush TextBrushFor(CellStyle style, CellValue value, ArgbColor background)
     {
         if (value.IsError)
         {
-            return Brushes.Crimson;
+            return Legible(Brushes.Crimson, background);
         }
 
-        // The default/"automatic" font color — transparent, or the default black — follows the theme
-        // so text keeps its contrast in dark mode. An explicitly chosen non-black color is document
-        // data and is drawn as-is.
         bool automatic = style.Font.Color.IsTransparent || style.Font.Color == ArgbColor.Black;
-        return automatic ? _palette.DefaultText : new SolidColorBrush(ToColor(style.Font.Color));
+        return automatic
+            ? Legible(_palette.DefaultText, background)
+            : new SolidColorBrush(ToColor(style.Font.Color));
+    }
+
+    /// <summary>
+    /// The blue a hyperlink draws in on <paramref name="background"/>. The link colour is the grid's
+    /// own chrome, so it follows the same rule as automatic ink — except that a link has somewhere
+    /// better to fall than plain body ink: the opposite theme's blue, which is picked when this
+    /// theme's can't be read on the cell's fill. Only if neither blue works does it hand over to the
+    /// generic rescue.
+    /// </summary>
+    private IBrush HyperlinkBrushFor(ArgbColor background)
+    {
+        if (Readable(_palette.Hyperlink, background))
+        {
+            return _palette.Hyperlink;
+        }
+
+        return Readable(_palette.HyperlinkAlternate, background)
+            ? _palette.HyperlinkAlternate
+            : Legible(_palette.Hyperlink, background);
     }
 
     private void DrawSelection(DrawingContext context, IBrush fill)

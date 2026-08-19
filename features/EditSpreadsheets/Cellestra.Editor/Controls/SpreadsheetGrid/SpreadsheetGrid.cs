@@ -177,8 +177,19 @@ public sealed partial class SpreadsheetGrid : Panel
     {
         _palette = GridPalette.For(ActualThemeVariant);
         Background = _palette.Canvas;
-        _editor.Background = _palette.Canvas;
-        _editor.Foreground = _palette.DefaultText;
+        if (IsInlineEditing)
+        {
+            // Switching theme mid-edit re-skins the open editor from its cell, the same way a mid-edit
+            // formatting command does — the blanket canvas/body-ink pair below is right for a closed
+            // editor, but on a filled cell it would leave the text you are typing on the wrong surface.
+            ApplyEditorFont(Sheet?.Find(Selection.ActiveRow, Selection.ActiveColumn));
+        }
+        else
+        {
+            _editor.Background = _palette.Canvas;
+            _editor.Foreground = _palette.DefaultText;
+        }
+
         Redraw();
     }
 

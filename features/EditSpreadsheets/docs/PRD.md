@@ -92,7 +92,7 @@ If I open a Cellestra-saved file in LibreOffice and notice nothing wrong, the ba
 ### Data
 - **Sort** a range or table by one or more columns (**multi-level** "then by"), ascending/descending, with a header-aware option (§8.11).
 - **Filter** rows with per-column **AutoFilter** dropdowns — filter by value or by condition; filtered-out rows are **hidden, not deleted** (§8.12).
-- **Tables (⌘T)** — turn a range into a named, **auto-expanding** table with banded-row styling and built-in filter headers; the table grows/shrinks as data is added or removed at its edges (§8.10).
+- **Tables (⌘T)** — turn a range into a named, **auto-expanding** table with a themed header band and built-in filter headers (banded rows are an opt-in toggle); the table grows/shrinks as data is added or removed at its edges (§8.10).
 - **Data validation** — restrict what a cell accepts (dropdown **pick lists**, number/date/text-length rules) with optional input and error messages (§8.13).
 - **Remove duplicates** from a selection, and **Text to Columns** to split delimited text across columns (§8.14).
 
@@ -131,7 +131,7 @@ If I open a Cellestra-saved file in LibreOffice and notice nothing wrong, the ba
 3. Changes apply immediately and are saved into the `.ods` styles on save.
 
 ### Sort, filter, and make a table
-1. User selects a range of data with a header row and presses **⌘T** (or Data ▸ Table) to make it a table — banded rows and filter headers appear, and the table is named.
+1. User selects a range of data with a header row and presses **⌘T** (or Data ▸ Table) to make it a table — the header band and filter headers appear, and the table is named.
 2. User clicks a column's filter dropdown to show only matching rows, and/or opens **Sort** to order by one or more columns.
 3. As the user types new rows just below the table, it **auto-expands** to include them; sort/filter state is remembered and re-applied.
 
@@ -409,9 +409,14 @@ below 5 seconds is treated as 5.
 - ⇧ + scroll affects the **grid** only; it does not interact with the ⇧-modified keyboard shortcuts, which fire on key presses rather than wheel events.
 
 ### 8.10 Tables
-- **⌘T** turns the selected range into a **table**: a named region with **banded-row styling** and a **filter header** on each column. If the selection has an obvious header row it's used; otherwise generic headers (`Column1`, `Column2`, …) are added.
-- A table **auto-expands**: typing a value in the row directly below it (or the column directly to its right) absorbs that row/column into the table, extending banding, filters, and any whole-column formulas. Deleting edge rows/columns shrinks it.
-- Tables are stored in `.ods` as a **named database range** (`table:database-range`) plus the banded styling — the native ODF concept LibreOffice uses — so they round-trip cleanly. **Excel-style structured references (`Table[Column]`) are not supported** (§9); formulas reference table cells with ordinary A1 or named-range references.
+- **⌘T** turns the selected range into a **table**: a named region with a **header band** and a **filter header** on each column. If the selection has an obvious header row it's used; otherwise generic headers (`Column1`, `Column2`, …) are added.
+- A table **auto-expands**: typing a value in the row directly below it (or the column directly to its right) absorbs that row/column into the table, extending the header look, banding, filters, and any whole-column formulas. Deleting edge rows/columns shrinks it.
+- Tables are stored in `.ods` as a **named database range** (`table:database-range`) — the native ODF concept LibreOffice uses — so they round-trip cleanly. **Excel-style structured references (`Table[Column]`) are not supported** (§9); formulas reference table cells with ordinary A1 or named-range references.
+- **A table's look is theme chrome, not cell formatting.** The grid paints the header row's band, the header column's band, the banding stripes, and the table's outline from the active theme's palette, so a table reads as a table in light *and* dark mode. Light: header row `#C6C6C6`, header column `#DCDCDC`; dark: `#3A3A3C` and `#2C2C2E`. Both headers are neutral greys in two weights — the row darker, the column lighter — because a table's headers frame data rather than compete with it, and two weights of one grey say "the row outranks the column" where two hues would only say "these are different things". The only thing written into the cells is **bold** on the header cells: real formatting, so the emphasis survives a round-trip without freezing one theme's colours into the file. A fill the user applies themselves is document data and draws over the bands.
+- **The table's outline is drawn in the header band's colour**, so the frame and the header read as one piece of chrome and follow the theme together (the AutoFilter dropdown buttons take the same colour).
+- **Header column** (Data ▸ Header Column, also on a table cell's context menu) designates the table's **first column** as row labels: its cells are bolded and the grid paints the lighter band under them. Alignment is left alone — a row label is text, and text already sits left under the General default (§8.8). The corner cell belongs to the header **row**, so toggling the column never restyles it, and a table that auto-expands downward carries the look onto the new row's first cell.
+- **Banded rows are off by default** (Data ▸ Banded Rows toggles them per table): banding is a reading aid the user opts into, not part of what a table is. When on, alternate data rows take a **muted, translucent tint of the header band** — banding always reads as a quiet echo of the header, never a colour of its own.
+- The header-column and banded-rows designations persist as `cellestra:*` **foreign attributes** on the table's `table:database-range` (ODF permits foreign attributes; LibreOffice opens the file untroubled and ignores them). They are written only when on, so a workbook that uses neither serializes to pure vocabulary ODF.
 - A sheet may hold multiple tables; tables may not overlap each other or merged regions.
 
 ### 8.11 Sorting
@@ -493,7 +498,7 @@ nothing and every header goes unrecognized.
 
 | Move | Rule |
 |---|---|
-| **Header emphasis** | Bold, centred, on the royal-blue fill a new table's header gets (`Defaults.TableHeaderFillArgb` / `TableHeaderTextArgb`) — a cleaned-up block and a table look like they came from the same program. |
+| **Header emphasis** | Bold, centred, on the same grey the light-theme table-header band uses (`Defaults.TableHeaderFillArgb` / `TableHeaderTextArgb`) — a cleaned-up block and a table look like they came from the same program. Unlike a table's band (theme chrome, §8.10), this fill is deliberately **real formatting**: writing what the sheet should look like is Clean Up's entire job. |
 | **Freeze** | The **topmost** block's header row is frozen (`FrozenRows`); columns are never frozen. A second block further down does not move the pane. |
 | **Number format** | One format per column, inferred from that column's values: a date code for an all-date column; `0.0…%` for percentages; `<symbol>#,##0.00` for currency; `#,##0` for whole numbers reaching 1,000; `#,##0.00…` otherwise, to the most decimals typed in the column (minimum 2, maximum 4). Whole numbers below 1,000 stay **General** — a separator there is noise. |
 | **Alignment** | Body cells return to **General** — left for text, right for numbers (§8.8), the alignment that stays right when a column's contents change. Header cells are centred. |
@@ -564,7 +569,7 @@ Intentional exclusions, not oversights.
 | Undo depth & persistence | Session-only, 1,000 steps, not saved in the file (§8.5). |
 | Default UI / discovery surface | One compact, context-aware **adaptive command bar** (collapsible, §6.3) plus the **Command Menu (⌘K)** and **sheet switcher (⌘⇧P)** as the keyboard-first surfaces (§6, §6.7). |
 | Sort, filter, and tables | **In v1** (§8.10–§8.12) — everyday features. Previously deferred; now core. |
-| How tables map to `.ods` | Tables are native **database ranges** (`table:database-range`) with banded styling and filters; **no Excel structured references** (§8.10, §9), to protect the LibreOffice round-trip. |
+| How tables map to `.ods` | Tables are native **database ranges** (`table:database-range`) with their filters, plus `cellestra:*` foreign attributes for the header-column/banded-rows flags; the table look itself is theme chrome, not saved styling; **no Excel structured references** (§8.10, §9), to protect the LibreOffice round-trip. |
 | Data validation, hide/unhide, hyperlinks, remove-duplicates, text-to-columns | **In v1** (§4 Data, §8.13–§8.14). |
 | Fill-handle behavior | Copy-fill only; **no series extrapolation** in v1 (§8.15). |
 | Autosave | **In v1** (§8.7a): a saved workbook is written back after 30s of no editing, configurable in Preferences (0 = off). Crash auto-recovery is still out (§9). |
@@ -597,7 +602,7 @@ editing match spreadsheet muscle memory (§3 *Feel*). Each is implemented and te
 | Sticky table headers | Scrolled down inside a table, the grid's column-header strip shows the **table's** column titles in place of A/B/C, and gives the letters back the moment you scroll past the table's last row or back up to its real header row. Columns the table doesn't cover keep their letters, and a headerless table lends nothing. |
 | Column auto-fit | A **Wrap Text** cell gets no vote in how wide its column should be — it was told to fold at the column's edge, so measuring it flat would ask for a paragraph's width and undo the wrap. Applies to the header double-click and to **Auto-fit Columns** (Data menu), which fits the whole **table** when the active cell is in one, and the selected columns otherwise. |
 | Table column width | Committing an edit inside a table **widens** that column to fit the new value — a table is a declared shape, so a value too wide for its column means the column is the wrong width. Widen-only: a width set by hand is never clawed back, and cells outside a table never resize anything. |
-| Inline editor colours | The editor paints the surface the cell is drawn over (its fill, else the table band, else the canvas), and guarantees its text can be read on it: ink below a 3:1 contrast ratio falls back to the theme's default text colour. Anything readable is left exactly as the document chose it. |
+| Cell text colours, drawn and edited | One rule for both, or opening a cell would change which of the two you can see. The surface is the cell's own fill, else the table band under it, else the canvas. The **"automatic"** font colour — the default black, which is the app's choice rather than the document's — is resolved against *that* surface, not against the theme alone: it takes the theme's body ink, and gives way to whichever pole the surface isn't when that ink would vanish into it. This is what keeps a light-filled cell (a table header, or any fill the document chose) readable in **dark** mode, where the theme's body ink is pale. A **hyperlink** follows the same rule with one extra step before the fallback — the opposite theme's blue, so a link on a pale header still reads as a link. An **explicitly chosen** font colour is document data and is drawn as-is; only the inline editor rescues it, and only below a 3:1 contrast ratio, because overriding a merely-lowish-contrast choice would misreport what the document says. |
 | Merge Cells is a toggle | Clicking a merged cell selects the **whole** merge, so "the selection is exactly one existing merged region" is what a click on merged cells looks like — and Merge Cells there **unmerges**. A selection that merely *spans* merges is a real merge of a bigger block: it **absorbs** them (unmerge each, then merge the whole) as one undoable step. Merging never overlaps an existing region, which the model refuses outright. |
 | Alignment names carry their axis | "Align Center" is two commands — across the cell and down it — so every alignment command is named for its axis: **Align Left/Center/Right (Horizontal)**, **Align Top/Middle/Bottom (Vertical)**. Both axes are ordinary catalog commands, so both reach the Command Menu, the menu bar, the radial, and rebindable shortcuts; the command bar's Align drawer only lays the vertical three out, it doesn't define them. |
 | Inserted rows/cols | Inherit the formatting of the line before them. |

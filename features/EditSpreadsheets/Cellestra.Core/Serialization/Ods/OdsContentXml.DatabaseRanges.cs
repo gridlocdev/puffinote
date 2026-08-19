@@ -35,7 +35,22 @@ public static partial class OdsContentXml
         {
             foreach (var table in sheet.Tables)
             {
-                ranges.Add(WriteDatabaseRange(sheet.Name, table.Name, table.Range, table.HasHeader, table.Filter, table.Sort));
+                var element = WriteDatabaseRange(sheet.Name, table.Name, table.Range, table.HasHeader, table.Filter, table.Sort);
+
+                // The facts ODF has no attribute for ride along as cellestra:* foreign attributes
+                // (permitted by ODF; ignored by LibreOffice), written only when on so a workbook
+                // without them serializes to pure vocabulary ODF.
+                if (table.HasHeaderColumn)
+                {
+                    element.Add(new XAttribute(CellestraNs + HeaderColumn, "true"));
+                }
+
+                if (table.HasBandedRows)
+                {
+                    element.Add(new XAttribute(CellestraNs + BandedRows, "true"));
+                }
+
+                ranges.Add(element);
             }
 
             if (sheet.ActiveFilter is { } region)
@@ -205,15 +220,31 @@ public static partial class OdsContentXml
         string? name = element.Attribute(Table + "name")?.Value;
         if (name is not null && name != AnonymousDatabaseRangeName)
         {
+            // The cellestra:* extension attributes carry the table facts ODF cannot (see the writer).
+            bool headerColumn = element.Attribute(CellestraNs + HeaderColumn)?.Value == "true";
+            bool bandedRows = element.Attribute(CellestraNs + BandedRows)?.Value == "true";
+
             // A named database range is a Cellestra table; merge filter/sort onto it (or add it).
             var existing = sheet.Tables.FirstOrDefault(t => string.Equals(t.Name, name, StringComparison.Ordinal));
             if (existing is not null)
             {
-                sheet.ReplaceTable(existing, existing with { Filter = filter, Sort = sort });
+                sheet.ReplaceTable(existing, existing with
+                {
+                    Filter = filter,
+                    Sort = sort,
+                    HasHeaderColumn = headerColumn,
+                    HasBandedRows = bandedRows,
+                });
             }
             else if (!sheet.Tables.Any(t => t.Range.Intersects(localRange)))
             {
-                sheet.AddTable(new DataTable(name, localRange, hasHeader) { Filter = filter, Sort = sort });
+                sheet.AddTable(new DataTable(name, localRange, hasHeader)
+                {
+                    Filter = filter,
+                    Sort = sort,
+                    HasHeaderColumn = headerColumn,
+                    HasBandedRows = bandedRows,
+                });
             }
         }
         else

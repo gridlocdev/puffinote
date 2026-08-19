@@ -49,16 +49,56 @@ public class DataEditCommandTests
         history.Execute(DataEditCommands.SetTableHeaderColumn(workbook, sheet.Name, table, enabled: true));
 
         Assert.True(sheet.Tables[0].HasHeaderColumn);
-        // The first column's data cells (below the header row) take the bold header fill.
+        // The first column's data cells (below the header row) are bolded — and nothing else: the
+        // grey band is theme chrome the grid paints from the flag, never a fill baked into the cell.
         var a2 = workbook.Styles.Get(sheet.Find(1, 0)!.StyleId);
         Assert.True(a2.Font.Bold);
-        Assert.Equal(new ArgbColor(Defaults.TableHeaderFillArgb), a2.Fill.Background);
+        Assert.False(a2.Fill.HasBackground);
         // A data cell in another column is untouched.
         Assert.False(workbook.Styles.Get(sheet.Find(1, 1)!.StyleId).Font.Bold);
 
         history.Undo();
         Assert.False(sheet.Tables[0].HasHeaderColumn);
         Assert.False(workbook.Styles.Get(sheet.Find(1, 0)!.StyleId).Font.Bold); // styling reverted
+    }
+
+    [Fact]
+    public void Table_header_commands_bake_no_colours_into_cells()
+    {
+        // The header look is theme chrome — grey in light mode, dark grey in dark mode — so the one
+        // thing these commands may write into the document is the bold emphasis. A baked fill or font
+        // colour would freeze one theme's colours into the file.
+        var (workbook, history, sheet) = New();
+        sheet.SetValue(0, 0, CellValue.Text("Site"));
+        sheet.SetValue(1, 0, CellValue.Text("All Sites"));
+        var table = new Table("T", CellRange.Parse("A1:B2"), HasHeader: true);
+        history.Execute(DataEditCommands.CreateTable(workbook, sheet.Name, table));
+        history.Execute(DataEditCommands.SetTableHeaderColumn(workbook, sheet.Name, table, enabled: true));
+
+        foreach (var (row, column) in new[] { (0, 0), (0, 1), (1, 0) })
+        {
+            var style = workbook.Styles.Get(sheet.Find(row, column)!.StyleId);
+            Assert.True(style.Font.Bold);
+            Assert.False(style.Fill.HasBackground);
+        }
+    }
+
+    [Fact]
+    public void Banded_rows_toggle_flips_the_flag_and_undoes()
+    {
+        // Banding is chrome drawn from the flag — off by default, and toggling it writes nothing
+        // into any cell.
+        var (_, history, sheet) = New();
+        var table = new Table("T", CellRange.Parse("A1:B4"), HasHeader: true);
+        sheet.AddTable(table);
+        Assert.False(sheet.Tables[0].HasBandedRows);
+
+        history.Execute(DataEditCommands.SetTableBandedRows(sheet.Name, table, enabled: true));
+        Assert.True(sheet.Tables[0].HasBandedRows);
+        Assert.Null(sheet.Find(1, 0)); // no cell was created, let alone styled
+
+        history.Undo();
+        Assert.False(sheet.Tables[0].HasBandedRows);
     }
 
     [Fact]
@@ -180,13 +220,13 @@ public class DataEditCommandTests
 
         history.Execute(DataEditCommands.CreateTable(workbook, sheet.Name, table));
 
-        // Header cells (row 0) get the royal-blue accent fill + bold white text; the body stays default.
+        // Header cells (row 0) are bolded and nothing more — the grey band is theme chrome the grid
+        // paints, never a fill baked into the cell. The body stays default.
         foreach (int column in new[] { 0, 1 })
         {
             var header = workbook.Styles.Get(sheet.GetOrCreate(0, column).StyleId);
-            Assert.Equal(Cellestra.Core.Styling.ArgbColor.FromHex("#1E4FB5"), header.Fill.Background);
             Assert.True(header.Font.Bold);
-            Assert.Equal(Cellestra.Core.Styling.ArgbColor.White, header.Font.Color);
+            Assert.False(header.Fill.HasBackground);
         }
 
         Assert.False(workbook.Styles.Get(sheet.GetOrCreate(1, 0).StyleId).Font.Bold);
@@ -258,10 +298,10 @@ public class DataEditCommandTests
 
         Assert.Equal(CellRange.Parse("A1:C3"), Assert.Single(sheet.Tables).Range);
 
-        // The new header cell C1 gets the table-header style (accent fill + bold white text).
+        // The new header cell C1 gets the header emphasis (bold; the band itself is theme chrome).
         var header = workbook.Styles.Get(sheet.GetOrCreate(0, 2).StyleId);
-        Assert.Equal(Cellestra.Core.Styling.ArgbColor.FromHex("#1E4FB5"), header.Fill.Background);
         Assert.True(header.Font.Bold);
+        Assert.False(header.Fill.HasBackground);
 
         history.Undo();
         Assert.Equal(CellRange.Parse("A1:B3"), Assert.Single(sheet.Tables).Range);
@@ -272,8 +312,8 @@ public class DataEditCommandTests
     public void Expand_table_for_edit_below_carries_the_header_column_onto_the_new_row()
     {
         // The mirror of the header-row case above, read along the other axis: a table with a header
-        // column that grows downward has to style the new row's first cell, or the header column stops
-        // one row short of the table it labels and the band reads as having a hole in it.
+        // column that grows downward has to embolden the new row's first cell, or the row labels stop
+        // one row short of the table they label.
         var (workbook, history, sheet) = New();
         var table = new Table("Data", CellRange.Parse("A1:B3"), HasHeader: true) { HasHeaderColumn = true };
         history.Execute(DataEditCommands.CreateTable(workbook, sheet.Name, table));
@@ -283,8 +323,8 @@ public class DataEditCommandTests
         history.Execute(command!);
 
         var header = workbook.Styles.Get(sheet.GetOrCreate(3, 0).StyleId);
-        Assert.Equal(Cellestra.Core.Styling.ArgbColor.FromHex("#1E4FB5"), header.Fill.Background);
         Assert.True(header.Font.Bold);
+        Assert.False(header.Fill.HasBackground);
 
         history.Undo();
         Assert.Equal(Cellestra.Core.Styling.StylePool.DefaultId, sheet.GetOrCreate(3, 0).StyleId);
