@@ -365,6 +365,43 @@ public sealed class CliTests : IDisposable
     }
 
     [Fact]
+    public void Man_is_one_page_generated_from_the_live_command_tree()
+    {
+        var (exit, output, _) = Run("man");
+        Assert.Equal(0, exit);
+        var root = CliApplication.BuildRoot();
+        foreach (var command in root.Subcommands.Where(c => c.Subcommands.Count == 0))
+        {
+            Assert.Contains($"### cellestra {command.Name}", output, StringComparison.Ordinal);
+        }
+
+        Assert.Contains("### cellestra name add", output, StringComparison.Ordinal); // nested verbs are flattened
+        Assert.Contains("--in-place", output, StringComparison.Ordinal);
+        Assert.Contains("[default: table]", output, StringComparison.Ordinal);
+        Assert.Contains("## Exit codes", output, StringComparison.Ordinal);
+        Assert.Contains("{\"op\":\"freeze\"", output, StringComparison.Ordinal); // the apply contract is on the page
+
+        (exit, output, _) = Run("man", "--json");
+        Assert.Equal(0, exit);
+        using var doc = JsonDocument.Parse(output);
+        Assert.Contains(doc.RootElement.GetProperty("commands").EnumerateArray(), c => c.GetProperty("name").GetString() == "cellestra apply");
+    }
+
+    [Fact]
+    public void Schema_prints_a_contract_and_rejects_an_unknown_one()
+    {
+        var (exit, output, _) = Run("schema", "apply");
+        Assert.Equal(0, exit);
+        Assert.Contains("\"op\":\"style\"", output, StringComparison.Ordinal);
+
+        (exit, output, _) = Run("schema", "report");
+        Assert.Equal(0, exit);
+        Assert.Contains("\"changed\"", output, StringComparison.Ordinal);
+
+        Assert.Equal(1, Run("schema", "nope").Exit);
+    }
+
+    [Fact]
     public void Edits_preserve_unmodeled_content()
     {
         string ods = Path2("withchart.ods");

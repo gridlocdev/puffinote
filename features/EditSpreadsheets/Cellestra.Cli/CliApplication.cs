@@ -40,6 +40,8 @@ public static class CliApplication
             ApplyCommands.Apply(),
             ExtraCommands.Open(),
             ExtraCommands.Completions(),
+            ReferenceCommands.Man(),
+            ReferenceCommands.Schema(),
 
             // Data, structural, and layout edits — parity with the desktop app's Data/Insert menus.
             DataCommands.Sort(),
