@@ -104,10 +104,13 @@ cellestra sheets budget.ods                            # worksheet names + used 
 cellestra info budget.ods                              # sheets, named ranges, locale, cell counts
 cellestra functions VLOOKUP                            # signature/args/example from FunctionRegistry
 cellestra validate budget.ods                          # opens? formula/#REF!/circular errors? (exit≠0 on problems)
+cellestra lint budget.ods --json                       # the mistakes that aren't errors: text numbers, short SUM ranges, odd-one-out formulas
+cellestra trace budget.ods Q1.D14 --depth 0            # what a formula reads (--dependents: who reads it)
 cellestra recalc budget.ods --in-place                 # refresh cached values like the GUI would
 cellestra diff before.ods after.ods                    # value/structure diff — IDEAL for round-trip debugging (exit≠0 if differ)
 cellestra clean-up budget.ods --dry-run                # what Clean Up (§8.17) would change, without writing
 cellestra apply budget.ods ops.json -i --json          # a batch of typed ops (cells, styles, layout, charts) in one save — `schema apply` for the ops
+cellestra style budget.ods A1:D1 --bold --fill '#EEE' -i   # the ops as verbs too: style, width, height, freeze, clear, copy, move, fill, paint, filter, …
 ```
 
 `diff` and `validate` are the high-leverage ones when debugging serialization or the formula engine: `validate` flags `#REF!`/circular/eval errors with a non-zero exit, and `diff` shows exactly which cells changed across an open→save→reopen (where Git only sees a binary blob).

@@ -206,8 +206,12 @@ internal static class ReferenceCommands
         - **`apply` is the batch verb**: one JSON document of typed ops (cells, blocks, styles, layout,
           structure, data, charts), one load, one recalculation, one save. `cellestra schema apply` lists the ops.
           Prefer it to a `set` per cell — it is faster and it fails as a whole, never half-written.
-        - **Check after you write**: `validate` (exit 1 on any error cell or circular reference) and `diff`
-          (exit 1 on any difference) are made for scripts and CI. `eval "=…"` tests a formula with no file.
+        - **Check after you write**: `validate` (exit 1 on any error cell or circular reference), `lint` (the
+          mistakes that aren't errors: numbers as text, short ranges, inconsistent formulas, rule violations),
+          `trace <cell>` (what a formula reads, or `--dependents` who reads it), and `diff` (exit 1 on any
+          difference in values, structure, or with `--styles` formatting) are made for scripts and CI.
+          `eval "=…"` tests a formula with no file. A cell's `style` comes back in every `--json` reply.
+        - **Names are addresses**: a named range or a table name works wherever a range or cell does.
         - **Same engine as the app**: evaluation, OpenFormula translation, and locale handling are identical;
           `--locale en-US` pins parsing/formatting for reproducible output.
         - **No network, ever.** Only the files named on the command line are touched.

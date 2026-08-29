@@ -39,14 +39,23 @@ the same reply that wrote it, not on a later inspection. A user error under `--j
 cellestra new book.ods --sheets "Budget,Notes" --json           # refuses to overwrite an existing file
 cellestra apply book.ods ops.json --in-place --json               # ⇐ the build step, see below
 cellestra validate book.ods --json                                # exit 1 on any error cell / circular ref
-cellestra cat book.ods --sheet Budget --json                      # rows (display strings) + cells (typed)
-cellestra get book.ods Budget.D5 --json                           # one cell: value, display, formula, error
-cellestra diff before.ods after.ods --json                        # exit 1 if they differ; lists the cells
+cellestra lint book.ods --json                                    # mistakes that aren't errors (see below)
+cellestra cat book.ods --sheet Budget --json                      # rows (display strings) + cells (typed, with style)
+cellestra get book.ods Budget.D5 GrandTotal Budget.B2:B4 --json   # one cell, a name, a range — several at once
+cellestra trace book.ods Budget.D5 --depth 0                      # what a formula reads; --dependents: who reads it
+cellestra diff before.ods after.ods --styles --json               # exit 1 if they differ: values, structure, formatting
 ```
 
-Check `errors` in the apply report (or run `validate`) after **every** write, and `cat --json` the
-range you built before you say it is done — the `display` string is exactly what a person opening
-the file sees, so a wrong number format or an unformatted date shows up there.
+Check `errors` in the apply report (or run `validate`) after **every** write; run **`lint`** before
+you say a sheet is done — it catches what an agent gets wrong most: a number or date stored as text,
+a `SUM` that stops one row short of the data, a formula that breaks its column's pattern, a value
+that violates a validation rule, a table header that isn't text. Then `cat --json` the range: the
+`display` string is exactly what a person opening the file sees, and every cell's `style` object
+(only non-default keys: `bold`, `fill`, `align`, `format`, `border`, …) lets you confirm formatting.
+`sheets --json` confirms widths, heights, frozen panes, merges, tables, and validation rules.
+
+A **named range or table name is an address** anywhere a range or cell is expected
+(`cat --range Spend`, `stats GrandTotal`, `{"op":"sort","range":"Orders",…}`).
 
 ## Building a sheet: `apply` — one document, one save
 
@@ -86,23 +95,40 @@ or stdin (`cat ops.json | cellestra apply book.ods - --in-place --json`).
 Every op (`cellestra schema apply` is the authoritative list with every field): `set`, `clear`,
 `style` (`bold`/`italic`/`underline`/`strikethrough`, `font`, `size`, `color`, `fill`, `align`,
 `valign`, `wrap`, number `format`, `border`/`borderColor`), `width`, `height`, `freeze`,
-`merge`/`unmerge`, `hide`/`show`, `add-sheet`/`rename-sheet`/`delete-sheet`,
-`insert-rows`/`delete-rows`/`insert-cols`/`delete-cols`, `sort`, `table`, `validation`,
-`name`/`unname`, `hyperlink`, `chart`. `--dry-run` applies in memory and returns the same report
-(changed cells, errors) without writing — use it to test a batch of formulas against a real file.
+`merge`/`unmerge`, `hide`/`show`, `copy`/`move` (relative references shift on a copy, like the
+app's paste), `fill` (the fill handle), `paint` (format painter), `filter` (hide rows by SUMIF-style
+conditions or allowed values; `clear` to show all), `add-sheet` (`at`, `ifMissing`)/`rename-sheet`/
+`delete-sheet`/`duplicate-sheet`/`move-sheet`, `settings` (locale, calc, activeSheet),
+`insert-rows`/`delete-rows`/`insert-cols`/`delete-cols`, `sort`, `table` (`replace`)/
+`table-options` (banded rows, header column, resize)/`table-remove`, `validation` (list, or
+whole/decimal/date/text-length with an operator and bounds; `remove`), `name`/`unname`,
+`hyperlink`, `chart`/`chart-update`/`chart-remove`. Re-running a batch is safe when you use
+`ifMissing`/`replace`. `--dry-run` applies in memory and returns the same report (changed cells,
+errors) without writing — use it to test a batch of formulas against a real file.
 
-For a big grid of data you already have as CSV: `cellestra import data.csv --into book.ods --sheet Data`
-(creates the workbook if absent, replaces that sheet's contents), then `apply` the formulas and
-styling on top. `cellestra convert a.csv b.ods` / `convert b.ods c.csv` converts whole files.
+Every op also exists as a verb for one-off use (`style`, `width`, `height`, `freeze`, `clear`,
+`copy`, `move`, `fill`, `paint`, `filter`, `settings`, `duplicate-sheet`, `move-sheet`, `table …`,
+`data-validation …`, `charts update|remove`); `cellestra man` lists them all with their options.
+
+For a grid of data you already have as CSV: `cellestra put book.ods Data.B3 --from grid.csv`
+drops it at a cell (fields parse like typing, so `=…` formulas land as formulas);
+`cellestra import data.csv --into book.ods --sheet Data` replaces a whole sheet (creating the
+workbook if absent). `cellestra convert a.csv b.ods` / `convert b.ods c.csv` converts whole files.
 
 ## Reading what is there
 
 - `sheets --json` / `info --json` — sheet names, used ranges, frozen panes, tables, named ranges, locale.
 - `cat --json` — `rows` (display strings for the bounding grid) and `cells` (populated cells only,
   typed, with `formula`/`error`/`format` when present). Narrow with `--range A1:D20`, `--sheet`.
-- `find book.ods "VLOOKUP" --in formulas --json` — where a formula or value is used (exit 1 if none).
-- `stats book.ods Budget.D2:D4 --json`; `functions SUMIFS --json` (signature and arguments);
-  `eval "=ROUND(355/113, 4)" --json` — try a formula with no file at all.
+- `find book.ods "VLOOKUP" --in formulas --json` — where a formula or value is used (exit 1 if none);
+  `find book.ods "2025" --replace "2026" --in-place` rewrites text and formulas (`--regex` with `$1`).
+- `stats book.ods Budget.D2:D4 --json` — count, blanks, a type histogram, distinct, sum, average,
+  median, stdev, min, max: run it on a column *before* writing formulas over it.
+- `trace book.ods Budget.D5 --depth 0` — the formula's inputs as a tree (a range is one node);
+  `--dependents` for what would break if you changed the cell.
+- `charts list|show book.ods` — every chart's type, title, and series references as JSON.
+- `functions SUMIFS --json` (signature and arguments); `eval "=ROUND(355/113, 4)" --json` — try a
+  formula with no file at all; `cat --both` prints `=A1*2 → 20` so source and result read together.
 
 ## Gotchas that cost time
 
