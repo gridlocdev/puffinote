@@ -207,6 +207,70 @@ public sealed class CliTests : IDisposable
     }
 
     [Fact]
+    public void Trace_follows_precedents_and_dependents()
+    {
+        string ods = Path2("book.ods");
+        Run("new", ods);
+        Run("set", ods, "A1=1", "A2=2", "A3=3", "B1==SUM(A1:A3)", "C1==B1*2", "--in-place");
+
+        var (exit, output, _) = Run("trace", ods, "C1", "--depth", "0");
+        Assert.Equal(0, exit);
+        var lines = output.Trim().Split('\n');
+        Assert.StartsWith("Sheet1.C1  =B1*2  → 12", lines[0], StringComparison.Ordinal);
+        Assert.Contains("  Sheet1.B1  =SUM(A1:A3)  → 6", lines[1], StringComparison.Ordinal);
+        Assert.Contains("Sheet1.A1:A3 (3 cells)", lines[2], StringComparison.Ordinal); // a range is one node
+
+        using var doc = JsonDocument.Parse(Run("trace", ods, "A2", "--dependents", "--depth", "0", "--json").Out);
+        var tree = doc.RootElement.GetProperty("tree");
+        Assert.Equal("Sheet1.B1", tree.GetProperty("dependents")[0].GetProperty("address").GetString());
+        Assert.Equal("Sheet1.C1", tree.GetProperty("dependents")[0].GetProperty("dependents")[0].GetProperty("address").GetString());
+    }
+
+    [Fact]
+    public void Lint_finds_mistakes_that_are_not_errors()
+    {
+        string ods = Path2("book.ods");
+        string ops = Path2("ops.json");
+        Run("new", ods);
+        File.WriteAllText(ops, """
+            [{"op":"set","at":"A1","values":[["Item","Qty"],["a",1],["b",2],["c",3],["d","4"],["Sum","=SUM(B2:B4)"]]},
+             {"op":"set","at":"D1","values":[["=A2"],["=A3"],["=A9"],["=A5"]]},
+             {"op":"table","range":"A1:B5","name":"T"},
+             {"op":"name","name":"Unused","range":"B2"},
+             {"op":"validation","range":"B2:B5","list":["1","2"]}]
+            """);
+        Assert.Equal(0, Run("apply", ods, ops, "--in-place").Exit);
+
+        // apply parses "4" like typing (a number), so plant a genuine text "4" the way a CSV import or a paste can.
+        Workbook workbook;
+        OdsPackage package;
+        using (var read = File.OpenRead(ods))
+        {
+            (workbook, package) = OdsReader.ReadWithPackage(read);
+        }
+
+        workbook.ActiveSheet.SetValue(1, 2, CellValue.Text("4")); // C2
+        using (var stream = File.Create(ods))
+        {
+            OdsWriter.Write(workbook, stream, package);
+        }
+
+        var (exit, output, _) = Run("lint", ods, "--json", "--locale", "en-US");
+        Assert.Equal(0, exit); // warnings only
+        using var doc = JsonDocument.Parse(output);
+        var codes = doc.RootElement.GetProperty("findings").EnumerateArray()
+            .Select(f => f.GetProperty("code").GetString() + "@" + f.GetProperty("cell").GetString()).ToList();
+        Assert.Contains("number-as-text@Sheet1.C2", codes);
+        Assert.Contains("short-range@Sheet1.B6", codes);          // SUM(B2:B4) but B5 holds a number
+        Assert.Contains("inconsistent-formula@Sheet1.D3", codes);  // =A9 between =A3 and =A5
+        Assert.Contains("validation@Sheet1.B4", codes);            // 3 is not in the list
+        Assert.Contains("unused-name@Unused", codes);
+        Assert.DoesNotContain(codes, c => c.StartsWith("error", StringComparison.Ordinal));
+
+        Assert.Equal(1, Run("lint", ods, "--strict").Exit);
+    }
+
+    [Fact]
     public void Set_json_reports_the_changed_cell_and_any_error_it_introduced()
     {
         string ods = Path2("book.ods");

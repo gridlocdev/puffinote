@@ -25,6 +25,8 @@ public static class CliApplication
             BaselineCommands.Info(),
             BaselineCommands.Eval(),
             BaselineCommands.Validate(),
+            InspectCommands.Trace(),
+            InspectCommands.Lint(),
 
             // Extras.
             ExtraCommands.New(),
