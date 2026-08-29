@@ -185,6 +185,28 @@ public sealed class CliTests : IDisposable
     }
 
     [Fact]
+    public void Names_and_tables_are_addresses_and_get_and_set_take_several()
+    {
+        string ods = Path2("book.ods");
+        Run("new", ods);
+        Assert.Equal(0, Run("set", ods, "A1=Item", "B1=Qty", "A2=Pen", "B2=3", "A3=Ink", "B3=4", "B4==SUM(B2:B3)", "--in-place").Exit);
+        Run("name", "add", ods, "Total", "Sheet1.B4", "--in-place");
+        Run("table", ods, "A1:B3", "--name", "Orders", "--in-place");
+
+        Assert.Equal("7", Run("get", ods, "Total").Out.Trim());                       // a named cell
+        using var doc = JsonDocument.Parse(Run("cat", ods, "--range", "Orders", "--json").Out);
+        Assert.Equal("A1:B3", doc.RootElement.GetProperty("range").GetString());
+
+        var (exit, output, _) = Run("get", ods, "A2", "B2:B3");                       // several, mixed
+        Assert.Equal(0, exit);
+        Assert.Equal(["Sheet1.A2\tPen", "Sheet1.B2\t3", "Sheet1.B3\t4"], output.Trim().Split('\n'));
+
+        using var many = JsonDocument.Parse(Run("get", ods, "A1", "Total", "--json").Out);
+        Assert.Equal(2, many.RootElement.GetArrayLength());
+        Assert.Equal(6, Run("get", ods, "Orders").Out.Trim().Split('\n').Length); // a table lists every cell
+    }
+
+    [Fact]
     public void Set_json_reports_the_changed_cell_and_any_error_it_introduced()
     {
         string ods = Path2("book.ods");

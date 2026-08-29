@@ -24,12 +24,25 @@ public static class Cells
             ?? throw new CliException($"No sheet named '{name}'. Available: {SheetList(workbook)}.");
     }
 
-    /// <summary>Resolve a cell reference to its sheet and address (sheet prefix wins over --sheet).</summary>
+    /// <summary>
+    /// Resolve a cell reference to its sheet and address (sheet prefix wins over --sheet). A named
+    /// range or table name that covers exactly one cell resolves too.
+    /// </summary>
     public static (Worksheet Sheet, CellAddress Address) ResolveCell(Workbook workbook, string reference, string? defaultSheet = null)
     {
         if (!CellAddress.TryParse(reference, out var address))
         {
-            throw new CliException($"'{reference}' is not a valid cell reference (e.g. Sheet1.B2 or B2).");
+            if (ResolveName(workbook, reference, defaultSheet) is { } named)
+            {
+                if (named.Range.RowCount != 1 || named.Range.ColumnCount != 1)
+                {
+                    throw new CliException($"'{reference}' is a range ({named.Range}), not a single cell.");
+                }
+
+                return (named.Sheet, named.Range.TopLeft);
+            }
+
+            throw new CliException($"'{reference}' is not a valid cell reference (e.g. Sheet1.B2 or B2) or a known name.");
         }
 
         var sheet = address.Sheet is not null
@@ -38,12 +51,16 @@ public static class Cells
         return (sheet, address);
     }
 
-    /// <summary>Resolve a range reference to its sheet and range (sheet prefix wins over --sheet).</summary>
+    /// <summary>
+    /// Resolve a range reference to its sheet and range (sheet prefix wins over --sheet). A named
+    /// range or a table name is an address too, so <c>cat --range Spend</c> works.
+    /// </summary>
     public static (Worksheet Sheet, CellRange Range) ResolveRange(Workbook workbook, string reference, string? defaultSheet = null)
     {
         if (!CellRange.TryParse(reference, out var range))
         {
-            throw new CliException($"'{reference}' is not a valid range (e.g. Sheet1.A1:C10 or A1:C10).");
+            return ResolveName(workbook, reference, defaultSheet)
+                ?? throw new CliException($"'{reference}' is not a valid range (e.g. Sheet1.A1:C10 or A1:C10), a named range, or a table.");
         }
 
         var sheet = range.Sheet is not null
@@ -70,6 +87,40 @@ public static class Cells
     {
         var cell = sheet.Find(row, column);
         return cell is { IsFormula: true } ? "=" + cell.Formula : Display(workbook, sheet, row, column, culture);
+    }
+
+    /// <summary>A named range (workbook-scoped, or scoped to the default sheet) or a table, by name.</summary>
+    public static (Worksheet Sheet, CellRange Range)? ResolveName(Workbook workbook, string name, string? defaultSheet)
+    {
+        name = name.Trim();
+        if (name.Length == 0)
+        {
+            return null;
+        }
+
+        var home = string.IsNullOrEmpty(defaultSheet) ? workbook.ActiveSheet : workbook.FindSheet(defaultSheet);
+        var named = workbook.FindNamedRange(name, home?.Name);
+        if (named is not null)
+        {
+            var target = named.Target;
+            var sheet = target.Sheet is not null
+                ? workbook.FindSheet(target.Sheet) ?? throw new CliException($"Named range '{name}' points at a missing sheet '{target.Sheet}'.")
+                : home ?? workbook.ActiveSheet;
+            return (sheet, target.WithSheet(null)); // the tuple carries the sheet, as for a parsed A1:C3
+        }
+
+        // Tables: the default sheet first, then any sheet — a table name is unique within its sheet.
+        var candidates = home is null ? workbook.Worksheets : [home, .. workbook.Worksheets.Where(w => w != home)];
+        foreach (var sheet in candidates)
+        {
+            var table = sheet.Tables.FirstOrDefault(t => string.Equals(t.Name, name, StringComparison.OrdinalIgnoreCase));
+            if (table is not null)
+            {
+                return (sheet, table.Range.WithSheet(null));
+            }
+        }
+
+        return null;
     }
 
     public static string SheetList(Workbook workbook) =>

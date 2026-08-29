@@ -123,14 +123,18 @@ internal static class BaselineCommands
     public static Command Get()
     {
         var file = Options.File();
-        var cell = new Argument<string>("cell") { Description = "Cell reference, e.g. Sheet1.B7 or B7" };
+        var cells = new Argument<string[]>("cells")
+        {
+            Description = "Cell(s) or range(s): Sheet1.B7, B7, A1:C3, a named range, a table name — several at once",
+            Arity = ArgumentArity.OneOrMore,
+        };
         var formula = Options.Formula();
         var locale = Options.Locale();
         var json = Options.Json();
 
-        var command = new Command("get", "Read one cell's value (or --formula for its source)")
+        var command = new Command("get", "Read cell values (or --formula for sources): one cell, several, or a range")
         {
-            file, cell, formula, locale, json,
+            file, cells, formula, locale, json,
         };
 
         command.SetAction(parse =>
@@ -139,18 +143,49 @@ internal static class BaselineCommands
             var loaded = Workspace.Load(parse.GetValue(file)!, null, culture);
             Workspace.Recalculate(loaded.Workbook);
             var effectiveCulture = culture ?? loaded.Workbook.Settings.EffectiveLocale;
+            var references = parse.GetValue(cells) ?? [];
 
-            var (worksheet, address) = Cells.ResolveCell(loaded.Workbook, parse.GetValue(cell)!);
+            // Expand every argument to cells: a single cell stays one; a range/name lists each position.
+            var targets = new List<(Worksheet Sheet, int Row, int Column)>();
+            foreach (var reference in references)
+            {
+                if (CellAddress.TryParse(reference, out _))
+                {
+                    var (sheet, address) = Cells.ResolveCell(loaded.Workbook, reference);
+                    targets.Add((sheet, address.Row, address.Column));
+                    continue;
+                }
+
+                var (rangeSheet, range) = Cells.ResolveRange(loaded.Workbook, reference);
+                if ((long)range.RowCount * range.ColumnCount > 1_000_000)
+                {
+                    throw new CliException($"'{reference}' covers {range.RowCount}×{range.ColumnCount} cells — use `cat --range` for a block that size.");
+                }
+
+                foreach (var (row, column) in range.Positions())
+                {
+                    targets.Add((rangeSheet, row, column));
+                }
+            }
+
+            // One argument that names one cell (B7, or a single-cell name) answers bare, as it always has.
+            bool single = references.Length == 1 && targets.Count == 1;
             if (parse.GetValue(json))
             {
-                Report.Write(Report.Cell(loaded.Workbook, worksheet, address.Row, address.Column, effectiveCulture));
+                var reports = targets.Select(t => Report.Cell(loaded.Workbook, t.Sheet, t.Row, t.Column, effectiveCulture)).ToList();
+                Report.Write(single ? reports[0] : reports);
                 return 0;
             }
 
-            string text = parse.GetValue(formula)
-                ? Cells.FormulaOrValue(loaded.Workbook, worksheet, address.Row, address.Column, effectiveCulture)
-                : Cells.Display(loaded.Workbook, worksheet, address.Row, address.Column, effectiveCulture);
-            Console.Out.WriteLine(text);
+            bool sources = parse.GetValue(formula);
+            foreach (var (sheet, row, column) in targets)
+            {
+                string text = sources
+                    ? Cells.FormulaOrValue(loaded.Workbook, sheet, row, column, effectiveCulture)
+                    : Cells.Display(loaded.Workbook, sheet, row, column, effectiveCulture);
+                Console.Out.WriteLine(single ? text : $"{Report.Address(sheet.Name, row, column)}\t{text}");
+            }
+
             return 0;
         });
 
@@ -160,32 +195,64 @@ internal static class BaselineCommands
     public static Command Set()
     {
         var file = Options.File();
-        var cell = new Argument<string>("cell") { Description = "Cell reference, e.g. Sheet1.B7" };
-        var value = new Argument<string>("value") { Description = "Value or formula, e.g. \"=SUM(B1:B6)\"" };
+        var edits = new Argument<string[]>("edits")
+        {
+            Description = "Either `<cell> <value>` or any number of `cell=value` pairs (a formula: `B7==SUM(B1:B6)`)",
+            Arity = ArgumentArity.OneOrMore,
+        };
         var inPlace = Options.InPlace();
         var output = Options.Output();
         var locale = Options.Locale();
         var json = Options.Json();
 
-        var command = new Command("set", "Set a cell and save the workbook (atomic)")
+        var command = new Command("set", "Set one or more cells and save the workbook (atomic)")
         {
-            file, cell, value, inPlace, output, locale, json,
+            file, edits, inPlace, output, locale, json,
         };
 
         command.SetAction(parse =>
         {
             string path = parse.GetValue(file)!;
             string target = Options.EditTarget(path, parse.GetValue(inPlace), parse.GetValue(output));
+            var pairs = ParseSetPairs(parse.GetValue(edits) ?? []);
             return EditSession.Run(path, target, Locale.Resolve(parse.GetValue(locale)), parse.GetValue(json), session =>
             {
-                var (worksheet, address) = Cells.ResolveCell(session.Workbook, parse.GetValue(cell)!);
-                // Reuse the app's input parsing (formula vs value, date coercion + format stamping).
-                session.Apply(EditCommands.SetInput(session.Workbook, worksheet.Name, address.Row, address.Column,
-                    parse.GetValue(value) ?? string.Empty, session.Culture));
+                foreach (var (reference, value) in pairs)
+                {
+                    var (worksheet, address) = Cells.ResolveCell(session.Workbook, reference);
+                    // Reuse the app's input parsing (formula vs value, date coercion + format stamping).
+                    session.Apply(EditCommands.SetInput(session.Workbook, worksheet.Name, address.Row, address.Column, value, session.Culture));
+                }
             }, format: null);
         });
 
         return command;
+    }
+
+    /// <summary>
+    /// <c>set file B2 42</c> is the original two-argument form; otherwise every argument is a
+    /// <c>cell=value</c> pair split at its first <c>=</c>, so a formula reads <c>B2==SUM(A1:A9)</c>.
+    /// </summary>
+    private static List<(string Cell, string Value)> ParseSetPairs(string[] arguments)
+    {
+        if (arguments.Length == 2 && !arguments[0].Contains('='))
+        {
+            return [(arguments[0], arguments[1])];
+        }
+
+        var pairs = new List<(string, string)>();
+        foreach (var argument in arguments)
+        {
+            int split = argument.IndexOf('=');
+            if (split <= 0)
+            {
+                throw new CliException($"'{argument}' is not a cell=value pair (e.g. B2=42, or B2==SUM(A1:A9) for a formula).");
+            }
+
+            pairs.Add((argument[..split], argument[(split + 1)..]));
+        }
+
+        return pairs;
     }
 
     public static Command Recalc()
