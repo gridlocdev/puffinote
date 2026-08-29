@@ -1,11 +1,13 @@
 using System.CommandLine;
 using System.Globalization;
+using System.Text.Json;
 using System.Text.RegularExpressions;
 using Cellestra.Cli.Infrastructure;
 using Cellestra.Core.Editing;
 using Cellestra.Core.Formulas.Functions;
 using Cellestra.Core.Model;
 using Cellestra.Core.Serialization.Csv;
+using Cellestra.Core.Values;
 using Puffinote.Components.Core.Cli;
 
 namespace Cellestra.Cli.Commands;
@@ -169,10 +171,10 @@ internal static class ExtraCommands
     public static Command Stats()
     {
         var file = Options.File();
-        var range = new Argument<string>("range") { Description = "Range to aggregate, e.g. Sheet1.A1:A100" };
+        var range = new Argument<string>("range") { Description = "Range to aggregate, e.g. Sheet1.A1:A100 (a name or table works too)" };
         var locale = Options.Locale();
         var json = Options.Json();
-        var command = new Command("stats", "Aggregate a range: sum, average, count, min, max") { file, range, locale, json };
+        var command = new Command("stats", "Describe a range: count, blanks, types, sum, average, median, stdev, min, max, distinct") { file, range, locale, json };
 
         command.SetAction(parse =>
         {
@@ -181,9 +183,9 @@ internal static class ExtraCommands
             Workspace.Recalculate(loaded.Workbook);
             var (worksheet, cellRange) = Cells.ResolveRange(loaded.Workbook, parse.GetValue(range)!);
 
-            int count = 0;
-            int numeric = 0;
-            double sum = 0, min = double.PositiveInfinity, max = double.NegativeInfinity;
+            int count = 0, texts = 0, booleans = 0, errors = 0, formulas = 0;
+            var numbers = new List<double>();
+            var distinct = new HashSet<string>(StringComparer.Ordinal);
 
             // Walk only the populated cells (O(populated)), not every position in the bounding box —
             // so `stats Sheet1.A1:A1048576` over a sparse column stays fast.
@@ -195,15 +197,38 @@ internal static class ExtraCommands
                 }
 
                 count++;
+                distinct.Add(cell.Value.ToInvariantString());
+                if (cell.IsFormula)
+                {
+                    formulas++;
+                }
+
                 if (cell.Value.IsNumber)
                 {
-                    numeric++;
-                    double n = cell.Value.AsNumber;
-                    sum += n;
-                    min = Math.Min(min, n);
-                    max = Math.Max(max, n);
+                    numbers.Add(cell.Value.AsNumber);
+                }
+                else if (cell.Value.IsText)
+                {
+                    texts++;
+                }
+                else if (cell.Value.IsBoolean)
+                {
+                    booleans++;
+                }
+                else if (cell.Value.IsError)
+                {
+                    errors++;
                 }
             }
+
+            long total = (long)cellRange.RowCount * cellRange.ColumnCount;
+            long blanks = total - count;
+            double? sum = numbers.Count > 0 ? numbers.Sum() : null;
+            double? average = numbers.Count > 0 ? numbers.Average() : null;
+            double? min = numbers.Count > 0 ? numbers.Min() : null;
+            double? max = numbers.Count > 0 ? numbers.Max() : null;
+            double? median = Median(numbers);
+            double? stdev = SampleStdev(numbers);
 
             if (parse.GetValue(json))
             {
@@ -211,87 +236,165 @@ internal static class ExtraCommands
                 {
                     sheet = worksheet.Name,
                     range = cellRange.ToString(),
+                    cells = total,
                     count,
-                    numeric,
+                    blanks,
+                    types = new { number = numbers.Count, text = texts, boolean = booleans, error = errors, formula = formulas },
+                    distinct = distinct.Count,
                     sum,
-                    average = numeric > 0 ? sum / numeric : (double?)null,
-                    min = numeric > 0 ? min : (double?)null,
-                    max = numeric > 0 ? max : (double?)null,
+                    average,
+                    median,
+                    stdev,
+                    min,
+                    max,
                 });
                 return 0;
             }
 
-            var invariant = CultureInfo.InvariantCulture;
+            var inv = CultureInfo.InvariantCulture;
+            string N(double? n) => n is { } v ? v.ToString("0.##########", inv) : string.Empty;
+            Console.Out.WriteLine($"cells\t{total}");
             Console.Out.WriteLine($"count\t{count}");
-            Console.Out.WriteLine($"numeric\t{numeric}");
-            Console.Out.WriteLine($"sum\t{sum.ToString("0.##########", invariant)}");
-            Console.Out.WriteLine($"average\t{(numeric > 0 ? (sum / numeric).ToString("0.##########", invariant) : "")}");
-            Console.Out.WriteLine($"min\t{(numeric > 0 ? min.ToString("0.##########", invariant) : "")}");
-            Console.Out.WriteLine($"max\t{(numeric > 0 ? max.ToString("0.##########", invariant) : "")}");
+            Console.Out.WriteLine($"blanks\t{blanks}");
+            Console.Out.WriteLine($"numeric\t{numbers.Count}");
+            Console.Out.WriteLine($"text\t{texts}");
+            Console.Out.WriteLine($"boolean\t{booleans}");
+            Console.Out.WriteLine($"error\t{errors}");
+            Console.Out.WriteLine($"formula\t{formulas}");
+            Console.Out.WriteLine($"distinct\t{distinct.Count}");
+            Console.Out.WriteLine($"sum\t{N(sum)}");
+            Console.Out.WriteLine($"average\t{N(average)}");
+            Console.Out.WriteLine($"median\t{N(median)}");
+            Console.Out.WriteLine($"stdev\t{N(stdev)}");
+            Console.Out.WriteLine($"min\t{N(min)}");
+            Console.Out.WriteLine($"max\t{N(max)}");
             return 0;
         });
 
         return command;
     }
 
+    private static double? Median(List<double> numbers)
+    {
+        if (numbers.Count == 0)
+        {
+            return null;
+        }
+
+        var sorted = numbers.Order().ToList();
+        int mid = sorted.Count / 2;
+        return sorted.Count % 2 == 1 ? sorted[mid] : (sorted[mid - 1] + sorted[mid]) / 2;
+    }
+
+    /// <summary>Sample standard deviation (n − 1), the same as the STDEV function; null below two numbers.</summary>
+    private static double? SampleStdev(List<double> numbers)
+    {
+        if (numbers.Count < 2)
+        {
+            return null;
+        }
+
+        double mean = numbers.Average();
+        return Math.Sqrt(numbers.Sum(n => (n - mean) * (n - mean)) / (numbers.Count - 1));
+    }
+
     public static Command Find()
     {
         var file = Options.File();
-        var term = new Argument<string>("term") { Description = "Text to search for" };
+        var term = new Argument<string>("term") { Description = "Text to search for (case-insensitive unless --regex)" };
         var regex = new Option<bool>("--regex") { Description = "Treat the term as a regular expression" };
         var into = new Option<string>("--in")
         {
             Description = "Where to search: values | formulas | both",
             DefaultValueFactory = _ => "both"
         };
+        var replace = new Option<string?>("--replace") { Description = "Replace every match with this text (needs --in-place or -o); $1 groups with --regex" };
+        var sheetOption = Options.Sheet();
+        var inPlace = Options.InPlace();
+        var output = Options.Output();
         var locale = Options.Locale();
         var json = Options.Json();
-        var command = new Command("find", "Search cells by value or formula") { file, term, regex, into, locale, json };
+        var command = new Command("find", "Search cells by value or formula — and optionally replace") { file, term, regex, into, replace, sheetOption, inPlace, output, locale, json };
 
         command.SetAction(parse =>
         {
-            var culture = Locale.Resolve(parse.GetValue(locale));
-            var loaded = Workspace.Load(parse.GetValue(file)!, null, culture);
-            Workspace.Recalculate(loaded.Workbook);
-            var effectiveCulture = culture ?? loaded.Workbook.Settings.EffectiveLocale;
-
             string where = (parse.GetValue(into) ?? "both").ToLowerInvariant();
             bool searchValues = where is "values" or "both";
             bool searchFormulas = where is "formulas" or "both";
-            string termText = parse.GetValue(term) ?? string.Empty;
-            Regex? pattern = null;
-            if (parse.GetValue(regex))
+            if (!searchValues && !searchFormulas)
             {
-                try
-                {
-                    pattern = new Regex(termText, RegexOptions.None);
-                }
-                catch (ArgumentException ex)
-                {
-                    throw new CliException($"Invalid regex '{termText}': {ex.Message}");
-                }
+                throw new CliException("--in must be values, formulas, or both.");
             }
 
-            bool Matches(string candidate) => pattern is not null
-                ? pattern.IsMatch(candidate)
-                : candidate.Contains(termText, StringComparison.OrdinalIgnoreCase);
+            string termText = parse.GetValue(term) ?? string.Empty;
+            Regex pattern;
+            try
+            {
+                pattern = parse.GetValue(regex)
+                    ? new Regex(termText, RegexOptions.None)
+                    : new Regex(Regex.Escape(termText), RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
+            }
+            catch (ArgumentException ex)
+            {
+                throw new CliException($"Invalid regex '{termText}': {ex.Message}");
+            }
 
+            string? replacement = parse.GetValue(replace);
+            string path = parse.GetValue(file)!;
+            string? only = parse.GetValue(sheetOption);
             bool asJson = parse.GetValue(json);
-            int hits = 0;
+            var culture = Locale.Resolve(parse.GetValue(locale));
+
+            if (replacement is not null)
+            {
+                string target = Options.EditTarget(path, parse.GetValue(inPlace), parse.GetValue(output));
+                return EditSession.Run(path, target, culture, asJson, session =>
+                {
+                    int replaced = 0;
+                    foreach (var worksheet in session.Workbook.Worksheets.Where(s => only is null || string.Equals(s.Name, only, StringComparison.OrdinalIgnoreCase)))
+                    {
+                        // Snapshot first: the edits mutate the sheet we're walking.
+                        var hits = worksheet.EnumerateCells().Select(c => (c.Row, c.Column, c.Cell)).ToList();
+                        foreach (var (row, column, cell) in hits)
+                        {
+                            if (searchFormulas && cell.IsFormula && pattern.IsMatch(cell.Formula!))
+                            {
+                                string formula = pattern.Replace(cell.Formula!, replacement);
+                                session.Apply(EditCommands.SetFormula(worksheet.Name, row, column, formula));
+                                replaced++;
+                            }
+                            else if (searchValues && !cell.IsFormula && cell.Value.IsText && pattern.IsMatch(cell.Value.AsText))
+                            {
+                                string text = pattern.Replace(cell.Value.AsText, replacement);
+                                session.Apply(EditCommands.SetValue(worksheet.Name, row, column, CellValue.Text(text)));
+                                replaced++;
+                            }
+                        }
+                    }
+
+                    session.Field("replaced", replaced);
+                    session.Note($"Replaced in {replaced} cell(s).");
+                });
+            }
+
+            var loaded = Workspace.Load(path, null, culture);
+            Workspace.Recalculate(loaded.Workbook);
+            var effectiveCulture = culture ?? loaded.Workbook.Settings.EffectiveLocale;
+            int found = 0;
             var matches = new List<CellReport>();
-            foreach (var worksheet in loaded.Workbook.Worksheets)
+            foreach (var worksheet in loaded.Workbook.Worksheets.Where(s => only is null || string.Equals(s.Name, only, StringComparison.OrdinalIgnoreCase)))
             {
                 foreach (var (row, column, cell) in worksheet.EnumerateCells())
                 {
                     bool match =
-                        (searchFormulas && cell.IsFormula && Matches("=" + cell.Formula)) ||
-                        (searchValues && Matches(Cells.Display(loaded.Workbook, worksheet, row, column, effectiveCulture)));
+                        (searchFormulas && cell.IsFormula && pattern.IsMatch("=" + cell.Formula)) ||
+                        (searchValues && pattern.IsMatch(Cells.Display(loaded.Workbook, worksheet, row, column, effectiveCulture)));
                     if (!match)
                     {
                         continue;
                     }
 
-                    hits++;
+                    found++;
                     if (asJson)
                     {
                         matches.Add(Report.Cell(loaded.Workbook, worksheet, row, column, effectiveCulture));
@@ -308,7 +411,7 @@ internal static class ExtraCommands
                 Report.Write(new { term = termText, matches });
             }
 
-            return hits > 0 ? 0 : 1;
+            return found > 0 ? 0 : 1;
         });
 
         return command;
@@ -323,8 +426,12 @@ internal static class ExtraCommands
             Description = "unified (default)",
             DefaultValueFactory = _ => "unified"
         };
+        var styles = new Option<bool>("--styles") { Description = "Also compare cell formatting (bold, fill, number format, …)" };
         var json = Options.Json();
-        var command = new Command("diff", "Compare two workbooks by value/structure (exit 1 if they differ)") { left, right, format, json };
+        var command = new Command("diff", "Compare two workbooks: values/formulas, structure (sheets, layout, tables, charts, names), and with --styles formatting (exit 1 if they differ)")
+        {
+            left, right, format, styles, json,
+        };
 
         command.SetAction(parse =>
         {
@@ -334,13 +441,23 @@ internal static class ExtraCommands
             Workspace.Recalculate(b.Workbook);
             var culture = CultureInfo.InvariantCulture;
             bool asJson = parse.GetValue(json);
+            bool compareStyles = parse.GetValue(styles);
 
             var addedSheets = new List<string>();
             var removedSheets = new List<string>();
             var cells = new List<object>();
+            var structure = new List<object>();
             var sheetNames = a.Workbook.Worksheets.Select(s => s.Name)
                 .Union(b.Workbook.Worksheets.Select(s => s.Name), StringComparer.OrdinalIgnoreCase)
                 .ToList();
+
+            void Line(string text)
+            {
+                if (!asJson)
+                {
+                    Console.Out.WriteLine(text);
+                }
+            }
 
             foreach (var name in sheetNames)
             {
@@ -349,48 +466,55 @@ internal static class ExtraCommands
                 if (sheetA is null)
                 {
                     addedSheets.Add(name);
-                    if (!asJson)
-                    {
-                        Console.Out.WriteLine($"+ sheet {name}");
-                    }
-
+                    Line($"+ sheet {name}");
                     continue;
                 }
 
                 if (sheetB is null)
                 {
                     removedSheets.Add(name);
-                    if (!asJson)
-                    {
-                        Console.Out.WriteLine($"- sheet {name}");
-                    }
-
+                    Line($"- sheet {name}");
                     continue;
                 }
 
-                var union = UsedUnion(sheetA, sheetB);
-                foreach (var (row, column) in union)
+                foreach (var (row, column) in UsedUnion(sheetA, sheetB))
                 {
                     string left1 = Cells.FormulaOrValue(a.Workbook, sheetA, row, column, culture);
                     string right1 = Cells.FormulaOrValue(b.Workbook, sheetB, row, column, culture);
-                    if (string.Equals(left1, right1, StringComparison.Ordinal))
+                    var address = new CellAddress(column, row, sheet: name);
+                    if (!string.Equals(left1, right1, StringComparison.Ordinal))
                     {
-                        continue;
+                        cells.Add(new { cell = address.ToString(), before = left1, after = right1 });
+                        Line($"{address}: \"{left1}\" -> \"{right1}\"");
                     }
 
-                    var address = new CellAddress(column, row, sheet: name);
-                    cells.Add(new { cell = address.ToString(), before = left1, after = right1 });
-                    if (!asJson)
+                    if (compareStyles)
                     {
-                        Console.Out.WriteLine($"{address}: \"{left1}\" -> \"{right1}\"");
+                        string styleA = StyleText(a.Workbook, sheetA, row, column);
+                        string styleB = StyleText(b.Workbook, sheetB, row, column);
+                        if (!string.Equals(styleA, styleB, StringComparison.Ordinal))
+                        {
+                            cells.Add(new { cell = address.ToString(), styleBefore = styleA, styleAfter = styleB });
+                            Line($"{address} style: {styleA} -> {styleB}");
+                        }
                     }
+                }
+
+                // Layout and structure: the same description sheets --json prints, compared key by key.
+                CompareObjects(name, Report.Sheet(sheetA), Report.Sheet(sheetB), structure, Line, skip: ["cells", "rows", "columns", "usedRange"]);
+                if (sheetA.IsChartSheet && sheetB.IsChartSheet)
+                {
+                    CompareObjects(name, ChartCommands.Describe(sheetA), ChartCommands.Describe(sheetB), structure, Line, skip: ["sheet"]);
                 }
             }
 
-            int differences = addedSheets.Count + removedSheets.Count + cells.Count;
+            CompareObjects("(workbook)", new { namedRanges = a.Workbook.NamedRanges.Select(Report.NamedRange).ToList() },
+                new { namedRanges = b.Workbook.NamedRanges.Select(Report.NamedRange).ToList() }, structure, Line, skip: []);
+
+            int differences = addedSheets.Count + removedSheets.Count + cells.Count + structure.Count;
             if (asJson)
             {
-                Report.Write(new { same = differences == 0, differences, addedSheets, removedSheets, cells });
+                Report.Write(new { same = differences == 0, differences, addedSheets, removedSheets, cells, structure });
             }
 
             return differences > 0 ? 1 : 0;
@@ -398,6 +522,36 @@ internal static class ExtraCommands
 
         return command;
     }
+
+    private static string StyleText(Workbook workbook, Worksheet sheet, int row, int column)
+    {
+        var cell = sheet.Find(row, column);
+        var style = cell is null ? null : Report.Style(workbook.Styles.Get(cell.StyleId));
+        return style is null ? "{}" : JsonSerializer.Serialize(style);
+    }
+
+    /// <summary>Report every top-level property whose JSON differs between two descriptions of the same thing.</summary>
+    private static void CompareObjects(string scope, object before, object after, List<object> into, Action<string> line, string[] skip)
+    {
+        using var docA = JsonDocument.Parse(JsonSerializer.Serialize(before, Report.JsonOptions));
+        using var docB = JsonDocument.Parse(JsonSerializer.Serialize(after, Report.JsonOptions));
+        var keys = docA.RootElement.EnumerateObject().Select(p => p.Name)
+            .Union(docB.RootElement.EnumerateObject().Select(p => p.Name), StringComparer.Ordinal)
+            .Where(k => !skip.Contains(k, StringComparer.Ordinal));
+        foreach (var key in keys)
+        {
+            string? valueA = docA.RootElement.TryGetProperty(key, out var pa) ? pa.GetRawText() : null;
+            string? valueB = docB.RootElement.TryGetProperty(key, out var pb) ? pb.GetRawText() : null;
+            if (!string.Equals(valueA, valueB, StringComparison.Ordinal))
+            {
+                into.Add(new { sheet = scope, property = key, before = valueA, after = valueB });
+                line($"{scope} {key}: {Compact(valueA)} -> {Compact(valueB)}");
+            }
+        }
+    }
+
+    private static string Compact(string? json) =>
+        json is null ? "(none)" : Regex.Replace(json, @"\s*\n\s*", " ");
 
     public static Command Functions()
     {

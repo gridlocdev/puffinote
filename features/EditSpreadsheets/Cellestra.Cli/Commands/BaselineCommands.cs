@@ -69,13 +69,14 @@ internal static class BaselineCommands
         var range = Options.Range();
         var format = Options.Format();
         var formula = Options.Formula();
+        var both = new Option<bool>("--both") { Description = "Show formula cells as `=A1*2 → 20` (source and result together)" };
         var locale = Options.Locale();
         var from = Options.From();
         var json = Options.Json();
 
         var command = new Command("cat", "Print a sheet or range to the terminal")
         {
-            file, sheet, range, format, formula, locale, from, json,
+            file, sheet, range, format, formula, both, locale, from, json,
         };
 
         command.SetAction(parse =>
@@ -98,7 +99,7 @@ internal static class BaselineCommands
                 cellRange = Cells.UsedRangeOrA1(worksheet);
             }
 
-            var grid = Cells.BuildGrid(loaded.Workbook, worksheet, cellRange, effectiveCulture, parse.GetValue(formula));
+            var grid = Cells.BuildGrid(loaded.Workbook, worksheet, cellRange, effectiveCulture, parse.GetValue(formula), parse.GetValue(both));
             var outputFormat = parse.GetValue(json) ? OutputFormat.Json : Output.ParseFormat(parse.GetValue(format));
             if (outputFormat == OutputFormat.Json)
             {

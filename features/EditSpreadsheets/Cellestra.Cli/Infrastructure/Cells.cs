@@ -127,7 +127,16 @@ public static class Cells
         string.Join(", ", workbook.Worksheets.Select(s => s.Name));
 
     /// <summary>Build a rectangular block of display (or formula) strings for rendering.</summary>
-    public static string[][] BuildGrid(Workbook workbook, Worksheet sheet, CellRange range, CultureInfo culture, bool formulas = false)
+    /// <summary>A formula cell as <c>=A1*2 → 20</c>, so source and result read together; other cells as their display.</summary>
+    public static string FormulaAndValue(Workbook workbook, Worksheet sheet, int row, int column, CultureInfo culture)
+    {
+        var cell = sheet.Find(row, column);
+        return cell is { IsFormula: true }
+            ? $"={cell.Formula} → {Display(workbook, sheet, row, column, culture)}"
+            : Display(workbook, sheet, row, column, culture);
+    }
+
+    public static string[][] BuildGrid(Workbook workbook, Worksheet sheet, CellRange range, CultureInfo culture, bool formulas = false, bool both = false)
     {
         var rows = new string[range.RowCount][];
         for (int r = 0; r < range.RowCount; r++)
@@ -137,8 +146,8 @@ public static class Cells
             {
                 int row = range.Top + r;
                 int column = range.Left + c;
-                cols[c] = formulas
-                    ? FormulaOrValue(workbook, sheet, row, column, culture)
+                cols[c] = both ? FormulaAndValue(workbook, sheet, row, column, culture)
+                    : formulas ? FormulaOrValue(workbook, sheet, row, column, culture)
                     : Display(workbook, sheet, row, column, culture);
             }
 

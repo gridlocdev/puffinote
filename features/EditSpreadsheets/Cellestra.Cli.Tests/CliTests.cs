@@ -413,6 +413,58 @@ public sealed class CliTests : IDisposable
     }
 
     [Fact]
+    public void Find_replace_stats_cat_both_and_structural_diff()
+    {
+        string ods = Path2("book.ods");
+        Run("new", ods);
+        Run("set", ods, "A1=apple pie", "A2=Apple tart", "A3=pear", "B1=1", "B2=2", "B3=4", "B4==SUM(B1:B3)", "--in-place");
+
+        // find --replace: values (case-insensitive) and formulas, snapshot-safe.
+        var (exit, output, _) = Run("find", ods, "apple", "--replace", "plum", "--in-place", "--json");
+        Assert.Equal(0, exit);
+        using (var doc = JsonDocument.Parse(output))
+        {
+            Assert.Equal(2, doc.RootElement.GetProperty("replaced").GetInt32());
+        }
+
+        Assert.Equal("plum tart", Run("get", ods, "A2").Out.Trim());
+        Assert.Equal(0, Run("find", ods, "B1:B3", "--in", "formulas", "--replace", "B1:B2", "--in-place").Exit);
+        Assert.Equal("=SUM(B1:B2)", Run("get", ods, "B4", "--formula").Out.Trim());
+
+        // stats: the fuller picture.
+        using (var doc = JsonDocument.Parse(Run("stats", ods, "A1:B4", "--json").Out))
+        {
+            Assert.Equal(8, doc.RootElement.GetProperty("cells").GetInt64());
+            Assert.Equal(1, doc.RootElement.GetProperty("blanks").GetInt64()); // A4
+            Assert.Equal(3, doc.RootElement.GetProperty("types").GetProperty("text").GetInt32());
+            Assert.Equal(2.5, doc.RootElement.GetProperty("median").GetDouble()); // 1,2,3,4 → 2.5 (B4 = 3)
+            Assert.Equal(7, doc.RootElement.GetProperty("distinct").GetInt32());
+        }
+
+        // cat --both shows source and result together.
+        Assert.Contains("=SUM(B1:B2) → 3", Run("cat", ods, "--both").Out, StringComparison.Ordinal);
+
+        // diff sees structure and, with --styles, formatting.
+        string other = Path2("other.ods");
+        Run("convert", ods, other);
+        Run("freeze", other, "--rows", "1", "--in-place");
+        Run("style", other, "A1", "--bold", "--in-place");
+        Run("name", "add", other, "Total", "Sheet1.B4", "--in-place");
+        Assert.Equal(0, Run("diff", ods, ods).Exit);
+        (exit, output, _) = Run("diff", ods, other, "--styles", "--json");
+        Assert.Equal(1, exit);
+        using (var doc = JsonDocument.Parse(output))
+        {
+            var structure = doc.RootElement.GetProperty("structure").EnumerateArray().Select(d => d.GetProperty("property").GetString()).ToList();
+            Assert.Contains("frozenRows", structure);
+            Assert.Contains("namedRanges", structure);
+            Assert.Contains(doc.RootElement.GetProperty("cells").EnumerateArray(), c => c.TryGetProperty("styleAfter", out var s) && s.GetString()!.Contains("bold", StringComparison.Ordinal));
+        }
+
+        Assert.Equal(1, Run("diff", ods, other).Exit); // structure alone is a difference, --styles or not
+    }
+
+    [Fact]
     public void Set_json_reports_the_changed_cell_and_any_error_it_introduced()
     {
         string ods = Path2("book.ods");
