@@ -216,29 +216,60 @@ internal static class DataCommands
     public static Command Table()
     {
         var file = Options.File();
-        var range = new Argument<string>("range") { Description = "Range to turn into a table, e.g. Sheet1.A1:D20" };
+        var range = new Argument<string>("range") { Description = "Range to turn into a table (or an existing table's name/range for the option forms), e.g. Sheet1.A1:D20" };
         var name = new Option<string?>("--name") { Description = "Table name (default: the next free Table N)" };
         var noHeader = new Option<bool>("--no-header") { Description = "The range has no header row" };
+        var replace = new Option<bool>("--replace") { Description = "Redefine a table already on the range" };
+        var remove = new Option<bool>("--remove") { Description = "Remove the table (cells and formatting stay)" };
+        var banded = new Option<string?>("--banded") { Description = "true | false — stripe alternate data rows" };
+        var headerColumn = new Option<string?>("--header-column") { Description = "true | false — treat the first column as row labels" };
+        var resize = new Option<string?>("--resize") { Description = "New range for the table, e.g. A1:D30" };
         var inPlace = Options.InPlace();
         var output = Options.Output();
         var json = Options.Json();
-        var command = new Command("table", "Turn a range into a table (database range)") { file, range, name, noHeader, inPlace, output, json };
-
-        command.SetAction(parse => RunEdit(parse, file, inPlace, output, locale: null, json, (wb, _) =>
+        var command = new Command("table", "Turn a range into a table (database range), or change/remove one")
         {
-            var (sheet, cellRange) = Cells.ResolveRange(wb, parse.GetValue(range)!);
-            if (sheet.Tables.Any(t => t.Range.Intersects(cellRange)))
+            file, range, name, noHeader, replace, remove, banded, headerColumn, resize, inPlace, output, json,
+        };
+
+        command.SetAction(parse =>
+        {
+            string reference = parse.GetValue(range)!;
+            if (parse.GetValue(remove))
             {
-                throw new CliException("The range overlaps an existing table; a cell can belong to only one table.");
+                return LayoutCommands.Dispatch(parse, file, inPlace, output, json, "table-remove", new() { ["table"] = reference });
             }
 
-            string tableName = parse.GetValue(name) ?? NextTableName(sheet);
-            var table = new Core.Data.Table(tableName, cellRange, HasHeader: !parse.GetValue(noHeader));
-            return [DataEditCommands.CreateTable(wb, sheet.Name, table)];
-        }));
+            if (parse.GetValue(banded) is not null || parse.GetValue(headerColumn) is not null || parse.GetValue(resize) is not null)
+            {
+                return LayoutCommands.Dispatch(parse, file, inPlace, output, json, "table-options", new()
+                {
+                    ["table"] = reference,
+                    ["bandedRows"] = ParseBool(parse.GetValue(banded), "--banded"),
+                    ["headerColumn"] = ParseBool(parse.GetValue(headerColumn), "--header-column"),
+                    ["range"] = parse.GetValue(resize),
+                });
+            }
+
+            return LayoutCommands.Dispatch(parse, file, inPlace, output, json, "table", new()
+            {
+                ["range"] = reference,
+                ["name"] = parse.GetValue(name),
+                ["header"] = parse.GetValue(noHeader) ? false : null,
+                ["replace"] = parse.GetValue(replace) ? true : null,
+            });
+        });
 
         return command;
     }
+
+    private static bool? ParseBool(string? text, string option) => text?.Trim().ToLowerInvariant() switch
+    {
+        null => null,
+        "true" or "on" or "yes" => true,
+        "false" or "off" or "no" => false,
+        _ => throw new CliException($"{option} must be true or false."),
+    };
 
     internal static string NextTableName(Worksheet sheet)
     {
@@ -261,41 +292,45 @@ internal static class DataCommands
         var range = new Argument<string>("range") { Description = "Range to validate, e.g. Sheet1.A1:A20" };
         var list = new Option<string?>("--list") { Description = "Allowed values, comma-separated (e.g. Red,Green,Blue)" };
         var source = new Option<string?>("--source") { Description = "A cell range whose values are the allowed list (e.g. Lists.A1:A8)" };
+        var kind = new Option<string?>("--kind") { Description = "whole | decimal | date | text-length (with --op and --value/--max)" };
+        var op = new Option<string?>("--op") { Description = "between | not-between | equal | not-equal | greater | less | greater-or-equal | less-or-equal (default between)" };
+        var value = new Option<string?>("--value") { Description = "The bound (or the lower bound for between); a date may be ISO, e.g. 2026-01-31" };
+        var max = new Option<string?>("--max") { Description = "The upper bound for between / not-between" };
+        var response = new Option<string?>("--response") { Description = "stop | warning | information (default stop)" };
+        var inputMessage = new Option<string?>("--message") { Description = "Input prompt shown while editing a cell" };
+        var errorMessage = new Option<string?>("--error") { Description = "Message shown when input is rejected" };
+        var remove = new Option<bool>("--remove") { Description = "Remove the rule(s) on the range" };
         var inPlace = Options.InPlace();
         var output = Options.Output();
+        var locale = Options.Locale();
         var json = Options.Json();
-        var command = new Command("data-validation", "Restrict a range to a list of allowed values") { file, range, list, source, inPlace, output, json };
-
-        command.SetAction(parse => RunEdit(parse, file, inPlace, output, locale: null, json, (wb, _) =>
+        var command = new Command("data-validation", "Restrict a range: a list of allowed values, or a number/date/text-length rule")
         {
-            var (sheet, cellRange) = Cells.ResolveRange(wb, parse.GetValue(range)!);
-            string? listText = parse.GetValue(list);
-            string? sourceText = parse.GetValue(source);
-            var rule = new DataValidation(ValidationKind.List, cellRange);
+            file, range, list, source, kind, op, value, max, response, inputMessage, errorMessage, remove, inPlace, output, locale, json,
+        };
 
-            if (!string.IsNullOrWhiteSpace(sourceText))
+        command.SetAction(parse =>
+        {
+            var fields = new Dictionary<string, object?>
             {
-                if (!CellRange.TryParse(sourceText, out var listSource))
-                {
-                    throw new CliException($"'{sourceText}' is not a valid range for --source.");
-                }
-
-                rule = rule with { ListSource = listSource };
-            }
-            else if (!string.IsNullOrWhiteSpace(listText))
-            {
-                rule = rule with
-                {
-                    ListValues = listText.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries),
-                };
-            }
-            else
-            {
-                throw new CliException("Give either --list \"a,b,c\" or --source <range>.");
-            }
-
-            return [DataEditCommands.SetValidation(sheet.Name, rule)];
-        }));
+                ["range"] = parse.GetValue(range),
+                ["remove"] = parse.GetValue(remove) ? true : null,
+                ["list"] = parse.GetValue(list),
+                ["source"] = parse.GetValue(source),
+                ["kind"] = parse.GetValue(kind),
+                ["operator"] = parse.GetValue(op),
+                ["value1"] = parse.GetValue(value),
+                ["value2"] = parse.GetValue(max),
+                ["response"] = parse.GetValue(response),
+                ["inputMessage"] = parse.GetValue(inputMessage),
+                ["errorMessage"] = parse.GetValue(errorMessage),
+            };
+            string path = parse.GetValue(file)!;
+            string target = Options.EditTarget(path, parse.GetValue(inPlace), parse.GetValue(output));
+            var present = fields.Where(kv => kv.Value is not null).ToDictionary(kv => kv.Key, kv => kv.Value, StringComparer.Ordinal);
+            return EditSession.Run(path, target, Locale.Resolve(parse.GetValue(locale)), parse.GetValue(json),
+                session => ApplyCommands.RunOp(session, "validation", present));
+        });
 
         return command;
     }

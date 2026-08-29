@@ -72,7 +72,12 @@ internal static class ApplyCommands
         Data
           {"op":"sort", "range":"A1:D100", "by":"B,A:desc", "header":true}
           {"op":"table", "range":"A1:D20", "name":"Sales", "header":true, "replace":true}   replace: redefine a table already on the range
+          {"op":"table-options", "table":"Sales", "bandedRows":true, "headerColumn":true, "range":"A1:D30"}   table: a name or a cell in it
+          {"op":"table-remove", "table":"Sales"}
           {"op":"validation", "range":"C2:C50", "list":["Red","Green"]}  or  "source":"Lists.A1:A8"
+          {"op":"validation", "range":"B2:B50", "kind":"whole|decimal|date|text-length", "operator":"between|not-between|equal|not-equal|greater|less|greater-or-equal|less-or-equal",
+                              "value1":1, "value2":100, "response":"stop|warning|information", "inputMessage":"…", "errorMessage":"…"}   a date bound may be "2026-01-31"
+          {"op":"validation", "range":"B2:B50", "remove":true}
           {"op":"name", "name":"TaxRate", "range":"Config.B1"}   {"op":"unname", "name":"TaxRate"}
           {"op":"hyperlink", "cell":"A2", "url":"https://…", "tooltip":"…"}   "url": null removes it
           {"op":"chart", "type":"column", "title":"Sales", "from":"A1:C13",          or "values":["B2:B13"], "names":["Q1"], "categories":"A2:A13",
@@ -472,6 +477,17 @@ internal static class ApplyCommands
                 break;
             case "validation":
                 Validation(session, op);
+                break;
+            case "table-remove":
+                {
+                    var (sheet, table) = FindTable(session, op);
+                    session.Apply(DataEditCommands.RemoveTable(sheet.Name, table));
+                    session.Field("table", table.Name);
+                    break;
+                }
+
+            case "table-options":
+                TableOptions(session, op);
                 break;
             case "name":
                 Name(session, op);
@@ -900,28 +916,203 @@ internal static class ApplyCommands
     private static void Validation(EditSession session, Op op)
     {
         var (sheet, range) = Range(session, op, "range");
-        var rule = new DataValidation(ValidationKind.List, range);
-        if (op.String("source") is { } source)
+        var existing = sheet.Validations.Where(v => v.Target.Intersects(range)).ToList();
+
+        if (op.Bool("remove") == true)
         {
-            if (!CellRange.TryParse(source, out var listSource))
+            if (existing.Count == 0)
             {
-                throw new CliException($"'{source}' is not a valid range for \"source\".");
+                throw new CliException($"no validation rule covers {range}.");
             }
 
-            rule = rule with { ListSource = listSource };
+            session.Apply(RemoveValidations(sheet.Name, existing));
+            session.Field("removed", existing.Count);
+            return;
         }
-        else
-        {
-            var list = op.Strings("list");
-            if (list.Length == 0)
-            {
-                throw new CliException("needs \"list\" (an array of allowed values) or \"source\" (a range).");
-            }
 
-            rule = rule with { ListValues = list };
+        var rule = BuildValidation(session, op, range);
+
+        // One rule per range: setting a new rule on cells that already have one replaces it, as the app does.
+        if (existing.Count > 0)
+        {
+            session.Apply(RemoveValidations(sheet.Name, existing));
         }
 
         session.Apply(DataEditCommands.SetValidation(sheet.Name, rule));
+    }
+
+    private static DataValidation BuildValidation(EditSession session, Op op, CellRange range)
+    {
+        string? kindText = op.String("kind");
+        var kind = kindText?.Trim().ToLowerInvariant() switch
+        {
+            null when op.Has("list") || op.Has("source") => ValidationKind.List,
+            null => throw new CliException("needs \"list\" or \"source\" (a list rule), or \"kind\" whole|decimal|date|text-length."),
+            "list" => ValidationKind.List,
+            "whole" or "whole-number" or "wholenumber" or "integer" => ValidationKind.WholeNumber,
+            "decimal" or "number" => ValidationKind.Decimal,
+            "date" => ValidationKind.Date,
+            "text-length" or "textlength" or "length" => ValidationKind.TextLength,
+            "any" => ValidationKind.Any,
+            _ => throw new CliException("\"kind\" must be list, whole, decimal, date, or text-length."),
+        };
+
+        var rule = new DataValidation(kind, range)
+        {
+            InputMessage = op.String("inputMessage"),
+            ErrorMessage = op.String("errorMessage"),
+            Response = (op.String("response") ?? "stop").Trim().ToLowerInvariant() switch
+            {
+                "stop" => ValidationResponse.Stop,
+                "warning" or "warn" => ValidationResponse.Warning,
+                "information" or "info" => ValidationResponse.Information,
+                _ => throw new CliException("\"response\" must be stop, warning, or information."),
+            },
+        };
+
+        if (kind == ValidationKind.List)
+        {
+            if (op.String("source") is { } source)
+            {
+                if (!CellRange.TryParse(source, out var listSource))
+                {
+                    throw new CliException($"'{source}' is not a valid range for \"source\".");
+                }
+
+                return rule with { ListSource = listSource };
+            }
+
+            var list = op.Strings("list");
+            if (list.Length == 0)
+            {
+                throw new CliException("a list rule needs \"list\" (an array of allowed values) or \"source\" (a range).");
+            }
+
+            return rule with { ListValues = list };
+        }
+
+        if (kind == ValidationKind.Any)
+        {
+            return rule;
+        }
+
+        var comparison = (op.String("operator") ?? "between").Trim().ToLowerInvariant() switch
+        {
+            "between" => ValidationOperator.Between,
+            "not-between" or "notbetween" => ValidationOperator.NotBetween,
+            "equal" or "=" or "==" => ValidationOperator.Equal,
+            "not-equal" or "notequal" or "<>" or "!=" => ValidationOperator.NotEqual,
+            "greater" or "greater-than" or ">" => ValidationOperator.GreaterThan,
+            "less" or "less-than" or "<" => ValidationOperator.LessThan,
+            "greater-or-equal" or ">=" => ValidationOperator.GreaterOrEqual,
+            "less-or-equal" or "<=" => ValidationOperator.LessOrEqual,
+            _ => throw new CliException("\"operator\" must be between, not-between, equal, not-equal, greater, less, greater-or-equal, or less-or-equal."),
+        };
+        bool twoBounds = comparison is ValidationOperator.Between or ValidationOperator.NotBetween;
+        double value1 = Bound(session, op, "value1", kind) ?? throw new CliException($"a {kindText} rule needs \"value1\"{(twoBounds ? " and \"value2\"" : "")}.");
+        double value2 = twoBounds
+            ? Bound(session, op, "value2", kind) ?? throw new CliException($"a between rule needs \"value2\" (the upper bound).")
+            : 0;
+        return rule with { Operator = comparison, Operand1 = value1, Operand2 = value2 };
+    }
+
+    /// <summary>A rule bound: a number, or for a date rule any date the document's locale would accept (ISO always works).</summary>
+    private static double? Bound(EditSession session, Op op, string name, ValidationKind kind)
+    {
+        if (!op.Has(name))
+        {
+            return null;
+        }
+
+        if (kind == ValidationKind.Date && op.Raw(name) is { ValueKind: JsonValueKind.String } text)
+        {
+            var parsed = InputParser.Parse(text.GetString()!, session.Culture);
+            if (!parsed.IsFormula && parsed.Value.IsNumber)
+            {
+                return parsed.Value.AsNumber;
+            }
+
+            throw new CliException($"\"{name}\" is not a date: '{text.GetString()}'.");
+        }
+
+        return op.Number(name);
+    }
+
+    private static IEditCommand RemoveValidations(string sheet, IReadOnlyList<DataValidation> rules) =>
+        new ActionCommand("Remove Data Validation",
+            wb =>
+            {
+                var ws = wb.FindSheet(sheet) ?? throw new InvalidOperationException($"Sheet '{sheet}' not found.");
+                foreach (var rule in rules)
+                {
+                    ws.RemoveValidation(rule);
+                }
+
+                return EditResult.None;
+            },
+            wb =>
+            {
+                var ws = wb.FindSheet(sheet) ?? throw new InvalidOperationException($"Sheet '{sheet}' not found.");
+                foreach (var rule in rules)
+                {
+                    ws.AddValidation(rule);
+                }
+
+                return EditResult.None;
+            });
+
+    private static (Worksheet Sheet, Table Table) FindTable(EditSession session, Op op)
+    {
+        string reference = op.Require("table");
+        var (sheet, range) = Range(session, op, "table"); // a table name resolves to its range; so does A1-style
+        var table = sheet.Tables.FirstOrDefault(t => string.Equals(t.Name, reference, StringComparison.OrdinalIgnoreCase))
+            ?? sheet.Tables.FirstOrDefault(t => t.Range.Intersects(range))
+            ?? throw new CliException($"no table at or named '{reference}'.");
+        return (sheet, table);
+    }
+
+    private static void TableOptions(EditSession session, Op op)
+    {
+        var (sheet, table) = FindTable(session, op);
+        bool any = false;
+        if (op.String("range") is { } newRange)
+        {
+            var (targetSheet, range) = Cells.ResolveRange(session.Workbook, newRange, sheet.Name);
+            if (targetSheet != sheet)
+            {
+                throw new CliException("a table can't move to another sheet; remove it and create it there.");
+            }
+
+            if (sheet.Tables.Any(t => t != table && t.Range.Intersects(range)))
+            {
+                throw new CliException("the new range overlaps another table.");
+            }
+
+            var resized = table with { Range = range };
+            session.Apply(DataEditCommands.ReplaceTable(sheet.Name, table, resized));
+            table = resized;
+            any = true;
+        }
+
+        if (op.Bool("bandedRows") is { } banded)
+        {
+            session.Apply(DataEditCommands.SetTableBandedRows(sheet.Name, table, banded));
+            table = table with { HasBandedRows = banded };
+            any = true;
+        }
+
+        if (op.Bool("headerColumn") is { } headerColumn)
+        {
+            session.Apply(DataEditCommands.SetTableHeaderColumn(session.Workbook, sheet.Name, table, headerColumn));
+            any = true;
+        }
+
+        if (!any)
+        {
+            throw new CliException("a table-options op needs at least one of: range, bandedRows, headerColumn.");
+        }
+
+        session.Field("table", table.Name);
     }
 
     private static void Name(EditSession session, Op op)

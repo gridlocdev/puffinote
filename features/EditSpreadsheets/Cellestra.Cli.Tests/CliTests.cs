@@ -366,6 +366,53 @@ public sealed class CliTests : IDisposable
     }
 
     [Fact]
+    public void Table_options_and_removal_and_validation_kinds()
+    {
+        string ods = Path2("book.ods");
+        Run("new", ods);
+        Run("set", ods, "A1=Name", "B1=Age", "A2=Ann", "B2=30", "A3=Bob", "B3=41", "--in-place");
+        Assert.Equal(0, Run("table", ods, "A1:B3", "--name", "People", "--in-place").Exit);
+        Assert.Equal(0, Run("table", ods, "People", "--banded", "true", "--header-column", "true", "--resize", "A1:B4", "--in-place").Exit);
+        using (var sheets = JsonDocument.Parse(Run("sheets", ods, "--json").Out))
+        {
+            var table = sheets.RootElement[0].GetProperty("tables")[0];
+            Assert.Equal("A1:B4", table.GetProperty("range").GetString());
+            Assert.True(table.GetProperty("bandedRows").GetBoolean());
+            Assert.True(table.GetProperty("headerColumn").GetBoolean());
+        }
+
+        Assert.Equal(0, Run("data-validation", ods, "B2:B4", "--kind", "whole", "--op", "between", "--value", "18", "--max", "65", "--error", "Adults only", "--in-place").Exit);
+        Assert.Equal(0, Run("data-validation", ods, "A2:A4", "--kind", "text-length", "--op", "less", "--value", "10", "--response", "warning", "--in-place").Exit);
+        using (var sheets = JsonDocument.Parse(Run("sheets", ods, "--json").Out))
+        {
+            var rules = sheets.RootElement[0].GetProperty("validations").EnumerateArray()
+                .ToDictionary(r => r.GetProperty("range").GetString()!, r => r);
+            Assert.Equal(2, rules.Count);
+            Assert.Equal("wholenumber", rules["B2:B4"].GetProperty("kind").GetString());
+            Assert.Equal(65, rules["B2:B4"].GetProperty("value2").GetDouble());
+            Assert.Equal("warning", rules["A2:A4"].GetProperty("response").GetString());
+        }
+
+        // A Stop rule refuses a fill that would break it, as in the app; lint reports an existing violation.
+        Run("set", ods, "B2=99", "--in-place");
+        using (var lint = JsonDocument.Parse(Run("lint", ods, "--json").Out))
+        {
+            Assert.Contains(lint.RootElement.GetProperty("findings").EnumerateArray(),
+                f => f.GetProperty("code").GetString() == "validation" && f.GetProperty("cell").GetString() == "Sheet1.B2");
+        }
+
+        Assert.Equal(1, Run("fill", ods, "B2:B4", "--in-place").Exit);
+
+        Assert.Equal(0, Run("data-validation", ods, "B2:B4", "--remove", "--in-place").Exit);
+        Assert.Equal(0, Run("table", ods, "People", "--remove", "--in-place").Exit);
+        using (var sheets = JsonDocument.Parse(Run("sheets", ods, "--json").Out))
+        {
+            Assert.False(sheets.RootElement[0].TryGetProperty("tables", out _));
+            Assert.Equal(1, sheets.RootElement[0].GetProperty("validations").GetArrayLength());
+        }
+    }
+
+    [Fact]
     public void Set_json_reports_the_changed_cell_and_any_error_it_introduced()
     {
         string ods = Path2("book.ods");
