@@ -31,6 +31,7 @@ public static class CliApplication
             // Extras.
             ExtraCommands.New(),
             ExtraCommands.Import(),
+            ExtraCommands.Put(),
             ExtraCommands.Export(),
             ExtraCommands.Stats(),
             ExtraCommands.Find(),
@@ -39,6 +40,8 @@ public static class CliApplication
             ExtraCommands.AddSheet(),
             ExtraCommands.RenameSheet(),
             ExtraCommands.DeleteSheet(),
+            LayoutCommands.DuplicateSheet(),
+            LayoutCommands.MoveSheet(),
             ApplyCommands.Apply(),
             ExtraCommands.Open(),
             ExtraCommands.Completions(),
@@ -65,6 +68,14 @@ public static class CliApplication
             DataCommands.ShowColumns(),
             DataCommands.Merge(),
             DataCommands.Unmerge(),
+
+            // Formatting and layout verbs — fronts on the matching apply ops.
+            LayoutCommands.Style(),
+            LayoutCommands.Width(),
+            LayoutCommands.Height(),
+            LayoutCommands.Freeze(),
+            LayoutCommands.Clear(),
+            LayoutCommands.Settings(),
 
             // Chart sheets — the headless face of Insert ▸ Chart Sheet.
             ChartCommands.Chart(),

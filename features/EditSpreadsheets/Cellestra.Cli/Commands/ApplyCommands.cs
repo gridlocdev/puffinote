@@ -54,13 +54,16 @@ internal static class ApplyCommands
           {"op":"hide", "rows":"5:8"} / {"op":"hide", "columns":"C"}    {"op":"show", ...} likewise
 
         Structure
-          {"op":"add-sheet", "name":"Data"}   {"op":"rename-sheet", "name":"Sheet1", "to":"Data"}   {"op":"delete-sheet", "name":"Old"}
+          {"op":"add-sheet", "name":"Data", "at":1, "ifMissing":true}   at: 1-based position; ifMissing: no error if it exists
+          {"op":"rename-sheet", "name":"Sheet1", "to":"Data"}   {"op":"delete-sheet", "name":"Old"}
+          {"op":"duplicate-sheet", "name":"Sheet1", "as":"Copy"}   {"op":"move-sheet", "name":"Data", "to":1}
+          {"op":"settings", "locale":"en-US", "calc":"automatic|manual", "activeSheet":"Data"}
           {"op":"insert-rows", "at":3, "count":2}   {"op":"delete-rows", "at":3, "count":1}      (1-based)
           {"op":"insert-cols", "at":"B", "count":1} {"op":"delete-cols", "at":"B"}
 
         Data
           {"op":"sort", "range":"A1:D100", "by":"B,A:desc", "header":true}
-          {"op":"table", "range":"A1:D20", "name":"Sales", "header":true}
+          {"op":"table", "range":"A1:D20", "name":"Sales", "header":true, "replace":true}   replace: redefine a table already on the range
           {"op":"validation", "range":"C2:C50", "list":["Red","Green"]}  or  "source":"Lists.A1:A8"
           {"op":"name", "name":"TaxRate", "range":"Config.B1"}   {"op":"unname", "name":"TaxRate"}
           {"op":"hyperlink", "cell":"A2", "url":"https://…", "tooltip":"…"}   "url": null removes it
@@ -174,6 +177,16 @@ internal static class ApplyCommands
 
         value = default;
         return false;
+    }
+
+    /// <summary>
+    /// Run one op given as a plain dictionary — how the standalone verbs (<c>style</c>, <c>width</c>,
+    /// <c>freeze</c>, …) share the ops' single implementation: build the op, dispatch it.
+    /// </summary>
+    internal static void RunOp(EditSession session, string kind, IReadOnlyDictionary<string, object?> fields)
+    {
+        var element = JsonSerializer.SerializeToElement(fields);
+        Run(session, new Op(element, 0), kind);
     }
 
     /// <summary>One op's fields, read leniently (case-insensitive names, numbers-as-strings) with clear errors.</summary>
@@ -337,10 +350,38 @@ internal static class ApplyCommands
                 Visibility(session, op, hidden: false);
                 break;
             case "add-sheet":
-                session.Field("sheet", wb.AddSheet(op.Require("name")).Name);
+                AddSheet(session, op);
                 break;
             case "rename-sheet":
                 wb.RenameSheet(Cells.PickSheet(wb, op.Require("name")), op.Require("to"));
+                break;
+            case "duplicate-sheet":
+                {
+                    var copy = wb.DuplicateSheet(Cells.PickSheet(wb, op.Require("name")));
+                    if (op.String("as") is { } newName)
+                    {
+                        wb.RenameSheet(copy, newName);
+                    }
+
+                    session.Field("sheet", copy.Name);
+                    break;
+                }
+
+            case "move-sheet":
+                {
+                    var sheet = Cells.PickSheet(wb, op.Require("name"));
+                    int to = op.Int("to", 0);
+                    if (to < 1 || to > wb.SheetCount)
+                    {
+                        throw new CliException($"\"to\" must be a 1-based position from 1 to {wb.SheetCount}.");
+                    }
+
+                    wb.MoveSheet(wb.IndexOf(sheet), to - 1);
+                    break;
+                }
+
+            case "settings":
+                Settings(session, op);
                 break;
             case "delete-sheet":
                 session.Apply(new DeleteSheetCommand(Cells.PickSheet(wb, op.Require("name")).Name));
@@ -682,6 +723,69 @@ internal static class ApplyCommands
 
     // ---- Structure --------------------------------------------------------
 
+    private static void AddSheet(EditSession session, Op op)
+    {
+        var wb = session.Workbook;
+        string name = op.Require("name");
+        if (wb.FindSheet(name) is { } existing)
+        {
+            if (op.Bool("ifMissing") == true)
+            {
+                session.Field("sheet", existing.Name); // already there: nothing to do, and not an error
+                return;
+            }
+
+            throw new CliException($"a sheet named '{name}' already exists (add \"ifMissing\": true to allow that).");
+        }
+
+        var sheet = wb.AddSheet(name);
+        if (op.Has("at"))
+        {
+            int at = op.Int("at", 0);
+            if (at < 1 || at > wb.SheetCount)
+            {
+                throw new CliException($"\"at\" must be a 1-based position from 1 to {wb.SheetCount}.");
+            }
+
+            wb.MoveSheet(wb.IndexOf(sheet), at - 1);
+        }
+
+        session.Field("sheet", sheet.Name);
+    }
+
+    private static void Settings(EditSession session, Op op)
+    {
+        var wb = session.Workbook;
+        bool any = false;
+        if (op.String("locale") is { } locale)
+        {
+            wb.Settings.Locale = Locale.Resolve(locale);
+            any = true;
+        }
+
+        if (op.String("calc") is { } calc)
+        {
+            wb.Settings.CalculationMode = calc.Trim().ToLowerInvariant() switch
+            {
+                "auto" or "automatic" => CalculationMode.Automatic,
+                "manual" => CalculationMode.Manual,
+                _ => throw new CliException("\"calc\" must be automatic or manual."),
+            };
+            any = true;
+        }
+
+        if (op.String("activeSheet") is { } active)
+        {
+            wb.Settings.ActiveSheetIndex = wb.IndexOf(Cells.PickSheet(wb, active));
+            any = true;
+        }
+
+        if (!any)
+        {
+            throw new CliException("a settings op needs at least one of: locale, calc, activeSheet.");
+        }
+    }
+
     private static void Structural(EditSession session, Op op, StructuralAxis axis, StructuralOperation operation)
     {
         var sheet = Cells.PickSheet(session.Workbook, op.String("sheet"));
@@ -708,9 +812,18 @@ internal static class ApplyCommands
     private static void Table(EditSession session, Op op)
     {
         var (sheet, range) = Range(session, op, "range");
-        if (sheet.Tables.Any(t => t.Range.Intersects(range)))
+        var overlapping = sheet.Tables.Where(t => t.Range.Intersects(range)).ToList();
+        if (overlapping.Count > 0)
         {
-            throw new CliException("the range overlaps an existing table; a cell can belong to only one table.");
+            if (op.Bool("replace") != true)
+            {
+                throw new CliException($"the range overlaps table '{overlapping[0].Name}'; a cell can belong to only one table (add \"replace\": true to redefine it).");
+            }
+
+            foreach (var old in overlapping)
+            {
+                session.Apply(DataEditCommands.RemoveTable(sheet.Name, old));
+            }
         }
 
         var table = new Table(op.String("name") ?? DataCommands.NextTableName(sheet), range, HasHeader: op.Bool("header") ?? true);

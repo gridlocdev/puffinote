@@ -94,6 +94,57 @@ internal static class ExtraCommands
         return command;
     }
 
+    /// <summary>
+    /// Drop a grid at an anchor — the missing middle between <c>set</c> (one cell) and <c>import</c>
+    /// (a whole sheet). Each field is parsed like typing, so numbers, dates, and <c>=</c>formulas land typed.
+    /// </summary>
+    public static Command Put()
+    {
+        var file = Options.File();
+        var at = new Argument<string>("at") { Description = "Top-left cell to write at, e.g. Sheet1.B3" };
+        var from = new Option<string>("--from") { Description = "CSV/TSV file to read the grid from (or - for stdin)", Required = true };
+        var delimiter = Options.Delimiter();
+        var inPlace = Options.InPlace();
+        var output = Options.Output();
+        var locale = Options.Locale();
+        var json = Options.Json();
+        var command = new Command("put", "Write a CSV/TSV grid into a sheet at a cell (values and formulas, parsed like typing)")
+        {
+            file, at, from, delimiter, inPlace, output, locale, json,
+        };
+
+        command.SetAction(parse =>
+        {
+            string path = parse.GetValue(file)!;
+            string target = Options.EditTarget(path, parse.GetValue(inPlace), parse.GetValue(output));
+            string source = parse.GetValue(from)!;
+            var csv = Options.Csv(parse.GetValue(delimiter)) ?? (source.EndsWith(".tsv", StringComparison.OrdinalIgnoreCase) ? CsvOptions.Tab : null);
+            var rows = CsvReader.Parse(ReadText(source), csv);
+
+            return EditSession.Run(path, target, Locale.Resolve(parse.GetValue(locale)), parse.GetValue(json), session =>
+            {
+                var (sheet, anchor) = Cells.ResolveCell(session.Workbook, parse.GetValue(at)!);
+                int written = 0;
+                for (int r = 0; r < rows.Count; r++)
+                {
+                    for (int c = 0; c < rows[r].Count; c++)
+                    {
+                        session.Apply(EditCommands.SetInput(session.Workbook, sheet.Name, anchor.Row + r, anchor.Column + c, rows[r][c], session.Culture));
+                        written++;
+                    }
+                }
+
+                int width = rows.Count == 0 ? 0 : rows.Max(row => row.Count);
+                CellRange? covered = rows.Count == 0 ? null : new CellRange(anchor.WithoutSheet(), new CellAddress(anchor.Column + width - 1, anchor.Row + rows.Count - 1));
+                session.Field("sheet", sheet.Name);
+                session.Field("range", covered?.ToString());
+                session.Note($"Wrote {written} cell(s) at {Report.Address(sheet.Name, anchor.Row, anchor.Column)}.");
+            });
+        });
+
+        return command;
+    }
+
     public static Command Export()
     {
         var file = Options.File("file", "Source .ods workbook");
@@ -416,14 +467,17 @@ internal static class ExtraCommands
     {
         var file = Options.File();
         var name = new Argument<string>("name") { Description = "New sheet name" };
+        var at = new Option<int?>("--at") { Description = "1-based position for the new sheet (default: last)" };
+        var ifMissing = new Option<bool>("--if-missing") { Description = "Succeed quietly if a sheet of that name already exists" };
         var inPlace = Options.InPlace();
         var output = Options.Output();
         var json = Options.Json();
-        var command = new Command("add-sheet", "Add a worksheet") { file, name, inPlace, output, json };
-        command.SetAction(parse => Mutate(parse, file, inPlace, output, json, session =>
+        var command = new Command("add-sheet", "Add a worksheet") { file, name, at, ifMissing, inPlace, output, json };
+        command.SetAction(parse => LayoutCommands.Dispatch(parse, file, inPlace, output, json, "add-sheet", new Dictionary<string, object?>
         {
-            var sheet = session.Workbook.AddSheet(parse.GetValue(name)!);
-            session.Field("sheet", sheet.Name);
+            ["name"] = parse.GetValue(name),
+            ["at"] = parse.GetValue(at),
+            ["ifMissing"] = parse.GetValue(ifMissing) ? true : null,
         }));
         return command;
     }

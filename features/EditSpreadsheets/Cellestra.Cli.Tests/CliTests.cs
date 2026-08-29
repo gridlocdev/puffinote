@@ -271,6 +271,54 @@ public sealed class CliTests : IDisposable
     }
 
     [Fact]
+    public void Put_drops_a_csv_grid_at_an_anchor_parsed_like_typing()
+    {
+        string ods = Path2("book.ods");
+        string csv = Path2("grid.csv");
+        Run("new", ods);
+        File.WriteAllText(csv, "Item,Qty\nPen,3\nInk,\"=C3*2\"\n");
+
+        var (exit, output, _) = Run("put", ods, "B2", "--from", csv, "--in-place", "--json");
+        Assert.Equal(0, exit);
+        using var doc = JsonDocument.Parse(output);
+        Assert.Equal("B2:C4", doc.RootElement.GetProperty("range").GetString());
+        Assert.Equal("3", Run("get", ods, "C3").Out.Trim());
+        Assert.Equal("6", Run("get", ods, "C4").Out.Trim());        // the formula was parsed, not stored as text
+        Assert.Equal("=C3*2", Run("get", ods, "C4", "--formula").Out.Trim());
+    }
+
+    [Fact]
+    public void Layout_verbs_front_the_apply_ops()
+    {
+        string ods = Path2("book.ods");
+        Run("new", ods);
+        Run("set", ods, "A1=Head", "A2=1", "--in-place");
+        Assert.Equal(0, Run("style", ods, "A1", "--bold", "--fill", "#EEEEEE", "--align", "center", "--in-place").Exit);
+        Assert.Equal(0, Run("style", ods, "A1", "--bold", "false", "--in-place").Exit);
+        Assert.Equal(0, Run("width", ods, "A:B", "100", "--in-place").Exit);
+        Assert.Equal(0, Run("height", ods, "1", "30", "--in-place").Exit);
+        Assert.Equal(0, Run("freeze", ods, "--rows", "1", "--in-place").Exit);
+        Assert.Equal(0, Run("settings", ods, "--locale", "de-DE", "--calc", "manual", "--in-place").Exit);
+        Assert.Equal(0, Run("add-sheet", ods, "Data", "--at", "1", "--in-place").Exit);
+        Assert.Equal(0, Run("add-sheet", ods, "Data", "--if-missing", "--in-place").Exit);
+        Assert.Equal(0, Run("duplicate-sheet", ods, "Sheet1", "--as", "Copy", "--in-place").Exit);
+        Assert.Equal(0, Run("move-sheet", ods, "Copy", "1", "--in-place").Exit);
+        Assert.Equal(0, Run("clear", ods, "Sheet1.A2", "--in-place").Exit);
+
+        using var cell = JsonDocument.Parse(Run("get", ods, "Sheet1.A1", "--json").Out);
+        var style = cell.RootElement.GetProperty("style");
+        Assert.False(style.TryGetProperty("bold", out _));           // turned back off
+        Assert.Equal("#EEEEEE", style.GetProperty("fill").GetString());
+        using var info = JsonDocument.Parse(Run("info", ods, "--json").Out);
+        Assert.Equal("de-DE", info.RootElement.GetProperty("locale").GetString());
+        Assert.Equal("Manual", info.RootElement.GetProperty("calculation").GetString());
+        var names = info.RootElement.GetProperty("sheets").EnumerateArray().Select(s => s.GetProperty("name").GetString()).ToList();
+        Assert.Equal(["Copy", "Data", "Sheet1"], names);
+        Assert.Equal(100, info.RootElement.GetProperty("sheets")[2].GetProperty("widths").GetProperty("B").GetDouble());
+        Assert.Equal(string.Empty, Run("get", ods, "Sheet1.A2").Out.Trim());
+    }
+
+    [Fact]
     public void Set_json_reports_the_changed_cell_and_any_error_it_introduced()
     {
         string ods = Path2("book.ods");

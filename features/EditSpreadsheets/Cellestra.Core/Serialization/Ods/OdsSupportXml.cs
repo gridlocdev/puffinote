@@ -9,6 +9,7 @@ namespace Cellestra.Core.Serialization.Ods;
 public static class OdsSupportXml
 {
     private const string CalcModeItem = "CellestraCalculationMode";
+    private const string LocaleItem = "CellestraLocale";
     private const string ActiveTableItem = "ActiveTable";
     private const string ViewsItem = "Views";
     private const string ViewIdItem = "ViewId";
@@ -73,7 +74,8 @@ public static class OdsSupportXml
             new XElement(Config + "config-item-map-indexed",
                 new XAttribute(Config + "name", ViewsItem),
                 view),
-            ConfigItem(CalcModeItem, "string", workbook.Settings.CalculationMode.ToString()));
+            ConfigItem(CalcModeItem, "string", workbook.Settings.CalculationMode.ToString()),
+            ConfigItem(LocaleItem, "string", workbook.Settings.Locale?.Name ?? string.Empty));
 
         var root = new XElement(Office + "document-settings",
             new XAttribute(XNamespace.Xmlns + "office", Office.NamespaceName),
@@ -145,6 +147,11 @@ public static class OdsSupportXml
             {
                 workbook.Settings.CalculationMode = mode;
             }
+            else if (name == LocaleItem)
+            {
+                // The document locale (PRD §8.6): an explicit one round-trips; blank keeps "system default".
+                workbook.Settings.Locale = string.IsNullOrWhiteSpace(item.Value) ? null : TryCulture(item.Value);
+            }
             else if (name == ActiveTableItem)
             {
                 var sheet = workbook.FindSheet(item.Value);
@@ -153,6 +160,18 @@ public static class OdsSupportXml
                     workbook.Settings.ActiveSheetIndex = workbook.IndexOf(sheet);
                 }
             }
+        }
+    }
+
+    private static System.Globalization.CultureInfo? TryCulture(string name)
+    {
+        try
+        {
+            return System.Globalization.CultureInfo.GetCultureInfo(name);
+        }
+        catch (System.Globalization.CultureNotFoundException)
+        {
+            return null;
         }
     }
 

@@ -39,6 +39,7 @@ public class OdsRoundTripTests
 
         workbook.Settings.ActiveSheetIndex = 1;
         workbook.Settings.CalculationMode = CalculationMode.Manual;
+        workbook.Settings.Locale = System.Globalization.CultureInfo.GetCultureInfo("de-DE");
         return workbook;
     }
 
@@ -197,6 +198,7 @@ public class OdsRoundTripTests
         Assert.NotNull(result.FindNamedRange("Rate"));
         Assert.Equal(1, result.Settings.ActiveSheetIndex);
         Assert.Equal(CalculationMode.Manual, result.Settings.CalculationMode);
+        Assert.Equal("de-DE", result.Settings.Locale?.Name); // the document locale round-trips (settings.xml)
     }
 
     [Fact]
