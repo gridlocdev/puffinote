@@ -462,6 +462,10 @@ public sealed class CliTests : IDisposable
         }
 
         Assert.Equal(1, Run("diff", ods, other).Exit); // structure alone is a difference, --styles or not
+
+        // A formula term matches the way `find` shows it — leading '=' and all.
+        Assert.Equal(0, Run("find", ods, "=SUM(", "--in", "formulas", "--replace", "=AVERAGE(", "--in-place").Exit);
+        Assert.Equal("=AVERAGE(B1:B2)", Run("get", ods, "B4", "--formula").Out.Trim());
     }
 
     [Fact]
@@ -1180,7 +1184,10 @@ public sealed class CliTests : IDisposable
         {
             Assert.Equal(1, doc.RootElement.GetProperty("series").GetArrayLength());   // data rebuilt
             Assert.Equal("Trend", doc.RootElement.GetProperty("title").GetString());  // the rest kept
+            Assert.Equal("Sheet1.A2:A3", doc.RootElement.GetProperty("categories").GetString()); // and so are the categories
         }
+
+        Assert.Equal(1, Run("charts", "update", ods, "Chart1", "--legend", "maybe", "--in-place").Exit); // true | false
 
         Assert.Equal(1, Run("charts", "show", ods, "Sheet1").Exit); // not a chart sheet
         Assert.Equal(0, Run("charts", "remove", ods, "Chart1", "--in-place").Exit);

@@ -58,15 +58,28 @@ internal static class InspectCommands
             var index = FormulaIndex.Build(workbook);
             var visited = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
             var root = new Node(sheet.Name, new CellRange(new CellAddress(address.Column, address.Row)));
-            var tree = Walk(workbook, index, root, downstream, maxDepth == 0 ? int.MaxValue : maxDepth, 0, visited, effective);
+            var budget = new NodeBudget();
+            var tree = Walk(workbook, index, root, downstream, maxDepth == 0 ? int.MaxValue : maxDepth, 0, visited, effective, budget);
 
             if (parse.GetValue(json))
             {
-                Report.Write(new { cell = tree.Address, direction = downstream ? "dependents" : "precedents", depth = maxDepth, tree });
+                Report.Write(new
+                {
+                    cell = tree.Address,
+                    direction = downstream ? "dependents" : "precedents",
+                    depth = maxDepth,
+                    truncated = budget.Exhausted ? true : (bool?)null,
+                    tree,
+                });
                 return 0;
             }
 
             Print(tree, downstream, 0);
+            if (budget.Exhausted)
+            {
+                Console.Error.WriteLine($"note: stopped after {NodeBudget.Limit} nodes; narrow it with --depth.");
+            }
+
             return 0;
         });
 
@@ -104,7 +117,30 @@ internal static class InspectCommands
         public List<TraceNode>? Dependents { get; init; }
     }
 
-    private static TraceNode Walk(Workbook workbook, FormulaIndex index, Node node, bool downstream, int maxDepth, int depth, HashSet<string> visited, CultureInfo culture)
+    /// <summary>A ceiling on how much of a fan-out tree one trace prints, so a hub cell can't run away.</summary>
+    private sealed class NodeBudget
+    {
+        public const int Limit = 2000;
+
+        private int _left = Limit;
+
+        public bool Exhausted { get; private set; }
+
+        /// <summary>Claim room for <paramref name="count"/> more nodes; false once the budget is spent.</summary>
+        public bool Take(int count)
+        {
+            if (count > _left)
+            {
+                Exhausted = true;
+                return false;
+            }
+
+            _left -= count;
+            return true;
+        }
+    }
+
+    private static TraceNode Walk(Workbook workbook, FormulaIndex index, Node node, bool downstream, int maxDepth, int depth, HashSet<string> visited, CultureInfo culture, NodeBudget budget)
     {
         var sheet = workbook.FindSheet(node.Sheet);
         var cell = node.IsCell ? sheet?.Find(node.Range.Top, node.Range.Left) : null;
@@ -113,17 +149,21 @@ internal static class InspectCommands
 
         List<TraceNode>? children = null;
         bool truncated = false;
-        if (!cycle && depth < maxDepth)
+        if (!cycle)
         {
+            // One lookup either way: asking twice doubles the work on a wide fan-out.
             var next = downstream ? index.DependentsOf(node) : index.PrecedentsOf(node);
             if (next.Count > 0)
             {
-                children = [.. next.Select(n => Walk(workbook, index, n, downstream, maxDepth, depth + 1, visited, culture))];
+                if (depth < maxDepth && budget.Take(next.Count))
+                {
+                    children = [.. next.Select(n => Walk(workbook, index, n, downstream, maxDepth, depth + 1, visited, culture, budget))];
+                }
+                else
+                {
+                    truncated = true;
+                }
             }
-        }
-        else if (!cycle && depth >= maxDepth)
-        {
-            truncated = (downstream ? index.DependentsOf(node) : index.PrecedentsOf(node)).Count > 0;
         }
 
         visited.Remove(node.Address); // a cell may appear again on another branch; only a true loop is a cycle
@@ -183,6 +223,14 @@ internal static class InspectCommands
     {
         private readonly Dictionary<string, (Worksheet Sheet, int Row, int Column, Expr Expr, List<Node> Reads)> _formulas = new(StringComparer.OrdinalIgnoreCase);
 
+        /// <summary>The other direction: which formula cells read a given single cell.</summary>
+        private readonly Dictionary<(string Sheet, int Row, int Column), List<Node>> _readers = [];
+
+        /// <summary>Range reads, kept apart — few enough to scan, and they can't be keyed by one cell.</summary>
+        private readonly List<(Node Read, Node Formula)> _rangeReaders = [];
+
+        private readonly Dictionary<string, Dictionary<(int Row, int Column), Expr>> _bySheet = new(StringComparer.OrdinalIgnoreCase);
+
         public static FormulaIndex Build(Workbook workbook)
         {
             var index = new FormulaIndex();
@@ -198,24 +246,87 @@ internal static class InspectCommands
                     var reads = new List<Node>();
                     CollectReads(expr, sheet.Name, workbook, reads);
                     index._formulas[Report.Address(sheet.Name, row, column)] = (sheet, row, column, expr, reads);
+
+                    if (!index._bySheet.TryGetValue(sheet.Name, out var onSheet))
+                    {
+                        index._bySheet[sheet.Name] = onSheet = [];
+                    }
+
+                    onSheet[(row, column)] = expr;
+
+                    var self = new Node(sheet.Name, new CellRange(new CellAddress(column, row)));
+                    foreach (var read in reads)
+                    {
+                        if (read.IsCell)
+                        {
+                            var key = (read.Sheet.ToUpperInvariant(), read.Range.Top, read.Range.Left);
+                            if (!index._readers.TryGetValue(key, out var readers))
+                            {
+                                index._readers[key] = readers = [];
+                            }
+
+                            readers.Add(self);
+                        }
+                        else
+                        {
+                            index._rangeReaders.Add((read, self));
+                        }
+                    }
                 }
             }
 
             return index;
         }
 
+        /// <summary>The parsed formulas of one sheet, by position — parsed once, in <see cref="Build"/>.</summary>
+        public IReadOnlyDictionary<(int Row, int Column), Expr> OnSheet(Worksheet sheet) =>
+            _bySheet.TryGetValue(sheet.Name, out var formulas) ? formulas : [];
+
         public IReadOnlyList<Node> PrecedentsOf(Node node) =>
             node.IsCell && _formulas.TryGetValue(node.Address, out var entry) ? entry.Reads : [];
 
-        /// <summary>Formula cells that read any cell of <paramref name="node"/>.</summary>
+        /// <summary>Formula cells that read any cell of <paramref name="node"/> — a lookup, not a sweep.</summary>
         public IReadOnlyList<Node> DependentsOf(Node node)
         {
             var result = new List<Node>();
-            foreach (var (address, entry) in _formulas)
+            var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            void Add(Node reader)
             {
-                if (entry.Reads.Any(r => string.Equals(r.Sheet, node.Sheet, StringComparison.OrdinalIgnoreCase) && r.Range.Intersects(node.Range)))
+                if (seen.Add(reader.Address))
                 {
-                    result.Add(new Node(entry.Sheet.Name, new CellRange(new CellAddress(entry.Column, entry.Row))));
+                    result.Add(reader);
+                }
+            }
+
+            if (node.IsCell)
+            {
+                if (_readers.TryGetValue((node.Sheet.ToUpperInvariant(), node.Range.Top, node.Range.Left), out var direct))
+                {
+                    foreach (var reader in direct)
+                    {
+                        Add(reader);
+                    }
+                }
+            }
+            else
+            {
+                foreach (var ((sheet, row, column), readers) in _readers)
+                {
+                    if (string.Equals(sheet, node.Sheet, StringComparison.OrdinalIgnoreCase) && node.Range.Contains(row, column))
+                    {
+                        foreach (var reader in readers)
+                        {
+                            Add(reader);
+                        }
+                    }
+                }
+            }
+
+            foreach (var (read, formula) in _rangeReaders)
+            {
+                if (string.Equals(read.Sheet, node.Sheet, StringComparison.OrdinalIgnoreCase) && read.Range.Intersects(node.Range))
+                {
+                    Add(formula);
                 }
             }
 
@@ -309,7 +420,7 @@ internal static class InspectCommands
                 CheckStoredAsText(workbook, s, effective, findings);
                 CheckTableHeaders(s, findings);
                 CheckValidationRules(s, effective, findings);
-                CheckFormulaPatterns(s, findings);
+                CheckFormulaPatterns(index, s, findings);
             }
 
             CheckFormulas(workbook, index, sheets, findings);
@@ -397,20 +508,23 @@ internal static class InspectCommands
 
     private static void CheckValidationRules(Worksheet sheet, CultureInfo culture, List<Finding> findings)
     {
-        foreach (var rule in sheet.Validations)
+        if (sheet.Validations.Count == 0)
         {
-            foreach (var (row, column, cell) in sheet.EnumerateCells())
-            {
-                if (!rule.Covers(row, column) || cell.IsFormula || cell.Value.IsEmpty)
-                {
-                    continue;
-                }
+            return;
+        }
 
-                if (!Validator.IsValid(rule, cell.Value, culture, range => ResolveValues(sheet, range)))
-                {
-                    findings.Add(new("warning", "validation", Report.Address(sheet.Name, row, column),
-                        $"\"{cell.Value.ToInvariantString()}\" violates the {rule.Kind.ToString().ToLowerInvariant()} rule on {rule.Target}"));
-                }
+        // One pass over what's populated, asking the sheet which rule covers each cell — not a pass per rule.
+        foreach (var (row, column, cell) in sheet.EnumerateCells())
+        {
+            if (cell.IsFormula || cell.Value.IsEmpty || sheet.FindValidation(row, column) is not { } rule)
+            {
+                continue;
+            }
+
+            if (!Validator.IsValid(rule, cell.Value, culture, range => ResolveValues(sheet, range)))
+            {
+                findings.Add(new("warning", "validation", Report.Address(sheet.Name, row, column),
+                    $"\"{cell.Value.ToInvariantString()}\" violates the {rule.Kind.ToString().ToLowerInvariant()} rule on {rule.Target}"));
             }
         }
     }
@@ -481,7 +595,20 @@ internal static class InspectCommands
             return true;
         }
 
-        // O(populated): a big empty range is cheap to prove empty.
+        // A small range: probe it. A big one (a whole column, say): walk what's populated instead.
+        if ((long)node.Range.RowCount * node.Range.ColumnCount <= 4096)
+        {
+            foreach (var (row, column) in node.Range.Positions())
+            {
+                if (!sheet.GetValue(row, column).IsEmpty)
+                {
+                    return false;
+                }
+            }
+
+            return true;
+        }
+
         return !sheet.EnumerateCells().Any(c => node.Range.Contains(c.Row, c.Column) && !c.Cell.Value.IsEmpty);
     }
 
@@ -489,16 +616,9 @@ internal static class InspectCommands
     /// A formula that breaks the pattern of its neighbours: the cells above and below (or left and
     /// right) agree once their relative references are shifted onto this row, and this one differs.
     /// </summary>
-    private static void CheckFormulaPatterns(Worksheet sheet, List<Finding> findings)
+    private static void CheckFormulaPatterns(FormulaIndex index, Worksheet sheet, List<Finding> findings)
     {
-        var formulas = new Dictionary<(int Row, int Column), Expr>();
-        foreach (var (row, column, cell) in sheet.EnumerateCells())
-        {
-            if (cell.IsFormula && Parser.TryParse(cell.Formula!, out var expr, out _) && expr is not null)
-            {
-                formulas[(row, column)] = expr;
-            }
-        }
+        var formulas = index.OnSheet(sheet); // parsed once in Build; re-parsing the sheet here doubled the work
 
         foreach (var ((row, column), expr) in formulas)
         {
@@ -511,7 +631,7 @@ internal static class InspectCommands
         }
     }
 
-    private static bool Breaks(Dictionary<(int Row, int Column), Expr> formulas, (int, int) before, (int, int) after, int columnDelta, int rowDelta, string here)
+    private static bool Breaks(IReadOnlyDictionary<(int Row, int Column), Expr> formulas, (int, int) before, (int, int) after, int columnDelta, int rowDelta, string here)
     {
         if (!formulas.TryGetValue(before, out var a) || !formulas.TryGetValue(after, out var b))
         {

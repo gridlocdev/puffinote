@@ -84,8 +84,16 @@ internal static class ChartCommands
         ChartDefinition next;
         if (rebuildData)
         {
+            // Only the data given is rebuilt: the parts the chart already had carry over, so
+            // `--values` alone doesn't quietly drop the categories (or a scatter's shared X range).
+            bool seeded = from is { Length: > 0 };
+            var first = current.Series.FirstOrDefault();
             next = BuildDefinition(session.Workbook, typeText ?? current.Type.ToString(), title ?? current.Title, legend is false || (legend is null && !current.ShowLegend),
-                xTitle ?? current.XAxisTitle, yTitle ?? current.YAxisTitle, stackingText ?? Spell(current.Stacking), values, names, categories, xValues, bubbleSizes, from);
+                xTitle ?? current.XAxisTitle, yTitle ?? current.YAxisTitle, stackingText ?? Spell(current.Stacking), values, names,
+                categories ?? (seeded ? null : current.CategoriesReference),
+                xValues ?? (seeded ? null : first?.XValuesReference),
+                bubbleSizes ?? (seeded ? null : first?.BubbleSizeReference),
+                from);
         }
         else
         {
@@ -219,7 +227,7 @@ internal static class ChartCommands
         var xValues = new Option<string?>("--x-values") { Description = "Shared X-value range (scatter & bubble)" };
         var bubbleSizes = new Option<string?>("--bubble-sizes") { Description = "Shared bubble-size range (bubble only)" };
         var stacking = new Option<string?>("--stacking") { Description = "none|stacked|percent" };
-        var legend = new Option<string?>("--legend") { Description = "true | false" };
+        var legend = new Option<string?>("--legend") { Description = "true | false", Arity = ArgumentArity.ZeroOrOne };
         var xTitle = new Option<string?>("--x-title") { Description = "Category/X axis title" };
         var yTitle = new Option<string?>("--y-title") { Description = "Value/Y axis title" };
         var inPlace = Options.InPlace();
@@ -241,7 +249,7 @@ internal static class ChartCommands
             ["xValues"] = parse.GetValue(xValues),
             ["bubbleSizes"] = parse.GetValue(bubbleSizes),
             ["stacking"] = parse.GetValue(stacking),
-            ["legend"] = parse.GetValue(legend) is { } l ? l.Trim().ToLowerInvariant() is "true" or "on" or "yes" : null,
+            ["legend"] = LayoutCommands.Flag(parse, legend),
             ["xTitle"] = parse.GetValue(xTitle),
             ["yTitle"] = parse.GetValue(yTitle),
         }));

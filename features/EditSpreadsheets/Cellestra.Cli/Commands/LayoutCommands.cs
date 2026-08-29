@@ -199,7 +199,7 @@ internal static class LayoutCommands
         Arity = ArgumentArity.ZeroOrOne,
     };
 
-    private static bool? Flag(ParseResult parse, Option<string?> option)
+    internal static bool? Flag(ParseResult parse, Option<string?> option)
     {
         var result = parse.GetResult(option);
         if (result is null)

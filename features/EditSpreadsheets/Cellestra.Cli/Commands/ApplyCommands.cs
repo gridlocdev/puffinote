@@ -741,12 +741,27 @@ internal static class ApplyCommands
         }));
 
         // ApplyStyle reports no cells (a style moves no values), but the report should still say what
-        // was touched: every cell that now exists inside the range — O(populated), never the bounding box.
-        foreach (var (row, column, _) in sheet.EnumerateCells())
+        // was touched: every cell that now exists inside the range. Walk whichever is smaller — the
+        // range, or the populated cells — so neither a header row on a huge sheet nor a styled
+        // whole column costs more than it's worth.
+        if ((long)range.RowCount * range.ColumnCount <= 4096)
         {
-            if (range.Contains(row, column))
+            foreach (var (row, column) in range.Positions())
             {
-                session.Touched(sheet.Name, row, column);
+                if (sheet.Find(row, column) is not null)
+                {
+                    session.Touched(sheet.Name, row, column);
+                }
+            }
+        }
+        else
+        {
+            foreach (var (row, column, _) in sheet.EnumerateCells())
+            {
+                if (range.Contains(row, column))
+                {
+                    session.Touched(sheet.Name, row, column);
+                }
             }
         }
     }

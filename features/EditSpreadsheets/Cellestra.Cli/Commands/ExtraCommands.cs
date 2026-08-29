@@ -308,7 +308,7 @@ internal static class ExtraCommands
             Description = "Where to search: values | formulas | both",
             DefaultValueFactory = _ => "both"
         };
-        var replace = new Option<string?>("--replace") { Description = "Replace every match with this text (needs --in-place or -o); $1 groups with --regex" };
+        var replace = new Option<string?>("--replace") { Description = "Replace every match with this text, in text cells and formulas (needs --in-place or -o); $1 groups with --regex" };
         var sheetOption = Options.Sheet();
         var inPlace = Options.InPlace();
         var output = Options.Output();
@@ -357,10 +357,11 @@ internal static class ExtraCommands
                         var hits = worksheet.EnumerateCells().Select(c => (c.Row, c.Column, c.Cell)).ToList();
                         foreach (var (row, column, cell) in hits)
                         {
-                            if (searchFormulas && cell.IsFormula && pattern.IsMatch(cell.Formula!))
+                            // Match what `find` matched: the formula as it's shown, leading '=' and all.
+                            if (searchFormulas && cell.IsFormula && pattern.IsMatch("=" + cell.Formula))
                             {
-                                string formula = pattern.Replace(cell.Formula!, replacement);
-                                session.Apply(EditCommands.SetFormula(worksheet.Name, row, column, formula));
+                                string formula = pattern.Replace("=" + cell.Formula, replacement);
+                                session.Apply(EditCommands.SetFormula(worksheet.Name, row, column, formula.StartsWith('=') ? formula[1..] : formula));
                                 replaced++;
                             }
                             else if (searchValues && !cell.IsFormula && cell.Value.IsText && pattern.IsMatch(cell.Value.AsText))
@@ -847,22 +848,17 @@ internal static class ExtraCommands
 
     private static IEnumerable<(int Row, int Column)> UsedUnion(Worksheet a, Worksheet b)
     {
-        var seen = new HashSet<(int, int)>();
-        foreach (var (row, column, _) in a.EnumerateCells())
+        // Reading order, so a diff of the same two files always lists its cells the same way.
+        var seen = new HashSet<(int Row, int Column)>();
+        foreach (var sheet in new[] { a, b })
         {
-            if (seen.Add((row, column)))
+            foreach (var (row, column, _) in sheet.EnumerateCells())
             {
-                yield return (row, column);
+                seen.Add((row, column));
             }
         }
 
-        foreach (var (row, column, _) in b.EnumerateCells())
-        {
-            if (seen.Add((row, column)))
-            {
-                yield return (row, column);
-            }
-        }
+        return seen.OrderBy(p => p.Row).ThenBy(p => p.Column);
     }
 
     private static string ReadText(string path) => path == "-" ? Console.In.ReadToEnd() : File.ReadAllText(path);

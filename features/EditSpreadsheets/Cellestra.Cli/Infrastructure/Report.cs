@@ -149,7 +149,7 @@ public static class Report
             static string Edge(BorderEdge e) => e.Style.ToString().ToLowerInvariant();
             bool uniform = b.Left == b.Right && b.Right == b.Top && b.Top == b.Bottom;
             d["border"] = uniform ? Edge(b.Left) : new { left = Edge(b.Left), right = Edge(b.Right), top = Edge(b.Top), bottom = Edge(b.Bottom) };
-            var color = uniform ? b.Left.Color : b.Left.Color;
+            var color = new[] { b.Left, b.Right, b.Top, b.Bottom }.FirstOrDefault(e => e.IsVisible)?.Color ?? ArgbColor.Black;
             if (color != ArgbColor.Black)
             {
                 d["borderColor"] = color.ToHex();

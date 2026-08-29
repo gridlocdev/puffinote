@@ -1,5 +1,4 @@
 using System.CommandLine;
-using System.Globalization;
 using Cellestra.Cli.Infrastructure;
 using Cellestra.Core.Data;
 using Cellestra.Core.Editing;
@@ -252,6 +251,4 @@ internal static class RangeCommands
             yield return sheet.GetValue(row, column);
         }
     }
-
-    internal static CultureInfo CultureOf(EditSession session) => session.Culture;
 }
