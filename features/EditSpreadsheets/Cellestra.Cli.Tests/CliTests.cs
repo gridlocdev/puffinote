@@ -319,6 +319,53 @@ public sealed class CliTests : IDisposable
     }
 
     [Fact]
+    public void Copy_move_fill_and_paint_behave_like_the_app()
+    {
+        string ods = Path2("book.ods");
+        Run("new", ods);
+        Run("set", ods, "A1=1", "A2=2", "A3=3", "B1==A1*10", "--in-place");
+        Run("style", ods, "B1", "--bold", "--in-place");
+
+        Assert.Equal(0, Run("fill", ods, "B1:B3", "--in-place").Exit);            // fill handle: B2 = A2*10
+        Assert.Equal("=A2*10", Run("get", ods, "B2", "--formula").Out.Trim());
+        Assert.Equal("30", Run("get", ods, "B3").Out.Trim());
+
+        Assert.Equal(0, Run("copy", ods, "A1:B3", "D1", "--in-place").Exit);      // paste shifts relative refs
+        Assert.Equal("=D2*10", Run("get", ods, "E2", "--formula").Out.Trim());
+        Assert.Equal(0, Run("copy", ods, "A1:B3", "G1", "--mode", "values", "--in-place").Exit);
+        Assert.Equal("10", Run("get", ods, "H1").Out.Trim());
+        Assert.Equal("10", Run("get", ods, "H1", "--formula").Out.Trim());         // values only: no formula
+
+        Assert.Equal(0, Run("move", ods, "D1:E3", "Sheet1.D10", "--in-place").Exit);
+        Assert.Equal(string.Empty, Run("get", ods, "D1").Out.Trim());
+        Assert.Equal("=D11*10", Run("get", ods, "E11", "--formula").Out.Trim());  // a move keeps the block coherent
+
+        Assert.Equal(0, Run("paint", ods, "B1", "A1:A3", "--in-place").Exit);
+        using var doc = JsonDocument.Parse(Run("get", ods, "A3", "--json").Out);
+        Assert.True(doc.RootElement.GetProperty("style").GetProperty("bold").GetBoolean());
+        Assert.Equal("3", doc.RootElement.GetProperty("display").GetString());     // formatting only
+    }
+
+    [Fact]
+    public void Filter_hides_rows_and_clear_shows_them_again()
+    {
+        string ods = Path2("book.ods");
+        Run("new", ods);
+        Run("set", ods, "A1=Name", "B1=Score", "A2=Ann", "B2=5", "A3=Bob", "B3=9", "A4=Cy", "B4=7", "--in-place");
+
+        var (exit, output, _) = Run("filter", ods, "A1:B4", "--where", "B >6", "--values", "A Bob,Cy", "--in-place", "--json");
+        Assert.Equal(0, exit);
+        using var doc = JsonDocument.Parse(output);
+        Assert.Equal(1, doc.RootElement.GetProperty("hiddenRows").GetInt32()); // Ann (5) hidden; Bob and Cy stay
+        using var sheets = JsonDocument.Parse(Run("sheets", ods, "--json").Out);
+        Assert.Equal("2", sheets.RootElement[0].GetProperty("hiddenRows")[0].GetString());
+
+        Assert.Equal(0, Run("filter", ods, "A1:B4", "--clear", "--in-place").Exit);
+        using var after = JsonDocument.Parse(Run("sheets", ods, "--json").Out);
+        Assert.False(after.RootElement[0].TryGetProperty("hiddenRows", out _));
+    }
+
+    [Fact]
     public void Set_json_reports_the_changed_cell_and_any_error_it_introduced()
     {
         string ods = Path2("book.ods");

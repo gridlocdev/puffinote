@@ -61,6 +61,14 @@ internal static class ApplyCommands
           {"op":"insert-rows", "at":3, "count":2}   {"op":"delete-rows", "at":3, "count":1}      (1-based)
           {"op":"insert-cols", "at":"B", "count":1} {"op":"delete-cols", "at":"B"}
 
+        Blocks
+          {"op":"copy", "from":"A1:B3", "to":"Sheet2.D1", "mode":"all|values|formats|formulas"}   relative refs shift, like paste
+          {"op":"move", "from":"A1:B3", "to":"D1"}                                              formulas travel unchanged; source cleared
+          {"op":"fill", "range":"D2:D20", "from":"D2"}       repeat a source block down/across (default: the range's first row or column)
+          {"op":"paint", "from":"A1:D1", "to":"A10:D20"}     format painter: copy formatting only, tiling the pattern
+          {"op":"filter", "range":"A1:D100", "header":true, "columns": {"B": {"condition":">5"}, "C": {"values":["Red","Blue"]}}}
+          {"op":"filter", "range":"A1:D100", "clear":true}   conditions are SUMIF-style (">5", "<>0", "*ink*"); rows are hidden, never deleted
+
         Data
           {"op":"sort", "range":"A1:D100", "by":"B,A:desc", "header":true}
           {"op":"table", "range":"A1:D20", "name":"Sales", "header":true, "replace":true}   replace: redefine a table already on the range
@@ -383,6 +391,64 @@ internal static class ApplyCommands
             case "settings":
                 Settings(session, op);
                 break;
+            case "copy":
+            case "move":
+                {
+                    var (fromSheet, from) = Range(session, op, "from");
+                    var (toSheet, to) = Range(session, op, "to");
+                    RangeCommands.CopyOrMove(session, fromSheet, from, toSheet, to, cut: kind == "move", op.String("mode") ?? "all");
+                    break;
+                }
+
+            case "fill":
+                {
+                    var (sheet, range) = Range(session, op, "range");
+                    CellRange? source = null;
+                    if (op.String("from") is { } fromText)
+                    {
+                        var (fromSheet, from) = Cells.ResolveRange(wb, fromText, sheet.Name);
+                        if (fromSheet != sheet)
+                        {
+                            throw new CliException("a fill's source must be on the same sheet as the range.");
+                        }
+
+                        source = from;
+                    }
+
+                    RangeCommands.Fill(session, sheet, range, source);
+                    break;
+                }
+
+            case "paint":
+                {
+                    var (fromSheet, from) = Range(session, op, "from");
+                    var (toSheet, to) = Range(session, op, "to");
+                    RangeCommands.Paint(session, fromSheet, from, toSheet, to);
+                    break;
+                }
+
+            case "filter":
+                {
+                    var (sheet, range) = Range(session, op, "range");
+                    var columns = new Dictionary<int, ColumnFilter>();
+                    if (op.Raw("columns") is { ValueKind: JsonValueKind.Object } spec)
+                    {
+                        foreach (var property in spec.EnumerateObject())
+                        {
+                            int column = DataCommands.ParseColumn(property.Name);
+                            var criteria = new Op(property.Value, op.Index);
+                            var allowed = criteria.Strings("values");
+                            columns[column] = new ColumnFilter
+                            {
+                                AllowedValues = allowed.Length > 0 ? new HashSet<string>(allowed, StringComparer.Ordinal) : null,
+                                Condition = criteria.String("condition"),
+                            };
+                        }
+                    }
+
+                    RangeCommands.Filter(session, sheet, range, op.Bool("header") ?? true, op.Bool("clear") ?? false, columns);
+                    break;
+                }
             case "delete-sheet":
                 session.Apply(new DeleteSheetCommand(Cells.PickSheet(wb, op.Require("name")).Name));
                 break;
