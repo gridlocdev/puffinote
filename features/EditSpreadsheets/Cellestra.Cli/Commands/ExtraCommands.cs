@@ -690,23 +690,120 @@ internal static class ExtraCommands
     public static Command Completions()
     {
         var shell = new Argument<string>("shell") { Description = "zsh | bash" };
-        var command = new Command("completions", "Print a shell completion script") { shell };
+        var command = new Command("completions", "Print a shell completion script (commands, subcommands, and every option)") { shell };
 
         command.SetAction(parse =>
         {
-            var names = CliApplication.BuildRoot().Subcommands.Select(c => c.Name).OrderBy(n => n, StringComparer.Ordinal);
-            string list = string.Join(" ", names);
+            var root = CliApplication.BuildRoot();
             string which = (parse.GetValue(shell) ?? string.Empty).ToLowerInvariant();
             Console.Out.WriteLine(which switch
             {
-                "zsh" => $"#compdef cellestra\n_cellestra() {{ _arguments '1:command:({list})' '*::arg:_files' }}\ncompdef _cellestra cellestra",
-                "bash" => $"_cellestra() {{ COMPREPLY=( $(compgen -W \"{list}\" -- \"${{COMP_WORDS[COMP_CWORD]}}\") ); }}\ncomplete -o default -F _cellestra cellestra",
+                "zsh" => ZshCompletion(root),
+                "bash" => BashCompletion(root),
                 _ => throw new CliException("Supported shells: zsh, bash."),
             });
             return 0;
         });
 
         return command;
+    }
+
+    private static IEnumerable<Command> Verbs(Command parent) => parent.Subcommands.OrderBy(c => c.Name, StringComparer.Ordinal);
+
+    private static IEnumerable<string> OptionNames(Command command) =>
+        command.Options.Where(o => o.Name is not ("--help" or "--version")).SelectMany(o => o.Aliases.Append(o.Name)).OrderBy(n => n, StringComparer.Ordinal);
+
+    private static string Quote(string text) => text.Replace("'", "'\\''", StringComparison.Ordinal).Replace("[", "\\[", StringComparison.Ordinal).Replace("]", "\\]", StringComparison.Ordinal);
+
+    /// <summary>zsh: a _describe'd command list, then per-command _arguments with every option and its help; groups dispatch again.</summary>
+    private static string ZshCompletion(RootCommand root)
+    {
+        var sb = new System.Text.StringBuilder();
+        sb.Append("#compdef cellestra\n\n");
+        sb.Append("_cellestra_options() {\n  local -a opts\n  case \"$1\" in\n");
+        foreach (var verb in Verbs(root))
+        {
+            if (verb.Subcommands.Count > 0)
+            {
+                foreach (var sub in Verbs(verb))
+                {
+                    sb.Append("    '").Append(verb.Name).Append(' ').Append(sub.Name).Append("') opts=(").Append(ZshOptions(sub)).Append(") ;;\n");
+                }
+
+                continue;
+            }
+
+            sb.Append("    '").Append(verb.Name).Append("') opts=(").Append(ZshOptions(verb)).Append(") ;;\n");
+        }
+
+        sb.Append("  esac\n  _arguments -s $opts '*:file:_files'\n}\n\n");
+
+        sb.Append("_cellestra() {\n  local -a cmds\n  cmds=(\n");
+        foreach (var verb in Verbs(root))
+        {
+            sb.Append("    '").Append(verb.Name).Append(':').Append(Quote(verb.Description ?? string.Empty)).Append("'\n");
+        }
+
+        sb.Append("  )\n  if (( CURRENT == 2 )); then\n    _describe 'command' cmds\n    return\n  fi\n");
+        sb.Append("  local cmd=$words[2]\n  case \"$cmd\" in\n");
+        foreach (var group in Verbs(root).Where(v => v.Subcommands.Count > 0))
+        {
+            sb.Append("    ").Append(group.Name).Append(")\n      if (( CURRENT == 3 )); then\n        local -a subs\n        subs=(\n");
+            foreach (var sub in Verbs(group))
+            {
+                sb.Append("          '").Append(sub.Name).Append(':').Append(Quote(sub.Description ?? string.Empty)).Append("'\n");
+            }
+
+            sb.Append("        )\n        _describe 'subcommand' subs\n      else\n        _cellestra_options \"$cmd $words[3]\"\n      fi\n      ;;\n");
+        }
+
+        sb.Append("    *) _cellestra_options \"$cmd\" ;;\n  esac\n}\n\ncompdef _cellestra cellestra\n");
+        return sb.ToString();
+    }
+
+    private static string ZshOptions(Command command)
+    {
+        var parts = new List<string>();
+        foreach (var option in command.Options.Where(o => o.Name is not ("--help" or "--version")))
+        {
+            string help = Quote(option.Description ?? string.Empty);
+            string value = option.ValueType == typeof(bool) ? string.Empty : ":value:";
+            foreach (var name in option.Aliases.Append(option.Name))
+            {
+                parts.Add($"'{name}[{help}]{value}'");
+            }
+        }
+
+        return string.Join(" ", parts);
+    }
+
+    /// <summary>bash: complete commands at word 1, subcommands for groups, and each command's options when the word starts with a dash; files otherwise.</summary>
+    private static string BashCompletion(RootCommand root)
+    {
+        var sb = new System.Text.StringBuilder();
+        sb.Append("_cellestra() {\n  local cur=\"${COMP_WORDS[COMP_CWORD]}\"\n  local cmd=\"${COMP_WORDS[1]}\"\n  local opts=\"\"\n");
+        sb.Append("  if [[ $COMP_CWORD -eq 1 ]]; then\n    COMPREPLY=( $(compgen -W \"").Append(string.Join(" ", Verbs(root).Select(v => v.Name))).Append("\" -- \"$cur\") )\n    return\n  fi\n");
+        sb.Append("  case \"$cmd\" in\n");
+        foreach (var verb in Verbs(root))
+        {
+            if (verb.Subcommands.Count > 0)
+            {
+                sb.Append("    ").Append(verb.Name).Append(")\n      if [[ $COMP_CWORD -eq 2 ]]; then\n        COMPREPLY=( $(compgen -W \"")
+                  .Append(string.Join(" ", Verbs(verb).Select(s => s.Name))).Append("\" -- \"$cur\") )\n        return\n      fi\n      case \"${COMP_WORDS[2]}\" in\n");
+                foreach (var sub in Verbs(verb))
+                {
+                    sb.Append("        ").Append(sub.Name).Append(") opts=\"").Append(string.Join(" ", OptionNames(sub))).Append("\" ;;\n");
+                }
+
+                sb.Append("      esac\n      ;;\n");
+                continue;
+            }
+
+            sb.Append("    ").Append(verb.Name).Append(") opts=\"").Append(string.Join(" ", OptionNames(verb))).Append("\" ;;\n");
+        }
+
+        sb.Append("  esac\n  if [[ \"$cur\" == -* ]]; then\n    COMPREPLY=( $(compgen -W \"$opts\" -- \"$cur\") )\n  else\n    COMPREPLY=( $(compgen -f -- \"$cur\") )\n  fi\n}\ncomplete -o filenames -F _cellestra cellestra\n");
+        return sb.ToString();
     }
 
     // ---- Helpers ----------------------------------------------------------

@@ -465,6 +465,22 @@ public sealed class CliTests : IDisposable
     }
 
     [Fact]
+    public void Completions_cover_subcommands_and_options()
+    {
+        var (exit, zsh, _) = Run("completions", "zsh");
+        Assert.Equal(0, exit);
+        Assert.Contains("'set') opts=(", zsh, StringComparison.Ordinal);
+        Assert.Contains("'--in-place[Edit the file in place (atomic write)]'", zsh, StringComparison.Ordinal);
+        Assert.Contains("'name add') opts=(", zsh, StringComparison.Ordinal); // nested verbs
+
+        var (exit2, bash, _) = Run("completions", "bash");
+        Assert.Equal(0, exit2);
+        Assert.Contains("apply) opts=\"", bash, StringComparison.Ordinal);
+        Assert.Contains("--dry-run", bash, StringComparison.Ordinal);
+        Assert.Contains("charts)", bash, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void Set_json_reports_the_changed_cell_and_any_error_it_introduced()
     {
         string ods = Path2("book.ods");
