@@ -54,7 +54,7 @@ public sealed class EditSession
     /// <paramref name="edit"/> does the work through <see cref="Apply"/>, <see cref="Note"/>, and
     /// <see cref="Field"/>; everything before and after it is the shared contract.
     /// </summary>
-    public static int Run(string path, string target, CultureInfo? locale, bool json, Action<EditSession> edit, WorkbookFormat? format = WorkbookFormat.Ods)
+    public static int Run(string path, string target, CultureInfo? locale, bool json, Action<EditSession> edit, WorkbookFormat? format = WorkbookFormat.Ods, bool dryRun = false)
     {
         if (json && target == "-")
         {
@@ -64,7 +64,7 @@ public sealed class EditSession
         var loaded = Workspace.Load(path, format, locale);
         var session = new EditSession(loaded, locale ?? loaded.Workbook.Settings.EffectiveLocale);
         edit(session);
-        return session.Finish(target, json);
+        return session.Finish(target, json, dryRun);
     }
 
     /// <summary>As <see cref="Run(string,string,CultureInfo?,bool,Action{EditSession},WorkbookFormat?)"/> for a workbook that is already in memory (a new file, an import).</summary>
@@ -77,19 +77,31 @@ public sealed class EditSession
 
         var session = new EditSession(loaded, locale ?? loaded.Workbook.Settings.EffectiveLocale);
         edit(session);
-        return session.Finish(target, json);
+        return session.Finish(target, json, dryRun: false);
     }
 
-    private int Finish(string target, bool json)
+    /// <summary>
+    /// Recalculate, save (unless this is a dry run), and report. A dry run does everything but the
+    /// write, so the report — changed cells, errors — is exactly what a real run would have produced.
+    /// </summary>
+    private int Finish(string target, bool json, bool dryRun)
     {
         var result = Workspace.Recalculate(Workbook);
-        Workspace.SaveOds(Workbook, Loaded.Package, target);
+        if (!dryRun)
+        {
+            Workspace.SaveOds(Workbook, Loaded.Package, target);
+        }
 
         if (!json)
         {
             foreach (var note in _notes)
             {
                 Console.Error.WriteLine(note);
+            }
+
+            if (dryRun)
+            {
+                Console.Error.WriteLine("Dry run: nothing written.");
             }
 
             if (result.HasCircularReference)
@@ -111,6 +123,7 @@ public sealed class EditSession
         {
             ["ok"] = true,
             ["file"] = target,
+            ["dryRun"] = dryRun ? true : null,
             ["changed"] = changed,
             ["recalculated"] = result.Evaluated,
             ["errors"] = errors,

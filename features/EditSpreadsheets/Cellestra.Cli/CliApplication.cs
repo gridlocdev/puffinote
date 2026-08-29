@@ -37,7 +37,7 @@ public static class CliApplication
             ExtraCommands.AddSheet(),
             ExtraCommands.RenameSheet(),
             ExtraCommands.DeleteSheet(),
-            ExtraCommands.Apply(),
+            ApplyCommands.Apply(),
             ExtraCommands.Open(),
             ExtraCommands.Completions(),
 

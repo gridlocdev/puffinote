@@ -1,6 +1,5 @@
 using System.CommandLine;
 using System.Globalization;
-using System.Text.Json;
 using System.Text.RegularExpressions;
 using Cellestra.Cli.Infrastructure;
 using Cellestra.Core.Editing;
@@ -11,7 +10,7 @@ using Puffinote.Components.Core.Cli;
 
 namespace Cellestra.Cli.Commands;
 
-/// <summary>The nice-to-haves: new, import/export, stats, find, diff, functions, sheet management, apply, open, completions.</summary>
+/// <summary>The nice-to-haves: new, import/export, stats, find, diff, functions, sheet management, open, completions.</summary>
 internal static class ExtraCommands
 {
     public static Command New()
@@ -417,9 +416,11 @@ internal static class ExtraCommands
     {
         var file = Options.File();
         var name = new Argument<string>("name") { Description = "New sheet name" };
+        var inPlace = Options.InPlace();
+        var output = Options.Output();
         var json = Options.Json();
-        var command = new Command("add-sheet", "Add a worksheet") { file, name, json };
-        command.SetAction(parse => MutateInPlace(parse.GetValue(file)!, parse.GetValue(json), session =>
+        var command = new Command("add-sheet", "Add a worksheet") { file, name, inPlace, output, json };
+        command.SetAction(parse => Mutate(parse, file, inPlace, output, json, session =>
         {
             var sheet = session.Workbook.AddSheet(parse.GetValue(name)!);
             session.Field("sheet", sheet.Name);
@@ -432,9 +433,11 @@ internal static class ExtraCommands
         var file = Options.File();
         var oldName = new Argument<string>("old") { Description = "Existing sheet name" };
         var newName = new Argument<string>("new") { Description = "New sheet name" };
+        var inPlace = Options.InPlace();
+        var output = Options.Output();
         var json = Options.Json();
-        var command = new Command("rename-sheet", "Rename a worksheet") { file, oldName, newName, json };
-        command.SetAction(parse => MutateInPlace(parse.GetValue(file)!, parse.GetValue(json), session =>
+        var command = new Command("rename-sheet", "Rename a worksheet") { file, oldName, newName, inPlace, output, json };
+        command.SetAction(parse => Mutate(parse, file, inPlace, output, json, session =>
         {
             session.Workbook.RenameSheet(Cells.PickSheet(session.Workbook, parse.GetValue(oldName)), parse.GetValue(newName)!);
             session.Field("sheet", parse.GetValue(newName));
@@ -446,58 +449,16 @@ internal static class ExtraCommands
     {
         var file = Options.File();
         var name = new Argument<string>("name") { Description = "Sheet to delete" };
+        var inPlace = Options.InPlace();
+        var output = Options.Output();
         var json = Options.Json();
-        var command = new Command("delete-sheet", "Delete a worksheet (dependent formulas become #REF!)") { file, name, json };
-        command.SetAction(parse => MutateInPlace(parse.GetValue(file)!, parse.GetValue(json), session =>
+        var command = new Command("delete-sheet", "Delete a worksheet (dependent formulas become #REF!)") { file, name, inPlace, output, json };
+        command.SetAction(parse => Mutate(parse, file, inPlace, output, json, session =>
         {
             var sheet = Cells.PickSheet(session.Workbook, parse.GetValue(name));
             session.Apply(new DeleteSheetCommand(sheet.Name));
             session.Field("sheet", sheet.Name);
         }));
-        return command;
-    }
-
-    public static Command Apply()
-    {
-        var file = Options.File();
-        var edits = Options.File("edits", "JSON file of edits (or - for stdin)");
-        var locale = Options.Locale();
-        var json = Options.Json();
-        var command = new Command("apply", "Apply a batch of cell edits from JSON") { file, edits, locale, json };
-
-        command.SetAction(parse =>
-        {
-            string path = parse.GetValue(file)!;
-            string text = ReadText(parse.GetValue(edits)!);
-            EditEntry[] entries;
-            try
-            {
-                entries = JsonSerializer.Deserialize<EditEntry[]>(text, JsonOptions) ?? [];
-            }
-            catch (JsonException ex)
-            {
-                throw new CliException($"Invalid edits JSON: {ex.Message}");
-            }
-
-            return EditSession.Run(path, path, Locale.Resolve(parse.GetValue(locale)), parse.GetValue(json), session =>
-            {
-                foreach (var entry in entries)
-                {
-                    if (string.IsNullOrWhiteSpace(entry.Cell))
-                    {
-                        throw new CliException("Each edit needs a \"cell\".");
-                    }
-
-                    var (worksheet, address) = Cells.ResolveCell(session.Workbook, entry.Cell);
-                    string input = entry.Formula ?? entry.Value ?? string.Empty;
-                    session.Apply(EditCommands.SetInput(session.Workbook, worksheet.Name, address.Row, address.Column, input, session.Culture));
-                }
-
-                session.Field("applied", entries.Length);
-                session.Note($"Applied {entries.Length} edit(s).");
-            });
-        });
-
         return command;
     }
 
@@ -542,15 +503,13 @@ internal static class ExtraCommands
 
     // ---- Helpers ----------------------------------------------------------
 
-    private static readonly JsonSerializerOptions JsonOptions = new()
+    /// <summary>The edit contract every writing verb follows: nothing overwrites without --in-place or -o.</summary>
+    private static int Mutate(ParseResult parse, Argument<string> file, Option<bool> inPlace, Option<string?> output, Option<bool> json, Action<EditSession> mutate)
     {
-        PropertyNameCaseInsensitive = true,
-    };
-
-    private sealed record EditEntry(string Cell, string? Value, string? Formula);
-
-    private static int MutateInPlace(string path, bool json, Action<EditSession> mutate) =>
-        EditSession.Run(path, path, null, json, mutate);
+        string path = parse.GetValue(file)!;
+        string target = Options.EditTarget(path, parse.GetValue(inPlace), parse.GetValue(output));
+        return EditSession.Run(path, target, null, parse.GetValue(json), mutate);
+    }
 
     private static object FunctionJson(FunctionMetadata m) => new
     {

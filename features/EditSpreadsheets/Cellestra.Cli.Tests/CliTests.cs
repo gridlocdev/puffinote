@@ -261,9 +261,107 @@ public sealed class CliTests : IDisposable
         Run("new", ods);
         File.WriteAllText(edits, "[{\"cell\":\"Sheet1.A1\",\"value\":\"=2+3\"},{\"cell\":\"Sheet1.A2\",\"value\":\"hi\"}]");
 
-        Assert.Equal(0, Run("apply", ods, edits).Exit);
+        Assert.Equal(0, Run("apply", ods, edits, "--in-place").Exit);
         Assert.Equal("5", Run("get", ods, "Sheet1.A1").Out.Trim());
         Assert.Equal("hi", Run("get", ods, "Sheet1.A2").Out.Trim());
+    }
+
+    [Fact]
+    public void Apply_builds_a_sheet_from_typed_ops_in_one_pass()
+    {
+        string ods = Path2("book.ods");
+        string ops = Path2("ops.json");
+        Run("new", ods);
+        File.WriteAllText(ops, """
+            {"ops": [
+              {"op":"set", "at":"A1", "values":[["Item","Qty","Price","Total"],["Pen",3,1.5,"=B2*C2"],["Ink",2,4,"=B3*C3"]]},
+              {"op":"set", "cell":"D4", "value":"=SUM(D2:D3)"},
+              {"op":"style", "range":"A1:D1", "bold":true, "fill":"#EEEEEE", "align":"center"},
+              {"op":"style", "range":"C2:D4", "format":"0.00"},
+              {"op":"width", "columns":"A", "width":120},
+              {"op":"freeze", "rows":1},
+              {"op":"add-sheet", "name":"Notes"},
+              {"op":"name", "name":"GrandTotal", "range":"Sheet1.D4"},
+              {"op":"table", "range":"A1:D3", "name":"Orders"}
+            ]}
+            """);
+
+        var (exit, output, _) = Run("apply", ods, ops, "--in-place", "--json");
+        Assert.Equal(0, exit);
+        using var doc = JsonDocument.Parse(output);
+        Assert.True(doc.RootElement.GetProperty("ok").GetBoolean());
+        Assert.Equal(9, doc.RootElement.GetProperty("applied").GetInt32());
+        Assert.Equal(0, doc.RootElement.GetProperty("errors").GetArrayLength());
+        Assert.Contains(doc.RootElement.GetProperty("changed").EnumerateArray(),
+            c => c.GetProperty("cell").GetString() == "Sheet1.D4" && c.GetProperty("value").GetDouble() == 12.5);
+
+        var workbook = OdsReader.Read(File.OpenRead(ods));
+        var sheet = workbook.FindSheet("Sheet1")!;
+        Assert.Equal(12.5, sheet.GetValue(3, 3).AsNumber);
+        Assert.True(workbook.Styles.Get(sheet.Find(0, 0)!.StyleId).Font.Bold);
+        Assert.Equal("0.00", workbook.Styles.Get(sheet.Find(1, 2)!.StyleId).NumberFormat.Code);
+        Assert.Equal(120, sheet.GetColumnWidth(0));
+        Assert.Equal(1, sheet.FrozenRows);
+        Assert.NotNull(workbook.FindSheet("Notes"));
+        Assert.NotNull(workbook.FindNamedRange("GrandTotal"));
+        Assert.Equal("Orders", sheet.Tables[0].Name);
+        Assert.Equal("12.50", Run("get", ods, "Sheet1.D4").Out.Trim());
+    }
+
+    [Fact]
+    public void Apply_accepts_a_bare_array_and_the_original_cell_value_form()
+    {
+        string ods = Path2("book.ods");
+        string ops = Path2("ops.json");
+        Run("new", ods);
+        File.WriteAllText(ops, "[{\"cell\":\"A1\",\"value\":\"7\"},{\"cell\":\"A2\",\"formula\":\"A1*2\"},{\"op\":\"set\",\"cell\":\"A3\",\"value\":true}]");
+
+        Assert.Equal(0, Run("apply", ods, ops, "--in-place").Exit);
+        Assert.Equal("14", Run("get", ods, "A2").Out.Trim());
+        Assert.Equal("=A1*2", Run("get", ods, "A2", "--formula").Out.Trim());
+        Assert.Equal("TRUE", Run("get", ods, "A3").Out.Trim());
+    }
+
+    [Fact]
+    public void Apply_dry_run_reports_the_outcome_and_writes_nothing()
+    {
+        string ods = Path2("book.ods");
+        string ops = Path2("ops.json");
+        Run("new", ods);
+        File.WriteAllText(ops, "[{\"op\":\"set\",\"cell\":\"A1\",\"value\":\"=NOPE(1)\"}]");
+        var before = File.ReadAllBytes(ods);
+
+        var (exit, output, _) = Run("apply", ods, ops, "--dry-run", "--json"); // no --in-place needed
+        Assert.Equal(0, exit);
+        using var doc = JsonDocument.Parse(output);
+        Assert.True(doc.RootElement.GetProperty("dryRun").GetBoolean());
+        Assert.Equal("#NAME?", doc.RootElement.GetProperty("errors")[0].GetProperty("error").GetString());
+        Assert.Equal(before, File.ReadAllBytes(ods));
+    }
+
+    [Fact]
+    public void Apply_aborts_the_whole_batch_on_a_bad_op_and_says_which()
+    {
+        string ods = Path2("book.ods");
+        string ops = Path2("ops.json");
+        Run("new", ods);
+        File.WriteAllText(ops, "[{\"op\":\"set\",\"cell\":\"A1\",\"value\":1},{\"op\":\"style\",\"range\":\"A1\",\"fill\":\"red\"}]");
+
+        var (exit, _, err) = Run("apply", ods, ops, "--in-place");
+        Assert.Equal(1, exit);
+        Assert.Contains("op 2 (style)", err, StringComparison.Ordinal);
+        Assert.Equal(string.Empty, Run("get", ods, "A1").Out.Trim()); // op 1 was not written either
+    }
+
+    [Fact]
+    public void Apply_and_sheet_verbs_refuse_to_overwrite_without_being_told_to()
+    {
+        string ods = Path2("book.ods");
+        string ops = Path2("ops.json");
+        Run("new", ods);
+        File.WriteAllText(ops, "[]");
+        Assert.Contains("--in-place", Run("apply", ods, ops).Err, StringComparison.Ordinal);
+        Assert.Contains("--in-place", Run("add-sheet", ods, "Two").Err, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -308,8 +406,8 @@ public sealed class CliTests : IDisposable
 
     [Theory]
     [InlineData("get", "/no/such/file.ods", "A1")]                 // missing file (IOException)
-    [InlineData("add-sheet", null, "Sheet1")]                       // duplicate sheet (InvalidOperationException)
-    [InlineData("rename-sheet", null, "Sheet1", "bad/name")]        // invalid name (ArgumentException)
+    [InlineData("add-sheet", null, "Sheet1", "--in-place")]                // duplicate sheet (InvalidOperationException)
+    [InlineData("rename-sheet", null, "Sheet1", "bad/name", "--in-place")] // invalid name (ArgumentException)
     public void User_errors_report_cleanly_and_exit_nonzero(params string?[] template)
     {
         // For cases that need a real workbook, "null" in the template is replaced by a fresh file.
@@ -469,7 +567,7 @@ public sealed class CliTests : IDisposable
     public void Clean_up_can_be_narrowed_to_one_sheet()
     {
         string ods = MessyBook();
-        Run("add-sheet", ods, "Other");
+        Run("add-sheet", ods, "Other", "--in-place");
         Run("set", ods, "Other.A1", "Label", "--in-place");
         Run("set", ods, "Other.A2", "7", "--in-place");
 

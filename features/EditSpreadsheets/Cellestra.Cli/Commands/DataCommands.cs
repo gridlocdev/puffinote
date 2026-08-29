@@ -43,7 +43,7 @@ internal static class DataCommands
         return command;
     }
 
-    private static List<SortLevel> ParseSortLevels(string spec)
+    internal static List<SortLevel> ParseSortLevels(string spec)
     {
         var levels = new List<SortLevel>();
         foreach (var token in spec.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
@@ -240,7 +240,7 @@ internal static class DataCommands
         return command;
     }
 
-    private static string NextTableName(Worksheet sheet)
+    internal static string NextTableName(Worksheet sheet)
     {
         var taken = new HashSet<string>(sheet.Tables.Select(t => t.Name), StringComparer.OrdinalIgnoreCase);
         for (int i = 1; ; i++)
@@ -563,7 +563,7 @@ internal static class DataCommands
     }
 
     /// <summary>A column reference — a letter (A, AB) or a 1-based number — as a 0-based index.</summary>
-    private static int ParseColumn(string token)
+    internal static int ParseColumn(string token)
     {
         token = token.Trim();
         if (int.TryParse(token, NumberStyles.Integer, CultureInfo.InvariantCulture, out int oneBased))
@@ -585,7 +585,7 @@ internal static class DataCommands
     }
 
     /// <summary>A 1-based row number as a 0-based index.</summary>
-    private static int ParseRow(string token)
+    internal static int ParseRow(string token)
     {
         if (!int.TryParse(token.Trim(), NumberStyles.Integer, CultureInfo.InvariantCulture, out int oneBased) || oneBased < 1)
         {
@@ -595,7 +595,7 @@ internal static class DataCommands
         return oneBased - 1;
     }
 
-    private static (int First, int Last) ParseRowSpan(string token)
+    internal static (int First, int Last) ParseRowSpan(string token)
     {
         var (a, b) = SplitSpan(token);
         int first = ParseRow(a);
@@ -603,7 +603,7 @@ internal static class DataCommands
         return Order(first, last);
     }
 
-    private static (int First, int Last) ParseColumnSpan(string token)
+    internal static (int First, int Last) ParseColumnSpan(string token)
     {
         var (a, b) = SplitSpan(token);
         int first = ParseColumn(a);
