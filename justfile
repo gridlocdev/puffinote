@@ -554,6 +554,16 @@ uninstall-cellestra-cli:
     rm -f "{{ BINDIR }}/cellestra"
     @echo "removed {{ BINDIR }}/cellestra"
 
+# Install the cellestra agent skill into ~/.claude/skills/cellestra/ (the copy embedded in the CLI)
+[group('cellestra')]
+install-cellestra-skill: install-cellestra-cli
+    "{{ BINDIR }}/cellestra" skill --install
+
+# Remove the installed cellestra agent skill (the inverse of install-cellestra-skill)
+[group('cellestra')]
+uninstall-cellestra-skill:
+    rm -rf "$HOME/.claude/skills/cellestra"
+
 # Remove Cellestra.app from APPS_DIR (the inverse of install-cellestra-app; macOS only)
 [group('cellestra')]
 uninstall-cellestra-app:

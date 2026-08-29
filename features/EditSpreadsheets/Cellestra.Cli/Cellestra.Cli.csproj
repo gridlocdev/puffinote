@@ -16,6 +16,15 @@
     <PackageReference Include="System.CommandLine" />
   </ItemGroup>
 
+  <!--
+    The agent skill ships inside the binary (`cellestra skill [-install]`), so an installed
+    cellestra can hand its own instructions to any agent host, anywhere. The repo copy under
+    .claude/skills/ is the source of truth — it's what agents working in this repo load directly.
+  -->
+  <ItemGroup>
+    <EmbeddedResource Include="..\..\..\.claude\skills\cellestra\SKILL.md" LogicalName="SKILL.md" />
+  </ItemGroup>
+
   <ItemGroup>
     <ProjectReference Include="..\Cellestra.Core\Cellestra.Core.csproj" />
     <ProjectReference Include="..\..\..\shared\Puffinote.Components.Core\Puffinote.Components.Core.csproj" />

@@ -410,6 +410,23 @@ public sealed class CliTests : IDisposable
     }
 
     [Fact]
+    public void Skill_prints_the_embedded_skill_and_installs_it_into_a_skills_directory()
+    {
+        var (exit, output, _) = Run("skill");
+        Assert.Equal(0, exit);
+        Assert.StartsWith("---\nname: cellestra\n", output, StringComparison.Ordinal);
+        Assert.Contains("cellestra apply", output, StringComparison.Ordinal);
+        Assert.DoesNotContain("AGENTS.md", output, StringComparison.Ordinal); // portable: no repo internals
+
+        string skills = Path2("skills");
+        (exit, _, var err) = Run("skill", "--install", "--dir", skills);
+        Assert.Equal(0, exit);
+        string installed = System.IO.Path.Combine(skills, "cellestra", "SKILL.md");
+        Assert.Contains(installed, err, StringComparison.Ordinal);
+        Assert.Equal(output, File.ReadAllText(installed));
+    }
+
+    [Fact]
     public void Schema_prints_a_contract_and_rejects_an_unknown_one()
     {
         var (exit, output, _) = Run("schema", "apply");

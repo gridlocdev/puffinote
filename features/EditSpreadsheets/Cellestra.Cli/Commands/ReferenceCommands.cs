@@ -85,6 +85,51 @@ internal static class ReferenceCommands
         return command;
     }
 
+    /// <summary>
+    /// The agent skill for this tool — a SKILL.md that Claude Code (and hosts with the same
+    /// convention) load from <c>~/.claude/skills/&lt;name&gt;/SKILL.md</c>. It is embedded in the
+    /// binary so an installed <c>cellestra</c> carries instructions that match its own version, and
+    /// <c>--install</c> puts them where the user's agents look, on any machine, in any directory.
+    /// </summary>
+    public static Command Skill()
+    {
+        var install = new Option<bool>("--install") { Description = "Write the skill into the skills directory instead of printing it" };
+        var directory = new Option<string?>("--dir")
+        {
+            Description = "Skills directory to install into (default: ~/.claude/skills; the skill goes in its own `cellestra/` folder)",
+        };
+        var command = new Command("skill", "Print the agent skill for this tool, or --install it into ~/.claude/skills/cellestra/") { install, directory };
+
+        command.SetAction(parse =>
+        {
+            string text = SkillText();
+            if (!parse.GetValue(install))
+            {
+                Console.Out.Write(text);
+                return 0;
+            }
+
+            string root = parse.GetValue(directory)
+                ?? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".claude", "skills");
+            string folder = Path.Combine(root, "cellestra");
+            Directory.CreateDirectory(folder);
+            string path = Path.Combine(folder, "SKILL.md");
+            Workspace.SaveText(text, path);
+            Console.Error.WriteLine($"installed {path}");
+            return 0;
+        });
+
+        return command;
+    }
+
+    private static string SkillText()
+    {
+        using var stream = typeof(ReferenceCommands).Assembly.GetManifestResourceStream("SKILL.md")
+            ?? throw new InvalidOperationException("SKILL.md is not embedded in this build.");
+        using var reader = new StreamReader(stream, Encoding.UTF8);
+        return reader.ReadToEnd();
+    }
+
     // ---- Content ----------------------------------------------------------
 
     private static readonly Dictionary<string, string> ExitCodes = new()

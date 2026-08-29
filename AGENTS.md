@@ -102,6 +102,7 @@ just publish                              # CLI + desktop, self-contained Releas
 just install                              # every app, both halves: CLI onto PATH + .app into /Applications
                                           #   (CLI alone off macOS; override: just PREFIX=/usr/local install)
 just install-cli                          # only the CLIs — what a Linux container can install
+just install-cellestra-skill              # + the cellestra agent skill into ~/.claude/skills (inverse: uninstall-cellestra-skill)
 just publish-typage-app                   # artifacts/typage/<rid>/Typage.app  (also: just install-app)
 ```
 
