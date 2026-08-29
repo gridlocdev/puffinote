@@ -28,10 +28,11 @@ internal static class DataCommands
         var noHeader = new Option<bool>("--no-header") { Description = "Treat the first row as data, not a header" };
         var inPlace = Options.InPlace();
         var output = Options.Output();
+        var json = Options.Json();
         var locale = Options.Locale();
-        var command = new Command("sort", "Sort a range by one or more columns") { file, range, by, noHeader, inPlace, output, locale };
+        var command = new Command("sort", "Sort a range by one or more columns") { file, range, by, noHeader, inPlace, output, locale, json };
 
-        command.SetAction(parse => RunEdit(parse, file, inPlace, output, locale, (wb, culture) =>
+        command.SetAction(parse => RunEdit(parse, file, inPlace, output, locale, json, (wb, culture) =>
         {
             var (sheet, cellRange) = Cells.ResolveRange(wb, parse.GetValue(range)!);
             var levels = ParseSortLevels(parse.GetValue(by)!);
@@ -70,24 +71,25 @@ internal static class DataCommands
         var noHeader = new Option<bool>("--no-header") { Description = "Treat the first row as data, not a header" };
         var inPlace = Options.InPlace();
         var output = Options.Output();
-        var command = new Command("remove-duplicates", "Drop repeated rows from a range") { file, range, columns, noHeader, inPlace, output };
+        var json = Options.Json();
+        var command = new Command("remove-duplicates", "Drop repeated rows from a range") { file, range, columns, noHeader, inPlace, output, json };
 
         command.SetAction(parse =>
         {
             string path = parse.GetValue(file)!;
             string target = Options.EditTarget(path, parse.GetValue(inPlace), parse.GetValue(output));
-            var loaded = Workspace.Load(path, WorkbookFormat.Ods, null);
-            var (sheet, cellRange) = Cells.ResolveRange(loaded.Workbook, parse.GetValue(range)!);
-            var keyColumns = (parse.GetValue(columns) ?? string.Empty)
-                .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
-                .Select(ParseColumn).ToList();
+            return EditSession.Run(path, target, null, parse.GetValue(json), session =>
+            {
+                var (sheet, cellRange) = Cells.ResolveRange(session.Workbook, parse.GetValue(range)!);
+                var keyColumns = (parse.GetValue(columns) ?? string.Empty)
+                    .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+                    .Select(ParseColumn).ToList();
 
-            var edit = DataEditCommands.RemoveDuplicates(sheet.Name, cellRange, keyColumns, hasHeader: !parse.GetValue(noHeader), out var removed);
-            edit.Apply(loaded.Workbook);
-            Workspace.Recalculate(loaded.Workbook);
-            Workspace.SaveOds(loaded.Workbook, loaded.Package, target);
-            Console.Error.WriteLine($"Removed {removed()} duplicate row(s).");
-            return 0;
+                var edit = DataEditCommands.RemoveDuplicates(sheet.Name, cellRange, keyColumns, hasHeader: !parse.GetValue(noHeader), out var removed);
+                session.Apply(edit);
+                session.Field("removed", removed());
+                session.Note($"Removed {removed()} duplicate row(s).");
+            });
         });
 
         return command;
@@ -109,10 +111,11 @@ internal static class DataCommands
         var dryRun = new Option<bool>("--dry-run") { Description = "Report what would change, and write nothing" };
         var inPlace = Options.InPlace();
         var output = Options.Output();
+        var json = Options.Json();
         var locale = Options.Locale();
         var command = new Command("clean-up", "Format a workbook from its contents: header, number formats, alignment, and column widths")
         {
-            file, sheet, dryRun, inPlace, output, locale,
+            file, sheet, dryRun, inPlace, output, locale, json,
         };
 
         command.SetAction(parse =>
@@ -131,31 +134,47 @@ internal static class DataCommands
             var plan = name is null
                 ? Cellestra.Core.Data.CleanUp.ForWorkbook(loaded.Workbook, effective)
                 : Cellestra.Core.Data.CleanUp.ForSheet(loaded.Workbook, Cells.PickSheet(loaded.Workbook, name), effective);
+            bool asJson = parse.GetValue(json);
+            var notes = plan.Notes.Select(n => n.ToString()).ToList();
+
+            if (preview)
+            {
+                if (asJson)
+                {
+                    Report.Write(new { ok = true, file = path, dryRun = true, notes });
+                    return 0;
+                }
+
+                Console.Out.WriteLine(plan.IsEmpty ? "Nothing to clean up." : string.Join('\n', notes));
+                return 0;
+            }
 
             if (plan.IsEmpty)
             {
+                if (asJson)
+                {
+                    Report.Write(new { ok = true, file = path, notes, changed = Array.Empty<CellReport>(), errors = Array.Empty<CellReport>() });
+                    return 0;
+                }
+
                 Console.Out.WriteLine("Nothing to clean up.");
                 return 0;
             }
 
-            foreach (var note in plan.Notes)
+            if (!asJson)
             {
-                Console.Out.WriteLine(note.ToString());
+                Console.Out.WriteLine(string.Join('\n', notes));
             }
 
-            if (preview)
+            return EditSession.Run(loaded, target!, culture, asJson, session =>
             {
-                return 0;
-            }
+                foreach (var edit in plan.Edits)
+                {
+                    session.Apply(edit);
+                }
 
-            foreach (var edit in plan.Edits)
-            {
-                edit.Apply(loaded.Workbook);
-            }
-
-            Workspace.Recalculate(loaded.Workbook);
-            Workspace.SaveOds(loaded.Workbook, loaded.Package, target!);
-            return 0;
+                session.Field("notes", notes);
+            });
         });
 
         return command;
@@ -174,9 +193,10 @@ internal static class DataCommands
         };
         var inPlace = Options.InPlace();
         var output = Options.Output();
-        var command = new Command("split", "Split a delimited column into multiple columns (text to columns)") { file, range, delimiter, inPlace, output };
+        var json = Options.Json();
+        var command = new Command("split", "Split a delimited column into multiple columns (text to columns)") { file, range, delimiter, inPlace, output, json };
 
-        command.SetAction(parse => RunEdit(parse, file, inPlace, output, locale: null, (wb, _) =>
+        command.SetAction(parse => RunEdit(parse, file, inPlace, output, locale: null, json, (wb, _) =>
         {
             var (sheet, cellRange) = Cells.ResolveRange(wb, parse.GetValue(range)!);
             string d = parse.GetValue(delimiter) ?? ",";
@@ -201,9 +221,10 @@ internal static class DataCommands
         var noHeader = new Option<bool>("--no-header") { Description = "The range has no header row" };
         var inPlace = Options.InPlace();
         var output = Options.Output();
-        var command = new Command("table", "Turn a range into a table (database range)") { file, range, name, noHeader, inPlace, output };
+        var json = Options.Json();
+        var command = new Command("table", "Turn a range into a table (database range)") { file, range, name, noHeader, inPlace, output, json };
 
-        command.SetAction(parse => RunEdit(parse, file, inPlace, output, locale: null, (wb, _) =>
+        command.SetAction(parse => RunEdit(parse, file, inPlace, output, locale: null, json, (wb, _) =>
         {
             var (sheet, cellRange) = Cells.ResolveRange(wb, parse.GetValue(range)!);
             if (sheet.Tables.Any(t => t.Range.Intersects(cellRange)))
@@ -242,9 +263,10 @@ internal static class DataCommands
         var source = new Option<string?>("--source") { Description = "A cell range whose values are the allowed list (e.g. Lists.A1:A8)" };
         var inPlace = Options.InPlace();
         var output = Options.Output();
-        var command = new Command("data-validation", "Restrict a range to a list of allowed values") { file, range, list, source, inPlace, output };
+        var json = Options.Json();
+        var command = new Command("data-validation", "Restrict a range to a list of allowed values") { file, range, list, source, inPlace, output, json };
 
-        command.SetAction(parse => RunEdit(parse, file, inPlace, output, locale: null, (wb, _) =>
+        command.SetAction(parse => RunEdit(parse, file, inPlace, output, locale: null, json, (wb, _) =>
         {
             var (sheet, cellRange) = Cells.ResolveRange(wb, parse.GetValue(range)!);
             string? listText = parse.GetValue(list);
@@ -292,10 +314,17 @@ internal static class DataCommands
     private static Command NameList()
     {
         var file = Options.File();
-        var command = new Command("list", "List the workbook's named ranges") { file };
+        var json = Options.Json();
+        var command = new Command("list", "List the workbook's named ranges") { file, json };
         command.SetAction(parse =>
         {
             var loaded = Workspace.Load(parse.GetValue(file)!, WorkbookFormat.Ods, null);
+            if (parse.GetValue(json))
+            {
+                Report.Write(loaded.Workbook.NamedRanges.Select(Report.NamedRange).ToList());
+                return 0;
+            }
+
             foreach (var named in loaded.Workbook.NamedRanges)
             {
                 string scope = named.IsGlobal ? "workbook" : named.Scope!;
@@ -314,9 +343,10 @@ internal static class DataCommands
         var range = new Argument<string>("range") { Description = "Range it points to, e.g. Sheet1.B1:B10" };
         var inPlace = Options.InPlace();
         var output = Options.Output();
-        var command = new Command("add", "Define a workbook-scoped named range") { file, nameArg, range, inPlace, output };
+        var json = Options.Json();
+        var command = new Command("add", "Define a workbook-scoped named range") { file, nameArg, range, inPlace, output, json };
 
-        command.SetAction(parse => RunEdit(parse, file, inPlace, output, locale: null, (wb, _) =>
+        command.SetAction(parse => RunEdit(parse, file, inPlace, output, locale: null, json, (wb, _) =>
         {
             var (sheet, cellRange) = Cells.ResolveRange(wb, parse.GetValue(range)!);
             // Store fully sheet-qualified so the name resolves regardless of the active sheet.
@@ -334,9 +364,10 @@ internal static class DataCommands
         var nameArg = new Argument<string>("name") { Description = "Name to remove" };
         var inPlace = Options.InPlace();
         var output = Options.Output();
-        var command = new Command("remove", "Remove a named range") { file, nameArg, inPlace, output };
+        var json = Options.Json();
+        var command = new Command("remove", "Remove a named range") { file, nameArg, inPlace, output, json };
 
-        command.SetAction(parse => RunEdit(parse, file, inPlace, output, locale: null, (wb, _) =>
+        command.SetAction(parse => RunEdit(parse, file, inPlace, output, locale: null, json, (wb, _) =>
         {
             if (!wb.RemoveNamedRange(parse.GetValue(nameArg)!))
             {
@@ -364,9 +395,10 @@ internal static class DataCommands
         var remove = new Option<bool>("--remove") { Description = "Remove the cell's hyperlink" };
         var inPlace = Options.InPlace();
         var output = Options.Output();
-        var command = new Command("hyperlink", "Add, change, or remove a cell's hyperlink") { file, cell, url, tooltip, remove, inPlace, output };
+        var json = Options.Json();
+        var command = new Command("hyperlink", "Add, change, or remove a cell's hyperlink") { file, cell, url, tooltip, remove, inPlace, output, json };
 
-        command.SetAction(parse => RunEdit(parse, file, inPlace, output, locale: null, (wb, _) =>
+        command.SetAction(parse => RunEdit(parse, file, inPlace, output, locale: null, json, (wb, _) =>
         {
             var (sheet, address) = Cells.ResolveCell(wb, parse.GetValue(cell)!);
             Core.Model.Hyperlink? link = null;
@@ -413,9 +445,10 @@ internal static class DataCommands
         var sheet = Options.Sheet();
         var inPlace = Options.InPlace();
         var output = Options.Output();
-        var command = new Command(verb, description) { file, at, count, sheet, inPlace, output };
+        var json = Options.Json();
+        var command = new Command(verb, description) { file, at, count, sheet, inPlace, output, json };
 
-        command.SetAction(parse => RunEdit(parse, file, inPlace, output, locale: null, (wb, _) =>
+        command.SetAction(parse => RunEdit(parse, file, inPlace, output, locale: null, json, (wb, _) =>
         {
             var worksheet = Cells.PickSheet(wb, parse.GetValue(sheet));
             int index = isRow ? ParseRow(parse.GetValue(at)!) : ParseColumn(parse.GetValue(at)!);
@@ -451,9 +484,10 @@ internal static class DataCommands
         var sheet = Options.Sheet();
         var inPlace = Options.InPlace();
         var output = Options.Output();
-        var command = new Command(verb, description) { file, lines, sheet, inPlace, output };
+        var json = Options.Json();
+        var command = new Command(verb, description) { file, lines, sheet, inPlace, output, json };
 
-        command.SetAction(parse => RunEdit(parse, file, inPlace, output, locale: null, (wb, _) =>
+        command.SetAction(parse => RunEdit(parse, file, inPlace, output, locale: null, json, (wb, _) =>
         {
             var worksheet = Cells.PickSheet(wb, parse.GetValue(sheet));
             var (first, last) = isRow ? ParseRowSpan(parse.GetValue(lines)!) : ParseColumnSpan(parse.GetValue(lines)!);
@@ -474,9 +508,10 @@ internal static class DataCommands
         var range = new Argument<string>("range") { Description = "Range to merge into one cell, e.g. Sheet1.A1:B2" };
         var inPlace = Options.InPlace();
         var output = Options.Output();
-        var command = new Command("merge", "Merge a range into a single cell") { file, range, inPlace, output };
+        var json = Options.Json();
+        var command = new Command("merge", "Merge a range into a single cell") { file, range, inPlace, output, json };
 
-        command.SetAction(parse => RunEdit(parse, file, inPlace, output, locale: null, (wb, _) =>
+        command.SetAction(parse => RunEdit(parse, file, inPlace, output, locale: null, json, (wb, _) =>
         {
             var (sheet, cellRange) = Cells.ResolveRange(wb, parse.GetValue(range)!);
             return [EditCommands.MergeCells(sheet.Name, cellRange)];
@@ -491,9 +526,10 @@ internal static class DataCommands
         var cell = new Argument<string>("cell") { Description = "Any cell of the merged region, e.g. Sheet1.A1" };
         var inPlace = Options.InPlace();
         var output = Options.Output();
-        var command = new Command("unmerge", "Split a merged region back into individual cells") { file, cell, inPlace, output };
+        var json = Options.Json();
+        var command = new Command("unmerge", "Split a merged region back into individual cells") { file, cell, inPlace, output, json };
 
-        command.SetAction(parse => RunEdit(parse, file, inPlace, output, locale: null, (wb, _) =>
+        command.SetAction(parse => RunEdit(parse, file, inPlace, output, locale: null, json, (wb, _) =>
         {
             var (sheet, address) = Cells.ResolveCell(wb, parse.GetValue(cell)!);
             return [EditCommands.UnmergeCells(sheet.Name, address.Row, address.Column)];
@@ -511,22 +547,19 @@ internal static class DataCommands
         Option<bool> inPlace,
         Option<string?> output,
         Option<string?>? locale,
+        Option<bool> json,
         Func<Workbook, CultureInfo, IEnumerable<IEditCommand>> build)
     {
         string path = parse.GetValue(file)!;
         string target = Options.EditTarget(path, parse.GetValue(inPlace), parse.GetValue(output));
         var culture = locale is null ? null : Locale.Resolve(parse.GetValue(locale));
-        var loaded = Workspace.Load(path, WorkbookFormat.Ods, culture);
-        var effective = culture ?? loaded.Workbook.Settings.EffectiveLocale;
-
-        foreach (var edit in build(loaded.Workbook, effective))
+        return EditSession.Run(path, target, culture, parse.GetValue(json), session =>
         {
-            edit.Apply(loaded.Workbook);
-        }
-
-        Workspace.Recalculate(loaded.Workbook);
-        Workspace.SaveOds(loaded.Workbook, loaded.Package, target);
-        return 0;
+            foreach (var edit in build(session.Workbook, session.Culture))
+            {
+                session.Apply(edit);
+            }
+        });
     }
 
     /// <summary>A column reference — a letter (A, AB) or a 1-based number — as a 0-based index.</summary>

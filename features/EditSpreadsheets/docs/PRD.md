@@ -472,6 +472,7 @@ A second face on the same brain (`ARCHITECTURE.md` §1): the `cellestra` binary 
 
 **Conventions (these matter more than any single command):**
 - **Pipe-friendly:** `--format table|csv|tsv|json`; read commands default to stdout; `-` means stdin/stdout.
+- **`--json` on every command, one shape:** a read prints its result as JSON; an edit prints a report — `ok`, `file`, the `changed` cells with their new value/display/formula/error, `recalculated`, every `errors` cell left in the workbook, and `circular` — so a script or agent learns about the `#NAME?` it just wrote in the same reply. A cell is always spelled the same way (`cell`, typed `value`, `display`, and `formula`/`error`/`format` only when present). A user error under `--json` is `{"ok": false, "error": "…"}` on stdout as well as the one-line stderr message.
 - **Edits are explicit and safe:** nothing overwrites without `--in-place` or `-o`; all writes are **atomic** (temp file + rename, matching the app's save rule §8.7).
 - **Edits preserve unmodeled content:** a `set`/`recalc` on a file with charts/pivots keeps them **verbatim** (§8.1) — covered by a test.
 - **Exit codes are first-class:** `validate` and `diff` return non-zero so they slot into CI and pre-commit hooks.

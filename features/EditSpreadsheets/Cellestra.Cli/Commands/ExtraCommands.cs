@@ -18,7 +18,8 @@ internal static class ExtraCommands
     {
         var file = Options.File("file", "Workbook to create (.ods)");
         var sheets = new Option<string?>("--sheets") { Description = "Comma-separated sheet names (default: Sheet1)" };
-        var command = new Command("new", "Create a new workbook") { file, sheets };
+        var json = Options.Json();
+        var command = new Command("new", "Create a new workbook") { file, sheets, json };
 
         command.SetAction(parse =>
         {
@@ -41,8 +42,8 @@ internal static class ExtraCommands
                 }
             }
 
-            Workspace.SaveOds(workbook, null, path);
-            return 0;
+            return EditSession.Run(new LoadedWorkbook(workbook, null), path, null, parse.GetValue(json), session =>
+                session.Field("sheets", workbook.Worksheets.Select(w => w.Name).ToList()));
         });
 
         return command;
@@ -55,7 +56,8 @@ internal static class ExtraCommands
         var sheet = new Option<string>("--sheet", "-s") { Description = "Sheet to fill (created/replaced)", Required = true };
         var delimiter = Options.Delimiter();
         var locale = Options.Locale();
-        var command = new Command("import", "Import a CSV into a sheet of an .ods workbook") { csvFile, into, sheet, delimiter, locale };
+        var json = Options.Json();
+        var command = new Command("import", "Import a CSV into a sheet of an .ods workbook") { csvFile, into, sheet, delimiter, locale, json };
 
         command.SetAction(parse =>
         {
@@ -63,27 +65,31 @@ internal static class ExtraCommands
             string sheetName = parse.GetValue(sheet)!;
             var culture = Locale.Resolve(parse.GetValue(locale));
             var csv = Options.Csv(parse.GetValue(delimiter));
-            string text = ReadCsv(parse.GetValue(csvFile)!);
+            string text = ReadText(parse.GetValue(csvFile)!);
 
             var loaded = File.Exists(target)
                 ? Workspace.Load(target, WorkbookFormat.Ods, culture)
                 : new LoadedWorkbook(Workbook.CreateNew(), null);
-            var workbook = loaded.Workbook;
 
-            var worksheet = workbook.FindSheet(sheetName);
-            if (worksheet is null)
+            return EditSession.Run(loaded, target, culture, parse.GetValue(json), session =>
             {
-                worksheet = workbook.AddSheet(sheetName);
-            }
-            else
-            {
-                ClearSheet(worksheet);
-            }
+                var workbook = session.Workbook;
+                var worksheet = workbook.FindSheet(sheetName);
+                if (worksheet is null)
+                {
+                    worksheet = workbook.AddSheet(sheetName);
+                }
+                else
+                {
+                    ClearSheet(worksheet);
+                }
 
-            CsvReader.Fill(workbook, worksheet, text, csv, culture);
-            Workspace.Recalculate(workbook);
-            Workspace.SaveOds(workbook, loaded.Package, target);
-            return 0;
+                CsvReader.Fill(workbook, worksheet, text, csv, culture);
+                var used = worksheet.GetUsedRange();
+                session.Field("sheet", worksheet.Name);
+                session.Field("range", used?.ToString());
+                session.Note($"Imported {worksheet.CellCount} cell(s) into '{worksheet.Name}'.");
+            });
         });
 
         return command;
@@ -115,7 +121,8 @@ internal static class ExtraCommands
         var file = Options.File();
         var range = new Argument<string>("range") { Description = "Range to aggregate, e.g. Sheet1.A1:A100" };
         var locale = Options.Locale();
-        var command = new Command("stats", "Aggregate a range: sum, average, count, min, max") { file, range, locale };
+        var json = Options.Json();
+        var command = new Command("stats", "Aggregate a range: sum, average, count, min, max") { file, range, locale, json };
 
         command.SetAction(parse =>
         {
@@ -148,6 +155,22 @@ internal static class ExtraCommands
                 }
             }
 
+            if (parse.GetValue(json))
+            {
+                Report.Write(new
+                {
+                    sheet = worksheet.Name,
+                    range = cellRange.ToString(),
+                    count,
+                    numeric,
+                    sum,
+                    average = numeric > 0 ? sum / numeric : (double?)null,
+                    min = numeric > 0 ? min : (double?)null,
+                    max = numeric > 0 ? max : (double?)null,
+                });
+                return 0;
+            }
+
             var invariant = CultureInfo.InvariantCulture;
             Console.Out.WriteLine($"count\t{count}");
             Console.Out.WriteLine($"numeric\t{numeric}");
@@ -172,7 +195,8 @@ internal static class ExtraCommands
             DefaultValueFactory = _ => "both"
         };
         var locale = Options.Locale();
-        var command = new Command("find", "Search cells by value or formula") { file, term, regex, into, locale };
+        var json = Options.Json();
+        var command = new Command("find", "Search cells by value or formula") { file, term, regex, into, locale, json };
 
         command.SetAction(parse =>
         {
@@ -202,7 +226,9 @@ internal static class ExtraCommands
                 ? pattern.IsMatch(candidate)
                 : candidate.Contains(termText, StringComparison.OrdinalIgnoreCase);
 
+            bool asJson = parse.GetValue(json);
             int hits = 0;
+            var matches = new List<CellReport>();
             foreach (var worksheet in loaded.Workbook.Worksheets)
             {
                 foreach (var (row, column, cell) in worksheet.EnumerateCells())
@@ -210,13 +236,26 @@ internal static class ExtraCommands
                     bool match =
                         (searchFormulas && cell.IsFormula && Matches("=" + cell.Formula)) ||
                         (searchValues && Matches(Cells.Display(loaded.Workbook, worksheet, row, column, effectiveCulture)));
-                    if (match)
+                    if (!match)
                     {
-                        var address = new CellAddress(column, row, sheet: worksheet.Name);
-                        Console.Out.WriteLine($"{address}\t{Cells.FormulaOrValue(loaded.Workbook, worksheet, row, column, effectiveCulture)}");
-                        hits++;
+                        continue;
                     }
+
+                    hits++;
+                    if (asJson)
+                    {
+                        matches.Add(Report.Cell(loaded.Workbook, worksheet, row, column, effectiveCulture));
+                        continue;
+                    }
+
+                    var address = new CellAddress(column, row, sheet: worksheet.Name);
+                    Console.Out.WriteLine($"{address}\t{Cells.FormulaOrValue(loaded.Workbook, worksheet, row, column, effectiveCulture)}");
                 }
+            }
+
+            if (asJson)
+            {
+                Report.Write(new { term = termText, matches });
             }
 
             return hits > 0 ? 0 : 1;
@@ -234,7 +273,8 @@ internal static class ExtraCommands
             Description = "unified (default)",
             DefaultValueFactory = _ => "unified"
         };
-        var command = new Command("diff", "Compare two workbooks by value/structure (exit 1 if they differ)") { left, right, format };
+        var json = Options.Json();
+        var command = new Command("diff", "Compare two workbooks by value/structure (exit 1 if they differ)") { left, right, format, json };
 
         command.SetAction(parse =>
         {
@@ -243,8 +283,11 @@ internal static class ExtraCommands
             Workspace.Recalculate(a.Workbook);
             Workspace.Recalculate(b.Workbook);
             var culture = CultureInfo.InvariantCulture;
+            bool asJson = parse.GetValue(json);
 
-            int differences = 0;
+            var addedSheets = new List<string>();
+            var removedSheets = new List<string>();
+            var cells = new List<object>();
             var sheetNames = a.Workbook.Worksheets.Select(s => s.Name)
                 .Union(b.Workbook.Worksheets.Select(s => s.Name), StringComparer.OrdinalIgnoreCase)
                 .ToList();
@@ -255,15 +298,23 @@ internal static class ExtraCommands
                 var sheetB = b.Workbook.FindSheet(name);
                 if (sheetA is null)
                 {
-                    Console.Out.WriteLine($"+ sheet {name}");
-                    differences++;
+                    addedSheets.Add(name);
+                    if (!asJson)
+                    {
+                        Console.Out.WriteLine($"+ sheet {name}");
+                    }
+
                     continue;
                 }
 
                 if (sheetB is null)
                 {
-                    Console.Out.WriteLine($"- sheet {name}");
-                    differences++;
+                    removedSheets.Add(name);
+                    if (!asJson)
+                    {
+                        Console.Out.WriteLine($"- sheet {name}");
+                    }
+
                     continue;
                 }
 
@@ -272,13 +323,24 @@ internal static class ExtraCommands
                 {
                     string left1 = Cells.FormulaOrValue(a.Workbook, sheetA, row, column, culture);
                     string right1 = Cells.FormulaOrValue(b.Workbook, sheetB, row, column, culture);
-                    if (!string.Equals(left1, right1, StringComparison.Ordinal))
+                    if (string.Equals(left1, right1, StringComparison.Ordinal))
                     {
-                        var address = new CellAddress(column, row, sheet: name);
+                        continue;
+                    }
+
+                    var address = new CellAddress(column, row, sheet: name);
+                    cells.Add(new { cell = address.ToString(), before = left1, after = right1 });
+                    if (!asJson)
+                    {
                         Console.Out.WriteLine($"{address}: \"{left1}\" -> \"{right1}\"");
-                        differences++;
                     }
                 }
+            }
+
+            int differences = addedSheets.Count + removedSheets.Count + cells.Count;
+            if (asJson)
+            {
+                Report.Write(new { same = differences == 0, differences, addedSheets, removedSheets, cells });
             }
 
             return differences > 0 ? 1 : 0;
@@ -294,14 +356,22 @@ internal static class ExtraCommands
             Description = "A function to describe (omit to list all)",
             Arity = ArgumentArity.ZeroOrOne
         };
-        var command = new Command("functions", "List supported functions, or describe one") { name };
+        var json = Options.Json();
+        var command = new Command("functions", "List supported functions, or describe one") { name, json };
 
         command.SetAction(parse =>
         {
             var registry = FunctionRegistry.CreateDefault();
             string? wanted = parse.GetValue(name);
+            bool asJson = parse.GetValue(json);
             if (string.IsNullOrEmpty(wanted))
             {
+                if (asJson)
+                {
+                    Report.Write(registry.AllMetadata.Select(FunctionJson).ToList());
+                    return 0;
+                }
+
                 foreach (var meta in registry.AllMetadata)
                 {
                     Console.Out.WriteLine($"{meta.Signature,-40}  {meta.Category}");
@@ -316,6 +386,12 @@ internal static class ExtraCommands
             }
 
             var m = function.Metadata;
+            if (asJson)
+            {
+                Report.Write(FunctionJson(m));
+                return 0;
+            }
+
             Console.Out.WriteLine(m.Signature);
             Console.Out.WriteLine($"Category: {m.Category}");
             Console.Out.WriteLine($"Returns:  {m.ReturnKind}");
@@ -341,8 +417,13 @@ internal static class ExtraCommands
     {
         var file = Options.File();
         var name = new Argument<string>("name") { Description = "New sheet name" };
-        var command = new Command("add-sheet", "Add a worksheet") { file, name };
-        command.SetAction(parse => MutateInPlace(parse.GetValue(file)!, wb => wb.AddSheet(parse.GetValue(name)!)));
+        var json = Options.Json();
+        var command = new Command("add-sheet", "Add a worksheet") { file, name, json };
+        command.SetAction(parse => MutateInPlace(parse.GetValue(file)!, parse.GetValue(json), session =>
+        {
+            var sheet = session.Workbook.AddSheet(parse.GetValue(name)!);
+            session.Field("sheet", sheet.Name);
+        }));
         return command;
     }
 
@@ -351,9 +432,13 @@ internal static class ExtraCommands
         var file = Options.File();
         var oldName = new Argument<string>("old") { Description = "Existing sheet name" };
         var newName = new Argument<string>("new") { Description = "New sheet name" };
-        var command = new Command("rename-sheet", "Rename a worksheet") { file, oldName, newName };
-        command.SetAction(parse => MutateInPlace(parse.GetValue(file)!, wb =>
-            wb.RenameSheet(Cells.PickSheet(wb, parse.GetValue(oldName)), parse.GetValue(newName)!)));
+        var json = Options.Json();
+        var command = new Command("rename-sheet", "Rename a worksheet") { file, oldName, newName, json };
+        command.SetAction(parse => MutateInPlace(parse.GetValue(file)!, parse.GetValue(json), session =>
+        {
+            session.Workbook.RenameSheet(Cells.PickSheet(session.Workbook, parse.GetValue(oldName)), parse.GetValue(newName)!);
+            session.Field("sheet", parse.GetValue(newName));
+        }));
         return command;
     }
 
@@ -361,11 +446,13 @@ internal static class ExtraCommands
     {
         var file = Options.File();
         var name = new Argument<string>("name") { Description = "Sheet to delete" };
-        var command = new Command("delete-sheet", "Delete a worksheet (dependent formulas become #REF!)") { file, name };
-        command.SetAction(parse => MutateInPlace(parse.GetValue(file)!, wb =>
+        var json = Options.Json();
+        var command = new Command("delete-sheet", "Delete a worksheet (dependent formulas become #REF!)") { file, name, json };
+        command.SetAction(parse => MutateInPlace(parse.GetValue(file)!, parse.GetValue(json), session =>
         {
-            var sheet = Cells.PickSheet(wb, parse.GetValue(name));
-            new DeleteSheetCommand(sheet.Name).Apply(wb);
+            var sheet = Cells.PickSheet(session.Workbook, parse.GetValue(name));
+            session.Apply(new DeleteSheetCommand(sheet.Name));
+            session.Field("sheet", sheet.Name);
         }));
         return command;
     }
@@ -375,42 +462,40 @@ internal static class ExtraCommands
         var file = Options.File();
         var edits = Options.File("edits", "JSON file of edits (or - for stdin)");
         var locale = Options.Locale();
-        var command = new Command("apply", "Apply a batch of cell edits from JSON") { file, edits, locale };
+        var json = Options.Json();
+        var command = new Command("apply", "Apply a batch of cell edits from JSON") { file, edits, locale, json };
 
         command.SetAction(parse =>
         {
-            var culture = Locale.Resolve(parse.GetValue(locale));
-            var loaded = Workspace.Load(parse.GetValue(file)!, WorkbookFormat.Ods, culture);
-            var effectiveCulture = culture ?? loaded.Workbook.Settings.EffectiveLocale;
-
-            string json = ReadCsv(parse.GetValue(edits)!); // reads file or stdin text
+            string path = parse.GetValue(file)!;
+            string text = ReadText(parse.GetValue(edits)!);
             EditEntry[] entries;
             try
             {
-                entries = JsonSerializer.Deserialize<EditEntry[]>(json, JsonOptions) ?? [];
+                entries = JsonSerializer.Deserialize<EditEntry[]>(text, JsonOptions) ?? [];
             }
             catch (JsonException ex)
             {
                 throw new CliException($"Invalid edits JSON: {ex.Message}");
             }
 
-            foreach (var entry in entries)
+            return EditSession.Run(path, path, Locale.Resolve(parse.GetValue(locale)), parse.GetValue(json), session =>
             {
-                if (string.IsNullOrWhiteSpace(entry.Cell))
+                foreach (var entry in entries)
                 {
-                    throw new CliException("Each edit needs a \"cell\".");
+                    if (string.IsNullOrWhiteSpace(entry.Cell))
+                    {
+                        throw new CliException("Each edit needs a \"cell\".");
+                    }
+
+                    var (worksheet, address) = Cells.ResolveCell(session.Workbook, entry.Cell);
+                    string input = entry.Formula ?? entry.Value ?? string.Empty;
+                    session.Apply(EditCommands.SetInput(session.Workbook, worksheet.Name, address.Row, address.Column, input, session.Culture));
                 }
 
-                var (worksheet, address) = Cells.ResolveCell(loaded.Workbook, entry.Cell);
-                string input = entry.Formula ?? entry.Value ?? string.Empty;
-                EditCommands.SetInput(loaded.Workbook, worksheet.Name, address.Row, address.Column, input, effectiveCulture)
-                    .Apply(loaded.Workbook);
-            }
-
-            Workspace.Recalculate(loaded.Workbook);
-            Workspace.SaveOds(loaded.Workbook, loaded.Package, parse.GetValue(file)!);
-            Console.Error.WriteLine($"Applied {entries.Length} edit(s).");
-            return 0;
+                session.Field("applied", entries.Length);
+                session.Note($"Applied {entries.Length} edit(s).");
+            });
         });
 
         return command;
@@ -464,14 +549,26 @@ internal static class ExtraCommands
 
     private sealed record EditEntry(string Cell, string? Value, string? Formula);
 
-    private static int MutateInPlace(string path, Action<Workbook> mutate)
+    private static int MutateInPlace(string path, bool json, Action<EditSession> mutate) =>
+        EditSession.Run(path, path, null, json, mutate);
+
+    private static object FunctionJson(FunctionMetadata m) => new
     {
-        var loaded = Workspace.Load(path, WorkbookFormat.Ods, null);
-        mutate(loaded.Workbook);
-        Workspace.Recalculate(loaded.Workbook);
-        Workspace.SaveOds(loaded.Workbook, loaded.Package, path);
-        return 0;
-    }
+        name = m.Name,
+        signature = m.Signature,
+        category = m.Category.ToString(),
+        returns = m.ReturnKind.ToString(),
+        summary = m.Summary,
+        arguments = m.Arguments.Select(a => new
+        {
+            name = a.Name,
+            kind = a.Kind.ToString(),
+            required = a.Required,
+            repeatable = a.Repeatable,
+            description = a.Description,
+        }).ToList(),
+        example = m.Example,
+    };
 
     private static void ClearSheet(Worksheet sheet)
     {
@@ -504,5 +601,5 @@ internal static class ExtraCommands
         }
     }
 
-    private static string ReadCsv(string path) => path == "-" ? Console.In.ReadToEnd() : File.ReadAllText(path);
+    private static string ReadText(string path) => path == "-" ? Console.In.ReadToEnd() : File.ReadAllText(path);
 }

@@ -71,10 +71,11 @@ internal static class BaselineCommands
         var formula = Options.Formula();
         var locale = Options.Locale();
         var from = Options.From();
+        var json = Options.Json();
 
         var command = new Command("cat", "Print a sheet or range to the terminal")
         {
-            file, sheet, range, format, formula, locale, from,
+            file, sheet, range, format, formula, locale, from, json,
         };
 
         command.SetAction(parse =>
@@ -98,11 +99,38 @@ internal static class BaselineCommands
             }
 
             var grid = Cells.BuildGrid(loaded.Workbook, worksheet, cellRange, effectiveCulture, parse.GetValue(formula));
-            Console.Out.Write(Output.Render(Output.ParseFormat(parse.GetValue(format)), worksheet.Name, cellRange, grid));
+            var outputFormat = parse.GetValue(json) ? OutputFormat.Json : Output.ParseFormat(parse.GetValue(format));
+            if (outputFormat == OutputFormat.Json)
+            {
+                // The grid of display strings for a quick look, plus every populated cell in full —
+                // typed value, formula, error, format — which is what a script actually acts on.
+                var cells = new List<CellReport>();
+                foreach (var (row, column, _) in worksheet.EnumerateCells())
+                {
+                    if (cellRange.Contains(row, column))
+                    {
+                        cells.Add(Report.Cell(loaded.Workbook, worksheet, row, column, effectiveCulture));
+                    }
+                }
+
+                cells.Sort((a, b) => CompareAddresses(a.Cell, b.Cell));
+                Report.Write(new { sheet = worksheet.Name, range = cellRange.ToString(), rows = grid, cells });
+                return 0;
+            }
+
+            Console.Out.Write(Output.Render(outputFormat, worksheet.Name, cellRange, grid));
             return 0;
         });
 
         return command;
+    }
+
+    private static int CompareAddresses(string a, string b)
+    {
+        var left = CellAddress.Parse(a);
+        var right = CellAddress.Parse(b);
+        int rows = left.Row.CompareTo(right.Row);
+        return rows != 0 ? rows : left.Column.CompareTo(right.Column);
     }
 
     public static Command Get()
@@ -111,10 +139,11 @@ internal static class BaselineCommands
         var cell = new Argument<string>("cell") { Description = "Cell reference, e.g. Sheet1.B7 or B7" };
         var formula = Options.Formula();
         var locale = Options.Locale();
+        var json = Options.Json();
 
         var command = new Command("get", "Read one cell's value (or --formula for its source)")
         {
-            file, cell, formula, locale,
+            file, cell, formula, locale, json,
         };
 
         command.SetAction(parse =>
@@ -125,6 +154,12 @@ internal static class BaselineCommands
             var effectiveCulture = culture ?? loaded.Workbook.Settings.EffectiveLocale;
 
             var (worksheet, address) = Cells.ResolveCell(loaded.Workbook, parse.GetValue(cell)!);
+            if (parse.GetValue(json))
+            {
+                Report.Write(Report.Cell(loaded.Workbook, worksheet, address.Row, address.Column, effectiveCulture));
+                return 0;
+            }
+
             string text = parse.GetValue(formula)
                 ? Cells.FormulaOrValue(loaded.Workbook, worksheet, address.Row, address.Column, effectiveCulture)
                 : Cells.Display(loaded.Workbook, worksheet, address.Row, address.Column, effectiveCulture);
@@ -143,28 +178,24 @@ internal static class BaselineCommands
         var inPlace = Options.InPlace();
         var output = Options.Output();
         var locale = Options.Locale();
+        var json = Options.Json();
 
         var command = new Command("set", "Set a cell and save the workbook (atomic)")
         {
-            file, cell, value, inPlace, output, locale,
+            file, cell, value, inPlace, output, locale, json,
         };
 
         command.SetAction(parse =>
         {
             string path = parse.GetValue(file)!;
             string target = Options.EditTarget(path, parse.GetValue(inPlace), parse.GetValue(output));
-            var culture = Locale.Resolve(parse.GetValue(locale));
-            var loaded = Workspace.Load(path, null, culture);
-            var effectiveCulture = culture ?? loaded.Workbook.Settings.EffectiveLocale;
-
-            var (worksheet, address) = Cells.ResolveCell(loaded.Workbook, parse.GetValue(cell)!);
-            // Reuse the app's input parsing (formula vs value, date coercion + format stamping).
-            EditCommands.SetInput(loaded.Workbook, worksheet.Name, address.Row, address.Column,
-                parse.GetValue(value) ?? string.Empty, effectiveCulture).Apply(loaded.Workbook);
-
-            Workspace.Recalculate(loaded.Workbook);
-            Workspace.SaveOds(loaded.Workbook, loaded.Package, target);
-            return 0;
+            return EditSession.Run(path, target, Locale.Resolve(parse.GetValue(locale)), parse.GetValue(json), session =>
+            {
+                var (worksheet, address) = Cells.ResolveCell(session.Workbook, parse.GetValue(cell)!);
+                // Reuse the app's input parsing (formula vs value, date coercion + format stamping).
+                session.Apply(EditCommands.SetInput(session.Workbook, worksheet.Name, address.Row, address.Column,
+                    parse.GetValue(value) ?? string.Empty, session.Culture));
+            }, format: null);
         });
 
         return command;
@@ -176,27 +207,23 @@ internal static class BaselineCommands
         var inPlace = Options.InPlace();
         var output = Options.Output();
         var locale = Options.Locale();
+        var json = Options.Json();
 
         var command = new Command("recalc", "Recalculate and refresh the file's cached values")
         {
-            file, inPlace, output, locale,
+            file, inPlace, output, locale, json,
         };
 
         command.SetAction(parse =>
         {
             string path = parse.GetValue(file)!;
             string target = Options.EditTarget(path, parse.GetValue(inPlace), parse.GetValue(output));
-            var loaded = Workspace.Load(path, null, Locale.Resolve(parse.GetValue(locale)));
-
-            var result = Workspace.Recalculate(loaded.Workbook);
-            Workspace.SaveOds(loaded.Workbook, loaded.Package, target);
-            Console.Error.WriteLine($"Recalculated {result.Evaluated} formula cell(s).");
-            if (result.HasCircularReference)
+            return EditSession.Run(path, target, Locale.Resolve(parse.GetValue(locale)), parse.GetValue(json), session =>
             {
-                Console.Error.WriteLine($"Warning: {result.CircularCells.Count} circular reference(s).");
-            }
-
-            return 0;
+                // The session recalculates on save; this command exists to do exactly that.
+                int formulas = session.Workbook.Worksheets.Sum(s => s.EnumerateCells().Count(c => c.Cell.IsFormula));
+                session.Note($"Recalculated {formulas} formula cell(s).");
+            }, format: null);
         });
 
         return command;
@@ -205,15 +232,22 @@ internal static class BaselineCommands
     public static Command Sheets()
     {
         var file = Options.File();
-        var command = new Command("sheets", "List worksheets with their used dimensions") { file };
+        var json = Options.Json();
+        var command = new Command("sheets", "List worksheets with their used dimensions") { file, json };
 
         command.SetAction(parse =>
         {
             var loaded = Workspace.Load(parse.GetValue(file)!, null, null);
+            if (parse.GetValue(json))
+            {
+                Report.Write(loaded.Workbook.Worksheets.Select(Report.Sheet).ToList());
+                return 0;
+            }
+
             foreach (var worksheet in loaded.Workbook.Worksheets)
             {
                 var used = worksheet.GetUsedRange();
-                string dims = used is { } range ? range.ToString() : "empty";
+                string dims = used is { } r ? r.ToString() : "empty";
                 Console.Out.WriteLine($"{worksheet.Name}\t{dims}\t{worksheet.CellCount} cells");
             }
 
@@ -226,12 +260,27 @@ internal static class BaselineCommands
     public static Command Info()
     {
         var file = Options.File();
-        var command = new Command("info", "Workbook overview: sheets, named ranges, locale, cell counts") { file };
+        var json = Options.Json();
+        var command = new Command("info", "Workbook overview: sheets, named ranges, locale, cell counts") { file, json };
 
         command.SetAction(parse =>
         {
             var loaded = Workspace.Load(parse.GetValue(file)!, null, null);
             var workbook = loaded.Workbook;
+            if (parse.GetValue(json))
+            {
+                Report.Write(new
+                {
+                    file = parse.GetValue(file),
+                    sheets = workbook.Worksheets.Select(Report.Sheet).ToList(),
+                    namedRanges = workbook.NamedRanges.Select(Report.NamedRange).ToList(),
+                    locale = workbook.Settings.Locale?.Name,
+                    calculation = workbook.Settings.CalculationMode.ToString(),
+                    populatedCells = workbook.Worksheets.Sum(s => s.CellCount),
+                });
+                return 0;
+            }
+
             Console.Out.WriteLine($"Sheets: {workbook.SheetCount}");
             foreach (var worksheet in workbook.Worksheets)
             {
@@ -260,7 +309,8 @@ internal static class BaselineCommands
     {
         var formula = new Argument<string>("formula") { Description = "A formula to evaluate, e.g. \"=ROUND(355/113, 4)\"" };
         var locale = Options.Locale();
-        var command = new Command("eval", "Evaluate a formula with no file — pure engine") { formula, locale };
+        var json = Options.Json();
+        var command = new Command("eval", "Evaluate a formula with no file — pure engine") { formula, locale, json };
 
         command.SetAction(parse =>
         {
@@ -271,8 +321,15 @@ internal static class BaselineCommands
                 text = text[1..];
             }
 
+            bool asJson = parse.GetValue(json);
             if (!Parser.TryParse(text, out var expr, out var error) || expr is null)
             {
+                if (asJson)
+                {
+                    Report.Write(new { ok = false, formula = "=" + text, error = "parse", message = error?.ToString() ?? "invalid formula" });
+                    return 1;
+                }
+
                 throw new CliException($"Parse error: {error?.ToString() ?? "invalid formula"}");
             }
 
@@ -282,14 +339,29 @@ internal static class BaselineCommands
             var context = new WorkbookEvaluationContext(workbook, workbook.ActiveSheet.Name, culture);
             var evaluator = new Evaluator(context, FunctionRegistry.CreateDefault());
             var value = evaluator.Evaluate(expr);
+            string display = value.IsError ? value.AsError.Token : Cellestra.Core.Styling.NumberFormatter.Format(value, "General", culture);
+
+            if (asJson)
+            {
+                object? typed = value.IsNumber ? value.AsNumber : value.IsText ? value.AsText : value.IsBoolean ? value.AsBoolean : null;
+                Report.Write(new
+                {
+                    ok = !value.IsError,
+                    formula = "=" + text,
+                    value = typed,
+                    display,
+                    error = value.IsError ? value.AsError.Token : null,
+                });
+                return value.IsError ? 1 : 0;
+            }
 
             if (value.IsError)
             {
-                Console.Error.WriteLine(value.AsError.Token);
+                Console.Error.WriteLine(display);
                 return 1;
             }
 
-            Console.Out.WriteLine(Cellestra.Core.Styling.NumberFormatter.Format(value, "General", culture));
+            Console.Out.WriteLine(display);
             return 0;
         });
 
@@ -299,11 +371,13 @@ internal static class BaselineCommands
     public static Command Validate()
     {
         var file = Options.File();
-        var command = new Command("validate", "Check the workbook opens and is free of formula/#REF!/circular errors") { file };
+        var json = Options.Json();
+        var command = new Command("validate", "Check the workbook opens and is free of formula/#REF!/circular errors") { file, json };
 
         command.SetAction(parse =>
         {
             string path = parse.GetValue(file)!;
+            bool asJson = parse.GetValue(json);
             LoadedWorkbook loaded;
             try
             {
@@ -311,30 +385,33 @@ internal static class BaselineCommands
             }
             catch (CliException ex)
             {
+                if (asJson)
+                {
+                    Report.Write(new { ok = false, file = path, opens = false, message = ex.Message, errors = Array.Empty<CellReport>(), circular = Array.Empty<string>() });
+                    return 1;
+                }
+
                 Console.Error.WriteLine(ex.Message);
                 return 1;
             }
 
             var result = Workspace.Recalculate(loaded.Workbook);
-            var errors = new List<string>();
-            foreach (var worksheet in loaded.Workbook.Worksheets)
+            var errors = Report.Errors(loaded.Workbook, loaded.Workbook.Settings.EffectiveLocale);
+            var circular = result.CircularCells.Select(c => Report.Address(c.Sheet, c.Row, c.Column)).ToList();
+            bool ok = errors.Count == 0 && !result.HasCircularReference;
+
+            if (asJson)
             {
-                foreach (var (row, column, cell) in worksheet.EnumerateCells())
-                {
-                    if (cell.Value.IsError)
-                    {
-                        var address = new CellAddress(column, row, sheet: worksheet.Name);
-                        errors.Add($"{address}: {cell.Value.AsError.Token}");
-                    }
-                }
+                Report.Write(new { ok, file = path, opens = true, errors, circular });
+                return ok ? 0 : 1;
             }
 
             foreach (var problem in errors.Take(50))
             {
-                Console.Error.WriteLine(problem);
+                Console.Error.WriteLine($"{problem.Cell}: {problem.Error}");
             }
 
-            if (errors.Count == 0 && !result.HasCircularReference)
+            if (ok)
             {
                 Console.Out.WriteLine("OK");
                 return 0;
@@ -342,7 +419,7 @@ internal static class BaselineCommands
 
             if (result.HasCircularReference)
             {
-                Console.Error.WriteLine($"{result.CircularCells.Count} circular reference(s).");
+                Console.Error.WriteLine($"{circular.Count} circular reference(s).");
             }
 
             Console.Error.WriteLine($"{errors.Count} cell error(s).");

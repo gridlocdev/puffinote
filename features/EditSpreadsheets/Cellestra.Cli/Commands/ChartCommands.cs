@@ -37,55 +37,61 @@ internal static class ChartCommands
         var yTitle = new Option<string?>("--y-title") { Description = "Value/Y axis title" };
         var inPlace = Options.InPlace();
         var output = Options.Output();
+        var json = Options.Json();
 
         var command = new Command("chart", "Add a chart sheet plotting data from the workbook")
         {
-            file, type, title, from, categories, values, names, xValues, bubbleSizes, stacking, noLegend, xTitle, yTitle, inPlace, output,
+            file, type, title, from, categories, values, names, xValues, bubbleSizes, stacking, noLegend, xTitle, yTitle, inPlace, output, json,
         };
 
         command.SetAction(parse =>
         {
             string path = parse.GetValue(file)!;
             string target = Options.EditTarget(path, parse.GetValue(inPlace), parse.GetValue(output));
-            var loaded = Workspace.Load(path, WorkbookFormat.Ods, null);
-            var workbook = loaded.Workbook;
-
-            var chartType = ParseType(parse.GetValue(type)!);
-            var definition = new ChartDefinition
-            {
-                Type = chartType,
-                Title = parse.GetValue(title) ?? "Chart",
-                ShowLegend = !parse.GetValue(noLegend),
-                XAxisTitle = parse.GetValue(xTitle),
-                YAxisTitle = parse.GetValue(yTitle),
-                Stacking = ParseStacking(parse.GetValue(stacking), chartType),
-            };
-
-            var explicitValues = parse.GetValue(values) ?? [];
-            if (explicitValues.Length > 0)
-            {
-                BuildExplicit(definition, chartType, explicitValues, parse.GetValue(names) ?? [],
-                    parse.GetValue(categories), parse.GetValue(xValues), parse.GetValue(bubbleSizes));
-            }
-            else if (parse.GetValue(from) is { Length: > 0 } fromRange)
-            {
-                BuildFromRange(definition, chartType, workbook, fromRange);
-            }
-            else
-            {
-                throw new CliException("Give the data to plot with --from <range> or one or more --values <range>.");
-            }
-
-            Validate(definition, chartType);
-
-            var sheet = workbook.AddChartSheet(definition);
-            Workspace.Recalculate(workbook);
-            Workspace.SaveOds(workbook, loaded.Package, target);
-            Console.Error.WriteLine($"Added chart sheet '{sheet.Name}'.");
-            return 0;
+            return EditSession.Run(path, target, null, parse.GetValue(json), session =>
+                AddChart(session, parse.GetValue(type)!, parse.GetValue(title), parse.GetValue(noLegend), parse.GetValue(xTitle),
+                    parse.GetValue(yTitle), parse.GetValue(stacking), parse.GetValue(values) ?? [], parse.GetValue(names) ?? [],
+                    parse.GetValue(categories), parse.GetValue(xValues), parse.GetValue(bubbleSizes), parse.GetValue(from)));
         });
 
         return command;
+    }
+
+    /// <summary>Build, validate, and add one chart sheet — shared by the <c>chart</c> verb and <c>apply</c>.</summary>
+    internal static void AddChart(
+        EditSession session, string typeText, string? title, bool noLegend, string? xTitle, string? yTitle, string? stackingText,
+        string[] values, string[] names, string? categories, string? xValues, string? bubbleSizes, string? from)
+    {
+        var workbook = session.Workbook;
+        var chartType = ParseType(typeText);
+        var definition = new ChartDefinition
+        {
+            Type = chartType,
+            Title = title ?? "Chart",
+            ShowLegend = !noLegend,
+            XAxisTitle = xTitle,
+            YAxisTitle = yTitle,
+            Stacking = ParseStacking(stackingText, chartType),
+        };
+
+        if (values.Length > 0)
+        {
+            BuildExplicit(definition, chartType, values, names, categories, xValues, bubbleSizes);
+        }
+        else if (from is { Length: > 0 } fromRange)
+        {
+            BuildFromRange(definition, chartType, workbook, fromRange);
+        }
+        else
+        {
+            throw new CliException("Give the data to plot with --from <range> or one or more --values <range>.");
+        }
+
+        Validate(definition, chartType);
+
+        var sheet = workbook.AddChartSheet(definition);
+        session.Field("sheet", sheet.Name);
+        session.Note($"Added chart sheet '{sheet.Name}'.");
     }
 
     // ---- Building the definition -----------------------------------------

@@ -1,3 +1,4 @@
+using System.Text.Json;
 using Cellestra.Core.Model;
 using Cellestra.Core.Serialization.Ods;
 using Cellestra.Core.Values;
@@ -127,6 +128,129 @@ public sealed class CliTests : IDisposable
         var (exit, output, _) = Run("diff", a, b);
         Assert.Equal(1, exit);
         Assert.Contains("Sheet1.A1", output, StringComparison.Ordinal);
+    }
+
+    // ---- --json: one report shape for reads, edits, and checks ------------
+
+    [Fact]
+    public void Get_json_reports_a_typed_value_and_the_formula()
+    {
+        string ods = Path2("book.ods");
+        Run("new", ods);
+        Run("set", ods, "Sheet1.A1", "10", "--in-place");
+        Run("set", ods, "Sheet1.A2", "=A1*2", "--in-place");
+
+        var (exit, output, _) = Run("get", ods, "Sheet1.A2", "--json");
+        Assert.Equal(0, exit);
+        using var doc = JsonDocument.Parse(output);
+        Assert.Equal("Sheet1.A2", doc.RootElement.GetProperty("cell").GetString());
+        Assert.Equal(20, doc.RootElement.GetProperty("value").GetDouble());
+        Assert.Equal("20", doc.RootElement.GetProperty("display").GetString());
+        Assert.Equal("=A1*2", doc.RootElement.GetProperty("formula").GetString());
+        Assert.False(doc.RootElement.TryGetProperty("error", out _)); // nulls are omitted on the wire
+    }
+
+    [Fact]
+    public void Set_json_reports_the_changed_cell_and_any_error_it_introduced()
+    {
+        string ods = Path2("book.ods");
+        Run("new", ods);
+        var (exit, output, err) = Run("set", ods, "Sheet1.B1", "=SUMM(A1)", "--in-place", "--json");
+        Assert.Equal(0, exit);
+        Assert.Equal(string.Empty, err); // the report is the whole reply, on stdout
+
+        using var doc = JsonDocument.Parse(output);
+        Assert.True(doc.RootElement.GetProperty("ok").GetBoolean());
+        var changed = doc.RootElement.GetProperty("changed");
+        Assert.Equal(1, changed.GetArrayLength());
+        Assert.Equal("Sheet1.B1", changed[0].GetProperty("cell").GetString());
+        Assert.Equal("#NAME?", changed[0].GetProperty("error").GetString());
+        Assert.Equal("Sheet1.B1", doc.RootElement.GetProperty("errors")[0].GetProperty("cell").GetString());
+    }
+
+    [Fact]
+    public void Validate_json_lists_errors_and_keeps_the_exit_code()
+    {
+        string ods = Path2("book.ods");
+        Run("new", ods);
+        Run("set", ods, "Sheet1.A1", "=1/0", "--in-place");
+
+        var (exit, output, _) = Run("validate", ods, "--json");
+        Assert.Equal(1, exit);
+        using var doc = JsonDocument.Parse(output);
+        Assert.False(doc.RootElement.GetProperty("ok").GetBoolean());
+        Assert.Equal("#DIV/0!", doc.RootElement.GetProperty("errors")[0].GetProperty("error").GetString());
+    }
+
+    [Fact]
+    public void Cat_json_carries_the_grid_and_every_populated_cell()
+    {
+        string ods = Path2("book.ods");
+        Run("new", ods);
+        Run("set", ods, "Sheet1.A1", "Name", "--in-place");
+        Run("set", ods, "Sheet1.B2", "3", "--in-place");
+
+        var (exit, output, _) = Run("cat", ods, "--json");
+        Assert.Equal(0, exit);
+        using var doc = JsonDocument.Parse(output);
+        Assert.Equal("A1:B2", doc.RootElement.GetProperty("range").GetString());
+        Assert.Equal(2, doc.RootElement.GetProperty("rows").GetArrayLength());
+        var cells = doc.RootElement.GetProperty("cells");
+        Assert.Equal(2, cells.GetArrayLength()); // only populated cells, in row-major order
+        Assert.Equal("Name", cells[0].GetProperty("value").GetString());
+        Assert.Equal(3, cells[1].GetProperty("value").GetDouble());
+    }
+
+    [Fact]
+    public void Diff_json_is_structured_and_exits_nonzero_on_a_difference()
+    {
+        string a = Path2("a.ods");
+        string b = Path2("b.ods");
+        Run("new", a);
+        Run("set", a, "Sheet1.A1", "1", "--in-place");
+        Run("convert", a, b);
+        Run("set", b, "Sheet1.A1", "2", "--in-place");
+
+        var (exit, output, _) = Run("diff", a, b, "--json");
+        Assert.Equal(1, exit);
+        using var doc = JsonDocument.Parse(output);
+        Assert.False(doc.RootElement.GetProperty("same").GetBoolean());
+        var cell = doc.RootElement.GetProperty("cells")[0];
+        Assert.Equal("Sheet1.A1", cell.GetProperty("cell").GetString());
+        Assert.Equal("1", cell.GetProperty("before").GetString());
+        Assert.Equal("2", cell.GetProperty("after").GetString());
+    }
+
+    [Fact]
+    public void Eval_and_functions_speak_json()
+    {
+        var (exit, output, _) = Run("eval", "=1+1", "--json");
+        Assert.Equal(0, exit);
+        using (var doc = JsonDocument.Parse(output))
+        {
+            Assert.Equal(2, doc.RootElement.GetProperty("value").GetDouble());
+        }
+
+        (exit, output, _) = Run("functions", "ABS", "--json");
+        Assert.Equal(0, exit);
+        using (var doc = JsonDocument.Parse(output))
+        {
+            Assert.Equal("ABS", doc.RootElement.GetProperty("name").GetString());
+            Assert.Equal("number", doc.RootElement.GetProperty("arguments")[0].GetProperty("name").GetString());
+        }
+    }
+
+    [Fact]
+    public void A_user_error_under_json_is_a_json_document_too()
+    {
+        string ods = Path2("book.ods");
+        Run("new", ods);
+        var (exit, output, err) = Run("set", ods, "Nope.A1", "1", "--in-place", "--json");
+        Assert.Equal(1, exit);
+        Assert.StartsWith("cellestra: ", err, StringComparison.Ordinal); // the human line still goes to stderr
+        using var doc = JsonDocument.Parse(output);
+        Assert.False(doc.RootElement.GetProperty("ok").GetBoolean());
+        Assert.Contains("Nope", doc.RootElement.GetProperty("error").GetString(), StringComparison.Ordinal);
     }
 
     [Fact]

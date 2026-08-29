@@ -111,7 +111,7 @@ cellestra clean-up budget.ods --dry-run                # what Clean Up (§8.17) 
 
 `diff` and `validate` are the high-leverage ones when debugging serialization or the formula engine: `validate` flags `#REF!`/circular/eval errors with a non-zero exit, and `diff` shows exactly which cells changed across an open→save→reopen (where Git only sees a binary blob).
 
-CLI conventions that matter while debugging: **reads go to stdout**; `--format table|csv|tsv|json` and `-` for stdin/stdout; **edits never overwrite without `--in-place` or `-o`** and are **atomic** (temp + rename); **edits preserve unmodeled content verbatim** (Golden Rule #7 / §8.1) — there's a CLI test that proves a chart survives a `set`; **`--locale` overrides** parsing/formatting for reproducible output. User errors print a clean `cellestra: …` line with exit 1; a stack trace means a real bug.
+CLI conventions that matter while debugging: **reads go to stdout**; `--format table|csv|tsv|json` and `-` for stdin/stdout; **`--json` on any command** gives a machine-readable reply — for an edit, a report of the changed cells plus every error cell now in the workbook (`Infrastructure/EditSession.cs`, `Report.cs`); **edits never overwrite without `--in-place` or `-o`** and are **atomic** (temp + rename); **edits preserve unmodeled content verbatim** (Golden Rule #7 / §8.1) — there's a CLI test that proves a chart survives a `set`; **`--locale` overrides** parsing/formatting for reproducible output. User errors print a clean `cellestra: …` line with exit 1; a stack trace means a real bug.
 
 ## Where things go
 

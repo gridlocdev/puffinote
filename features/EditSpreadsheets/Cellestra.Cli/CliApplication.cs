@@ -81,10 +81,45 @@ public static class CliApplication
         return root;
     }
 
-    public static int Run(string[] args) =>
+    public static int Run(string[] args)
+    {
         // The shared harness handles the common expected-error set (CliException, bad input, missing
         // file, …). Cellestra additionally treats InvalidOperationException (duplicate/unknown sheet)
         // and a malformed-JSON read as user errors rather than bugs.
-        CliHost.Run(BuildRoot(), args, "cellestra",
-            ex => ex is InvalidOperationException or System.Text.Json.JsonException);
+        static bool Expected(Exception ex) => ex is InvalidOperationException or System.Text.Json.JsonException;
+
+        if (!args.Contains("--json", StringComparer.Ordinal))
+        {
+            return CliHost.Run(BuildRoot(), args, "cellestra", Expected);
+        }
+
+        // Under --json a caller is a script or an agent reading stdout, so a user error is a JSON
+        // document there too — the same `ok: false` shape every command's report uses — as well as
+        // the one-line stderr message the harness prints for a human.
+        var stderr = Console.Error;
+        var captured = new StringWriter();
+        Console.SetError(captured);
+        int exit;
+        try
+        {
+            exit = CliHost.Run(BuildRoot(), args, "cellestra", Expected);
+        }
+        finally
+        {
+            Console.SetError(stderr);
+        }
+
+        string text = captured.ToString();
+        if (text.Length > 0)
+        {
+            stderr.Write(text);
+        }
+
+        if (exit != 0 && text.StartsWith("cellestra: ", StringComparison.Ordinal))
+        {
+            Infrastructure.Report.Write(new { ok = false, error = text["cellestra: ".Length..].TrimEnd() });
+        }
+
+        return exit;
+    }
 }

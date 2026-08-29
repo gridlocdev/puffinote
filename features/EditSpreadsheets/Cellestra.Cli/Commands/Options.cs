@@ -48,6 +48,13 @@ internal static class Options
     public static Option<bool> Formula() =>
         new("--formula") { Description = "Show formula sources instead of computed values" };
 
+    /// <summary>
+    /// Machine-readable output. On a read it replaces the text rendering; on an edit it prints a
+    /// report of what changed (cells, values, errors) to stdout instead of notes to stderr.
+    /// </summary>
+    public static Option<bool> Json() =>
+        new("--json") { Description = "Print a JSON report to stdout (for scripts and agents)" };
+
     public static WorkbookFormat? FormatOverride(string? value) => value?.ToLowerInvariant() switch
     {
         null or "" => null,
