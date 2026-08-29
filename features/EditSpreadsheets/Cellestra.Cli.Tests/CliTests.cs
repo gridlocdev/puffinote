@@ -151,6 +151,40 @@ public sealed class CliTests : IDisposable
     }
 
     [Fact]
+    public void Styling_and_layout_read_back_through_json()
+    {
+        string ods = Path2("book.ods");
+        string ops = Path2("ops.json");
+        Run("new", ods);
+        File.WriteAllText(ops, """
+            [{"op":"set","cell":"A1","value":"Head"},
+             {"op":"style","range":"A1","bold":true,"fill":"#EEEEEE","align":"center","border":"thin","format":"0.00"},
+             {"op":"width","columns":"A","width":120},{"op":"height","rows":"1","height":30},
+             {"op":"hide","columns":"C"},{"op":"merge","range":"B2:C3"},{"op":"freeze","rows":1}]
+            """);
+        Assert.Equal(0, Run("apply", ods, ops, "--in-place").Exit);
+
+        using var cell = JsonDocument.Parse(Run("get", ods, "A1", "--json").Out);
+        var style = cell.RootElement.GetProperty("style");
+        Assert.True(style.GetProperty("bold").GetBoolean());
+        Assert.Equal("#EEEEEE", style.GetProperty("fill").GetString());
+        Assert.Equal("center", style.GetProperty("align").GetString());
+        Assert.Equal("thin", style.GetProperty("border").GetString());
+        Assert.False(style.TryGetProperty("italic", out _)); // only non-default keys
+
+        using var plain = JsonDocument.Parse(Run("get", ods, "A2", "--json").Out);
+        Assert.False(plain.RootElement.TryGetProperty("style", out _));
+
+        using var sheets = JsonDocument.Parse(Run("sheets", ods, "--json").Out);
+        var sheet = sheets.RootElement[0];
+        Assert.Equal(120, sheet.GetProperty("widths").GetProperty("A").GetDouble());
+        Assert.Equal(30, sheet.GetProperty("heights").GetProperty("1").GetDouble());
+        Assert.Equal("C", sheet.GetProperty("hiddenColumns")[0].GetString());
+        Assert.Equal("B2:C3", sheet.GetProperty("merges")[0].GetString());
+        Assert.Equal(1, sheet.GetProperty("frozenRows").GetInt32());
+    }
+
+    [Fact]
     public void Set_json_reports_the_changed_cell_and_any_error_it_introduced()
     {
         string ods = Path2("book.ods");

@@ -31,6 +31,7 @@ internal static class ReferenceCommands
                 Report.Write(new
                 {
                     tool = "cellestra",
+                    contract = Report.ContractVersion,
                     description = root.Description,
                     commands = Flatten(root, "cellestra").Select(c => new
                     {
@@ -149,7 +150,10 @@ internal static class ReferenceCommands
            "display": "12.50",       what the GUI shows (number format + locale)
            "formula": "=B3*C3",      only for formula cells, with the leading =
            "error": "#NAME?",        only when the value is an error
-           "format": "0.00"}         only when the number format is not General
+           "format": "0.00",         only when the number format is not General
+           "style": {"bold": true, "fill": "#EEEEEE", "align": "center", "border": "thin"}}
+                                     only what differs from the default, using the same keys as apply's style op
+                                     (bold, italic, underline, strikethrough, font, size, color, fill, align, valign, wrap, border, borderColor)
 
         Edit report (set, apply, sort, chart, clean-up, … — anything that writes, with --json)
           {"ok": true,
@@ -170,12 +174,18 @@ internal static class ReferenceCommands
           validate  → {"ok", "file", "opens", "errors": [Cell…], "circular": [addr…]}    exit 1 when !ok
           diff      → {"same", "differences", "addedSheets", "removedSheets", "cells": [{"cell","before","after"}…]}   exit 1 when !same
           eval      → {"ok", "formula", "value", "display", "error"}
-          sheets    → [{"name","usedRange","rows","columns","cells","chart","frozenRows","frozenColumns","tables"}…]
+          sheets    → [{"name","usedRange","rows","columns","cells","chart","frozenRows","frozenColumns",
+                        "tables":[{"name","range","header","headerColumn","bandedRows"}], "merges":["A1:D1"],
+                        "widths":{"A":120}, "heights":{"1":28}, "hiddenColumns":["C"], "hiddenRows":["5"],
+                        "validations":[{"range","kind","operator","value1","value2","list","source","response"}]}…]   (absent keys = default)
           info      → {"file", "sheets": […], "namedRanges": [{"name","target","scope"}…], "locale", "calculation", "populatedCells"}
           stats     → {"sheet","range","count","numeric","sum","average","min","max"}
           functions → [{"name","signature","category","returns","summary","arguments":[{"name","kind","required","repeatable","description"}],"example"}…]
           name list → [{"name","target","scope"}…]
           man       → the whole command tree
+
+        Contract
+          man --json carries "contract": 1 — the version of these shapes and of the apply document. Additive keys never bump it.
 
         Errors
           any verb  → {"ok": false, "error": "…"} on stdout (exit 1), plus the usual one-line stderr message.
