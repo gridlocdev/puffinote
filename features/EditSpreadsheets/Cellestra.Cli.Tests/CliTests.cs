@@ -354,6 +354,28 @@ public sealed class CliTests : IDisposable
     }
 
     [Fact]
+    public void Apply_names_the_op_when_core_refuses()
+    {
+        string ods = Path2("book.ods");
+        string ops = Path2("ops.json");
+        Run("new", ods);
+        File.WriteAllText(ops, "[{\"op\":\"add-sheet\",\"name\":\"Sheet1\"}]"); // duplicate: Core throws InvalidOperationException
+        var (exit, _, err) = Run("apply", ods, ops, "--in-place");
+        Assert.Equal(1, exit);
+        Assert.Contains("op 1 (add-sheet)", err, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void A_parse_error_under_json_is_a_json_document_too()
+    {
+        var (exit, output, _) = Run("set", "book.ods", "--json"); // missing <cell> and <value>
+        Assert.Equal(1, exit);
+        using var doc = JsonDocument.Parse(output);
+        Assert.False(doc.RootElement.GetProperty("ok").GetBoolean());
+        Assert.NotEmpty(doc.RootElement.GetProperty("error").GetString()!);
+    }
+
+    [Fact]
     public void Apply_and_sheet_verbs_refuse_to_overwrite_without_being_told_to()
     {
         string ods = Path2("book.ods");

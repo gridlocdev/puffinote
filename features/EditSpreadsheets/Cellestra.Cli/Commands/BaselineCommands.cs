@@ -104,16 +104,11 @@ internal static class BaselineCommands
             {
                 // The grid of display strings for a quick look, plus every populated cell in full —
                 // typed value, formula, error, format — which is what a script actually acts on.
-                var cells = new List<CellReport>();
-                foreach (var (row, column, _) in worksheet.EnumerateCells())
-                {
-                    if (cellRange.Contains(row, column))
-                    {
-                        cells.Add(Report.Cell(loaded.Workbook, worksheet, row, column, effectiveCulture));
-                    }
-                }
-
-                cells.Sort((a, b) => CompareAddresses(a.Cell, b.Cell));
+                var cells = worksheet.EnumerateCells()
+                    .Where(c => cellRange.Contains(c.Row, c.Column))
+                    .OrderBy(c => c.Row).ThenBy(c => c.Column)
+                    .Select(c => Report.Cell(loaded.Workbook, worksheet, c.Row, c.Column, effectiveCulture))
+                    .ToList();
                 Report.Write(new { sheet = worksheet.Name, range = cellRange.ToString(), rows = grid, cells });
                 return 0;
             }
@@ -123,14 +118,6 @@ internal static class BaselineCommands
         });
 
         return command;
-    }
-
-    private static int CompareAddresses(string a, string b)
-    {
-        var left = CellAddress.Parse(a);
-        var right = CellAddress.Parse(b);
-        int rows = left.Row.CompareTo(right.Row);
-        return rows != 0 ? rows : left.Column.CompareTo(right.Column);
     }
 
     public static Command Get()

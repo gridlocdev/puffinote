@@ -56,7 +56,7 @@ public sealed class EditSession
     /// </summary>
     public static int Run(string path, string target, CultureInfo? locale, bool json, Action<EditSession> edit, WorkbookFormat? format = WorkbookFormat.Ods, bool dryRun = false)
     {
-        if (json && target == "-")
+        if (json && target == "-" && !dryRun)
         {
             throw new CliException("--json writes the report to stdout, so the workbook can't go there too — give -o <file> or --in-place.");
         }

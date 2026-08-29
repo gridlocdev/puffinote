@@ -111,6 +111,7 @@ internal static class ReferenceCommands
            "file": "book.ods",        where it was written (-o or the input with --in-place)
            "dryRun": true,            only on --dry-run: nothing was written
            "changed": [Cell, …],      the cells the ops touched, with their values AFTER recalculation
+                                      (structural ops — insert/delete rows/cols/sheets, hide/show, freeze, width, height — list none)
            "recalculated": 12,        formula cells evaluated
            "errors": [Cell, …],       EVERY error cell now in the workbook — check this after each write
            "circular": ["Sheet1.A1"],

@@ -101,8 +101,10 @@ internal static class ApplyCommands
                     {
                         Run(session, new Op(ops[i].Element, i), ops[i].Kind);
                     }
-                    catch (CliException ex)
+                    catch (Exception ex) when (ex is CliException or InvalidOperationException or ArgumentException or FormatException)
                     {
+                        // Core's own refusals (duplicate sheet, bad name, …) are user errors too, and the
+                        // user needs to know which op raised them.
                         throw new CliException($"op {i + 1} ({ops[i].Kind}): {ex.Message}");
                     }
                 }
@@ -259,7 +261,7 @@ internal static class ApplyCommands
                 return fallback;
             }
 
-            if (n.Value != Math.Floor(n.Value))
+            if (n.Value != Math.Floor(n.Value) || n.Value < int.MinValue || n.Value > int.MaxValue)
             {
                 throw new CliException($"\"{name}\" must be a whole number.");
             }
@@ -276,7 +278,8 @@ internal static class ApplyCommands
 
             if (v.ValueKind == JsonValueKind.String)
             {
-                return [v.GetString()!];
+                // A lone string is the verb's comma-separated spelling ("Red,Green,Blue").
+                return v.GetString()!.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
             }
 
             if (v.ValueKind != JsonValueKind.Array)
@@ -425,8 +428,10 @@ internal static class ApplyCommands
         var (ws, address) = Cells.ResolveCell(wb, op.Require("cell"), op.String("sheet"));
         if (op.Has("formula"))
         {
+            // The original {"cell", "formula"} form: the leading = is optional there.
             string formula = op.Require("formula");
-            SetOne(session, ws, address.Row, address.Column, JsonDocument.Parse(JsonSerializer.Serialize(formula.StartsWith('=') ? formula : "=" + formula)).RootElement);
+            session.Apply(EditCommands.SetInput(wb, ws.Name, address.Row, address.Column,
+                formula.StartsWith('=') ? formula : "=" + formula, session.Culture));
             return;
         }
 
@@ -749,6 +754,11 @@ internal static class ApplyCommands
     private static void Hyperlink(EditSession session, Op op)
     {
         var (sheet, address) = Cell(session, op, "cell");
+        if (!op.Present("url"))
+        {
+            throw new CliException("needs \"url\" (a link, or null to remove the cell's link).");
+        }
+
         string? url = op.String("url");
         var link = url is null ? null : new Hyperlink(url) { Tooltip = op.String("tooltip") };
         session.Apply(EditCommands.SetHyperlink(session.Workbook, sheet.Name, address.Row, address.Column, link));

@@ -97,10 +97,15 @@ public static class CliApplication
 
         // Under --json a caller is a script or an agent reading stdout, so a user error is a JSON
         // document there too — the same `ok: false` shape every command's report uses — as well as
-        // the one-line stderr message the harness prints for a human.
+        // the one-line stderr message the harness prints for a human. Both streams are captured:
+        // System.CommandLine answers a parse error (missing argument, unknown option) with the help
+        // text on stdout, which is not JSON and must not reach a parser.
+        var stdout = Console.Out;
         var stderr = Console.Error;
-        var captured = new StringWriter();
-        Console.SetError(captured);
+        var capturedOut = new StringWriter();
+        var capturedErr = new StringWriter();
+        Console.SetOut(capturedOut);
+        Console.SetError(capturedErr);
         int exit;
         try
         {
@@ -108,20 +113,27 @@ public static class CliApplication
         }
         finally
         {
+            Console.SetOut(stdout);
             Console.SetError(stderr);
         }
 
-        string text = captured.ToString();
-        if (text.Length > 0)
+        string errText = capturedErr.ToString();
+        if (errText.Length > 0)
         {
-            stderr.Write(text);
+            stderr.Write(errText);
         }
 
-        if (exit != 0 && text.StartsWith("cellestra: ", StringComparison.Ordinal))
+        if (exit != 0 && errText.Length > 0)
         {
-            Infrastructure.Report.Write(new { ok = false, error = text["cellestra: ".Length..].TrimEnd() });
+            // Either the harness's "cellestra: …" line or System.CommandLine's own parse errors — both
+            // are the user's to fix, and both get the JSON reply in place of whatever stdout held.
+            string message = errText.StartsWith("cellestra: ", StringComparison.Ordinal) ? errText["cellestra: ".Length..] : errText;
+            var lines = message.Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).Distinct().ToList();
+            Infrastructure.Report.Write(new { ok = false, error = string.Join(" ", lines) });
+            return exit;
         }
 
+        stdout.Write(capturedOut.ToString());
         return exit;
     }
 }
