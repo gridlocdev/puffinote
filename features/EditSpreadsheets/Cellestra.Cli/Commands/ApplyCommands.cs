@@ -82,6 +82,8 @@ internal static class ApplyCommands
           {"op":"hyperlink", "cell":"A2", "url":"https://…", "tooltip":"…"}   "url": null removes it
           {"op":"chart", "type":"column", "title":"Sales", "from":"A1:C13",          or "values":["B2:B13"], "names":["Q1"], "categories":"A2:A13",
                          "stacking":"none", "legend":true, "xTitle":"Month", "yTitle":"USD"}   scatter: "xValues"; bubble: + "bubbleSizes"
+          {"op":"chart-update", "sheet":"Chart1", "title":"…", "type":"line", …}   only the keys given change; data keys rebuild the series
+          {"op":"chart-remove", "sheet":"Chart1"}
 
         Run:  cellestra apply book.ods ops.json --in-place [--json] [--dry-run] [--locale en-US]
               cat ops.json | cellestra apply book.ods - -o out.ods --json
@@ -488,6 +490,19 @@ internal static class ApplyCommands
 
             case "table-options":
                 TableOptions(session, op);
+                break;
+            case "chart-remove":
+                {
+                    var sheet = ChartCommands.ChartSheet(wb, op.Require("sheet"));
+                    session.Apply(new DeleteSheetCommand(sheet.Name));
+                    session.Field("sheet", sheet.Name);
+                    break;
+                }
+
+            case "chart-update":
+                ChartCommands.UpdateChart(session, op.Require("sheet"), op.String("type"), op.String("title"), op.Bool("legend"),
+                    op.String("xTitle"), op.String("yTitle"), op.String("stacking"), op.Strings("values"), op.Strings("names"),
+                    op.String("categories"), op.String("xValues"), op.String("bubbleSizes"), op.String("from"));
                 break;
             case "name":
                 Name(session, op);

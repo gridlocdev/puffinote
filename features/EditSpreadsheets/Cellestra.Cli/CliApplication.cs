@@ -84,6 +84,7 @@ public static class CliApplication
 
             // Chart sheets — the headless face of Insert ▸ Chart Sheet.
             ChartCommands.Chart(),
+            ChartCommands.Charts(),
         };
 
         // `cellestra <file>` with no verb opens the workbook in the app, the way every CLI in the family

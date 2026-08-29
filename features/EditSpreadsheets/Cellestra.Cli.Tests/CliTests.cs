@@ -1086,6 +1086,40 @@ public sealed class CliTests : IDisposable
     }
 
     [Fact]
+    public void Charts_can_be_listed_shown_updated_and_removed()
+    {
+        string ods = ChartDataBook();
+        Run("chart", ods, "--type", "column", "--title", "Sales", "--from", "Sheet1.A1:C3", "--in-place");
+
+        Assert.Contains("Chart1\tcolumn\tSales\t2 series", Run("charts", "list", ods).Out, StringComparison.Ordinal);
+        using (var doc = JsonDocument.Parse(Run("charts", "show", ods, "Chart1").Out))
+        {
+            Assert.Equal("Sheet1.A2:A3", doc.RootElement.GetProperty("categories").GetString());
+            Assert.Equal(2, doc.RootElement.GetProperty("series").GetArrayLength());
+        }
+
+        Assert.Equal(0, Run("charts", "update", ods, "Chart1", "--type", "line", "--title", "Trend", "--legend", "false", "--in-place").Exit);
+        using (var doc = JsonDocument.Parse(Run("charts", "show", ods, "Chart1").Out))
+        {
+            Assert.Equal("line", doc.RootElement.GetProperty("type").GetString());
+            Assert.Equal("Trend", doc.RootElement.GetProperty("title").GetString());
+            Assert.False(doc.RootElement.GetProperty("legend").GetBoolean());
+            Assert.Equal(2, doc.RootElement.GetProperty("series").GetArrayLength()); // data untouched
+        }
+
+        Assert.Equal(0, Run("charts", "update", ods, "Chart1", "--values", "Sheet1.B2:B3", "--names", "Only", "--in-place").Exit);
+        using (var doc = JsonDocument.Parse(Run("charts", "show", ods, "Chart1").Out))
+        {
+            Assert.Equal(1, doc.RootElement.GetProperty("series").GetArrayLength());   // data rebuilt
+            Assert.Equal("Trend", doc.RootElement.GetProperty("title").GetString());  // the rest kept
+        }
+
+        Assert.Equal(1, Run("charts", "show", ods, "Sheet1").Exit); // not a chart sheet
+        Assert.Equal(0, Run("charts", "remove", ods, "Chart1", "--in-place").Exit);
+        Assert.Equal("[]", Run("charts", "list", ods, "--json").Out.Trim());
+    }
+
+    [Fact]
     public void Chart_with_explicit_fields_round_trips()
     {
         string ods = ChartDataBook();
