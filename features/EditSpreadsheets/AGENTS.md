@@ -93,7 +93,7 @@ just publish-cellestra-app                           # notarized .app bundle
 
 `Cellestra.Cli/` is a **third consumer of `Cellestra.Core`** (no Avalonia, no network) — the same brain as the app. Reach for it to inspect a workbook, check the engine, or diff a serialization change **without launching the GUI** (which you usually can't headlessly). Because it reuses the engine, what it prints is what the app would compute. Full spec: **PRD §8.16**; design: **ARCHITECTURE §1/§3**.
 
-Run it via `dotnet run --project Cellestra.Cli -- <command>`, or build once and call the binary at `Cellestra.Cli/bin/Debug/net10.0/cellestra`. Addressing matches the app (`Sheet1.B2`, ranges `Sheet1.A1:C10`; omit the sheet for the active/first one). No args, `-h`, or `--help` lists everything; **`cellestra man`** prints the entire reference (commands, options, conventions, exit codes, JSON contracts) as one page — read that once rather than `--help` per verb.
+Run it via `dotnet run --project Cellestra.Cli -- <command>`, or build once and call the binary at `Cellestra.Cli/bin/<os>/Debug/net10.0/cellestra`. The repo-level **`cellestra` skill** (`.claude/skills/cellestra/SKILL.md`) is the agent's guide to *creating* workbooks with it — the `apply` batch document, the `--json` loop, and the gotchas — while this section is about debugging Cellestra itself. Addressing matches the app (`Sheet1.B2`, ranges `Sheet1.A1:C10`; omit the sheet for the active/first one). No args, `-h`, or `--help` lists everything; **`cellestra man`** prints the entire reference (commands, options, conventions, exit codes, JSON contracts) as one page — read that once rather than `--help` per verb.
 
 ```bash
 cellestra cat budget.ods --sheet Q1 --range A1:D20    # see a sheet (table|csv|tsv|json)
