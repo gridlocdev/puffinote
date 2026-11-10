@@ -1,0 +1,14 @@
+dist
+out
+release
+pnpm-lock.yaml
+.types
+node_modules
+# The C# tree and its docs go in the final phase of the TypeScript port.
+app
+features
+shared
+docs
+build
+*.md
+pivotask-prototype

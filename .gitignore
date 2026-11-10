@@ -491,3 +491,14 @@ $RECYCLE.BIN/
 # Vim temporary swap files
 *.swp
 
+
+## TypeScript workspace
+# The .NET rules above ignore `**/packages/*`, `bin/` and `release/`; the TS layout reuses those names.
+!/packages/
+!/packages/*
+!/apps/*/bin/
+dist/
+out/
+.types/
+*.tsbuildinfo
+.nas-data/
