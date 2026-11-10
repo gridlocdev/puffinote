@@ -1,11 +1,21 @@
 import type { Selection } from '../document/selection.ts';
 import { canCoalesce, coalesce, type TextEdit } from './textEdit.ts';
 
-/** One undo step: the edit, plus the selection before and after it. */
+/**
+ * Work outside the text that belongs to one undo step (Delete Picture's file): `undo` runs when the step is
+ * undone, `redo` when it is redone.
+ */
+export interface UndoEffect {
+  readonly undo: () => void;
+  readonly redo: () => void;
+}
+
+/** One undo step: the edit, plus the selection before and after it, and any work outside the text. */
 export interface HistoryEntry {
   readonly edit: TextEdit;
   readonly before: Selection;
   readonly after: Selection;
+  readonly effect?: UndoEffect;
 }
 
 /**
@@ -35,13 +45,13 @@ export class EditHistory {
   }
 
   /** Record an edit that has already been applied. */
-  record(edit: TextEdit, before: Selection, after: Selection): void {
+  record(edit: TextEdit, before: Selection, after: Selection, effect?: UndoEffect): void {
     this.redoStack.length = 0;
     const top = this.undoStack[this.undoStack.length - 1];
-    if (!this.coalesceBreak && top && canCoalesce(top.edit, edit)) {
+    if (!effect && !top?.effect && !this.coalesceBreak && top && canCoalesce(top.edit, edit)) {
       this.undoStack[this.undoStack.length - 1] = { ...top, edit: coalesce(top.edit, edit), after };
     } else {
-      this.undoStack.push({ edit, before, after });
+      this.undoStack.push(effect ? { edit, before, after, effect } : { edit, before, after });
       if (this.undoStack.length > EditHistory.maxDepth) this.undoStack.shift();
     }
     this.coalesceBreak = false;

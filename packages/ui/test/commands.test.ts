@@ -12,6 +12,7 @@ import {
   linkEdit,
   moveLinesEdit,
   outdentEdit,
+  removeRangeEdit,
   setTaskStateEdit,
   toggleInlineEdit,
   toggleTaskEdit,
@@ -382,5 +383,23 @@ describe('EditorState', () => {
     const state = new EditorState('a **b** c');
     state.select(2, 7);
     expect(state.selectedText()).toBe('**b**');
+  });
+});
+
+describe('removeRangeEdit (Delete Picture)', () => {
+  const remove = (text: string, what: string) => {
+    const doc = TextDocument.fromString(text);
+    const start = text.indexOf(what);
+    return applyEditTo(doc, removeRangeEdit(doc, start, start + what.length)).getText();
+  };
+
+  it('takes out just the picture when the line has other text', () => {
+    expect(remove('see ![](a.png) here', '![](a.png)')).toBe('see  here');
+  });
+
+  it('takes the line when the picture is alone on it', () => {
+    expect(remove('one\n![](a.png)\ntwo', '![](a.png)')).toBe('one\ntwo');
+    expect(remove('one\n  ![](a.png)', '![](a.png)')).toBe('one');
+    expect(remove('![](a.png)', '![](a.png)')).toBe('');
   });
 });

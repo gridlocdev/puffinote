@@ -272,7 +272,8 @@ switched from the status bar or the View commands:
 - **Caret and selection** move by grapheme cluster. IME composition works in place.
 - **Context menu.** A right-click (a two-finger click, or Control-click on macOS) opens Cut, Copy, Paste and
   Select All, in every view. A click inside the selection keeps it; anywhere else moves the caret there
-  first. Cut and Copy are off with nothing selected. ⌘X, ⌘C and ⌘V stay the platform's own keys.
+  first. Cut and Copy are off with nothing selected. ⌘X, ⌘C and ⌘V stay the platform's own keys. A
+  right-click on a picture opens the picture's own menu instead (§10.6).
 - **Undo and redo.** Typing coalesces into runs. Structural edits, commands and a paste are single steps. Revert
   resets the history. Taking an external change is one step (§5).
 - **Enter.** In the two formatted views, Enter writes a paragraph break (`\n\n`) that shows as one new line.
@@ -309,7 +310,9 @@ switched from the status bar or the View commands:
 - **Line-prefix marks** (heading `#`, `>`, list and task markers): they show when the caret is on the line.
   List items and tasks are the exception: their `-`, `1.` or `- [ ]` shows only when the caret or selection
   touches the marker's own characters (from the line start through the bullet, number or `]`), so editing the
-  item's text keeps the bullet, number or checkbox, and the text doesn't move.
+  item's text keeps the bullet, number or checkbox, and the text doesn't move. A selection counts only when
+  one of its ends is inside the marker, so dragging across an item, or to the left of its checkbox, keeps the
+  checkbox drawn.
   When hidden, they are drawn as decorations: bullets, numbers, checkboxes, a quote bar.
 - **List items hang.** A list item's marker (indent, bullet or number, checkbox) sits in a column of its own
   and the text in the next, so wrapped rows line up with the text above, as in Apple Notes, not under the
@@ -387,7 +390,9 @@ whitespace are ignored when the scheme is read. Any other URL (`javascript:`, `v
   - **A folder beside each note:** `Meeting.assets/` next to `Meeting.md`.
 - **Names.** A dropped or copied file keeps its name. A screenshot or a picture copied from a page (the
   clipboard calls those `image.png`) is named after the time: `Pasted image 2026-11-10 14.03.22.png`. A name
-  that is taken gets a number (`Holiday 2.png`), comparing without case.
+  that is taken gets a number (`Holiday 2.png`), comparing without case. A picture whose bytes match one
+  already in that folder (Copy Picture from another note, then paste) links to that file instead of saving a
+  copy.
 - **The link** is relative to the note, with spaces and brackets percent-encoded (`../attachments/Pasted%20image….png`).
 - **Moving keeps links working.** Pictures never move with a note, since other notes may show them.
   - Moving or renaming a note rewrites its own links to pictures so they still reach the same files.
@@ -400,6 +405,15 @@ whitespace are ignored when the scheme is read. Any other URL (`javascript:`, `v
   the last to show one, and When a Picture Is No Longer Used is Offer to Delete It, the status bar says so
   with a Move to Trash button (Delete where the notebook has no Trash). The offer stays up for twelve
   seconds. Set to Keep It, nothing is said.
+- **Picture menu.** A right-click on a picture in a note opens:
+  - **Open Picture:** the file in a tab of its own (off for a web picture or a missing file).
+  - **Copy Picture:** the picture on the clipboard, as a PNG.
+  - **View Link Text:** selects the picture's `![](…)`, so its Markdown shows.
+  - **Delete Picture:** takes the picture out of the note (its line too, when it was alone on one), as an
+    undoable step, and moves its file to the Trash (deletes it where the notebook has no Trash). When another
+    note, or another spot in this note, also shows the file, it asks first and lists those notes: Keep File (the
+    default) takes the picture out of this note only, Delete File also deletes the file, Cancel does nothing.
+    Undo puts the picture and its file back; Redo takes them out again.
 - **Find Unused Pictures…** (command menu) lists every picture no note links to, with a thumbnail and its
   folder, all ticked. Move to Trash deletes the ticked ones. A picture counts as used when a note links to it
   with `![](…)` or `[…](…)`, outside code. Unsaved text in open tabs counts.

@@ -1,5 +1,5 @@
 import type { Token } from '@puffinote/markdown';
-import { selectionIntersects, type Selection } from '@puffinote/text';
+import { isCollapsed, selectionIntersects, type Selection } from '@puffinote/text';
 
 /**
  * How the editor draws Markdown:
@@ -67,8 +67,9 @@ export function lineReveal(
 
 /**
  * On a list or task line, whether the selection touches the marker's own characters: from the line start
- * through the bullet or number, or through `]` on a task (not the space after it). `null` on a line that isn't
- * a list item.
+ * through the bullet or number, or through `]` on a task (not the space after it). A range selection only
+ * counts when one of its ends is inside the marker, so dragging across the item, or to the left of its
+ * checkbox, keeps the checkbox drawn. `null` on a line that isn't a list item.
  */
 function listPrefixTouched(
   tokens: readonly Token[],
@@ -80,7 +81,9 @@ function listPrefixTouched(
   if (!task && !list) return null;
   // The tokens run on through the space after the marker; a caret there, before the item's text, doesn't count.
   const end = task ? task.start + Math.min(3, task.length) : list!.start + Math.max(1, list!.length - 1);
-  return selectionIntersects(selection, lineStart, end - lineStart);
+  if (isCollapsed(selection)) return selectionIntersects(selection, lineStart, end - lineStart);
+  const inside = (o: number) => o > lineStart && o <= end;
+  return inside(selection.anchor) || inside(selection.caret);
 }
 
 /** A line nothing reveals (the caret is elsewhere). */

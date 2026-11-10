@@ -1,11 +1,14 @@
 import { computed, signal } from '@preact/signals';
 import { CommandCatalog, type Command, type CommandSpec } from '../commands/command.ts';
 import { formatShortcut, parseShortcut } from '../commands/shortcut.ts';
+import { removeRangeEdit } from '../editor/commands.ts';
 import { markdownCommandSpecs } from '../editor/editorCommands.ts';
+import type { EditorMenuPoint, PictureAt } from '../editor/MarkdownEditor.tsx';
 import type { EditorState } from '../editor/editorState.ts';
 import { sidebarPanels, type Notebook, type SidebarPanel, type Tab } from '../notebook/notebook.ts';
 import { allFolders, fileKind, findNode, hasFolders, noteFileName, type TreeNode } from '../notebook/tree.ts';
-import { baseName, invalidNameReason, parentOf, stemOf } from '../platform/paths.ts';
+import { imageTargets } from '../notebook/attachments.ts';
+import { baseName, invalidNameReason, mimeOf, parentOf, resolveRelative, stemOf } from '../platform/paths.ts';
 import type { ConfirmOptions, PromptOptions } from './Dialog.tsx';
 
 /** A row in a context menu; `null` draws a separator. */
@@ -286,8 +289,15 @@ export class ShellModel {
     this.open({ kind: 'menu', x: at.x, y: at.y, items });
   }
 
-  /** The editor's right-click menu (PRD §10.1): the clipboard and Select All, from the command catalog. */
-  openEditorMenu(at: { x: number; y: number }): void {
+  /**
+   * The editor's right-click menu (PRD §10.1): the clipboard and Select All, from the command catalog. On a
+   * picture, the picture's own menu instead (PRD §10.6).
+   */
+  openEditorMenu(at: EditorMenuPoint): void {
+    if (at.picture) {
+      this.openPictureMenu(at.picture, at);
+      return;
+    }
     const item = (id: string, shortcut: string): MenuItem | null => {
       const c = this.menuCatalog.get(id);
       if (!c) return null;
@@ -307,6 +317,133 @@ export class ShellModel {
       item('edit.selectAll', key('mod+a')),
     ];
     this.open({ kind: 'menu', x: at.x, y: at.y, items });
+  }
+
+  /** A picture's right-click menu: open it, copy it, show its Markdown, or delete it (PRD §10.6). */
+  private openPictureMenu(picture: PictureAt, at: { x: number; y: number }): void {
+    const nb = this.notebook.peek();
+    const tab = this.activeTab.peek();
+    if (!nb || !tab?.state) return;
+    const file = this.pictureFile(picture.url, tab.path.peek());
+    const items: (MenuItem | null)[] = [
+      { label: 'Open Picture', disabled: file === null, run: () => void this.openFile(file!) },
+      {
+        label: 'Copy Picture',
+        run: () =>
+          void this.copyPicture(file ?? nb.resolveImage(tab.path.peek(), picture.url), file !== null),
+      },
+      {
+        label: 'View Link Text',
+        run: () => {
+          tab.state?.select(picture.start, picture.end);
+          this.focusEditor();
+        },
+      },
+      null,
+      { label: 'Delete Picture', danger: true, run: () => void this.deletePicture(picture) },
+    ];
+    this.open({ kind: 'menu', x: at.x, y: at.y, items });
+  }
+
+  /** The notebook file a picture link written in note `notePath` points at, or null (a web picture, missing). */
+  private pictureFile(url: string, notePath: string): string | null {
+    if (/^[a-z][a-z0-9+.-]*:/i.test(url)) return null;
+    const path = resolveRelative(notePath, url);
+    const nb = this.notebook.peek();
+    return path !== null && nb && findNode(nb.tree.peek(), path)?.kind === 'file' ? path : null;
+  }
+
+  /**
+   * Put a picture on the clipboard, as a PNG: a notebook file read through the store (a canvas fed straight
+   * from the store's file URL can't be read back), or a web picture by its URL.
+   */
+  private async copyPicture(source: string, inNotebook: boolean): Promise<void> {
+    let url: string | null = null;
+    try {
+      const nb = this.notebook.peek();
+      if (inNotebook && nb) {
+        const { bytes } = await nb.store.read(source);
+        url = URL.createObjectURL(new Blob([bytes as Uint8Array<ArrayBuffer>], { type: mimeOf(source) }));
+      }
+      const img = new Image();
+      img.crossOrigin = 'anonymous';
+      img.src = url ?? source;
+      await img.decode();
+      const canvas = document.createElement('canvas');
+      canvas.width = img.naturalWidth;
+      canvas.height = img.naturalHeight;
+      canvas.getContext('2d')!.drawImage(img, 0, 0);
+      const png = await new Promise<Blob>((resolve, reject) =>
+        canvas.toBlob((b) => (b ? resolve(b) : reject(new Error('no image'))), 'image/png'),
+      );
+      await navigator.clipboard.write([new ClipboardItem({ 'image/png': png })]);
+    } catch {
+      this.notebook.peek()?.notify('error', 'Puffinote couldn’t copy this picture.');
+    } finally {
+      if (url) URL.revokeObjectURL(url);
+    }
+  }
+
+  /**
+   * Delete Picture: take the picture out of the note and delete its file. When another note (or another spot in
+   * this one) shows the same file, ask first, listing those notes; the default keeps the file.
+   */
+  async deletePicture(picture: PictureAt): Promise<void> {
+    const nb = this.notebook.peek();
+    const tab = this.activeTab.peek();
+    const state = tab?.state;
+    if (!nb || !tab || !state) return;
+    const notePath = tab.path.peek();
+    const written = state.document.getText(picture.start, picture.end - picture.start);
+    const file = this.pictureFile(picture.url, notePath);
+    let deleteFile = file !== null;
+    if (file !== null) {
+      const text = state.text;
+      const hereAgain = imageTargets(text.slice(0, picture.start) + text.slice(picture.end), notePath).has(
+        file,
+      );
+      const others = await nb.notesShowing(file, notePath);
+      if (hereAgain || others.length > 0) {
+        const names = others.map((p) => p.replace(/\.[^./]+$/, ''));
+        if (hereAgain) names.unshift(`${stemOf(notePath)} (this note, elsewhere)`);
+        const trash = nb.store.kind === 'native';
+        const answer = await this.confirm({
+          title: `“${baseName(file)}” is in other notes`,
+          message:
+            `Keep File takes it out of this note only. Delete File ${trash ? 'moves the file to the Trash' : 'deletes the file'}, ` +
+            `so it's gone from ${names.length === 1 ? 'that note' : 'those notes'} too:`,
+          list: names,
+          buttons: [
+            { label: 'Cancel', value: 'cancel' },
+            { label: 'Delete File', value: 'file', kind: 'danger' },
+            { label: 'Keep File', value: 'link', kind: 'primary' },
+          ],
+        });
+        if (answer === 'cancel') return;
+        deleteFile = answer === 'file';
+      }
+    }
+    // Keep the file's bytes, so Undo can put it back and Redo delete it again.
+    let bytes: Uint8Array | null = null;
+    if (deleteFile && file !== null) {
+      try {
+        bytes = (await nb.store.read(file)).bytes;
+      } catch {
+        // Unreadable: it's deleted all the same, and Undo brings back only the link.
+      }
+    }
+    // The note may have changed while the question was open: only take out the picture if it's still there.
+    if (state.document.getText(picture.start, picture.end - picture.start) !== written) return;
+    const effect =
+      file !== null && bytes !== null
+        ? {
+            undo: () => void nb.restorePicture(file, bytes),
+            redo: () => void nb.removeAll([file]),
+          }
+        : undefined;
+    state.apply(removeRangeEdit(state.document, picture.start, picture.end), effect);
+    this.focusEditor();
+    if (deleteFile && file !== null) await nb.removeAll([file]);
   }
 
   /** Set the zoom, clamped and rounded to whole percents, and remember it. */

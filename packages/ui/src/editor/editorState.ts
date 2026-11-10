@@ -6,6 +6,7 @@ import {
   selectionStart,
   type Selection,
   type TextDocument,
+  type UndoEffect,
 } from '@puffinote/text';
 import { findBlocks, updateBlocks, type Block } from './blocks.ts';
 import type { Edit, EditContext } from './commands.ts';
@@ -74,10 +75,10 @@ export class EditorState {
    * Apply one command result (Enter, Tab, a line move, a format) as its own undo step: it never coalesces
    * with the typing before or after it (PRD §10.1).
    */
-  apply(edit: Edit | null): boolean {
+  apply(edit: Edit | null, effect?: UndoEffect): boolean {
     if (!edit) return false;
     breakUndoRun(this.buffer);
-    this.buffer.replaceRange(edit.start, edit.length, edit.text, edit.caret);
+    this.buffer.replaceRange(edit.start, edit.length, edit.text, edit.caret, effect);
     this.select(edit.anchor, edit.caret);
     breakUndoRun(this.buffer);
     return true;

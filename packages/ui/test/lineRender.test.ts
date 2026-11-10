@@ -75,6 +75,15 @@ describe('concealment (PRD §10.2)', () => {
     expect(visible('  - [ ] sub', caretAt(9))).toBe('<indent><checkbox>sub');
   });
 
+  it("keeps a task's checkbox when a selection runs across or up to its marker", () => {
+    const md = 'a\n- [ ] todo\nb';
+    const sel = (anchor: number, caret: number): Selection => ({ anchor, caret });
+    expect(visible(md, sel(0, 2), 1)).toBe('<checkbox>todo'); // dragged to the left of the checkbox
+    expect(visible(md, sel(0, 13), 1)).toBe('<checkbox>todo'); // across the whole item
+    expect(visible(md, sel(13, 2), 1)).toBe('<checkbox>todo'); // back up to the line start
+    expect(visible(md, sel(4, 9), 1)).toBe('- [ ] todo'); // from inside the marker
+  });
+
   it("keeps a list item's bullet or number while the caret edits its text", () => {
     expect(visible('- plain', caretAt(4))).toBe('<bullet>plain');
     expect(visible('- plain', caretAt(2))).toBe('<bullet>plain'); // at the start of the text

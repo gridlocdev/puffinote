@@ -90,6 +90,16 @@ describe('Notebook pictures', () => {
     expect((await store.read('attachments/Holiday 2.png')).bytes).toHaveLength(4);
   });
 
+  it('links the same picture pasted again to the file already there', async () => {
+    const { store, nb } = await open({ 'a.md': '', 'b.md': '' });
+    const [first] = await nb.addPictures('a.md', [png('Photo.png')]);
+    const [again] = await nb.addPictures('b.md', [png('image.png')]);
+    expect(again).toBe(first);
+    expect((await store.list('attachments')).map((e) => e.name)).toEqual(['Photo.png']);
+    const other = { ...png('Photo.png'), bytes: new Uint8Array([1, 2, 3, 4]) };
+    expect(await nb.addPictures('b.md', [other])).toEqual(['![](attachments/Photo%202.png)']);
+  });
+
   it('saves beside the note when set to', async () => {
     const { nb } = await open({ 'note.md': '' }, { attachmentLocation: 'note' });
     const [link] = await nb.addPictures('note.md', [png('p.png')]);

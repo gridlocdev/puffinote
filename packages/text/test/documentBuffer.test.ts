@@ -187,3 +187,19 @@ describe('reloadFrom', () => {
     expect(buf.selection.caret).toBe(2);
   });
 });
+
+describe('undo effects', () => {
+  it('undoes and redoes work outside the text with its edit, never merged with typing', () => {
+    const buf = new DocumentBuffer('ab');
+    const log: string[] = [];
+    buf.replaceRange(0, 1, '', 0, { undo: () => log.push('undo'), redo: () => log.push('redo') });
+    buf.insert('x');
+    buf.undo(); // the typing only
+    expect(log).toEqual([]);
+    buf.undo();
+    expect(text(buf)).toBe('ab');
+    buf.redo();
+    expect(text(buf)).toBe('b');
+    expect(log).toEqual(['undo', 'redo']);
+  });
+});

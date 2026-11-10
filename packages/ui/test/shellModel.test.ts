@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { Notebook } from '../src/notebook/notebook.ts';
 import { findNode } from '../src/notebook/tree.ts';
 import { memoryPrefs } from '../src/notebook/settings.ts';
@@ -150,5 +150,67 @@ describe('ShellModel zoom', () => {
     expect(m.zoom.value).toBe(0.5);
     await m.menuCatalog.run('view.zoomReset');
     expect(m.zoom.value).toBe(1);
+  });
+});
+
+describe('ShellModel Delete Picture', () => {
+  async function setup(files: Record<string, string>) {
+    const store = new MemoryStore('N', files);
+    const nb = await Notebook.open(store, { prefs: memoryPrefs({ autoSave: false }) });
+    const m = new ShellModel();
+    m.setNotebook(nb);
+    const tab = (await nb.openFile('a.md'))!;
+    const text = tab.state!.text;
+    const start = text.indexOf('![');
+    const end = text.indexOf(')', start) + 1;
+    return { nb, m, tab, picture: { start, end, url: 'pic.png' } };
+  }
+
+  it('takes the picture and its line out of the note and deletes a file no other note shows', async () => {
+    const { nb, m, tab, picture } = await setup({ 'a.md': 'one\n![](pic.png)\ntwo', 'pic.png': '' });
+    await m.deletePicture(picture);
+    expect(tab.state!.text).toBe('one\ntwo');
+    expect(m.overlay.value).toBeNull();
+    expect(findNode(nb.tree.value, 'pic.png')).toBeNull();
+  });
+
+  it('brings the file back on Undo and deletes it again on Redo', async () => {
+    const { nb, m, tab, picture } = await setup({ 'a.md': 'one\n![](pic.png)\ntwo', 'pic.png': 'PNG' });
+    await m.deletePicture(picture);
+    expect(findNode(nb.tree.value, 'pic.png')).toBeNull();
+    tab.state!.undo();
+    expect(tab.state!.text).toBe('one\n![](pic.png)\ntwo');
+    await vi.waitFor(() => expect(findNode(nb.tree.value, 'pic.png')).not.toBeNull());
+    expect(new TextDecoder().decode((await nb.store.read('pic.png')).bytes)).toBe('PNG');
+    tab.state!.redo();
+    expect(tab.state!.text).toBe('one\ntwo');
+    await vi.waitFor(() => expect(findNode(nb.tree.value, 'pic.png')).toBeNull());
+  });
+
+  it('asks before deleting a file other notes show, listing them, and keeps it by default', async () => {
+    const { nb, m, tab, picture } = await setup({
+      'a.md': 'see ![](pic.png) here',
+      'sub/b.md': '![x](../pic.png)',
+      'c.md': 'nothing',
+      'pic.png': '',
+    });
+    const deleting = m.deletePicture(picture);
+    await vi.waitFor(() => expect(m.overlay.value?.kind).toBe('confirm'));
+    const o = m.overlay.value;
+    expect(o?.kind === 'confirm' && o.options.list).toEqual(['sub/b']);
+    if (o?.kind === 'confirm') o.done('link');
+    await deleting;
+    expect(tab.state!.text).toBe('see  here');
+    expect(findNode(nb.tree.value, 'pic.png')).not.toBeNull();
+  });
+
+  it('deletes the shared file when asked to', async () => {
+    const { nb, m, picture } = await setup({ 'a.md': '![](pic.png)', 'b.md': '![](pic.png)', 'pic.png': '' });
+    const deleting = m.deletePicture(picture);
+    await vi.waitFor(() => expect(m.overlay.value?.kind).toBe('confirm'));
+    const o = m.overlay.value;
+    if (o?.kind === 'confirm') o.done('file');
+    await deleting;
+    expect(findNode(nb.tree.value, 'pic.png')).toBeNull();
   });
 });

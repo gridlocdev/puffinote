@@ -9,7 +9,7 @@ import {
 } from '../document/selection.ts';
 import { computeStats, type DocumentStats } from '../document/stats.ts';
 import { TextDocument } from '../document/textDocument.ts';
-import { EditHistory } from './editHistory.ts';
+import { EditHistory, type UndoEffect } from './editHistory.ts';
 import { applyEdit, caretAfter as editCaretAfter, invertEdit, replaceEdit } from './textEdit.ts';
 
 export type BufferListener = () => void;
@@ -127,15 +127,16 @@ export class DocumentBuffer {
 
   /**
    * Replace `[start, start + length)` with `text` as one undoable edit. The caret goes to
-   * `caretAfter` when given, otherwise just after the inserted text.
+   * `caretAfter` when given, otherwise just after the inserted text. `effect` is work outside the text that
+   * undoing and redoing this edit also undo and redo.
    */
-  replaceRange(start: number, length: number, text: string, caretAfter?: number): void {
+  replaceRange(start: number, length: number, text: string, caretAfter?: number, effect?: UndoEffect): void {
     const edit = replaceEdit(this.document, start, length, text);
     if (edit.removed.length === 0 && edit.inserted.length === 0) return;
     const before = this.selectionValue;
     this.document = applyEdit(edit, this.document);
     this.selectionValue = caretAt(caretAfter ?? editCaretAfter(edit));
-    this.history.record(edit, before, this.selectionValue);
+    this.history.record(edit, before, this.selectionValue, effect);
     this.textChanged(this.document.getPosition(edit.start).line);
   }
 
@@ -145,6 +146,7 @@ export class DocumentBuffer {
     this.document = applyEdit(invertEdit(entry.edit), this.document);
     this.selectionValue = this.clamp(entry.before);
     this.textChanged(this.document.getPosition(entry.edit.start).line);
+    entry.effect?.undo();
     return true;
   }
 
@@ -154,6 +156,7 @@ export class DocumentBuffer {
     this.document = applyEdit(entry.edit, this.document);
     this.selectionValue = this.clamp(entry.after);
     this.textChanged(this.document.getPosition(entry.edit.start).line);
+    entry.effect?.redo();
     return true;
   }
 

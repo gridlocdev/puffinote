@@ -1270,6 +1270,14 @@
   color: #fff;
 }
 
+.pn-confirm-list {
+  max-height: 40vh;
+  margin: 4px 0 0;
+  padding-left: 20px;
+  overflow-y: auto;
+  overflow-wrap: anywhere;
+}
+
 .pn-field {
   display: flex;
   flex-direction: column;

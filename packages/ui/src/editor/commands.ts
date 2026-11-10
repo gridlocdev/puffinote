@@ -107,6 +107,27 @@ function firstListItem(doc: TextDocument, line: number): boolean {
   return true;
 }
 
+/**
+ * Take the picture written at `[start, end)` out of the note (Delete Picture, PRD §10.6). A picture alone on
+ * its line takes the line with it; the caret lands where the picture was.
+ */
+export function removeRangeEdit(doc: TextDocument, start: number, end: number): Edit {
+  const line = lineOf(doc, start);
+  const lineStart = doc.getLineStart(line);
+  const text = contentOf(doc.getLineText(line));
+  const rest = text.slice(0, start - lineStart) + text.slice(end - lineStart);
+  if (rest.trim().length > 0 || doc.lineCount === 1) {
+    return { start, length: end - start, text: '', anchor: start, caret: start };
+  }
+  // The whole line goes: with the line break after it, or before it on the last line.
+  const lineEnd = lineStart + text.length;
+  const last = line === doc.lineCount - 1;
+  const from = last ? lineStart - (doc.getText(lineStart - 2, 2) === '\r\n' ? 2 : 1) : lineStart;
+  const to = last ? lineEnd : doc.getLineStart(line + 1);
+  const caret = last ? from : lineStart;
+  return { start: from, length: to - from, text: '', anchor: caret, caret };
+}
+
 /** Shift+Enter: a single line break, never a new paragraph. */
 export function softBreakEdit(sel: Selection): Edit {
   return replaceSelection(sel, '\n');

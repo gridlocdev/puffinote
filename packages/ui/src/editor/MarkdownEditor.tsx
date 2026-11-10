@@ -46,10 +46,24 @@ export interface MarkdownEditorProps {
   readonly zoom?: number;
   /** Ticking a task done moves it below the open ones in its list (Settings: Move ticked tasks to the bottom). */
   readonly sortTasks?: boolean;
-  /** A right-click (or Control-click on macOS): show the editing menu at that point. */
-  readonly onContextMenu?: (at: { readonly x: number; readonly y: number }) => void;
+  /** A right-click (or Control-click on macOS): show the editing menu at that point, or a picture's menu. */
+  readonly onContextMenu?: (at: EditorMenuPoint) => void;
   /** Save pasted or dropped pictures and return the Markdown for each; without it, only text pastes. */
   readonly onPictures?: (files: readonly File[]) => Promise<readonly string[]>;
+}
+
+/** Where the editor was right-clicked, and the picture under the pointer, if any. */
+export interface EditorMenuPoint {
+  readonly x: number;
+  readonly y: number;
+  readonly picture?: PictureAt;
+}
+
+/** A picture drawn in the note: its Markdown's range in the document, and its link as written. */
+export interface PictureAt {
+  readonly start: number;
+  readonly end: number;
+  readonly url: string;
 }
 
 const identity = (url: string): string => url;
@@ -664,12 +678,47 @@ export function MarkdownEditor(props: MarkdownEditorProps) {
     if (!props.onContextMenu) return;
     e.preventDefault();
     inputRef.current?.focus({ preventScroll: true });
+    const picture = pictureAt(e.target as HTMLElement);
+    if (picture) {
+      props.onContextMenu({ x: e.clientX, y: e.clientY, picture });
+      return;
+    }
     // Like a text field: a right-click inside the selection keeps it, anywhere else moves the caret there.
     const offset = offsetAt(e.clientX, e.clientY);
     const from = selectionStart(sel);
     const to = Math.max(sel.anchor, sel.caret);
     if (offset !== null && (isCollapsed(sel) || offset < from || offset > to)) state.select(offset, offset);
     props.onContextMenu({ x: e.clientX, y: e.clientY });
+  }
+
+  /**
+   * Dragging back to the left of a list item's bullet or checkbox: the selection takes in the whole item, as
+   * it does on the lines it passed over, instead of stopping where the item's text starts.
+   */
+  function itemStartLeftOf(offset: number, x: number): number {
+    const line = doc.getPosition(offset).line;
+    if (mode !== 'live' || offset !== itemTextStart(line)) return offset;
+    const body = lineEl(line)?.querySelector(':scope > .pn-li-body');
+    return body && x < body.getBoundingClientRect().left ? doc.getLineStart(line) : offset;
+  }
+
+  /** The picture whose drawing `target` is in: the whole `![alt](url)` it was drawn from. */
+  function pictureAt(target: HTMLElement): PictureAt | undefined {
+    const img = target.closest<HTMLElement>('.pn-image');
+    const lineAttr = img?.closest('[data-line]')?.getAttribute('data-line');
+    if (!img || lineAttr == null) return undefined;
+    const line = Number(lineAttr);
+    const lineStart = doc.getLineStart(line);
+    const tokens = state.model.lineTokens(line);
+    const at = lineStart + Number(img.dataset.from);
+    const urlToken = tokens.find((t) => t.type === 'imageUrl' && t.start === at);
+    if (!urlToken || urlToken.node === 0) return undefined;
+    const parts = tokens.filter((t) => t.node === urlToken.node);
+    return {
+      start: Math.min(...parts.map((t) => t.start)),
+      end: Math.max(...parts.map((t) => t.start + t.length)),
+      url: urlToken.meta ?? doc.getText(urlToken.start, urlToken.length),
+    };
   }
 
   function offsetAt(x: number, y: number, dir: 1 | -1 = 1): number | null {
@@ -731,7 +780,8 @@ export function MarkdownEditor(props: MarkdownEditorProps) {
 
     const fixedAnchor = anchor;
     const onMove = (m: MouseEvent): void => {
-      const to = offsetAt(m.clientX, m.clientY, m.clientX > e.clientX ? 1 : -1);
+      let to = offsetAt(m.clientX, m.clientY, m.clientX > e.clientX ? 1 : -1);
+      if (to !== null && to < fixedAnchor) to = itemStartLeftOf(to, m.clientX);
       if (to !== null) {
         revealCaret.current = true;
         state.select(fixedAnchor, to);

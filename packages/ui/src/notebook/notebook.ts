@@ -23,6 +23,7 @@ import { NoteMetaCache } from './noteMeta.ts';
 import {
   ConflictError,
   NotFoundError,
+  type Entry,
   type FileData,
   type NotebookStore,
 } from '../platform/notebookStore.ts';
@@ -1055,15 +1056,22 @@ export class Notebook {
     files: readonly { name: string; type: string; bytes: Uint8Array }[],
   ): Promise<string[]> {
     const dir = attachmentDir(this.settings.peek(), notePath);
-    let taken: Set<string>;
+    let entries: Entry[];
     try {
-      taken = new Set((await this.store.list(dir)).map((e) => e.name.toLowerCase()));
+      entries = await this.store.list(dir);
     } catch {
-      taken = new Set();
+      entries = [];
     }
+    const taken = new Set(entries.map((e) => e.name.toLowerCase()));
     const links: string[] = [];
     for (const f of files) {
       if (!isImageMime(f.type)) continue;
+      // The same picture pasted again (Copy Picture from another note) links to the file that's already there.
+      const same = await this.samePicture(dir, entries, f.bytes);
+      if (same !== null) {
+        links.push(imageMarkdown(notePath, same));
+        continue;
+      }
       let name = attachmentName(f.name, f.type, new Date());
       // Disks that ignore case would refuse "Photo.png" beside "photo.png".
       name = uniqueName(name, { has: (n: string) => taken.has(n.toLowerCase()) } as ReadonlySet<string>);
@@ -1099,6 +1107,49 @@ export class Notebook {
       if (fileKind(f.path) !== 'note') continue;
       const text = await this.noteText(f.path);
       if (text?.includes('](')) for (const t of imageTargets(text, f.path)) out.add(t);
+    }
+    return out;
+  }
+
+  /** The picture in `dir` (listed as `entries`) whose bytes are `bytes`, or null. */
+  private async samePicture(
+    dir: string,
+    entries: readonly Entry[],
+    bytes: Uint8Array,
+  ): Promise<string | null> {
+    for (const e of entries) {
+      if (e.kind !== 'file' || e.size !== bytes.length || !isImagePath(e.name)) continue;
+      const path = e.path;
+      try {
+        const other = (await this.store.read(path)).bytes;
+        if (other.length === bytes.length && other.every((b, i) => b === bytes[i])) return path;
+      } catch {
+        // Unreadable: not a match.
+      }
+    }
+    return null;
+  }
+
+  /** Put a deleted picture's file back (undoing Delete Picture), and redraw the notes that show it. */
+  async restorePicture(path: string, bytes: Uint8Array): Promise<void> {
+    try {
+      await this.store.write(path, bytes, { create: true });
+    } catch (e) {
+      this.report(e);
+      return;
+    }
+    this.images.delete(path);
+    this.imagesLoaded.value++;
+    await this.reloadTree();
+  }
+
+  /** The notes other than `except` that link to the picture at `path`, in tree order. */
+  async notesShowing(path: string, except: string): Promise<string[]> {
+    const out: string[] = [];
+    for (const f of allFiles(this.tree.peek())) {
+      if (fileKind(f.path) !== 'note' || f.path === except) continue;
+      const text = await this.noteText(f.path);
+      if (text?.includes('](') && imageTargets(text, f.path).has(path)) out.push(f.path);
     }
     return out;
   }

@@ -132,6 +132,8 @@ export interface ConfirmButton {
 export interface ConfirmOptions {
   readonly title: string;
   readonly message: string;
+  /** Names listed under the message (the notes a shared picture shows in). */
+  readonly list?: readonly string[];
   /** Left to right; the last is the default. Escape answers 'cancel'. */
   readonly buttons: readonly ConfirmButton[];
 }
@@ -158,6 +160,13 @@ export function ConfirmDialog(props: ConfirmOptions & { readonly onDone: (value:
       ))}
     >
       <p>{props.message}</p>
+      {props.list && props.list.length > 0 && (
+        <ul class="pn-confirm-list">
+          {props.list.map((name) => (
+            <li key={name}>{name}</li>
+          ))}
+        </ul>
+      )}
     </Dialog>
   );
 }
