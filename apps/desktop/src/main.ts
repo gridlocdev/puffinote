@@ -1,4 +1,4 @@
-import { app, BrowserWindow, dialog, ipcMain, Menu, net, protocol, shell } from 'electron';
+import { app, BrowserWindow, dialog, ipcMain, Menu, net, protocol, screen, shell } from 'electron';
 import type { MenuItemConstructorOptions } from 'electron';
 import { mkdir, readdir, realpath, rename, stat } from 'node:fs/promises';
 import path from 'node:path';
@@ -88,9 +88,13 @@ function stopWatching(state: WindowState): void {
 }
 
 function createWindow(): BrowserWindow {
+  // Fill the usable part of the screen the pointer is on: below the menu bar, clear of the Dock or taskbar.
+  const { x, y, width, height } = screen.getDisplayNearestPoint(screen.getCursorScreenPoint()).workArea;
   const win = new BrowserWindow({
-    width: 1200,
-    height: 800,
+    x,
+    y,
+    width,
+    height,
     minWidth: 560,
     minHeight: 400,
     title: 'Puffinote',
