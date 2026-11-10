@@ -198,9 +198,12 @@ export function computeEnter(line: string, caretColumn: number): EnterResult {
     return { kind: 'exit', text: '', exitStart, exitLength: contentLen - exitStart };
   }
 
-  // The caret is inside the marker prefix: continuing would splice another marker into the line, so open an
-  // empty item above and push the whole item down.
-  if (caretColumn < p.length) return enter('above', continuationPrefix(p) + '\n');
+  // The caret is inside the marker prefix, or at the start of an item's text: continuing would splice another
+  // marker into the line or leave the item's marker behind on an empty line, so open an empty item above and
+  // push the whole item down, keeping its marker and tick.
+  if (caretColumn < p.length || (p.hasList && caretColumn === p.length)) {
+    return enter('above', continuationPrefix(p) + '\n');
+  }
 
   return enter('continue', '\n' + continuationPrefix(p));
 }

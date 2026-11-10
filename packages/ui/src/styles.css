@@ -259,6 +259,17 @@
 
 /* ----- Decorations: synthetic glyphs that replace concealed markers ----- */
 
+/* A list item: its bullet or checkbox in one column, its text in the next, so wrapped rows line up with the
+   text instead of running back under the marker. */
+.pn-line.pn-hang {
+  display: flex;
+  align-items: flex-start;
+}
+.pn-li-body {
+  flex: 1 1 0;
+  min-width: 0;
+}
+
 .pn-deco {
   display: inline-block;
   vertical-align: top;

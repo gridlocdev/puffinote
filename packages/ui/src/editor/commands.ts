@@ -80,12 +80,31 @@ export function enterEdit(doc: TextDocument, sel: Selection, mode: ViewMode, con
   }
   if (r.kind === 'continue') return withRenumber(doc, replaceSelection(sel, r.text));
   if (r.kind === 'above' && isCollapsed(sel)) {
-    // One new line: an empty item above, with the caret at the start of the text of the item it pushed down.
-    const caret = lineStart + r.text.length + parseLinePrefix(lineText).length;
-    return withRenumber(doc, { start: lineStart, length: 0, text: r.text, anchor: caret, caret });
+    // One new line above, with the caret at the start of the text of the item it pushed down: an empty item
+    // inside a list, or a blank line (kept in its quote) when the item is the first of its list.
+    const p = parseLinePrefix(lineText);
+    const text = p.hasList && firstListItem(doc, line) ? p.quote.trimEnd() + '\n' : r.text;
+    const caret = lineStart + text.length + p.length;
+    return withRenumber(doc, { start: lineStart, length: 0, text, anchor: caret, caret });
   }
   const blank = lineText.trim().length === 0;
   return replaceSelection(sel, blank ? '\n' : '\n\n');
+}
+
+/**
+ * Whether list item `line` is the first item of its list: no item at its level comes before it, past the lines
+ * nested under earlier items. The first child of a nested list counts as first.
+ */
+function firstListItem(doc: TextDocument, line: number): boolean {
+  const p = parseLinePrefix(doc.getLineText(line));
+  for (let i = line - 1; i >= 0; i--) {
+    const text = doc.getLineText(i);
+    const q = parseLinePrefix(text);
+    if (q.quote !== p.quote || text.slice(q.markerStart).trim().length === 0) return true;
+    if (q.markerStart < p.markerStart) return true;
+    if (q.markerStart === p.markerStart) return !(q.hasList && q.list === p.list);
+  }
+  return true;
 }
 
 /** Shift+Enter: a single line break, never a new paragraph. */
@@ -459,6 +478,118 @@ export function setTaskStateEdit(
     remove: 1,
     insert: taskMark(state),
   }));
+}
+
+/** One item of a bulleted list: its first line, its last (nested lines included), and whether it's done. */
+interface ListItem {
+  readonly first: number;
+  readonly last: number;
+  readonly done: boolean;
+}
+
+/** The items of the bulleted list that `line` is an item of (its own level only), or null. */
+function listItemsAround(doc: TextDocument, line: number): ListItem[] | null {
+  const p = parseLinePrefix(doc.getLineText(line));
+  if (!p.hasList || p.list !== 'unordered') return null;
+  const sibling = (i: number) => {
+    const q = parseLinePrefix(doc.getLineText(i));
+    return q.hasList && q.list === 'unordered' && q.quote === p.quote && q.markerStart === p.markerStart;
+  };
+  // A nested line: not blank, in the same quote, and starting right of this level's marker.
+  const nested = (i: number) => {
+    const text = doc.getLineText(i);
+    const q = parseLinePrefix(text);
+    return (
+      text.slice(q.markerStart).trim().length > 0 && q.quote === p.quote && q.markerStart > p.markerStart
+    );
+  };
+  let first = line;
+  for (let i = line - 1; i >= 0; i--) {
+    if (sibling(i)) first = i;
+    else if (!nested(i)) break;
+  }
+  const items: ListItem[] = [];
+  for (let i = first; i < doc.lineCount && sibling(i);) {
+    let last = i;
+    while (last + 1 < doc.lineCount && nested(last + 1)) last++;
+    items.push({ first: i, last, done: parseLinePrefix(doc.getLineText(i)).taskChecked });
+    i = last + 1;
+  }
+  return items;
+}
+
+/**
+ * "Move ticked tasks to the bottom" (PRD §10.1): reorder the bulleted lists holding `lines` so each list's
+ * done tasks follow the others, every item keeping its nested lines and the two groups keeping their order.
+ * The selection moves with the text it was in. Null when every list is already in that order.
+ */
+export function sortTasksEdit(doc: TextDocument, sel: Selection, lines: readonly number[]): Edit | null {
+  const pieces: { start: number; end: number; text: string; map: (o: number) => number }[] = [];
+  const seen = new Set<number>();
+  for (const line of lines) {
+    const items = listItemsAround(doc, line);
+    if (!items || items.length < 2 || seen.has(items[0]!.first)) continue;
+    seen.add(items[0]!.first);
+    const order = [...items.filter((it) => !it.done), ...items.filter((it) => it.done)];
+    if (order.every((it, i) => it === items[i])) continue;
+    const start = doc.getLineStart(items[0]!.first);
+    const end = doc.getLineEnd(items[items.length - 1]!.last);
+    const spans = order.map((it) => {
+      const a = doc.getLineStart(it.first);
+      return { a, b: doc.getLineEnd(it.last) };
+    });
+    let at = start;
+    const placed = spans.map((sp) => {
+      const to = at;
+      at += sp.b - sp.a + 1;
+      return { ...sp, to };
+    });
+    pieces.push({
+      start,
+      end,
+      text: spans.map((sp) => doc.getText(sp.a, sp.b - sp.a)).join('\n'),
+      map: (o) => {
+        const hit = placed.find((sp) => o >= sp.a && o <= sp.b);
+        return hit ? hit.to + (o - hit.a) : o;
+      },
+    });
+  }
+  if (pieces.length === 0) return null;
+  pieces.sort((x, y) => x.start - y.start);
+  const start = pieces[0]!.start;
+  const end = pieces[pieces.length - 1]!.end;
+  let text = '';
+  let at = start;
+  for (const pc of pieces) {
+    text += doc.getText(at, pc.start - at) + pc.text;
+    at = pc.end;
+  }
+  const map = (o: number) => pieces.find((pc) => o >= pc.start && o <= pc.end)?.map(o) ?? o;
+  return { start, length: end - start, text, anchor: map(sel.anchor), caret: map(sel.caret) };
+}
+
+/**
+ * `edit` (a task state change) followed by sorting the lists it touched, as one undoable edit. Edits that
+ * change the text's length (adding a box) are returned as they are.
+ */
+export function withTaskSort(doc: TextDocument, edit: Edit | null): Edit | null {
+  if (!edit || edit.text.length !== edit.length) return edit;
+  const after = applyEditTo(doc, edit);
+  const first = after.getPosition(edit.start).line;
+  const last = after.getPosition(edit.start + edit.text.length).line;
+  const lines = Array.from({ length: last - first + 1 }, (_, i) => first + i);
+  const sort = sortTasksEdit(after, { anchor: edit.anchor, caret: edit.caret }, lines);
+  if (!sort) return edit;
+  const start = Math.min(edit.start, sort.start);
+  const end = Math.max(edit.start + edit.length, sort.start + sort.length);
+  const sorted = applyEditTo(after, sort);
+  return {
+    start,
+    length: end - start,
+    text: sorted.getText(start, end - start),
+    anchor: sort.anchor,
+    caret: sort.caret,
+  };
 }
 
 /** ⇧⌘L: take the task box off each selected line, leaving the list item. */

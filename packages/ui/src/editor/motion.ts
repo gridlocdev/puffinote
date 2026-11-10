@@ -1,3 +1,4 @@
+import { parseLinePrefix } from '@puffinote/markdown';
 import type { TextDocument } from '@puffinote/text';
 
 const words = new Intl.Segmenter(undefined, { granularity: 'word' });
@@ -46,4 +47,23 @@ export function wordRangeAt(doc: TextDocument, offset: number): { start: number;
     if (column >= s.index && column < end) return { start: lineStart + s.index, end: lineStart + end };
   }
   return { start: offset, end: offset };
+}
+
+/**
+ * Where a list item's text starts on `line`, past its bullet and task box (`- [ ] |text`); the line start
+ * when it isn't a list item. In Rich view the bullet and box draw as decorations, and a caret belongs after them.
+ */
+export function itemTextStart(doc: TextDocument, line: number): number {
+  const p = parseLinePrefix(doc.getLineText(line));
+  return doc.getLineStart(line) + (p.hasList ? p.length : 0);
+}
+
+/**
+ * Home (⌘← on macOS) in Rich view from `from`: the start of a list item's text, or, pressed there (or from
+ * inside the marker), the start of the line, so the marker can still be reached.
+ */
+export function smartLineStart(doc: TextDocument, from: number): number {
+  const line = doc.getPosition(from).line;
+  const text = itemTextStart(doc, line);
+  return from > text ? text : doc.getLineStart(line);
 }

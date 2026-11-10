@@ -15,6 +15,7 @@ import {
   setTaskStateEdit,
   toggleInlineEdit,
   toggleTaskEdit,
+  withTaskSort,
   type Edit,
 } from './commands.ts';
 import type { EditorState } from './editorState.ts';
@@ -28,6 +29,8 @@ export interface EditorCommandTarget {
   readonly focus: () => void;
   /** The editor's text input, which takes the clipboard events (Cut, Copy and Paste from a menu). */
   readonly input?: () => HTMLElement | null;
+  /** Whether ticking a task done moves it below the open ones in its list (Settings, PRD §9). */
+  readonly sortTasks?: () => boolean;
 }
 
 /**
@@ -37,6 +40,7 @@ export interface EditorCommandTarget {
  */
 export function markdownCommandSpecs(target: EditorCommandTarget): CommandSpec[] {
   const has = () => target.state() !== null;
+  const sorted = (doc: TextDocument, e: Edit | null) => (target.sortTasks?.() ? withTaskSort(doc, e) : e);
   const edit = (fn: (doc: TextDocument, sel: Selection) => Edit | null) => (): void => {
     const s = target.state();
     if (!s) return;
@@ -240,7 +244,7 @@ export function markdownCommandSpecs(target: EditorCommandTarget): CommandSpec[]
       shortcut: 'mod+l',
       icon: 'square-check',
       enabled: has,
-      run: edit(toggleTaskEdit),
+      run: edit((doc, sel) => sorted(doc, toggleTaskEdit(doc, sel))),
     },
     {
       id: 'format.taskStatus',
@@ -255,7 +259,7 @@ export function markdownCommandSpecs(target: EditorCommandTarget): CommandSpec[]
         const p = parseLinePrefix(doc.getLineText(line));
         if (!p.hasTask) return null;
         const next = taskStateOrder[(taskStateOrder.indexOf(p.task) + 1) % taskStateOrder.length]!;
-        return setTaskStateEdit(doc, sel, line, next);
+        return sorted(doc, setTaskStateEdit(doc, sel, line, next));
       }),
     },
     {

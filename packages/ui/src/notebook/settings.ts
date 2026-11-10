@@ -18,8 +18,14 @@ export interface Settings {
   readonly defaultView: ViewMode;
   /** Save a note a moment after the last edit. */
   readonly autoSave: boolean;
+  /** Move a task below the open ones in its list when it's ticked done, as Apple Notes does. */
+  readonly sortCheckedTasks: boolean;
   /** What Tab inserts and how far a list item indents. */
   readonly indent: 'spaces2' | 'spaces4' | 'tab';
+  /**
+   * How a file tree row opens: one click (⌥-click selects), or two (one click selects, as in Finder).
+   */
+  readonly treeClick: 'single' | 'double';
   /** Show `.md` and other extensions in the file tree. */
   readonly showFileExtensions: boolean;
   /** Show files and folders whose names start with a dot. */
@@ -45,7 +51,9 @@ export const defaultSettings: Settings = {
   accent: 'blue',
   defaultView: 'live',
   autoSave: true,
+  sortCheckedTasks: true,
   indent: 'spaces4',
+  treeClick: 'single',
   showFileExtensions: false,
   showHiddenFiles: false,
   showTabBar: true,
@@ -108,6 +116,11 @@ export const settingFields: readonly SettingField[] = [
   },
   { key: 'autoSave', label: 'Save automatically', help: 'Save a note a second after you stop typing.' },
   {
+    key: 'sortCheckedTasks',
+    label: 'Move ticked tasks to the bottom',
+    help: 'When you tick a task done, move it below the unticked ones in its list. Unticking moves it back up.',
+  },
+  {
     key: 'indent',
     label: 'Indent with',
     help: 'What Tab inserts, and how far a nested list item moves.',
@@ -115,6 +128,15 @@ export const settingFields: readonly SettingField[] = [
       { value: 'spaces4', label: '4 spaces' },
       { value: 'spaces2', label: '2 spaces' },
       { value: 'tab', label: 'Tab' },
+    ],
+  },
+  {
+    key: 'treeClick',
+    label: 'Open notes and folders with',
+    help: 'In the file tree. With a double click, one click selects a note or folder, so Enter renames it.',
+    options: [
+      { value: 'single', label: 'A single click' },
+      { value: 'double', label: 'A double click' },
     ],
   },
   {

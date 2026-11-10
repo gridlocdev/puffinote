@@ -91,10 +91,35 @@ export function caretBox(lineEl: Element, col: number): CaretBox {
     };
   }
   if ('el' in p) {
+    // Beside a decoration (a checkbox, a bullet): where the text before or after it would start, so past its
+    // margin, and as tall as the line's text rather than the decoration.
     const r = p.el.getBoundingClientRect();
-    return { left: p.side === 'left' ? r.left : r.right, top: r.top, height: r.height };
+    const deco = getComputedStyle(p.el);
+    const style = getComputedStyle(lineEl);
+    const lh = parseFloat(style.lineHeight) || r.height;
+    const h = Math.min(lh, fontHeight(style) ?? lh);
+    const rowTop = r.top - (parseFloat(deco.marginTop) || 0);
+    return {
+      left:
+        p.side === 'left'
+          ? r.left - (parseFloat(deco.marginLeft) || 0)
+          : r.right + (parseFloat(deco.marginRight) || 0),
+      top: rowTop + (lh - h) / 2,
+      height: h,
+    };
   }
   const range = document.createRange();
+  const text = p.node.textContent ?? '';
+  if (p.offset < text.length) {
+    // Measure the character after the caret: at a soft wrap a collapsed range measures the end of the row
+    // above, but the caret belongs at the start of the row below (where typing would put the character).
+    const code = text.charCodeAt(p.offset);
+    const step = code >= 0xd800 && code <= 0xdbff && p.offset + 1 < text.length ? 2 : 1;
+    range.setStart(p.node, p.offset);
+    range.setEnd(p.node, p.offset + step);
+    const r = firstRect(range);
+    if (r && r.height > 0) return { left: r.left, top: r.top, height: r.height };
+  }
   range.setStart(p.node, p.offset);
   range.setEnd(p.node, p.offset);
   let rect = firstRect(range);
@@ -287,7 +312,12 @@ export function hitTest(
     return { line, col: x < r.left + r.width / 2 ? fromOf(deco) : toOf(deco) };
   }
 
-  const pos = caretFromPoint(cx, cy);
+  // Under a list item's marker (not on its shown text), the row is the text column's row beside it (PRD §10.2).
+  const itemBody = lineEl.querySelector(':scope > .pn-li-body');
+  const onMarker =
+    !!target && lineEl.contains(target) && !!target.closest('[data-from]') && !itemBody?.contains(target);
+  const px = itemBody && !onMarker ? Math.max(cx, itemBody.getBoundingClientRect().left + 1) : cx;
+  const pos = caretFromPoint(px, cy);
   if (pos) {
     const host =
       pos.offsetNode.nodeType === Node.TEXT_NODE ? pos.offsetNode.parentElement : (pos.offsetNode as Element);
@@ -300,8 +330,9 @@ export function hitTest(
     ) {
       return { line, col: Math.min(fromOf(run) + pos.offset, toOf(run)) };
     }
-    if (host === lineEl) {
-      const kids = Array.from(lineEl.children);
+    const body = host?.classList.contains('pn-li-body') && host.parentElement === lineEl;
+    if (host === lineEl || body) {
+      const kids = Array.from(host!.children);
       const kid = kids[pos.offset];
       if (kid?.hasAttribute('data-from')) return { line, col: fromOf(kid) };
     }

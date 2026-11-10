@@ -1,3 +1,4 @@
+import { parseLinePrefix } from '@puffinote/markdown';
 import { TextDocument, type Selection } from '@puffinote/text';
 import { describe, expect, it } from 'vitest';
 import {
@@ -14,6 +15,9 @@ import {
   setTaskStateEdit,
   toggleInlineEdit,
   toggleTaskEdit,
+  withTaskSort,
+  itemTextStart,
+  smartLineStart,
   typeCharEdit,
   wordLeft,
   wordRight,
@@ -77,6 +81,19 @@ describe('Enter (PRD §10.1)', () => {
     expect(enter('- [ ] a\n|- [ ] b')).toBe('- [ ] a\n- [ ] \n- [ ] |b');
     expect(enter('- [ ] a\n- [x|] b')).toBe('- [ ] a\n- [ ] \n- [x] |b');
     expect(enter('1. a\n|2. b')).toBe('1. a\n2. \n3. |b');
+  });
+
+  it('pushes an item down whole when the caret is at the start of its text', () => {
+    expect(enter('- [ ] a\n- [x] |b')).toBe('- [ ] a\n- [ ] \n- [x] |b');
+    expect(enter('- [ ] a\n  - [ ] c\n- [ ] |b')).toBe('- [ ] a\n  - [ ] c\n- [ ] \n- [ ] |b');
+    expect(enter('- a\n- |b')).toBe('- a\n- \n- |b');
+  });
+
+  it('opens a blank line above the first item of a list instead of an empty item', () => {
+    expect(enter('- [x] |a\n- [ ] b')).toBe('\n- [x] |a\n- [ ] b');
+    expect(enter('Tasks\n- [ ] |a')).toBe('Tasks\n\n- [ ] |a');
+    expect(enter('- [ ] a\n  - [x] |c')).toBe('- [ ] a\n\n  - [x] |c');
+    expect(enter('> - [ ] |a')).toBe('>\n> - [ ] |a');
   });
 
   it('exits an empty item', () => {
@@ -251,6 +268,58 @@ describe('tasks', () => {
       '- [/] a\n- [ ] b|',
     );
     expect(run('plain|', (d, s) => setTaskStateEdit(d, s, 0, 'done'))).toBe('(none)');
+  });
+});
+
+describe('ticked tasks sink', () => {
+  const tick = (marked: string, line?: number) =>
+    run(marked, (d, s) => {
+      const at = line ?? d.getPosition(s.caret).line;
+      const p = parseLinePrefix(d.getLineText(at));
+      return withTaskSort(d, setTaskStateEdit(d, s, at, p.taskChecked ? 'notStarted' : 'done'));
+    });
+
+  it('moves a ticked task below the open ones, the caret with it', () => {
+    expect(tick('- [ ] a|\n- [ ] b\n- [x] c')).toBe('- [ ] b\n- [x] a|\n- [x] c');
+    expect(tick('- [ ] a\n- [ ] b|\n- [ ] c\nafter')).toBe('- [ ] a\n- [ ] c\n- [x] b|\nafter');
+  });
+
+  it('moves an unticked task back up to the end of the open ones', () => {
+    expect(tick('- [ ] a\n- [x] b\n- [x] c|')).toBe('- [ ] a\n- [ ] c|\n- [x] b');
+  });
+
+  it('carries nested lines and stays inside its own list', () => {
+    expect(tick('x\n- [ ] a|\n    - [ ] sub\n    more\n- [ ] b\n\n- [ ] other')).toBe(
+      'x\n- [ ] b\n- [x] a|\n    - [ ] sub\n    more\n\n- [ ] other',
+    );
+    expect(tick('- [ ] a\n    - [ ] s1|\n    - [ ] s2\n- [ ] b')).toBe(
+      '- [ ] a\n    - [ ] s2\n    - [x] s1|\n- [ ] b',
+    );
+  });
+
+  it('leaves numbered lists and lists already in order alone', () => {
+    expect(tick('1. [ ] a|\n2. [ ] b')).toBe('1. [x] a|\n2. [ ] b');
+    expect(tick('- [ ] a\n- [ ] b|')).toBe('- [ ] a\n- [x] b|');
+  });
+
+  it('sorts the lists ⌘L toggles, as one edit', () => {
+    expect(run('- [ ] ‹a\n- [ ] b›\n- [ ] c', (d, s) => withTaskSort(d, toggleTaskEdit(d, s)))).toBe(
+      '- [ ] c\n- [x] ‹a\n- [x] b›',
+    );
+  });
+});
+
+describe('list item starts', () => {
+  const doc = TextDocument.fromString('# h\n- [ ] task\n  - item\n> - q\nplain');
+  it('finds where an item’s text starts, past its bullet and box', () => {
+    expect([0, 1, 2, 3, 4].map((l) => itemTextStart(doc, l) - doc.getLineStart(l))).toEqual([0, 6, 4, 4, 0]);
+  });
+
+  it('goes to the text first on Home, then to the line start', () => {
+    const line = doc.getLineStart(1);
+    expect(smartLineStart(doc, line + 9)).toBe(line + 6);
+    expect(smartLineStart(doc, line + 6)).toBe(line);
+    expect(smartLineStart(doc, line + 3)).toBe(line);
   });
 });
 

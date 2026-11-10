@@ -14,8 +14,9 @@ export interface LineReveal {
   /** The caret or selection touches this line. */
   readonly lineActive: boolean;
   /**
-   * The line-prefix markers show. On most lines that is `lineActive`; on a task line, only when the selection
-   * touches the marker's own characters (`- [ ]`), so editing the task's text keeps the checkbox.
+   * The line-prefix markers show. On most lines that is `lineActive`; on a list or task line, only when the
+   * selection touches the marker's own characters (`-`, `1.`, `- [ ]`), so editing the item's text keeps the
+   * bullet, number or checkbox, and the text doesn't move.
    */
   readonly prefixActive: boolean;
   /** Inline nodes the selection touches: their markers show. */
@@ -43,7 +44,7 @@ export function lineReveal(
     selectionIntersects(selection, blockRange.start, blockRange.end - blockRange.start);
   // Shared objects for lines the caret isn't on, so a memoized line sees an unchanged prop.
   if (!lineActive) return blockRevealed ? blockOnlyReveal : concealedReveal;
-  const prefixActive = taskPrefixTouched(tokens, selection) ?? true;
+  const prefixActive = listPrefixTouched(tokens, lineStart, selection) ?? true;
 
   // Each inline node's extent is the union of its tokens.
   const extents = new Map<number, { start: number; end: number }>();
@@ -65,17 +66,21 @@ export function lineReveal(
 }
 
 /**
- * On a task line, whether the selection touches the marker from the bullet through `]` (not the space after
- * it). `null` on a line with no task marker.
+ * On a list or task line, whether the selection touches the marker's own characters: from the line start
+ * through the bullet or number, or through `]` on a task (not the space after it). `null` on a line that isn't
+ * a list item.
  */
-function taskPrefixTouched(tokens: readonly Token[], selection: Selection): boolean | null {
+function listPrefixTouched(
+  tokens: readonly Token[],
+  lineStart: number,
+  selection: Selection,
+): boolean | null {
   const task = tokens.find((t) => t.type === 'taskMarker');
-  if (!task) return null;
   const list = tokens.find((t) => t.type === 'listMarker');
-  const start = list ? list.start : task.start;
-  // The token runs on through the space after `]`; a caret there, before the task's text, doesn't count.
-  const end = task.start + Math.min(3, task.length);
-  return selectionIntersects(selection, start, end - start);
+  if (!task && !list) return null;
+  // The tokens run on through the space after the marker; a caret there, before the item's text, doesn't count.
+  const end = task ? task.start + Math.min(3, task.length) : list!.start + Math.max(1, list!.length - 1);
+  return selectionIntersects(selection, lineStart, end - lineStart);
 }
 
 /** A line nothing reveals (the caret is elsewhere). */

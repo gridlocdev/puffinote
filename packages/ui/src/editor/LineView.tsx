@@ -1,25 +1,49 @@
-import { renderHtmlBody } from '@puffinote/markdown';
+import { parseLinePrefix, renderHtmlBody } from '@puffinote/markdown';
 import { TextDocument } from '@puffinote/text';
 import { memo } from 'preact/compat';
 import { lineViewPropsEqual, type LineViewProps } from './lineProps.ts';
 import { renderLine, type Segment } from './lineRender.ts';
+import type { ViewMode } from './reveal.ts';
 
 /** One source line. Memoized by `lineViewPropsEqual`: a line redraws only when what it draws changes. */
 export const LineView = memo(function LineView(p: LineViewProps) {
   const r = renderLine(p.text, p.start, p.tokens, p.reveal, p.mode, p.block);
+  const view = (s: Segment) => <SegmentView key={s.from} s={s} text={p.text} resolveImage={p.resolveImage} />;
+  const hang = hangingPrefix(p.text, r.segments, p.mode);
   return (
     <div
-      class={r.className}
+      class={hang > 0 ? `${r.className} pn-hang` : r.className}
       data-line={p.index}
       data-length={r.length}
       style={r.collapsed ? { display: 'none' } : undefined}
     >
-      {r.segments.map((s) => (
-        <SegmentView key={s.from} s={s} text={p.text} resolveImage={p.resolveImage} />
-      ))}
+      {hang > 0 ? (
+        <>
+          {r.segments.slice(0, hang).map(view)}
+          {/* The item's text, in a column of its own so wrapped rows line up with it (PRD §10.2). */}
+          <span class="pn-li-body">{r.segments.slice(hang).map(view)}</span>
+        </>
+      ) : (
+        r.segments.map(view)
+      )}
     </div>
   );
 }, lineViewPropsEqual);
+
+/**
+ * How many leading segments are a list item's marker (indent, quote, bullet or number, checkbox), which get a
+ * column of their own; 0 for a line that isn't a list item, in Raw text, or whose runs don't break where the
+ * item's text starts. Shown or hidden, the marker keeps its column, so the text doesn't move under the caret.
+ */
+function hangingPrefix(text: string, segments: readonly Segment[], mode: ViewMode): number {
+  if (mode === 'raw') return 0;
+  const p = parseLinePrefix(text);
+  if (!p.hasList) return 0;
+  let n = 0;
+  while (n < segments.length && segments[n]!.to <= p.length) n++;
+  const clean = n > 0 && (n === segments.length || segments[n]!.from >= p.length);
+  return clean ? n : 0;
+}
 
 function SegmentView({
   s,

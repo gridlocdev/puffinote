@@ -11,6 +11,7 @@ import {
   indentEdit,
   outdentEdit,
   setTaskStateEdit,
+  withTaskSort,
   softBreakEdit,
   typeCharEdit,
 } from './commands.ts';
@@ -19,7 +20,14 @@ import type { EditorState } from './editorState.ts';
 import { caretBox, firstRowEndingBelow, hitTest, lineSelectionRects } from './geometry.ts';
 import { renderLine, snapOutOfConcealed } from './lineRender.ts';
 import { BlockWidget, LineView } from './LineView.tsx';
-import { lineContentEnd, wordLeft, wordRangeAt, wordRight } from './motion.ts';
+import {
+  itemTextStart as listTextStart,
+  lineContentEnd,
+  smartLineStart,
+  wordLeft,
+  wordRangeAt,
+  wordRight,
+} from './motion.ts';
 import { keyAction } from './keys.ts';
 import { lineReveal, type LineReveal } from './reveal.ts';
 
@@ -36,6 +44,8 @@ export interface MarkdownEditorProps {
   readonly onScroll?: (top: number) => void;
   /** How large to draw the note (1 is 100%). A change re-measures the caret and selection. */
   readonly zoom?: number;
+  /** Ticking a task done moves it below the open ones in its list (Settings: Move ticked tasks to the bottom). */
+  readonly sortTasks?: boolean;
   /** A right-click (or Control-click on macOS): show the editing menu at that point. */
   readonly onContextMenu?: (at: { readonly x: number; readonly y: number }) => void;
   /** Save pasted or dropped pictures and return the Markdown for each; without it, only text pastes. */
@@ -87,12 +97,20 @@ export function MarkdownEditor(props: MarkdownEditorProps) {
   const goalX = useRef<number | null>(null);
   const composing = useRef(false);
   const revealCaret = useRef(false);
+  /** The latest render's vertical move, for a move that finishes on the next frame. */
+  const verticalRef = useRef<(dir: 1 | -1, extend: boolean) => void>(() => {});
   const stateRef = useRef(state);
   stateRef.current = state;
+  const sortTasksRef = useRef(false);
+  sortTasksRef.current = props.sortTasks ?? false;
   const catalog = useMemo(
     () =>
       new CommandCatalog(
-        markdownCommandSpecs({ state: () => stateRef.current, focus: () => inputRef.current?.focus() }),
+        markdownCommandSpecs({
+          state: () => stateRef.current,
+          focus: () => inputRef.current?.focus(),
+          sortTasks: () => sortTasksRef.current,
+        }),
       ),
     [],
   );
@@ -406,14 +424,33 @@ export function MarkdownEditor(props: MarkdownEditorProps) {
     if (unit === 'word') to = dir > 0 ? wordRight(doc, at) : wordLeft(doc, at);
     else if (unit === 'line') {
       const line = doc.getPosition(at).line;
-      to = dir > 0 ? lineContentEnd(doc, line) : doc.getLineStart(line);
+      to = dir > 0 ? lineContentEnd(doc, line) : startOf(line, at);
     } else to = snap(dir > 0 ? state.buffer.nextCaret(at) : state.buffer.previousCaret(at), dir);
     moveTo(to, extend);
+  }
+
+  /** Where a list item's text starts on `line` in Rich view; the line start in the views that show markers. */
+  function itemTextStart(line: number): number {
+    return mode === 'live' ? listTextStart(doc, line) : doc.getLineStart(line);
+  }
+
+  /** Home, ⌘↑: the start of a list item's text first in Rich view (PRD §10.2). */
+  function startOf(line: number, from: number): number {
+    if (mode !== 'live') return doc.getLineStart(line);
+    return doc.getPosition(from).line === line ? smartLineStart(doc, from) : listTextStart(doc, line);
   }
 
   function vertical(dir: 1 | -1, extend: boolean): void {
     const content = contentRef.current;
     if (!content) return;
+    const from = doc.getPosition(sel.caret).line;
+    if (sel.caret < itemTextStart(from)) {
+      // In a task's revealed `- [ ]`: the line is laid out wider than it will be once the caret leaves the
+      // marker. Step to the text first and measure the move once the marker has turned back into a checkbox.
+      moveTo(itemTextStart(from), extend, true);
+      requestAnimationFrame(() => verticalRef.current(dir, extend));
+      return;
+    }
     const box = caretBoxAt(sel.caret);
     const caretLine = doc.getPosition(sel.caret).line;
     const current = lineEl(caretLine);
@@ -436,7 +473,8 @@ export function MarkdownEditor(props: MarkdownEditorProps) {
       while (i >= 0 && i < lines.length && lines[i]!.getBoundingClientRect().height === 0) i += dir;
       const targetEl = lines[i];
       if (!targetEl) {
-        moveTo(dir > 0 ? doc.length : 0, extend);
+        // ↑ on the first row stops at the start of its text (a task's checkbox stays a checkbox).
+        moveTo(dir > 0 ? doc.length : sel.caret >= itemTextStart(0) ? itemTextStart(0) : 0, extend);
         return;
       }
       targetEl.scrollIntoView({ block: 'nearest' });
@@ -449,8 +487,12 @@ export function MarkdownEditor(props: MarkdownEditorProps) {
     const offset =
       doc.getLineStart(hit.line) +
       Math.min(hit.col, lineContentEnd(doc, hit.line) - doc.getLineStart(hit.line));
-    moveTo(offset, extend, true);
+    // Stepping onto a list item at its left edge lands where its text starts, after the bullet or checkbox,
+    // not before it (which would reveal a task's `- [ ]` and type in front of the marker).
+    moveTo(Math.max(offset, itemTextStart(hit.line)), extend, true);
   }
+
+  verticalRef.current = vertical;
 
   function apply(edit: Parameters<EditorState['apply']>[0]): void {
     goalX.current = null;
@@ -489,7 +531,7 @@ export function MarkdownEditor(props: MarkdownEditorProps) {
     const shift = e.shiftKey;
     switch (action.kind) {
       case 'move':
-        if (action.unit === 'doc') moveTo(action.dir > 0 ? doc.length : 0, shift);
+        if (action.unit === 'doc') moveTo(action.dir > 0 ? doc.length : startOf(0, sel.caret), shift);
         else horizontal(action.dir, shift, action.unit);
         break;
       case 'vertical':
@@ -656,7 +698,10 @@ export function MarkdownEditor(props: MarkdownEditorProps) {
       if (lineAttr != null) {
         const line = Number(lineAttr);
         const p = parseLinePrefix(doc.getLineText(line));
-        if (p.hasTask) state.apply(setTaskStateEdit(doc, sel, line, toggledTaskState(p.task)));
+        if (p.hasTask) {
+          const e = setTaskStateEdit(doc, sel, line, toggledTaskState(p.task));
+          state.apply(props.sortTasks ? withTaskSort(doc, e) : e);
+        }
       }
       return;
     }

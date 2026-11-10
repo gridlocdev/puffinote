@@ -114,9 +114,14 @@ describe('computeEnter', () => {
     ['- [x] task', 3, '- [ ] \n'],
     ['1. task', 0, '2. \n'],
     ['  - task', 2, '  - \n'],
-  ])('opens an empty item above %j when the caret is in its marker', (line, caret, text) => {
-    expect(computeEnter(line, caret)).toMatchObject({ kind: 'above', text });
-  });
+    ['- [x] task', 6, '- [ ] \n'],
+    ['1. task', 3, '2. \n'],
+  ])(
+    'opens an empty item above %j when the caret is in its marker or at its text start',
+    (line, caret, text) => {
+      expect(computeEnter(line, caret)).toMatchObject({ kind: 'above', text });
+    },
+  );
 });
 
 describe('renumberOrderedList', () => {

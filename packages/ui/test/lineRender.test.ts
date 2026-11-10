@@ -73,7 +73,16 @@ describe('concealment (PRD §10.2)', () => {
     expect(visible(md, caretAt(5))).toBe('- [ ] todo'); // right after `]`
     expect(visible(md, caretAt(0))).toBe('- [ ] todo'); // before the bullet
     expect(visible('  - [ ] sub', caretAt(9))).toBe('<indent><checkbox>sub');
-    expect(visible('- plain', caretAt(4))).toBe('- plain'); // other list items show their marker as before
+  });
+
+  it("keeps a list item's bullet or number while the caret edits its text", () => {
+    expect(visible('- plain', caretAt(4))).toBe('<bullet>plain');
+    expect(visible('- plain', caretAt(2))).toBe('<bullet>plain'); // at the start of the text
+    expect(visible('- plain', caretAt(1))).toBe('- plain'); // right after the bullet
+    expect(visible('10. ten', caretAt(6))).toBe('<number>ten');
+    expect(visible('10. ten', caretAt(3))).toBe('10. ten');
+    expect(visible('  - sub', caretAt(0))).toBe('  - sub'); // the line start of a nested item
+    expect(visible('# Head', caretAt(4))).toBe('# Head'); // other prefixes show on the whole line
   });
 
   it('carries the task state on the checkbox and the line', () => {
