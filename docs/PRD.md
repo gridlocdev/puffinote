@@ -245,7 +245,9 @@ switched from the status bar or the View commands:
   In Raw text, Enter writes one newline. Either way, one press makes one visible line.
 - **Lists and quotes.** Enter continues a list item, task (always as `[ ]`), or quote. Enter on an empty
   top-level item leaves the block and lands on a visible line. An empty nested item goes up one level
-  instead. Ordered lists renumber as items are added, moved or re-indented.
+  instead. Enter with the caret at the start of an item (or inside its marker) opens one empty item above it
+  and keeps the caret at the start of the item's text. Ordered lists renumber as items are added, moved or
+  re-indented.
 - **Tab and Shift+Tab** indent and outdent list items, by the Indent with setting. Elsewhere, Tab inserts the
   indent.
 - **Auto-pairing:** `*`, `_`, `` ` ``, `[` and `(` wrap a selection, or insert a pair. `*`, `_` and `` ` ``

@@ -109,12 +109,13 @@ describe('computeEnter', () => {
   });
 
   it.each([
-    ['- task', 0],
-    ['- [ ] task', 0],
-    ['1. task', 0],
-    ['  - task', 2],
-  ])('does not duplicate the marker left of it in %j', (line, caret) => {
-    expect(computeEnter(line, caret)).toMatchObject({ kind: 'plain', text: '\n' });
+    ['- task', 0, '- \n'],
+    ['- [ ] task', 0, '- [ ] \n'],
+    ['- [x] task', 3, '- [ ] \n'],
+    ['1. task', 0, '2. \n'],
+    ['  - task', 2, '  - \n'],
+  ])('opens an empty item above %j when the caret is in its marker', (line, caret, text) => {
+    expect(computeEnter(line, caret)).toMatchObject({ kind: 'above', text });
   });
 });
 

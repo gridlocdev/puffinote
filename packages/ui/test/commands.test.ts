@@ -73,6 +73,12 @@ describe('Enter (PRD §10.1)', () => {
     expect(enter('> quoted|')).toBe('> quoted\n> |');
   });
 
+  it('opens one empty item above when the caret is at the start of an item', () => {
+    expect(enter('- [ ] a\n|- [ ] b')).toBe('- [ ] a\n- [ ] \n- [ ] |b');
+    expect(enter('- [ ] a\n- [x|] b')).toBe('- [ ] a\n- [ ] \n- [x] |b');
+    expect(enter('1. a\n|2. b')).toBe('1. a\n2. \n3. |b');
+  });
+
   it('exits an empty item', () => {
     expect(enter('- a\n- |')).toBe('- a\n|');
   });

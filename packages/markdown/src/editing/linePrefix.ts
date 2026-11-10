@@ -161,12 +161,13 @@ export function continuationPrefix(p: LinePrefix): string {
 }
 
 /** What an Enter keypress should do on the caret's line. */
-export type EnterKind = 'plain' | 'continue' | 'exit';
+export type EnterKind = 'plain' | 'continue' | 'exit' | 'above';
 
 /**
  * The decision for an Enter keypress. `text` is what to insert at the caret. For `exit`, the columns
  * `[exitStart, exitStart + exitLength)` of the line are deleted and nothing is inserted, so an empty item
- * clears back to its outer level.
+ * clears back to its outer level. For `above`, `text` (an empty item and its newline) goes in at the start of
+ * the line, so the item moves down whole.
  */
 export interface EnterResult {
   readonly kind: EnterKind;
@@ -197,9 +198,9 @@ export function computeEnter(line: string, caretColumn: number): EnterResult {
     return { kind: 'exit', text: '', exitStart, exitLength: contentLen - exitStart };
   }
 
-  // The caret is inside the marker prefix: continuing would splice another marker into the line, so push
-  // the whole item down instead.
-  if (caretColumn < p.length) return enter('plain', '\n');
+  // The caret is inside the marker prefix: continuing would splice another marker into the line, so open an
+  // empty item above and push the whole item down.
+  if (caretColumn < p.length) return enter('above', continuationPrefix(p) + '\n');
 
   return enter('continue', '\n' + continuationPrefix(p));
 }

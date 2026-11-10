@@ -79,6 +79,11 @@ export function enterEdit(doc: TextDocument, sel: Selection, mode: ViewMode, con
     return { start: at, length: r.exitLength, text: '', anchor: at, caret: at };
   }
   if (r.kind === 'continue') return withRenumber(doc, replaceSelection(sel, r.text));
+  if (r.kind === 'above' && isCollapsed(sel)) {
+    // One new line: an empty item above, with the caret at the start of the text of the item it pushed down.
+    const caret = lineStart + r.text.length + parseLinePrefix(lineText).length;
+    return withRenumber(doc, { start: lineStart, length: 0, text: r.text, anchor: caret, caret });
+  }
   const blank = lineText.trim().length === 0;
   return replaceSelection(sel, blank ? '\n' : '\n\n');
 }
