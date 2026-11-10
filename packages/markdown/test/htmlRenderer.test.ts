@@ -22,6 +22,12 @@ describe('HTML renderer', () => {
     expect(body('![cat](p.png)')).toContain('<img src="p.png" alt="cat">');
   });
 
+  it('keeps spaces in a link or image path, encoded', () => {
+    expect(body('[a](my file.md)')).toContain('<a href="my%20file.md">a</a>');
+    expect(body('[a](<my file.md> "t")')).toContain('<a href="my%20file.md">a</a>');
+    expect(body('![c](my cat.png)')).toContain('<img src="my%20cat.png" alt="c">');
+  });
+
   it('renders unordered and ordered lists', () => {
     const html = body('- one\n- two');
     expect(html).toContain('<ul>');

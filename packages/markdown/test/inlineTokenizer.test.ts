@@ -54,6 +54,21 @@ describe('inline tokenizer', () => {
     expect(textsOfType("![alt](pic.png 'caption')", 'imageUrl')).toEqual(['pic.png']);
   });
 
+  it('keeps spaces in a destination that has no title', () => {
+    const urls = (md: string) =>
+      tokenize(md)
+        .model.allTokens()
+        .filter((t) => t.type === 'linkUrl' || t.type === 'imageUrl')
+        .map((t) => t.meta);
+    expect(urls('[a](my file.md)')).toEqual(['my file.md']);
+    expect(urls('[a]( my file.md  )')).toEqual(['my file.md']);
+    expect(urls('[a](<my file.md>)')).toEqual(['my file.md']);
+    expect(urls('[a](<my file.md> "title")')).toEqual(['my file.md']);
+    expect(urls('![c](my cat.png)')).toEqual(['my cat.png']);
+    expect(urls('[a](b.md (paren title))')).toEqual(['b.md']);
+    expect(textsOfType('[a](<my file.md>)', 'linkUrl')).toEqual(['<my file.md>']);
+  });
+
   it('reads bracketed and bare autolinks', () => {
     expect(textsOfType('<https://x.com>', 'autolink')).toEqual(['https://x.com']);
     expect(textsOfType('see https://example.com/path here', 'autolink')).toEqual([

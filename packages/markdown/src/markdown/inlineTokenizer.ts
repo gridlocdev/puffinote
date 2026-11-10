@@ -174,12 +174,12 @@ class InlineTokenizer {
         if (urlClose > 0) {
           const node = this.nextNode++;
           const altStart = i + 2;
-          const [urlStart, urlLen] = this.destination(altClose + 2, urlClose);
+          const [urlStart, urlLen, url] = this.destination(altClose + 2, urlClose);
           this.flushText(i);
           this.emit(i, 2, 'marker', 'marker', null, node);
           this.emit(altStart, altClose - altStart, 'imageAlt', 'content', t.slice(altStart, altClose), node);
           this.emit(altClose, 2, 'marker', 'marker', null, node);
-          this.emit(urlStart, urlLen, 'imageUrl', 'marker', t.slice(urlStart, urlStart + urlLen), node);
+          this.emit(urlStart, urlLen, 'imageUrl', 'marker', url, node);
           // The closing marker covers any title plus the ')'.
           this.emit(urlStart + urlLen, urlClose + 1 - (urlStart + urlLen), 'marker', 'marker', null, node);
           return urlClose + 1 - i;
@@ -211,12 +211,12 @@ class InlineTokenizer {
       const urlClose = this.matchParen(textClose + 1, to);
       if (urlClose > 0) {
         const node = this.nextNode++;
-        const [urlStart, urlLen] = this.destination(textClose + 2, urlClose);
+        const [urlStart, urlLen, url] = this.destination(textClose + 2, urlClose);
         this.flushText(i);
         this.emit(i, 1, 'marker', 'marker', null, node);
         this.run(i + 1, textClose); // link text recurses, sharing this tokenizer's node counter
         this.emit(textClose, 2, 'marker', 'marker', null, node);
-        this.emit(urlStart, urlLen, 'linkUrl', 'marker', t.slice(urlStart, urlStart + urlLen), node);
+        this.emit(urlStart, urlLen, 'linkUrl', 'marker', url, node);
         this.emit(urlStart + urlLen, urlClose + 1 - (urlStart + urlLen), 'marker', 'marker', null, node);
         return urlClose + 1 - i;
       }
@@ -393,15 +393,31 @@ class InlineTokenizer {
   }
 
   /**
-   * The destination inside a link's parentheses `[from, to)`: leading whitespace skipped, ending at the first
-   * whitespace, so an optional `"title"` is excluded from the URL.
+   * The destination inside a link's parentheses `[from, to)`, as the token's start and length plus the URL.
+   * Leading whitespace is skipped. `<my file.md>` is the URL between the brackets (the token keeps them).
+   * Otherwise the URL ends at the first whitespace when what follows is a title (`"…"`, `'…'` or `(…)`), and
+   * else runs to the end, so `[a](my file.md)` keeps its spaces.
    */
-  private destination(from: number, to: number): [number, number] {
+  private destination(from: number, to: number): [number, number, string] {
+    const t = this.text;
     let s = from;
-    while (s < to && isWhiteSpace(this.text.charAt(s))) s++;
+    while (s < to && isWhiteSpace(t.charAt(s))) s++;
+    if (t.charAt(s) === '<') {
+      for (let k = s + 1; k < to; k++) {
+        const c = t.charAt(k);
+        if (c === '<' || c === '\n') break;
+        if (c === '>') return [s, k + 1 - s, t.slice(s + 1, k)];
+      }
+    }
     let e = s;
-    while (e < to && !isWhiteSpace(this.text.charAt(e))) e++;
-    return [s, e - s];
+    while (e < to && !isWhiteSpace(t.charAt(e))) e++;
+    let r = e;
+    while (r < to && isWhiteSpace(t.charAt(r))) r++;
+    if (r < to && !isTitle(t.slice(r, to).trimEnd())) {
+      e = to;
+      while (e > s && isWhiteSpace(t.charAt(e - 1))) e--;
+    }
+    return [s, e - s, t.slice(s, e)];
   }
 
   /** The length of the run of `c` at `i`, bounded by `to`. Remembers the last run, so each position inside a
@@ -490,6 +506,16 @@ class InlineTokenizer {
     }
     return -1;
   }
+}
+
+/** Is `s` a link title: `"…"`, `'…'` or `(…)`? */
+function isTitle(s: string): boolean {
+  if (s.length < 2) return false;
+  const open = s.charAt(0);
+  const close = s.charAt(s.length - 1);
+  return (
+    (open === '"' && close === '"') || (open === "'" && close === "'") || (open === '(' && close === ')')
+  );
 }
 
 function isTrailingUrlPunct(c: string): boolean {

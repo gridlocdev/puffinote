@@ -64,7 +64,8 @@ const dataImage = /^data:image\/(png|jpeg|gif|webp|avif|bmp)[;,]/i;
  * an image may also be a raster `data:image/…` URL. Everything else (`javascript:`, `vbscript:`, `file:`,
  * other `data:` URLs, any other scheme) is dropped, matching what the editor will open (§10.3).
  */
-function safeHref(url: string, kind: 'link' | 'image'): string | null {
+function safeHref(raw: string, kind: 'link' | 'image'): string | null {
+  const url = raw.replace(/ /g, '%20'); // `<my file.md>` keeps its spaces in the source, not in the URL
   const scheme = schemeOf(url);
   if (scheme === null || scheme === 'http' || scheme === 'https' || scheme === 'mailto') return url;
   if (kind === 'image' && scheme === 'data' && dataImage.test(withoutControls(url))) return url;
