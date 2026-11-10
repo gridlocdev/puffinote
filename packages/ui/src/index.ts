@@ -15,3 +15,4 @@ export * from './notebook/tree.ts';
 export * from './platform/index.ts';
 export * from './shell/Shell.tsx';
 export * from './shell/shellModel.ts';
+export * from './shell/Icon.tsx';

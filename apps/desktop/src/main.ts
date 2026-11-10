@@ -1,0 +1,483 @@
+import { app, BrowserWindow, dialog, ipcMain, Menu, net, protocol, shell } from 'electron';
+import type { MenuItemConstructorOptions } from 'electron';
+import { mkdir, readdir, readFile, realpath, rename, stat } from 'node:fs/promises';
+import path from 'node:path';
+import { fileURLToPath, pathToFileURL } from 'node:url';
+import {
+  Channels,
+  CONFLICT_CHANGED,
+  CONFLICT_EXISTS,
+  FILE_SCHEME,
+  NOT_FOUND,
+  type NativeEntry,
+  type NativeMenuItem,
+} from './bridge.ts';
+import {
+  FolderGrants,
+  folderArgs,
+  isAppUrl,
+  TEMP_FILE,
+  watchTree,
+  withFileLock,
+  writeAtomic,
+} from './files.ts';
+
+const here = path.dirname(fileURLToPath(import.meta.url));
+const webRoot = path.join(here, 'web');
+/** How long the renderer has to acknowledge a close request before we offer to force it. */
+const CLOSE_ACK_MS = 3000;
+/** PUFFINOTE_HEADLESS=1: render offscreen and never show a window or Dock icon (automated checks). */
+const headless = process.env.PUFFINOTE_HEADLESS === '1';
+if (headless) app.dock?.hide();
+
+// The web client loads from app://puffinote/ — a standard, secure scheme so fetch, modules and CSP behave like
+// https. Notebook pictures load from pnfile://local/<path>, served only inside granted folders.
+protocol.registerSchemesAsPrivileged([
+  { scheme: 'app', privileges: { standard: true, secure: true, supportFetchAPI: true } },
+  { scheme: FILE_SCHEME, privileges: { standard: true, secure: true, supportFetchAPI: true } },
+]);
+
+/** Per-window state the main process must know: allow-close flag, folder watcher, renderer health. */
+interface WindowState {
+  allowClose: boolean;
+  stopWatch: (() => void) | null;
+  /** Running while a close request waits for the renderer's ack. */
+  closeTimer: NodeJS.Timeout | null;
+  /** The renderer crashed or was killed: nothing is left to ask about unsaved changes. */
+  rendererGone: boolean;
+  unresponsive: boolean;
+}
+const windows = new Map<number, WindowState>();
+/** Notebook folders the renderer may touch: picked in a dialog, opened by the OS, or opened before. */
+const grants = new FolderGrants(path.join(app.getPath('userData'), 'granted-folders.json'));
+/** Another instance is running: it gets our argv (second-instance) and owns the grants file. */
+const single = app.requestSingleInstanceLock();
+if (!single) {
+  grants.disablePersist();
+  app.quit();
+}
+/** mtime we last wrote per path, so the watcher can leave out our own saves. */
+const knownMtime = new Map<string, number>();
+/** Set by Cmd+Q / app.quit() so the last window closing ends the app on macOS too. */
+let quitting = false;
+
+function grantAll(paths: readonly string[]): string[] {
+  for (const p of paths) grants.grant(p);
+  return [...paths];
+}
+
+/** Folders asked for before a window was ready (macOS open-file at launch, argv). */
+const pendingOpen: string[] = grantAll(folderArgs(process.argv.slice(app.isPackaged ? 1 : 2), process.cwd()));
+
+function stopWatching(state: WindowState): void {
+  state.stopWatch?.();
+  state.stopWatch = null;
+}
+
+function createWindow(): BrowserWindow {
+  const win = new BrowserWindow({
+    width: 1200,
+    height: 800,
+    minWidth: 560,
+    minHeight: 400,
+    title: 'Puffinote',
+    // macOS ignores this and shows the bundle's icon.
+    ...(process.platform === 'darwin' ? {} : { icon: path.join(here, '..', 'build', 'icon.png') }),
+    show: false,
+    webPreferences: {
+      preload: path.join(here, 'preload.cjs'),
+      contextIsolation: true,
+      sandbox: true,
+      nodeIntegration: false,
+      offscreen: headless,
+    },
+  });
+  const state: WindowState = {
+    allowClose: false,
+    stopWatch: null,
+    closeTimer: null,
+    rendererGone: false,
+    unresponsive: false,
+  };
+  windows.set(win.id, state);
+
+  if (!headless) win.once('ready-to-show', () => win.show());
+  win.on('close', (e) => {
+    if (state.allowClose || state.rendererGone) return;
+    e.preventDefault();
+    if (state.unresponsive) return void offerForceClose(win, state);
+    if (state.closeTimer) return; // already asked; waiting for the renderer
+    win.webContents.send(Channels.closeRequested);
+    state.closeTimer = setTimeout(() => {
+      state.closeTimer = null;
+      void offerForceClose(win, state);
+    }, CLOSE_ACK_MS);
+  });
+  win.on('closed', () => {
+    stopWatching(state);
+    if (state.closeTimer) clearTimeout(state.closeTimer);
+    windows.delete(win.id);
+  });
+  win.on('unresponsive', () => (state.unresponsive = true));
+  win.on('responsive', () => (state.unresponsive = false));
+  win.webContents.on('render-process-gone', () => {
+    state.rendererGone = true;
+    stopWatching(state);
+    if (state.closeTimer || quitting) {
+      if (state.closeTimer) clearTimeout(state.closeTimer);
+      state.closeTimer = null;
+      win.destroy();
+    }
+  });
+  // The page's beforeunload guard blocks unloading while notes are dirty. Once the close handshake has asked
+  // (and the user chose Don't Save), let it through; otherwise (a reload, a page-initiated close) it holds.
+  win.webContents.on('will-prevent-unload', (e) => {
+    if (state.allowClose) e.preventDefault();
+  });
+  // Links in notes open in the user's browser, never inside the app.
+  win.webContents.setWindowOpenHandler(({ url }) => {
+    if (/^(https?|mailto):/i.test(url)) void shell.openExternal(url);
+    return { action: 'deny' };
+  });
+  win.webContents.on('will-navigate', (e, url) => {
+    if (isAppUrl(url)) return;
+    e.preventDefault();
+    if (/^(https?|mailto):/i.test(url)) void shell.openExternal(url);
+  });
+  win.webContents.on('did-finish-load', () => {
+    for (const p of pendingOpen.splice(0)) win.webContents.send(Channels.openFolder, p);
+  });
+
+  void win.loadURL('app://puffinote/index.html');
+  return win;
+}
+
+/** The renderer is hung or never answered the close request: let the user force it. */
+async function offerForceClose(win: BrowserWindow, state: WindowState): Promise<void> {
+  if (win.isDestroyed()) return;
+  const { response } = await dialog.showMessageBox(win, {
+    type: 'warning',
+    buttons: ['Close Anyway', 'Wait'],
+    defaultId: 1,
+    cancelId: 1,
+    message: 'Puffinote is not responding.',
+    detail: 'Closing now loses unsaved changes.',
+  });
+  if (win.isDestroyed()) return;
+  if (response === 0) {
+    state.allowClose = true;
+    win.destroy();
+  } else quitting = false;
+}
+
+type IpcEvent = Electron.IpcMainEvent | Electron.IpcMainInvokeEvent;
+
+function fromEvent(e: IpcEvent): BrowserWindow | null {
+  return BrowserWindow.fromWebContents(e.sender);
+}
+
+/** Only our own page may use the bridge. */
+function trusted(e: IpcEvent): boolean {
+  return isAppUrl(e.senderFrame?.url);
+}
+
+function forbidden(): never {
+  throw new Error('Forbidden');
+}
+
+/** Throw unless the request is from our page and `p` lies inside a granted notebook folder. */
+async function guard(e: IpcEvent, p: unknown): Promise<string> {
+  if (!trusted(e) || !(await grants.allows(p))) forbidden();
+  return path.resolve(p as string);
+}
+
+/** Node's not-found becomes the marker the renderer turns into a NotFoundError. */
+function notFound(e: unknown, p: string): never {
+  if ((e as NodeJS.ErrnoException)?.code === 'ENOENT') throw new Error(`${NOT_FOUND}: ${path.basename(p)}`);
+  throw e;
+}
+
+const exists = (p: string) =>
+  stat(p).then(
+    () => true,
+    () => false,
+  );
+
+/**
+ * A folder the renderer asks for that isn't granted (a Recent from before the grants file, or a moved
+ * profile): open it only if it is a folder and the user agrees.
+ */
+async function allowFolder(win: BrowserWindow | null, p: unknown): Promise<void> {
+  if (await grants.allows(p)) return;
+  if (typeof p !== 'string' || !path.isAbsolute(p)) forbidden();
+  const s = await stat(p).catch((e: unknown) => notFound(e, p));
+  if (!s.isDirectory()) forbidden();
+  const opts = {
+    type: 'question' as const,
+    buttons: ['Open', 'Cancel'],
+    defaultId: 0,
+    cancelId: 1,
+    message: `Open “${path.basename(p)}” as a notebook?`,
+    detail: p,
+  };
+  const { response } = win ? await dialog.showMessageBox(win, opts) : await dialog.showMessageBox(opts);
+  if (response !== 0) throw new Error('Opening the folder was cancelled');
+  grants.grant(p);
+}
+
+async function listDir(dir: string): Promise<NativeEntry[]> {
+  const names = await readdir(dir).catch((e: unknown) => notFound(e, dir));
+  const out: NativeEntry[] = [];
+  for (const name of names) {
+    if (TEMP_FILE.test(name)) continue;
+    const p = path.join(dir, name);
+    // stat follows symlinks; a link that leaves the notebook (or dangles) is left out.
+    const s = await stat(p).catch(() => null);
+    if (!s || !(s.isFile() || s.isDirectory()) || !(await grants.allows(p))) continue;
+    out.push({
+      path: p,
+      name,
+      kind: s.isDirectory() ? 'dir' : 'file',
+      size: s.isDirectory() ? 0 : s.size,
+      modified: s.mtimeMs,
+    });
+  }
+  return out;
+}
+
+/** Atomic save, one per file at a time. Refuses if the file changed since it was read, or exists on create. */
+function writeNative(
+  p: string,
+  bytes: Uint8Array,
+  expected: number | null,
+  force: boolean,
+  create: boolean,
+): Promise<number> {
+  return withFileLock(p, async () => {
+    const s = await stat(p).catch(() => null);
+    if (create && s) throw new Error(`${CONFLICT_EXISTS}: ${path.basename(p)}`);
+    if (!force && expected !== null && (!s || Math.abs(s.mtimeMs - expected) > 1))
+      throw new Error(`${CONFLICT_CHANGED}: the file changed on disk`);
+    await mkdir(path.dirname(p), { recursive: true });
+    await writeAtomic(p, bytes);
+    const after = await stat(p);
+    knownMtime.set(p, after.mtimeMs);
+    return after.mtimeMs;
+  });
+}
+
+/** Is `to` the same file as `from` under another spelling (a case-only rename on macOS/Windows)? */
+async function sameFile(from: string, to: string): Promise<boolean> {
+  const [a, b] = await Promise.all([realpath(from).catch(() => null), realpath(to).catch(() => null)]);
+  return a !== null && a === b && from !== to;
+}
+
+function toTemplate(items: readonly NativeMenuItem[], win: BrowserWindow): MenuItemConstructorOptions[] {
+  return items.map((item): MenuItemConstructorOptions => {
+    if (item.type === 'separator') return { type: 'separator' };
+    if (item.role)
+      return {
+        role: item.role as MenuItemConstructorOptions['role'],
+        ...(item.label ? { label: item.label } : {}),
+      };
+    const opts: MenuItemConstructorOptions = {
+      label: item.label ?? '',
+      enabled: item.enabled ?? true,
+      ...(item.accelerator ? { accelerator: item.accelerator } : {}),
+      ...(item.type === 'checkbox' ? { type: 'checkbox', checked: item.checked ?? false } : {}),
+    };
+    if (item.submenu) opts.submenu = toTemplate(item.submenu, win);
+    else if (item.command) {
+      const id = item.command;
+      opts.click = () => win.webContents.send(Channels.command, id);
+    }
+    return opts;
+  });
+}
+
+function registerIpc(): void {
+  ipcMain.handle(Channels.pickFolder, async (e) => {
+    if (!trusted(e)) forbidden();
+    const win = fromEvent(e);
+    const opts = {
+      properties: ['openDirectory', 'createDirectory'] as Array<'openDirectory' | 'createDirectory'>,
+    };
+    const result = win ? await dialog.showOpenDialog(win, opts) : await dialog.showOpenDialog(opts);
+    const p = result.filePaths[0];
+    if (result.canceled || !p) return null;
+    grants.grant(p);
+    app.addRecentDocument(p);
+    return p;
+  });
+  ipcMain.handle(Channels.list, async (e, dir: unknown) => {
+    if (!trusted(e)) forbidden();
+    // Listing a notebook's own folder is how one opens: a folder not granted yet gets asked about.
+    await allowFolder(fromEvent(e), dir);
+    return listDir(path.resolve(dir as string));
+  });
+  ipcMain.handle(Channels.read, async (e, p: unknown) => {
+    const file = await guard(e, p);
+    const [bytes, s] = await Promise.all([readFile(file), stat(file)]).catch((err: unknown) =>
+      notFound(err, file),
+    );
+    return { bytes: new Uint8Array(bytes), modified: s.mtimeMs };
+  });
+  ipcMain.handle(
+    Channels.write,
+    async (e, p: unknown, bytes: unknown, expected: unknown, force: unknown, create: unknown) => {
+      const file = await guard(e, p);
+      if (!(bytes instanceof Uint8Array)) forbidden();
+      return writeNative(
+        file,
+        bytes,
+        typeof expected === 'number' ? expected : null,
+        force === true,
+        create === true,
+      );
+    },
+  );
+  ipcMain.handle(Channels.mkdir, async (e, p: unknown) => {
+    const dir = await guard(e, p);
+    const s = await stat(dir).catch(() => null);
+    if (s && !s.isDirectory()) throw new Error(`${CONFLICT_EXISTS}: ${path.basename(dir)}`);
+    await mkdir(dir, { recursive: true });
+  });
+  ipcMain.handle(Channels.move, async (e, from: unknown, to: unknown) => {
+    const src = await guard(e, from);
+    const dest = await guard(e, to);
+    if (!(await exists(src))) notFound({ code: 'ENOENT' }, src);
+    if (dest === src) return;
+    const rel = path.relative(src, dest);
+    if (rel && !rel.startsWith('..') && !path.isAbsolute(rel))
+      throw new Error('A folder cannot move into itself');
+    if ((await exists(dest)) && !(await sameFile(src, dest)))
+      throw new Error(`${CONFLICT_EXISTS}: ${path.basename(dest)}`);
+    await mkdir(path.dirname(dest), { recursive: true });
+    await rename(src, dest);
+  });
+  ipcMain.handle(Channels.trash, async (e, p: unknown) => {
+    const target = await guard(e, p);
+    if (grants.isRoot(target)) forbidden();
+    if (!(await exists(target))) return;
+    await shell.trashItem(target);
+  });
+  ipcMain.handle(Channels.reveal, async (e, p: unknown) => {
+    shell.showItemInFolder(await guard(e, p));
+  });
+  ipcMain.handle(Channels.openExternal, async (e, p: unknown) => {
+    const error = await shell.openPath(await guard(e, p));
+    if (error) throw new Error(error);
+  });
+  ipcMain.on(Channels.watch, (e, root: unknown) => {
+    const win = fromEvent(e);
+    const state = win && windows.get(win.id);
+    if (!win || !state || !trusted(e)) return;
+    stopWatching(state);
+    if (!grants.isRoot(root)) return;
+    app.addRecentDocument(root);
+    state.stopWatch = watchTree(root, (paths) => {
+      void Promise.all(
+        paths.map(async (p) => {
+          const known = knownMtime.get(p);
+          if (known === undefined) return p;
+          const s = await stat(p).catch(() => null);
+          return s && Math.abs(s.mtimeMs - known) <= 1 ? null : p; // our own save
+        }),
+      ).then((changed) => {
+        const out = changed.filter((p): p is string => p !== null);
+        if (out.length > 0 && !win.isDestroyed()) win.webContents.send(Channels.changed, out);
+      });
+    });
+  });
+  ipcMain.on(Channels.setTitle, (e, title: unknown, dirty: unknown) => {
+    const win = fromEvent(e);
+    if (!win || !trusted(e) || typeof title !== 'string') return;
+    win.setTitle(title);
+    win.setDocumentEdited(dirty === true);
+  });
+  ipcMain.on(Channels.setMenu, (e, items: readonly NativeMenuItem[]) => {
+    const win = fromEvent(e);
+    if (!win || !trusted(e) || !Array.isArray(items)) return;
+    const template = toTemplate(items, win);
+    if (process.platform === 'darwin') template.unshift({ role: 'appMenu' });
+    Menu.setApplicationMenu(Menu.buildFromTemplate(template));
+  });
+  ipcMain.on(Channels.closeAck, (e) => {
+    const win = fromEvent(e);
+    const state = win && windows.get(win.id);
+    if (!state || !trusted(e)) return;
+    if (state.closeTimer) clearTimeout(state.closeTimer);
+    state.closeTimer = null;
+  });
+  ipcMain.on(Channels.confirmClose, (e) => {
+    const win = fromEvent(e);
+    const state = win && windows.get(win.id);
+    if (!win || !state || !trusted(e)) return;
+    state.allowClose = true;
+    win.close();
+  });
+  ipcMain.on(Channels.cancelClose, (e) => {
+    if (trusted(e)) quitting = false;
+  });
+}
+
+/** Open folders in the first window, or remember them until one has loaded. */
+function openInWindow(paths: readonly string[]): void {
+  const win = BrowserWindow.getAllWindows()[0];
+  if (win && !win.webContents.isLoading()) {
+    for (const p of paths) win.webContents.send(Channels.openFolder, p);
+    return;
+  }
+  pendingOpen.push(...paths);
+  if (!win && app.isReady()) createWindow();
+}
+
+app.on('open-file', (e, p) => {
+  e.preventDefault();
+  openInWindow(grantAll(folderArgs([p], process.cwd())));
+});
+
+app.on('second-instance', (_e, argv, workingDirectory) => {
+  const folders = grantAll(folderArgs(argv.slice(1), workingDirectory));
+  const win = BrowserWindow.getAllWindows()[0];
+  if (win) {
+    if (win.isMinimized()) win.restore();
+    win.focus();
+  }
+  if (folders.length > 0 || !win) openInWindow(folders.slice(-1));
+});
+
+app.on('before-quit', () => {
+  quitting = true;
+});
+
+/** `pnfile://local/Users/me/Notes/pic.png` → the absolute path, on macOS/Linux and Windows. */
+function fileFromUrl(url: string): string {
+  const pathname = decodeURIComponent(new URL(url).pathname);
+  return /^\/[A-Za-z]:\//.test(pathname) ? pathname.slice(1) : pathname;
+}
+
+void app.whenReady().then(async () => {
+  if (!single) return; // quitting: the running instance has the folders
+  protocol.handle('app', (req) => {
+    const { pathname } = new URL(req.url);
+    const file = path.normalize(path.join(webRoot, decodeURIComponent(pathname)));
+    if (!file.startsWith(webRoot + path.sep)) return new Response('Forbidden', { status: 403 });
+    return net.fetch(pathToFileURL(file).toString());
+  });
+  protocol.handle(FILE_SCHEME, async (req) => {
+    const file = fileFromUrl(req.url);
+    if (!(await grants.allows(file))) return new Response('Forbidden', { status: 403 });
+    return net.fetch(pathToFileURL(file).toString());
+  });
+  registerIpc();
+  await grants.load();
+  createWindow();
+  app.on('activate', () => {
+    if (BrowserWindow.getAllWindows().length === 0) createWindow();
+  });
+});
+
+app.on('window-all-closed', () => {
+  if (process.platform !== 'darwin' || quitting) app.quit();
+});

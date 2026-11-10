@@ -1,0 +1,20 @@
+{
+  "name": "@puffinote/desktop",
+  "productName": "Puffinote",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "license": "MIT",
+  "description": "Puffinote desktop app (Electron).",
+  "main": "out/main.js",
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json && node scripts/copy-web.mjs",
+    "start": "pnpm build && node scripts/start.mjs",
+    "package": "pnpm build && electron-builder --config electron-builder.yml"
+  },
+  "devDependencies": {
+    "@puffinote/web": "workspace:*",
+    "electron": "45.2.3",
+    "electron-builder": "26.18.0"
+  }
+}

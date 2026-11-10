@@ -265,6 +265,12 @@ export class Notebook {
       }),
     );
     if (this.store.watch) this.disposers.push(this.store.watch(() => this.scheduleRefresh()));
+    else if (typeof window !== 'undefined') {
+      // No change notification (a browser folder, the NAS): look again whenever the window comes back.
+      const onFocus = () => this.scheduleRefresh();
+      window.addEventListener('focus', onFocus);
+      this.disposers.push(() => window.removeEventListener('focus', onFocus));
+    }
   }
 
   dispose(): void {

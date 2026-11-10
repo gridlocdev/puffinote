@@ -1,0 +1,20 @@
+# Copy to compose.yaml on the NAS and adjust the volume paths.
+services:
+  puffinote:
+    build: .
+    # image: puffinote:latest
+    ports:
+      - '8790:8790'
+    environment:
+      # One or more notebook folders (or folders of notebooks): Name=/container/path;Other=/container/path2
+      PUFFINOTE_ROOTS: 'Notes=/data/notes;Shared=/data/shared'
+      # Optional shared secret. Leave unset if your NAS reverse proxy already authenticates.
+      # PUFFINOTE_TOKEN: change-me
+      # Without a token, only IP addresses and localhost are answered. Add the names you browse to:
+      # PUFFINOTE_HOSTS: 'nas.lan,puffinote.home.arpa'
+    volumes:
+      - /volume1/notes:/data/notes
+      - /volume1/shared:/data/shared
+    # The container runs as the image's `node` user (uid 1000); match your NAS share's owner:
+    # user: '1026:100'
+    restart: unless-stopped

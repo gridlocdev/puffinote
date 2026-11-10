@@ -1,0 +1,55 @@
+import { toAccelerator, type CommandCatalog, type CommandGroup, type NativeMenuItem } from '@puffinote/ui';
+
+const MENU_ORDER: readonly CommandGroup[] = ['File', 'Edit', 'Insert', 'Format', 'View', 'Go', 'Help'];
+
+/** Clipboard items are Electron roles, so the note gets real cut/copy/paste events. Added after these ids. */
+const CLIPBOARD_AFTER = 'edit.redo';
+const CLIPBOARD: readonly NativeMenuItem[] = [
+  { type: 'separator' },
+  { role: 'cut' },
+  { role: 'copy' },
+  { role: 'paste' },
+];
+
+/** Separators before these ids. */
+const BREAKS = new Set([
+  'shell.openNotebook',
+  'shell.save',
+  'shell.closeTab',
+  'shell.rename',
+  'shell.refresh',
+  'edit.selectAll',
+  'edit.moveLineUp',
+  'format.task',
+  'format.quote',
+  'format.paragraph',
+  'format.link',
+  'view.viewRich',
+  'view.toggleSidebar',
+  'shell.nextTab',
+  'shell.focusTree',
+]);
+
+/** The desktop app's menu bar, built from the same catalog as ⌘K. */
+export function nativeMenu(catalog: CommandCatalog): NativeMenuItem[] {
+  const menus: NativeMenuItem[] = [];
+  for (const group of MENU_ORDER) {
+    const items: NativeMenuItem[] = [];
+    for (const c of catalog.all) {
+      if (c.group !== group) continue;
+      if (BREAKS.has(c.id) && items.length > 0 && items.at(-1)?.type !== 'separator')
+        items.push({ type: 'separator' });
+      items.push({
+        label: c.title,
+        command: c.id,
+        enabled: catalog.isEnabled(c),
+        ...(c.shortcutKey ? { accelerator: toAccelerator(c.shortcutKey) } : {}),
+        ...(c.active ? { type: 'checkbox' as const, checked: c.active() } : {}),
+      });
+      if (c.id === CLIPBOARD_AFTER) items.push(...CLIPBOARD);
+    }
+    if (items.length > 0) menus.push({ label: group, submenu: items });
+  }
+  menus.push({ role: 'windowMenu' });
+  return menus;
+}

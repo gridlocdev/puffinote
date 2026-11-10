@@ -1,0 +1,13 @@
+{
+  "name": "@puffinote/server",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "license": "MIT",
+  "description": "Serves the Puffinote web client and a small file API over notebook folders on a NAS.",
+  "scripts": {
+    "start": "node src/main.ts",
+    "dev": "PUFFINOTE_ROOTS=Sample=../../.nas-data PUFFINOTE_STATIC= node --watch src/main.ts",
+    "build": "echo 'server runs from source (node type stripping)'"
+  }
+}

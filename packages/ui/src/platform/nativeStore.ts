@@ -55,6 +55,8 @@ export interface PuffinoteNative {
   /** Watch the notebook folder; `null` stops watching. */
   watch(root: string | null): void;
   onChanged(cb: (paths: readonly string[]) => void): () => void;
+  /** A folder to open as the notebook: from the command line, the Dock, or a second launch. */
+  onOpenFolder(cb: (path: string) => void): () => void;
   setTitle(title: string, dirty: boolean): void;
   setMenu(menu: readonly NativeMenuItem[]): void;
   onCommand(cb: (id: string) => void): () => void;
