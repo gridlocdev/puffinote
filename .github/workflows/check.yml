@@ -23,6 +23,8 @@ jobs:
       - uses: actions/setup-node@v5
         with:
           node-version: 22
+          # v5 caches pnpm's store by default, but pnpm only exists after `corepack enable`.
+          package-manager-cache: false
       - run: corepack enable
       - run: pnpm install --frozen-lockfile
       - run: pnpm check
