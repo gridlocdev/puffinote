@@ -246,7 +246,10 @@ up). The caret sits before or after it, never inside. Relative paths resolve aga
 
 ### 10.3 Status bar and links
 
-- **Status bar:** the latest notice (an error, "Saved"), Ln/Col, the word count, and the view switcher.
+- **Status bar:** the latest notice (an error, "Saved"), Ln/Col, the word count, the zoom when it isn't
+  100% (a click resets it), and the view switcher.
+- **Zoom.** Zoom In (⌘=), Zoom Out (⌘-) and Actual Size scale the note's text and spacing from 50% to 300% in
+  10% steps. The zoom is remembered per browser or desktop app, not per notebook.
 - **Links.** Hovering shows the destination. ⌘-click (Ctrl-click elsewhere) opens it. A plain click puts the
   caret in the link, so it stays editable. Only `http`, `https` and `mailto` links open. Other schemes,
   including `file:`, `javascript:` and `data:`, are never handed to the OS.
@@ -391,7 +394,9 @@ A usage error prints the message and then the command's help.
   needs.
 - **Accessibility.** The tree, tabs, menus and dialogs carry ARIA roles and labels and a visible focus ring.
   Concealment never removes text from the accessibility tree. Everything works from the keyboard.
-- **Themes.** Light and dark, following the system by default. Colours are tokens.
+- **Themes.** Light and dark, following the system by default. Colours are tokens; dark uses neutral greys,
+  as Cellestra does. On macOS the desktop window hides its title bar and draws its own 28px one in the
+  chrome colour, showing the window title.
 - **Security.** The desktop renderer is sandboxed with context isolation, and its bridge only touches folders
   the user granted. The NAS server confines paths to their roots. Notes cannot run script: the built client
   has a strict CSP.

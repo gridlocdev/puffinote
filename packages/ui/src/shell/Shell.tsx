@@ -80,7 +80,7 @@ export function Shell(props: {
 
   const tab = nb?.active.value ?? null;
   const collapsed = nb?.sidebarCollapsed.value ?? true;
-  return (
+  const shell = (
     <div class="pn-shell">
       {nb && !collapsed && <Sidebar model={model} nb={nb} />}
       {nb && collapsed && (
@@ -105,9 +105,19 @@ export function Shell(props: {
             (props.welcome ?? <div class="pn-empty">No notebook open.</div>)
           )}
         </div>
-        {nb && <StatusBar nb={nb} tab={tab} />}
+        {nb && <StatusBar model={model} nb={nb} tab={tab} />}
       </main>
       <Overlays model={model} prefs={props.prefs} />
+    </div>
+  );
+  if (!model.host.titleBar) return shell;
+  // The macOS desktop window hides its own title bar; this one sits under the traffic lights and drags the window.
+  return (
+    <div class="pn-window">
+      <header class="pn-titlebar">
+        <span class="pn-title">{model.title.value}</span>
+      </header>
+      {shell}
     </div>
   );
 }
@@ -153,6 +163,7 @@ function Document(props: { readonly model: ShellModel; readonly nb: Notebook; re
           initialScrollTop={tab.scrollTop}
           onScroll={(top) => (tab.scrollTop = top)}
           placeholder="Start writing…"
+          zoom={model.zoom.value}
         />
       </div>
     </>
@@ -198,9 +209,18 @@ function EmptyNotebook({ model }: { readonly model: ShellModel }) {
 
 const modeLabels = { live: 'Rich', source: 'Formatted', raw: 'Raw' } as const;
 
-function StatusBar({ nb, tab }: { readonly nb: Notebook; readonly tab: Tab | null }) {
+function StatusBar({
+  model,
+  nb,
+  tab,
+}: {
+  readonly model: ShellModel;
+  readonly nb: Notebook;
+  readonly tab: Tab | null;
+}) {
   const notice = nb.notice.value;
   const state = tab?.state ?? null;
+  const zoom = model.zoom.value;
   let position = '';
   let words = 0;
   if (state) {
@@ -220,6 +240,11 @@ function StatusBar({ nb, tab }: { readonly nb: Notebook; readonly tab: Tab | nul
           <span>
             {words} {words === 1 ? 'word' : 'words'}
           </span>
+          {zoom !== 1 && (
+            <button class="pn-status-zoom" title="Actual Size" onClick={() => model.setZoom(1)}>
+              {Math.round(zoom * 100)}%
+            </button>
+          )}
           <span class="pn-modes" role="group" aria-label="View">
             {(['live', 'source', 'raw'] as const).map((m) => (
               <button key={m} aria-pressed={state.mode.value === m} onClick={() => (state.mode.value = m)}>

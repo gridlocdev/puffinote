@@ -34,6 +34,8 @@ export interface MarkdownEditorProps {
   /** Where to scroll on mount (a tab coming back). */
   readonly initialScrollTop?: number;
   readonly onScroll?: (top: number) => void;
+  /** How large to draw the note (1 is 100%). A change re-measures the caret and selection. */
+  readonly zoom?: number;
 }
 
 const identity = (url: string): string => url;
@@ -594,7 +596,7 @@ export function MarkdownEditor(props: MarkdownEditorProps) {
 
   const empty = doc.length === 0;
   return (
-    <div class={`pn-editor pn-mode-${mode}`}>
+    <div class={`pn-editor pn-mode-${mode}`} style={props.zoom ? { '--pn-z': props.zoom } : undefined}>
       <div class="pn-scroller" ref={scrollerRef} onMouseDown={onMouseDown} onScroll={onScrollerScroll}>
         <div class="pn-content" ref={contentRef} data-placeholder={empty ? props.placeholder : undefined}>
           {rows}

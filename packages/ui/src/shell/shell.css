@@ -17,12 +17,12 @@
 
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme='light']) {
-    --pn-chrome-bg: #22252a;
-    --pn-chrome-fg: #c9d1d9;
-    --pn-border: #363b42;
-    --pn-hover: rgba(230, 232, 235, 0.07);
-    --pn-row-selected: rgba(110, 162, 255, 0.16);
-    --pn-row-selected-focus: rgba(110, 162, 255, 0.3);
+    --pn-chrome-bg: #252526;
+    --pn-chrome-fg: #cccccc;
+    --pn-border: #3c3c3c;
+    --pn-hover: rgba(255, 255, 255, 0.08);
+    --pn-row-selected: rgba(74, 144, 226, 0.16);
+    --pn-row-selected-focus: rgba(74, 144, 226, 0.3);
     --pn-danger: #ff7b72;
     --pn-warn-bg: #3a3214;
     --pn-warn-border: #6b5a1e;
@@ -32,12 +32,12 @@
 }
 
 :root[data-theme='dark'] {
-  --pn-chrome-bg: #22252a;
-  --pn-chrome-fg: #c9d1d9;
-  --pn-border: #363b42;
-  --pn-hover: rgba(230, 232, 235, 0.07);
-  --pn-row-selected: rgba(110, 162, 255, 0.16);
-  --pn-row-selected-focus: rgba(110, 162, 255, 0.3);
+  --pn-chrome-bg: #252526;
+  --pn-chrome-fg: #cccccc;
+  --pn-border: #3c3c3c;
+  --pn-hover: rgba(255, 255, 255, 0.08);
+  --pn-row-selected: rgba(74, 144, 226, 0.16);
+  --pn-row-selected-focus: rgba(74, 144, 226, 0.3);
   --pn-danger: #ff7b72;
   --pn-warn-bg: #3a3214;
   --pn-warn-border: #6b5a1e;
@@ -359,6 +359,38 @@
 
 /* ----- Main area ----- */
 
+/* The macOS desktop window: a 28px title bar in the chrome colour above the shell (Cellestra's pattern). */
+.pn-window {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+.pn-window > .pn-shell {
+  position: relative;
+  flex: 1;
+  height: auto;
+}
+.pn-titlebar {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  height: 28px;
+  /* Clear of the traffic lights on the left, and balanced on the right. */
+  padding: 0 78px;
+  background: var(--pn-chrome-bg);
+  border-bottom: 1px solid var(--pn-border);
+  -webkit-app-region: drag;
+  -webkit-user-select: none;
+  user-select: none;
+}
+.pn-title {
+  overflow: hidden;
+  color: var(--pn-chrome-fg);
+  font: 600 13px/1 var(--pn-font);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 .pn-shell-main {
   display: flex;
   flex-direction: column;
@@ -561,6 +593,18 @@
   gap: 2px;
 }
 
+.pn-status-zoom {
+  padding: 1px 6px;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+.pn-status-zoom:hover {
+  background: var(--pn-hover);
+}
 .pn-modes button {
   padding: 1px 6px;
   border: 0;

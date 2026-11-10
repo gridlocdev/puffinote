@@ -96,6 +96,8 @@ function createWindow(): BrowserWindow {
     title: 'Puffinote',
     // macOS ignores this and shows the bundle's icon.
     ...(process.platform === 'darwin' ? {} : { icon: path.join(here, '..', 'build', 'icon.png') }),
+    // On macOS the page draws its own title bar under the traffic lights, in the app's colours (as Cellestra does).
+    titleBarStyle: process.platform === 'darwin' ? 'hidden' : 'default',
     show: false,
     webPreferences: {
       preload: path.join(here, 'preload.cjs'),

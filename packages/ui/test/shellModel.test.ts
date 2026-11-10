@@ -54,3 +54,22 @@ describe('ShellModel overlays', () => {
     m.setNotebook(null);
   });
 });
+
+describe('ShellModel zoom', () => {
+  it('steps by 10%, clamps, resets, and runs from the catalog', async () => {
+    const m = new ShellModel();
+    m.setZoom(1);
+    await m.menuCatalog.run('view.zoomIn');
+    await m.menuCatalog.run('view.zoomIn');
+    expect(m.zoom.value).toBe(1.2);
+    await m.menuCatalog.run('view.zoomOut');
+    expect(m.zoom.value).toBe(1.1);
+    m.setZoom(99);
+    expect(m.zoom.value).toBe(3);
+    expect(m.menuCatalog.isEnabled(m.menuCatalog.get('view.zoomIn')!)).toBe(false);
+    m.setZoom(0);
+    expect(m.zoom.value).toBe(0.5);
+    await m.menuCatalog.run('view.zoomReset');
+    expect(m.zoom.value).toBe(1);
+  });
+});

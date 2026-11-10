@@ -35,6 +35,23 @@ export interface ShellHost {
   readonly openNotebook?: () => void;
   /** Show the window title somewhere besides `document.title` (the desktop window). */
   readonly setTitle?: (title: string) => void;
+  /** Draw a title bar at the top of the page (the macOS desktop window, whose own bar is hidden). */
+  readonly titleBar?: boolean;
+}
+
+/** The editor's zoom range and step (1 is 100%), as in Cellestra. */
+export const MIN_ZOOM = 0.5;
+export const MAX_ZOOM = 3;
+const ZOOM_STEP = 0.1;
+const ZOOM_KEY = 'puffinote.zoom';
+
+function loadZoom(): number {
+  try {
+    const z = Number(localStorage.getItem(ZOOM_KEY));
+    return Number.isFinite(z) && z >= MIN_ZOOM && z <= MAX_ZOOM ? z : 1;
+  } catch {
+    return 1;
+  }
 }
 
 /**
@@ -51,6 +68,8 @@ export class ShellModel {
   readonly searchQuery = signal('');
   /** Bumps when Filter or Search should put the caret in its box. */
   readonly focusPanelTick = signal(0);
+  /** How large notes are drawn (1 is 100%). Remembered across sessions in this browser or app. */
+  readonly zoom = signal(loadZoom());
   readonly host: ShellHost;
   /** Keys: the shell's own commands. The editor handles its own keys while it has focus. */
   readonly shellCatalog: CommandCatalog;
@@ -183,6 +202,18 @@ export class ShellModel {
     nb.panel.value = panel;
     // The typed-into panels take the caret; the read-only ones leave it be (PRD §6.2).
     if (panel === 'filter' || panel === 'search') this.focusPanelTick.value++;
+  }
+
+  /** Set the zoom, clamped and rounded to whole percents, and remember it. */
+  setZoom(z: number): void {
+    const v = Math.round(Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, z)) * 100) / 100;
+    this.zoom.value = v;
+    try {
+      if (v === 1) localStorage.removeItem(ZOOM_KEY);
+      else localStorage.setItem(ZOOM_KEY, String(v));
+    } catch {
+      // Storage disabled: the zoom lasts until the page closes.
+    }
   }
 
   toggleSidebar(): void {
@@ -597,6 +628,41 @@ function shellCommandSpecs(m: ShellModel): CommandSpec[] {
         const shown = m.tabBarOverride.peek() ?? nb()?.settings.peek().showTabBar ?? true;
         m.tabBarOverride.value = !shown;
       },
+    },
+    {
+      id: 'view.zoomIn',
+      title: 'Zoom In',
+      description: 'Make notes bigger.',
+      group: 'View',
+      shortcut: 'mod+=',
+      alternates: ['mod++'],
+      icon: 'zoom-in',
+      keywords: 'bigger larger text size',
+      global: true,
+      enabled: () => m.zoom.peek() < MAX_ZOOM,
+      run: () => m.setZoom(m.zoom.peek() + ZOOM_STEP),
+    },
+    {
+      id: 'view.zoomOut',
+      title: 'Zoom Out',
+      description: 'Make notes smaller.',
+      group: 'View',
+      shortcut: 'mod+-',
+      icon: 'zoom-out',
+      keywords: 'smaller text size',
+      global: true,
+      enabled: () => m.zoom.peek() > MIN_ZOOM,
+      run: () => m.setZoom(m.zoom.peek() - ZOOM_STEP),
+    },
+    {
+      id: 'view.zoomReset',
+      title: 'Actual Size',
+      description: 'Reset the zoom to 100%.',
+      group: 'View',
+      keywords: 'zoom reset 100%',
+      global: true,
+      enabled: () => m.zoom.peek() !== 1,
+      run: () => m.setZoom(1),
     },
     ...sidebarPanels.map((p): CommandSpec => ({
       id: `view.sidebar.${p.id}`,

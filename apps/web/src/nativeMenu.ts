@@ -26,6 +26,8 @@ const BREAKS = new Set([
   'format.link',
   'view.viewRich',
   'view.toggleSidebar',
+  'view.zoomIn',
+  'view.sidebar.files',
   'shell.nextTab',
   'shell.focusTree',
 ]);

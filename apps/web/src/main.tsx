@@ -11,6 +11,7 @@ const host = await Launcher.detect();
 const model = new ShellModel({
   // On the desktop the folder dialog comes straight up; on the web it's back to the welcome screen.
   openNotebook: () => (host.native ? void launcher.openFolder() : launcher.close()),
+  titleBar: host.native?.platform === 'darwin',
 });
 const launcher = new Launcher(model, localPrefs, host);
 document.documentElement.dataset.host = host.kind;
@@ -71,6 +72,7 @@ if (native) {
     void nb?.tabs.value;
     void nb?.selected.value;
     void nb?.sidebarCollapsed.value;
+    void model.zoom.value;
     if (queued) return;
     queued = setTimeout(() => {
       queued = null;
