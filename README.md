@@ -4,12 +4,16 @@ A notes app for a folder of Markdown files. You open a folder, and Puffinote sho
 in tabs, and formats them as you type. Your notes stay plain `.md` files that any other editor, sync tool or
 git can use.
 
-![Puffinote with a notebook open. The sidebar on the left shows the folders Journal, Projects and Reading and
-the notes Inbox and Welcome, with "Garden plan" selected under Projects. Two tabs are open, Welcome and Garden
-plan. The editor shows the Garden plan note formatted in place: a large heading, a paragraph with bold, italic
-and highlighted words, a task list with one done (checked and struck through), one in progress and two open
-tasks, a numbered list, a blockquote with a bar, a link, inline code, and a table. The status bar reads "Ln 3,
-Col 119", "127 words", and the view switcher Rich, Formatted and Raw.](docs/images/notebook.webp)
+![Puffinote on macOS in the dark theme, with a notebook named Notes open. The sidebar on the left shows
+the file tree: the folders attachments, Birds (with the note Puffins selected), Journal, Projects and
+Reading, and the notes Inbox and Welcome. Two tabs are open, Welcome and Puffins. The editor shows the
+Puffins note formatted in place: a large heading; a paragraph with a bold word, an italic genus name, a
+highlighted phrase, a blue link to the Wikipedia article and inline code; a photo of an Atlantic puffin
+standing on a grassy cliff edge above the sea; a quote with a bar about puffin chicks; a "Trip to
+Látrabjarg" checklist with one task done (ticked and struck through), one in progress and two open; and a
+table of the three puffin species with their scientific names in italics, lengths and conservation status.
+The status bar reads "Ln 6, Col 1", "248 words", and the view switcher Rich, Formatted and
+Raw.](docs/images/notebook.webp)
 
 It runs in the browser, on your NAS, or as a desktop app, all from the same code.
 
@@ -19,18 +23,15 @@ It runs in the browser, on your NAS, or as a desktop app, all from the same code
   Markdown markers stay hidden until the caret reaches them. Switch to **Formatted** to see every marker, or
   **Raw** for the plain source.
 - **Tasks with three states.** `[ ]` open, `[/]` in progress, `[x]` done. A click on the box completes it,
-  and ticked tasks move below the open ones. `⌥↑` and `⌥↓` move a list item, `⌥⌘↑` and `⌥⌘↓` to the top or
-  bottom of its list.
-- **Pictures in your notes.** Paste or drop a picture and Puffinote saves it next to your notes and links it.
-  Click a picture to see it full size, zoom and pan; right-click it to rename, copy or delete it.
-- **Finds things fast.** ⌘O opens any file by name, the sidebar searches every note, filters the tree by name,
-  and outlines the open note. ⌘K runs any command.
-- **Keeps up with the folder.** Changes made by other apps show up, and a note you are editing is never
-  overwritten without asking. Notes save themselves a second after you stop typing.
-- **Each notebook keeps its own settings.** Puffinote stores its state in a `.puffinote` folder inside the
-  notebook, so the settings travel with the folder.
-- **Works from the keyboard.** Every command has a menu entry, and the file tree works with the arrow keys.
-- **A command-line tool.** `puffinote` prints a notebook's tree, searches it, and turns a note into HTML.
+  and ticked tasks move below the open ones.
+- **Pictures in your notes.** Paste or drop a picture and Puffinote saves it in the notebook and links it.
+  Click a picture to see it full size with zoom and pan, or right-click it to rename, copy or delete it.
+- **Finds things fast.** `⌘O` opens any file by name. The sidebar searches every note, filters the tree by
+  name, and outlines the open note. `⌘K` runs any command, and everything works from the keyboard.
+- **Keeps up with the folder.** Notes save a second after you stop typing. Changes made by other apps show
+  up, and a note you are editing is never overwritten without asking.
+- **Each notebook keeps its own settings.** Puffinote stores them in a `.puffinote` folder inside the
+  notebook, so they travel with the folder.
 
 ## Download
 
@@ -84,18 +85,7 @@ get `421 Misdirected Request`, which stops a hostile web page from reaching your
 
 If someone else saved a note after you opened it, Puffinote warns you before overwriting their changes.
 
-## Build it from source
-
-You need Node 22.18 or later, pnpm (`corepack enable`) and [just](https://github.com/casey/just):
-
-```bash
-just setup            # install the dependencies
-just run-desktop      # run it in dev mode
-just package-desktop  # build a .dmg / AppImage / installer in apps/desktop/release
-just install-desktop  # macOS: package and install into /Applications
-```
-
-## Keyboard shortcuts
+## Controls
 
 |                              | macOS              | Windows and Linux               |
 | ---------------------------- | ------------------ | ------------------------------- |
@@ -119,6 +109,14 @@ just install-desktop  # macOS: package and install into /Applications
 In the picture preview, pinch or `⌘`-scroll zooms, scrolling or dragging pans, `0` fits the picture to the
 window, `1` shows it at actual size, and `Esc` closes it. ⌘K lists every other command with its shortcut.
 
+## Credits
+
+The puffin photo in the screenshot is
+[Papageitaucher Fratercula arctica](https://commons.wikimedia.org/wiki/File:Papageitaucher_Fratercula_arctica.jpg)
+by Richard Bartz, from Wikimedia Commons, under
+[CC BY-SA 3.0](https://creativecommons.org/licenses/by-sa/3.0/). The note around it is based on the
+Wikipedia article [Puffin](https://en.wikipedia.org/wiki/Puffin).
+
 ## Documentation
 
 **[Read the product spec](docs/PRD.md)**, or jump to a question:
@@ -126,12 +124,13 @@ window, `1` shows it at actual size, and `Esc` closes it. ⌘K lists every other
 - [Where does Puffinote keep its own files, and what happens when a note changes outside the app?](docs/PRD.md#5-the-notebook)
 - [How does the live preview decide what to hide?](docs/PRD.md#102-live-preview)
 - [Which settings are there, and how do notebook settings work?](docs/PRD.md#9-settings)
-- [What can the `puffinote` command do?](docs/PRD.md#12-the-cli)
+- [Where do pasted pictures go, and what happens when a note stops using one?](docs/PRD.md#106-pasted-and-dropped-pictures)
 
 ## For developers
 
-The [developer guide](docs/Developer-Guide.md) covers setup, every `just` recipe, the checks, the CLI and how
-to package the apps. [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) explains how the code is laid out.
+The [developer guide](docs/Developer-Guide.md) covers building and packaging the apps yourself, every `just`
+recipe, the checks, the `puffinote` command-line tool and how releases are made.
+[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) explains how the code is laid out.
 
 ## License
 
