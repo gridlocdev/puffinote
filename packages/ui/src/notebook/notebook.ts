@@ -17,6 +17,7 @@ import {
 } from '../platform/notebookStore.ts';
 import {
   baseName,
+  stemOf,
   invalidNameReason,
   isWithin,
   joinPath,
@@ -163,6 +164,8 @@ export interface SearchHit {
   /** The line, trimmed, with the match at `[matchStart, matchStart + length)`. */
   readonly preview: string;
   readonly matchStart: number;
+  /** The match is in the note's name (`preview` is the file name); opening it doesn't select anything. */
+  readonly inTitle?: boolean;
 }
 
 /** What a notebook remembers between sessions, in `.puffinote/session.json` (PRD §5). */
@@ -773,7 +776,8 @@ export class Notebook {
   }
 
   /**
-   * Full-text search across the notebook's notes (PRD §6.2), open tabs' unsaved text included. An aborted
+   * Search across the notebook's notes (PRD §6.2): their names, then their text, open tabs' unsaved text
+   * included. An aborted
    * `signal` stops the scan between files and resolves with no hits.
    */
   async search(
@@ -781,11 +785,27 @@ export class Notebook {
     opts: { caseSensitive?: boolean; regex?: boolean; signal?: AbortSignal } = {},
   ): Promise<SearchHit[]> {
     if (!query.trim()) return [];
-    const hits: SearchHit[] = [];
+    const find = { caseSensitive: opts.caseSensitive ?? false, regex: opts.regex ?? false };
+    // Notes whose name matches come first, each led by its name; the rest follow in tree order.
+    const titled: SearchHit[] = [];
+    const rest: SearchHit[] = [];
+    const done = () => titled.concat(rest).slice(0, 500);
     const open = new Map(this.tabs.value.filter((t) => t.state).map((t) => [t.path.value, t.state!]));
     for (const file of allFiles(this.tree.value)) {
       if (opts.signal?.aborted) return [];
       if (fileKind(file.path) !== 'note') continue;
+      const name = findAll(stemOf(file.path), query, find)[0];
+      const hits = name ? titled : rest;
+      if (name)
+        hits.push({
+          path: file.path,
+          line: 0,
+          offset: 0,
+          length: name.length,
+          preview: baseName(file.path),
+          matchStart: name.start,
+          inTitle: true,
+        });
       let text: string;
       try {
         text = open.get(file.path)?.text ?? readText((await this.store.read(file.path)).bytes).text;
@@ -793,10 +813,7 @@ export class Notebook {
         continue;
       }
       if (opts.signal?.aborted) return [];
-      const matches = findAll(text, query, {
-        caseSensitive: opts.caseSensitive ?? false,
-        regex: opts.regex ?? false,
-      });
+      const matches = findAll(text, query, find);
       if (matches.length === 0) continue;
       const doc = TextDocument.fromString(text);
       for (const m of matches.slice(0, 50)) {
@@ -813,10 +830,10 @@ export class Notebook {
           preview,
           matchStart: pos.column - cut + (cut > lead ? 1 : 0),
         });
-        if (hits.length >= 500) return hits;
+        if (titled.length + rest.length >= 500) return done();
       }
     }
-    return hits;
+    return done();
   }
 
   /**

@@ -208,7 +208,8 @@ function SearchPanel({ model, nb }: { readonly model: ShellModel; readonly nb: N
 
   const open = async (hit: SearchHit) => {
     const tab = await nb.openFile(hit.path);
-    if (tab?.state) {
+    if (hit.inTitle) model.focusEditor();
+    else if (tab?.state) {
       tab.state.reveal(hit.offset, hit.offset + hit.length);
       model.focusEditor();
     }
@@ -260,7 +261,7 @@ function SearchPanel({ model, nb }: { readonly model: ShellModel; readonly nb: N
           lastPath = h.path;
           return (
             <li
-              key={`${h.path}:${h.offset}`}
+              key={`${h.path}:${h.inTitle ? 'title' : h.offset}`}
               role="option"
               aria-selected={i === index}
               class={head ? 'pn-hit pn-hit-first' : 'pn-hit'}
@@ -269,16 +270,33 @@ function SearchPanel({ model, nb }: { readonly model: ShellModel; readonly nb: N
                 void open(h);
               }}
             >
-              {head && <span class="pn-hit-file">{baseName(h.path)}</span>}
-              <span class="pn-hit-line">
-                {h.preview.slice(0, h.matchStart)}
-                <mark>{h.preview.slice(h.matchStart, h.matchStart + h.length)}</mark>
-                {h.preview.slice(h.matchStart + h.length)}
-              </span>
+              {h.inTitle ? (
+                <span class="pn-hit-file">
+                  <Marked hit={h} />
+                </span>
+              ) : (
+                <>
+                  {head && <span class="pn-hit-file">{baseName(h.path)}</span>}
+                  <span class="pn-hit-line">
+                    <Marked hit={h} />
+                  </span>
+                </>
+              )}
             </li>
           );
         })}
       </ul>
+    </>
+  );
+}
+
+/** A hit's preview with the match highlighted. */
+function Marked({ hit }: { readonly hit: SearchHit }) {
+  return (
+    <>
+      {hit.preview.slice(0, hit.matchStart)}
+      <mark>{hit.preview.slice(hit.matchStart, hit.matchStart + hit.length)}</mark>
+      {hit.preview.slice(hit.matchStart + hit.length)}
     </>
   );
 }

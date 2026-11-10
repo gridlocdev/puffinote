@@ -346,6 +346,7 @@
   text-overflow: ellipsis;
 }
 
+.pn-hit-file mark,
 .pn-hit-line mark {
   background: var(--pn-mark-bg);
   color: var(--pn-fg);

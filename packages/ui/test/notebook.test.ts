@@ -172,6 +172,19 @@ describe('Notebook files', () => {
     );
     expect(hits[1]!.offset).toBe(3);
   });
+
+  it('finds note names first, then text', async () => {
+    const { nb } = await open({ 'a.md': 'about plans', 'f/Plans.md': 'nothing here', 'plans.pdf': '' });
+    const hits = await nb.search('plan');
+    expect(
+      hits.map((h) => [h.path, !!h.inTitle, h.preview.slice(h.matchStart, h.matchStart + h.length)]),
+    ).toEqual([
+      ['f/Plans.md', true, 'Plan'],
+      ['a.md', false, 'plan'],
+    ]);
+    // The extension isn't part of the name a search sees.
+    expect(await nb.search('md')).toEqual([]);
+  });
 });
 
 describe('Notebook session and settings', () => {

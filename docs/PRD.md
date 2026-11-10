@@ -133,8 +133,9 @@ leave the focus where it was.
   case-insensitively. It keeps the folders above a match and everything inside a matching folder, opens the
   folders that lead to matches, and counts the matches (or says "No matches"). It is the same tree, with the
   same keys, menu and drag.
-- **Search** finds text in every note, including the unsaved text of open tabs. Each hit shows its line with
-  the match marked. Enter or a click opens the note at the hit.
+- **Search** finds note names and the text in every note, including the unsaved text of open tabs. Notes
+  whose name matches come first, led by the name with the match marked. Each text hit shows its line with
+  the match marked. Enter or a click opens the note, at the hit for a text hit.
 - **Outline** lists the headings of the active note, indented by level. A click moves the caret to the
   heading.
 - **Recent** lists this notebook's recently opened files.
