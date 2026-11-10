@@ -1,18 +1,6 @@
-import { createHash, randomBytes } from 'node:crypto';
-import { constants as fsConstants } from 'node:fs';
-import {
-  chown,
-  lstat,
-  mkdir,
-  open,
-  readdir,
-  readFile,
-  realpath,
-  rename,
-  rm,
-  stat,
-  unlink,
-} from 'node:fs/promises';
+import { createHash, randomBytes, type Hash } from 'node:crypto';
+import { createReadStream, constants as fsConstants } from 'node:fs';
+import { chown, lstat, mkdir, open, readdir, realpath, rename, rm, stat, unlink } from 'node:fs/promises';
 import path from 'node:path';
 
 /** A named folder on the NAS that holds notebooks; the client browses it and opens a folder in it. */
@@ -156,14 +144,14 @@ export class FileApi {
   async read(
     rootId: string | null,
     rel: string | null,
-  ): Promise<{ bytes: Buffer; etag: string; modified: number }> {
+  ): Promise<{ file: string; size: number; etag: string; modified: number }> {
     const root = this.root(rootId);
     const full = await this.resolveEntry(root, rel);
     try {
       const s = await stat(full);
       if (!s.isFile()) throw new ApiError(400, 'Not a file');
-      const bytes = await readFile(full);
-      return { bytes, etag: etagOf(bytes), modified: s.mtimeMs };
+      // Hashed as a stream and served as one (server.ts), so a large file never sits in memory.
+      return { file: full, size: s.size, etag: await etagOfFile(full), modified: s.mtimeMs };
     } catch (e) {
       throw fsError(e);
     }
@@ -202,6 +190,13 @@ export class FileApi {
     const src = await this.resolveEntry(root, from);
     const dest = await this.resolveEntry(root, to);
     if (src === dest) return;
+    // Hold the write lock of both paths, so an in-flight save can't land on the old path after the move, and
+    // a new file can't appear at the destination between the check and the rename.
+    const keys = [...new Set([await queueKey(src), await queueKey(dest)])].sort();
+    return this.serializedAll(keys, () => this.moveLocked(src, dest));
+  }
+
+  private async moveLocked(src: string, dest: string): Promise<void> {
     const s = await lstat(src).catch(() => null);
     if (!s) throw new ApiError(404, 'Not found');
     if (s.isDirectory() && (dest + path.sep).startsWith(src + path.sep))
@@ -212,6 +207,8 @@ export class FileApi {
     try {
       await mkdir(path.dirname(dest), { recursive: true });
       await rename(src, dest);
+      await syncDir(path.dirname(dest));
+      if (path.dirname(src) !== path.dirname(dest)) await syncDir(path.dirname(src));
     } catch (e) {
       throw fsError(e);
     }
@@ -221,6 +218,10 @@ export class FileApi {
   async remove(rootId: string | null, rel: string | null): Promise<void> {
     const root = this.root(rootId);
     const full = await this.resolveEntry(root, rel);
+    return this.serialized(await queueKey(full), () => this.removeLocked(full));
+  }
+
+  private async removeLocked(full: string): Promise<void> {
     if (!(await lstat(full).catch(() => null))) throw new ApiError(404, 'Not found');
     await rm(full, { recursive: true, force: true }).catch((e: unknown) => {
       throw fsError(e);
@@ -240,31 +241,39 @@ export class FileApi {
     }
   }
 
+  /** `serialized` over several keys, taken in sorted order so two callers can't wait on each other. */
+  private serializedAll<T>(keys: readonly string[], fn: () => Promise<T>): Promise<T> {
+    const [first, ...rest] = keys;
+    if (first === undefined) return fn();
+    return this.serialized(first, () => this.serializedAll(rest, fn));
+  }
+
   private async writeLocked(
     full: string,
     bytes: Buffer,
     opts: { ifMatch?: string | null; ifNoneMatch?: string | null },
   ): Promise<{ etag: string }> {
-    const dir = path.dirname(full);
-    const base = path.basename(full);
-    await mkdir(dir, { recursive: true }).catch((e: unknown) => {
+    await mkdir(path.dirname(full), { recursive: true }).catch((e: unknown) => {
       throw fsError(e);
     });
 
     const target = await stat(full).catch(() => null);
     if (target && !target.isFile()) throw new ApiError(400, 'Not a file');
+    // A symlink stays a link: replace the file it names (resolveEntry checked that it is inside the root).
+    const dest = target ? await realpath(full) : full;
+    const dir = path.dirname(dest);
+    const base = path.basename(dest);
     if (opts.ifNoneMatch === '*' && target) throw new ApiError(412, 'A file with that name already exists');
     if (opts.ifMatch) {
       if (!target) throw new ApiError(412, 'The file was moved or deleted since it was opened');
-      const current = await readFile(full);
-      if (opts.ifMatch !== '*' && etagOf(current) !== opts.ifMatch)
+      if (opts.ifMatch !== '*' && (await etagOfFile(dest)) !== opts.ifMatch)
         throw new ApiError(412, 'The file changed on the server since it was opened');
     }
 
     try {
       if (target && target.nlink > 1) {
         // A rename would split the hard link; write through it instead (not atomic, but keeps the link).
-        const handle = await open(full, fsConstants.O_WRONLY | fsConstants.O_TRUNC);
+        const handle = await open(dest, fsConstants.O_WRONLY | fsConstants.O_TRUNC);
         try {
           await handle.writeFile(bytes);
           await handle.sync();
@@ -289,7 +298,8 @@ export class FileApi {
         await handle.close();
       }
       if (target) await chown(tmp, target.uid, target.gid).catch(() => {}); // only root may give files away
-      await rename(tmp, full);
+      await rename(tmp, dest);
+      await syncDir(dir);
     } catch (e) {
       await unlink(tmp).catch(() => {});
       throw fsError(e);
@@ -320,8 +330,30 @@ async function queueKey(full: string): Promise<string> {
   }
 }
 
+/**
+ * Make a rename in `dir` durable: without this, a power cut soon after a save can bring the old file back.
+ * Windows can't open a folder, so this is best effort.
+ */
+async function syncDir(dir: string): Promise<void> {
+  const handle = await open(dir, fsConstants.O_RDONLY).catch(() => null);
+  if (!handle) return;
+  await handle.sync().catch(() => {});
+  await handle.close();
+}
+
 export function etagOf(bytes: Uint8Array): string {
-  return '"' + createHash('sha256').update(bytes).digest('base64url').slice(0, 27) + '"';
+  return etagOfHash(createHash('sha256').update(bytes));
+}
+
+/** `etagOf` the file's contents, read as a stream. */
+async function etagOfFile(file: string): Promise<string> {
+  const hash = createHash('sha256');
+  for await (const chunk of createReadStream(file)) hash.update(chunk as Buffer);
+  return etagOfHash(hash);
+}
+
+function etagOfHash(hash: Hash): string {
+  return '"' + hash.digest('base64url').slice(0, 27) + '"';
 }
 
 function fsError(e: unknown): Error {

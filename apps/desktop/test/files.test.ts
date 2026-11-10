@@ -15,7 +15,16 @@ import {
 import os from 'node:os';
 import path from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { FolderGrants, folderArgs, isAppUrl, watchTree, withFileLock, writeAtomic } from '../src/files.ts';
+import {
+  FolderGrants,
+  folderArgs,
+  isAppUrl,
+  readWithMtime,
+  watchTree,
+  withFileLock,
+  withFileLocks,
+  writeAtomic,
+} from '../src/files.ts';
 
 let dir: string;
 beforeAll(async () => {
@@ -114,6 +123,23 @@ describe('FolderGrants', () => {
     expect(await g.allows(path.join(nb, 'up', 'new.md'))).toBe(false);
   });
 
+  it('follows a dangling symlink to where a save through it would land', async () => {
+    const nb = path.join(dir, 'nb3');
+    await mkdir(path.join(nb, '.puffinote'), { recursive: true });
+    await symlink('../../out/pwned.txt', path.join(nb, '.puffinote', 'session.json'));
+    await symlink('missing.md', path.join(nb, 'inside-link.md'));
+    await symlink(path.join(dir, 'gone-dir'), path.join(nb, 'gone'));
+    await symlink('loop-b', path.join(nb, 'loop-a'));
+    await symlink('loop-a', path.join(nb, 'loop-b'));
+    const g = new FolderGrants(null);
+    await g.load();
+    g.grant(nb);
+    expect(await g.allows(path.join(nb, '.puffinote', 'session.json'))).toBe(false);
+    expect(await g.allows(path.join(nb, 'gone', 'new.md'))).toBe(false);
+    expect(await g.allows(path.join(nb, 'inside-link.md'))).toBe(true);
+    expect(await g.allows(path.join(nb, 'loop-a'))).toBe(false);
+  });
+
   it('persists grants and reloads them', async () => {
     const file = path.join(dir, 'grants', 'granted.json');
     const g = new FolderGrants(file);
@@ -152,6 +178,48 @@ describe('watchTree', () => {
     } finally {
       stop();
     }
+  });
+
+  it('still reports during a steady stream of changes', async () => {
+    const root = path.join(dir, 'busy');
+    await mkdir(root, { recursive: true });
+    const calls: string[][] = [];
+    const stop = watchTree(root, (paths) => calls.push(paths), 100, { maxWaitMs: 250 });
+    try {
+      await wait(50);
+      for (let i = 0; i < 20; i++) {
+        await writeFile(path.join(root, 'log.txt'), String(i));
+        await wait(40); // always inside the 100 ms quiet period
+      }
+      expect(calls.length).toBeGreaterThanOrEqual(2);
+    } finally {
+      stop();
+    }
+  });
+});
+
+describe('withFileLocks and readWithMtime', () => {
+  it('runs after every earlier lock on any of its files', async () => {
+    const order: string[] = [];
+    const a = path.join(dir, 'A.md');
+    const b = path.join(dir, 'b.md');
+    const first = withFileLock(b, async () => {
+      await wait(30);
+      order.push('save b');
+    });
+    const move = withFileLocks([a, b], async () => {
+      order.push('move');
+    });
+    await Promise.all([first, move]);
+    expect(order).toEqual(['save b', 'move']);
+  });
+
+  it('reads the bytes with their mtime', async () => {
+    const f = path.join(dir, 'read.md');
+    await writeFile(f, 'hello');
+    const { bytes: got, modified } = await readWithMtime(f);
+    expect(new TextDecoder().decode(got)).toBe('hello');
+    expect(modified).toBe((await stat(f)).mtimeMs);
   });
 });
 

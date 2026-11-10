@@ -1,4 +1,15 @@
-import { link, mkdtemp, mkdir, readFile, rm, stat, symlink, writeFile } from 'node:fs/promises';
+import {
+  link,
+  lstat,
+  mkdtemp,
+  mkdir,
+  readFile,
+  rename,
+  rm,
+  stat,
+  symlink,
+  writeFile,
+} from 'node:fs/promises';
 import type { AddressInfo } from 'node:net';
 import os from 'node:os';
 import path from 'node:path';
@@ -109,6 +120,42 @@ describe('the file API', () => {
     await link(a, path.join(dir, 'linked-too.md'));
     await fetch(`${base}/file?${q({ path: 'linked.md' })}`, { method: 'PUT', body: 'two', headers: auth });
     expect(await readFile(path.join(dir, 'linked-too.md'), 'utf8')).toBe('two');
+  });
+
+  it('keeps a symlink when saving through it, and replaces the file it names', async () => {
+    await writeFile(path.join(dir, 'real.md'), 'real');
+    await symlink('real.md', path.join(dir, 'alias.md'));
+    const url = `${base}/file?${q({ path: 'alias.md' })}`;
+    const etag = (await fetch(url, { headers: auth })).headers.get('etag') ?? '';
+    const res = await fetch(url, { method: 'PUT', body: 'new', headers: { ...auth, 'If-Match': etag } });
+    expect(res.status).toBe(200);
+    expect((await lstat(path.join(dir, 'alias.md'))).isSymbolicLink()).toBe(true);
+    expect(await readFile(path.join(dir, 'real.md'), 'utf8')).toBe('new');
+  });
+
+  it('refuses changes sent by another site’s page', async () => {
+    const move = (headers: Record<string, string>) =>
+      fetch(`${base}/move?${q({ from: 'Notes/a.md', to: 'Notes/b.md' })}`, {
+        method: 'POST',
+        headers: { ...auth, ...headers },
+      });
+    expect((await move({ 'Sec-Fetch-Site': 'cross-site' })).status).toBe(403);
+    expect((await move({ 'Sec-Fetch-Site': 'same-site' })).status).toBe(403);
+    expect((await move({ Origin: 'https://evil.example' })).status).toBe(403);
+    expect((await move({ Origin: 'null' })).status).toBe(403);
+    expect(await stat(path.join(dir, 'Notes/a.md'))).toBeTruthy();
+    const host = new URL(base).host;
+    expect((await move({ Origin: `http://${host}` })).status).toBe(200);
+    expect((await move({ 'Sec-Fetch-Site': 'same-origin' })).status).toBe(404); // a.md has moved
+    await rename(path.join(dir, 'Notes/b.md'), path.join(dir, 'Notes/a.md'));
+  });
+
+  it('streams a file and its content hash', async () => {
+    const big = Buffer.alloc(3 * 1024 * 1024, 'x');
+    await writeFile(path.join(dir, 'big.bin'), big);
+    const res = await fetch(`${base}/file?${q({ path: 'big.bin' })}`, { headers: auth });
+    expect(res.headers.get('etag')).toBe(etagOf(big));
+    expect(Buffer.from(await res.arrayBuffer()).equals(big)).toBe(true);
   });
 
   it('refuses uploads over the limit', async () => {

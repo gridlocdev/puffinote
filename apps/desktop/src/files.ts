@@ -64,6 +64,18 @@ export async function writeAtomic(p: string, bytes: Uint8Array): Promise<void> {
     if (created) await unlink(tmp).catch(() => {});
     throw e;
   }
+  await syncDir(path.dirname(real));
+}
+
+/**
+ * Make a rename in `dir` durable: without this, a power cut soon after a save can bring the old file back.
+ * Windows can't open a folder, so this is best effort.
+ */
+export async function syncDir(dir: string): Promise<void> {
+  const h = await open(dir, 'r').catch(() => null);
+  if (!h) return;
+  await h.sync().catch(() => {});
+  await h.close();
 }
 
 /** The file a path names after following symlinks; a path that doesn't exist yet is its own target. */
@@ -82,8 +94,7 @@ const fileLocks = new Map<string, Promise<unknown>>();
  * volume usually is case-insensitive (macOS, Windows).
  */
 export async function withFileLock<T>(p: string, fn: () => Promise<T>): Promise<T> {
-  const abs = path.resolve(p);
-  const key = process.platform === 'linux' ? abs : abs.normalize('NFC').toLowerCase();
+  const key = lockKey(p);
   const prev = fileLocks.get(key) ?? Promise.resolve();
   const run = prev.then(fn, fn);
   const tail = run.catch(() => {});
@@ -95,36 +106,100 @@ export async function withFileLock<T>(p: string, fn: () => Promise<T>): Promise<
   }
 }
 
+function lockKey(p: string): string {
+  const abs = path.resolve(p);
+  return process.platform === 'linux' ? abs : abs.normalize('NFC').toLowerCase();
+}
+
+/** `withFileLock` over several files, taken in one order so two callers can't wait on each other. */
+export function withFileLocks<T>(paths: readonly string[], fn: () => Promise<T>): Promise<T> {
+  const byKey = new Map(paths.map((p) => [lockKey(p), p]));
+  const sorted = [...byKey.keys()].sort().map((k) => byKey.get(k));
+  const run = (i: number): Promise<T> => {
+    const p = sorted[i];
+    return p === undefined ? fn() : withFileLock(p, () => run(i + 1));
+  };
+  return run(0);
+}
+
+/** A file's bytes and the mtime of exactly those bytes (one handle, so no write can come between). */
+export async function readWithMtime(file: string): Promise<{ bytes: Uint8Array; modified: number }> {
+  const h = await open(file, 'r');
+  try {
+    const s = await h.stat();
+    const bytes = await h.readFile();
+    return { bytes: new Uint8Array(bytes), modified: s.mtimeMs };
+  } finally {
+    await h.close();
+  }
+}
+
 /**
  * Watch a notebook folder and everything in it. A burst of events becomes one call after `delayMs` with the
- * absolute paths that changed; our own temp files are left out.
+ * absolute paths that changed; our own temp files are left out. A steady stream of events (a sync tool, a
+ * build writing into the folder) still reports every `maxWaitMs`. If the watcher fails (too many open files,
+ * the folder renamed), it is started again after `retryMs` and the whole folder is reported as changed,
+ * since events were missed.
  */
-export function watchTree(root: string, onChange: (paths: string[]) => void, delayMs = 200): () => void {
+export function watchTree(
+  root: string,
+  onChange: (paths: string[]) => void,
+  delayMs = 200,
+  { maxWaitMs = 2000, retryMs = 2000 } = {},
+): () => void {
   let timer: NodeJS.Timeout | null = null;
+  let firstPending = 0;
+  let retry: NodeJS.Timeout | null = null;
+  let stopped = false;
   const pending = new Set<string>();
   let watcher: FSWatcher | null = null;
-  try {
-    watcher = watch(root, { recursive: true }, (_event, filename) => {
-      const name = filename?.toString() ?? '';
-      if (TEMP_FILE.test(path.basename(name))) return;
-      pending.add(name ? path.join(root, name) : root);
-      if (timer) clearTimeout(timer);
-      timer = setTimeout(() => {
-        timer = null;
-        const paths = [...pending];
-        pending.clear();
-        onChange(paths);
-      }, delayMs);
-    });
-    watcher.on('error', () => {});
-  } catch {
-    watcher = null;
-  }
+
+  const flush = (): void => {
+    if (timer) clearTimeout(timer);
+    timer = null;
+    const paths = [...pending];
+    pending.clear();
+    if (paths.length > 0 && !stopped) onChange(paths);
+  };
+  const note = (p: string): void => {
+    if (pending.size === 0) firstPending = Date.now();
+    pending.add(p);
+    if (timer) clearTimeout(timer);
+    const wait = Math.max(0, Math.min(delayMs, firstPending + maxWaitMs - Date.now()));
+    timer = setTimeout(flush, wait);
+  };
+  const start = (): void => {
+    retry = null;
+    if (stopped) return;
+    try {
+      watcher = watch(root, { recursive: true }, (_event, filename) => {
+        const name = filename?.toString() ?? '';
+        if (TEMP_FILE.test(path.basename(name))) return;
+        note(name ? path.join(root, name) : root);
+      });
+      watcher.on('error', () => {
+        watcher?.close();
+        watcher = null;
+        if (!stopped) retry = setTimeout(restart, retryMs);
+      });
+    } catch {
+      watcher = null;
+      retry = setTimeout(restart, retryMs);
+    }
+  };
+  const restart = (): void => {
+    start();
+    if (watcher) note(root);
+  };
+  start();
   return () => {
+    stopped = true;
     watcher?.close();
     watcher = null;
     if (timer) clearTimeout(timer);
     timer = null;
+    if (retry) clearTimeout(retry);
+    retry = null;
   };
 }
 
@@ -189,12 +264,22 @@ export class FolderGrants {
     const root = this.#folders.find((f) => inside(f, abs));
     if (!root) return false;
     const realRoot = await realpath(root).catch(() => root);
+    // Walk up to the nearest part that exists, but follow a dangling symlink on the way: a save through
+    // it (writeAtomic) lands where it points, so that is where the check must look.
     let probe = abs;
-    for (;;) {
+    const tail: string[] = [];
+    for (let hops = 0; ;) {
       const real = await realpath(probe).catch(() => null);
-      if (real !== null) return inside(realRoot, real);
+      if (real !== null) return inside(realRoot, path.join(real, ...tail));
+      const link = await readlink(probe).catch(() => null);
+      if (link !== null) {
+        if (++hops > 40) return false; // a loop
+        probe = path.resolve(path.dirname(probe), link);
+        continue;
+      }
       const parent = path.dirname(probe);
       if (parent === probe) return false;
+      tail.unshift(path.basename(probe));
       probe = parent;
     }
   }

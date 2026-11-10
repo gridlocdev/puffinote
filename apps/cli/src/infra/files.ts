@@ -1,6 +1,10 @@
 import { randomBytes } from 'node:crypto';
 import {
+  closeSync,
   existsSync,
+  fchmodSync,
+  fsyncSync,
+  openSync,
   readdirSync,
   readFileSync,
   realpathSync,
@@ -36,13 +40,23 @@ export function saveText(con: Console, text: string, output: string): void {
     con.out(text);
     return;
   }
-  const target = path.resolve(output);
+  // Follow a symlink, so the link stays and the file it names is replaced.
+  const target = existsSync(output) ? realpathSync(output) : path.resolve(output);
+  const existing = existsSync(target) ? statSync(target) : null;
+  const mode = existing ? existing.mode & 0o7777 : 0o644;
   const temp = path.join(
     path.dirname(target),
     `.${path.basename(target)}.${randomBytes(8).toString('hex')}.tmp`,
   );
   try {
-    writeFileSync(temp, text);
+    const fd = openSync(temp, 'wx', mode);
+    try {
+      fchmodSync(fd, mode); // open() applies the umask; the replacement keeps the original bits
+      writeFileSync(fd, text);
+      fsyncSync(fd);
+    } finally {
+      closeSync(fd);
+    }
     renameSync(temp, target);
   } catch (e) {
     rmSync(temp, { force: true });

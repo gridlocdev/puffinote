@@ -1,4 +1,7 @@
 import {
+  chmodSync,
+  lstatSync,
+  statSync,
   mkdirSync,
   mkdtempSync,
   readdirSync,
@@ -197,6 +200,20 @@ describe('markdown commands', () => {
     expect(readFileSync(out, 'utf8')).toContain('<h2>Puffins</h2>');
     expect(readdirSync(at('Sub')).filter((n) => n.endsWith('.tmp'))).toEqual([]);
     rmSync(out);
+  });
+
+  it('html -o through a symlink replaces the file it names and keeps its mode', () => {
+    const target = at('Sub', 'target.html');
+    const link = at('Sub', 'link.html');
+    writeFileSync(target, 'old', { mode: 0o600 });
+    chmodSync(target, 0o600);
+    symlinkSync('target.html', link);
+    expect(run(['html', at('Welcome.md'), '-o', link]).exit).toBe(0);
+    expect(lstatSync(link).isSymbolicLink()).toBe(true);
+    expect(readFileSync(target, 'utf8')).toContain('<h2>Puffins</h2>');
+    expect(statSync(target).mode & 0o777).toBe(0o600);
+    rmSync(link);
+    rmSync(target);
   });
 
   it('reports a missing file', () => {

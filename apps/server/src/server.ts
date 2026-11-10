@@ -1,8 +1,10 @@
 import { timingSafeEqual } from 'node:crypto';
+import { createReadStream } from 'node:fs';
 import { readFile, stat } from 'node:fs/promises';
 import http from 'node:http';
 import { isIP } from 'node:net';
 import path from 'node:path';
+import { pipeline } from 'node:stream/promises';
 import { ApiError, type FileApi } from './fileApi.ts';
 
 export interface ServerOptions {
@@ -97,6 +99,8 @@ async function handle(
     // /api/info stays public: it is how the client learns that a token is needed.
     const isInfo = req.method === 'GET' && url.pathname === '/api/info';
     if (!isInfo && !authorized(req, opts.token)) throw new ApiError(401, 'Unauthorized');
+    if (req.method !== 'GET' && req.method !== 'HEAD' && crossSite(req))
+      throw new ApiError(403, 'Cross-site request refused');
     return api(req, res, url, opts);
   }
   if (req.method !== 'GET' && req.method !== 'HEAD') throw new ApiError(405, 'Method not allowed');
@@ -125,7 +129,7 @@ async function api(
       return send(res, 200, await opts.api.list(root, q.get('path')));
     case 'GET /api/file': {
       const rel = q.get('path');
-      const { bytes, etag, modified } = await opts.api.read(root, rel);
+      const { file, size, etag, modified } = await opts.api.read(root, rel);
       if (req.headers['if-none-match'] === etag) {
         res.writeHead(304, { ETag: etag, ...SECURITY_HEADERS });
         return void res.end();
@@ -135,14 +139,18 @@ async function api(
         'Content-Type': IMAGE.has(ext)
           ? (MIME[ext] ?? 'application/octet-stream')
           : 'application/octet-stream',
-        'Content-Length': bytes.length,
+        'Content-Length': size,
         'Cache-Control': 'no-cache',
         'Last-Modified': new Date(modified).toUTCString(),
         'Content-Security-Policy': FILE_CSP,
         ETag: etag,
         ...SECURITY_HEADERS,
       });
-      return void res.end(bytes);
+      // If the file changes between the hash and the stream, the ETag no longer matches the file, so the
+      // client's next save is refused (412) rather than overwriting a change. The length is capped at `size`
+      // to match Content-Length.
+      await pipeline(createReadStream(file, { start: 0, end: Math.max(0, size - 1) }), res);
+      return;
     }
     case 'PUT /api/file': {
       const body = await readBody(req, opts.maxBytes);
@@ -209,6 +217,24 @@ function authorized(req: http.IncomingMessage, token: string | null): boolean {
   const a = Buffer.from(got);
   const b = Buffer.from(token);
   return a.length === b.length && timingSafeEqual(a, b);
+}
+
+/**
+ * Did another site's page send this request? A form or `fetch` from any web page can POST here without a
+ * CORS preflight, so a request that changes files must come from our own page. `Sec-Fetch-Site` answers
+ * that directly (and survives a reverse proxy); older browsers send only `Origin`, compared with `Host`.
+ * Requests with neither header come from scripts and tools, not from a browser page.
+ */
+export function crossSite(req: http.IncomingMessage): boolean {
+  const site = header(req, 'sec-fetch-site');
+  if (site !== null) return site !== 'same-origin' && site !== 'none';
+  const origin = header(req, 'origin');
+  if (origin === null) return false;
+  try {
+    return new URL(origin).host !== req.headers.host;
+  } catch {
+    return true; // "null" (a sandboxed page, a file:// page) or garbage
+  }
 }
 
 function header(req: http.IncomingMessage, name: string): string | null {

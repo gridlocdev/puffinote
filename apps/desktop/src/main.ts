@@ -1,6 +1,6 @@
 import { app, BrowserWindow, dialog, ipcMain, Menu, net, protocol, shell } from 'electron';
 import type { MenuItemConstructorOptions } from 'electron';
-import { mkdir, readdir, readFile, realpath, rename, stat } from 'node:fs/promises';
+import { mkdir, readdir, realpath, rename, stat } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import {
@@ -16,9 +16,11 @@ import {
   FolderGrants,
   folderArgs,
   isAppUrl,
+  readWithMtime,
   TEMP_FILE,
   watchTree,
   withFileLock,
+  withFileLocks,
   writeAtomic,
 } from './files.ts';
 
@@ -317,10 +319,9 @@ function registerIpc(): void {
   });
   ipcMain.handle(Channels.read, async (e, p: unknown) => {
     const file = await guard(e, p);
-    const [bytes, s] = await Promise.all([readFile(file), stat(file)]).catch((err: unknown) =>
-      notFound(err, file),
-    );
-    return { bytes: new Uint8Array(bytes), modified: s.mtimeMs };
+    // One handle for the mtime and the bytes, so an external write can't slip between them and hand the
+    // renderer old text under the new version (its next save would then overwrite that write).
+    return readWithMtime(file).catch((err: unknown) => notFound(err, file));
   });
   ipcMain.handle(
     Channels.write,
@@ -350,10 +351,14 @@ function registerIpc(): void {
     const rel = path.relative(src, dest);
     if (rel && !rel.startsWith('..') && !path.isAbsolute(rel))
       throw new Error('A folder cannot move into itself');
-    if ((await exists(dest)) && !(await sameFile(src, dest)))
-      throw new Error(`${CONFLICT_EXISTS}: ${path.basename(dest)}`);
-    await mkdir(path.dirname(dest), { recursive: true });
-    await rename(src, dest);
+    // Under both files' save locks: a save in flight can't land on the old path after the move, and a new
+    // file can't appear at the destination between the check and the rename.
+    await withFileLocks([src, dest], async () => {
+      if ((await exists(dest)) && !(await sameFile(src, dest)))
+        throw new Error(`${CONFLICT_EXISTS}: ${path.basename(dest)}`);
+      await mkdir(path.dirname(dest), { recursive: true });
+      await rename(src, dest);
+    });
   });
   ipcMain.handle(Channels.trash, async (e, p: unknown) => {
     const target = await guard(e, p);
