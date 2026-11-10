@@ -1,14 +1,10 @@
 # Developer guide
 
-Puffinote is TypeScript in a pnpm workspace: Preact and `@preact/signals` for the UI, Vite for the web
-build, Electron for the desktop app, and a dependency-free Node server and CLI that run straight from source
-with Node's type stripping. The rules in `AGENTS.md` at the repository root apply to everyone working on it.
-[ARCHITECTURE.md](ARCHITECTURE.md) explains how the code is laid out.
+Puffinote is TypeScript in a pnpm workspace: Preact and `@preact/signals` for the UI, Vite for the web build, Electron for the desktop app, and a dependency-free Node server and CLI that run straight from source with Node's type stripping. The rules in `AGENTS.md` at the repository root apply to everyone working on it. [ARCHITECTURE.md](ARCHITECTURE.md) explains how the code is laid out.
 
 ## Getting set up
 
-You need Node 22.18 or later, pnpm (through `corepack enable`) and [just](https://github.com/casey/just).
-The devcontainer in `.devcontainer/` has all three.
+You need Node 22.18 or later, pnpm (through `corepack enable`) and [just](https://github.com/casey/just). The devcontainer in `.devcontainer/` has all three.
 
 ```bash
 just setup                # corepack enable, then pnpm install
@@ -20,12 +16,9 @@ just run-editor-demo      # the editor alone, with no shell, on http://localhost
 just cli tree ~/Notes     # the puffinote CLI from source (any arguments)
 ```
 
-- `just run-web` and `just run-server` serve `.nas-data/` in the repository as the root `Sample`. Put a
-  notebook folder in it to try the NAS flow. The folder is gitignored.
-- Without the NAS server, `pnpm --filter @puffinote/web dev` is the plain web app: it opens a folder through
-  the browser (Chromium) or uses the browser's private storage.
-- `just cli` runs from the folder you are in, so relative paths work as they would with an installed
-  `puffinote`.
+- `just run-web` and `just run-server` serve `.nas-data/` in the repository as the root `Sample`. Put a notebook folder in it to try the NAS flow. The folder is gitignored.
+- Without the NAS server, `pnpm --filter @puffinote/web dev` is the plain web app: it opens a folder through the browser (Chromium) or uses the browser's private storage.
+- `just cli` runs from the folder you are in, so relative paths work as they would with an installed `puffinote`.
 
 ## Checking your work
 
@@ -39,35 +32,26 @@ just fmt              # format every file
 just fmt-check        # check the formatting
 ```
 
-`just check` must pass before every commit. When you change behaviour, add or update a test in that
-package's `test/` folder.
+`just check` must pass before every commit. When you change behaviour, add or update a test in that package's `test/` folder.
 
-Check UI changes headlessly: run `just run-web` (or `just preview-web`) and drive it in a browser that isn't
-in your way. The desktop app renders offscreen with `PUFFINOTE_HEADLESS=1`.
+Check UI changes headlessly: run `just run-web` (or `just preview-web`) and drive it in a browser that isn't in your way. The desktop app renders offscreen with `PUFFINOTE_HEADLESS=1`.
 
 ## The spec and its references
 
-The product spec is [PRD.md](PRD.md). The code cites it as `PRD §n` in comments next to the behaviour a
-section describes. When you change behaviour, change the spec in the same commit. If you renumber a section,
-find its references with `grep -rn 'PRD §' packages apps`.
+The product spec is [PRD.md](PRD.md). The code cites it as `PRD §n` in comments next to the behaviour a section describes. When you change behaviour, change the spec in the same commit. If you renumber a section, find its references with `grep -rn 'PRD §' packages apps`.
 
 ## Adding a command
 
-1. Add it to the catalog: a shell command in `packages/ui/src/shell/shellModel.ts`, or an editor command in
-   `packages/ui/src/editor/editorCommands.ts`. Give it an id (`shell.`, `view.`, `edit.`, `format.` or
-   `insert.`), a title, a group, and a shortcut if it needs one.
+1. Add it to the catalog: a shell command in `packages/ui/src/shell/shellModel.ts`, or an editor command in `packages/ui/src/editor/editorCommands.ts`. Give it an id (`shell.`, `view.`, `edit.`, `format.` or `insert.`), a title, a group, and a shortcut if it needs one.
 2. If the shortcut belongs to the shell, check it against the reserved set (PRD §8.2).
-3. The command menu, the shortcut and the desktop menu bar pick it up from the catalog. Nothing else needs
-   registering.
+3. The command menu, the shortcut and the desktop menu bar pick it up from the catalog. Nothing else needs registering.
 4. Add a test for its behaviour.
 
 ## Adding a Markdown construct
 
 1. Add the token types to `packages/markdown/src/markdown/token.ts`.
-2. Recognize it in `lineTokenizer.ts` (a block or line prefix) or `inlineTokenizer.ts` (inline). If it spans
-   lines, add its state to `blockState.ts`.
-3. Render it: styling in `packages/ui/src/editor/lineRender.ts` and `styles.css`, reveal rules in
-   `reveal.ts`, and HTML in `packages/markdown/src/html/htmlRenderer.ts`.
+2. Recognize it in `lineTokenizer.ts` (a block or line prefix) or `inlineTokenizer.ts` (inline). If it spans lines, add its state to `blockState.ts`.
+3. Render it: styling in `packages/ui/src/editor/lineRender.ts` and `styles.css`, reveal rules in `reveal.ts`, and HTML in `packages/markdown/src/html/htmlRenderer.ts`.
 4. Add tests next to the existing ones in `packages/markdown/test/`, and the construct to PRD §11.3.
 
 ## The NAS server
@@ -77,9 +61,7 @@ just build-docker     # build the image (puffinote:latest)
 just run-docker       # run it against ./.nas-data on http://localhost:8790
 ```
 
-The server is configured only through environment variables, listed at the top of `apps/server/src/main.ts`
-and in [ARCHITECTURE.md](ARCHITECTURE.md#server-appsserver). `compose.example.yaml` is the starting point for
-a NAS.
+The server is configured only through environment variables, listed at the top of `apps/server/src/main.ts` and in [ARCHITECTURE.md](ARCHITECTURE.md#server-appsserver). `compose.example.yaml` is the starting point for a NAS.
 
 ## Building and packaging the desktop app
 
@@ -91,32 +73,24 @@ just package-desktop-dir  # an unpacked app only, faster for local testing
 just install-desktop      # macOS: package and install into /Applications
 ```
 
-- The package is signed ad hoc so it runs on Apple silicon. Swap the identity in
-  `apps/desktop/electron-builder.yml` for a Developer ID to distribute it.
-- `just install-desktop` moves an existing copy to the Trash first, and refuses while the app is running.
-  It registers the installed copy with Launch Services, so `puffinote <folder>` opens it.
+- The package is signed ad hoc so it runs on Apple silicon. Swap the identity in `apps/desktop/electron-builder.yml` for a Developer ID to distribute it.
+- `just install-desktop` moves an existing copy to the Trash first, and refuses while the app is running. It registers the installed copy with Launch Services, so `puffinote <folder>` opens it.
 
 ### The app icon
 
-The icon is drawn by hand in `apps/desktop/assets/icon.svg`: a 1024 canvas on Apple's grid, with the
-824-unit tile at (100, 100). After editing it, render the platform files and commit them, so builds don't
-need Inkscape:
+The icon is drawn by hand in `apps/desktop/assets/icon.svg`: a 1024 canvas on Apple's grid, with the 824-unit tile at (100, 100). After editing it, render the platform files and commit them, so builds don't need Inkscape:
 
 ```bash
 just icons  # icon.icns (macOS), icon.ico (Windows) and icon.png (Linux window) in apps/desktop/build
 ```
 
-It needs Inkscape (`brew install --cask inkscape`) and, for the `.icns`, macOS. If the Dock still shows the
-old icon after a rebuild, that is the macOS icon cache: move the app, or log out and back in.
+It needs Inkscape (`brew install --cask inkscape`) and, for the `.icns`, macOS. If the Dock still shows the old icon after a rebuild, that is the macOS icon cache: move the app, or log out and back in.
 
 ## Releasing
 
-Pushing a `vX.Y.Z` tag runs `.github/workflows/release.yml`. It packages the desktop app on macOS (Apple
-silicon and Intel), Windows and Linux, and publishes them on a GitHub release. The NAS image isn't
-published: people build it from the repository (README).
+Pushing a `vX.Y.Z` tag runs `.github/workflows/release.yml`. It packages the desktop app on macOS (Apple silicon and Intel), Windows and Linux, and publishes them on a GitHub release. The NAS image isn't published: people build it from the repository (README).
 
-1. Set the same version in every `package.json` (the root, `apps/*` and `packages/*`). The workflow stops if
-   the tag doesn't match `apps/desktop/package.json`.
+1. Set the same version in every `package.json` (the root, `apps/*` and `packages/*`). The workflow stops if the tag doesn't match `apps/desktop/package.json`.
 2. Add a `## X.Y.Z` section to `CHANGELOG.md`. It becomes the release notes.
 3. Run `just check`, commit, then tag and push:
 
@@ -125,13 +99,8 @@ published: people build it from the repository (README).
    git push origin main vX.Y.Z
    ```
 
-- The apps aren't notarized or code-signed, so the README tells people how to open them the first time.
-  The desktop app's update check (PRD §3.1) reads the latest release from GitHub's API, so a published
-  release reaches existing installs within a day.
-- `.github/workflows/check.yml` runs `pnpm check` on Linux, macOS and Windows for every pull request. It
-  does not run on push: run it by hand from the repository's **Actions** tab, or with
-  `gh workflow run check.yml`. `.github/workflows/docker.yml` builds the Docker image and checks that it
-  starts; it also runs only by hand (`gh workflow run docker.yml`).
+- The apps aren't notarized or code-signed, so the README tells people how to open them the first time. The desktop app's update check (PRD §3.1) reads the latest release from GitHub's API, so a published release reaches existing installs within a day.
+- `.github/workflows/check.yml` runs `pnpm check` on Linux, macOS and Windows for every pull request. It does not run on push: run it by hand from the repository's **Actions** tab, or with `gh workflow run check.yml`. `.github/workflows/docker.yml` builds the Docker image and checks that it starts; it also runs only by hand (`gh workflow run docker.yml`).
 
 ## Cleaning up
 
