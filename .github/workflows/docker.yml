@@ -1,0 +1,18 @@
+name: docker
+
+# Run by hand: build the NAS Docker image and check that it starts. Nothing is pushed.
+on:
+  workflow_dispatch:
+
+jobs:
+  docker:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: docker build -t puffinote:ci .
+      - name: Smoke test
+        run: |
+          docker run -d --name pn -p 8790:8790 puffinote:ci
+          for i in $(seq 1 20); do curl -fs http://127.0.0.1:8790/api/info && exit 0; sleep 1; done
+          docker logs pn
+          exit 1
