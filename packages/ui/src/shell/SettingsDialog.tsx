@@ -110,7 +110,21 @@ function Field(props: {
   return (
     <div class="pn-setting">
       <label for={id}>{field.label}</label>
-      {!props.optional && !field.options ? (
+      {field.text ? (
+        <input
+          id={id}
+          type="text"
+          spellcheck={false}
+          value={String(props.value ?? '')}
+          placeholder={
+            props.optional ? `Use preference (${String(props.inherited)})` : String(props.inherited)
+          }
+          onInput={(e) => {
+            const raw = (e.target as HTMLInputElement).value;
+            props.onChange(raw.trim() === '' ? undefined : raw);
+          }}
+        />
+      ) : !props.optional && !field.options ? (
         <input
           id={id}
           type="checkbox"

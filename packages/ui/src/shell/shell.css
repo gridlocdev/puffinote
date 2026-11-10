@@ -1147,6 +1147,19 @@
 .pn-status-zoom:hover {
   background: var(--pn-hover);
 }
+.pn-status-action {
+  margin-left: 8px;
+  padding: 1px 8px;
+  border: 1px solid var(--pn-border);
+  border-radius: 4px;
+  background: transparent;
+  color: var(--pn-accent);
+  font: inherit;
+  cursor: pointer;
+}
+.pn-status-action:hover {
+  background: var(--pn-hover);
+}
 .pn-modes button {
   padding: 2px 8px;
   border: 0;
@@ -1234,7 +1247,8 @@
   color: var(--pn-on-accent);
 }
 
-.pn-dialog-actions .pn-primary:disabled {
+.pn-dialog-actions .pn-primary:disabled,
+.pn-dialog-actions .pn-danger:disabled {
   opacity: 0.5;
 }
 
@@ -1242,7 +1256,8 @@
   color: var(--pn-danger);
 }
 
-.pn-confirm .pn-dialog-actions .pn-danger:last-child {
+.pn-confirm .pn-dialog-actions .pn-danger:last-child,
+.pn-unused .pn-dialog-actions .pn-danger:last-child {
   background: var(--pn-danger);
   border-color: var(--pn-danger);
   color: #fff;
@@ -1255,7 +1270,8 @@
 }
 
 .pn-field input,
-.pn-setting select {
+.pn-setting select,
+.pn-setting input[type='text'] {
   padding: 6px 8px;
   border: 1px solid var(--pn-border);
   border-radius: 6px;
@@ -1460,4 +1476,47 @@
     max-width: 85vw;
     box-shadow: var(--pn-shadow);
   }
+}
+
+/* Find Unused Pictures… */
+.pn-unused-list {
+  max-height: 50vh;
+  margin: 8px 0 0;
+  padding: 0;
+  overflow-y: auto;
+  list-style: none;
+}
+
+.pn-unused-list label {
+  display: grid;
+  grid-template-columns: auto 40px minmax(0, 1fr);
+  grid-template-rows: auto auto;
+  align-items: center;
+  gap: 0 10px;
+  padding: 4px 0;
+}
+
+.pn-unused-list input {
+  grid-row: 1 / 3;
+}
+
+.pn-unused-list img {
+  grid-row: 1 / 3;
+  width: 40px;
+  height: 40px;
+  border-radius: 4px;
+  object-fit: cover;
+  background: var(--pn-thumb-bg);
+}
+
+.pn-unused-name,
+.pn-unused-dir {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.pn-unused-dir {
+  color: var(--pn-muted);
+  font-size: 12px;
 }

@@ -9,6 +9,7 @@ import { LibraryLayout } from './LibraryLayout.tsx';
 import { CommandMenu, MoveToPopup, QuickOpen } from './ListPopup.tsx';
 import { baseName } from '../platform/paths.ts';
 import { SettingsDialog } from './SettingsDialog.tsx';
+import { UnusedPicturesDialog } from './UnusedPicturesDialog.tsx';
 import type { ShellModel } from './shellModel.ts';
 import { RailLayout } from './RailLayout.tsx';
 
@@ -83,7 +84,8 @@ export function Shell(props: {
   useSignalEffect(() => {
     const n = model.notebook.value;
     if (!n?.notice.value) return;
-    const t = setTimeout(() => (n.notice.value = null), NOTICE_MS);
+    // An offer (Move to Trash) stays up longer, so there's time to take it.
+    const t = setTimeout(() => (n.notice.value = null), n.notice.value.action ? NOTICE_MS * 2 : NOTICE_MS);
     return () => clearTimeout(t);
   });
 
@@ -142,6 +144,8 @@ function Overlays({ model, prefs }: { readonly model: ShellModel; readonly prefs
       ) : null;
     case 'settings':
       return <SettingsDialog nb={nb} prefs={prefs} onClose={close} />;
+    case 'unusedPictures':
+      return nb ? <UnusedPicturesDialog nb={nb} paths={o.paths} onClose={close} /> : null;
     case 'prompt':
       return <PromptDialog {...o.options} onDone={o.done} />;
     case 'confirm':

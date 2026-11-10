@@ -150,7 +150,8 @@ accent colour (§9) tints selections, active icons and highlights in both, light
     space means the top level.
   - A move that changes nothing, or a folder into itself, shows no indicator. A name that is already taken is
     refused. Escape cancels.
-  - A move is a plain move. Links to the file are not rewritten. Open tabs and the recent list follow it.
+  - A move is a plain move. Links to the file are not rewritten, except links to pictures (§10.6). Open tabs
+    and the recent list follow it.
 
 ### 6.2 Keyboard
 
@@ -224,18 +225,21 @@ Settings resolve in layers, lowest first: the defaults, the user's preferences (
 notebook's overrides in `.puffinote/settings.json`. The Settings dialog (⌘,) has two scopes over the same
 fields: **Preferences** and **This notebook**. A notebook field can be reset to inherit.
 
-| Setting                        | Values                              | Default      |
-| ------------------------------ | ----------------------------------- | ------------ |
-| Appearance                     | Match system, Light, Dark           | Match system |
-| Layout                         | Icon rail, Library and note list    | Icon rail    |
-| Accent colour                  | Blue, Amber, Teal, Purple           | Blue         |
-| Notes open in                  | Rich view, Formatted view, Raw text | Rich view    |
-| Save automatically             | on/off                              | on           |
-| Indent with                    | 4 spaces, 2 spaces, Tab             | 4 spaces     |
-| Show file extensions           | on/off                              | off          |
-| Show hidden files              | on/off                              | off          |
-| Show tab bar                   | on/off                              | on           |
-| Ask before opening other files | on/off                              | on           |
+| Setting                          | Values                                                   | Default                       |
+| -------------------------------- | -------------------------------------------------------- | ----------------------------- |
+| Appearance                       | Match system, Light, Dark                                | Match system                  |
+| Layout                           | Icon rail, Library and note list                         | Icon rail                     |
+| Accent colour                    | Blue, Amber, Teal, Purple                                | Blue                          |
+| Notes open in                    | Rich view, Formatted view, Raw text                      | Rich view                     |
+| Save automatically               | on/off                                                   | on                            |
+| Indent with                      | 4 spaces, 2 spaces, Tab                                  | 4 spaces                      |
+| Show file extensions             | on/off                                                   | off                           |
+| Show hidden files                | on/off                                                   | off                           |
+| Show tab bar                     | on/off                                                   | on                            |
+| Ask before opening other files   | on/off                                                   | on                            |
+| Save pasted pictures in          | The notebook's picture folder, A folder beside each note | The notebook's picture folder |
+| Picture folder                   | a folder name                                            | attachments                   |
+| When a picture is no longer used | Offer to delete it, Keep it                              | Offer to delete it            |
 
 ## 10. The editor
 
@@ -339,6 +343,34 @@ its scheme is `http`, `https` or `mailto`; an email autolink gets `mailto:`. An 
 `data:image/` URL of a raster type (png, jpeg, gif, webp, avif or bmp; never SVG). Control characters and
 whitespace are ignored when the scheme is read. Any other URL (`javascript:`, `vbscript:`, `file:`, other
 `data:` and so on) is dropped: the link renders as its text, the image as its alt text.
+
+### 10.6 Pasted and dropped pictures
+
+- **Paste or drop a picture** (PNG, JPEG, GIF, WebP, SVG, AVIF or BMP) into a note to save it in the notebook
+  and insert `![](path)` at the caret, or after the line it is dropped on. Each picture gets a line of its own, so the rich
+  view shows it. Files that aren't pictures are ignored.
+- **Where it's saved** follows Save Pasted Pictures In:
+  - **The notebook's picture folder:** one folder for the whole notebook, named by Picture Folder
+    (`attachments` by default), from the notebook's top level. It may be nested (`assets/images`).
+  - **A folder beside each note:** `Meeting.assets/` next to `Meeting.md`.
+- **Names.** A dropped or copied file keeps its name. A screenshot or a picture copied from a page (the
+  clipboard calls those `image.png`) is named after the time: `Pasted image 2026-11-10 14.03.22.png`. A name
+  that is taken gets a number (`Holiday 2.png`), comparing without case.
+- **The link** is relative to the note, with spaces and brackets percent-encoded (`../attachments/Pasted%20image….png`).
+- **Moving keeps links working.** Pictures never move with a note, since other notes may show them.
+  - Moving or renaming a note rewrites its own links to pictures so they still reach the same files.
+  - Moving or renaming a picture, or a folder with pictures in it, rewrites the links to them in every note.
+  - A link keeps its style (`<…>` or encoded) and any `#fragment`. Links that still resolve, and links to
+    anything other than a picture, are left as written.
+  - An open note is changed in its tab, as an undoable step, and saved straight away if it had no unsaved
+    edits. A closed note is changed on disk. The status bar says how many notes changed.
+- **Unused pictures.** When a save removes the last link to a picture in the notebook, or a deleted note was
+  the last to show one, and When a Picture Is No Longer Used is Offer to Delete It, the status bar says so
+  with a Move to Trash button (Delete where the notebook has no Trash). The offer stays up for twelve
+  seconds. Set to Keep It, nothing is said.
+- **Find Unused Pictures…** (command menu) lists every picture no note links to, with a thumbnail and its
+  folder, all ticked. Move to Trash deletes the ticked ones. A picture counts as used when a note links to it
+  with `![](…)` or `[…](…)`, outside code. Unsaved text in open tabs counts.
 
 ## 11. Markdown processing
 

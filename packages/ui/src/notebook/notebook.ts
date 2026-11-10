@@ -9,6 +9,16 @@ import {
   type TextFileFormat,
 } from '@puffinote/text';
 import { EditorState } from '../editor/editorState.ts';
+import {
+  applyRefEdits,
+  attachmentDir,
+  attachmentName,
+  imageMarkdown,
+  imageTargets,
+  isImageMime,
+  relinkEdits,
+  type RefEdit,
+} from './attachments.ts';
 import { NoteMetaCache } from './noteMeta.ts';
 import {
   ConflictError,
@@ -20,12 +30,14 @@ import {
   baseName,
   stemOf,
   invalidNameReason,
+  isImagePath,
   isWithin,
   joinPath,
   mimeOf,
   parentOf,
   rebase,
   resolveRelative,
+  uniqueName,
 } from '../platform/paths.ts';
 import {
   indentUnit,
@@ -163,6 +175,8 @@ export class Tab {
 export interface Notice {
   readonly kind: 'info' | 'error';
   readonly text: string;
+  /** A button beside the text (Move to Trash for a picture no note uses). */
+  readonly action?: { readonly label: string; readonly run: () => void };
 }
 
 export interface SearchHit {
@@ -603,6 +617,7 @@ export class Notebook {
     if (!force && !tab.dirty.peek()) return true;
     const text = tab.state.text;
     const path = tab.path.peek();
+    const before = tab.savedText;
     this.writing.add(tab);
     try {
       const version = await this.store.write(path, encodeText(text, tab.format), {
@@ -623,6 +638,11 @@ export class Notebook {
         created: stat?.created || now,
       });
       this.flashSaved(tab);
+      if (before.includes('](')) {
+        const now = imageTargets(text, path);
+        const dropped = [...imageTargets(before, path)].filter((p) => !now.has(p));
+        if (dropped.length > 0) void this.offerUnused(dropped);
+      }
       return true;
     } catch (e) {
       if (e instanceof ConflictError && (e.reason === 'changed' || e.reason === 'deleted')) {
@@ -756,6 +776,8 @@ export class Notebook {
   }
 
   private async relocate(from: string, to: string): Promise<string | null> {
+    const node = findNode(this.tree.peek(), from);
+    const movedFiles = !node ? [] : node.kind === 'file' ? [from] : allFiles(node).map((f) => f.path);
     try {
       await this.store.move(from, to);
     } catch (e) {
@@ -783,7 +805,68 @@ export class Notebook {
       this.selected.value = rebase(this.selected.value, from, to);
     }
     await this.reloadTree();
+    await this.relinkPictures(from, to, movedFiles);
     return to;
+  }
+
+  /**
+   * Keep picture links right after `from` moved to `to` (PRD §6.1): a moved note's links to pictures that
+   * stayed put, and every note's links to pictures that moved. Pictures never move with a note.
+   */
+  private async relinkPictures(from: string, to: string, moved: readonly string[]): Promise<void> {
+    const pictureMoved = moved.some(isImagePath);
+    const notes = pictureMoved
+      ? allFiles(this.tree.peek())
+          .map((f) => f.path)
+          .filter((p) => fileKind(p) === 'note')
+      : moved.filter((p) => fileKind(p) === 'note').map((p) => rebase(p, from, to));
+    const follow = (p: string) => (isWithin(p, from) ? rebase(p, from, to) : p);
+    let changed = 0;
+    for (const now of notes) {
+      const was = isWithin(now, to) ? rebase(now, to, from) : now;
+      if (await this.editNote(now, (text) => relinkEdits(text, was, now, follow))) changed++;
+    }
+    if (changed > 0) {
+      this.notify('info', `Updated picture links in ${changed} ${changed === 1 ? 'note' : 'notes'}.`);
+    }
+  }
+
+  /**
+   * Apply `edits` to the note at `path`: in its tab when it is open (one undo step each, saved straight
+   * away when the tab had nothing unsaved), on disk otherwise. True when anything changed.
+   */
+  private async editNote(path: string, edits: (text: string) => RefEdit[]): Promise<boolean> {
+    const tab = this.tabs.peek().find((t) => t.state && t.path.peek() === path);
+    if (tab?.state) {
+      const list = edits(tab.state.text);
+      if (list.length === 0) return false;
+      const clean = !tab.dirty.peek();
+      let caret = tab.state.selection.peek().caret;
+      for (const e of [...list].reverse()) {
+        if (caret >= e.start + e.length) caret += e.text.length - e.length;
+        else if (caret > e.start) caret = e.start;
+      }
+      for (const e of [...list].reverse()) {
+        tab.state.apply({ start: e.start, length: e.length, text: e.text, anchor: e.start, caret: e.start });
+      }
+      tab.state.select(caret);
+      if (clean && !tab.readOnly) await this.save(tab);
+      return true;
+    }
+    try {
+      const data = await this.store.read(path);
+      const decoded = readText(data.bytes);
+      if (isReadOnlyDecode(decoded)) return false;
+      const list = edits(decoded.text);
+      if (list.length === 0) return false;
+      await this.store.write(path, encodeText(applyRefEdits(decoded.text, list), decoded.format), {
+        expected: data.version,
+      });
+      return true;
+    } catch (e) {
+      this.report(e);
+      return false;
+    }
   }
 
   /**
@@ -807,6 +890,17 @@ export class Notebook {
 
   /** Delete a file or folder (the shell confirms first). Its tabs close without saving. */
   async remove(path: string): Promise<boolean> {
+    const node = findNode(this.tree.peek(), path);
+    const notes = (!node ? [] : node.kind === 'file' ? [path] : allFiles(node).map((f) => f.path)).filter(
+      (p) => fileKind(p) === 'note',
+    );
+    const linked = new Set<string>();
+    if (this.settings.peek().unusedImages === 'ask') {
+      for (const p of notes) {
+        const text = await this.noteText(p);
+        if (text !== null) for (const t of imageTargets(text, p)) if (!isWithin(t, path)) linked.add(t);
+      }
+    }
     try {
       await this.store.remove(path);
     } catch (e) {
@@ -824,6 +918,7 @@ export class Notebook {
     }
     if (this.selected.value && isWithin(this.selected.value, path)) this.selected.value = null;
     await this.reloadTree();
+    if (linked.size > 0) void this.offerUnused([...linked]);
     return true;
   }
 
@@ -947,6 +1042,105 @@ export class Notebook {
       })
       .catch(() => undefined);
     return '';
+  }
+
+  // ----- Pictures -----
+
+  /**
+   * Save pasted or dropped pictures for the note at `notePath` in its picture folder (PRD §10.6) and return
+   * the Markdown that shows each. Files that aren't pictures are skipped.
+   */
+  async addPictures(
+    notePath: string,
+    files: readonly { name: string; type: string; bytes: Uint8Array }[],
+  ): Promise<string[]> {
+    const dir = attachmentDir(this.settings.peek(), notePath);
+    let taken: Set<string>;
+    try {
+      taken = new Set((await this.store.list(dir)).map((e) => e.name.toLowerCase()));
+    } catch {
+      taken = new Set();
+    }
+    const links: string[] = [];
+    for (const f of files) {
+      if (!isImageMime(f.type)) continue;
+      let name = attachmentName(f.name, f.type, new Date());
+      // Disks that ignore case would refuse "Photo.png" beside "photo.png".
+      name = uniqueName(name, { has: (n: string) => taken.has(n.toLowerCase()) } as ReadonlySet<string>);
+      taken.add(name.toLowerCase());
+      const path = joinPath(dir, name);
+      try {
+        await this.store.write(path, f.bytes, { create: true });
+      } catch (e) {
+        this.report(e);
+        continue;
+      }
+      links.push(imageMarkdown(notePath, path));
+    }
+    if (links.length > 0) await this.reloadTree();
+    return links;
+  }
+
+  /** A note's text: its tab's, unsaved edits included, or what's on disk. Null when it can't be read. */
+  private async noteText(path: string): Promise<string | null> {
+    const tab = this.tabs.peek().find((t) => t.state && t.path.peek() === path);
+    if (tab?.state) return tab.state.text;
+    try {
+      return readText((await this.store.read(path)).bytes).text;
+    } catch {
+      return null;
+    }
+  }
+
+  /** Every picture some note links to, by notebook path. */
+  private async linkedPictures(): Promise<Set<string>> {
+    const out = new Set<string>();
+    for (const f of allFiles(this.tree.peek())) {
+      if (fileKind(f.path) !== 'note') continue;
+      const text = await this.noteText(f.path);
+      if (text?.includes('](')) for (const t of imageTargets(text, f.path)) out.add(t);
+    }
+    return out;
+  }
+
+  /** The notebook's pictures that no note links to (Find Unused Pictures…), in tree order. */
+  async unusedPictures(): Promise<string[]> {
+    const linked = await this.linkedPictures();
+    return allFiles(this.tree.peek())
+      .map((f) => f.path)
+      .filter((p) => fileKind(p) === 'image' && !isWithin(p, stateDir) && !linked.has(p));
+  }
+
+  /**
+   * After the links to `paths` went away, offer to delete those no note links to any more (the "When a
+   * picture is no longer used" setting).
+   */
+  private async offerUnused(paths: readonly string[]): Promise<void> {
+    if (this.settings.peek().unusedImages !== 'ask') return;
+    const present = paths.filter((p) => findNode(this.tree.peek(), p)?.kind === 'file');
+    if (present.length === 0) return;
+    const linked = await this.linkedPictures();
+    const unused = present.filter((p) => !linked.has(p));
+    if (unused.length === 0) return;
+    const trash = this.store.kind === 'native';
+    this.notice.value = {
+      kind: 'info',
+      text:
+        unused.length === 1
+          ? `No note shows “${baseName(unused[0]!)}” any more.`
+          : `No note shows ${unused.length} of these pictures any more.`,
+      action: {
+        label: trash ? 'Move to Trash' : 'Delete',
+        run: () => void this.removeAll(unused),
+      },
+    };
+  }
+
+  /** Delete each of `paths` (unused pictures). */
+  async removeAll(paths: readonly string[]): Promise<void> {
+    let done = 0;
+    for (const p of paths) if (await this.remove(p)) done++;
+    if (done > 0) this.notify('info', `Deleted ${done} ${done === 1 ? 'picture' : 'pictures'}.`);
   }
 
   // ----- Settings -----

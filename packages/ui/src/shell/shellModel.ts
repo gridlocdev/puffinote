@@ -24,6 +24,7 @@ export type Overlay =
   | { readonly kind: 'quickOpen' }
   | { readonly kind: 'moveTo'; readonly path: string }
   | { readonly kind: 'settings' }
+  | { readonly kind: 'unusedPictures'; readonly paths: readonly string[] }
   | { readonly kind: 'prompt'; readonly options: PromptOptions; readonly done: (v: string | null) => void }
   | { readonly kind: 'confirm'; readonly options: ConfirmOptions; readonly done: (v: string) => void }
   | {
@@ -480,6 +481,15 @@ export class ShellModel {
     if (answer === 'delete') await nb.remove(path);
   }
 
+  /** Find Unused Pictures… (PRD §10.6): list them, or say there are none. */
+  async findUnusedPictures(): Promise<void> {
+    const nb = this.notebook.peek();
+    if (!nb) return;
+    const paths = await nb.unusedPictures();
+    if (paths.length === 0) nb.notify('info', 'Every picture in the notebook is used by a note.');
+    else this.open({ kind: 'unusedPictures', paths });
+  }
+
   /** Expand every folder, or collapse them all when all are open (the tree header's toggle, PRD §6). */
   toggleAllFolders(): void {
     const nb = this.notebook.peek();
@@ -666,6 +676,15 @@ function shellCommandSpecs(m: ShellModel): CommandSpec[] {
       icon: 'trash-2',
       enabled: () => !!nb()?.selected.peek(),
       run: () => m.remove(nb()!.selected.peek()!),
+    },
+    {
+      id: 'shell.unusedPictures',
+      title: 'Find Unused Pictures…',
+      description: 'List the pictures no note links to, and move the ones you pick to the Trash.',
+      group: 'File',
+      icon: 'image',
+      enabled: hasNb,
+      run: () => m.findUnusedPictures(),
     },
     {
       id: 'shell.revealActive',

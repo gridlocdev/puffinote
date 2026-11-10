@@ -38,6 +38,8 @@ export interface MarkdownEditorProps {
   readonly zoom?: number;
   /** A right-click (or Control-click on macOS): show the editing menu at that point. */
   readonly onContextMenu?: (at: { readonly x: number; readonly y: number }) => void;
+  /** Save pasted or dropped pictures and return the Markdown for each; without it, only text pastes. */
+  readonly onPictures?: (files: readonly File[]) => Promise<readonly string[]>;
 }
 
 const identity = (url: string): string => url;
@@ -57,6 +59,11 @@ interface RowIndex {
   readonly rows: readonly HTMLElement[];
   readonly byLine: readonly (HTMLElement | undefined)[];
   readonly rowOfLine: readonly (number | undefined)[];
+}
+
+/** The picture files on the clipboard or in a drop. */
+function pictureFiles(data: DataTransfer | null | undefined): File[] {
+  return [...(data?.files ?? [])].filter((f) => f.type.startsWith('image/'));
 }
 
 /** The links a ⌘-click may open (PRD §10.3). */
@@ -554,6 +561,12 @@ export function MarkdownEditor(props: MarkdownEditorProps) {
   }
 
   function onPaste(e: ClipboardEvent): void {
+    const pictures = pictureFiles(e.clipboardData);
+    if (pictures.length > 0 && props.onPictures) {
+      e.preventDefault();
+      void insertPictures(pictures);
+      return;
+    }
     const pasted = e.clipboardData?.getData('text/plain');
     e.preventDefault();
     if (!pasted) return;
@@ -562,6 +575,45 @@ export function MarkdownEditor(props: MarkdownEditorProps) {
     const text = stripDuplicateTaskMarker(pasted.replace(/\r\n?/g, '\n'), doc.getLineText(p.line), p.column);
     revealCaret.current = true;
     state.paste(text);
+  }
+
+  /** Save `files` and put a picture line for each at the caret, each on a line of its own (PRD §10.6). */
+  async function insertPictures(files: readonly File[]): Promise<void> {
+    const links = await props.onPictures!(files);
+    if (links.length === 0) return;
+    const now = state.selection.peek();
+    const from = selectionStart(now);
+    const to = Math.max(now.anchor, now.caret);
+    const d = state.document;
+    const start = d.getLineStart(d.getPosition(from).line);
+    const endLine = d.getPosition(to).line;
+    const end = d.getLineStart(endLine) + d.getLineText(endLine).length;
+    const before = d.getText(start, from - start).trim() ? '\n' : '';
+    const after = d.getText(to, end - to).trim() ? '\n' : '';
+    revealCaret.current = true;
+    state.paste(before + links.join('\n') + after);
+  }
+
+  function onDragOver(e: DragEvent): void {
+    if (!props.onPictures || !e.dataTransfer?.types.includes('Files')) return;
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'copy';
+  }
+
+  function onDrop(e: DragEvent): void {
+    const pictures = pictureFiles(e.dataTransfer);
+    if (!props.onPictures || !e.dataTransfer?.types.includes('Files')) return;
+    e.preventDefault();
+    if (pictures.length === 0) return;
+    inputRef.current?.focus({ preventScroll: true });
+    // The picture goes after the line it lands on, never splitting the line's text.
+    const at = offsetAt(e.clientX, e.clientY);
+    if (at !== null) {
+      const line = doc.getPosition(at).line;
+      const end = doc.getLineStart(line) + doc.getLineText(line).length;
+      state.select(end, end);
+    }
+    void insertPictures(pictures);
   }
 
   // ----- Mouse -----
@@ -656,6 +708,8 @@ export function MarkdownEditor(props: MarkdownEditorProps) {
         ref={scrollerRef}
         onMouseDown={onMouseDown}
         onContextMenu={onContextMenu}
+        onDragOver={onDragOver}
+        onDrop={onDrop}
         onScroll={onScrollerScroll}
       >
         <div class="pn-content" ref={contentRef} data-placeholder={empty ? props.placeholder : undefined}>

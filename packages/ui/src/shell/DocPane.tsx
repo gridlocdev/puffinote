@@ -48,6 +48,18 @@ export function Document(props: { readonly model: ShellModel; readonly nb: Noteb
           placeholder="Start writing…"
           zoom={model.zoom.value}
           onContextMenu={(at) => model.openEditorMenu(at)}
+          onPictures={async (files) =>
+            nb.addPictures(
+              path,
+              await Promise.all(
+                files.map(async (f) => ({
+                  name: f.name,
+                  type: f.type,
+                  bytes: new Uint8Array(await f.arrayBuffer()),
+                })),
+              ),
+            )
+          }
         />
       </div>
     </>
@@ -117,6 +129,17 @@ export function StatusBar({
     <footer class="pn-status">
       <span class={`pn-status-notice${notice?.kind === 'error' ? ' pn-error' : ''}`} role="status">
         {notice?.text ?? (tab?.saved.value ? 'Saved' : '')}
+        {notice?.action && (
+          <button
+            class="pn-status-action"
+            onClick={() => {
+              nb.notice.value = null;
+              notice.action!.run();
+            }}
+          >
+            {notice.action.label}
+          </button>
+        )}
       </span>
       {state && (
         <>

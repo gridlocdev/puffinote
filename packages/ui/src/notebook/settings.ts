@@ -28,6 +28,12 @@ export interface Settings {
   readonly showTabBar: boolean;
   /** Ask before a file Puffinote can't show opens in its default app. */
   readonly confirmOpenExternal: boolean;
+  /** Where a pasted or dropped picture is saved (PRD §10.6): one folder for the notebook, or one per note. */
+  readonly attachmentLocation: 'notebook' | 'note';
+  /** The notebook-wide picture folder, from the notebook's top level. */
+  readonly attachmentFolder: string;
+  /** When a save drops the last link to a picture: offer to delete the file, or keep it quietly. */
+  readonly unusedImages: 'ask' | 'keep';
 }
 
 export type SettingKey = keyof Settings;
@@ -44,6 +50,9 @@ export const defaultSettings: Settings = {
   showHiddenFiles: false,
   showTabBar: true,
   confirmOpenExternal: true,
+  attachmentLocation: 'notebook',
+  attachmentFolder: 'attachments',
+  unusedImages: 'ask',
 };
 
 /** One field in the Settings dialog: its label, help, and the values it takes. */
@@ -52,6 +61,8 @@ export interface SettingField<K extends SettingKey = SettingKey> {
   readonly label: string;
   readonly help: string;
   readonly options?: readonly { readonly value: Settings[K]; readonly label: string }[];
+  /** A free-text field; an empty value means the default (or, in a notebook, the preference). */
+  readonly text?: boolean;
 }
 
 export const settingFields: readonly SettingField[] = [
@@ -126,6 +137,30 @@ export const settingFields: readonly SettingField[] = [
     label: 'Ask before opening other files',
     help: 'Ask before a file Puffinote can’t show, like a PDF, opens in its default app.',
   },
+  {
+    key: 'attachmentLocation',
+    label: 'Save pasted pictures in',
+    help: 'One folder for the whole notebook, or a folder beside each note named after it (“Note.assets”).',
+    options: [
+      { value: 'notebook', label: 'The notebook’s picture folder' },
+      { value: 'note', label: 'A folder beside each note' },
+    ],
+  },
+  {
+    key: 'attachmentFolder',
+    label: 'Picture folder',
+    help: 'The notebook-wide folder for pasted pictures, from the notebook’s top level.',
+    text: true,
+  },
+  {
+    key: 'unusedImages',
+    label: 'When a picture is no longer used',
+    help: 'After you remove the last link to a picture, offer to delete the file, or keep it.',
+    options: [
+      { value: 'ask', label: 'Offer to delete it' },
+      { value: 'keep', label: 'Keep it' },
+    ],
+  },
 ];
 
 export function indentUnit(s: Settings): string {
@@ -151,7 +186,7 @@ export function sanitize(raw: unknown): PartialSettings {
     const ok = field.options
       ? field.options.some((o) => o.value === v)
       : typeof v === typeof defaultSettings[field.key];
-    if (ok) out[field.key] = v;
+    if (ok && !(field.text && (v as string).trim() === '')) out[field.key] = v;
   }
   return out as PartialSettings;
 }
