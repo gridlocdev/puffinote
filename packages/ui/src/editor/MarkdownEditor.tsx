@@ -16,7 +16,7 @@ import {
 } from './commands.ts';
 import { markdownCommandSpecs } from './editorCommands.ts';
 import type { EditorState } from './editorState.ts';
-import { caretBox, firstRowEndingBelow, hitTest, lineSelectionRects } from './geometry.ts';
+import { caretBox, firstRowEndingBelow, fontHeight, hitTest, lineSelectionRects } from './geometry.ts';
 import { renderLine, snapOutOfConcealed } from './lineRender.ts';
 import { BlockWidget, LineView } from './LineView.tsx';
 import { lineContentEnd, wordLeft, wordRangeAt, wordRight } from './motion.ts';
@@ -300,10 +300,10 @@ export function MarkdownEditor(props: MarkdownEditorProps) {
     if (!el || el.hasAttribute('data-widget')) return null;
     const box = caretBox(el, p.column);
     if (el.classList.contains('pn-blank')) {
-      // A blank line is shorter than a text line: centre a full-height caret on it.
-      const lh = parseFloat(getComputedStyle(el).getPropertyValue('--pn-body-line')) || box.height;
+      // A blank line is shorter than a text line: centre a caret as tall as a text line's on it.
+      const h = fontHeight(getComputedStyle(el)) ?? box.height;
       const r = el.getBoundingClientRect();
-      return { left: box.left, top: r.top + (r.height - lh) / 2, height: lh };
+      return { left: box.left, top: r.top + (r.height - h) / 2, height: h };
     }
     return box;
   }

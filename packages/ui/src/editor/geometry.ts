@@ -80,9 +80,15 @@ export function caretBox(lineEl: Element, col: number): CaretBox {
   const p = domPointIn(lineEl, col);
   const lineRect = lineEl.getBoundingClientRect();
   if (!p) {
+    // An empty line: a caret as tall as the text would be, centred on the line box.
     const style = getComputedStyle(lineEl);
     const lh = parseFloat(style.lineHeight) || lineRect.height || 20;
-    return { left: lineRect.left + parseFloat(style.paddingLeft || '0'), top: lineRect.top, height: lh };
+    const h = Math.min(lh, fontHeight(style) ?? lh);
+    return {
+      left: lineRect.left + parseFloat(style.paddingLeft || '0'),
+      top: lineRect.top + parseFloat(style.paddingTop || '0') + (lh - h) / 2,
+      height: h,
+    };
   }
   if ('el' in p) {
     const r = p.el.getBoundingClientRect();
@@ -102,6 +108,29 @@ export function caretBox(lineEl: Element, col: number): CaretBox {
   }
   if (!rect) return { left: lineRect.left, top: lineRect.top, height: lineRect.height };
   return { left: rect.left, top: rect.top, height: rect.height };
+}
+
+const fontHeights = new Map<string, number | null>();
+let measureCtx: CanvasRenderingContext2D | null | undefined;
+
+/**
+ * The height a text caret has in `style`'s font (its ascent plus descent), which is what a collapsed range
+ * in a line of text measures. Cached per font; null where canvas text metrics are unavailable.
+ */
+export function fontHeight(style: CSSStyleDeclaration): number | null {
+  const font = `${style.fontStyle} ${style.fontWeight} ${style.fontSize} ${style.fontFamily}`;
+  const cached = fontHeights.get(font);
+  if (cached !== undefined) return cached;
+  measureCtx ??= document.createElement('canvas').getContext('2d');
+  let h: number | null = null;
+  if (measureCtx) {
+    measureCtx.font = font;
+    const m = measureCtx.measureText('Hg');
+    const sum = m.fontBoundingBoxAscent + m.fontBoundingBoxDescent;
+    if (Number.isFinite(sum) && sum > 0) h = Math.round(sum);
+  }
+  fontHeights.set(font, h);
+  return h;
 }
 
 function firstRect(range: Range): DOMRect | null {
