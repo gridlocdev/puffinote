@@ -1,4 +1,4 @@
-import { effect } from '@preact/signals';
+import { computed, effect } from '@preact/signals';
 import { render } from 'preact';
 import { localPrefs, Shell, ShellModel } from '@puffinote/ui';
 import '@puffinote/ui/styles.css';
@@ -64,6 +64,8 @@ if (native) {
 
   // Rebuild the menu when enabled/checked states may have moved; coalesced to one send.
   let queued: ReturnType<typeof setTimeout> | null = null;
+  // Find Next and Find Previous follow whether the find bar has text, not every letter typed into it.
+  const hasFindText = computed(() => !!model.findQuery.value);
   effect(() => {
     const nb = model.notebook.value;
     void model.activeTab.value;
@@ -74,6 +76,7 @@ if (native) {
     void nb?.selected.value;
     void nb?.sidebarCollapsed.value;
     void model.zoom.value;
+    void hasFindText.value;
     if (queued) return;
     queued = setTimeout(() => {
       queued = null;

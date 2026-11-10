@@ -1038,6 +1038,83 @@
   min-height: 0;
 }
 
+/* Find in Note (PRD §10.7) */
+.pn-find {
+  position: absolute;
+  top: 8px;
+  right: 16px;
+  z-index: 5;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 4px;
+  border: 1px solid var(--pn-border);
+  border-radius: 10px;
+  background: var(--pn-chrome-bg);
+  box-shadow: var(--pn-shadow);
+  font: var(--pn-ui-font);
+}
+
+.pn-find input {
+  width: 200px;
+  padding: 4px 8px;
+  border: 0;
+  border-radius: 6px;
+  background: var(--pn-fill);
+  color: var(--pn-fg);
+  font: inherit;
+}
+
+.pn-find input:focus {
+  outline: 2px solid var(--pn-accent);
+  outline-offset: -1px;
+}
+
+.pn-find-count {
+  min-width: 72px;
+  padding: 0 6px;
+  color: var(--pn-dim);
+  font-size: 12px;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+
+.pn-find button {
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  border: 0;
+  border-radius: 6px;
+  background: none;
+  color: var(--pn-chrome-fg);
+}
+
+.pn-find button:hover:not(:disabled) {
+  background: var(--pn-hover);
+}
+
+.pn-find button:disabled {
+  opacity: 0.4;
+}
+
+.pn-find .pn-icon svg {
+  width: 16px;
+  height: 16px;
+}
+
+/* In the accent colour, so a match never looks like the note's own ==highlight==. */
+::highlight(pn-find) {
+  background-color: color-mix(in srgb, var(--pn-accent) 22%, transparent);
+}
+
+::highlight(pn-find-current) {
+  background-color: color-mix(in srgb, var(--pn-accent) 45%, transparent);
+  text-decoration: underline 2px var(--pn-accent);
+  text-underline-offset: 3px;
+}
+
 .pn-image-view {
   flex: 1;
   display: flex;

@@ -200,7 +200,7 @@ leave the focus where it was.
   case-insensitively. It keeps the folders above a match and everything inside a matching folder, opens the
   folders that lead to matches, and counts the matches (or says "No matches"). It is the same tree, with the
   same keys, menu and drag.
-- **Search** finds note names and the text in every note, including the unsaved text of open tabs. Notes
+- **Search** (⇧⌘F) finds note names and the text in every note, including the unsaved text of open tabs. Notes
   whose name matches come first, led by the name with the match marked. Each text hit shows its line with
   the match marked. Enter or a click opens the note, at the hit for a text hit.
 - **Outline** lists the headings of the active note, indented by level. A click moves the caret to the
@@ -242,7 +242,8 @@ files are opened here.
 
 - Shortcuts are written once as `mod+shift+k` and shown in each platform's style (⌘⇧K, Ctrl+Shift+K).
 - **Resolution order:** an open overlay (a dialog, the command menu) gets keys first. Then the shell's
-  reserved set: ⌘K, ⌘O, ⌘N, ⇧⌘N, ⌘S, ⌘W, ⌥⌘W, ⇧⌘], ⇧⌘[, ⌥⌘S, ⌥⌘E, ⌘\, ⌘, and ⇧⌘O. Then the editor.
+  reserved set: ⌘K, ⌘O, ⌘N, ⇧⌘N, ⌘S, ⌘W, ⌥⌘W, ⇧⌘], ⇧⌘[, ⌥⌘S, ⌥⌘E, ⌘\, ⌘, (Settings), ⇧⌘O, ⌘F, ⇧⌘F,
+  ⌘G and ⇧⌘G. Then the editor.
 - While a question is up (Save changes?, a name to type), menu-bar commands do nothing. Quitting or opening
   another folder still works: its own question replaces the open one, which is answered Cancel.
 - In a text field other than the note (a dialog, the filter box), editing shortcuts keep the field's own
@@ -457,6 +458,18 @@ whitespace are ignored when the scheme is read. Any other URL (`javascript:`, `v
 - **Find Unused Pictures…** (command menu) lists every picture no note links to, with a thumbnail and its
   folder, all ticked. Move to Trash deletes the ticked ones. A picture counts as used when a note links to it
   with `![](…)` or `[…](…)`, outside code. Unsaved text in open tabs counts.
+
+### 10.7 Find in Note
+
+- **Find in Note… (⌘F)** opens a bar over the note's top right corner with the caret in its box. It starts
+  with the selected text when that is on one line, and otherwise with the text it had when it was last
+  closed.
+- Matching ignores case, and the text is matched as typed (no patterns). Every match in the note is marked,
+  and the current one more strongly. The bar counts them ("3 of 12", or "No results").
+- Typing selects the first match from the selection onwards. Enter or ⌘G selects the next match, and ⇧Enter
+  or ⇧⌘G the previous one, wrapping around the note. Matches follow edits while the bar is open.
+- Escape or the close button closes the bar and puts the caret back in the note, with the match selected.
+- Searching every note is the sidebar's Search panel (§6.3), opened with ⇧⌘F.
 
 ## 11. Markdown processing
 

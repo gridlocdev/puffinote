@@ -5,6 +5,7 @@ import { removeRangeEdit } from '../editor/commands.ts';
 import { markdownCommandSpecs } from '../editor/editorCommands.ts';
 import type { EditorMenuPoint, PictureAt } from '../editor/MarkdownEditor.tsx';
 import type { EditorState } from '../editor/editorState.ts';
+import { findAll, matchAt, matchFrom, type TextRange } from '../editor/find.ts';
 import { sidebarPanels, type Notebook, type SidebarPanel, type Tab } from '../notebook/notebook.ts';
 import { allFolders, fileKind, findNode, hasFolders, noteFileName, type TreeNode } from '../notebook/tree.ts';
 import { imageTargets } from '../notebook/attachments.ts';
@@ -89,6 +90,8 @@ export class ShellModel {
   readonly searchQuery = signal('');
   /** Bumps when Filter or Search should put the caret in its box. */
   readonly focusPanelTick = signal(0);
+  /** Find in Note's box (PRD §10.7): its text while the bar is open, null while it is closed. */
+  readonly findQuery = signal<string | null>(null);
   /** The Library layout's popover under the path bar, if one is open. */
   readonly popover = signal<'outline' | 'recent' | null>(null);
   /** How large notes are drawn (1 is 100%). Remembered across sessions in this browser or app. */
@@ -102,6 +105,19 @@ export class ShellModel {
 
   readonly activeTab = computed(() => this.notebook.value?.active.value ?? null);
   readonly activeState = computed<EditorState | null>(() => this.activeTab.value?.state ?? null);
+  /** The matches of the find bar's text in the note in front, and the one the selection is on (or -1). */
+  readonly findMatches = computed<{ matches: readonly TextRange[]; current: number } | null>(() => {
+    const query = this.findQuery.value;
+    const state = this.activeState.value;
+    if (!query || !state) return null;
+    void state.version.value;
+    const matches = findAll(state.text, query);
+    const sel = state.selection.value;
+    return {
+      matches,
+      current: matchAt(matches, Math.min(sel.anchor, sel.caret), Math.max(sel.anchor, sel.caret)),
+    };
+  });
   /** The window's layout (PRD §6): the icon rail with tabs, or the library with one note at a time. */
   readonly layout = computed(() => this.notebook.value?.settings.value.layout ?? 'rail');
   readonly showTabBar = computed(() => {
@@ -226,6 +242,50 @@ export class ShellModel {
 
   focusEditor(): void {
     setTimeout(() => globalThis.document?.querySelector<HTMLElement>('.pn-shell-main .pn-input')?.focus());
+  }
+
+  // ----- Find in Note (PRD §10.7) -----
+
+  /** The find bar's text when it was last closed, for the next ⌘F with nothing selected. */
+  private lastFind = '';
+
+  /** Open the find bar with the caret in its box, starting from the selected text when it is on one line. */
+  openFind(): void {
+    const state = this.activeState.peek();
+    if (!state) return;
+    const sel = state.selection.peek();
+    const picked = state.text.slice(Math.min(sel.anchor, sel.caret), Math.max(sel.anchor, sel.caret));
+    if (picked && !picked.includes('\n') && picked.length <= 200) this.findQuery.value = picked;
+    else if (this.findQuery.peek() === null) this.findQuery.value = this.lastFind;
+    setTimeout(() => {
+      const box = globalThis.document?.querySelector<HTMLInputElement>('.pn-find input');
+      box?.focus();
+      box?.select();
+    });
+  }
+
+  /** The find bar's text changed: select the first match from where the selection starts. */
+  setFindQuery(query: string): void {
+    this.findQuery.value = query;
+    this.findStep(0);
+  }
+
+  /** Select the next match (1), the previous one (-1), or the one at or after the selection (0). */
+  findStep(dir: -1 | 0 | 1): void {
+    const state = this.activeState.peek();
+    const query = this.findQuery.peek();
+    if (!state || !query) return;
+    const matches = findAll(state.text, query);
+    const sel = state.selection.peek();
+    const i = matchFrom(matches, Math.min(sel.anchor, sel.caret), dir);
+    if (i >= 0) state.reveal(matches[i]!.start, matches[i]!.end);
+  }
+
+  /** Close the find bar; the match stays selected, and the caret goes back to the note. */
+  closeFind(): void {
+    this.lastFind = this.findQuery.peek() ?? '';
+    this.findQuery.value = null;
+    if (this.activeState.peek()) this.focusEditor();
   }
 
   focusTree(): void {
@@ -819,6 +879,38 @@ function shellCommandSpecs(m: ShellModel): CommandSpec[] {
       run: () => m.open({ kind: 'quickOpen' }),
     },
     {
+      id: 'shell.find',
+      title: 'Find in Note…',
+      description: 'Find text in the note in front.',
+      group: 'Edit',
+      shortcut: 'mod+f',
+      icon: 'search',
+      keywords: 'search find text in note',
+      global: true,
+      enabled: () => m.activeState.peek() !== null,
+      run: () => m.openFind(),
+    },
+    {
+      id: 'shell.findNext',
+      title: 'Find Next',
+      description: 'Select the next match of the find bar’s text.',
+      group: 'Edit',
+      shortcut: 'mod+g',
+      global: true,
+      enabled: () => m.activeState.peek() !== null && !!m.findQuery.peek(),
+      run: () => m.findStep(1),
+    },
+    {
+      id: 'shell.findPrevious',
+      title: 'Find Previous',
+      description: 'Select the previous match of the find bar’s text.',
+      group: 'Edit',
+      shortcut: 'mod+shift+g',
+      global: true,
+      enabled: () => m.activeState.peek() !== null && !!m.findQuery.peek(),
+      run: () => m.findStep(-1),
+    },
+    {
       id: 'shell.newNote',
       title: 'New Note…',
       description: 'Create a note in the selected folder.',
@@ -1075,9 +1167,13 @@ function shellCommandSpecs(m: ShellModel): CommandSpec[] {
     ...sidebarPanels.map((p): CommandSpec => ({
       id: `view.sidebar.${p.id}`,
       title: `${p.title} (Sidebar)`,
-      description: `Show the sidebar’s ${p.title} panel.`,
+      description:
+        p.id === 'search'
+          ? 'Search the names and text of every note.'
+          : `Show the sidebar’s ${p.title} panel.`,
       group: 'View',
       icon: p.icon,
+      ...(p.id === 'search' ? { shortcut: 'mod+shift+f', global: true } : {}),
       enabled: hasNb,
       active: () => nb()?.panel.peek() === p.id && !nb()!.sidebarCollapsed.peek(),
       run: () => m.showPanel(p.id),

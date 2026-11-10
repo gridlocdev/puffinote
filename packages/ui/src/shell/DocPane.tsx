@@ -1,3 +1,4 @@
+import { MAX_MATCHES } from '../editor/find.ts';
 import { MarkdownEditor } from '../editor/MarkdownEditor.tsx';
 import type { Notebook, Tab } from '../notebook/notebook.ts';
 import { Icon } from './Icon.tsx';
@@ -40,6 +41,7 @@ export function Document(props: { readonly model: ShellModel; readonly nb: Noteb
         />
       )}
       <div class="pn-editor-host">
+        <FindBar model={model} />
         <MarkdownEditor
           state={tab.state}
           resolveImage={(url) => nb.resolveImage(path, url)}
@@ -50,6 +52,7 @@ export function Document(props: { readonly model: ShellModel; readonly nb: Noteb
           sortTasks={nb.settings.value.sortCheckedTasks}
           onContextMenu={(at) => model.openEditorMenu(at)}
           onOpenPicture={(picture) => model.openPreview(picture)}
+          findMatches={model.findMatches.value ?? undefined}
           onPictures={async (files) =>
             nb.addPictures(
               path,
@@ -65,6 +68,65 @@ export function Document(props: { readonly model: ShellModel; readonly nb: Noteb
         />
       </div>
     </>
+  );
+}
+
+/** Find in Note (PRD §10.7): a box over the note's top right corner, open from ⌘F until Escape. */
+function FindBar({ model }: { readonly model: ShellModel }) {
+  const query = model.findQuery.value;
+  if (query === null) return null;
+  const found = model.findMatches.value;
+  const count = found?.matches.length ?? 0;
+  const total = count >= MAX_MATCHES ? `${MAX_MATCHES}+` : String(count);
+  const status = !query
+    ? ''
+    : count === 0
+      ? 'No results'
+      : found!.current >= 0
+        ? `${found!.current + 1} of ${total}`
+        : `${total} found`;
+  const key = (id: string) => model.menuCatalog.get(id)?.shortcutText ?? '';
+  return (
+    <div class="pn-find" role="search">
+      <input
+        type="text"
+        value={query}
+        placeholder="Find in note"
+        aria-label="Find in note"
+        spellcheck={false}
+        autocomplete="off"
+        onInput={(e) => model.setFindQuery((e.target as HTMLInputElement).value)}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter') model.findStep(e.shiftKey ? -1 : 1);
+          else if (e.key === 'Escape') model.closeFind();
+          else return;
+          e.preventDefault();
+          e.stopPropagation();
+        }}
+      />
+      <span class="pn-find-count" aria-live="polite">
+        {status}
+      </span>
+      <button
+        title={`Previous Match (${key('shell.findPrevious')})`}
+        aria-label="Previous match"
+        disabled={count === 0}
+        onClick={() => model.findStep(-1)}
+      >
+        <Icon name="chevron-up" />
+      </button>
+      <button
+        title={`Next Match (${key('shell.findNext')})`}
+        aria-label="Next match"
+        disabled={count === 0}
+        onClick={() => model.findStep(1)}
+      >
+        <Icon name="chevron-down" />
+      </button>
+      <button title="Close (Esc)" aria-label="Close" onClick={() => model.closeFind()}>
+        <Icon name="x" />
+      </button>
+    </div>
   );
 }
 

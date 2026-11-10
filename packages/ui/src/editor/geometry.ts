@@ -75,6 +75,22 @@ function nextTextStartsAt(runs: readonly HTMLElement[], after: HTMLElement, col:
   return false;
 }
 
+/** DOM ranges over the drawn text of columns `[from, to)` of a line: one per text run they touch. */
+export function textRanges(lineEl: Element, from: number, to: number): Range[] {
+  const out: Range[] = [];
+  for (const run of runsOf(lineEl)) {
+    if (!isTextRun(run)) continue;
+    const a = Math.max(from, fromOf(run));
+    const b = Math.min(to, toOf(run));
+    if (a >= b) continue;
+    const range = document.createRange();
+    range.setStart(run.firstChild!, a - fromOf(run));
+    range.setEnd(run.firstChild!, b - fromOf(run));
+    out.push(range);
+  }
+  return out;
+}
+
 /** Where the caret draws for `col` on a line, in viewport coordinates. */
 export function caretBox(lineEl: Element, col: number): CaretBox {
   const p = domPointIn(lineEl, col);

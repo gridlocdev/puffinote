@@ -17,7 +17,7 @@ import {
 } from './commands.ts';
 import { markdownCommandSpecs } from './editorCommands.ts';
 import type { EditorState } from './editorState.ts';
-import { caretBox, firstRowEndingBelow, hitTest, lineSelectionRects } from './geometry.ts';
+import { caretBox, firstRowEndingBelow, hitTest, lineSelectionRects, textRanges } from './geometry.ts';
 import { renderLine, snapOutOfConcealed } from './lineRender.ts';
 import { BlockWidget, LineView } from './LineView.tsx';
 import {
@@ -28,6 +28,7 @@ import {
   wordRangeAt,
   wordRight,
 } from './motion.ts';
+import type { TextRange } from './find.ts';
 import { keyAction } from './keys.ts';
 import { lineReveal, type LineReveal } from './reveal.ts';
 
@@ -52,6 +53,8 @@ export interface MarkdownEditorProps {
   readonly onOpenPicture?: (picture: PictureAt) => void;
   /** Save pasted or dropped pictures and return the Markdown for each; without it, only text pastes. */
   readonly onPictures?: (files: readonly File[]) => Promise<readonly string[]>;
+  /** Find in Note's matches to mark, and which one is current (PRD §10.7). */
+  readonly findMatches?: { readonly matches: readonly TextRange[]; readonly current: number };
 }
 
 /** Where the editor was right-clicked, and the picture under the pointer, if any. */
@@ -362,6 +365,41 @@ export function MarkdownEditor(props: MarkdownEditorProps) {
     ro.observe(content);
     return () => ro.disconnect();
   }, []);
+
+  // Find in Note's marks, drawn with the CSS Custom Highlight API so the lines' DOM stays as it is. Every render
+  // can replace the lines' text nodes, so the ranges are made again each time.
+  const findMatches = props.findMatches;
+  useLayoutEffect(() => {
+    const registry = globalThis.CSS?.highlights;
+    if (!registry) return;
+    if (!findMatches || findMatches.matches.length === 0) {
+      registry.delete('pn-find');
+      registry.delete('pn-find-current');
+      return;
+    }
+    const all = new Highlight();
+    const current = new Highlight();
+    findMatches.matches.forEach((m, i) => {
+      const a = doc.getPosition(m.start);
+      const b = doc.getPosition(m.end);
+      for (let line = a.line; line <= b.line; line++) {
+        const el = lineEl(line);
+        if (!el || el.hasAttribute('data-widget')) continue;
+        const from = line === a.line ? a.column : 0;
+        const to = line === b.line ? b.column : doc.getLineEnd(line) - doc.getLineStart(line);
+        for (const r of textRanges(el, from, to)) (i === findMatches.current ? current : all).add(r);
+      }
+    });
+    registry.set('pn-find', all);
+    registry.set('pn-find-current', current);
+  });
+  useLayoutEffect(
+    () => () => {
+      globalThis.CSS?.highlights?.delete('pn-find');
+      globalThis.CSS?.highlights?.delete('pn-find-current');
+    },
+    [],
+  );
 
   useLayoutEffect(() => {
     if (props.autoFocus) inputRef.current?.focus({ preventScroll: true });

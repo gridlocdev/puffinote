@@ -91,6 +91,8 @@ If someone else saved a note after you opened it, Puffinote warns you before ove
 | ---------------------------- | ------------------ | ------------------------------- |
 | Command menu                 | `⌘K`               | `Ctrl+K`                        |
 | Go to file                   | `⌘O`               | `Ctrl+O`                        |
+| Find in the note             | `⌘F`               | `Ctrl+F`                        |
+| Search every note            | `⇧⌘F`              | `Ctrl+Shift+F`                  |
 | New note / new folder        | `⌘N` / `⇧⌘N`       | `Ctrl+N` / `Ctrl+Shift+N`       |
 | Save                         | `⌘S`               | `Ctrl+S`                        |
 | Close tab                    | `⌘W`               | `Ctrl+W`                        |

@@ -11,8 +11,12 @@ const CLIPBOARD: readonly NativeMenuItem[] = [
   { role: 'paste' },
 ];
 
+/** These go at the end of their menu, after the editor's own items. */
+const LAST = new Set(['shell.find', 'shell.findNext', 'shell.findPrevious']);
+
 /** Separators before these ids. */
 const BREAKS = new Set([
+  'shell.find',
   'shell.openNotebook',
   'shell.save',
   'shell.closeTab',
@@ -37,8 +41,8 @@ export function nativeMenu(catalog: CommandCatalog): NativeMenuItem[] {
   const menus: NativeMenuItem[] = [];
   for (const group of MENU_ORDER) {
     const items: NativeMenuItem[] = [];
-    for (const c of catalog.all) {
-      if (c.group !== group) continue;
+    const inGroup = catalog.all.filter((c) => c.group === group);
+    for (const c of [...inGroup.filter((c) => !LAST.has(c.id)), ...inGroup.filter((c) => LAST.has(c.id))]) {
       if (BREAKS.has(c.id) && items.length > 0 && items.at(-1)?.type !== 'separator')
         items.push({ type: 'separator' });
       items.push({
