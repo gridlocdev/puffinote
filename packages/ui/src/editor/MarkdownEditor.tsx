@@ -16,7 +16,7 @@ import {
 } from './commands.ts';
 import { markdownCommandSpecs } from './editorCommands.ts';
 import type { EditorState } from './editorState.ts';
-import { caretBox, firstRowEndingBelow, fontHeight, hitTest, lineSelectionRects } from './geometry.ts';
+import { caretBox, firstRowEndingBelow, hitTest, lineSelectionRects } from './geometry.ts';
 import { renderLine, snapOutOfConcealed } from './lineRender.ts';
 import { BlockWidget, LineView } from './LineView.tsx';
 import { lineContentEnd, wordLeft, wordRangeAt, wordRight } from './motion.ts';
@@ -181,6 +181,8 @@ export function MarkdownEditor(props: MarkdownEditorProps) {
 
   // ----- Caret, selection and the input's position, after the DOM is up to date -----
   const paintRef = useRef<() => void>(() => {});
+  /** Put the caret and the input back over the caret's spot, after lines moved without a render. */
+  const placeRef = useRef<() => void>(() => {});
   useLayoutEffect(() => {
     const content = contentRef.current;
     const caretEl = caretRef.current;
@@ -211,6 +213,15 @@ export function MarkdownEditor(props: MarkdownEditorProps) {
     }
     revealCaret.current = false;
 
+    placeRef.current = () => {
+      const b = caretBoxAt(sel.caret);
+      if (!b) return;
+      const o = content.getBoundingClientRect();
+      const t = `translate(${b.left - o.left}px, ${b.top - o.top}px)`;
+      caretEl.style.transform = t;
+      caretEl.style.height = `${b.height}px`;
+      input.style.transform = t;
+    };
     paintRef.current = () => paintSelection(content, layer);
     paintRef.current();
     // Mirror a non-empty selection in the input, selected, so the browser enables Copy and Cut (Safari
@@ -288,6 +299,26 @@ export function MarkdownEditor(props: MarkdownEditorProps) {
     if (props.initialScrollTop && scrollerRef.current) scrollerRef.current.scrollTop = props.initialScrollTop;
   }, []);
 
+  // Lines can move with no render: off-screen lines take their real height a frame after a view change or
+  // zoom (content-visibility), text rewraps when the window resizes, a picture loads. The content's size
+  // changes with each, so redraw the caret and selection then.
+  useLayoutEffect(() => {
+    const content = contentRef.current;
+    if (!content || typeof ResizeObserver === 'undefined') return;
+    let queued = false;
+    const ro = new ResizeObserver(() => {
+      if (queued) return;
+      queued = true;
+      requestAnimationFrame(() => {
+        queued = false;
+        placeRef.current();
+        paintRef.current();
+      });
+    });
+    ro.observe(content);
+    return () => ro.disconnect();
+  }, []);
+
   useLayoutEffect(() => {
     if (props.autoFocus) inputRef.current?.focus({ preventScroll: true });
   }, []);
@@ -296,36 +327,11 @@ export function MarkdownEditor(props: MarkdownEditorProps) {
     return rowIndex.current.byLine[line] ?? null;
   }
 
-  /** Whether the next shown line after `line` is something other than a blank line. */
-  function textFollows(line: number): boolean {
-    for (let i = line + 1; ; i++) {
-      const next = lineEl(i);
-      if (!next) return false;
-      if (next.getBoundingClientRect().height === 0) continue; // a hidden line, like a setext underline
-      return !next.classList.contains('pn-blank');
-    }
-  }
-
   function caretBoxAt(offset: number) {
     const p = doc.getPosition(Math.min(offset, doc.length));
     const el = lineEl(p.line);
     if (!el || el.hasAttribute('data-widget')) return null;
-    const box = caretBox(el, p.column);
-    if (el.classList.contains('pn-blank')) {
-      // A blank line is shorter than a text line, and grows into one when typed on. With nothing after it,
-      // the caret stands where that text will be, so typing doesn't move it; between two lines of text it
-      // is centred in the gap, so it doesn't run into the next line's letters.
-      const style = getComputedStyle(el);
-      const h = fontHeight(style) ?? box.height;
-      const r = el.getBoundingClientRect();
-      if (!textFollows(p.line)) {
-        // The computed line-height is in pixels; the --pn-body-line it comes from is still a calc() here.
-        const lh = parseFloat(style.lineHeight) || r.height;
-        return { left: box.left, top: r.top + (lh - h) / 2, height: h };
-      }
-      return { left: box.left, top: r.top + (r.height - h) / 2, height: h };
-    }
-    return box;
+    return caretBox(el, p.column);
   }
 
   function centreInView(box: { top: number; height: number }): void {

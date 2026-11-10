@@ -122,11 +122,6 @@
   contain-intrinsic-size: auto var(--pn-body-line);
 }
 
-.pn-blank {
-  min-height: 0;
-  height: calc(12px * var(--pn-z));
-}
-
 .pn-h1,
 .pn-h2,
 .pn-h3,
@@ -217,9 +212,6 @@
   line-height: calc(22px * var(--pn-z));
   min-height: calc(22px * var(--pn-z));
   margin: 0;
-}
-.pn-mode-raw .pn-blank {
-  height: calc(22px * var(--pn-z));
 }
 
 /* ----- Inline ----- */
