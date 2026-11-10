@@ -134,8 +134,11 @@ accent colour (§9) tints selections, active icons and highlights in both, light
 - **Files** shows every file and folder in the notebook, folders first, sorted case-insensitively with
   numbers by value (`note2` before `note10`). Dotfiles are hidden unless Show Hidden Files is on. Extensions
   are hidden unless Show File Extensions is on.
-- **Tree verbs:** new note, new folder, rename (F2), delete (confirmed), reveal the active file, refresh, and
-  expand or collapse all. They are in each row's context menu and in the command menu.
+- **Tree verbs:** new note, new folder, rename (F2), move to another folder, delete (confirmed), reveal the
+  active file, refresh, and expand or collapse all. They are in each row's context menu and in the command
+  menu.
+  - Move To… opens a searchable list of the folders the item can move into, the notebook's top level first.
+    Folders where the move would change nothing, or would put a folder inside itself, are left out.
   - New Note adds `.md` to the name unless it already ends in a note extension (§5). A dot elsewhere is part
     of the name: "Meeting 2024.11" becomes `Meeting 2024.11.md`.
   - A rename that changes only the case of a name works on disks that ignore case.

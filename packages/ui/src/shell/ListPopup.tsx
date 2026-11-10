@@ -118,6 +118,56 @@ export function QuickOpen(props: {
   );
 }
 
+/** Move To…: pick the folder a file or folder moves into (PRD §6.1), by part of its name. */
+export function MoveToPopup(props: {
+  readonly name: string;
+  /** The folders it can move into; `''` is the top level. */
+  readonly folders: readonly string[];
+  readonly notebookName: string;
+  readonly onMove: (dir: string) => void;
+  readonly onClose: () => void;
+}) {
+  const [query, setQuery] = useState('');
+  const [index, setIndex] = useState(0);
+  const results = useMemo(() => rankFiles(props.folders, query, []), [props.folders, query]);
+  const pick = (dir: string | undefined) => {
+    props.onClose();
+    if (dir !== undefined) queueMicrotask(() => props.onMove(dir));
+  };
+  return (
+    <ListPopup
+      label={`Move “${props.name}” To`}
+      placeholder={`Move “${props.name}” to…`}
+      query={query}
+      onQuery={(q) => {
+        setQuery(q);
+        setIndex(0);
+      }}
+      index={index}
+      onIndex={setIndex}
+      count={results.length}
+      onPick={(i) => pick(results[i])}
+      onClose={props.onClose}
+      empty={props.folders.length === 0 ? 'There is no other folder to move it to' : 'No matching folders'}
+    >
+      {results.map((dir, i) => (
+        <li
+          key={dir}
+          id={`pn-option-${i}`}
+          role="option"
+          aria-selected={i === index}
+          onPointerMove={() => setIndex(i)}
+          onClick={() => pick(dir)}
+        >
+          <Icon name="folder" />
+          <span class="pn-option-title">{dir === '' ? props.notebookName : baseName(dir)}</span>
+          <span class="pn-option-group">{dir === '' ? 'Top level' : parentOf(dir)}</span>
+        </li>
+      ))}
+    </ListPopup>
+  );
+}
+
 function ListPopup(props: {
   readonly label: string;
   readonly placeholder: string;

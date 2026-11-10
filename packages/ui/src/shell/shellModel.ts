@@ -21,6 +21,7 @@ export interface MenuItem {
 export type Overlay =
   | { readonly kind: 'commands' }
   | { readonly kind: 'quickOpen' }
+  | { readonly kind: 'moveTo'; readonly path: string }
   | { readonly kind: 'settings' }
   | { readonly kind: 'prompt'; readonly options: PromptOptions; readonly done: (v: string | null) => void }
   | { readonly kind: 'confirm'; readonly options: ConfirmOptions; readonly done: (v: string) => void }
@@ -270,6 +271,7 @@ export class ShellModel {
     );
     if (node && node.path) {
       items.push(null, { label: 'Rename…', shortcut: 'F2', run: () => void this.rename(node.path) });
+      items.push({ label: 'Move To…', run: () => this.open({ kind: 'moveTo', path: node.path }) });
       if (store.reveal) items.push({ label: revealLabel(), run: () => void store.reveal!(node.path) });
       items.push(null, { label: 'Delete…', danger: true, run: () => void this.remove(node.path) });
     }
@@ -403,6 +405,13 @@ export class ShellModel {
         (findNode(nb.tree.peek(), dir ? `${dir}/${v}` : v) ? `“${v}” already exists.` : null),
     });
     if (name !== null) await nb.createFolder(dir, name);
+  }
+
+  /** The folders `path` can move into (PRD §6.1), the top level (`''`) first. */
+  moveTargets(path: string): string[] {
+    const nb = this.notebook.peek();
+    if (!nb) return [];
+    return ['', ...allFolders(nb.tree.peek())].filter((dir) => nb.canMove(path, dir));
   }
 
   async rename(path: string): Promise<void> {

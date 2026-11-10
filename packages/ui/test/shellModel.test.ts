@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { Notebook } from '../src/notebook/notebook.ts';
+import { findNode } from '../src/notebook/tree.ts';
 import { memoryPrefs } from '../src/notebook/settings.ts';
 import { MemoryStore } from '../src/platform/memoryStore.ts';
 import { ShellModel } from '../src/shell/shellModel.ts';
@@ -51,6 +52,31 @@ describe('ShellModel overlays', () => {
     const o = m.overlay.value;
     if (o?.kind === 'confirm') o.done('discard');
     expect(await quitting).toBe(true);
+    m.setNotebook(null);
+  });
+});
+
+describe('ShellModel Move To', () => {
+  it('offers every folder the item can move into, the top level first', async () => {
+    const store = new MemoryStore('N', {
+      'a/x.md': '',
+      'a/b/y.md': '',
+      'c/z.md': '',
+      'c/a/w.md': '',
+      'top.md': '',
+    });
+    const nb = await Notebook.open(store, { prefs: memoryPrefs({ autoSave: false }) });
+    const m = new ShellModel();
+    m.setNotebook(nb);
+    // Not its own folder or anything inside it, and not where a same-named item already is.
+    expect(m.moveTargets('a')).toEqual(['c/a']);
+    expect(m.moveTargets('a/b')).toEqual(['', 'c', 'c/a']);
+    expect(m.moveTargets('top.md')).toEqual(['a', 'a/b', 'c', 'c/a']);
+    m.openFileMenu(findNode(nb.tree.value, 'top.md'), '', { x: 0, y: 0 });
+    const menu = m.overlay.value;
+    const item = menu?.kind === 'menu' ? menu.items.find((i) => i?.label === 'Move To…') : undefined;
+    item?.run();
+    expect(m.overlay.value).toEqual({ kind: 'moveTo', path: 'top.md' });
     m.setNotebook(null);
   });
 });

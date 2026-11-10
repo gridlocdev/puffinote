@@ -6,7 +6,8 @@ import type { PrefsStorage } from '../notebook/settings.ts';
 import { ContextMenu } from './ContextMenu.tsx';
 import { ConfirmDialog, PromptDialog } from './Dialog.tsx';
 import { LibraryLayout } from './LibraryLayout.tsx';
-import { CommandMenu, QuickOpen } from './ListPopup.tsx';
+import { CommandMenu, MoveToPopup, QuickOpen } from './ListPopup.tsx';
+import { baseName } from '../platform/paths.ts';
 import { SettingsDialog } from './SettingsDialog.tsx';
 import type { ShellModel } from './shellModel.ts';
 import { RailLayout } from './RailLayout.tsx';
@@ -126,6 +127,16 @@ function Overlays({ model, prefs }: { readonly model: ShellModel; readonly prefs
           recent={nb.recent.value}
           showExtensions={nb.settings.value.showFileExtensions}
           onOpen={(p) => void model.openFile(p)}
+          onClose={close}
+        />
+      ) : null;
+    case 'moveTo':
+      return nb ? (
+        <MoveToPopup
+          name={baseName(o.path)}
+          folders={model.moveTargets(o.path)}
+          notebookName={nb.name}
+          onMove={(dir) => void nb.move(o.path, dir)}
           onClose={close}
         />
       ) : null;
