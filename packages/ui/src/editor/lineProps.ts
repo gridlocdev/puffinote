@@ -30,7 +30,12 @@ export function lineViewPropsEqual(a: LineViewProps, b: LineViewProps): boolean 
 
 function revealEqual(a: LineReveal, b: LineReveal): boolean {
   if (a === b) return true;
-  if (a.lineActive !== b.lineActive || a.blockRevealed !== b.blockRevealed) return false;
+  if (
+    a.lineActive !== b.lineActive ||
+    a.prefixActive !== b.prefixActive ||
+    a.blockRevealed !== b.blockRevealed
+  )
+    return false;
   if (a.nodes.size !== b.nodes.size) return false;
   for (const n of a.nodes) if (!b.nodes.has(n)) return false;
   return true;

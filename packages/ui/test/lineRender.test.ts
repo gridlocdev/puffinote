@@ -63,7 +63,17 @@ describe('concealment (PRD §10.2)', () => {
     expect(visible('- item\nx', elsewhere)).toBe('<bullet>item');
     expect(visible('1. one\nx', elsewhere)).toBe('<number>one');
     expect(visible('- [x] done\nx', elsewhere)).toBe('<checkbox>done');
-    expect(visible('- [ ] todo', caretAt(7))).toBe('- [ ] todo');
+    expect(visible('- [ ] todo', caretAt(3))).toBe('- [ ] todo');
+  });
+
+  it("keeps a task's checkbox while the caret edits its text, and shows the marker when it touches it", () => {
+    const md = '- [ ] todo';
+    expect(visible(md, caretAt(7))).toBe('<checkbox>todo'); // in the text
+    expect(visible(md, caretAt(6))).toBe('<checkbox>todo'); // at the start of the text
+    expect(visible(md, caretAt(5))).toBe('- [ ] todo'); // right after `]`
+    expect(visible(md, caretAt(0))).toBe('- [ ] todo'); // before the bullet
+    expect(visible('  - [ ] sub', caretAt(9))).toBe('<indent><checkbox>sub');
+    expect(visible('- plain', caretAt(4))).toBe('- plain'); // other list items show their marker as before
   });
 
   it('carries the task state on the checkbox and the line', () => {

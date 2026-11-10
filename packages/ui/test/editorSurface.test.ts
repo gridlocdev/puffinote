@@ -7,7 +7,12 @@ import { keyAction, type KeyLike } from '../src/editor/keys.ts';
 import { lineViewPropsEqual, type LineViewProps } from '../src/editor/lineProps.ts';
 import type { LineReveal } from '../src/editor/reveal.ts';
 
-const idle = (): LineReveal => ({ lineActive: false, nodes: new Set(), blockRevealed: false });
+const idle = (): LineReveal => ({
+  lineActive: false,
+  prefixActive: false,
+  nodes: new Set(),
+  blockRevealed: false,
+});
 const resolve = (url: string) => url;
 
 /** The props the surface hands line `i`, built fresh each time as a render does. */

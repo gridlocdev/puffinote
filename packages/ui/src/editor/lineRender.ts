@@ -148,7 +148,7 @@ export function renderLine(
       return t.role === 'marker' || imageNodes.has(t.node);
     }
     if (t.role !== 'marker') return false;
-    if (linePrefixTypes.has(t.type)) return !reveal.lineActive;
+    if (linePrefixTypes.has(t.type)) return !reveal.prefixActive;
     if (t.type === 'codeFence' || t.type === 'frontMatterFence') return !reveal.blockRevealed;
     return false;
   };
@@ -171,7 +171,7 @@ export function renderLine(
     if (
       t.type === 'listMarker' &&
       live &&
-      !reveal.lineActive &&
+      !reveal.prefixActive &&
       s > pos &&
       /^[ \t]+$/.test(lineText.slice(pos, s))
     ) {

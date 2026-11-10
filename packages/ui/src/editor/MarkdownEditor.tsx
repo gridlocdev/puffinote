@@ -1,4 +1,4 @@
-import { stripDuplicateTaskMarker, toggledTaskState, parseLinePrefix } from '@puffinote/markdown';
+import { stripDuplicateTaskMarker, toggledTaskState, parseLinePrefix, type Token } from '@puffinote/markdown';
 import { isCollapsed, selectionEnd, selectionLength, selectionStart } from '@puffinote/text';
 import { useLayoutEffect, useMemo, useRef } from 'preact/hooks';
 import type { JSX } from 'preact';
@@ -21,7 +21,7 @@ import { renderLine, snapOutOfConcealed } from './lineRender.ts';
 import { BlockWidget, LineView } from './LineView.tsx';
 import { lineContentEnd, wordLeft, wordRangeAt, wordRight } from './motion.ts';
 import { keyAction } from './keys.ts';
-import { lineReveal } from './reveal.ts';
+import { lineReveal, type LineReveal } from './reveal.ts';
 
 export interface MarkdownEditorProps {
   readonly state: EditorState;
@@ -353,6 +353,17 @@ export function MarkdownEditor(props: MarkdownEditorProps) {
 
   // ----- Selection helpers -----
 
+  /**
+   * The reveal that decides where a caret may land: inline markers as the selection reveals them now, and a
+   * task's prefix as the caret at `offset` would reveal it, so stepping left from a task's text into `]`
+   * shows the marker instead of jumping over it.
+   */
+  function snapReveal(tokens: readonly Token[], start: number, end: number, offset: number): LineReveal {
+    const now = lineReveal(tokens, start, end, sel, null);
+    const there = lineReveal(tokens, start, end, { anchor: offset, caret: offset }, null);
+    return now.prefixActive === there.prefixActive ? now : { ...now, prefixActive: there.prefixActive };
+  }
+
   /** Step `offset` out of a concealed marker on its line, toward `dir` (concealed runs are atomic). */
   function snap(offset: number, dir: 1 | -1): number {
     const p = doc.getPosition(offset);
@@ -362,7 +373,7 @@ export function MarkdownEditor(props: MarkdownEditorProps) {
       doc.getLineText(p.line),
       start,
       tokens,
-      lineReveal(tokens, start, doc.getLineEnd(p.line), sel, null),
+      snapReveal(tokens, start, doc.getLineEnd(p.line), offset),
       mode,
       blockAtLine(blocks, p.line)?.kind ?? null,
     );

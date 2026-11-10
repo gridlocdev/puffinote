@@ -268,6 +268,8 @@ switched from the status bar or the View commands:
 - **Inline marks** (emphasis, strikethrough, highlight, inline code, links, autolinks): the markers show when
   the caret or selection touches that node. Otherwise they are hidden and the styled text shows.
 - **Line-prefix marks** (heading `#`, `>`, list and task markers): they show when the caret is on the line.
+  A task is the exception: its `- [ ]` shows only when the caret or selection touches the marker's own
+  characters (before the bullet through right after `]`), so editing the task's text keeps the checkbox.
   When hidden, they are drawn as decorations: bullets, numbers, checkboxes, a quote bar.
 - **Blocks** (fenced code, tables, front matter): the raw source shows when the selection touches the block.
 - A selection reveals every node it touches.
