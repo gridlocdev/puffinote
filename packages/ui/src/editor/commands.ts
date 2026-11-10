@@ -154,15 +154,18 @@ function selectedLines(doc: TextDocument, sel: Selection): [number, number] {
 
 // ----- Tab / Shift+Tab -----
 
-/** Tab: indent list items or a multi-line selection; elsewhere insert one indent at the caret (PRD §10.1). */
-export function indentEdit(doc: TextDocument, sel: Selection, indent = defaultIndent): Edit {
+/**
+ * Tab: indent list items or a multi-line selection; elsewhere insert one indent at the caret (PRD §10.1).
+ * Blank lines in a multi-line selection stay blank, so a selection of only blank lines changes nothing (null).
+ */
+export function indentEdit(doc: TextDocument, sel: Selection, indent = defaultIndent): Edit | null {
   const [a, b] = selectedLines(doc, sel);
   const isList = parseLinePrefix(doc.getLineText(a)).hasList;
   if (a === b && !isList) return replaceSelection(sel, indent);
   const edit = spliceLines(doc, sel, a, b, (text) =>
     contentOf(text).length === 0 && a !== b ? null : { at: 0, remove: 0, insert: indent },
   );
-  return withRenumber(doc, edit!, [a, b + 1]);
+  return edit ? withRenumber(doc, edit, [a, b + 1]) : null;
 }
 
 /** Shift+Tab: remove one indent step (a tab, or up to `indent.length` spaces) from each selected line. */
@@ -255,9 +258,19 @@ function isWordChar(c: string): boolean {
   return c.length > 0 && /[\p{L}\p{Nd}_]/u.test(c);
 }
 
+/** Only indentation and quote markers before the caret: a `*`, `_` or `` ` `` here starts a list, rule or fence. */
+function atLinePrefix(before: string): boolean {
+  return /^[ \t]*(?:>[ \t]*)*$/.test(before);
+}
+
 /**
  * Typing `ch` (PRD §10.1): wrap a selection in a pair, insert an empty pair at a word start, or step over a
  * closer that is already there. Returns null for an ordinary insert.
+ *
+ * `*`, `_` and `` ` `` don't pair where they are more often literal: at the start of a line (`* item`, `---`,
+ * a fence), right after the same character (the second and third backtick of a fence), or after a letter or
+ * digit. Inside an empty pair the same character makes a double pair (`*|*` + `*` is `**|**`, bold), and a
+ * space typed right after a lone opener drops its closer (`2 *|*` + space is `2 * |`).
  */
 export function typeCharEdit(doc: TextDocument, sel: Selection, ch: string): Edit | null {
   const close = closers[ch];
@@ -283,15 +296,31 @@ export function typeCharEdit(doc: TextDocument, sel: Selection, ch: string): Edi
   const prev = text.charAt(col - 1);
   const next = text.charAt(col);
 
-  // Step over a closer that's already there (`(x|)` + `)`), but not out of an empty symmetric pair (`*|*`
-  // + `*` makes `**|**`, the start of bold).
-  if ((ch === ')' || ch === ']' || symmetric.has(ch)) && next === ch && !(symmetric.has(ch) && prev === ch)) {
+  // Step over a closer that's already there (`(x|)` + `)`, `**b*|*` + `*`), but not out of an empty symmetric
+  // pair (`*|*` + `*` makes `**|**`, the start of bold). A `*` after a word is a closer, not an empty pair.
+  const emptyPair = symmetric.has(ch) && prev === ch && !isWordChar(text.charAt(col - 2));
+  if ((ch === ')' || ch === ']' || symmetric.has(ch)) && next === ch && !emptyPair) {
     return { start: at, length: 0, text: '', anchor: at + 1, caret: at + 1 };
+  }
+  // A space right after a lone auto-paired opener (`*|*`, not `**|**`): the opener was literal after all.
+  if (
+    ch === ' ' &&
+    symmetric.has(prev) &&
+    next === prev &&
+    text.charAt(col - 2) !== prev &&
+    text.charAt(col + 1) !== prev &&
+    !isWordChar(text.charAt(col - 2)) &&
+    !isWordChar(text.charAt(col + 1))
+  ) {
+    return { start: at, length: 1, text: ' ', anchor: at + 1, caret: at + 1 };
   }
   if (!close) return null;
   const nextFree = next === '' || /\s/.test(next) || ')]}*_`'.includes(next);
   if (!nextFree) return null;
-  if (symmetric.has(ch) && isWordChar(prev)) return null;
+  if (symmetric.has(ch)) {
+    if (isWordChar(prev) || atLinePrefix(text.slice(0, col))) return null;
+    if (prev === ch && next !== ch) return null; // the next char of a run: `**`, a fence
+  }
   return { start: at, length: 0, text: ch + close, anchor: at + 1, caret: at + 1 };
 }
 
@@ -507,14 +536,23 @@ export function ruleEdit(doc: TextDocument, sel: Selection): Edit {
 
 // ----- Line operations -----
 
-/** ⌘D: duplicate the selected lines below themselves; the selection moves to the copy. */
+/** The document's line ending: CRLF when its first line break is one, else LF. */
+function lineEnding(doc: TextDocument): string {
+  return doc.lineCount > 1 && doc.getLineText(0).endsWith('\r') ? '\r\n' : '\n';
+}
+
+/**
+ * ⌘D: duplicate the selected lines below themselves; the selection moves to the copy. The copy keeps its
+ * bytes, and the break before it is the document's line ending (the last line of a file has none of its own).
+ */
 export function duplicateLinesEdit(doc: TextDocument, sel: Selection): Edit {
   const [a, b] = selectedLines(doc, sel);
   const start = doc.getLineStart(a);
   const end = doc.getLineEnd(b);
-  const shift = end - start + 1;
-  const text = '\n' + doc.getText().slice(start, end);
-  return { start: end, length: 0, text, anchor: sel.anchor + shift, caret: sel.caret + shift };
+  const block = doc.getText(start, end - start);
+  // A CRLF line already holds its `\r` before `end`, so the copy goes between that and the `\n`.
+  const text = (block.endsWith('\r') ? '\n' : lineEnding(doc)) + block;
+  return { start: end, length: 0, text, anchor: sel.anchor + text.length, caret: sel.caret + text.length };
 }
 
 /** ⇧⌘K: delete the selected lines. */
@@ -527,34 +565,57 @@ export function deleteLinesEdit(doc: TextDocument, sel: Selection): Edit {
   return { start, length: end - start, text: '', anchor: start, caret: start };
 }
 
-/** ⌥↑ / ⌥↓: move the selected lines past their neighbour; the selection moves with them. */
+/**
+ * ⌥↑ / ⌥↓: move the selected lines past their neighbour; the selection moves with them. Line contents move
+ * and line breaks stay where they are, so a CRLF file stays CRLF and the file's last line keeps its lack of
+ * a terminator wherever the moved lines land.
+ */
 export function moveLinesEdit(doc: TextDocument, sel: Selection, dir: -1 | 1): Edit | null {
   const [a, b] = selectedLines(doc, sel);
   if ((dir < 0 && a === 0) || (dir > 0 && b === doc.lineCount - 1)) return null;
-  const text = doc.getText();
-  const blockStart = doc.getLineStart(a);
-  const blockEnd = doc.getLineEnd(b);
-  const block = text.slice(blockStart, blockEnd);
-  if (dir < 0) {
-    const prevStart = doc.getLineStart(a - 1);
-    const prev = text.slice(prevStart, blockStart - 1);
-    const shift = -(prev.length + 1);
-    return {
-      start: prevStart,
-      length: blockEnd - prevStart,
-      text: block + '\n' + prev,
-      anchor: sel.anchor + shift,
-      caret: sel.caret + shift,
-    };
+  const lo = dir < 0 ? a - 1 : a;
+  const hi = dir < 0 ? b : b + 1;
+  const n = hi - lo + 1;
+  const contents: string[] = [];
+  // The break after each position. The region ends before the last line's `\n`, so only its `\r` is in it.
+  const breaks: string[] = [];
+  for (let i = lo; i <= hi; i++) {
+    const t = doc.getLineText(i);
+    const cr = t.endsWith('\r');
+    contents.push(cr ? t.slice(0, -1) : t);
+    breaks.push(i < hi ? (cr ? '\r\n' : '\n') : cr ? '\r' : '');
   }
-  const nextEnd = doc.getLineEnd(b + 1);
-  const next = text.slice(blockEnd + 1, nextEnd);
-  const shift = next.length + 1;
+  // The old line (relative to `lo`) drawn at each new position: the neighbour swaps to the block's far side.
+  const order: number[] = [];
+  if (dir < 0) {
+    for (let r = 1; r < n; r++) order.push(r);
+    order.push(0);
+  } else {
+    order.push(n - 1);
+    for (let r = 0; r < n - 1; r++) order.push(r);
+  }
+  const regionStart = doc.getLineStart(lo);
+  const newStart = new Array<number>(n);
+  let text = '';
+  let afterBlock = regionStart;
+  for (let k = 0; k < n; k++) {
+    const r = order[k]!;
+    newStart[r] = regionStart + text.length;
+    text += contents[r]! + breaks[k]!;
+    // Past the block's line break; a trailing `\r` is half of a CRLF whose `\n` follows the region.
+    if (r === b - lo) afterBlock = regionStart + text.length + (breaks[k] === '\r' ? 1 : 0);
+  }
+  const map = (offset: number): number => {
+    const p = doc.getPosition(offset);
+    if (p.line < a || p.line > b) return afterBlock; // a selection ending at the start of the next line
+    const r = p.line - lo;
+    return newStart[r]! + Math.min(p.column, contents[r]!.length);
+  };
   return {
-    start: blockStart,
-    length: nextEnd - blockStart,
-    text: next + '\n' + block,
-    anchor: sel.anchor + shift,
-    caret: sel.caret + shift,
+    start: regionStart,
+    length: doc.getLineEnd(hi) - regionStart,
+    text,
+    anchor: map(sel.anchor),
+    caret: map(sel.caret),
   };
 }

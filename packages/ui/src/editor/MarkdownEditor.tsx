@@ -1,9 +1,10 @@
 import { stripDuplicateTaskMarker, toggledTaskState, parseLinePrefix } from '@puffinote/markdown';
-import { isCollapsed, selectionEnd, selectionStart } from '@puffinote/text';
+import { isCollapsed, selectionEnd, selectionLength, selectionStart } from '@puffinote/text';
 import { useLayoutEffect, useMemo, useRef } from 'preact/hooks';
 import type { JSX } from 'preact';
 import { CommandCatalog } from '../commands/command.ts';
-import { blockAtLine } from './blocks.ts';
+import { isMac } from '../commands/shortcut.ts';
+import { blockAtLine, type Block } from './blocks.ts';
 import {
   backspacePairEdit,
   enterEdit,
@@ -15,10 +16,11 @@ import {
 } from './commands.ts';
 import { markdownCommandSpecs } from './editorCommands.ts';
 import type { EditorState } from './editorState.ts';
-import { caretBox, hitTest, lineElements, lineSelectionRects } from './geometry.ts';
+import { caretBox, firstRowEndingBelow, hitTest, lineSelectionRects } from './geometry.ts';
 import { renderLine, snapOutOfConcealed } from './lineRender.ts';
 import { BlockWidget, LineView } from './LineView.tsx';
 import { lineContentEnd, wordLeft, wordRangeAt, wordRight } from './motion.ts';
+import { keyAction } from './keys.ts';
 import { lineReveal } from './reveal.ts';
 
 export interface MarkdownEditorProps {
@@ -38,7 +40,22 @@ export interface MarkdownEditorProps {
 
 const identity = (url: string): string => url;
 const defaultOpen = (url: string): void => void window.open(url, '_blank', 'noopener,noreferrer');
-const isMac = typeof navigator !== 'undefined' && /Mac|iPhone|iPad/.test(navigator.platform);
+/** The longest selection the hidden input mirrors as text; longer ones mirror as a stand-in. */
+const maxMirrorLength = 2000;
+
+interface LineCache {
+  readonly doc: EditorState['document'];
+  readonly texts: string[];
+  readonly starts: number[];
+}
+
+interface RowIndex {
+  /** The line each row draws, in row order. */
+  readonly lines: readonly number[];
+  readonly rows: readonly HTMLElement[];
+  readonly byLine: readonly (HTMLElement | undefined)[];
+  readonly rowOfLine: readonly (number | undefined)[];
+}
 
 /** The links a ⌘-click may open (PRD §10.3). */
 export function isOpenableLink(url: string): boolean {
@@ -82,51 +99,95 @@ export function MarkdownEditor(props: MarkdownEditorProps) {
   const blocks = state.blocks;
 
   // ----- Render the lines -----
+  // Line texts and starts for this snapshot, kept across renders so a caret move re-reads nothing and the
+  // memoized rows compare identical strings.
+  const lineCache = useRef<LineCache>({ doc, texts: [], starts: [] });
+  if (lineCache.current.doc !== doc) lineCache.current = { doc, texts: [], starts: [] };
+  const cache = lineCache.current;
   const rows: JSX.Element[] = [];
+  /** The line each row draws (a widget row draws its block's first line). */
+  const rowLines: number[] = [];
+  let bi = 0;
+  let blockRange: { start: number; end: number } | null = null;
+  let rangeOf: Block | null = null;
   for (let i = 0; i < doc.lineCount; i++) {
-    const block = blockAtLine(blocks, i);
-    const blockRange = block
-      ? { start: doc.getLineStart(block.startLine), end: doc.getLineEnd(block.endLine) }
-      : null;
+    while (bi < blocks.length && blocks[bi]!.endLine < i) bi++;
+    const block = bi < blocks.length && blocks[bi]!.startLine <= i ? blocks[bi]! : null;
+    if (block && block !== rangeOf) {
+      rangeOf = block;
+      blockRange = { start: doc.getLineStart(block.startLine), end: doc.getLineEnd(block.endLine) };
+    }
+    const range = block ? blockRange : null;
     if (block?.kind === 'table' && mode === 'live' && i === block.startLine) {
-      const touched =
-        blockRange !== null && selectionStart(sel) <= blockRange.end && selectionEnd(sel) >= blockRange.start;
+      const touched = range !== null && selectionStart(sel) <= range.end && selectionEnd(sel) >= range.start;
       if (!touched) {
         rows.push(
           <BlockWidget
-            key={`w${i}`}
+            key={`w${state.lineKey(i)}`}
             line={i}
-            source={doc.getText(blockRange!.start, blockRange!.end - blockRange!.start)}
+            source={doc.getText(range!.start, range!.end - range!.start)}
           />,
         );
+        rowLines.push(i);
         i = block.endLine;
         continue;
       }
     }
-    const start = doc.getLineStart(i);
+    const start = (cache.starts[i] ??= doc.getLineStart(i));
+    const text = (cache.texts[i] ??= doc.getLineText(i));
     const tokens = model.lineTokens(i);
     rows.push(
       <LineView
-        key={i}
+        key={state.lineKey(i)}
         index={i}
-        text={doc.getLineText(i)}
+        text={text}
         start={start}
         tokens={tokens}
-        reveal={lineReveal(tokens, start, doc.getLineEnd(i), sel, blockRange)}
+        reveal={lineReveal(tokens, start, start + text.length, sel, range)}
         mode={mode}
         block={block?.kind ?? null}
         resolveImage={resolveImage}
       />,
     );
+    rowLines.push(i);
+  }
+
+  // The row elements in order and by line, rebuilt only when the rows changed. Memoized rows that moved
+  // (a line inserted above them) skip their render, so their `data-line` is renumbered here.
+  const rowIndex = useRef<RowIndex>({ lines: [], rows: [], byLine: [], rowOfLine: [] });
+
+  function indexRows(content: HTMLElement): void {
+    const prev = rowIndex.current;
+    const kids = content.children;
+    const same =
+      prev.lines.length === rowLines.length &&
+      prev.rows.every((el, k) => el === kids[k]) &&
+      prev.lines.every((l, k) => l === rowLines[k]);
+    if (same) return;
+    const rowEls: HTMLElement[] = new Array<HTMLElement>(rowLines.length);
+    const byLine: (HTMLElement | undefined)[] = [];
+    const rowOfLine: number[] = [];
+    for (let k = 0; k < rowLines.length; k++) {
+      const el = kids[k] as HTMLElement;
+      const line = rowLines[k]!;
+      const attr = String(line);
+      if (el.getAttribute('data-line') !== attr) el.setAttribute('data-line', attr);
+      rowEls[k] = el;
+      byLine[line] = el;
+      rowOfLine[line] = k;
+    }
+    rowIndex.current = { lines: rowLines, rows: rowEls, byLine, rowOfLine };
   }
 
   // ----- Caret, selection and the input's position, after the DOM is up to date -----
+  const paintRef = useRef<() => void>(() => {});
   useLayoutEffect(() => {
     const content = contentRef.current;
     const caretEl = caretRef.current;
     const layer = selectionRef.current;
     const input = inputRef.current;
     if (!content || !caretEl || !layer || !input) return;
+    indexRows(content);
     const origin = content.getBoundingClientRect();
 
     const box = caretBoxAt(sel.caret);
@@ -150,27 +211,78 @@ export function MarkdownEditor(props: MarkdownEditorProps) {
     }
     revealCaret.current = false;
 
-    // Selection highlight.
-    layer.replaceChildren();
-    if (!isCollapsed(sel)) {
-      const a = doc.getPosition(selectionStart(sel));
-      const b = doc.getPosition(selectionEnd(sel));
-      for (let line = a.line; line <= b.line; line++) {
-        const el = lineEl(line);
-        if (!el || el.style.display === 'none') continue;
-        const from = line === a.line ? a.column : 0;
-        const to = line === b.line ? b.column : Number.MAX_SAFE_INTEGER;
-        for (const r of lineSelectionRects(el, from, to, line < b.line)) {
-          const div = document.createElement('div');
-          div.className = 'pn-selection-rect';
-          div.style.transform = `translate(${r.left - origin.left}px, ${r.top - origin.top}px)`;
-          div.style.width = `${r.width}px`;
-          div.style.height = `${r.height}px`;
-          layer.appendChild(div);
-        }
-      }
+    paintRef.current = () => paintSelection(content, layer);
+    paintRef.current();
+    // Mirror a non-empty selection in the input, selected, so the browser enables Copy and Cut (Safari
+    // dispatches neither for an empty textarea selection). A long selection mirrors as one space: the copy
+    // handler writes the real Markdown source either way, and typing replaces the mirror like any selection.
+    if (!composing.current) {
+      const mirror = isCollapsed(sel)
+        ? ''
+        : selectionLength(sel) <= maxMirrorLength
+          ? state.selectedText()
+          : ' ';
+      if (input.value !== mirror) input.value = mirror;
+      if (mirror) input.setSelectionRange(0, mirror.length);
     }
   });
+
+  /**
+   * Draw the selection highlight for the rows on screen (plus a screen of margin each way); scrolling repaints.
+   * All rectangles are measured before the layer changes, so the browser lays out once, and a Select All on a
+   * long note measures a few dozen lines instead of every one.
+   */
+  function paintSelection(content: HTMLElement, layer: HTMLElement): void {
+    if (isCollapsed(sel)) {
+      if (layer.firstChild) layer.replaceChildren();
+      return;
+    }
+    const { rows, rowOfLine, byLine } = rowIndex.current;
+    const scroller = scrollerRef.current;
+    const a = doc.getPosition(selectionStart(sel));
+    const b = doc.getPosition(selectionEnd(sel));
+    let first = a.line;
+    let last = b.line;
+    if (scroller && rows.length > 0) {
+      const view = scroller.getBoundingClientRect();
+      const margin = Math.max(view.height, 200);
+      const top = firstRowEndingBelow(rows, view.top - margin);
+      const bottom = firstRowEndingBelow(rows, view.bottom + margin);
+      const lineOfRow = rowIndex.current.lines;
+      first = Math.max(first, lineOfRow[Math.min(top, rows.length - 1)] ?? 0);
+      last = Math.min(last, lineOfRow[Math.min(bottom, rows.length - 1)] ?? last);
+    }
+    const origin = content.getBoundingClientRect();
+    const rects: DOMRect[] = [];
+    for (let line = first; line <= last; line++) {
+      const el = byLine[line];
+      if (!el || rowOfLine[line] === undefined || el.style.display === 'none') continue;
+      const from = line === a.line ? a.column : 0;
+      const to = line === b.line ? b.column : Number.MAX_SAFE_INTEGER;
+      for (const r of lineSelectionRects(el, from, to, line < b.line)) rects.push(r);
+    }
+    const frag = document.createDocumentFragment();
+    for (const r of rects) {
+      const div = document.createElement('div');
+      div.className = 'pn-selection-rect';
+      div.style.transform = `translate(${r.left - origin.left}px, ${r.top - origin.top}px)`;
+      div.style.width = `${r.width}px`;
+      div.style.height = `${r.height}px`;
+      frag.appendChild(div);
+    }
+    layer.replaceChildren(frag);
+  }
+
+  const paintQueued = useRef(false);
+  function onScrollerScroll(e: Event): void {
+    props.onScroll?.((e.currentTarget as HTMLElement).scrollTop);
+    if (isCollapsed(sel) || paintQueued.current) return;
+    paintQueued.current = true;
+    requestAnimationFrame(() => {
+      paintQueued.current = false;
+      paintRef.current();
+    });
+  }
 
   useLayoutEffect(() => {
     if (props.initialScrollTop && scrollerRef.current) scrollerRef.current.scrollTop = props.initialScrollTop;
@@ -181,7 +293,7 @@ export function MarkdownEditor(props: MarkdownEditorProps) {
   }, []);
 
   function lineEl(line: number): HTMLElement | null {
-    return contentRef.current?.querySelector<HTMLElement>(`:scope > [data-line="${line}"]`) ?? null;
+    return rowIndex.current.byLine[line] ?? null;
   }
 
   function caretBoxAt(offset: number) {
@@ -275,8 +387,8 @@ export function MarkdownEditor(props: MarkdownEditorProps) {
     } else if (dir < 0 && mid - lh > cr.top) {
       y = mid - lh;
     } else {
-      const lines = lineElements(content);
-      let i = lines.indexOf(current) + dir;
+      const lines = rowIndex.current.rows;
+      let i = (rowIndex.current.rowOfLine[caretLine] ?? lines.indexOf(current)) + dir;
       while (i >= 0 && i < lines.length && lines[i]!.getBoundingClientRect().height === 0) i += dir;
       const targetEl = lines[i];
       if (!targetEl) {
@@ -288,7 +400,7 @@ export function MarkdownEditor(props: MarkdownEditorProps) {
       y = dir > 0 ? tr.top + Math.min(tr.height / 2, 6) : tr.bottom - Math.min(tr.height / 2, 6);
     }
     const now = content.getBoundingClientRect();
-    const hit = hitTest(content, now.left + goalX.current, y);
+    const hit = hitTest(content, now.left + goalX.current, y, rowIndex.current.rows);
     if (!hit) return;
     const offset =
       doc.getLineStart(hit.line) +
@@ -308,7 +420,7 @@ export function MarkdownEditor(props: MarkdownEditorProps) {
     if ([...text].length === 1) {
       const edit = typeCharEdit(doc, sel, text);
       if (edit) {
-        state.apply(edit);
+        state.applyTyping(edit);
         return;
       }
     }
@@ -328,59 +440,42 @@ export function MarkdownEditor(props: MarkdownEditorProps) {
       e.stopPropagation();
       return;
     }
-    const mod = isMac ? e.metaKey : e.ctrlKey;
-    const word = isMac ? e.altKey : e.ctrlKey;
+    const action = keyAction(e, isMac);
+    if (!action) return;
     const shift = e.shiftKey;
-    let handled = true;
-    switch (e.key) {
-      case 'ArrowLeft':
-      case 'ArrowRight': {
-        const dir = e.key === 'ArrowRight' ? 1 : -1;
-        if (isMac && e.metaKey) horizontal(dir, shift, 'line');
-        else horizontal(dir, shift, word ? 'word' : 'char');
+    switch (action.kind) {
+      case 'move':
+        if (action.unit === 'doc') moveTo(action.dir > 0 ? doc.length : 0, shift);
+        else horizontal(action.dir, shift, action.unit);
         break;
-      }
-      case 'ArrowUp':
-      case 'ArrowDown': {
-        const dir = e.key === 'ArrowDown' ? 1 : -1;
-        if (mod) moveTo(dir > 0 ? doc.length : 0, shift);
-        else vertical(dir, shift);
+      case 'vertical':
+        vertical(action.dir, shift);
         break;
-      }
-      case 'Home':
-        horizontal(-1, shift, 'line');
-        break;
-      case 'End':
-        horizontal(1, shift, 'line');
-        break;
-      case 'Backspace':
+      case 'deleteBack':
         if (!isCollapsed(sel)) state.insert('');
-        else if (mod) apply(rangeEdit(doc.getLineStart(doc.getPosition(sel.caret).line), sel.caret));
-        else if (word) apply(rangeEdit(wordLeft(doc, sel.caret), sel.caret));
+        else if (action.unit === 'line') {
+          apply(rangeEdit(doc.getLineStart(doc.getPosition(sel.caret).line), sel.caret));
+        } else if (action.unit === 'word') apply(rangeEdit(wordLeft(doc, sel.caret), sel.caret));
         else if (!state.apply(backspacePairEdit(doc, sel))) state.buffer.backspace();
         revealCaret.current = true;
         break;
-      case 'Delete':
+      case 'deleteForward':
         if (!isCollapsed(sel)) state.insert('');
-        else if (word) apply(rangeEdit(sel.caret, wordRight(doc, sel.caret)));
+        else if (action.unit === 'word') apply(rangeEdit(sel.caret, wordRight(doc, sel.caret)));
         else state.buffer.deleteForward();
         revealCaret.current = true;
         break;
-      case 'Enter':
-        if (mod) handled = false;
-        else apply(shift ? softBreakEdit(sel) : enterEdit(doc, sel, mode, state.contextAt(sel.caret)));
+      case 'enter':
+        apply(action.soft ? softBreakEdit(sel) : enterEdit(doc, sel, mode, state.contextAt(sel.caret)));
         break;
-      case 'Tab':
-        if (mod || e.altKey) handled = false;
-        else apply(shift ? outdentEdit(doc, sel, state.indentUnit) : indentEdit(doc, sel, state.indentUnit));
+      case 'tab':
+        apply(
+          action.outdent ? outdentEdit(doc, sel, state.indentUnit) : indentEdit(doc, sel, state.indentUnit),
+        );
         break;
-      default:
-        handled = false;
     }
-    if (handled) {
-      e.preventDefault();
-      e.stopPropagation();
-    }
+    e.preventDefault();
+    e.stopPropagation();
   }
 
   function rangeEdit(start: number, end: number) {
@@ -429,7 +524,7 @@ export function MarkdownEditor(props: MarkdownEditorProps) {
     const p = doc.getPosition(at);
     const text = stripDuplicateTaskMarker(pasted.replace(/\r\n?/g, '\n'), doc.getLineText(p.line), p.column);
     revealCaret.current = true;
-    state.insert(text);
+    state.paste(text);
   }
 
   // ----- Mouse -----
@@ -437,7 +532,7 @@ export function MarkdownEditor(props: MarkdownEditorProps) {
   function offsetAt(x: number, y: number, dir: 1 | -1 = 1): number | null {
     const content = contentRef.current;
     if (!content) return null;
-    const hit = hitTest(content, x, y);
+    const hit = hitTest(content, x, y, rowIndex.current.rows);
     if (!hit) return null;
     const start = doc.getLineStart(hit.line);
     return snap(start + Math.min(hit.col, lineContentEnd(doc, hit.line) - start), dir);
@@ -502,14 +597,7 @@ export function MarkdownEditor(props: MarkdownEditorProps) {
   const empty = doc.length === 0;
   return (
     <div class={`pn-editor pn-mode-${mode}`}>
-      <div
-        class="pn-scroller"
-        ref={scrollerRef}
-        onMouseDown={onMouseDown}
-        onScroll={
-          props.onScroll ? (e) => props.onScroll!((e.currentTarget as HTMLElement).scrollTop) : undefined
-        }
-      >
+      <div class="pn-scroller" ref={scrollerRef} onMouseDown={onMouseDown} onScroll={onScrollerScroll}>
         <div class="pn-content" ref={contentRef} data-placeholder={empty ? props.placeholder : undefined}>
           {rows}
           <div class="pn-selection-layer" ref={selectionRef} aria-hidden="true" />

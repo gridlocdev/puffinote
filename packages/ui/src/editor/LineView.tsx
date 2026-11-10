@@ -1,22 +1,10 @@
-import { renderHtmlBody, type Token } from '@puffinote/markdown';
+import { renderHtmlBody } from '@puffinote/markdown';
 import { TextDocument } from '@puffinote/text';
 import { memo } from 'preact/compat';
-import type { BlockKind } from './blocks.ts';
+import { lineViewPropsEqual, type LineViewProps } from './lineProps.ts';
 import { renderLine, type Segment } from './lineRender.ts';
-import type { LineReveal, ViewMode } from './reveal.ts';
 
-export interface LineViewProps {
-  readonly index: number;
-  readonly text: string;
-  readonly start: number;
-  readonly tokens: readonly Token[];
-  readonly reveal: LineReveal;
-  readonly mode: ViewMode;
-  readonly block: BlockKind | null;
-  readonly resolveImage: (url: string) => string;
-}
-
-/** One source line. Memoized: a line redraws only when its text, tokens or reveal state change. */
+/** One source line. Memoized by `lineViewPropsEqual`: a line redraws only when what it draws changes. */
 export const LineView = memo(function LineView(p: LineViewProps) {
   const r = renderLine(p.text, p.start, p.tokens, p.reveal, p.mode, p.block);
   return (
@@ -31,7 +19,7 @@ export const LineView = memo(function LineView(p: LineViewProps) {
       ))}
     </div>
   );
-});
+}, lineViewPropsEqual);
 
 function SegmentView({
   s,

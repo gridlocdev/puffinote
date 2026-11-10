@@ -3,11 +3,13 @@ import { describe, expect, it } from 'vitest';
 import {
   applyEditTo,
   backspacePairEdit,
+  duplicateLinesEdit,
   EditorState,
   enterEdit,
   headingEdit,
   indentEdit,
   linkEdit,
+  moveLinesEdit,
   outdentEdit,
   setTaskStateEdit,
   toggleInlineEdit,
@@ -103,6 +105,11 @@ describe('Tab and Shift+Tab', () => {
     expect(run('- b|', (d, s) => outdentEdit(d, s))).toBe('(none)');
   });
 
+  it('does nothing on a selection of only blank lines', () => {
+    expect(run('‹\n\n›', (d, s) => indentEdit(d, s))).toBe('(none)');
+    expect(run('a\n‹\n\n›b', (d, s) => indentEdit(d, s))).toBe('(none)');
+  });
+
   it('renumbers an ordered list when an item moves into it', () => {
     expect(run('1. a\n    1. b|\n2. c', (d, s) => outdentEdit(d, s))).toBe('1. a\n2. b|\n3. c');
   });
@@ -136,6 +143,44 @@ describe('auto-pairing', () => {
   it('wraps a selection', () => {
     expect(type('‹word›', '*')).toBe('*‹word›*');
     expect(type('‹word›', '(')).toBe('(‹word›)');
+  });
+
+  it('does not pair at the start of a line, where the character is a list marker, rule or fence', () => {
+    expect(type('|', '*')).toBe('(none)');
+    expect(type('    |', '*')).toBe('(none)');
+    expect(type('> |', '_')).toBe('(none)');
+    expect(type('|', '`')).toBe('(none)');
+  });
+
+  it('does not pair the next character of a run, such as a fence', () => {
+    expect(type('`|', '`')).toBe('(none)');
+    expect(type('``|', '`')).toBe('(none)');
+    expect(type('a _|', '_')).toBe('(none)');
+  });
+
+  it('drops the closer when a space follows a lone opener', () => {
+    expect(type('2 *|*', ' ')).toBe('2 * |');
+    expect(type('a `|`', ' ')).toBe('a ` |');
+    expect(type('**|**', ' ')).toBe('(none)');
+    expect(type('snake_|_case', ' ')).toBe('(none)');
+  });
+
+  it('types common sequences without stray closers', () => {
+    const typed = (keys: string): string => {
+      const state = new EditorState('');
+      for (const ch of keys) {
+        const edit = typeCharEdit(state.document, state.selection.value, ch);
+        if (edit) state.applyTyping(edit);
+        else state.insert(ch);
+      }
+      return state.text;
+    };
+    expect(typed('* item')).toBe('* item');
+    expect(typed('2 * 3')).toBe('2 * 3');
+    expect(typed('```js')).toBe('```js');
+    expect(typed('- *word* and _it_ and `code`')).toBe('- *word* and _it_ and `code`');
+    expect(typed('a **bold** b')).toBe('a **bold** b');
+    expect(typed('*word*')).toBe('*word*');
   });
 
   it('deletes an empty pair with Backspace', () => {
@@ -211,6 +256,28 @@ describe('word motion', () => {
     expect(wordRight(doc, 7)).toBe(8);
     expect(wordLeft(doc, 7)).toBe(4);
     expect(wordLeft(doc, 8)).toBe(7);
+  });
+});
+
+describe('line moves and duplicates keep the line endings', () => {
+  const move = (marked: string, dir: -1 | 1) => run(marked, (d, s) => moveLinesEdit(d, s, dir));
+
+  it('moves the last line of a CRLF file up without mixing endings', () => {
+    expect(move('a\r\nb\r\nc|', -1)).toBe('a\r\nc|\r\nb');
+    expect(move('a\r\nb|\r\nc', 1)).toBe('a\r\nc\r\nb|');
+  });
+
+  it('moves lines in an LF file and keeps the selection with them', () => {
+    expect(move('a\n‹b\nc›\nd', -1)).toBe('‹b\nc›\na\nd');
+    expect(move('a\n‹b\nc›\nd', 1)).toBe('a\nd\n‹b\nc›');
+    expect(move('a\n‹b\n›c', 1)).toBe('a\nc\n‹b›');
+    expect(move('a|\nb', -1)).toBe('(none)');
+  });
+
+  it('duplicates with the document line ending, also on the last line', () => {
+    expect(run('a\r\nb|', duplicateLinesEdit)).toBe('a\r\nb\r\nb|');
+    expect(run('a|\r\nb', duplicateLinesEdit)).toBe('a\r\na|\r\nb');
+    expect(run('a\nb|', duplicateLinesEdit)).toBe('a\nb\nb|');
   });
 });
 

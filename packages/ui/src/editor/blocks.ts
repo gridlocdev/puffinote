@@ -13,9 +13,31 @@ export interface Block {
 
 /** The document's multi-line blocks in order, found from the tokens the model already produced. */
 export function findBlocks(doc: TextDocument, model: MarkdownModel): Block[] {
-  const blocks: Block[] = [];
+  return scanBlocks(doc, model, 0, []);
+}
+
+/**
+ * The blocks after an edit, reusing every block of `previous` that ends well above `dirtyFromLine` (the first
+ * line the model re-tokenized). Lines and states above that line are unchanged, and a block can only grow
+ * downward by one line (a table body row), so a block ending two or more lines above it is still exact. The
+ * scan resumes right after the last kept block, which is a position the full scan also starts from.
+ */
+export function updateBlocks(
+  previous: readonly Block[],
+  doc: TextDocument,
+  model: MarkdownModel,
+  dirtyFromLine: number,
+): Block[] {
+  let keep = 0;
+  while (keep < previous.length && previous[keep]!.endLine + 1 < dirtyFromLine) keep++;
+  const kept = previous.slice(0, keep);
+  const from = keep > 0 ? kept[keep - 1]!.endLine + 1 : 0;
+  return scanBlocks(doc, model, from, kept);
+}
+
+function scanBlocks(doc: TextDocument, model: MarkdownModel, from: number, blocks: Block[]): Block[] {
   const n = Math.min(model.lineCount, doc.lineCount);
-  let i = 0;
+  let i = from;
   while (i < n) {
     const first = model.lineTokens(i)[0];
     if (first?.type === 'frontMatterFence' && i === 0) {

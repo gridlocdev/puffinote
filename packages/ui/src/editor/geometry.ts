@@ -167,21 +167,64 @@ function caretFromPoint(x: number, y: number): CaretPositionLike | null {
   return r ? { offsetNode: r.startContainer, offset: r.startOffset } : null;
 }
 
-/** The visible line element nearest to viewport `y`. */
-export function nearestLine(root: Element, y: number): HTMLElement | null {
-  let best: HTMLElement | null = null;
-  let bestDist = Infinity;
-  for (const el of lineElements(root)) {
-    const r = el.getBoundingClientRect();
-    if (r.height === 0) continue;
-    const d = y < r.top ? r.top - y : y > r.bottom ? y - r.bottom : 0;
-    if (d < bestDist) {
-      bestDist = d;
-      best = el;
-      if (d === 0) break;
+/** Anything with a viewport rectangle: a line element, or a stand-in in tests. */
+export interface RectSource {
+  getBoundingClientRect(): { readonly top: number; readonly bottom: number; readonly height: number };
+}
+
+/**
+ * The index of the first visible row (non-zero height) at or after `from` and before `to`, or `to` when
+ * there is none. Collapsed rows (`display: none`) measure zero and take no part in the order.
+ */
+export function nextVisibleRow(rows: readonly RectSource[], from: number, to = rows.length): number {
+  let i = from;
+  while (i < to && rows[i]!.getBoundingClientRect().height === 0) i++;
+  return i;
+}
+
+/**
+ * The index of the first visible row whose bottom is at or below viewport `y`, or `rows.length` when every
+ * row is above it. Rows are in document order, so their visible tops only grow: a binary search reads
+ * O(log n) rectangles instead of measuring every row up to `y`.
+ */
+export function firstRowEndingBelow(rows: readonly RectSource[], y: number): number {
+  let lo = 0;
+  let hi = rows.length;
+  while (lo < hi) {
+    const mid = (lo + hi) >> 1;
+    const j = nextVisibleRow(rows, mid, hi);
+    if (j === hi) {
+      hi = mid; // [mid, hi) is all collapsed
+      continue;
     }
+    if (rows[j]!.getBoundingClientRect().bottom >= y) hi = j;
+    else lo = j + 1;
   }
-  return best;
+  return nextVisibleRow(rows, lo);
+}
+
+/** The index of the visible row nearest to viewport `y`, or -1 when no row is visible. */
+export function nearestRowIndex(rows: readonly RectSource[], y: number): number {
+  const after = firstRowEndingBelow(rows, y);
+  let before = after - 1;
+  while (before >= 0 && rows[before]!.getBoundingClientRect().height === 0) before--;
+  if (after >= rows.length) return before;
+  if (before < 0) return after;
+  const a = rows[after]!.getBoundingClientRect();
+  const b = rows[before]!.getBoundingClientRect();
+  const dAfter = y < a.top ? a.top - y : 0;
+  const dBefore = y - b.bottom;
+  return dBefore <= dAfter ? before : after;
+}
+
+/** The visible line element nearest to viewport `y`. Pass `rows` when the caller already has them. */
+export function nearestLine(
+  root: Element,
+  y: number,
+  rows: readonly HTMLElement[] = lineElements(root),
+): HTMLElement | null {
+  const i = nearestRowIndex(rows, y);
+  return i >= 0 ? rows[i]! : null;
 }
 
 /** A hit: a line and a column on it. */
@@ -191,8 +234,13 @@ export interface Hit {
 }
 
 /** Map a viewport point to a line and column, landing on the near side of a decoration. */
-export function hitTest(root: Element, x: number, y: number): Hit | null {
-  let lineEl = nearestLine(root, y);
+export function hitTest(
+  root: Element,
+  x: number,
+  y: number,
+  rows: readonly HTMLElement[] = lineElements(root),
+): Hit | null {
+  let lineEl = nearestLine(root, y, rows);
   if (!lineEl) return null;
   const lr = lineEl.getBoundingClientRect();
   const cy = Math.min(Math.max(y, lr.top + 1), lr.bottom - 1);
