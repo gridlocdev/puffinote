@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Puffinote's app icon. 1024 canvas on Apple's icon grid: an 824-unit tile at (100,100) with a
+     transparent margin. scripts/make-icons.sh crops to the tile for Windows and Linux, so keep the
+     tile there. A puffin in profile, facing right, on the default blue accent. -->
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
+  <defs>
+    <linearGradient id="tile" gradientUnits="userSpaceOnUse" x1="0" y1="100" x2="0" y2="924">
+      <stop offset="0" stop-color="#6FA8FF" />
+      <stop offset="1" stop-color="#2B5FCC" />
+    </linearGradient>
+    <linearGradient id="beak" gradientUnits="userSpaceOnUse" x1="600" y1="0" x2="790" y2="0">
+      <stop offset="0" stop-color="#FF9A3C" />
+      <stop offset="1" stop-color="#F0552A" />
+    </linearGradient>
+    <clipPath id="body">
+      <path id="bodyShape" d="M 470 250 C 600 250 660 340 660 450 C 660 560 700 650 690 730 C 680 810 590 850 470 850 C 340 850 290 760 300 640 C 310 540 330 500 330 420 C 330 320 370 250 470 250 Z" />
+    </clipPath>
+  </defs>
+
+  <rect x="100" y="100" width="824" height="824" rx="185" fill="url(#tile)" />
+
+  <g transform="translate(-14 -40)">
+    <!-- Dark back and crown. -->
+    <use href="#bodyShape" fill="#17203A" />
+    <g clip-path="url(#body)">
+      <!-- White face and belly. -->
+      <ellipse cx="560" cy="430" rx="118" ry="105" fill="#FFFFFF" />
+      <ellipse cx="560" cy="720" rx="150" ry="200" fill="#FFFFFF" />
+    </g>
+
+    <!-- The beak: deep at the base, as a puffin's is. -->
+    <path d="M 636 340 C 716 352 778 410 792 474 C 744 494 690 504 636 504 Z" fill="url(#beak)" />
+
+    <!-- The eye. -->
+    <circle cx="590" cy="412" r="20" fill="#17203A" />
+  </g>
+</svg>

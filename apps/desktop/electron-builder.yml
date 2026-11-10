@@ -6,6 +6,8 @@ directories:
 files:
   - out/**
   - package.json
+  # The window icon on Linux and Windows (macOS takes the bundle's icon.icns).
+  - build/icon.png
 asar: true
 mac:
   category: public.app-category.productivity

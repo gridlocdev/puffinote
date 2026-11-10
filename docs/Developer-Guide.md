@@ -96,6 +96,19 @@ just install-desktop      # macOS: package and install into /Applications
 - `just install-desktop` moves an existing copy to the Trash first, and refuses while the app is running.
   It registers the installed copy with Launch Services, so `puffinote <folder>` opens it.
 
+### The app icon
+
+The icon is drawn by hand in `apps/desktop/assets/icon.svg`: a 1024 canvas on Apple's grid, with the
+824-unit tile at (100, 100). After editing it, render the platform files and commit them, so builds don't
+need Inkscape:
+
+```bash
+just icons  # icon.icns (macOS), icon.ico (Windows) and icon.png (Linux window) in apps/desktop/build
+```
+
+It needs Inkscape (`brew install --cask inkscape`) and, for the `.icns`, macOS. If the Dock still shows the
+old icon after a rebuild, that is the macOS icon cache: move the app, or log out and back in.
+
 ## Cleaning up
 
 ```bash

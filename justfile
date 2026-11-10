@@ -99,6 +99,11 @@ install-desktop: package-desktop-dir
     "$lsregister" -f "$target"
     echo "Installed $target"
 
+# Render the app icon (apps/desktop/assets/icon.svg) into apps/desktop/build. Needs Inkscape; commit the results.
+[group('build')]
+icons:
+    apps/desktop/scripts/make-icons.sh
+
 # Build the NAS Docker image.
 [group('build')]
 build-docker tag="puffinote:latest":
