@@ -82,6 +82,26 @@ describe('ShellModel Move To', () => {
   });
 });
 
+describe('ShellModel pinned tabs', () => {
+  it('leaves pinned tabs open on Close Other and Close All', async () => {
+    const store = new MemoryStore('N', { 'a.md': '', 'b.md': '', 'c.md': '' });
+    const nb = await Notebook.open(store, { prefs: memoryPrefs({ autoSave: false }) });
+    const m = new ShellModel();
+    m.setNotebook(nb);
+    const a = (await nb.openFile('a.md'))!;
+    await nb.openFile('b.md');
+    const c = (await nb.openFile('c.md'))!;
+    nb.setTabPinned(a, true);
+    await m.closeTabs(c);
+    expect(nb.tabs.value.map((t) => t.path.value)).toEqual(['a.md', 'c.md']);
+    await m.closeTabs(null);
+    expect(nb.tabs.value.map((t) => t.path.value)).toEqual(['a.md']);
+    await m.closeTab(a);
+    expect(nb.tabs.value).toEqual([]);
+    m.setNotebook(null);
+  });
+});
+
 describe('ShellModel editor menu', () => {
   it('offers the clipboard and Select All, with Cut and Copy off for an empty selection', async () => {
     const store = new MemoryStore('N', { 'a.md': 'hello' });

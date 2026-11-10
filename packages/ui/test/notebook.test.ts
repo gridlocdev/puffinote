@@ -127,6 +127,37 @@ describe('Notebook tabs and saving', () => {
   });
 });
 
+describe('Notebook pinned tabs', () => {
+  it('keeps pinned tabs first, in pin order, and remembers them', async () => {
+    const { store, nb } = await open({ 'a.md': '', 'b.md': '', 'c.md': '', 'd.md': '' });
+    const [a, b, c, d] = [
+      (await nb.openFile('a.md'))!,
+      (await nb.openFile('b.md'))!,
+      (await nb.openFile('c.md'))!,
+      (await nb.openFile('d.md'))!,
+    ];
+    const order = () => nb.tabs.value.map((t) => t.path.value);
+    nb.setTabPinned(c, true);
+    nb.setTabPinned(d, true);
+    expect(order()).toEqual(['c.md', 'd.md', 'a.md', 'b.md']);
+    // Unpinning puts the tab first among the unpinned; a move can't take a tab across the line.
+    nb.setTabPinned(c, false);
+    expect(order()).toEqual(['d.md', 'c.md', 'a.md', 'b.md']);
+    nb.moveTab(b, 0);
+    expect(order()).toEqual(['d.md', 'b.md', 'c.md', 'a.md']);
+    expect([a, d].map((t) => t.pinned.value)).toEqual([false, true]);
+
+    await nb.persist();
+    const again = await Notebook.open(store, { prefs: memoryPrefs() });
+    expect(again.tabs.value.map((t) => `${t.path.value}${t.pinned.value ? '*' : ''}`)).toEqual([
+      'd.md*',
+      'b.md',
+      'c.md',
+      'a.md',
+    ]);
+  });
+});
+
 describe('Notebook files', () => {
   it('creates notes with .md and unique folders', async () => {
     const { store, nb } = await open({ 'a.md': '' });

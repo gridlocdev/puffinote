@@ -209,7 +209,7 @@ export class ShellModel {
   // ----- Focus -----
 
   focusEditor(): void {
-    setTimeout(() => document.querySelector<HTMLElement>('.pn-shell-main .pn-input')?.focus());
+    setTimeout(() => globalThis.document?.querySelector<HTMLElement>('.pn-shell-main .pn-input')?.focus());
   }
 
   focusTree(): void {
@@ -359,7 +359,8 @@ export class ShellModel {
     if (!nb) return;
     if (keep) nb.activate(keep);
     for (const t of [...nb.tabs.peek()]) {
-      if (t === keep) continue;
+      // Pinned tabs stay (PRD §7); ⌘W or the tab's own menu closes one.
+      if (t === keep || t.pinned.peek()) continue;
       if (!(await this.closeTab(t))) return;
     }
   }
@@ -618,9 +619,22 @@ function shellCommandSpecs(m: ShellModel): CommandSpec[] {
       },
     },
     {
+      id: 'shell.pinTab',
+      title: 'Pin Tab',
+      description: 'Keep the note in front at the start of the tab strip, always in view.',
+      group: 'File',
+      icon: 'pin',
+      enabled: hasTab,
+      active: () => tab()?.pinned.value ?? false,
+      run: () => {
+        const t = tab();
+        if (t) nb()?.setTabPinned(t, !t.pinned.peek());
+      },
+    },
+    {
       id: 'shell.closeOtherTabs',
       title: 'Close Other Tabs',
-      description: 'Close every tab but the one in front.',
+      description: 'Close every tab but the one in front and the pinned ones.',
       group: 'File',
       enabled: () => (nb()?.tabs.peek().length ?? 0) > 1,
       run: () => m.closeTabs(tab()),
@@ -628,7 +642,7 @@ function shellCommandSpecs(m: ShellModel): CommandSpec[] {
     {
       id: 'shell.closeAllTabs',
       title: 'Close All Tabs',
-      description: 'Close every tab.',
+      description: 'Close every tab but the pinned ones.',
       group: 'File',
       shortcut: 'mod+alt+w',
       global: true,

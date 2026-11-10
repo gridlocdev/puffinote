@@ -100,6 +100,8 @@ export class Tab {
   generation = 0;
   /** Where the editor was scrolled, restored when the tab comes back. */
   scrollTop = 0;
+  /** Kept at the front of the strip and in view (PRD §7); Close Other and Close All leave it open. */
+  readonly pinned = signal(false);
   private readonly disposers: (() => void)[] = [];
 
   constructor(
@@ -176,9 +178,14 @@ export interface SearchHit {
   readonly inTitle?: boolean;
 }
 
+/** `tabs` with the pinned ones moved to the front, each group keeping its order. */
+function pinnedFirst(tabs: readonly Tab[]): Tab[] {
+  return [...tabs.filter((t) => t.pinned.peek()), ...tabs.filter((t) => !t.pinned.peek())];
+}
+
 /** What a notebook remembers between sessions, in `.puffinote/session.json` (PRD §5). */
 export interface Session {
-  readonly tabs: readonly { path: string; caret?: number; mode?: string }[];
+  readonly tabs: readonly { path: string; caret?: number; mode?: string; pinned?: boolean }[];
   readonly active: string | null;
   readonly expanded: readonly string[];
   readonly recent: readonly string[];
@@ -287,6 +294,7 @@ export class Notebook {
       for (const t of session.tabs ?? []) {
         if (typeof t?.path !== 'string') continue;
         const tab = await this.openTab(t.path).catch(() => null);
+        if (tab && t.pinned === true) this.setTabPinned(tab, true);
         if (tab?.state) {
           if (t.mode === 'live' || t.mode === 'source' || t.mode === 'raw') tab.state.mode.value = t.mode;
           if (typeof t.caret === 'number') tab.state.select(Math.min(t.caret, tab.state.document.length));
@@ -544,7 +552,18 @@ export class Notebook {
   moveTab(tab: Tab, to: number): void {
     const tabs = this.tabs.value.filter((t) => t !== tab);
     tabs.splice(Math.max(0, Math.min(to, tabs.length)), 0, tab);
-    this.tabs.value = tabs;
+    this.tabs.value = pinnedFirst(tabs);
+  }
+
+  /** Pin or unpin `tab` (PRD §7): a pinned tab joins the end of the pinned ones; an unpinned one leads the rest. */
+  setTabPinned(tab: Tab, pinned: boolean): void {
+    const tabs = this.tabs.value;
+    if (!tabs.includes(tab) || tab.pinned.peek() === pinned) return;
+    tab.pinned.value = pinned;
+    const others = tabs.filter((t) => t !== tab);
+    const at = others.filter((t) => t.pinned.peek()).length;
+    others.splice(at, 0, tab);
+    this.tabs.value = others;
   }
 
   // ----- Saving -----
@@ -960,6 +979,7 @@ export class Notebook {
       tabs: this.tabs.value.map((t) => ({
         path: t.path.value,
         ...(t.state ? { caret: t.state.selection.value.caret, mode: t.state.mode.value } : {}),
+        ...(t.pinned.value ? { pinned: true } : {}),
       })),
       active: this.active.value?.path.value ?? null,
       expanded: [...this.expanded.value],
