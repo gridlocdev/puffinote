@@ -19,6 +19,8 @@ mac:
   identity: '-'
 linux:
   target: [AppImage]
+  # The package name (@puffinote/desktop) isn't a usable file name.
+  executableName: puffinote
   category: Office
 win:
   target: [nsis]
