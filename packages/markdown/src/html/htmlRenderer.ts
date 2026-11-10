@@ -5,7 +5,7 @@ import { taskLabel, taskStateFromMark, type TaskState } from '../markdown/taskSt
 import type { Token } from '../markdown/token.ts';
 
 /**
- * Renders a document to self-contained HTML (PRD §7.8). Pure and dependency-free: it walks the same token
+ * Renders a document to self-contained HTML (PRD §10.5). Pure and dependency-free: it walks the same token
  * stream the editor uses, so what the CLI exports matches what the editor shows. No external CSS, no network.
  */
 export function renderHtmlDocument(document: TextDocument, title?: string | null): string {
@@ -85,7 +85,7 @@ class Renderer {
     return this.paragraph(line);
   }
 
-  /** Front matter renders as a collapsed "Properties" block (PRD §7.4). */
+  /** Front matter renders as a collapsed "Properties" block (PRD §10.2). */
   private frontMatter(line: number): number {
     const n = this.doc.lineCount;
     let i = line + 1;
@@ -171,7 +171,7 @@ class Renderer {
       const tokens = this.model.lineTokens(i);
       const box = tokens[1]?.type === 'taskMarker' ? tokens[1] : null;
       if (box) {
-        // Three states, not a bit: the export draws the same box the editor does (PRD §8.3.2). The text is
+        // Three states, not a bit: the export draws the same box the editor does (PRD §11.4). The text is
         // wrapped so a done item can be struck through without the rule crossing its box.
         const state = taskStateFromMark(box.meta?.charAt(0) || ' ');
         this.out +=
@@ -450,7 +450,7 @@ th, td { border: 1px solid rgba(127,127,127,0.4); padding: 0.4em 0.7em; }
 .properties { color: #888; font-size: 0.85em; }
 img { max-width: 100%; }
 
-/* Task states (PRD §8.3.2). One accent, single-hue: the dash and the check share it, so "under way" and
+/* Task states (PRD §11.4). One accent, single-hue: the dash and the check share it, so "under way" and
    "done" read as two points on one path. A resting box is a bare outline in the quiet border colour. */
 :root { --t-border:#B1B8C2; --t-accent:#216BE0; --t-check:#fff; --t-off:#6E7781; }
 @media (prefers-color-scheme: dark) {

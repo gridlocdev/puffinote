@@ -1,7 +1,7 @@
 import type { ViewMode } from '../editor/reveal.ts';
 
 /**
- * Puffinote's settings (PRD §7.5). They resolve in layers, lowest first: the defaults here, the user's
+ * Puffinote's settings (PRD §9). They resolve in layers, lowest first: the defaults here, the user's
  * preferences (every notebook), then the notebook's own overrides in `.puffinote/settings.json`, which travel
  * with the folder.
  */
@@ -19,7 +19,7 @@ export interface Settings {
   readonly showHiddenFiles: boolean;
   /** Spell-check the text being typed (the browser's checker). */
   readonly spellcheck: boolean;
-  /** Show the tab strip over the editor (PRD §7.5). */
+  /** Show the tab strip over the editor (PRD §9). */
   readonly showTabBar: boolean;
 }
 

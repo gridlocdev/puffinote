@@ -17,7 +17,7 @@ import { TabStrip } from './TabStrip.tsx';
 const NOTICE_MS = 6000;
 
 /**
- * The notebook window (PRD §7): sidebar, tab strip, the note in front, a status bar, and the overlays. The
+ * The notebook window (PRD §5–§9): sidebar, tab strip, the note in front, a status bar, and the overlays. The
  * hosts (web, NAS, desktop) put one on the page and hand it a notebook; everything else is in here.
  */
 export function Shell(props: {
@@ -29,7 +29,7 @@ export function Shell(props: {
   const { model } = props;
   const nb = model.notebook.value;
 
-  // Shell keys: the reserved set wins over everything but an open overlay (PRD §7.6).
+  // Shell keys: the reserved set wins over everything but an open overlay (PRD §8.2).
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.defaultPrevented || model.overlay.peek()) return;

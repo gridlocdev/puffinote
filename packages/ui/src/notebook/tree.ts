@@ -15,7 +15,7 @@ export const stateDir = '.puffinote';
 
 export const emptyTree: TreeNode = { path: '', name: '', kind: 'dir', children: [] };
 
-/** How a file opens: in the editor, as a picture, or in another app (PRD §7.2). */
+/** How a file opens: in the editor, as a picture, or in another app (PRD §6). */
 export type FileKind = 'note' | 'image' | 'other';
 
 export function fileKind(path: string): FileKind {
@@ -113,7 +113,7 @@ export function visibleRows(root: TreeNode, expanded: ReadonlySet<string>): Tree
 }
 
 /**
- * The Filter panel's tree (PRD §7.2.3): entries whose whole name (extension included) contains `query`,
+ * The Filter panel's tree (PRD §6.2): entries whose whole name (extension included) contains `query`,
  * case-insensitively, plus the folders above them and everything inside a matching folder. `opened` gets the
  * folders that lead to a match, so the match is a row you can see.
  */

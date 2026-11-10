@@ -3,11 +3,11 @@ import { token, type Token, type TokenRole, type TokenType } from './token.ts';
 
 /**
  * Tokenizes the inline constructs inside one line's content region: emphasis, code, links, images,
- * autolinks, wiki-links, embeds, escapes, strikethrough, highlight. The scanner is tolerant (PRD §7.4): an
+ * autolinks, wiki-links, embeds, escapes, strikethrough, highlight. The scanner is tolerant (PRD §10.2): an
  * unmatched opening marker stays literal text until validly closed, so styling only applies to a complete
  * construct and typing never flickers.
  *
- * Emphasis, strong, strike and highlight content is a single token with no recursion (PRD §8.4–§8.5); link
+ * Emphasis, strong, strike and highlight content is a single token with no recursion (PRD §11.6–§11.7); link
  * text recurses so emphasis inside a link still styles.
  */
 export function tokenizeInline(

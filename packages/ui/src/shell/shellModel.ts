@@ -44,7 +44,7 @@ export interface ShellHost {
 export class ShellModel {
   readonly notebook = signal<Notebook | null>(null);
   readonly overlay = signal<Overlay | null>(null);
-  /** Toggle Tab Bar's session-only answer; null follows the setting (PRD §7.5). */
+  /** Toggle Tab Bar's session-only answer; null follows the setting (PRD §9). */
   readonly tabBarOverride = signal<boolean | null>(null);
   /** The Filter and Search panels' boxes, kept while the user looks elsewhere. */
   readonly filterQuery = signal('');
@@ -54,7 +54,7 @@ export class ShellModel {
   readonly host: ShellHost;
   /** Keys: the shell's own commands. The editor handles its own keys while it has focus. */
   readonly shellCatalog: CommandCatalog;
-  /** ⌘K: the shell's commands merged with the editor's (PRD §7.4). */
+  /** ⌘K: the shell's commands merged with the editor's (PRD §8.1). */
   readonly menuCatalog: CommandCatalog;
   private readonly shellIds: ReadonlySet<string>;
 
@@ -159,7 +159,7 @@ export class ShellModel {
     if (!nb) return;
     nb.sidebarCollapsed.value = false;
     nb.panel.value = panel;
-    // The typed-into panels take the caret; the read-only ones leave it be (PRD §7.2.3).
+    // The typed-into panels take the caret; the read-only ones leave it be (PRD §6.2).
     if (panel === 'filter' || panel === 'search') this.focusPanelTick.value++;
   }
 
@@ -320,7 +320,7 @@ export class ShellModel {
     if (answer === 'delete') await nb.remove(path);
   }
 
-  /** Expand every folder, or collapse them all when all are open (the tree header's toggle, PRD §7.2). */
+  /** Expand every folder, or collapse them all when all are open (the tree header's toggle, PRD §6). */
   toggleAllFolders(): void {
     const nb = this.notebook.peek();
     if (!nb || !hasFolders(nb.tree.peek())) return;
@@ -335,7 +335,7 @@ export class ShellModel {
     return folders.length > 0 && folders.every((f) => open.has(f));
   }
 
-  /** The window title: the document, its unsaved dot or "— Saved" (PRD §7.3), and the notebook. */
+  /** The window title: the document, its unsaved dot or "— Saved" (PRD §7), and the notebook. */
   readonly title = computed(() => {
     const nb = this.notebook.value;
     if (!nb) return 'Puffinote';
@@ -346,7 +346,7 @@ export class ShellModel {
   });
 }
 
-/** The shell's own commands (PRD §7.4). Ids start `shell.` or `view.sidebar.`, apart from the editor's. */
+/** The shell's own commands (PRD §8.1). Ids start `shell.` or `view.sidebar.`, apart from the editor's. */
 function shellCommandSpecs(m: ShellModel): CommandSpec[] {
   const nb = () => m.notebook.peek();
   const hasNb = () => nb() !== null;

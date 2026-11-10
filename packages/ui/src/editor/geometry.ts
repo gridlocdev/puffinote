@@ -1,5 +1,5 @@
 /**
- * The offset ↔ visual map of the editing surface (PRD §7.4), read from the DOM the surface rendered. Each line
+ * The offset ↔ visual map of the editing surface (PRD §10.2), read from the DOM the surface rendered. Each line
  * is a `[data-line]` element; each source run inside it a `[data-from][data-to]` span whose text node holds
  * exactly that run of the source, so a column maps to a text-node offset and back. Concealed runs have no text
  * and decorations are atomic: a point on one lands on its near side.

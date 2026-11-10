@@ -7,7 +7,7 @@ import { FileTree } from './FileTree.tsx';
 import { Icon } from './Icon.tsx';
 import type { ShellModel } from './shellModel.ts';
 
-/** The left sidebar (PRD §7.2): header, the panel switcher, and the panel. */
+/** The left sidebar (PRD §6): header, the panel switcher, and the panel. */
 export function Sidebar({ model, nb }: { readonly model: ShellModel; readonly nb: Notebook }) {
   const panel = nb.panel.value;
   const tip = (id: string) => {
@@ -96,7 +96,7 @@ export function Sidebar({ model, nb }: { readonly model: ShellModel; readonly nb
   );
 }
 
-/** A box whose caret arrives when its panel is chosen (PRD §7.2.3). */
+/** A box whose caret arrives when its panel is chosen (PRD §6.2). */
 function PanelBox(props: {
   readonly model: ShellModel;
   readonly value: string;

@@ -12,7 +12,7 @@ import { Dialog } from './Dialog.tsx';
 type Scope = 'user' | 'notebook';
 
 /**
- * Settings (PRD §7.5): two scopes over the same fields. "Preferences" are yours, in every notebook; "This
+ * Settings (PRD §9): two scopes over the same fields. "Preferences" are yours, in every notebook; "This
  * Notebook" pins a value for everyone who opens the folder, in `.puffinote/settings.json`, and a field left
  * on "Use preference" inherits.
  */

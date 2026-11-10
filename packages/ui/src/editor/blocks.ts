@@ -1,7 +1,7 @@
 import type { MarkdownModel } from '@puffinote/markdown';
 import type { TextDocument } from '@puffinote/text';
 
-/** A multi-line construct that conceals or reveals as one unit (PRD §7.4). */
+/** A multi-line construct that conceals or reveals as one unit (PRD §10.2). */
 export type BlockKind = 'fencedCode' | 'frontMatter' | 'table';
 
 export interface Block {

@@ -5,7 +5,7 @@ import { rankFiles } from '../notebook/quickOpen.ts';
 import { baseName, parentOf } from '../platform/paths.ts';
 import { Icon } from './Icon.tsx';
 
-/** ⌘K: search and run any command (PRD §7.4). Recent commands come first while the query is empty. */
+/** ⌘K: search and run any command (PRD §8.1). Recent commands come first while the query is empty. */
 export function CommandMenu(props: {
   readonly catalog: CommandCatalog;
   /** Which commands to offer (the editor's only while a note is in front). */
@@ -61,7 +61,7 @@ export function CommandMenu(props: {
   );
 }
 
-/** ⌘O: jump to any file by part of its name (PRD §7.2.5). */
+/** ⌘O: jump to any file by part of its name (PRD §6.3). */
 export function QuickOpen(props: {
   readonly files: readonly string[];
   readonly recent: readonly string[];

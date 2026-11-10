@@ -2,7 +2,7 @@ import { caretAt, DocumentBuffer, TextDocument } from '@puffinote/text';
 import { describe, expect, it } from 'vitest';
 import { MarkdownModel } from '../src/index.ts';
 
-/** An incremental update must always equal a full rebuild (PRD §8.2). */
+/** An incremental update must always equal a full rebuild (PRD §11.2). */
 function expectIncrementalMatchesFull(
   before: string,
   offset: number,

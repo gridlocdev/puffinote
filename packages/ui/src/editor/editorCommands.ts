@@ -29,7 +29,7 @@ export interface EditorCommandTarget {
 }
 
 /**
- * The Markdown editor's one command catalog (PRD §7.4): the editor's own key handling and the shell's merged
+ * The Markdown editor's one command catalog (PRD §10.2): the editor's own key handling and the shell's merged
  * Command Menu both read it, so a binding and its label can't disagree. Ids are namespaced (`edit.`,
  * `format.`, `insert.`, `view.`) apart from the shell's `shell.` commands.
  */

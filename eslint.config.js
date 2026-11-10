@@ -3,17 +3,7 @@ import tseslint from 'typescript-eslint';
 
 export default tseslint.config(
   {
-    // The C# tree stays until the final phase of the TypeScript port; nothing in it is linted.
-    ignores: [
-      '**/dist/**',
-      '**/out/**',
-      '**/release/**',
-      '**/.types/**',
-      '**/node_modules/**',
-      'app/**',
-      'features/**',
-      'shared/**',
-    ],
+    ignores: ['**/dist/**', '**/out/**', '**/release/**', '**/.types/**', '**/node_modules/**'],
   },
   js.configs.recommended,
   ...tseslint.configs.recommended,

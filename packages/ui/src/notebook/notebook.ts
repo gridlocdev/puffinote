@@ -49,7 +49,7 @@ export const sidebarPanels: readonly { id: SidebarPanel; title: string; icon: st
   { id: 'recent', title: 'Recent', icon: 'history' },
 ];
 
-/** What changed on disk under an open tab that has unsaved edits (PRD §7.1). */
+/** What changed on disk under an open tab that has unsaved edits (PRD §5). */
 export type TabConflict = 'none' | 'changed' | 'deleted';
 
 const AUTOSAVE_MS = 1000;
@@ -69,7 +69,7 @@ export class Tab {
   /** Unsaved edits. */
   readonly dirty = signal(false);
   readonly conflict = signal<TabConflict>('none');
-  /** Just saved: the title bar says "— Saved" for a moment (PRD §7.3). */
+  /** Just saved: the title bar says "— Saved" for a moment (PRD §7). */
   readonly saved = signal(false);
   /** The encoding was guessed; saving would write the guess back, so the note is read-only. */
   readonly readOnly: boolean;
@@ -153,7 +153,7 @@ export interface SearchHit {
   readonly matchStart: number;
 }
 
-/** What a notebook remembers between sessions, in `.puffinote/session.json` (PRD §7.1). */
+/** What a notebook remembers between sessions, in `.puffinote/session.json` (PRD §5). */
 export interface Session {
   readonly tabs: readonly { path: string; caret?: number; mode?: string }[];
   readonly active: string | null;
@@ -164,7 +164,7 @@ export interface Session {
 
 export const sessionPath = `${stateDir}/session.json`;
 export const overridesPath = `${stateDir}/settings.json`;
-/** Volatile state stays out of git; the notebook's settings travel with it (PRD §7.1). */
+/** Volatile state stays out of git; the notebook's settings travel with it (PRD §5). */
 const gitignore = '# Puffinote: machine-local state\nsession.json\n';
 
 export interface NotebookOptions {
@@ -174,7 +174,7 @@ export interface NotebookOptions {
 }
 
 /**
- * One open notebook (PRD §7.1): its file tree, open tabs, sidebar, recent files and settings, published as
+ * One open notebook (PRD §5): its file tree, open tabs, sidebar, recent files and settings, published as
  * signals for the shell to draw. All file changes go through here so tabs, the tree and the recent list stay
  * reconciled with the folder.
  */
@@ -257,7 +257,7 @@ export class Notebook {
         this.schedulePersist();
       }),
     );
-    // Settings reach the open tabs live (PRD §7.5).
+    // Settings reach the open tabs live (PRD §9).
     this.disposers.push(
       effect(() => {
         const unit = indentUnit(this.settings.value);
@@ -314,7 +314,7 @@ export class Notebook {
     this.selected.value = path;
   }
 
-  /** Re-read the tree and reconcile every open tab against the disk (PRD §7.1). */
+  /** Re-read the tree and reconcile every open tab against the disk (PRD §5). */
   async refresh(): Promise<void> {
     try {
       await this.reloadTree();
@@ -498,7 +498,7 @@ export class Notebook {
     }, SAVED_FLASH_MS);
   }
 
-  /** Take the disk's version into `tab`, as one undoable step (PRD §7.1). */
+  /** Take the disk's version into `tab`, as one undoable step (PRD §5). */
   async reload(tab: Tab): Promise<void> {
     try {
       const data = await this.store.read(tab.path.value);
@@ -581,7 +581,7 @@ export class Notebook {
   }
 
   /**
-   * Move a file or folder into `dir` (PRD §7.2: a plain move; links aren't rewritten). Moving into its own
+   * Move a file or folder into `dir` (PRD §6: a plain move; links aren't rewritten). Moving into its own
    * folder or into itself does nothing. Returns the new path.
    */
   async move(path: string, dir: string): Promise<string | null> {
@@ -661,7 +661,7 @@ export class Notebook {
     if (next.join('\n') !== this.recent.value.join('\n')) this.recent.value = next;
   }
 
-  /** Full-text search across the notebook's notes (PRD §7.2.3), open tabs' unsaved text included. */
+  /** Full-text search across the notebook's notes (PRD §6.2), open tabs' unsaved text included. */
   async search(query: string, opts: { caseSensitive?: boolean; regex?: boolean } = {}): Promise<SearchHit[]> {
     if (!query.trim()) return [];
     const hits: SearchHit[] = [];

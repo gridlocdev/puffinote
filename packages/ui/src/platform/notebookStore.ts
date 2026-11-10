@@ -1,5 +1,5 @@
 /**
- * Where a notebook lives (PRD §7.1: a notebook is one root folder). The shell only ever talks to a
+ * Where a notebook lives (PRD §5: a notebook is one root folder). The shell only ever talks to a
  * NotebookStore; it never knows whether the folder is in memory, picked in the browser, on the NAS server, or
  * on disk through Electron. Paths are notebook-relative (see `paths.ts`).
  */

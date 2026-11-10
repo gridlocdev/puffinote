@@ -1,7 +1,7 @@
 import type { MarkdownModel } from './markdownModel.ts';
 import type { TextDocument } from '@puffinote/text';
 
-/** A heading in the active note (PRD §7.2.3, the Outline panel). */
+/** A heading in the active note (PRD §6.2, the Outline panel). */
 export interface OutlineItem {
   readonly level: number;
   readonly text: string;

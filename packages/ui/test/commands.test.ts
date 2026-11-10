@@ -52,7 +52,7 @@ function run(marked: string, cmd: (doc: TextDocument, sel: Selection) => Edit | 
   return show(doc, cmd(doc, sel));
 }
 
-describe('Enter (PRD §7.2)', () => {
+describe('Enter (PRD §10.1)', () => {
   const enter = (marked: string, mode: 'live' | 'raw' = 'live', context: 'text' | 'code' = 'text') =>
     run(marked, (d, s) => enterEdit(d, s, mode, context));
 

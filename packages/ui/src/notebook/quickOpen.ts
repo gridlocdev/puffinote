@@ -2,7 +2,7 @@ import { compact, inOrder } from '../commands/command.ts';
 import { baseName } from '../platform/paths.ts';
 
 /**
- * Quick Open's ranking (PRD §7.2.5): the name starting with the query, then containing it, then the path
+ * Quick Open's ranking (PRD §6.3): the name starting with the query, then containing it, then the path
  * containing it, then the name and then the path holding the query's letters in order. Ties go to the more
  * recently opened file, then to the path. With no query, recent files first, then the rest by path.
  */

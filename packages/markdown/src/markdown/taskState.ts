@@ -1,5 +1,5 @@
 /**
- * What a task-list item's box says (PRD §8.3.2). One character between the brackets, three states:
+ * What a task-list item's box says (PRD §11.4). One character between the brackets, three states:
  * `[ ]` not started, `[/]` in progress, `[x]` done. Any other character is not a box; the line stays literal
  * text. This is dialect, not presentation: colour and glyph belong to the surfaces.
  */

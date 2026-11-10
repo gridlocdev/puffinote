@@ -3,7 +3,7 @@ import type { Notebook, Tab } from '../notebook/notebook.ts';
 import { Icon } from './Icon.tsx';
 import type { ShellModel } from './shellModel.ts';
 
-/** The open documents (PRD §7.3): click to show, middle-click or × to close, right-click for the closing verbs. */
+/** The open documents (PRD §7): click to show, middle-click or × to close, right-click for the closing verbs. */
 export function TabStrip({ model, nb }: { readonly model: ShellModel; readonly nb: Notebook }) {
   const tabs = nb.tabs.value;
   const active = nb.active.value;

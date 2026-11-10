@@ -1,52 +1,18 @@
 {
-  "name": "Puffinote (.NET 10)",
+  "name": "Puffinote (Node 22)",
   "build": {
     "dockerfile": "Dockerfile"
   },
   "features": {
     "ghcr.io/devcontainers/features/github-cli:1": {}
   },
-  // Restore all three solutions once the container is built, so IntelliSense and the first build are
-  // fast in whichever area you open. (`just restore` does the same; it's spelled out here so the
-  // container still provisions if the justfile moves.) Serial on purpose — concurrent `dotnet`
-  // invocations deadlock on the MSBuild-node locks. The desktop GUIs can't run headlessly anyway
-  // (Avalonia.Native RenderTimer -6661 without a display link), so this targets the build, the CLIs,
-  // and the headless test suites.
-  "postCreateCommand": "dotnet restore app/Puffinote.slnx && dotnet restore features/EditMarkdown/Typage.slnx && dotnet restore features/EditSpreadsheets/Cellestra.slnx",
-  // Cellestra's headless UI tests draw with real Skia, which HANGS where there's no display/GPU — as here.
-  // This var (read by Cellestra.UiTests/TestAppBuilder.cs) switches them to Avalonia's null drawing so
-  // `dotnet test` just runs. CI and a real desktop leave it unset and keep real Skia, so render-capture
-  // tests get real frames there. Typage's and Puffinote's UI tests always use null drawing and ignore this.
-  //
-  // The rest cut the per-build memory footprint, which matters whenever more than one thing here is
-  // building — several agent worktrees in one container, or a build alongside the C# Dev Kit's own
-  // MSBuild. Server GC reserves a GC heap per logical core, so a handful of concurrent .NET processes
-  // reserve enormously before doing any real work; workstation GC costs some throughput on a single
-  // build and roughly halves resident memory when several overlap. Node reuse otherwise keeps MSBuild
-  // workers alive ~15 minutes after a build holding their heaps, and the MSBuild server is a third
-  // resident process. See "Never run two dotnet build/test invocations at once" in AGENTS.md.
-  "containerEnv": {
-    "CELLESTRA_HEADLESS_NULL_DRAWING": "1",
-    "DOTNET_gcServer": "0",
-    "MSBUILDDISABLENODEREUSE": "1",
-    "DOTNET_CLI_USE_MSBUILD_SERVER": "0"
-  },
+  "postCreateCommand": "pnpm install",
+  // The web dev server and the NAS server.
+  "forwardPorts": [5173, 8790],
   "customizations": {
     "vscode": {
-      "extensions": [
-        "ms-dotnettools.csdevkit",
-        "ms-dotnettools.csharp",
-        "AvaloniaTeam.vscode-avalonia",
-        "editorconfig.editorconfig"
-      ],
-      "settings": {
-        // There is no root solution — each area builds on its own. Puffinote is the default because it's
-        // the widest (it compiles both editors + shared/), but it excludes the standalone Desktop apps and
-        // the test projects: when you work inside a feature, switch with the C# Dev Kit solution picker to
-        // features/EditMarkdown/Typage.slnx or features/EditSpreadsheets/Cellestra.slnx.
-        "dotnet.defaultSolution": "app/Puffinote.slnx"
-      }
+      "extensions": ["dbaeumer.vscode-eslint", "esbenp.prettier-vscode", "editorconfig.editorconfig"]
     }
   },
-  "remoteUser": "vscode"
+  "remoteUser": "node"
 }

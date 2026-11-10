@@ -2,7 +2,7 @@
 export type BlockKind = 'normal' | 'fencedCode' | 'frontMatter' | 'indentedCode';
 
 /**
- * The block state carried from one line to the next (PRD §8.1). Only constructs that truly span lines need
+ * The block state carried from one line to the next (PRD §11.1). Only constructs that truly span lines need
  * carried state: fenced code (its fence char and length, so only a matching fence closes it), front matter
  * and indented code. The checkpoint cache stores this at every line so a viewport can resume tokenizing just
  * above itself.

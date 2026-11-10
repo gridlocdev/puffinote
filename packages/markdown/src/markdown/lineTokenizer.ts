@@ -6,7 +6,7 @@ import { token, type Token } from './token.ts';
 
 /**
  * Tokenizes one line given the block state it is entered with, and returns the state the next line is
- * entered with. This is the heart of the incremental line-based tokenizer (PRD §8): no document AST, just a
+ * entered with. This is the heart of the incremental line-based tokenizer (PRD §11): no document AST, just a
  * per-line classifier driven by carried block state. Tables and setext headings need a neighbouring line and
  * are decided one level up, in the model.
  *
@@ -75,7 +75,7 @@ function inFencedCode(
     return BlockStates.normal;
   }
   if (len > 0) output.push(token(lineStart, len, 'codeText', 'content'));
-  return entering; // an unterminated fence extends to the end of the file (PRD §7.4)
+  return entering; // an unterminated fence extends to the end of the file (PRD §10.2)
 }
 
 function normal(

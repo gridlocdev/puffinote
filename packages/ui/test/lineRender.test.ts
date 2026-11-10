@@ -38,7 +38,7 @@ function visible(md: string, sel: Selection, line = 0, mode: ViewMode = 'live'):
 const elsewhere = caretAt(10_000);
 const far = (md: string): Selection => caretAt(md.length);
 
-describe('concealment (PRD §7.4)', () => {
+describe('concealment (PRD §10.2)', () => {
   it('hides inline markers until the caret touches the node', () => {
     const md = 'a **bold** b\nnext';
     expect(visible(md, far(md))).toBe('a bold b');

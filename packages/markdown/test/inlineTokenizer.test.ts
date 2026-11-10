@@ -79,7 +79,7 @@ describe('inline tokenizer', () => {
     expect(hasType('# heading  \ntext', 'hardBreak')).toBe(false);
   });
 
-  it('keeps malformed constructs literal (PRD §7.4)', () => {
+  it('keeps malformed constructs literal (PRD §10.2)', () => {
     expect(hasType('a **unclosed bold', 'strong')).toBe(false);
     expect(hasType('a **unclosed bold', 'text')).toBe(true);
     expect(hasType('[not a link', 'linkUrl')).toBe(false);

@@ -29,7 +29,7 @@ export interface MarkdownEditorProps {
   readonly openLink?: (url: string) => void;
   readonly autoFocus?: boolean;
   readonly placeholder?: string;
-  /** Let the browser underline misspellings (PRD §7.5). */
+  /** Let the browser underline misspellings (PRD §10.3). */
   readonly spellcheck?: boolean;
   /** Where to scroll on mount (a tab coming back). */
   readonly initialScrollTop?: number;
@@ -40,13 +40,13 @@ const identity = (url: string): string => url;
 const defaultOpen = (url: string): void => void window.open(url, '_blank', 'noopener,noreferrer');
 const isMac = typeof navigator !== 'undefined' && /Mac|iPhone|iPad/.test(navigator.platform);
 
-/** The links a ⌘-click may open (PRD §7.5). */
+/** The links a ⌘-click may open (PRD §10.3). */
 export function isOpenableLink(url: string): boolean {
   return /^(https?:|mailto:)/i.test(url.trim());
 }
 
 /**
- * The live-preview Markdown editor (PRD §7). Built from scratch: lines render as DOM, a hidden textarea takes
+ * The live-preview Markdown editor (PRD §10). Built from scratch: lines render as DOM, a hidden textarea takes
  * keyboard, IME and clipboard input, and the caret and selection are drawn as an overlay from the offset ↔
  * visual map in `geometry.ts`.
  */

@@ -3,13 +3,13 @@ import { selectionIntersects, type Selection } from '@puffinote/text';
 
 /**
  * How the editor draws Markdown:
- * - `live`: live preview; markers conceal until the caret or selection reaches them (PRD §7.4).
+ * - `live`: live preview; markers conceal until the caret or selection reaches them (PRD §10.2).
  * - `source`: every marker shows, still styled.
  * - `raw`: the literal source in one monospace style.
  */
 export type ViewMode = 'live' | 'source' | 'raw';
 
-/** What is revealed on one line, from the selection (PRD §7.4). */
+/** What is revealed on one line, from the selection (PRD §10.2). */
 export interface LineReveal {
   /** The caret or selection touches this line: its line-prefix markers show. */
   readonly lineActive: boolean;

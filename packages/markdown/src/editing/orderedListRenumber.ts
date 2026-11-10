@@ -9,7 +9,7 @@ export interface RenumberResult {
 
 /**
  * Renumber the run of same-level ordered items starting at `startLine`, sequentially from that item's own
- * number, so inserting or removing an item keeps the numbering 1, 2, 3 (PRD §7.2). The run ends at the first
+ * number, so inserting or removing an item keeps the numbering 1, 2, 3 (PRD §10.1). The run ends at the first
  * line that isn't an ordered item at the same indent and quote depth. Returns null when `startLine` isn't an
  * ordered item or nothing needs changing.
  */

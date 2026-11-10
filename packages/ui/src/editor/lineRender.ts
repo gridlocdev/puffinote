@@ -78,7 +78,7 @@ const linePrefixTypes = new Set<TokenType>([
 ]);
 
 /**
- * Lay out one source line as styled segments, deciding which markers conceal (PRD §7.4):
+ * Lay out one source line as styled segments, deciding which markers conceal (PRD §10.2):
  * inline markers by their node, line-prefix markers by the caret's line, block fences by their block.
  */
 export function renderLine(

@@ -18,7 +18,7 @@ export interface MarkdownModelUpdate {
 }
 
 /**
- * The tokenized view of a document: per-line tokens plus the block-state checkpoint cache (PRD §8.1, §8.2).
+ * The tokenized view of a document: per-line tokens plus the block-state checkpoint cache (PRD §11.1, §11.2).
  * Every line records the state it was entered with, so rendering a viewport can resume from the nearest line
  * above, and an edit re-tokenizes only from its first affected line down, reusing the untouched prefix.
  */
@@ -62,7 +62,7 @@ export class MarkdownModel {
 
   /**
    * Re-tokenize after an edit, reusing the untouched prefix `[0, firstChangedLine)`. The worst case is O(n),
-   * such as an opening fence typed at the top (PRD §8.2); a common edit re-runs a short tail.
+   * such as an opening fence typed at the top (PRD §11.2); a common edit re-runs a short tail.
    */
   update(newDocument: TextDocument, firstChangedLine: number): MarkdownModelUpdate {
     const n = newDocument.lineCount;

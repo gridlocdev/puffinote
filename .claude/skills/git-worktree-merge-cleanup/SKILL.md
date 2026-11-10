@@ -33,13 +33,13 @@ failures look like data loss and are not.
    `git status` alone — see the audit below.
 2. **Record the original branch tips** so every step is recoverable.
 3. **`rebase` then `merge --ff-only`.** Never plain `git merge`; `--ff-only` is what
-   guarantees "no merge commits", and it *fails loudly* instead of silently
+   guarantees "no merge commits", and it _fails loudly_ instead of silently
    creating one.
 4. **Verify before you delete.** The build gate is the point of no return, not the
    merge.
 5. **Delete with `git branch -d`, never `-D`** — and know exactly what `-d`
    promises. It refuses unless the branch is merged into **the current `HEAD` or the
-   branch's own configured upstream** — *not* "merged into `main`". Run it while on
+   branch's own configured upstream** — _not_ "merged into `main`". Run it while on
    `main` (Step 6), and gate each delete on the check you actually trust:
    `git merge-base --is-ancestor <branch> main`.
 6. **Re-check state immediately before destructive ops.** Something else may be
@@ -66,9 +66,9 @@ done
 **A branch that is `0 ahead` has nothing to land.** Its tip is already an ancestor
 of `main` and it can be deleted outright. Don't rebase it, don't "merge" it.
 
-**Order the merges by file overlap.** Branches touching disjoint trees (e.g. `app/`
-vs `features/EditMarkdown/`) land cleanly in any order. Two branches touching the
-same files *will* conflict on the second one — land them adjacently so the conflict
+**Order the merges by file overlap.** Branches touching disjoint trees (e.g. `packages/markdown/`
+vs `apps/server/`) land cleanly in any order. Two branches touching the
+same files _will_ conflict on the second one — land them adjacently so the conflict
 is fresh in your head, and expect the second to need a real resolution.
 
 ## Step 2 — Safety audit (before anything destructive)
@@ -88,7 +88,7 @@ Record the tips so any mistake is a one-line recovery:
 for b in <branches> main; do echo "  $b = $(git rev-parse $b)"; done
 ```
 
-If a file *is* genuinely modified, stop and surface it. Everything downstream
+If a file _is_ genuinely modified, stop and surface it. Everything downstream
 assumes the worktrees are clean.
 
 ## Step 3 — Environment faults (fix these first, they will bite)
@@ -112,7 +112,7 @@ leaves them alone and they linger.
 
 Fix — rewrites only the pointers, never file content. **Run it from the main
 worktree root (`/workspaces/Puffinote`)**: the paths below are relative, and this
-fault *is* "the repo isn't where the pointers think it is", so a wrong CWD is
+fault _is_ "the repo isn't where the pointers think it is", so a wrong CWD is
 exactly the thing you can't assume away here:
 
 ```bash
@@ -141,7 +141,7 @@ git rev-parse HEAD:<file>       # HEAD
 git ls-files -s <file>          # index (2nd field)
 ```
 
-Cause: git's stat cache is *racily clean*. This git build compares mtimes at
+Cause: git's stat cache is _racily clean_. This git build compares mtimes at
 one-second granularity, and a checkout writes the files and the index within the
 same second, so the entries look potentially-dirty and `unpack_trees` refuses to
 overwrite them.
@@ -149,7 +149,7 @@ overwrite them.
 Optional diagnostic — `git update-index -q --refresh` re-hashes the suspect entries
 and, once it confirms the content is unchanged, clears the racily-clean flag and
 exits silently. That is a fast, direct proof of the "this is not data loss" claim
-(anything it *doesn't* clear is genuinely modified) before you commit to the detach
+(anything it _doesn't_ clear is genuinely modified) before you commit to the detach
 dance below. It is **not a fix**: the rebase's own internal checkout of `onto`
 rewrites those files with fresh mtimes and recreates the race — which is precisely
 why detach-and-rebase-in-the-main-repo is the reliable answer. Use it to diagnose,
@@ -157,7 +157,7 @@ not to unblock.
 
 What does **not** work (don't waste the cycles):
 
-- `git reset --hard` — rewrites files *and* index in the same instant, recreating
+- `git reset --hard` — rewrites files _and_ index in the same instant, recreating
   the race.
 - Backdating mtimes (`git ls-files -z | xargs -0 touch -d '1 hour ago'`) then
   refreshing — the rebase's own internal checkout of `onto` immediately rewrites
@@ -178,8 +178,8 @@ second. A stalled rebase reschedules the same `pick`, so the status output looks
 alarming ("1 command done" + the same commit still pending) — it isn't.
 
 Always `git rebase --abort` before retrying; a leftover `rebase-merge` directory
-makes the next attempt refuse with *"I am stopping in case you still have something
-valuable there"*, and leaves HEAD detached at the `onto` commit (so `git log` looks
+makes the next attempt refuse with _"I am stopping in case you still have something
+valuable there"_, and leaves HEAD detached at the `onto` commit (so `git log` looks
 like your branch was reset — it wasn't; the branch ref is intact).
 
 ## Step 4 — Rebase and land, one branch at a time
@@ -193,7 +193,7 @@ git checkout main
 git merge --ff-only <branch>      # fast-forward — no merge commit
 ```
 
-That sanity diff shows *only* main's changes for a **clean replay**. If you
+That sanity diff shows _only_ main's changes for a **clean replay**. If you
 hand-resolved a conflict (next section), your resolution legitimately shows up in it
 too — that's the rebase working, not a mistake. Don't read it as an alarm.
 
@@ -209,60 +209,45 @@ git log --merges <old-main>..main | wc -l   # MUST be 0
 The realistic conflict is **branch A renamed a symbol; branch B was written before
 that rename and still calls the old name, while also adding new behavior.**
 
-During a *rebase*, the sides are inverted from what you may expect:
+During a _rebase_, the sides are inverted from what you may expect:
 
 - `<<<<<<< HEAD` = the **new base** (`main`, already containing branch A)
 - `>>>>>>> <sha>` = the **commit being replayed** (branch B)
 
 Resolve by **keeping the new base's naming and layering the replayed commit's new
-behavior on top** — never by taking one side wholesale. Then run two *separate*
+behavior on top** — never by taking one side wholesale. Then run two _separate_
 checks before continuing — one for leftover markers, one for stale symbols:
 
 ```bash
 git diff --check                    # leftover conflict markers + whitespace errors
-grep -rn "<OldName>" app/ features/ shared/    # no stale refs to the renamed symbol
+grep -rn "<OldName>" packages/ apps/ --exclude-dir=node_modules --exclude-dir=dist   # no stale refs
 ```
 
 **Use `git diff --check` for markers, not a grep.** It is what git itself uses, it
-reports *all four* marker lines — including the `|||||||` base marker that a
+reports _all four_ marker lines — including the `|||||||` base marker that a
 diff3-style conflict adds and that a `<<<<<<</=======/>>>>>>>` grep misses — and it
 flags whitespace errors for free. (A marker grep does still catch a diff3 block via
 its other three lines, so it isn't wrong, just strictly weaker.) `--check` only
 looks at what you changed, so it can't be fooled by build artifacts.
 
 The stale-symbol grep is still yours to run — `--check` knows nothing about names.
-Ignore its hits under `obj/` and `bin/`: those are gitignored build artifacts and
-are routinely stale.
+Ignore its hits under `dist/`, `out/` and `.types/`: those are gitignored build
+artifacts and are routinely stale.
 
 ## Step 5 — Verify (the real gate)
 
-Per `AGENTS.md`, done means **format-check + build + test** for every area touched.
-**Warnings are errors** (`TreatWarningsAsErrors=true`), so "builds" means zero
-warnings. A hand-resolved conflict makes this mandatory, not optional.
-
-`just` may not be on `PATH` in every sandbox. The recipes are thin wrappers over
-`dotnet <verb> <area>.slnx`, so run them directly:
-
-| Area touched | Solution |
-|---|---|
-| `app/` (shell/CLI) | `app/Puffinote.slnx` |
-| `features/EditMarkdown/` (Typage) | `features/EditMarkdown/Typage.slnx` |
-| `features/EditSpreadsheets/` (Cellestra) | `features/EditSpreadsheets/Cellestra.slnx` |
-| `shared/` | **all three** — it compiles into every solution |
+Per `AGENTS.md`, done means **`just check`** (or `pnpm check` where `just` isn't on
+`PATH`): format check, lint, `tsc -b`, the vitest suites, then the build. It covers
+every package at once, so there is no per-area choice to make. A hand-resolved
+conflict makes this mandatory, not optional.
 
 ```bash
-dotnet build <area>.slnx                          # expect: 0 Warning(s), 0 Error(s)
-dotnet test  <area>.slnx
-dotnet format <area>.slnx --verify-no-changes     # exit 0 == formatted
+pnpm install --frozen-lockfile   # a branch may have changed the lockfile
+pnpm check                       # every step must pass
 ```
 
-**Never run two `dotnet build`/`dotnet test` invocations at once** — concurrent runs
-deadlock on the MSBuild-node lock and hang forever. Run them serially, one area at a
-time. (If it happens: kill `dotnet`/`testhost`/`MSBuild`, `dotnet build-server
-shutdown`, retry.)
-
-The GUI cannot launch in this headless container; verify UI behavior through the
-headless UI tests, not by running the app.
+Verify UI behaviour headlessly (the vitest DOM tests, or the built-in browser
+against `just run-web`), never by opening a visible window.
 
 ## Step 6 — Clean up
 
@@ -285,10 +270,10 @@ git worktree list && git --no-pager branch     # confirm
 ### What `-d` actually guarantees
 
 `git branch -d` refuses unless the branch is merged into **`HEAD` or the branch's
-own configured upstream** — it does *not* know you meant `main`. Two ways that bites:
+own configured upstream** — it does _not_ know you meant `main`. Two ways that bites:
 
 - **Run it from some other branch** and the merged-into-`HEAD` test fails, so `-d`
-  refuses a branch that *is* fully in `main`. Safe, but confusing — and it tempts you
+  refuses a branch that _is_ fully in `main`. Safe, but confusing — and it tempts you
   toward `-D`, which is the one thing you must not do here.
 - **A branch with an upstream that already contains it** gets green-lit on the
   strength of that upstream, even if local `main` doesn't have the commits.
@@ -300,8 +285,8 @@ changes meaning underneath you. Hence the explicit `git merge-base --is-ancestor
 is or what upstream claims.
 
 Both commands are chosen because they **fail rather than destroy**. If
-`git worktree remove` demands `--force`, or `git branch -d` refuses *while the
-`--is-ancestor` gate passed*, that is the tool telling you your safety audit was
+`git worktree remove` demands `--force`, or `git branch -d` refuses _while the
+`--is-ancestor` gate passed_, that is the tool telling you your safety audit was
 wrong — stop and re-examine, don't escalate the flag.
 
 Removing a worktree does **not** delete its branch; they're separate steps.
@@ -309,7 +294,7 @@ Removing a worktree does **not** delete its branch; they're separate steps.
 ## Traps
 
 - **Never text-parse `git branch` output — `grep -v '^\*'` especially.** It drops
-  the currently-checked-out branch from the list, so a branch that *is* merged simply
+  the currently-checked-out branch from the list, so a branch that _is_ merged simply
   vanishes from a `--merged main` listing (or survives a `--no-merged` one), and you
   report the opposite of the truth. This exact trap produced a wrong "these branches
   are unmerged" claim. In a worktree-heavy repo it's worse than the `*` alone
@@ -328,5 +313,5 @@ Removing a worktree does **not** delete its branch; they're separate steps.
   pushed, it is public — do not rewrite it.
 - **Don't push unless asked.** Landing on local `main` is the task; publishing is a
   separate decision.
-- **A stale `obj/`/`bin/` will echo old symbol names** back at your post-conflict
+- **A stale `dist/`/`.types/` will echo old symbol names** back at your post-conflict
   greps. Scope searches to source, or ignore artifact paths.

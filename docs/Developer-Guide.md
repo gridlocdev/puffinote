@@ -1,0 +1,104 @@
+# Developer guide
+
+Puffinote is TypeScript in a pnpm workspace: Preact and `@preact/signals` for the UI, Vite for the web
+build, Electron for the desktop app, and a dependency-free Node server and CLI that run straight from source
+with Node's type stripping. The rules in `AGENTS.md` at the repository root apply to everyone working on it.
+[ARCHITECTURE.md](ARCHITECTURE.md) explains how the code is laid out.
+
+## Getting set up
+
+You need Node 22.18 or later, pnpm (through `corepack enable`) and [just](https://github.com/casey/just).
+The devcontainer in `.devcontainer/` has all three.
+
+```bash
+just setup                # corepack enable, then pnpm install
+just run-web              # web client on http://localhost:5173 plus the NAS server on :8790
+just run-server           # the NAS server only, serving ./.nas-data, restarting on changes
+just run-desktop          # the desktop app in dev mode (builds the web client first)
+just preview-web          # the built client served by the NAS server, as on a NAS (:8790)
+just run-editor-demo      # the editor alone, with no shell, on http://localhost:5199
+just cli tree ~/Notes     # the puffinote CLI from source (any arguments)
+```
+
+- `just run-web` and `just run-server` serve `.nas-data/` in the repository as the root `Sample`. Put a
+  notebook folder in it to try the NAS flow. The folder is gitignored.
+- Without the NAS server, `pnpm --filter @puffinote/web dev` is the plain web app: it opens a folder through
+  the browser (Chromium) or uses the browser's private storage.
+- `just cli` runs from the folder you are in, so relative paths work as they would with an installed
+  `puffinote`.
+
+## Checking your work
+
+```bash
+just check            # everything: Prettier, ESLint, tsc -b, Vitest, then the build
+just test             # the tests once; narrow with a file or -t "name"
+just test-watch       # the tests in watch mode
+just lint             # ESLint
+just typecheck        # tsc -b over every package
+just fmt              # format every file
+just fmt-check        # check the formatting
+```
+
+`just check` must pass before every commit. When you change behaviour, add or update a test in that
+package's `test/` folder.
+
+Check UI changes headlessly: run `just run-web` (or `just preview-web`) and drive it in a browser that isn't
+in your way. The desktop app renders offscreen with `PUFFINOTE_HEADLESS=1`.
+
+## The spec and its references
+
+The product spec is [PRD.md](PRD.md). The code cites it as `PRD §n` in comments next to the behaviour a
+section describes. When you change behaviour, change the spec in the same commit. If you renumber a section,
+find its references with `grep -rn 'PRD §' packages apps`.
+
+## Adding a command
+
+1. Add it to the catalog: a shell command in `packages/ui/src/shell/shellModel.ts`, or an editor command in
+   `packages/ui/src/editor/editorCommands.ts`. Give it an id (`shell.`, `view.`, `edit.`, `format.` or
+   `insert.`), a title, a group, and a shortcut if it needs one.
+2. If the shortcut belongs to the shell, check it against the reserved set (PRD §8.2).
+3. The command menu, the shortcut and the desktop menu bar pick it up from the catalog. Nothing else needs
+   registering.
+4. Add a test for its behaviour.
+
+## Adding a Markdown construct
+
+1. Add the token types to `packages/markdown/src/markdown/token.ts`.
+2. Recognize it in `lineTokenizer.ts` (a block or line prefix) or `inlineTokenizer.ts` (inline). If it spans
+   lines, add its state to `blockState.ts`.
+3. Render it: styling in `packages/ui/src/editor/lineRender.ts` and `styles.css`, reveal rules in
+   `reveal.ts`, and HTML in `packages/markdown/src/html/htmlRenderer.ts`.
+4. Add tests next to the existing ones in `packages/markdown/test/`, and the construct to PRD §11.3.
+
+## The NAS server
+
+```bash
+just build-docker     # build the image (puffinote:latest)
+just run-docker       # run it against ./.nas-data on http://localhost:8790
+```
+
+The server is configured only through environment variables, listed at the top of `apps/server/src/main.ts`
+and in [ARCHITECTURE.md](ARCHITECTURE.md#server-appsserver). `compose.example.yaml` is the starting point for
+a NAS.
+
+## Building and packaging the desktop app
+
+```bash
+just build                # the web client and the desktop main process
+just build-desktop        # the desktop app only, into apps/desktop/out
+just package-desktop      # a .dmg and .zip (macOS), AppImage (Linux) or installer (Windows)
+just package-desktop-dir  # an unpacked app only, faster for local testing
+just install-desktop      # macOS: package and install into /Applications
+```
+
+- The package is signed ad hoc so it runs on Apple silicon. Swap the identity in
+  `apps/desktop/electron-builder.yml` for a Developer ID to distribute it.
+- `just install-desktop` moves an existing copy to the Trash first, and refuses while the app is running.
+  It registers the installed copy with Launch Services, so `puffinote <folder>` opens it.
+
+## Cleaning up
+
+```bash
+just clean        # remove build output
+just clean-all    # also remove every node_modules (run just setup after)
+```

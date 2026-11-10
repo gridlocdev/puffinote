@@ -24,7 +24,7 @@ export class EditorState {
   readonly mode = signal<ViewMode>('live');
   /** Bumps when `reveal` asks the surface to bring the caret into view. */
   readonly revealTick = signal(0);
-  /** The editor's indent unit for Tab (PRD §7.2: four spaces by default). */
+  /** The editor's indent unit for Tab (PRD §10.1: four spaces by default). */
   indentUnit = '    ';
 
   private modelValue: MarkdownModel;
@@ -84,7 +84,7 @@ export class EditorState {
     this.revealTick.value++;
   }
 
-  /** The selected Markdown source, which is what copy puts on the clipboard (PRD §7.2). */
+  /** The selected Markdown source, which is what copy puts on the clipboard (PRD §10.1). */
   selectedText(): string {
     const s = this.buffer.selection;
     return this.document.getText(selectionStart(s), selectionLength(s));

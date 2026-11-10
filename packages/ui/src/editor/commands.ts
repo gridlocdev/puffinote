@@ -56,7 +56,7 @@ function contentOf(line: string): string {
 // ----- Enter -----
 
 /**
- * Enter (PRD §7.2): continue a list or quote, exit an empty item, keep a code block's indent, and otherwise
+ * Enter (PRD §10.1): continue a list or quote, exit an empty item, keep a code block's indent, and otherwise
  * start a new paragraph, which is a blank line (`\n\n`) in the formatted views and one `\n` in raw view.
  */
 export function enterEdit(doc: TextDocument, sel: Selection, mode: ViewMode, context: EditContext): Edit {
@@ -154,7 +154,7 @@ function selectedLines(doc: TextDocument, sel: Selection): [number, number] {
 
 // ----- Tab / Shift+Tab -----
 
-/** Tab: indent list items or a multi-line selection; elsewhere insert one indent at the caret (PRD §7.2). */
+/** Tab: indent list items or a multi-line selection; elsewhere insert one indent at the caret (PRD §10.1). */
 export function indentEdit(doc: TextDocument, sel: Selection, indent = defaultIndent): Edit {
   const [a, b] = selectedLines(doc, sel);
   const isList = parseLinePrefix(doc.getLineText(a)).hasList;
@@ -180,7 +180,7 @@ export function outdentEdit(doc: TextDocument, sel: Selection, indent = defaultI
 // ----- Ordered-list renumbering -----
 
 /**
- * Fold ordered-list renumbering into `edit` (PRD §7.2), so typing an item or changing its depth leaves the
+ * Fold ordered-list renumbering into `edit` (PRD §10.1), so typing an item or changing its depth leaves the
  * numbers right in the same undo step. `lines` are lines of the edited document whose lists to check; by
  * default the caret's line and the line after it.
  */
@@ -256,7 +256,7 @@ function isWordChar(c: string): boolean {
 }
 
 /**
- * Typing `ch` (PRD §7.2): wrap a selection in a pair, insert an empty pair at a word start, or step over a
+ * Typing `ch` (PRD §10.1): wrap a selection in a pair, insert an empty pair at a word start, or step over a
  * closer that is already there. Returns null for an ordinary insert.
  */
 export function typeCharEdit(doc: TextDocument, sel: Selection, ch: string): Edit | null {

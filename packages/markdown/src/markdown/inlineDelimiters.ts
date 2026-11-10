@@ -24,7 +24,7 @@ export function spanEnd(span: InlineDelimiterSpan): number {
 /**
  * The top-level paired constructs (`~~`, `==`, and `*`/`_` runs of 1–3) inside `content`, in source order.
  *
- * The tokenizer emits emphasis, strike and highlight content as one flat token (PRD §8.4), so in
+ * The tokenizer emits emphasis, strike and highlight content as one flat token (PRD §11.6), so in
  * `***~~bold~~***` the `~~` has no token of its own. Anything that must see one level further in scans here:
  * the surface to draw the nested strike, the formatting toggles to find the run to remove. One level deep.
  */

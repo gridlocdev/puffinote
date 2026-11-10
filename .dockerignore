@@ -3,7 +3,5 @@
 **/out
 **/release
 **/.types
-**/bin
-**/obj
 .git
 .nas-data

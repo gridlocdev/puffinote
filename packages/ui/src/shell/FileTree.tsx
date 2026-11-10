@@ -18,8 +18,8 @@ interface DragState {
 }
 
 /**
- * The notebook's file tree (PRD §7.2): one focusable `tree` whose rows are moved through with the keyboard
- * (§7.2.2), a context menu per row, and a drag-to-move the tree draws itself — a ghost, an outline on the
+ * The notebook's file tree (PRD §6): one focusable `tree` whose rows are moved through with the keyboard
+ * (§6.1), a context menu per row, and a drag-to-move the tree draws itself — a ghost, an outline on the
  * folder it would land in, and a hovered closed folder opening after a second.
  */
 export function FileTree(props: {
@@ -54,7 +54,7 @@ export function FileTree(props: {
     else void model.openFile(node.path);
   };
 
-  // ----- Keyboard (PRD §7.2.2) -----
+  // ----- Keyboard (PRD §6.1) -----
   const onKeyDown = (e: KeyboardEvent) => {
     if (e.metaKey || e.ctrlKey) {
       if ((e.key === 'Backspace' || e.key === 'Delete') && selected) {

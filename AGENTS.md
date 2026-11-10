@@ -1,283 +1,61 @@
-# AGENTS.md
-
-Orientation for an AI coding agent (and any human) working anywhere in the **Puffinote** repository. Read this first. It covers what's true across the whole repo; each area then has its own `AGENTS.md` with the detail that matters once you're working inside it — **read that area's guide before you touch its code.**
-
-## What Puffinote is
-
-A monorepo for **Puffinote**, a notebook-style workspace that composes independent, from-scratch native editors into one shell:
-
-- **Typage** — a Markdown (`.md`) live-preview editor.
-- **Cellestra** — an OpenDocument Spreadsheet (`.ods`) editor (macOS-first for 1.0).
-- **Plaintain** — a plaintext (`.txt`, `.log`, anything decodable) editor.
-- **Pivotask** — a task board (`.pivotask`).
-- **Puffinote** — the composite shell/app that embeds them, plus a unifying CLI.
-
-Each editor builds, tests, and ships on its own; the shell embeds them without reaching into their internals. Removing Puffinote must leave every editor fully working.
-
-## Repository map
-
-```
-app/                          Puffinote — the composite shell (Desktop + CLI) that embeds the editors
-features/EditMarkdown/        Typage — the Markdown editor (engine, control, desktop, CLI, tests)
-features/EditSpreadsheets/    Cellestra — the spreadsheet editor (core, editor, charts, desktop, CLI, tests)
-features/EditPlaintext/       Plaintain — the plaintext editor (control, desktop, CLI, tests)
-features/ManageTasks/         Pivotask — the task board (core, control, desktop, CLI, tests)
-shared/                       Cross-cutting libraries used by the shell and the editors:
-                                Puffinote.Components (Avalonia: theming, icons, overlays, shell chrome)
-                                Puffinote.Components.Core (non-UI: CLI helpers — safe for CLI projects)
-                                Puffinote.Text (non-UI: piece table, graphemes, selection, undo, search, file codec)
-docs/                         PRD / ARCHITECTURE (per-area) + proposals/ (repo-wide)
-build/                        package-mac.sh — the shared macOS .app bundler for every app
-justfile                      Build/test/format/ship entry points for every area — prefer these
-Directory.Build.props         Shared MSBuild settings (framework, nullable, analyzers, OS-specific bin/obj)
-Directory.Packages.props      Central NuGet version pins — the single source of truth for versions
-```
-
-There is no single root solution. Each area has its own:
-
-| Working on… | Read its guide | Build/test solution |
-|---|---|---|
-| The shell / CLI (`app/`) | [`app/AGENTS.md`](app/AGENTS.md) | `app/Puffinote.slnx` |
-| Markdown editor (`features/EditMarkdown/`) | [`features/EditMarkdown/AGENTS.md`](features/EditMarkdown/AGENTS.md) | `features/EditMarkdown/Typage.slnx` |
-| Spreadsheet editor (`features/EditSpreadsheets/`) | [`features/EditSpreadsheets/AGENTS.md`](features/EditSpreadsheets/AGENTS.md) | `features/EditSpreadsheets/Cellestra.slnx` |
-| Plaintext editor (`features/EditPlaintext/`) | [`features/EditPlaintext/AGENTS.md`](features/EditPlaintext/AGENTS.md) | `features/EditPlaintext/Plaintain.slnx` |
-| Task board (`features/ManageTasks/`) | [`features/ManageTasks/AGENTS.md`](features/ManageTasks/AGENTS.md) | `features/ManageTasks/Pivotask.slnx` |
-
-`shared/` has no guide of its own because it isn't an area you work in — it's a dependency of every other one. Its projects are compiled into **every solution**, so a change there is a change to every area: build and test them all (`just check`) before you call it done.
-
-**What belongs in `shared/`, and the things that deliberately don't.** Both editor proposals deferred a
-rule-of-three review to Phase 5; it has been done, and its answers are worth not re-deriving:
-
-| Candidate | Verdict |
-|---|---|
-| The **find bars** (Typage's and Plaintain's) | **Not promoted.** They look alike and are not: Typage's is a controller bound to its editor that also replaces text and reveals matches through concealed syntax; Plaintain's is a passive strip that raises events and lets the editor paint its own highlights. One control with two modes is two controls with extra steps. |
-| The find bars' **match wording** ("3 of 17" / "No results") | **Promoted** → `Puffinote.Text`'s `SearchStatus`. Two apps showed the reader the same phrases, they agreed exactly, and nothing but luck was keeping them agreeing. The shared-vocabulary rule below covers a phrase for the same reason it covers a name. |
-| Pivotask's **label chip** and **due pill** | **Not promoted.** They are already one function inside Pivotask (`TaskCard.Chip`) serving four callers, and no other app has anything of the shape. That is a local abstraction doing its job, not duplication. |
-| The **one-file watcher** and **file stamp** | **Promoted** → `OpenFileWatcher`, `FileStamp`. Five apps needed the identical, fiddly plumbing. |
-| **Launching an app on a document** (from its CLI) and **receiving one** (from the desktop) | **Promoted** → `AppLauncher` (`Puffinote.Components.Core`), `DocumentActivation` (`Puffinote.Components`). Five CLIs and five shells, and the half that was missing was missing from four of them at once — see [Opening a document](#opening-a-document). |
-| The **crash-recovery snapshot** | **Promoted** → `RecoveryService`. Two text editors, nothing app-specific once the app name is a parameter. Stays text-shaped: a workbook is not a string. |
-| The **macOS app menu** and **About card** | **Promoted** → `MacAppMenu`, `AboutDialog`. Five apps, four strings' difference. |
-
-The rule that decided each of these: promote when the *duplication* is real, not when the *resemblance*
-is. Two things that would have to grow a mode to share an implementation are two things.
-
-When this file and an area guide or a linked doc disagree, the deeper doc wins for design detail; this file wins for repo-wide process.
-
-## Tech stack (do not change without being asked)
-
-- **C# on .NET 10** (`net10.0`); SDK pinned in `global.json`.
-- **Avalonia 12.0.4** for UI (compiled bindings on); SkiaSharp 3.
-- **xUnit v3** for tests; headless UI via `Avalonia.Headless.XUnit`.
-- **MIT** licensed.
-
-Versions are pinned centrally in `Directory.Packages.props` (central package management is on) — never hardcode a version elsewhere. `Directory.Build.props` makes the SDK analyzers an enforced gate: `nullable` enable, `EnableNETAnalyzers`, `AnalysisLevel=latest`, `EnforceCodeStyleInBuild=true`, and **`TreatWarningsAsErrors=true`** — so any analyzer or style warning fails the build (see [Build & test](#build--test)).
-
-## Build & test
-
-The `justfile` is the front door — it knows every area's solution path, so you don't have to. Bare `just` lists every recipe, grouped by area, and `just` searches upward for it, so recipes work from any directory in the repo (no `-C` dance).
-
-```bash
-just build                                # every area   (also: just test, just format)
-just build-typage                         # one area     (verb-first: <verb>-puffinote | -typage | -cellestra | -plaintain | -pivotask)
-just test-filter SomeTest typage          # one test / a subset — prefer this while iterating
-just check                                # format-verify + build + test, every area
-```
-
-Every recipe is a thin wrapper over `dotnet build|test|format <area>.slnx` (e.g. `features/EditMarkdown/Typage.slnx`) — **if `just` isn't on `PATH`, run those directly**; they're equivalent, and some agent sandboxes aren't the devcontainer. (`just --dry-run <recipe>` prints the exact commands a recipe would run.) Likewise, if `dotnet` isn't on `PATH`, `export PATH="$PATH:/root/.dotnet"` (and `libicu` must be installed).
-
-**Before running any test, export `CELLESTRA_HEADLESS_NULL_DRAWING=1` unless you are on CI or a real desktop.** Cellestra's headless UI tests draw with real Skia, which **hangs** where there is no display/GPU — and it hangs *silently*, before the first test reports, so it reads as "the tests are slow" rather than as an error. `.devcontainer/devcontainer.json` sets the variable via `containerEnv`, but **a shell that didn't come from the devcontainer does not get it** — which is most agent sandboxes and any `docker exec`. Check it, don't assume it:
-
-```bash
-echo "${CELLESTRA_HEADLESS_NULL_DRAWING:-<UNSET>}"   # <UNSET> ⇒ export it before testing
-export CELLESTRA_HEADLESS_NULL_DRAWING=1
-```
-
-`just` does **not** set it either, so `just test`/`just check` hang the same way without it. Only Cellestra reads it — Typage, Plaintain, Pivotask, and Puffinote always use null drawing. Details and the `AssertRenders()` rule for render-capture tests: [`features/EditSpreadsheets/AGENTS.md`](features/EditSpreadsheets/AGENTS.md). Whole-suite timings with it set, as a sanity check: Cellestra ~10s, Typage ~4s, Puffinote ~4s — if a suite runs for minutes, it is hung, not busy.
-
-**Shipping.** The same front door publishes and installs each app; all of it is macOS-first, and only the
-`.app` targets require a Mac (the container can still publish):
-
-```bash
-just publish                              # CLI + desktop, self-contained Release → artifacts/<app>/<rid>/
-just install                              # every app, both halves: CLI onto PATH + .app into /Applications
-                                          #   (CLI alone off macOS; override: just PREFIX=/usr/local install)
-just install-cli                          # only the CLIs — what a Linux container can install
-just install-cellestra-skill              # + the cellestra agent skill into ~/.claude/skills (inverse: uninstall-cellestra-skill)
-just publish-typage-app                   # artifacts/typage/<rid>/Typage.app  (also: just install-app)
-```
-
-Bundle metadata is per app (`<App>.Desktop/Info.plist`); the bundling, signing, and notarization logic is
-shared in `build/package-mac.sh` — extend that script rather than adding a per-area copy.
-
-Everything here has an exact inverse — `just unpublish` for what publish wrote under `artifacts/`,
-`just uninstall` for both halves of every app, `just uninstall-cli` for the CLIs alone, `just
-uninstall-app` for the bundles alone (which also withdraws their Launch Services file-type claims). `unpublish` is RID-precise, so a cross-published `osx-x64` tree survives it;
-`just clean` is the blunt one and takes `artifacts/` entirely. No inverse removes `PREFIX/bin` itself or
-an app's user data under `~/Library/Application Support`: uninstalling a tool is not consent to delete
-someone's documents, settings, or unsaved-work snapshots.
-
-**Definition of done:** `just check` passes for every area you touched — i.e. formatting verified, solution builds clean, tests green. Warnings **are** errors here (`TreatWarningsAsErrors=true`), so a warning fails the build — "builds" already means "no warnings," this is not advisory. Formatting is a gate too: `just format-check` runs `dotnet format --verify-no-changes`, and a non-zero exit is a failure to fix, not a suggestion.
-
-**Two ways a `*.UiTests` run hangs with no output**, both of which read as "the build lock again" and are
-not. The run sits there and eventually dies at ~60s with `Xunit.Sdk.TestPipelineException`, or is
-OOM-killed (exit 137); the offending class passes on its own under `--filter`, which is what makes it look
-like a flake:
-
-- **A plain `[Theory]`.** Use `[AvaloniaTheory]` in these projects. (`[Fact]` mixed in is fine.)
-- **A modal left standing on an `OverlayHost`** — including a fire-and-forget
-  `_ = _overlay.ShowModalAsync(…)` that nothing awaits. A headless run has nobody to dismiss it. Either
-  keep the prompt out of the path under test (Typage's and Plaintain's external-change code split the
-  *decision* from the *prompt* for exactly this reason, and test the decision) or dismiss it through a
-  seam that calls `OverlayHost.Close()`.
-
-  **Never block on a `Task` in one of these tests** — `.Result`, `.Wait()`, `.GetAwaiter().GetResult()`.
-  Its continuations need the UI thread, which is the thread you just blocked, so a prompt that never got
-  answered deadlocks the whole run instead of failing the one case. Pump and assert instead:
-  `Dispatcher.UIThread.RunJobs(); Assert.True(task.IsCompleted, "…still waiting on a dialog");` and only
-  then unwrap it. The `Settle` helper in the `OpenFromDesktopTests` of Typage, Pivotask, and Puffinote is
-  that, three lines.
-
-  Check what the window's document *is* before assuming it is clean: Pivotask's never-saved
-  `BoardDocument` compares dirty by construction, so a fresh window there prompts on every open (its
-  [area guide](features/ManageTasks/AGENTS.md) explains why).
-
-Bisect with `dotnet test <project>.csproj --no-build --filter "FullyQualifiedName~<Name>"` before
-suspecting anything else — and give it a hard `timeout`, so a hang costs you seconds rather than the
-suite's full 60s-to-10min death.
-
-**Never run two `dotnet build`/`dotnet test` invocations at once** — concurrent runs deadlock on the MSBuild-node and build-output locks and hang indefinitely, and they are also what gets a container OOM-killed: each build brings MSBuild worker nodes (one per core by default), a Roslyn `VBCSCompiler` that outlives it, restore, and a `testhost` per test project. (This is why `just check` is serial — recipe dependencies run one at a time, in the order written.) If it happens: kill the `dotnet`/`testhost`/`MSBuild` processes, `dotnet build-server shutdown`, retry.
-
-That rule holds *across* worktrees, not just within one — several agents in `.claude/worktrees/*` share one container's memory. Editing in parallel is fine; building in parallel is not. In a sandbox with no lock of its own, take one:
-
-```bash
-flock -w 900 /tmp/dotnet-build.lock dotnet build features/EditMarkdown/Typage.slnx
-```
-
-**If a build sits there having printed `agentbox: waiting for the dotnet build lock`, it is queued, not hung** — some container wraps `dotnet` in exactly that lock, so a build starts only once the one ahead of it finishes. Let it block. Killing `dotnet`/`MSBuild`/`testhost` or rerunning the command in another shell is the wrong move, and it is the move the "if a suite runs for minutes, it is hung" rule above would otherwise push you toward. The message names the holder (pid, working directory, command line); a `dotnet` that exits **199** never built anything — it timed out waiting, which is not a build failure, so re-run it (optionally with a longer `AGENTBOX_BUILD_LOCK_WAIT`) rather than going looking for a compile error. Locks are held by a live process and released when it exits, so there is never a stale lock file to clear by hand.
-
-**Never pipe a build's output — redirect it to a file.** `dotnet build … | tail` (or `| grep`, or any
-pipe) reads as a ten-minute hang and is not one: the build spawns `VBCSCompiler`, Roslyn's shared
-compiler server, which **outlives it by design** — idling ~10 minutes before exiting — while still
-holding the stdout it inherited. The reader on the far end of the pipe therefore never sees EOF, and the
-command blocks for that whole idle timeout after `dotnet` has already exited, verdict and all. Measured:
-a Cellestra build that finished in 6.2s with `Build FAILED` sat on the pipe for 600s. Every solution here
-builds in **3–8 seconds**, so anything longer is this, not a slow build. Write to a log and read the log:
-
-```bash
-LOG=$(mktemp); flock -w 1800 /tmp/dotnet-build.lock \
-  dotnet build features/EditSpreadsheets/Cellestra.slnx -m:2 -p:UseSharedCompilation=false -nodeReuse:false \
-  > "$LOG" 2>&1 < /dev/null
-grep -E "error|Warning\(s\)|Error\(s\)" "$LOG"
-```
-
-`-p:UseSharedCompilation=false` is what stops the server outliving the build in the first place;
-`DOTNET_CLI_USE_MSBUILD_SERVER=0` does **not** cover it (that is the MSBuild server, a different
-process). To free one that is already stuck: `dotnet build-server shutdown`, then `pkill -f VBCSCompiler`.
-This is a third thing that looks like the build lock and isn't — check it before the two above.
-
-Memory-wise, a container running more than one worktree wants `DOTNET_gcServer=0` (workstation GC — the biggest single win, since Server GC reserves a heap per logical core), `MSBUILDDISABLENODEREUSE=1`, and `DOTNET_CLI_USE_MSBUILD_SERVER=0`; pass `-m:2` to `dotnet build` rather than letting MSBuild fan out to every core, and run `dotnet build-server shutdown` between tasks to reclaim the lingering compiler server. `.devcontainer/devcontainer.json` sets those three vars — a container it didn't build (an agent sandbox) does not have them.
-
-**CI:** only `.github/workflows/typage-ci.yml` exists, and its push/PR triggers are commented out (`workflow_dispatch` only) — so nothing is gated for you on push. `just check` locally *is* the gate.
-
-**Working with the analyzer/style rules.** The `.editorconfig` at the repo root is the single source of truth for style and diagnostic severities; `dotnet format` auto-fixes the large majority of violations, so run it first before fixing anything by hand. When something still fails the build:
-
-- **Fix the code, don't silence the rule.** Don't add blanket `#pragma`/`NoWarn` or downgrade a severity just to go green. Some rules have no code-fixer and must be fixed by hand — e.g. `CA2000` (dispose), `CA1063` (IDisposable pattern). Only edit `.editorconfig` to change a rule when that's genuinely the right call, and say why in the commit.
-- **`IDE0060` (unused parameter) is a non-blocking *warning*, not an error** (`WarningsNotAsErrors`), because the param is often required by a delegate/interface/override signature or is a placeholder for unwired behavior. Surface it — but **don't blind-delete a parameter to clear it**; a `sheet`/`hasHeader`-style unused param may be an incomplete feature, not cruft. Remove only when it's genuinely dead.
-- **Don't re-enable XML-doc validation.** `GenerateDocumentationFile=true` exists only so `IDE0005` (unused usings) reports at build; the doc-prose warnings (`CS1591`, `CS15xx`) are `NoWarn`ed on purpose. Don't remove those from `NoWarn` or start writing `<param>` docs to satisfy them — this isn't a published-docs library.
-- Test projects (`**/*Tests/**`) relax `CA1063`/`CA1816` — xUnit fixtures don't need the full `IDisposable` ceremony.
-
-Build artifacts live under OS-specific `bin/<os>/` and `obj/<os>/` paths (so Linux devcontainer builds don't collide with native host builds) and are git-ignored — never commit them.
-
-**Running.** The devcontainer is Linux and headless (no GPU), so launching a GUI (`just run-typage` and friends / `dotnet run --project *.Desktop`) fails *environmentally* — that's the container, not a regression in your change, and it is not something to debug. **Verify GUI behavior with headless UI tests, or through the CLI.** The CLI does run here:
-
-```bash
-dotnet run --project app/Puffinote.Cli -- info            # summarize the notebook in the current directory
-dotnet run --project app/Puffinote.Cli -- search "todo"   # full-text search the notebook (notes + sheet cells)
-dotnet run --project app/Puffinote.Cli -- md --help       # route into Typage's commands; `sheet …` routes to Cellestra
-```
-
-## Opening a document
-
-**Every CLI is named for its app, and opens its app's documents.** `puffinote`, `typage`, `cellestra`,
-`plaintain`, `pivotask` — no abbreviations. (Two of them shipped as `pltn` and `ptask`; that is reversed,
-with no compatibility shim. `just uninstall-plaintain` / `-pivotask` remove the old binary too, since
-nothing else ever would.) A first argument naming a document opens it in the app:
-
-```bash
-typage notes.md          cellestra budget.ods       pivotask work.pivotask
-plaintain server.log     puffinote ~/notes          puffinote ~/notes/todo.md
-```
-
-The four editors take a file, and refuse an argument whose extension they don't open — at the root of a
-verb set, an unrecognized token is far more likely a mistyped command than a document, and the error says
-both. Plaintain is the exception, because it opens *anything decodable*, so the only thing it can refuse
-is a path naming nothing. Puffinote takes a folder (a notebook) or a file (a document, plus the notebook
-holding it). Bare `typage`/`cellestra`/`pivotask`/`puffinote` still print help — they are toolkits first
-and launchers second — while bare `plaintain` opens an empty window, which is what a launcher does.
-
-**A document arrives two ways, and only one of them is argv.** A launch argument comes in as
-`desktop.Args`, read once at startup. macOS does not use it: Finder's "Open With", a double-click on a
-claimed extension, and `open -a <App> <file>` — which is how every CLI here reaches an *installed* app,
-running or not — all send a **bundled** app an Apple Event, which Avalonia surfaces as
-`IActivatableLifetime.Activated` carrying `FileActivatedEventArgs`. Claiming a type in `Info.plist` and
-handling only `args[0]` is what opened every association onto an empty "Untitled" document with the file
-dropped on the floor. Both halves are shared and must not be forked: **`AppLauncher`** (CLI side) and
-**`DocumentActivation`** (app side). Every `App` handles both routes through one `DocumentToOpen` rule.
-
-The two arrivals differ in one way that reaches the user: an argument lands before anything is on screen,
-while an activation can land over a document being edited — so it goes through the window's
-`OpenFromDesktop`, which waits out any open modal (`OverlayHost.WaitUntilClosedAsync` — the host shows one
-card at a time) and then asks before discarding unsaved work.
-
-## Shared vocabulary
-
-Five apps ship one family, so an element that appears in more than one of them has **one** name — in its
-label, its command title, its tooltip, its settings row, **its key in the config file, its command id**,
-and the PRD that specifies it. Two names for one thing is one thing the reader has to learn twice.
-
-| Term | What it is |
-|---|---|
-| **Command Bar** | The horizontal strip of commands at the top of Typage and Cellestra — the adaptive bar with the search pill at its right end. Three states: visible, collapsed (its slim handle), hidden. Not "toolbar", not "formatting toolbar". |
-| **Command Menu** | The searchable list of every command, opened with ⌘K or by clicking the Command Bar's "Search commands…" pill. Not "command palette" in anything a user reads. |
-
-**A config file is a surface, not an implementation detail.** Its keys are read and hand-edited by people,
-and a command id is the key a shortcut is rebound against in `shortcuts.json` and the value a Cellestra
-radial slot stores — so both follow this table too. `Toolbar` is `CommandBar` in Typage's `settings.json`
-(the name Cellestra's file already used), `view.commandPalette` is `view.commandMenu`, and Typage's
-`view.toolbar*` ids are `view.commandBar*`, which is what Cellestra had all along. A key named after a word
-the UI no longer uses is a third name for an element that is supposed to have one.
-
-Renaming an id does cost something real: a rebound shortcut or a radial slot pointing at the old id stops
-resolving, and the setting under the old key is not read. **No migration is provided** — that was a
-deliberate call, taken while the family is still finding its names, and the fallback in every case is the
-shipped default rather than a broken app.
-
-What does *not* follow the table: C# type and member names that never reach a file (`PaletteListView`,
-`PaletteCatalog`, `CommandPalette`, `IAppEnvironment.ShowCommandPalette`). They are free to be renamed and
-free to lag; nothing outside the compiler reads them. And `docs/proposals/` is exempt — those are records
-of what was decided when, and editing the words a past decision was written in is not a rename, it is a
-forgery.
-
-## Repo-wide golden rules
-
-1. **One-way layering.** Puffinote → editors + `shared/`; **nothing references Puffinote.** Editors don't depend on each other. If the shell needs a hook to embed an editor, add it to the *editor* or to `shared/`, never as a reach-in from Puffinote.
-2. **Compose, don't fork.** Embed the existing editor surfaces unchanged rather than copying them.
-3. **Guard the supply chain.** Trusted base is the .NET BCL + Avalonia (+ its native deps). No new NuGet package without a stated reason in the PR/commit; **never** add JavaScript/npm. First-party Avalonia-team controls (MIT) are pre-approved.
-4. **macOS-first for 1.0.** Ship quality on macOS first; other platforms must still build. (For why you can't launch a GUI to check your work, see [Build & test](#build--test).)
-5. **Nothing left to interpretation.** If a behavior isn't specified, check the area's PRD/ARCHITECTURE (`docs/`); if it truly isn't there, **stop and ask**, then record the answer in the relevant doc.
-
-## Agent workflow
-
-Delegate by read vs. write, mapped onto this repo's structure:
-
-- **Exploring or researching across the areas** (`app/`, `EditMarkdown/`, `EditSpreadsheets/`) → fan out: a subagent per area gathers findings that you synthesize centrally. Reads don't collide, so parallelism is a clean win here.
-- **Implementing a change** — especially one that spans the shell and an editor, or touches the one-way layering contract (golden rule #1) → keep it single-threaded. This is the write-heavy case where parallel agents make conflicting implicit decisions that are costly to reconcile, and the layering has to stay coherent across the edit.
-- **Whatever the shape: only one agent builds or tests at a time.** Fanned-out subagents must read, not `dotnet build`/`dotnet test` — concurrent MSBuild runs deadlock (see [Build & test](#build--test)). Verify centrally, after the fan-in.
+# Puffinote — agent guide
+
+A TypeScript notes app for folders of Markdown files. One UI runs in the browser, in the NAS server's client
+and in the Electron app; a CLI reads notebooks with the same engine. The spec is [docs/PRD.md](docs/PRD.md),
+the code layout is [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md), and the commands are in
+[docs/Developer-Guide.md](docs/Developer-Guide.md).
+
+## Gates
+
+- `just check` (= `pnpm check`) must pass before you commit: Prettier check, ESLint, `tsc -b`, Vitest, and the
+  build.
+- When you change behaviour, add or update a test in the package's `test/` folder, and update the PRD section
+  the code cites (`PRD §n`).
+- Check UI changes headlessly (a browser driven in the background, or the desktop app with
+  `PUFFINOTE_HEADLESS=1`). Never open a visible window to check your work.
+
+## Layout
+
+| Path                | What it is                                                                                                                         |
+| ------------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
+| `packages/text`     | Text documents: `TextDocument`, selections, graphemes, decoding, undo history, search, stats. No DOM or Node (ESLint enforces it). |
+| `packages/markdown` | The Markdown engine: incremental tokenizers, `MarkdownModel`, editing helpers, the HTML renderer, the outline. No DOM or Node.     |
+| `packages/ui`       | Preact and signals: the editor, the command catalog, the notebook model, the shell, and the `NotebookStore` adapters.              |
+| `apps/web`          | The Vite entry point. One static build serves the browser, the NAS server and the desktop app.                                     |
+| `apps/server`       | The NAS server (`node:http`): serves the client and `/api` for the configured roots. No framework.                                 |
+| `apps/desktop`      | The Electron shell: main process, sandboxed preload bridge, native menu, folder watcher.                                           |
+| `apps/cli`          | The `puffinote` CLI: notebook and note commands, run from source.                                                                  |
+
+## Golden rules
+
+1. **The engine packages stay pure.** `text` and `markdown` know nothing about the DOM, Node, Preact or
+   styling. The engine emits semantic tokens; concealment and styling belong to the editor.
+2. **The files are the source of truth.** No database. Editing never rewrites bytes the user didn't touch,
+   and a save writes exactly the buffer.
+3. **One command catalog.** The command menu, shortcuts, context menus and the Electron menu bar all read
+   it. Don't wire a key or a menu item past it.
+4. **The UI reaches files only through `NotebookStore`.** It never knows whether a notebook is in memory, in
+   the browser, on the NAS or on disk.
+5. **Never lose text.** Saves are atomic everywhere. A conflict is shown and the user chooses; nothing merges
+   or overwrites silently.
+6. **Security.** The Electron renderer is sandboxed with context isolation; its only native access is the
+   `puffinoteNative` bridge, and only inside folders the user granted. The server confines every path to
+   its root, symlinks included, and checks `Host` when there is no token.
+7. **Dependencies.** The runtime dependencies are Preact and `@preact/signals`. Don't add a third-party
+   package without the owner's approval. Pin versions exactly.
+8. **Nothing left to interpretation.** If a behaviour isn't in the PRD, stop and ask, then record the answer
+   in the PRD.
+
+## TypeScript conventions
+
+- Strict mode with `noUncheckedIndexedAccess` and `erasableSyntaxOnly`: no enums, parameter properties or
+  namespaces. Use union types and `const` objects.
+- Relative imports end in `.ts`. Use `import type` for types only.
+- Offsets are UTF-16 code units into the document. Caret motion goes by grapheme cluster.
 
 ## Git workflow
 
-- Always create a git worktree from the `main` branch, and rebase onto `main` before merging. Do not merge `main` into your branch.
-- Keep commits small and coherent; split unrelated changes into separate commits.
-- Use **Conventional Commits** with an area scope, matching the existing history: `feat(puffinote): …`, `fix(cellestra): …`, `refactor(typage): …`, `test(typage): …`, `perf(…): …`.
-- Add a co-author line for your commit signature, e.g. `Co-Authored-By: <name> <email>`.
-- You may commit without approval, but do not commit if there are outstanding questions. Only commit work whose solution builds clean and tests green.
+- Work in a git worktree off `main`, and rebase onto `main` before landing. Don't merge `main` into a branch.
+- Keep commits small and coherent.
+- Use Conventional Commits with an area scope: `feat(puffinote): …`, `fix(editor): …`, `test(markdown): …`.
+- Commit only when `just check` is green and no questions are outstanding.

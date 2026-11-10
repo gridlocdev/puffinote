@@ -7,7 +7,7 @@ export type ListKind = 'none' | 'unordered' | 'ordered';
 
 /**
  * The parsed leading block structure of one line: indentation, an optional blockquote prefix, and an optional
- * list marker with a task box. The editing assists (Enter continuation and exit, list renumbering; PRD §7.2)
+ * list marker with a task box. The editing assists (Enter continuation and exit, list renumbering; PRD §10.1)
  * are decided from this. It mirrors the tokenizer's recognizers so the assists agree with what is styled.
  */
 export interface LinePrefix {
@@ -151,7 +151,7 @@ export function stripDuplicateTaskMarker(pasted: string, targetLine: string, car
   return incoming.hasTask ? pasted.slice(incoming.length) : pasted;
 }
 
-/** The prefix that begins the next sibling item or line, after a newline (PRD §7.2). */
+/** The prefix that begins the next sibling item or line, after a newline (PRD §10.1). */
 export function continuationPrefix(p: LinePrefix): string {
   let prefix = p.indentText + p.quote;
   if (p.list === 'unordered') prefix += `${p.bullet} `;

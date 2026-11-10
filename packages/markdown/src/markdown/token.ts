@@ -1,5 +1,5 @@
 /**
- * The semantic kinds the tokenizer emits (PRD §8.3, §10.1). The engine emits semantic tokens only — types,
+ * The semantic kinds the tokenizer emits (PRD §11.3; layering in ARCHITECTURE.md). The engine emits semantic tokens only — types,
  * source ranges and roles — and knows nothing about styling or concealment; those are the editor's job.
  *
  * - `headingMarker` is the `#` run of an ATX heading, with the level (1–6) in `meta`. A setext heading has no
@@ -47,7 +47,7 @@ export type TokenType =
 
 /**
  * Whether a token is visible rendered content or marker punctuation. The live preview keys concealment off
- * this: markers hide when the caret is away, content always shows (PRD §7.4, §10.1).
+ * this: markers hide when the caret is away, content always shows (PRD §10.2, §11.3).
  */
 export type TokenRole = 'content' | 'marker';
 
