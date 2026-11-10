@@ -16,6 +16,7 @@ import {
   FolderGrants,
   folderArgs,
   isAppUrl,
+  isOpenableDocument,
   readWithMtime,
   TEMP_FILE,
   watchTree,
@@ -43,6 +44,8 @@ protocol.registerSchemesAsPrivileged([
 interface WindowState {
   allowClose: boolean;
   stopWatch: (() => void) | null;
+  /** The notebook folder being watched. */
+  watchRoot: string | null;
   /** Running while a close request waits for the renderer's ack. */
   closeTimer: NodeJS.Timeout | null;
   /** The renderer crashed or was killed: nothing is left to ask about unsaved changes. */
@@ -74,6 +77,14 @@ const pendingOpen: string[] = grantAll(folderArgs(process.argv.slice(app.isPacka
 function stopWatching(state: WindowState): void {
   state.stopWatch?.();
   state.stopWatch = null;
+  const root = state.watchRoot;
+  state.watchRoot = null;
+  // Forget our saves in that folder unless another window still watches it.
+  if (root === null || [...windows.values()].some((s) => s.watchRoot === root)) return;
+  for (const p of knownMtime.keys()) {
+    const rel = path.relative(root, p);
+    if (!rel.startsWith('..') && !path.isAbsolute(rel)) knownMtime.delete(p);
+  }
 }
 
 function createWindow(): BrowserWindow {
@@ -97,6 +108,7 @@ function createWindow(): BrowserWindow {
   const state: WindowState = {
     allowClose: false,
     stopWatch: null,
+    watchRoot: null,
     closeTimer: null,
     rendererGone: false,
     unresponsive: false,
@@ -370,7 +382,10 @@ function registerIpc(): void {
     shell.showItemInFolder(await guard(e, p));
   });
   ipcMain.handle(Channels.openExternal, async (e, p: unknown) => {
-    const error = await shell.openPath(await guard(e, p));
+    const target = await guard(e, p);
+    // Never launch an app or script from a notebook: show it in the file manager instead.
+    if (!(await isOpenableDocument(target))) return shell.showItemInFolder(target);
+    const error = await shell.openPath(target);
     if (error) throw new Error(error);
   });
   ipcMain.on(Channels.watch, (e, root: unknown) => {
@@ -380,13 +395,17 @@ function registerIpc(): void {
     stopWatching(state);
     if (!grants.isRoot(root)) return;
     app.addRecentDocument(root);
+    state.watchRoot = root;
     state.stopWatch = watchTree(root, (paths) => {
       void Promise.all(
         paths.map(async (p) => {
           const known = knownMtime.get(p);
           if (known === undefined) return p;
           const s = await stat(p).catch(() => null);
-          return s && Math.abs(s.mtimeMs - known) <= 1 ? null : p; // our own save
+          if (s && Math.abs(s.mtimeMs - known) <= 1) return null; // our own save
+          // Changed by someone else, or gone: forget it, unless a newer save of ours landed meanwhile.
+          if (knownMtime.get(p) === known) knownMtime.delete(p);
+          return p;
         }),
       ).then((changed) => {
         const out = changed.filter((p): p is string => p !== null);

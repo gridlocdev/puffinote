@@ -19,6 +19,7 @@ import {
   FolderGrants,
   folderArgs,
   isAppUrl,
+  isOpenableDocument,
   readWithMtime,
   watchTree,
   withFileLock,
@@ -229,5 +230,24 @@ describe('isAppUrl', () => {
     expect(isAppUrl('app://evil/index.html')).toBe(false);
     expect(isAppUrl('https://puffinote/')).toBe(false);
     expect(isAppUrl(undefined)).toBe(false);
+  });
+});
+
+describe('isOpenableDocument', () => {
+  it('opens documents but never apps, scripts or folders', async () => {
+    const d = path.join(dir, 'openable');
+    await mkdir(path.join(d, 'Evil.app'), { recursive: true });
+    await mkdir(path.join(d, 'folder.pdf'));
+    await writeFile(path.join(d, 'note.PDF'), 'x');
+    await writeFile(path.join(d, 'run.command'), 'x');
+    await writeFile(path.join(d, 'noext'), 'x');
+    await symlink(path.join(d, 'run.command'), path.join(d, 'disguised.pdf'));
+    expect(await isOpenableDocument(path.join(d, 'note.PDF'))).toBe(true);
+    expect(await isOpenableDocument(path.join(d, 'run.command'))).toBe(false);
+    expect(await isOpenableDocument(path.join(d, 'noext'))).toBe(false);
+    expect(await isOpenableDocument(path.join(d, 'Evil.app'))).toBe(false);
+    expect(await isOpenableDocument(path.join(d, 'folder.pdf'))).toBe(false);
+    expect(await isOpenableDocument(path.join(d, 'disguised.pdf'))).toBe(false);
+    expect(await isOpenableDocument(path.join(d, 'missing.pdf'))).toBe(false);
   });
 });

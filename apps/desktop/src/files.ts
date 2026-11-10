@@ -122,6 +122,33 @@ export function withFileLocks<T>(paths: readonly string[], fn: () => Promise<T>)
   return run(0);
 }
 
+/**
+ * Document types that "Open in Default App" hands to the OS. Anything else (an `.app` bundle, a `.command`
+ * script, an `.exe`, a shortcut) could run code from a synced or shared notebook, so it is only revealed in the
+ * file manager.
+ */
+const OPENABLE = new Set(
+  (
+    'pdf txt text md markdown rtf csv tsv json xml html htm log yaml yml toml ' +
+    'png jpg jpeg gif webp avif svg bmp tif tiff heic heif ico ' +
+    'mp3 m4a aac wav flac ogg opus mp4 m4v mov webm mkv avi ' +
+    'doc docx xls xlsx ppt pptx odt ods odp odg pages numbers key epub'
+  ).split(' '),
+);
+
+/**
+ * May `p` be opened in its default app? Only a regular file whose name, and whose real name after following
+ * symlinks, has a document extension. Folders are refused: on macOS an `.app` is one.
+ */
+export async function isOpenableDocument(p: string): Promise<boolean> {
+  const real = await realpath(p).catch(() => null);
+  if (real === null) return false;
+  const s = await stat(real).catch(() => null);
+  if (!s?.isFile()) return false;
+  const ext = (name: string) => path.extname(name).slice(1).toLowerCase();
+  return OPENABLE.has(ext(p)) && OPENABLE.has(ext(real));
+}
+
 /** A file's bytes and the mtime of exactly those bytes (one handle, so no write can come between). */
 export async function readWithMtime(file: string): Promise<{ bytes: Uint8Array; modified: number }> {
   const h = await open(file, 'r');
