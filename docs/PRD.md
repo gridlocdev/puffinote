@@ -143,7 +143,9 @@ accent colour (§9) tints selections, active icons and highlights in both, light
     of the name: "Meeting 2024.11" becomes `Meeting 2024.11.md`.
   - A rename that changes only the case of a name works on disks that ignore case.
 - **Drag to move.** The tree draws the drag itself: a ghost under the pointer, an outline on the folder it
-  would land in, and a closed folder that opens after the pointer rests on it for a second.
+  would land in, and a closed folder that opens after the pointer rests on it for a second. Holding the
+  pointer near the tree's top or bottom edge for half a second scrolls the tree that way, faster the closer
+  the pointer is to the edge.
   - A drop on a folder means that folder. A drop on a file means the folder that holds it. A drop on the empty
     space means the top level.
   - A move that changes nothing, or a folder into itself, shows no indicator. A name that is already taken is
@@ -154,7 +156,9 @@ accent colour (§9) tints selections, active icons and highlights in both, light
 
 - ⌥⌘S focuses the tree; ⌥⌘E focuses the editor.
 - In the tree: ↑/↓ move, ←/→ collapse or expand (or go to the parent or first child), Home/End jump, typing
-  jumps to a matching name, Enter opens a file or toggles a folder, F2 renames, Delete deletes.
+  jumps to a matching name, Enter opens a file or toggles a folder, F2 renames, Delete deletes. Escape
+  selects the folder that holds the selected row.
+- On macOS, as in Finder, Enter renames the selected row and ⌘↓ opens it (Space also opens or toggles).
 - The tree is one ARIA `tree` with a visible focus ring.
 
 ### 6.3 Panels

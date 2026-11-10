@@ -1,4 +1,5 @@
 import { useLayoutEffect, useRef, useState } from 'preact/hooks';
+import { isMac } from '../commands/shortcut.ts';
 import type { Notebook } from '../notebook/notebook.ts';
 import { fileKind, visibleRows, type TreeNode, type TreeRow } from '../notebook/tree.ts';
 import { baseName, parentOf } from '../platform/paths.ts';
@@ -8,6 +9,10 @@ import type { ShellModel } from './shellModel.ts';
 const DRAG_START_PX = 4;
 const HOVER_OPEN_MS = 1000;
 const TYPE_AHEAD_MS = 800;
+/** Drag autoscroll (PRD §6.1): the edge band, the hold before it starts, and the top speed in px per frame. */
+const SCROLL_EDGE_PX = 28;
+const SCROLL_HOLD_MS = 500;
+const SCROLL_MAX_PX = 14;
 
 interface DragState {
   readonly path: string;
@@ -56,6 +61,12 @@ export function FileTree(props: {
 
   // ----- Keyboard (PRD §6.2) -----
   const onKeyDown = (e: KeyboardEvent) => {
+    const row = rows[selIndex];
+    if (isMac && e.metaKey && e.key === 'ArrowDown') {
+      e.preventDefault();
+      if (row) activate(row.node);
+      return;
+    }
     if (e.metaKey || e.ctrlKey) {
       if ((e.key === 'Backspace' || e.key === 'Delete') && selected) {
         e.preventDefault();
@@ -63,7 +74,6 @@ export function FileTree(props: {
       }
       return;
     }
-    const row = rows[selIndex];
     const go = (i: number) => {
       e.preventDefault();
       select(rows[Math.max(0, Math.min(rows.length - 1, i))]);
@@ -97,8 +107,24 @@ export function FileTree(props: {
       }
       case 'Enter':
         e.preventDefault();
+        // Finder renames on Enter; elsewhere Enter opens.
+        if (row) {
+          if (isMac) void model.rename(row.node.path);
+          else activate(row.node);
+        }
+        return;
+      case ' ':
+        e.preventDefault();
         if (row) activate(row.node);
         return;
+      case 'Escape': {
+        // Up one level: the folder that holds the selected row.
+        if (!row || parentOf(row.node.path) === root.path) return;
+        e.preventDefault();
+        e.stopPropagation();
+        nb.selected.value = parentOf(row.node.path);
+        return;
+      }
       case 'F2':
         e.preventDefault();
         if (row) void model.rename(row.node.path);
@@ -162,6 +188,44 @@ export function FileTree(props: {
       hoverTimer = null;
       hoverDir = null;
     };
+    // Autoscroll near the tree's top or bottom edge, after a short hold (PRD §6.1).
+    let edgeSince = 0;
+    let scrollFrame = 0;
+    let lastPointer: { x: number; y: number } | null = null;
+    const edgeSpeed = (y: number): number => {
+      const tree = ref.current;
+      if (!tree) return 0;
+      const r = tree.getBoundingClientRect();
+      const band = Math.min(SCROLL_EDGE_PX, r.height / 4);
+      if (y < r.top + band) return -SCROLL_MAX_PX * Math.min(1, (r.top + band - y) / band);
+      if (y > r.bottom - band) return SCROLL_MAX_PX * Math.min(1, (y - (r.bottom - band)) / band);
+      return 0;
+    };
+    const tick = (now: number) => {
+      scrollFrame = 0;
+      const tree = ref.current;
+      if (!tree || !lastPointer) return;
+      const speed = edgeSpeed(lastPointer.y);
+      if (speed === 0) {
+        edgeSince = 0;
+        return;
+      }
+      if (!edgeSince) edgeSince = now;
+      if (now - edgeSince >= SCROLL_HOLD_MS) {
+        const before = tree.scrollTop;
+        tree.scrollTop += speed;
+        if (tree.scrollTop !== before) {
+          const { dir } = targetAt(lastPointer.x, lastPointer.y);
+          setDrag({ path: node.path, x: lastPointer.x, y: lastPointer.y, target: dir });
+        }
+      }
+      scrollFrame = requestAnimationFrame(tick);
+    };
+    const stopScroll = () => {
+      if (scrollFrame) cancelAnimationFrame(scrollFrame);
+      scrollFrame = 0;
+      edgeSince = 0;
+    };
     const targetAt = (x: number, y: number): { dir: string | null; row: TreeNode | null } => {
       const tree = ref.current;
       const hit = document.elementFromPoint(x, y);
@@ -180,6 +244,8 @@ export function FileTree(props: {
       }
       const { dir, row } = targetAt(ev.clientX, ev.clientY);
       setDrag({ path: node.path, x: ev.clientX, y: ev.clientY, target: dir });
+      lastPointer = { x: ev.clientX, y: ev.clientY };
+      if (!scrollFrame && edgeSpeed(ev.clientY) !== 0) scrollFrame = requestAnimationFrame(tick);
       // A closed folder held under the pointer opens, so you can aim inside it.
       const closed = row?.kind === 'dir' && !expandedRef.current.has(row.path) ? row.path : null;
       if (closed !== hoverDir) {
@@ -193,6 +259,7 @@ export function FileTree(props: {
       window.removeEventListener('pointerup', onUp);
       window.removeEventListener('keydown', onKey, true);
       clearHover();
+      stopScroll();
       setDrag(null);
       if (drop && started && ev) {
         const { dir } = targetAt(ev.clientX, ev.clientY);
