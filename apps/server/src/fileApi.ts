@@ -276,8 +276,10 @@ export class FileApi {
     try {
       if (target && target.nlink > 1) {
         // A rename would split the hard link; write through it instead (not atomic, but keeps the link).
-        const handle = await open(dest, fsConstants.O_WRONLY | fsConstants.O_TRUNC);
+        // 'r+' then truncate: Windows refuses O_TRUNC passed as a number (EINVAL).
+        const handle = await open(dest, 'r+');
         try {
+          await handle.truncate(0);
           await handle.writeFile(bytes);
           await handle.sync();
         } finally {

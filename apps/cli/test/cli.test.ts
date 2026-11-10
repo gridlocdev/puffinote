@@ -211,7 +211,8 @@ describe('markdown commands', () => {
     expect(run(['html', at('Welcome.md'), '-o', link]).exit).toBe(0);
     expect(lstatSync(link).isSymbolicLink()).toBe(true);
     expect(readFileSync(target, 'utf8')).toContain('<h2>Puffins</h2>');
-    expect(statSync(target).mode & 0o777).toBe(0o600);
+    // Windows has no POSIX permission bits.
+    if (process.platform !== 'win32') expect(statSync(target).mode & 0o777).toBe(0o600);
     rmSync(link);
     rmSync(target);
   });

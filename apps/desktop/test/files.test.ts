@@ -45,7 +45,8 @@ describe('writeAtomic', () => {
     await writeFile(p, 'a');
     await chmod(p, 0o600);
     await writeAtomic(p, bytes('b'));
-    expect((await stat(p)).mode & 0o777).toBe(0o600);
+    // Windows has no POSIX permission bits.
+    if (process.platform !== 'win32') expect((await stat(p)).mode & 0o777).toBe(0o600);
     expect(await readFile(p, 'utf8')).toBe('b');
     expect(await readdir(sub)).toEqual(['a.md']);
   });
