@@ -40,6 +40,7 @@ export function FileTree(props: {
   const selected = nb.selected.value;
   const activePath = nb.active.value?.path.value ?? null;
   const showExt = nb.settings.value.showFileExtensions;
+  const doubleClick = nb.settings.value.treeClick === 'double';
   const selIndex = rows.findIndex((r) => r.node.path === selected);
   const ref = useRef<HTMLDivElement>(null);
   const [drag, setDrag] = useState<DragState | null>(null);
@@ -53,6 +54,10 @@ export function FileTree(props: {
   const select = (row: TreeRow | undefined) => {
     if (row) nb.selected.value = row.node.path;
   };
+
+  /** A plain click that opens a note or folder (not ⌥-click, and not when rows open with a double click). */
+  const opensOnClick = (e: MouseEvent) =>
+    !doubleClick && !e.altKey && !e.metaKey && !e.ctrlKey && !e.shiftKey;
 
   const activate = (node: TreeNode) => {
     if (node.kind === 'dir') props.onToggle(node.path, !expanded.has(node.path));
@@ -118,11 +123,12 @@ export function FileTree(props: {
         if (row) activate(row.node);
         return;
       case 'Escape': {
-        // Up one level: the folder that holds the selected row.
-        if (!row || parentOf(row.node.path) === root.path) return;
+        // Up one level: the folder that holds the selected row, or none (the notebook) from the top level.
+        if (!row) return;
         e.preventDefault();
         e.stopPropagation();
-        nb.selected.value = parentOf(row.node.path);
+        const up = parentOf(row.node.path);
+        nb.selected.value = up === root.path ? null : up;
         return;
       }
       case 'F2':
@@ -293,8 +299,11 @@ export function FileTree(props: {
       aria-label={props.label}
       aria-activedescendant={selIndex >= 0 ? `pn-tree-${selIndex}` : undefined}
       onKeyDown={onKeyDown}
-      onFocus={() => {
-        if (selIndex < 0 && rows.length > 0) select(rows.find((r) => r.node.path === activePath) ?? rows[0]);
+      onClick={(e) => {
+        // Empty space: nothing selected, so New Note and New Folder go in the notebook's top level.
+        // The path as dispatched: opening a folder can redraw the clicked icon out of the page before this runs.
+        const onRow = e.composedPath().some((el) => el instanceof Element && el.hasAttribute('data-path'));
+        if (!onRow) nb.selected.value = null;
       }}
       onContextMenu={(e) => {
         if ((e.target as HTMLElement).closest('[data-path]')) return;
@@ -319,9 +328,34 @@ export function FileTree(props: {
             title={n.path}
             style={{ paddingLeft: `${8 + row.depth * 14}px` }}
             onPointerDown={(e) => onPointerDown(e, n)}
-            onClick={() => {
+            onMouseDown={(e) => {
+              // A click that opens a note sends the keyboard to the editor, and one that opens a folder
+              // leaves the selection alone: either way the tree doesn't take the keyboard, so no row flashes
+              // the selection's accent.
+              if (opensOnClick(e)) e.preventDefault();
+            }}
+            onClick={(e) => {
               if (suppressClick.current) return;
+              if (opensOnClick(e)) {
+                // A note is selected once it's open; a folder opens or closes without being selected.
+                if (n.kind === 'file') void model.openFile(n.path).then(() => (nb.selected.value = n.path));
+                else activate(n);
+                return;
+              }
               nb.selected.value = n.path;
+              // A folder's arrow always opens or closes it.
+              if (doubleClick && n.kind === 'dir' && (e.target as Element).closest('.pn-chevron')) {
+                activate(n);
+                return;
+              }
+              // ⌥-click (or any click, when rows open with a double click) only selects, so Enter renames
+              // it; the tree keeps focus.
+              if (e.altKey || doubleClick) ref.current?.focus();
+              else activate(n);
+            }}
+            onDblClick={(e) => {
+              if (!doubleClick || e.altKey || suppressClick.current) return;
+              if (n.kind === 'dir' && (e.target as Element).closest('.pn-chevron')) return;
               activate(n);
             }}
             onContextMenu={(e) => {

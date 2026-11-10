@@ -105,7 +105,18 @@ function RailPanel({ model, nb }: { readonly model: ShellModel; readonly nb: Not
   const files = panel === 'files' || panel === 'filter';
   return (
     <aside class="pn-sidebar pn-card" style={{ width: `${nb.sidebarWidth.value}px` }} aria-label={title}>
-      <header class="pn-panel-head">
+      <header
+        class="pn-panel-head"
+        onClick={(e) => {
+          // Like the tree's empty space: a click off the buttons selects nothing, so New Note and New Folder
+          // add to the top level (PRD §6.2).
+          if (files && !(e.target as Element).closest('button')) {
+            nb.selected.value = null;
+            // The click was in the sidebar, so the keyboard goes there (↓ then picks the first row).
+            (e.currentTarget as HTMLElement).parentElement?.querySelector<HTMLElement>('.pn-tree')?.focus();
+          }
+        }}
+      >
         <h2 class="pn-panel-title">{title}</h2>
         {files && (
           <>
@@ -158,7 +169,12 @@ function RailPanel({ model, nb }: { readonly model: ShellModel; readonly nb: Not
           </>
         )}
       </header>
-      <div class="pn-panel">
+      <div
+        class="pn-panel"
+        onClick={(e) => {
+          if (files && e.target === e.currentTarget) nb.selected.value = null;
+        }}
+      >
         {panel === 'files' && (
           <FileTree
             model={model}

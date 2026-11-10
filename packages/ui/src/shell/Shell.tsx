@@ -47,6 +47,19 @@ export function Shell(props: {
     return () => window.removeEventListener('keydown', onKey);
   }, [model]);
 
+  // As on macOS, a click on a toolbar button (rail, panel header, tabs, view switch) leaves the keyboard where it
+  // was, so the caret stays in the note and a dialog's Cancel gives it back there (PRD §6.2). Tab still reaches
+  // the buttons, and buttons in dialogs and menus take focus as usual.
+  useEffect(() => {
+    const onMouseDown = (e: MouseEvent) => {
+      const t = e.target as Element | null;
+      if (t?.closest('button') && !t.closest('[role="dialog"], [role="menu"], [role="listbox"]'))
+        e.preventDefault();
+    };
+    window.addEventListener('mousedown', onMouseDown, true);
+    return () => window.removeEventListener('mousedown', onMouseDown, true);
+  }, []);
+
   // Unsaved work is never lost to a closed page; the session is written on the way out.
   useEffect(() => {
     const onBeforeUnload = (e: BeforeUnloadEvent) => {

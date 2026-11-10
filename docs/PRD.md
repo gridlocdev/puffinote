@@ -155,11 +155,25 @@ accent colour (§9) tints selections, active icons and highlights in both, light
 
 ### 6.2 Keyboard
 
-- ⌥⌘S focuses the tree; ⌥⌘E focuses the editor.
+- ⌥⌘S focuses the tree (on the open note when nothing is selected); ⌥⌘E focuses the editor.
+- The keyboard goes where the click was meant for. A click on a toolbar button (the rail, the panel's header
+  buttons, tabs, the view switch) leaves it where it was, as on macOS, so the caret stays in the note and a
+  cancelled dialog gives it back there. Tab still reaches those buttons.
+- A new note takes the caret. A new folder is selected with the keyboard on it in the tree, so Enter renames
+  it. The tree getting the keyboard back (after a dialog, say) never selects a row on its own.
 - In the tree: ↑/↓ move, ←/→ collapse or expand (or go to the parent or first child), Home/End jump, typing
   jumps to a matching name, Enter opens a file or toggles a folder, F2 renames, Delete deletes. Escape
-  selects the folder that holds the selected row.
+  selects the folder that holds the selected row, and from the top level selects nothing.
 - On macOS, as in Finder, Enter renames the selected row and ⌘↓ opens it (Space also opens or toggles).
+- A click on a file opens and selects it and puts the keyboard in the editor; a click on a folder opens or
+  closes it without selecting it, so the selection stays where it was. ⌥-click selects a row without opening
+  it and puts the keyboard in the tree, so Enter then renames it.
+- With **Open notes and folders with** set to a double click (§9), one click selects a row as ⌥-click does,
+  and a double click opens the file or opens or closes the folder. A folder's arrow still opens or closes it
+  with one click.
+- The selected row has an accent background: a tint, and the solid accent while the tree has the keyboard.
+- A click on the tree's empty space, or on the panel's header away from its buttons, selects nothing and puts
+  the keyboard in the tree, so New Note and New Folder add to the top level.
 - The tree is one ARIA `tree` with a visible focus ring.
 
 ### 6.3 Panels
@@ -225,21 +239,23 @@ Settings resolve in layers, lowest first: the defaults, the user's preferences (
 notebook's overrides in `.puffinote/settings.json`. The Settings dialog (⌘,) has two scopes over the same
 fields: **Preferences** and **This notebook**. A notebook field can be reset to inherit.
 
-| Setting                          | Values                                                   | Default                       |
-| -------------------------------- | -------------------------------------------------------- | ----------------------------- |
-| Appearance                       | Match system, Light, Dark                                | Match system                  |
-| Layout                           | Icon rail, Library and note list                         | Icon rail                     |
-| Accent colour                    | Blue, Amber, Teal, Purple                                | Blue                          |
-| Notes open in                    | Rich view, Formatted view, Raw text                      | Rich view                     |
-| Save automatically               | on/off                                                   | on                            |
-| Indent with                      | 4 spaces, 2 spaces, Tab                                  | 4 spaces                      |
-| Show file extensions             | on/off                                                   | off                           |
-| Show hidden files                | on/off                                                   | off                           |
-| Show tab bar                     | on/off                                                   | on                            |
-| Ask before opening other files   | on/off                                                   | on                            |
-| Save pasted pictures in          | The notebook's picture folder, A folder beside each note | The notebook's picture folder |
-| Picture folder                   | a folder name                                            | attachments                   |
-| When a picture is no longer used | Offer to delete it, Keep it                              | Offer to delete it            |
+| Setting                          | Values                                                             | Default                       |
+| -------------------------------- | ------------------------------------------------------------------ | ----------------------------- |
+| Appearance                       | Match system, Light, Dark                                          | Match system                  |
+| Layout                           | Icon rail, Library and note list                                   | Icon rail                     |
+| Accent colour                    | Blue, Amber, Teal, Purple                                          | Blue                          |
+| Notes open in                    | Rich view, Formatted view, Raw text                                | Rich view                     |
+| Save automatically               | on/off                                                             | on                            |
+| Move ticked tasks to the bottom  | on/off                                                             | on                            |
+| Indent with                      | 4 spaces, 2 spaces, Tab                                            | 4 spaces                      |
+| Open notes and folders with      | A single click (⌥-click selects), A double click (a click selects) | A single click                |
+| Show file extensions             | on/off                                                             | off                           |
+| Show hidden files                | on/off                                                             | off                           |
+| Show tab bar                     | on/off                                                             | on                            |
+| Ask before opening other files   | on/off                                                             | on                            |
+| Save pasted pictures in          | The notebook's picture folder, A folder beside each note           | The notebook's picture folder |
+| Picture folder                   | a folder name                                                      | attachments                   |
+| When a picture is no longer used | Offer to delete it, Keep it                                        | Offer to delete it            |
 
 ## 10. The editor
 
@@ -263,9 +279,10 @@ switched from the status bar or the View commands:
   In Raw text, Enter writes one newline. Either way, one press makes one visible line.
 - **Lists and quotes.** Enter continues a list item, task (always as `[ ]`), or quote. Enter on an empty
   top-level item leaves the block and lands on a visible line. An empty nested item goes up one level
-  instead. Enter with the caret at the start of an item (or inside its marker) opens one empty item above it
-  and keeps the caret at the start of the item's text. Ordered lists renumber as items are added, moved or
-  re-indented.
+  instead. Enter with the caret at the start of an item's text (or inside its marker) pushes the whole item
+  down, keeping its marker and tick, and keeps the caret at the start of its text. Inside a list it opens one
+  empty item above (a task as `[ ]`). On the first item of a list it opens a blank line above instead.
+  Ordered lists renumber as items are added, moved or re-indented.
 - **Tab and Shift+Tab** indent and outdent list items, by the Indent with setting. Elsewhere, Tab inserts the
   indent.
 - **Auto-pairing:** `*`, `_`, `` ` ``, `[` and `(` wrap a selection, or insert a pair. `*`, `_` and `` ` ``
@@ -276,6 +293,10 @@ switched from the status bar or the View commands:
 - **Formatting:** bold ⌘B, italic ⌘I, inline code ⌘E, strikethrough ⇧⌘X, highlight ⇧⌘H, headings ⌘1–⌘6,
   paragraph ⌘0, bullet list ⌘., numbered list ⌘/, blockquote, link ⌥⌘K, code block ⇧⌘E, horizontal rule.
 - **Tasks:** ⌘L toggles a checkbox (and adds one where there is none), ⌥⌘L steps the status, ⇧⌘L removes it.
+  With Move ticked tasks to the bottom on (§9), ticking a task done moves it below the open items of its
+  bulleted list, as Apple Notes does, and unticking moves it back to the end of the open ones. The item takes
+  its nested lines along, the rest keep their order, the caret moves with it, and one undo reverses it.
+  Numbered lists aren't reordered.
 - **Clipboard:** copy gives the Markdown source. Paste inserts plain text, and drops a duplicate task marker
   when pasting a task into a task.
 
@@ -286,11 +307,22 @@ switched from the status bar or the View commands:
 - **Inline marks** (emphasis, strikethrough, highlight, inline code, links, autolinks): the markers show when
   the caret or selection touches that node. Otherwise they are hidden and the styled text shows.
 - **Line-prefix marks** (heading `#`, `>`, list and task markers): they show when the caret is on the line.
-  A task is the exception: its `- [ ]` shows only when the caret or selection touches the marker's own
-  characters (before the bullet through right after `]`), so editing the task's text keeps the checkbox.
+  List items and tasks are the exception: their `-`, `1.` or `- [ ]` shows only when the caret or selection
+  touches the marker's own characters (from the line start through the bullet, number or `]`), so editing the
+  item's text keeps the bullet, number or checkbox, and the text doesn't move.
   When hidden, they are drawn as decorations: bullets, numbers, checkboxes, a quote bar.
+- **List items hang.** A list item's marker (indent, bullet or number, checkbox) sits in a column of its own
+  and the text in the next, so wrapped rows line up with the text above, as in Apple Notes, not under the
+  bullet. The column stays when the marker shows (in Rich and Formatted views; not in Raw text). A click
+  under the bullet or checkbox lands at the start of that row's text.
 - **Blocks** (fenced code, tables, front matter): the raw source shows when the selection touches the block.
 - A selection reveals every node it touches.
+
+**The caret sits where typing would put text.** Beside a checkbox or bullet it draws past the decoration's
+margin, at the text's start, as tall as the text. At a soft wrap it draws at the start of the row below, so
+↓ from the end of a wrapped row moves to the next row. ↑ and ↓ onto a list item at its left edge land at the
+start of its text, not before the bullet or checkbox. Home (⌘← on macOS) and ⌘↑ go to the start of an
+item's text first, and to the line start (revealing a task's `- [ ]`) when pressed again there.
 
 **Concealed markers are atomic.** Arrow keys skip over a hidden marker run. Once revealed, its characters are
 ordinary text. The offset ↔ visual map keeps clicks, arrows and selection on the right document offsets.
@@ -434,7 +466,8 @@ One character between the brackets, three states:
   struck through.
 - **A click on the box completes it**, and a click on a done box clears it. A click never stops at in
   progress on the way. To mark a task in progress, use ⌥⌘L (Next Task Status).
-- A state change rewrites the one character between the brackets and leaves the caret where it was.
+- A state change rewrites the one character between the brackets and leaves the caret where it was, unless
+  Move ticked tasks to the bottom moves the item (§10.1).
 - The HTML export draws the same three boxes as inline SVG.
 
 ### 11.5 Links

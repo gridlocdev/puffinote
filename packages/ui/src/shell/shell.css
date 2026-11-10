@@ -821,12 +821,19 @@
   color: var(--pn-accent) !important;
 }
 
+/* The selected row: an accent tint, and solid accent while the tree has the keyboard (as in Finder). */
 .pn-row[aria-selected='true']:not(.pn-row-active) {
-  background: var(--pn-hover);
+  background: var(--pn-row-selected-focus);
 }
 
 .pn-tree:focus .pn-row[aria-selected='true'] {
-  box-shadow: inset 0 0 0 1px var(--pn-accent);
+  background: var(--pn-accent);
+  color: var(--pn-on-accent);
+}
+
+.pn-tree:focus .pn-row[aria-selected='true'] > .pn-icon,
+.pn-tree:focus .pn-row[aria-selected='true'] .pn-chevron {
+  color: var(--pn-on-accent) !important;
 }
 
 .pn-row-name {

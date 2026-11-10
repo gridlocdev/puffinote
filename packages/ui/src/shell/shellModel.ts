@@ -105,6 +105,7 @@ export class ShellModel {
       state: () => this.activeState.peek(),
       focus: () => this.focusEditor(),
       input: () => document.querySelector<HTMLElement>('.pn-shell-main .pn-input'),
+      sortTasks: () => this.notebook.peek()?.settings.peek().sortCheckedTasks ?? false,
     });
     this.menuCatalog = new CommandCatalog([...shell, ...editor]);
   }
@@ -222,6 +223,10 @@ export class ShellModel {
       return;
     }
     if (nb.panel.peek() !== 'files' && nb.panel.peek() !== 'filter') nb.panel.value = 'files';
+    // With nothing selected, the keyboard starts on the open note. (Getting focus back, say from a dialog, keeps
+    // "nothing selected", so New Note still goes to the top level.)
+    const open = nb.active.peek()?.path.peek();
+    if (!nb.selected.peek() && open) nb.reveal(open);
     setTimeout(() => document.querySelector<HTMLElement>('.pn-sidebar .pn-tree')?.focus());
   }
 
@@ -431,7 +436,9 @@ export class ShellModel {
         invalidNameReason(v) ??
         (findNode(nb.tree.peek(), dir ? `${dir}/${v}` : v) ? `“${v}” already exists.` : null),
     });
-    if (name !== null) await nb.createFolder(dir, name);
+    if (name === null) return;
+    // Like Finder: the new folder is selected with the keyboard on it, ready to rename or fill (PRD §6.2).
+    if ((await nb.createFolder(dir, name)) && this.layout.peek() === 'rail') this.focusTree();
   }
 
   /** The folders `path` can move into (PRD §6.1), the top level (`''`) first. */

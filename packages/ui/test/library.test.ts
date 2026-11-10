@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { scopeList, sortNotes } from '../src/notebook/library.ts';
 import { excerptOf, imageInfo, relativeDate } from '../src/notebook/noteMeta.ts';
-import { sanitize } from '../src/notebook/settings.ts';
+import { resolveSettings, sanitize } from '../src/notebook/settings.ts';
 import { Notebook, sessionPath } from '../src/notebook/notebook.ts';
 import { memoryPrefs } from '../src/notebook/settings.ts';
 import { MemoryStore } from '../src/platform/memoryStore.ts';
@@ -11,6 +11,12 @@ describe('layout and accent settings', () => {
   it('keeps known values and drops others', () => {
     expect(sanitize({ layout: 'library', accent: 'teal' })).toEqual({ layout: 'library', accent: 'teal' });
     expect(sanitize({ layout: 'grid', accent: 'red' })).toEqual({});
+  });
+
+  it('opens tree rows with a single click unless set to a double click', () => {
+    expect(resolveSettings().treeClick).toBe('single');
+    expect(resolveSettings({ treeClick: 'double' }).treeClick).toBe('double');
+    expect(sanitize({ treeClick: 'triple' })).toEqual({});
   });
 });
 
