@@ -1,7 +1,10 @@
 import type { ComponentChildren } from 'preact';
 import { useLayoutEffect, useRef, useState } from 'preact/hooks';
 
-/** A modal dialog: Escape and the backdrop close it; focus moves in and goes back where it was on close. */
+/**
+ * A modal dialog: Escape and the backdrop close it; focus moves in, Tab and Shift+Tab cycle through its controls
+ * without leaving it, and focus goes back where it was on close.
+ */
 export function Dialog(props: {
   readonly title?: string;
   readonly onClose: () => void;
@@ -37,6 +40,12 @@ export function Dialog(props: {
               e.preventDefault();
               e.stopPropagation();
               props.onClose();
+            } else if (e.key === 'Tab' && ref.current) {
+              const els = focusables(ref.current);
+              if (els.length === 0) return;
+              const at = els.indexOf(document.activeElement as HTMLElement);
+              e.preventDefault();
+              els[nextTabStop(els.length, at, e.shiftKey)]!.focus();
             }
           }}
           onSubmit={(e) => {
@@ -51,6 +60,19 @@ export function Dialog(props: {
       </div>
     </div>
   );
+}
+
+/** Where Tab (or Shift+Tab, `back`) goes from stop `at` of `count`, wrapping; `at` is -1 when focus is elsewhere. */
+export function nextTabStop(count: number, at: number, back: boolean): number {
+  if (back) return at <= 0 ? count - 1 : at - 1;
+  return at < 0 || at === count - 1 ? 0 : at + 1;
+}
+
+/** The controls Tab stops on, in order: enabled, visible, and not taken out of the tab order. */
+function focusables(root: HTMLElement): HTMLElement[] {
+  return [
+    ...root.querySelectorAll<HTMLElement>('button, input, select, textarea, a[href], [tabindex]'),
+  ].filter((el) => !(el as HTMLButtonElement).disabled && el.tabIndex >= 0 && el.getClientRects().length > 0);
 }
 
 export interface PromptOptions {

@@ -3,6 +3,7 @@ import { Notebook } from '../src/notebook/notebook.ts';
 import { findNode } from '../src/notebook/tree.ts';
 import { memoryPrefs } from '../src/notebook/settings.ts';
 import { MemoryStore } from '../src/platform/memoryStore.ts';
+import { nextTabStop } from '../src/shell/Dialog.tsx';
 import { ShellModel } from '../src/shell/shellModel.ts';
 
 const buttons = [
@@ -100,6 +101,16 @@ describe('ShellModel editor menu', () => {
     m.openEditorMenu({ x: 0, y: 0 });
     expect(labels()).toEqual(['Cut', 'Copy', 'Paste', '-', 'Select All']);
     m.setNotebook(null);
+  });
+});
+
+describe('Dialog focus', () => {
+  it('cycles Tab and Shift+Tab through the controls without leaving', () => {
+    expect([0, 1, 2].map((i) => nextTabStop(3, i, false))).toEqual([1, 2, 0]);
+    expect([0, 1, 2].map((i) => nextTabStop(3, i, true))).toEqual([2, 0, 1]);
+    // Focus on something that isn't a stop (the dialog's text): Tab goes to the first, Shift+Tab to the last.
+    expect(nextTabStop(3, -1, false)).toBe(0);
+    expect(nextTabStop(3, -1, true)).toBe(2);
   });
 });
 

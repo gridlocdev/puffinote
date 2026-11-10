@@ -442,7 +442,9 @@ A usage error prints the message and then the command's help.
 - **Responsiveness.** Typing re-tokenizes only the changed tail (§11.2). The editor renders only the lines it
   needs.
 - **Accessibility.** The tree, tabs, menus and dialogs carry ARIA roles and labels and a visible focus ring.
-  Concealment never removes text from the accessibility tree. Everything works from the keyboard.
+  Concealment never removes text from the accessibility tree. Everything works from the keyboard. A dialog
+  takes focus when it opens, Tab and Shift+Tab cycle through its controls without leaving it, and focus goes
+  back where it was when it closes.
 - **Themes.** Light and dark, following the system by default. Colours are tokens; dark uses neutral greys,
   as Cellestra does. On macOS the desktop window hides its title bar and draws its own 28px one in the
   chrome colour, showing the window title. The desktop window's own background matches the theme, and a
