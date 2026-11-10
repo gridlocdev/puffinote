@@ -9,6 +9,7 @@ import {
   type TextFileFormat,
 } from '@puffinote/text';
 import { EditorState } from '../editor/editorState.ts';
+import { NoteMetaCache } from './noteMeta.ts';
 import {
   ConflictError,
   NotFoundError,
@@ -43,6 +44,7 @@ import {
   loadTree,
   noteFileName,
   stateDir,
+  type FileStat,
   type TreeNode,
 } from './tree.ts';
 
@@ -55,6 +57,12 @@ export const sidebarPanels: readonly { id: SidebarPanel; title: string; icon: st
   { id: 'outline', title: 'Outline', icon: 'list' },
   { id: 'recent', title: 'Recent', icon: 'history' },
 ];
+
+/** How the Library layout's note list is ordered. */
+export type NoteSort = 'edited' | 'title' | 'created';
+
+/** What the Library layout's note list shows: every note, the pinned ones, recent ones, or one folder's. */
+export type LibraryScope = 'all' | 'pinned' | 'recent' | `folder:${string}`;
 
 /** What changed on disk under an open tab that has unsaved edits (PRD §5). */
 export type TabConflict = 'none' | 'changed' | 'deleted';
@@ -175,6 +183,9 @@ export interface Session {
   readonly expanded: readonly string[];
   readonly recent: readonly string[];
   readonly sidebar: { collapsed: boolean; width: number; panel: SidebarPanel };
+  /** Notes pinned to the top of the Library layout's list. */
+  readonly pinned?: readonly string[];
+  readonly library?: { scope: LibraryScope; sort: NoteSort };
 }
 
 export const sessionPath = `${stateDir}/session.json`;
@@ -205,12 +216,19 @@ export class Notebook {
   readonly sidebarWidth = signal(260);
   readonly panel = signal<SidebarPanel>('files');
   readonly recent = signal<readonly string[]>([]);
+  /** Each file's size and times from the last tree read, by path. */
+  readonly stats = signal<ReadonlyMap<string, FileStat>>(new Map());
+  readonly pinned = signal<readonly string[]>([]);
+  readonly sort = signal<NoteSort>('edited');
+  readonly scope = signal<LibraryScope>('folder:');
   readonly userPrefs: Signal<PartialSettings>;
   readonly overrides = signal<PartialSettings>({});
   readonly settings = computed<Settings>(() => resolveSettings(this.userPrefs.value, this.overrides.value));
   readonly notice = signal<Notice | null>(null);
   /** Bumps when an image a note shows has loaded, so the editor redraws it. */
   readonly imagesLoaded = signal(0);
+  /** Excerpts and picture sizes for the note list, read as it asks. */
+  readonly meta: NoteMetaCache;
 
   private readonly options: NotebookOptions;
   private readonly images = new Map<string, string | null>();
@@ -229,6 +247,7 @@ export class Notebook {
     this.store = store;
     this.options = options;
     this.userPrefs = signal(options.prefs.load());
+    this.meta = new NoteMetaCache(store);
   }
 
   /** Open `store` as the notebook: read its settings, session and tree, and reopen its tabs. */
@@ -245,6 +264,18 @@ export class Notebook {
     if (session) {
       if (Array.isArray(session.expanded)) this.expanded.value = new Set(session.expanded.filter(isString));
       if (Array.isArray(session.recent)) this.recent.value = session.recent.filter(isString);
+      if (Array.isArray(session.pinned)) this.pinned.value = session.pinned.filter(isString);
+      const lib = session.library;
+      if (lib) {
+        if (lib.sort === 'edited' || lib.sort === 'title' || lib.sort === 'created')
+          this.sort.value = lib.sort;
+        const scope = lib.scope as unknown;
+        if (scope === 'all' || scope === 'pinned' || scope === 'recent') this.scope.value = scope;
+        else if (typeof scope === 'string' && scope.startsWith('folder:')) {
+          const dir = scope.slice('folder:'.length);
+          if (findNode(this.tree.peek(), dir)?.kind === 'dir') this.scope.value = `folder:${dir}`;
+        }
+      }
       const sb = session.sidebar;
       if (sb) {
         this.sidebarCollapsed.value = sb.collapsed === true;
@@ -272,6 +303,9 @@ export class Notebook {
         void this.active.value;
         void this.expanded.value;
         void this.recent.value;
+        void this.pinned.value;
+        void this.sort.value;
+        void this.scope.value;
         void this.sidebarCollapsed.value;
         void this.sidebarWidth.value;
         void this.panel.value;
@@ -312,6 +346,7 @@ export class Notebook {
       void this.persist();
     }
     for (const d of this.disposers) d();
+    this.meta.dispose();
     for (const t of this.tabs.value) t.dispose();
     if (this.refreshTimer) clearTimeout(this.refreshTimer);
     for (const url of this.images.values()) if (url?.startsWith('blob:')) URL.revokeObjectURL(url);
@@ -329,8 +364,10 @@ export class Notebook {
 
   /** Re-read the tree. The signal keeps its old value when nothing changed, so a refresh redraws nothing. */
   async reloadTree(): Promise<void> {
-    const next = await loadTree(this.store, this.settings.peek().showHiddenFiles);
+    const stats = new Map<string, FileStat>();
+    const next = await loadTree(this.store, this.settings.peek().showHiddenFiles, stats);
     if (!sameTree(this.tree.peek(), next)) this.tree.value = next;
+    if (!sameStats(this.stats.peek(), stats)) this.stats.value = stats;
   }
 
   toggleFolder(path: string, open?: boolean): void {
@@ -557,6 +594,13 @@ export class Notebook {
       tab.generation++;
       tab.dirty.value = tab.state.text !== text;
       tab.conflict.value = 'none';
+      const stat = this.stats.peek().get(path);
+      const now = Date.now();
+      this.stats.value = new Map(this.stats.peek()).set(path, {
+        size: text.length,
+        modified: now,
+        created: stat?.created || now,
+      });
       this.flashSaved(tab);
       return true;
     } catch (e) {
@@ -702,6 +746,13 @@ export class Notebook {
     this.tabs.value = [...this.tabs.value];
     await Promise.all(moved.map((t) => this.adoptMovedVersion(t)));
     this.recent.value = this.recent.value.map((p) => (isWithin(p, from) ? rebase(p, from, to) : p));
+    if (this.pinned.value.some((p) => isWithin(p, from))) {
+      this.pinned.value = this.pinned.value.map((p) => (isWithin(p, from) ? rebase(p, from, to) : p));
+    }
+    const scope = this.scope.value;
+    if (scope.startsWith('folder:') && isWithin(scope.slice(7), from) && scope !== 'folder:') {
+      this.scope.value = `folder:${rebase(scope.slice(7), from, to)}`;
+    }
     this.expanded.value = new Set(
       [...this.expanded.value]
         .map((p) => (isWithin(p, from) ? rebase(p, from, to) : p))
@@ -743,6 +794,13 @@ export class Notebook {
     }
     for (const t of [...this.tabs.value]) if (isWithin(t.path.value, path)) this.closeTab(t);
     this.recent.value = this.recent.value.filter((p) => !isWithin(p, path));
+    if (this.pinned.value.some((p) => isWithin(p, path))) {
+      this.pinned.value = this.pinned.value.filter((p) => !isWithin(p, path));
+    }
+    const scope = this.scope.value;
+    if (scope !== 'folder:' && scope.startsWith('folder:') && isWithin(scope.slice(7), path)) {
+      this.scope.value = `folder:${parentOf(path)}`;
+    }
     if (this.selected.value && isWithin(this.selected.value, path)) this.selected.value = null;
     await this.reloadTree();
     return true;
@@ -770,13 +828,19 @@ export class Notebook {
 
   // ----- Recent, search, images -----
 
+  /** Pin `path` to the top of the note list, or unpin it. */
+  togglePin(path: string): void {
+    const pinned = this.pinned.value;
+    this.pinned.value = pinned.includes(path) ? pinned.filter((p) => p !== path) : [...pinned, path];
+  }
+
   private touchRecent(path: string): void {
     const next = [path, ...this.recent.value.filter((p) => p !== path)].slice(0, RECENT_LIMIT);
     if (next.join('\n') !== this.recent.value.join('\n')) this.recent.value = next;
   }
 
   /**
-   * Search across the notebook's notes (PRD §6.2): their names, then their text, open tabs' unsaved text
+   * Search across the notebook's notes (PRD §6.3): their names, then their text, open tabs' unsaved text
    * included. An aborted
    * `signal` stops the scan between files and resolves with no hits.
    */
@@ -896,6 +960,8 @@ export class Notebook {
       active: this.active.value?.path.value ?? null,
       expanded: [...this.expanded.value],
       recent: this.recent.value,
+      pinned: this.pinned.value,
+      library: { scope: this.scope.value, sort: this.sort.value },
       sidebar: {
         collapsed: this.sidebarCollapsed.value,
         width: this.sidebarWidth.value,
@@ -965,6 +1031,15 @@ interface SaveSlot {
   force: boolean;
   /** The last save, the next one waits for. */
   tail: Promise<boolean>;
+}
+
+function sameStats(a: ReadonlyMap<string, FileStat>, b: ReadonlyMap<string, FileStat>): boolean {
+  if (a.size !== b.size) return false;
+  for (const [k, v] of a) {
+    const w = b.get(k);
+    if (!w || w.size !== v.size || w.modified !== v.modified || w.created !== v.created) return false;
+  }
+  return true;
 }
 
 /** Whether two trees list the same entries, so a refresh can keep the old object. */

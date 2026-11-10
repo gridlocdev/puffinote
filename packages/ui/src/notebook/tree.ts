@@ -41,9 +41,28 @@ export function compareEntries(a: { kind: string; name: string }, b: { kind: str
 }
 
 /** Read the whole notebook. `.puffinote` and `.git` are never listed; other dot-names only when `hidden`. */
-export async function loadTree(store: NotebookStore, hidden: boolean): Promise<TreeNode> {
+/** A file's size and times, as the store listed them (0 when it can't tell). */
+export interface FileStat {
+  readonly size: number;
+  readonly modified: number;
+  readonly created: number;
+}
+
+/** Read the whole tree. `stats`, when given, collects each file's size and times by path. */
+export async function loadTree(
+  store: NotebookStore,
+  hidden: boolean,
+  stats?: Map<string, FileStat>,
+): Promise<TreeNode> {
   const walk = async (dir: string, name: string): Promise<TreeNode> => {
     const entries = (await store.list(dir)).filter((e) => shown(e, hidden)).sort(compareEntries);
+    if (stats) {
+      for (const e of entries) {
+        if (e.kind === 'file') {
+          stats.set(e.path, { size: e.size, modified: e.modified, created: e.created || e.modified });
+        }
+      }
+    }
     const children = await Promise.all(
       entries.map((e) =>
         e.kind === 'dir'
@@ -122,7 +141,7 @@ export function visibleRows(root: TreeNode, expanded: ReadonlySet<string>): Tree
 }
 
 /**
- * The Filter panel's tree (PRD §6.2): entries whose whole name (extension included) contains `query`,
+ * The Filter panel's tree (PRD §6.3): entries whose whole name (extension included) contains `query`,
  * case-insensitively, plus the folders above them and everything inside a matching folder. `opened` gets the
  * folders that lead to a match, so the match is a row you can see.
  */

@@ -17,6 +17,8 @@ export interface Entry {
   readonly kind: 'file' | 'dir';
   readonly size: number;
   readonly modified: number;
+  /** Birth time where the file system keeps one (0 otherwise). */
+  readonly created: number;
 }
 
 /** A failure the HTTP layer maps to a status code. */
@@ -135,6 +137,7 @@ export class FileApi {
         kind: s.isDirectory() ? 'dir' : 'file',
         size: s.isDirectory() ? 0 : s.size,
         modified: s.mtimeMs,
+        created: s.birthtimeMs,
       });
     }
     entries.sort((a, b) => (a.kind === b.kind ? a.name.localeCompare(b.name) : a.kind === 'dir' ? -1 : 1));

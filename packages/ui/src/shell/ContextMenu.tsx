@@ -69,8 +69,9 @@ export function ContextMenu(props: {
           ) : (
             <li
               key={i}
-              role="menuitem"
-              class={`${i === index ? 'pn-menu-current' : ''}${item.danger ? ' pn-menu-danger' : ''}`}
+              role={item.checked === undefined ? 'menuitem' : 'menuitemradio'}
+              aria-checked={item.checked}
+              class={`${i === index ? 'pn-menu-current' : ''}${item.danger ? ' pn-menu-danger' : ''}${item.checked === undefined ? '' : ' pn-menu-check'}`}
               aria-disabled={item.disabled ? true : undefined}
               onPointerMove={() => !item.disabled && setIndex(i)}
               onClick={() => run(item)}

@@ -256,6 +256,7 @@ async function listDir(dir: string): Promise<NativeEntry[]> {
       kind: s.isDirectory() ? 'dir' : 'file',
       size: s.isDirectory() ? 0 : s.size,
       modified: s.mtimeMs,
+      created: s.birthtimeMs,
     });
   }
   return out;
@@ -420,6 +421,14 @@ function registerIpc(): void {
     if (!win || !trusted(e) || typeof title !== 'string') return;
     win.setTitle(title);
     win.setDocumentEdited(dirty === true);
+  });
+  ipcMain.on(Channels.setTitleBarHeight, (e, height: unknown) => {
+    const win = fromEvent(e);
+    if (!win || !trusted(e) || process.platform !== 'darwin') return;
+    if (typeof height !== 'number' || !Number.isFinite(height) || height < 14 || height > 80) return;
+    // The buttons are about 14px tall; their top sits so they're centred, as far in from the left.
+    const y = Math.round((height - 14) / 2);
+    win.setWindowButtonPosition({ x: y + 6, y });
   });
   ipcMain.on(Channels.setMenu, (e, items: readonly NativeMenuItem[]) => {
     const win = fromEvent(e);

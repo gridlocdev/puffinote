@@ -3,7 +3,7 @@ import { CommandCatalog, type Command, type CommandSpec } from '../commands/comm
 import { markdownCommandSpecs } from '../editor/editorCommands.ts';
 import type { EditorState } from '../editor/editorState.ts';
 import { sidebarPanels, type Notebook, type SidebarPanel, type Tab } from '../notebook/notebook.ts';
-import { allFolders, findNode, hasFolders, noteFileName } from '../notebook/tree.ts';
+import { allFolders, fileKind, findNode, hasFolders, noteFileName, type TreeNode } from '../notebook/tree.ts';
 import { baseName, invalidNameReason, parentOf, stemOf } from '../platform/paths.ts';
 import type { ConfirmOptions, PromptOptions } from './Dialog.tsx';
 
@@ -14,6 +14,8 @@ export interface MenuItem {
   readonly shortcut?: string;
   readonly disabled?: boolean;
   readonly danger?: boolean;
+  /** A choice that's on: drawn with a tick, and announced as a checked radio item. */
+  readonly checked?: boolean;
 }
 
 export type Overlay =
@@ -37,6 +39,8 @@ export interface ShellHost {
   readonly setTitle?: (title: string) => void;
   /** Draw a title bar at the top of the page (the macOS desktop window, whose own bar is hidden). */
   readonly titleBar?: boolean;
+  /** Centre the window's own buttons (the macOS traffic lights) in a title bar this tall. */
+  readonly setTitleBarHeight?: (height: number) => void;
 }
 
 /** The editor's zoom range and step (1 is 100%), as in Cellestra. */
@@ -68,6 +72,8 @@ export class ShellModel {
   readonly searchQuery = signal('');
   /** Bumps when Filter or Search should put the caret in its box. */
   readonly focusPanelTick = signal(0);
+  /** The Library layout's popover under the path bar, if one is open. */
+  readonly popover = signal<'outline' | 'recent' | null>(null);
   /** How large notes are drawn (1 is 100%). Remembered across sessions in this browser or app. */
   readonly zoom = signal(loadZoom());
   readonly host: ShellHost;
@@ -79,9 +85,11 @@ export class ShellModel {
 
   readonly activeTab = computed(() => this.notebook.value?.active.value ?? null);
   readonly activeState = computed<EditorState | null>(() => this.activeTab.value?.state ?? null);
+  /** The window's layout (PRD §6): the icon rail with tabs, or the library with one note at a time. */
+  readonly layout = computed(() => this.notebook.value?.settings.value.layout ?? 'rail');
   readonly showTabBar = computed(() => {
     const nb = this.notebook.value;
-    if (!nb || nb.tabs.value.length === 0) return false;
+    if (!nb || nb.tabs.value.length === 0 || this.layout.value === 'library') return false;
     return this.tabBarOverride.value ?? nb.settings.value.showTabBar;
   });
 
@@ -108,6 +116,7 @@ export class ShellModel {
     this.tabBarOverride.value = null;
     this.filterQuery.value = '';
     this.searchQuery.value = '';
+    this.popover.value = null;
     this.notebook.value = nb;
   }
 
@@ -191,6 +200,10 @@ export class ShellModel {
     const nb = this.notebook.peek();
     if (!nb) return;
     nb.sidebarCollapsed.value = false;
+    if (this.layout.peek() === 'library') {
+      setTimeout(() => document.querySelector<HTMLElement>('.pn-notes-list')?.focus());
+      return;
+    }
     if (nb.panel.peek() !== 'files' && nb.panel.peek() !== 'filter') nb.panel.value = 'files';
     setTimeout(() => document.querySelector<HTMLElement>('.pn-sidebar .pn-tree')?.focus());
   }
@@ -198,10 +211,56 @@ export class ShellModel {
   showPanel(panel: SidebarPanel): void {
     const nb = this.notebook.peek();
     if (!nb) return;
+    if (this.layout.peek() === 'library') {
+      // The library has no panels: Outline and Recent are popovers, and the rest is the note list's box.
+      if (panel === 'outline' || panel === 'recent') {
+        this.popover.value = this.popover.peek() === panel ? null : panel;
+        return;
+      }
+      nb.sidebarCollapsed.value = false;
+      if (panel === 'files') this.focusTree();
+      else this.focusPanelTick.value++;
+      return;
+    }
     nb.sidebarCollapsed.value = false;
     nb.panel.value = panel;
-    // The typed-into panels take the caret; the read-only ones leave it be (PRD §6.2).
+    // The typed-into panels take the caret; the read-only ones leave it be (PRD §6.3).
     if (panel === 'filter' || panel === 'search') this.focusPanelTick.value++;
+  }
+
+  /**
+   * The context menu for a file or folder (`node`), or for empty space in `dir`, at `at`: the tree's, the
+   * library's folders', and the note list's.
+   */
+  openFileMenu(node: TreeNode | null, dir: string, at: { x: number; y: number }): void {
+    const nb = this.notebook.peek();
+    if (!nb) return;
+    const store = nb.store;
+    const items: (MenuItem | null)[] = [];
+    if (node?.kind === 'file') {
+      items.push({
+        label: fileKind(node.path) === 'other' ? 'Open in Default App' : 'Open',
+        run: () => void this.openFile(node.path),
+      });
+      if (store.openExternal && fileKind(node.path) !== 'other') {
+        items.push({ label: 'Open in Default App', run: () => void store.openExternal!(node.path) });
+      }
+      if (this.layout.peek() === 'library') {
+        const pinned = nb.pinned.peek().includes(node.path);
+        items.push({ label: pinned ? 'Unpin' : 'Pin to Top', run: () => nb.togglePin(node.path) });
+      }
+      items.push(null);
+    }
+    items.push(
+      { label: 'New Note…', run: () => void this.newNote(dir) },
+      { label: 'New Folder…', run: () => void this.newFolder(dir) },
+    );
+    if (node && node.path) {
+      items.push(null, { label: 'Rename…', shortcut: 'F2', run: () => void this.rename(node.path) });
+      if (store.reveal) items.push({ label: revealLabel(), run: () => void store.reveal!(node.path) });
+      items.push(null, { label: 'Delete…', danger: true, run: () => void this.remove(node.path) });
+    }
+    this.open({ kind: 'menu', x: at.x, y: at.y, items });
   }
 
   /** Set the zoom, clamped and rounded to whole percents, and remember it. */
@@ -399,6 +458,12 @@ export class ShellModel {
   });
 }
 
+/** What the file manager is called here. */
+export function revealLabel(): string {
+  const p = typeof navigator !== 'undefined' ? navigator.platform : '';
+  return /Mac/.test(p) ? 'Reveal in Finder' : /Win/.test(p) ? 'Show in Explorer' : 'Show in Folder';
+}
+
 /** Answer a prompt or confirm that is going away unanswered: a prompt with null, a confirm with 'cancel'. */
 function cancelDialog(o: Overlay): void {
   if (o.kind === 'prompt') o.done(null);
@@ -553,6 +618,7 @@ function shellCommandSpecs(m: ShellModel): CommandSpec[] {
         if (!n || !t) return;
         m.showPanel('files');
         n.reveal(t.path.peek());
+        if (m.layout.peek() === 'library') n.scope.value = `folder:${parentOf(t.path.peek())}`;
       },
     },
     {
@@ -623,6 +689,7 @@ function shellCommandSpecs(m: ShellModel): CommandSpec[] {
       title: 'Toggle Tab Bar',
       description: 'Hide or show the tab strip for this session.',
       group: 'View',
+      enabled: () => m.layout.peek() === 'rail',
       active: () => m.tabBarOverride.peek() ?? nb()?.settings.peek().showTabBar ?? true,
       run: () => {
         const shown = m.tabBarOverride.peek() ?? nb()?.settings.peek().showTabBar ?? true;

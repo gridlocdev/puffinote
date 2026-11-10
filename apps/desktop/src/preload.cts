@@ -37,6 +37,7 @@ contextBridge.exposeInMainWorld('puffinoteNative', {
   onChanged: (cb: (paths: readonly string[]) => void) => on('puffinote:changed', cb),
   onOpenFolder: (cb: (path: string) => void) => on('puffinote:open-folder', cb),
   setTitle: (title: string, dirty: boolean): void => ipcRenderer.send('puffinote:set-title', title, dirty),
+  setTitleBarHeight: (height: number): void => ipcRenderer.send('puffinote:set-title-bar-height', height),
   setMenu: (menu: readonly NativeMenuItem[]): void => ipcRenderer.send('puffinote:set-menu', menu),
   onCommand: (cb: (id: string) => void) => on('puffinote:command', cb),
   onCloseRequested: (cb: () => void) =>

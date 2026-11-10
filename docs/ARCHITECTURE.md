@@ -6,7 +6,7 @@ from.
 
 ```
      ┌──────────────────── packages/ui (Preact + signals) ─────────────────────┐
-     │  Shell · Sidebar · FileTree · TabStrip · ⌘K / ⌘O · dialogs · status bar  │
+     │  Shell · Rail/Library layouts · FileTree · TabStrip · ⌘K / ⌘O · dialogs  │
      │  ShellModel (commands, overlays) · Notebook (tree, tabs, session)        │
      │  MarkdownEditor (DOM lines, hidden textarea, caret overlay)              │
      │  NotebookStore ─┬─ BrowserStore  (File System Access / private folder)   │

@@ -9,17 +9,39 @@
   --pn-fg: #1f2328;
   --pn-muted: #6e7781;
   --pn-marker: #8c959f;
-  --pn-accent: #2f6fdf;
-  --pn-link: #2f6fdf;
+  --pn-accent: var(--pn-accent-light);
+  --pn-link: var(--pn-accent);
   --pn-code-bg: #f3f4f6;
   --pn-mark-bg: #fff3b0;
   --pn-quote-bar: #d0d7de;
   --pn-rule: #d0d7de;
-  --pn-selection: rgba(47, 111, 223, 0.22);
+  --pn-selection: color-mix(in srgb, var(--pn-accent) 22%, transparent);
   --pn-selection-blur: rgba(110, 119, 129, 0.18);
   --pn-caret: #1f2328;
   --pn-font: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
   --pn-mono: ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
+}
+
+/* The accent colours (Settings → Accent colour): a deeper one on light backgrounds, a lighter one on dark. */
+:root,
+:root[data-accent='blue'] {
+  --pn-accent-light: #2f6fdf;
+  --pn-accent-dark: #4c8dff;
+}
+
+:root[data-accent='amber'] {
+  --pn-accent-light: #b06a00;
+  --pn-accent-dark: #e0a84f;
+}
+
+:root[data-accent='teal'] {
+  --pn-accent-light: #13806b;
+  --pn-accent-dark: #3fb8a0;
+}
+
+:root[data-accent='purple'] {
+  --pn-accent-light: #8a3fd1;
+  --pn-accent-dark: #c77dff;
 }
 
 @media (prefers-color-scheme: dark) {
@@ -28,13 +50,13 @@
     --pn-fg: #e6e6e6;
     --pn-muted: #a0a0a0;
     --pn-marker: #7a7a7a;
-    --pn-accent: #4a90e2;
-    --pn-link: #6aa8f0;
+    --pn-accent: var(--pn-accent-dark);
+    --pn-link: color-mix(in srgb, var(--pn-accent) 78%, #ffffff);
     --pn-code-bg: #2d2d2e;
     --pn-mark-bg: #5c4f12;
     --pn-quote-bar: #4a4a4a;
     --pn-rule: #4a4a4a;
-    --pn-selection: rgba(74, 144, 226, 0.35);
+    --pn-selection: color-mix(in srgb, var(--pn-accent) 35%, transparent);
     --pn-selection-blur: rgba(160, 160, 160, 0.2);
     --pn-caret: #e6e6e6;
   }
@@ -45,13 +67,13 @@
   --pn-fg: #e6e6e6;
   --pn-muted: #a0a0a0;
   --pn-marker: #7a7a7a;
-  --pn-accent: #4a90e2;
-  --pn-link: #6aa8f0;
+  --pn-accent: var(--pn-accent-dark);
+  --pn-link: color-mix(in srgb, var(--pn-accent) 78%, #ffffff);
   --pn-code-bg: #2d2d2e;
   --pn-mark-bg: #5c4f12;
   --pn-quote-bar: #4a4a4a;
   --pn-rule: #4a4a4a;
-  --pn-selection: rgba(74, 144, 226, 0.35);
+  --pn-selection: color-mix(in srgb, var(--pn-accent) 35%, transparent);
   --pn-selection-blur: rgba(160, 160, 160, 0.2);
   --pn-caret: #e6e6e6;
 }

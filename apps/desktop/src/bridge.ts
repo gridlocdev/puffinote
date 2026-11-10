@@ -22,6 +22,7 @@ export interface NativeEntry {
   readonly kind: 'file' | 'dir';
   readonly size: number;
   readonly modified: number;
+  readonly created?: number;
 }
 
 export const Channels = {
@@ -36,6 +37,8 @@ export const Channels = {
   openExternal: 'puffinote:open-external',
   watch: 'puffinote:watch',
   setTitle: 'puffinote:set-title',
+  /** The height of the page's title bar, so the macOS traffic lights sit in its middle. */
+  setTitleBarHeight: 'puffinote:set-title-bar-height',
   setMenu: 'puffinote:set-menu',
   confirmClose: 'puffinote:confirm-close',
   /** The renderer kept the window open (the user cancelled the unsaved-changes prompt). */

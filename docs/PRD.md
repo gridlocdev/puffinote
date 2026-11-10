@@ -11,8 +11,9 @@ The code cites this document as `PRD §n`. If you renumber a section, update tho
 
 ## 1. Summary
 
-- **One notebook, one window.** The window shows a sidebar (Files, Filter, Search, Outline and Recent), a tab
-  strip, the note in front, and a status bar.
+- **One notebook, one window,** in one of two layouts (§6): an **icon rail** with a floating panel (Files,
+  Filter, Search, Outline and Recent) and tabbed notes, or a **library** of folders beside a list of notes,
+  one note at a time. Both have the note in front and a status bar.
 - **The editor is built for Markdown.** It is a live preview: formatting shows in place, and the Markdown
   markers stay hidden until the caret reaches them. Saving writes exactly the text in the buffer.
 - **Three hosts, one client:**
@@ -72,8 +73,8 @@ The code cites this document as `PRD §n`. If you renumber a section, update tho
 - **A notebook is one root folder.** One notebook is open at a time. Open Notebook… (⇧⌘O) asks about unsaved
   tabs, then switches.
 - **The notebook keeps its own state in `.puffinote/`:**
-  - `session.json`: the open tabs, the active tab, the sidebar (width, panel, open folders) and the recent
-    files.
+  - `session.json`: the open tabs, the active tab, the sidebar (width, panel, open folders), the recent
+    files, the pinned notes, and the library's folder and sort order.
   - `settings.json`: this notebook's settings overrides (§9).
   - `.gitignore`: ignores `session.json` and keeps `settings.json`, so a notebook under git shares its
     settings but not its window state.
@@ -98,7 +99,36 @@ The code cites this document as `PRD §n`. If you renumber a section, update tho
   - A tab's saves happen one at a time. A save asked for while one is in flight writes after it, with the text
     the tab has by then.
 
-## 6. The sidebar
+## 6. The layouts
+
+The Layout setting (§9) picks one. Both share the note, the status bar, the commands and the settings. The
+accent colour (§9) tints selections, active icons and highlights in both, light and dark.
+
+- **Icon rail (the default).** A narrow rail on the left: the notebook's initials (a click opens another
+  notebook), a button per panel (§6.2), Hide Sidebar and Settings. The chosen panel floats beside it in a
+  card with its title and, for Files and Filter, New Note, New Folder and a ⋯ menu (expand or collapse all
+  folders, refresh). Clicking the shown panel's button hides it. The open notes are tabs in a second card
+  (§7). The panel's width is dragged at its right edge.
+- **Library.** Three columns:
+  - **The library:** All notes, Pinned and Recent, then the notebook's folders (the notebook's own folder
+    first; a folder with folders in it opens with its chevron). The chosen one is the note list's scope.
+    New Folder and Settings sit at the bottom. A folder's context menu is the tree's (§6.1).
+  - **The note list:** the scope's name and counts ("7 notes · 2 folders"), a Sort menu (Last Edited, Title,
+    Created) and New Note. A card per file: a note shows its name, when it was last edited (or created, when
+    sorted by that) as "Now", "5m", "2h", "Yesterday", a weekday or a date, and its first lines with the
+    Markdown taken out (an open note's follow its unsaved text). A picture shows its format and size in
+    pixels, read from the file, and a thumbnail; any other file says so. Pinned notes (Pin to Top in a card's
+    context menu) come first, in every scope. The **Filter** box narrows the list to names or text that
+    contain what's typed. ↑/↓ in the list show the next note, keeping the keyboard in the list.
+  - **The note,** under a path bar: the folders leading to it (a click shows that folder's notes), the note's
+    name, and Outline and History buttons that open those lists as popovers.
+  - One note at a time: opening a note closes the one before it, unless it has unsaved edits. Tabs (§7) and
+    Toggle Tab Bar don't apply. The Files, Filter and Search commands go to the note list and its box;
+    Outline and Recent open the popovers.
+- ⌘\ hides and shows the panel (icon rail) or the library and note list (library). The state persists per
+  notebook.
+
+### 6.1 The file tree
 
 - **Files** shows every file and folder in the notebook, folders first, sorted case-insensitively with
   numbers by value (`note2` before `note10`). Dotfiles are hidden unless Show Hidden Files is on. Extensions
@@ -115,18 +145,17 @@ The code cites this document as `PRD §n`. If you renumber a section, update tho
   - A move that changes nothing, or a folder into itself, shows no indicator. A name that is already taken is
     refused. Escape cancels.
   - A move is a plain move. Links to the file are not rewritten. Open tabs and the recent list follow it.
-- **Collapsible.** ⌘\ hides and shows the sidebar. The width and state persist per notebook.
 
-### 6.1 Keyboard
+### 6.2 Keyboard
 
 - ⌥⌘S focuses the tree; ⌥⌘E focuses the editor.
 - In the tree: ↑/↓ move, ←/→ collapse or expand (or go to the parent or first child), Home/End jump, typing
   jumps to a matching name, Enter opens a file or toggles a folder, F2 renames, Delete deletes.
 - The tree is one ARIA `tree` with a visible focus ring.
 
-### 6.2 Panels
+### 6.3 Panels
 
-The switcher row changes the panel. Filter and Search put the caret in their box; Files, Outline and Recent
+The rail's buttons change the panel. Filter and Search put the caret in their box; Files, Outline and Recent
 leave the focus where it was.
 
 - **Filter** narrows the tree to entries whose whole name (extension included) contains the text,
@@ -140,7 +169,7 @@ leave the focus where it was.
   heading.
 - **Recent** lists this notebook's recently opened files.
 
-### 6.3 Quick Open (⌘O)
+### 6.4 Quick Open (⌘O)
 
 Type part of a file name to open it. Ranking: names that start with the query, then names that contain it,
 then paths that contain it, then names and paths that contain its letters in order. Ties go to the more
@@ -155,6 +184,7 @@ files are opened here.
 - After a save, the status bar says "Saved" for a moment.
 - Each tab keeps its scroll position, caret, undo history and view (§10).
 - Show Tab Bar (§9) hides the strip. The tabs stay open.
+- Tabs belong to the icon rail layout. The library shows one note at a time (§6).
 
 ## 8. Commands and shortcuts
 
@@ -185,6 +215,8 @@ fields: **Preferences** and **This notebook**. A notebook field can be reset to 
 | Setting              | Values                              | Default      |
 | -------------------- | ----------------------------------- | ------------ |
 | Appearance           | Match system, Light, Dark           | Match system |
+| Layout               | Icon rail, Library and note list    | Icon rail    |
+| Accent colour        | Blue, Amber, Teal, Purple           | Blue         |
 | Notes open in        | Rich view, Formatted view, Raw text | Rich view    |
 | Save automatically   | on/off                              | on           |
 | Indent with          | 4 spaces, 2 spaces, Tab             | 4 spaces     |

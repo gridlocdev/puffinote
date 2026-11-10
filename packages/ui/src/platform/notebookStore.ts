@@ -13,6 +13,8 @@ export interface Entry {
   readonly size: number;
   /** Milliseconds since the epoch; 0 when the store can't tell. */
   readonly modified: number;
+  /** When the file was created, in milliseconds since the epoch; missing or 0 when the store can't tell. */
+  readonly created?: number;
 }
 
 export interface FileData {

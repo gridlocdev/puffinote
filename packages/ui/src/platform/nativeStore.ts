@@ -15,6 +15,7 @@ export interface NativeEntry {
   readonly kind: 'file' | 'dir';
   readonly size: number;
   readonly modified: number;
+  readonly created?: number;
 }
 
 export interface NativeMenuItem {
@@ -58,6 +59,8 @@ export interface PuffinoteNative {
   /** A folder to open as the notebook: from the command line, the Dock, or a second launch. */
   onOpenFolder(cb: (path: string) => void): () => void;
   setTitle(title: string, dirty: boolean): void;
+  /** Centre the macOS traffic lights in a title bar this tall. */
+  setTitleBarHeight(height: number): void;
   setMenu(menu: readonly NativeMenuItem[]): void;
   onCommand(cb: (id: string) => void): () => void;
   onCloseRequested(cb: () => void): () => void;

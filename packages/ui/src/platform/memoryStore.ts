@@ -17,7 +17,10 @@ export class MemoryStore implements NotebookStore {
   readonly kind = 'memory' as const;
   readonly name: string;
   readonly capabilities = { watch: true, reveal: false, openExternal: false };
-  private readonly files = new Map<string, { bytes: Uint8Array; version: number; modified: number }>();
+  private readonly files = new Map<
+    string,
+    { bytes: Uint8Array; version: number; modified: number; created: number }
+  >();
   private readonly dirs = new Set<string>(['']);
   private readonly listeners = new Set<(paths: readonly string[]) => void>();
   private counter = 0;
@@ -38,7 +41,14 @@ export class MemoryStore implements NotebookStore {
     }
     for (const [path, f] of this.files) {
       if (parentOf(path) === dir) {
-        out.push({ path, name: baseName(path), kind: 'file', size: f.bytes.length, modified: f.modified });
+        out.push({
+          path,
+          name: baseName(path),
+          kind: 'file',
+          size: f.bytes.length,
+          modified: f.modified,
+          created: f.created,
+        });
       }
     }
     return Promise.resolve(out);
@@ -130,7 +140,8 @@ export class MemoryStore implements NotebookStore {
   private put(path: string, bytes: Uint8Array): number {
     this.ensureDir(parentOf(path));
     const version = ++this.counter;
-    this.files.set(path, { bytes, version, modified: Date.now() });
+    const now = Date.now();
+    this.files.set(path, { bytes, version, modified: now, created: this.files.get(path)?.created ?? now });
     return version;
   }
 

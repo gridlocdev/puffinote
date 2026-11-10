@@ -1,103 +1,15 @@
+/* The panels the Icon rail layout shows (PRD §6.3); the Library layout borrows Outline and Recent. */
+
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'preact/hooks';
-import { sidebarPanels, type Notebook, type SearchHit } from '../notebook/notebook.ts';
+import type { Notebook, SearchHit } from '../notebook/notebook.ts';
 import { outlineOf } from '@puffinote/markdown';
-import { filterTree, findNode, hasFolders } from '../notebook/tree.ts';
+import { filterTree, findNode } from '../notebook/tree.ts';
 import { baseName, parentOf } from '../platform/paths.ts';
 import { FileTree } from './FileTree.tsx';
-import { Icon } from './Icon.tsx';
 import type { ShellModel } from './shellModel.ts';
 
-/** The left sidebar (PRD §6): header, the panel switcher, and the panel. */
-export function Sidebar({ model, nb }: { readonly model: ShellModel; readonly nb: Notebook }) {
-  const panel = nb.panel.value;
-  const tip = (id: string) => {
-    const c = model.menuCatalog.get(id);
-    return c ? `${c.title}${c.shortcutText ? ` (${c.shortcutText})` : ''}` : '';
-  };
-  const folders = hasFolders(nb.tree.value);
-  const allOpen = model.allExpanded();
-  return (
-    <aside class="pn-sidebar" style={{ width: `${nb.sidebarWidth.value}px` }} aria-label="Sidebar">
-      <header class="pn-sidebar-head">
-        <button
-          class="pn-icon-button"
-          title={tip('view.toggleSidebar')}
-          onClick={() => model.toggleSidebar()}
-        >
-          <Icon name="panel-left" />
-        </button>
-        <span class="pn-sidebar-title" title={nb.name}>
-          {nb.name}
-        </span>
-        <button class="pn-icon-button" title={tip('shell.newNote')} onClick={() => void model.newNote()}>
-          <Icon name="file-plus" />
-        </button>
-        <button class="pn-icon-button" title={tip('shell.newFolder')} onClick={() => void model.newFolder()}>
-          <Icon name="folder-plus" />
-        </button>
-        <button
-          class="pn-icon-button"
-          aria-disabled={folders ? undefined : true}
-          aria-label={allOpen ? 'Collapse All Folders' : 'Expand All Folders'}
-          aria-description={folders ? undefined : 'No folders available for expanding'}
-          title={
-            folders
-              ? allOpen
-                ? 'Collapse All Folders'
-                : 'Expand All Folders'
-              : 'No folders available for expanding'
-          }
-          onClick={() => model.toggleAllFolders()}
-        >
-          <Icon name={allOpen ? 'chevrons-up' : 'chevrons-down'} />
-        </button>
-      </header>
-      <nav class="pn-switcher" aria-label="Sidebar panels">
-        {sidebarPanels.map((p) => (
-          <button
-            key={p.id}
-            class="pn-icon-button"
-            aria-pressed={panel === p.id}
-            title={tip(`view.sidebar.${p.id}`)}
-            aria-label={p.title}
-            onClick={() => model.showPanel(p.id)}
-          >
-            <Icon name={p.icon} />
-          </button>
-        ))}
-        <span class="pn-switcher-gap" />
-        <button
-          class="pn-icon-button"
-          title={tip('view.sidebar.settings')}
-          aria-label="Settings"
-          onClick={() => model.open({ kind: 'settings' })}
-        >
-          <Icon name="settings-2" />
-        </button>
-      </nav>
-      <div class="pn-panel">
-        {panel === 'files' && (
-          <FileTree
-            model={model}
-            nb={nb}
-            root={nb.tree.value}
-            expanded={nb.expanded.value}
-            onToggle={(p, open) => nb.toggleFolder(p, open)}
-            label="Files"
-          />
-        )}
-        {panel === 'filter' && <FilterPanel model={model} nb={nb} />}
-        {panel === 'search' && <SearchPanel model={model} nb={nb} />}
-        {panel === 'outline' && <OutlinePanel model={model} nb={nb} />}
-        {panel === 'recent' && <RecentPanel model={model} nb={nb} />}
-      </div>
-      <Resizer nb={nb} />
-    </aside>
-  );
-}
-
-/** A box whose caret arrives when its panel is chosen (PRD §6.2). */
-function PanelBox(props: {
+/** A box whose caret arrives when its panel is chosen (PRD §6.3). */
+export function PanelBox(props: {
   readonly model: ShellModel;
   readonly value: string;
   readonly placeholder: string;
@@ -135,7 +47,7 @@ function PanelBox(props: {
   );
 }
 
-function FilterPanel({ model, nb }: { readonly model: ShellModel; readonly nb: Notebook }) {
+export function FilterPanel({ model, nb }: { readonly model: ShellModel; readonly nb: Notebook }) {
   const query = model.filterQuery.value;
   const result = useMemo(() => filterTree(nb.tree.value, query), [nb.tree.value, query]);
   // The folders leading to matches open themselves, but aren't held open: these toggles are the panel's own.
@@ -175,7 +87,7 @@ function FilterPanel({ model, nb }: { readonly model: ShellModel; readonly nb: N
   );
 }
 
-function SearchPanel({ model, nb }: { readonly model: ShellModel; readonly nb: Notebook }) {
+export function SearchPanel({ model, nb }: { readonly model: ShellModel; readonly nb: Notebook }) {
   const query = model.searchQuery.value;
   const [hits, setHits] = useState<readonly SearchHit[] | null>(null);
   const [busy, setBusy] = useState(false);
@@ -291,7 +203,7 @@ function SearchPanel({ model, nb }: { readonly model: ShellModel; readonly nb: N
 }
 
 /** A hit's preview with the match highlighted. */
-function Marked({ hit }: { readonly hit: SearchHit }) {
+export function Marked({ hit }: { readonly hit: SearchHit }) {
   return (
     <>
       {hit.preview.slice(0, hit.matchStart)}
@@ -301,7 +213,7 @@ function Marked({ hit }: { readonly hit: SearchHit }) {
   );
 }
 
-function OutlinePanel({ model, nb }: { readonly model: ShellModel; readonly nb: Notebook }) {
+export function OutlinePanel({ model, nb }: { readonly model: ShellModel; readonly nb: Notebook }) {
   const state = nb.active.value?.state ?? null;
   if (!state) return <p class="pn-panel-note">Open a note to see its headings.</p>;
   void state.version.value;
@@ -344,7 +256,7 @@ function OutlinePanel({ model, nb }: { readonly model: ShellModel; readonly nb: 
   );
 }
 
-function RecentPanel({ model, nb }: { readonly model: ShellModel; readonly nb: Notebook }) {
+export function RecentPanel({ model, nb }: { readonly model: ShellModel; readonly nb: Notebook }) {
   const recent = nb.recent.value.filter((p) => findNode(nb.tree.value, p));
   if (recent.length === 0) return <p class="pn-panel-note">Notes you open show up here.</p>;
   return (
@@ -377,7 +289,7 @@ function RecentPanel({ model, nb }: { readonly model: ShellModel; readonly nb: N
 }
 
 /** Drag the sidebar's right edge to resize it; the width is remembered per notebook. */
-function Resizer({ nb }: { readonly nb: Notebook }) {
+export function Resizer({ nb }: { readonly nb: Notebook }) {
   return (
     <div
       class="pn-resizer"

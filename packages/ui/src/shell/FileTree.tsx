@@ -3,7 +3,7 @@ import type { Notebook } from '../notebook/notebook.ts';
 import { fileKind, visibleRows, type TreeNode, type TreeRow } from '../notebook/tree.ts';
 import { baseName, parentOf } from '../platform/paths.ts';
 import { Icon } from './Icon.tsx';
-import type { MenuItem, ShellModel } from './shellModel.ts';
+import type { ShellModel } from './shellModel.ts';
 
 const DRAG_START_PX = 4;
 const HOVER_OPEN_MS = 1000;
@@ -19,7 +19,7 @@ interface DragState {
 
 /**
  * The notebook's file tree (PRD §6): one focusable `tree` whose rows are moved through with the keyboard
- * (§6.1), a context menu per row, and a drag-to-move the tree draws itself — a ghost, an outline on the
+ * (§6.2), a context menu per row, and a drag-to-move the tree draws itself — a ghost, an outline on the
  * folder it would land in, and a hovered closed folder opening after a second.
  */
 export function FileTree(props: {
@@ -54,7 +54,7 @@ export function FileTree(props: {
     else void model.openFile(node.path);
   };
 
-  // ----- Keyboard (PRD §6.1) -----
+  // ----- Keyboard (PRD §6.2) -----
   const onKeyDown = (e: KeyboardEvent) => {
     if (e.metaKey || e.ctrlKey) {
       if ((e.key === 'Backspace' || e.key === 'Delete') && selected) {
@@ -139,30 +139,8 @@ export function FileTree(props: {
 
   // ----- Context menu -----
   function openMenu(node: TreeNode | null, at: { x: number; y: number } | null) {
-    const pos = at ?? rowPoint(node);
     const dir = node ? (node.kind === 'dir' ? node.path : parentOf(node.path)) : root.path;
-    const store = nb.store;
-    const items: (MenuItem | null)[] = [];
-    if (node?.kind === 'file') {
-      items.push({
-        label: fileKind(node.path) === 'other' ? 'Open in Default App' : 'Open',
-        run: () => activate(node),
-      });
-      if (store.openExternal && fileKind(node.path) !== 'other') {
-        items.push({ label: 'Open in Default App', run: () => void store.openExternal!(node.path) });
-      }
-      items.push(null);
-    }
-    items.push(
-      { label: 'New Note…', run: () => void model.newNote(dir) },
-      { label: 'New Folder…', run: () => void model.newFolder(dir) },
-    );
-    if (node) {
-      items.push(null, { label: 'Rename…', shortcut: 'F2', run: () => void model.rename(node.path) });
-      if (store.reveal) items.push({ label: revealLabel(), run: () => void store.reveal!(node.path) });
-      items.push(null, { label: 'Delete…', danger: true, run: () => void model.remove(node.path) });
-    }
-    model.open({ kind: 'menu', x: pos.x, y: pos.y, items });
+    model.openFileMenu(node, dir, at ?? rowPoint(node));
   }
 
   function rowPoint(node: TreeNode | null) {
@@ -306,9 +284,4 @@ function iconFor(n: TreeNode, open: boolean): string {
   if (n.kind === 'dir') return open ? 'folder-open' : 'folder';
   const kind = fileKind(n.path);
   return kind === 'note' ? 'file-text' : kind === 'image' ? 'image' : 'file';
-}
-
-function revealLabel(): string {
-  const p = typeof navigator !== 'undefined' ? navigator.platform : '';
-  return /Mac/.test(p) ? 'Reveal in Finder' : /Win/.test(p) ? 'Show in Explorer' : 'Show in Folder';
 }

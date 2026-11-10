@@ -7,6 +7,13 @@ import type { ViewMode } from '../editor/reveal.ts';
  */
 export interface Settings {
   readonly theme: 'system' | 'light' | 'dark';
+  /**
+   * How the window is laid out (PRD §6): an icon rail with a floating panel and tabs, or a library of folders
+   * beside a list of notes, one note at a time.
+   */
+  readonly layout: 'rail' | 'library';
+  /** The colour of selections, active icons and highlights. */
+  readonly accent: 'blue' | 'amber' | 'teal' | 'purple';
   /** The view a note opens in. */
   readonly defaultView: ViewMode;
   /** Save a note a moment after the last edit. */
@@ -26,6 +33,8 @@ export type PartialSettings = { -readonly [K in SettingKey]?: Settings[K] };
 
 export const defaultSettings: Settings = {
   theme: 'system',
+  layout: 'rail',
+  accent: 'blue',
   defaultView: 'live',
   autoSave: true,
   indent: 'spaces4',
@@ -51,6 +60,26 @@ export const settingFields: readonly SettingField[] = [
       { value: 'system', label: 'Match system' },
       { value: 'light', label: 'Light' },
       { value: 'dark', label: 'Dark' },
+    ],
+  },
+  {
+    key: 'layout',
+    label: 'Layout',
+    help: 'Icon rail: a floating panel beside tabbed notes. Library: folders, a list of notes, and one note.',
+    options: [
+      { value: 'rail', label: 'Icon rail' },
+      { value: 'library', label: 'Library and note list' },
+    ],
+  },
+  {
+    key: 'accent',
+    label: 'Accent colour',
+    help: 'The colour of selections, active icons and highlights.',
+    options: [
+      { value: 'blue', label: 'Blue' },
+      { value: 'amber', label: 'Amber' },
+      { value: 'teal', label: 'Teal' },
+      { value: 'purple', label: 'Purple' },
     ],
   },
   {
@@ -84,7 +113,11 @@ export const settingFields: readonly SettingField[] = [
     label: 'Show hidden files',
     help: 'Show files and folders whose names start with a dot.',
   },
-  { key: 'showTabBar', label: 'Show the tab bar', help: 'Show open notes as tabs above the editor.' },
+  {
+    key: 'showTabBar',
+    label: 'Show the tab bar',
+    help: 'Show open notes as tabs above the editor (Icon rail layout).',
+  },
 ];
 
 export function indentUnit(s: Settings): string {

@@ -12,6 +12,7 @@ const model = new ShellModel({
   // On the desktop the folder dialog comes straight up; on the web it's back to the welcome screen.
   openNotebook: () => (host.native ? void launcher.openFolder() : launcher.close()),
   titleBar: host.native?.platform === 'darwin',
+  setTitleBarHeight: (h) => host.native?.setTitleBarHeight(h),
 });
 const launcher = new Launcher(model, localPrefs, host);
 document.documentElement.dataset.host = host.kind;

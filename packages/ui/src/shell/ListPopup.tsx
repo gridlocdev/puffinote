@@ -61,7 +61,7 @@ export function CommandMenu(props: {
   );
 }
 
-/** ⌘O: jump to any file by part of its name (PRD §6.3). */
+/** ⌘O: jump to any file by part of its name (PRD §6.4). */
 export function QuickOpen(props: {
   readonly files: readonly string[];
   readonly recent: readonly string[];
