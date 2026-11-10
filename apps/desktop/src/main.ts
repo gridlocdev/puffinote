@@ -1,4 +1,15 @@
-import { app, BrowserWindow, dialog, ipcMain, Menu, net, protocol, screen, shell } from 'electron';
+import {
+  app,
+  BrowserWindow,
+  dialog,
+  ipcMain,
+  Menu,
+  nativeTheme,
+  net,
+  protocol,
+  screen,
+  shell,
+} from 'electron';
 import type { MenuItemConstructorOptions } from 'electron';
 import { mkdir, readdir, realpath, rename, stat } from 'node:fs/promises';
 import path from 'node:path';
@@ -103,6 +114,8 @@ function createWindow(): BrowserWindow {
     // On macOS the page draws its own title bar under the traffic lights, in the app's colours (as Cellestra does).
     titleBarStyle: process.platform === 'darwin' ? 'hidden' : 'default',
     show: false,
+    // The page's background (styles.css --pn-bg), so a resize or a slow first paint doesn't flash white.
+    backgroundColor: nativeTheme.shouldUseDarkColors ? '#1e1e1e' : '#ffffff',
     webPreferences: {
       preload: path.join(here, 'preload.cjs'),
       contextIsolation: true,
@@ -186,6 +199,7 @@ async function offerForceClose(win: BrowserWindow, state: WindowState): Promise<
   if (win.isDestroyed()) return;
   if (response === 0) {
     state.allowClose = true;
+    win.hide();
     win.destroy();
   } else quitting = false;
 }
@@ -453,6 +467,8 @@ function registerIpc(): void {
     const state = win && windows.get(win.id);
     if (!win || !state || !trusted(e)) return;
     state.allowClose = true;
+    // Hide first: the page unloads before the window goes, and would show a blank (white) frame meanwhile.
+    win.hide();
     win.close();
   });
   ipcMain.on(Channels.cancelClose, (e) => {

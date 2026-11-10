@@ -445,7 +445,8 @@ A usage error prints the message and then the command's help.
   Concealment never removes text from the accessibility tree. Everything works from the keyboard.
 - **Themes.** Light and dark, following the system by default. Colours are tokens; dark uses neutral greys,
   as Cellestra does. On macOS the desktop window hides its title bar and draws its own 28px one in the
-  chrome colour, showing the window title.
+  chrome colour, showing the window title. The desktop window's own background matches the theme, and a
+  closing window hides before its page unloads, so neither a resize nor quitting flashes white.
 - **Security.** The desktop renderer is sandboxed with context isolation, and its bridge only touches folders
   the user granted. The NAS server confines paths to their roots. Notes cannot run script: the built client
   has a strict CSP.
