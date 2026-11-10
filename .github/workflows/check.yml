@@ -1,9 +1,8 @@
 name: check
 
 # The same gate as `just check` (format, lint, typecheck, tests, build) on all three desktop systems.
+# Run it by hand (Actions tab or `gh workflow run check.yml`), and on pull requests; never on push.
 on:
-  push:
-    branches: [main]
   pull_request:
   workflow_dispatch:
 

@@ -128,9 +128,10 @@ published: people build it from the repository (README).
 - The apps aren't notarized or code-signed, so the README tells people how to open them the first time.
   The desktop app's update check (PRD §3.1) reads the latest release from GitHub's API, so a published
   release reaches existing installs within a day.
-- `.github/workflows/check.yml` runs `pnpm check` on Linux, macOS and Windows for every push to `main` and
-  every pull request. `.github/workflows/docker.yml` builds the Docker image and checks that it starts; run
-  it by hand from the repository's **Actions** tab (or `gh workflow run docker.yml`).
+- `.github/workflows/check.yml` runs `pnpm check` on Linux, macOS and Windows for every pull request. It
+  does not run on push: run it by hand from the repository's **Actions** tab, or with
+  `gh workflow run check.yml`. `.github/workflows/docker.yml` builds the Docker image and checks that it
+  starts; it also runs only by hand (`gh workflow run docker.yml`).
 
 ## Cleaning up
 
