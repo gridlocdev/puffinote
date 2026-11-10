@@ -1,0 +1,312 @@
+import { describe, expect, it, vi } from 'vitest';
+import { Notebook, sessionPath } from '../src/notebook/notebook.ts';
+import { memoryPrefs } from '../src/notebook/settings.ts';
+import { noteFileName } from '../src/notebook/tree.ts';
+import { MemoryStore } from '../src/platform/memoryStore.ts';
+import { ConflictError, type FileData, type WriteOptions } from '../src/platform/notebookStore.ts';
+
+/** A MemoryStore that can hold writes and reads back, to force the order async work lands in. */
+class GatedStore extends MemoryStore {
+  holdWrites = false;
+  holdReads = false;
+  readonly writes: { path: string; release: () => void }[] = [];
+  readonly reads: (() => void)[] = [];
+
+  override write(path: string, bytes: Uint8Array, opts?: WriteOptions): Promise<string | null> {
+    if (!this.holdWrites) return super.write(path, bytes, opts);
+    return new Promise((resolve, reject) =>
+      this.writes.push({ path, release: () => void super.write(path, bytes, opts).then(resolve, reject) }),
+    );
+  }
+
+  override read(path: string): Promise<FileData> {
+    if (!this.holdReads) return super.read(path);
+    // The read sees the disk as it is now; only its answer is held back.
+    const now = super.read(path);
+    return new Promise((resolve, reject) => this.reads.push(() => void now.then(resolve, reject)));
+  }
+}
+
+/** A store whose move copies and deletes, giving the file a new version (like the browser store). */
+class CopyingStore extends MemoryStore {
+  override async move(from: string, to: string): Promise<void> {
+    const data = await this.read(from);
+    await this.write(to, data.bytes, { force: true });
+    await this.remove(from);
+  }
+}
+
+const text = async (store: MemoryStore, path: string) =>
+  new TextDecoder().decode((await store.read(path)).bytes);
+const settle = async () => {
+  for (let i = 0; i < 10; i++) await new Promise((r) => setTimeout(r, 0));
+};
+
+async function openWith<S extends MemoryStore>(store: S, prefs = {}) {
+  const nb = await Notebook.open(store, { prefs: memoryPrefs({ autoSave: false, ...prefs }) });
+  return nb;
+}
+
+describe('Notebook saves and refreshes in flight', () => {
+  it('runs a second save after the first, against the version it got back', async () => {
+    const store = new GatedStore('N', { 'a.md': 'hello' });
+    const nb = await openWith(store);
+    const tab = (await nb.openFile('a.md'))!;
+    tab.state!.select(5);
+    tab.state!.insert(' one');
+    store.holdWrites = true;
+    const first = nb.save(tab);
+    await settle();
+    tab.state!.insert(' two');
+    const second = nb.save(tab);
+    await settle();
+    expect(store.writes).toHaveLength(1); // the second waits for the first
+    store.writes.shift()!.release();
+    await settle();
+    expect(store.writes).toHaveLength(1);
+    store.writes.shift()!.release();
+    expect(await first).toBe(true);
+    expect(await second).toBe(true);
+    expect(tab.conflict.value).toBe('none');
+    expect(tab.dirty.value).toBe(false);
+    expect(await text(store, 'a.md')).toBe('hello one two');
+  });
+
+  it('coalesces saves asked for while one waits', async () => {
+    const store = new GatedStore('N', { 'a.md': '' });
+    const nb = await openWith(store);
+    const tab = (await nb.openFile('a.md'))!;
+    tab.state!.insert('a');
+    store.holdWrites = true;
+    const first = nb.save(tab);
+    await settle();
+    tab.state!.insert('b');
+    const second = nb.save(tab);
+    tab.state!.insert('c');
+    const third = nb.save(tab);
+    expect(third).toBe(second);
+    store.writes.shift()!.release();
+    await settle();
+    store.writes.shift()!.release();
+    await Promise.all([first, second]);
+    expect(store.writes).toHaveLength(0);
+    expect(await text(store, 'a.md')).toBe('abc');
+  });
+
+  it('does not write a tab without unsaved edits unless forced', async () => {
+    const store = new MemoryStore('N', { 'a.md': 'x' });
+    const nb = await openWith(store);
+    const tab = (await nb.openFile('a.md'))!;
+    const before = tab.version;
+    expect(await nb.save(tab)).toBe(true);
+    expect(tab.version).toBe(before);
+    expect(await nb.save(tab, true)).toBe(true);
+    expect(tab.version).not.toBe(before);
+  });
+
+  it('drops a refresh that read the disk before a save landed', async () => {
+    const store = new GatedStore('N', { 'a.md': 'hello' });
+    const nb = await openWith(store);
+    const tab = (await nb.openFile('a.md'))!;
+    tab.state!.select(5);
+    tab.state!.insert(' world');
+    store.holdReads = true;
+    const refreshing = nb.refresh();
+    await settle();
+    store.holdReads = false;
+    expect(store.reads).toHaveLength(1); // read 'hello' at the old version
+    expect(await nb.save(tab)).toBe(true);
+    for (const r of store.reads) r();
+    await refreshing;
+    expect(tab.state!.text).toBe('hello world');
+    expect(tab.dirty.value).toBe(false);
+    expect(tab.conflict.value).toBe('none');
+    tab.state!.insert('!');
+    expect(await nb.save(tab)).toBe(true);
+    expect(await text(store, 'a.md')).toBe('hello world!');
+  });
+
+  it('skips a tab whose save is in flight', async () => {
+    const store = new GatedStore('N', { 'a.md': 'hello' });
+    const nb = await openWith(store);
+    const tab = (await nb.openFile('a.md'))!;
+    tab.state!.select(5);
+    tab.state!.insert('!');
+    store.holdWrites = true;
+    const saving = nb.save(tab);
+    await settle();
+    await nb.refresh();
+    expect(tab.conflict.value).toBe('none');
+    store.writes.shift()!.release();
+    expect(await saving).toBe(true);
+    expect(tab.state!.text).toBe('hello!');
+  });
+
+  it('clears the deleted flag when the file comes back with the same text', async () => {
+    const store = new MemoryStore('N', { 'a.md': 'hello' });
+    const nb = await openWith(store);
+    const tab = (await nb.openFile('a.md'))!;
+    store.touch('a.md', null);
+    await nb.refresh();
+    expect(tab.conflict.value).toBe('deleted');
+    store.touch('a.md', 'hello');
+    await nb.refresh();
+    expect(tab.conflict.value).toBe('none');
+    tab.state!.insert('x');
+    expect(await nb.save(tab)).toBe(true);
+  });
+
+  it('flags a note deleted outside the app instead of recreating it on save', async () => {
+    const store = new MemoryStore('N', { 'a.md': 'hello' });
+    const nb = await openWith(store);
+    const tab = (await nb.openFile('a.md'))!;
+    tab.state!.insert('x');
+    store.touch('a.md', null);
+    expect(await nb.save(tab)).toBe(false);
+    expect(tab.conflict.value).toBe('deleted');
+    await expect(store.read('a.md')).rejects.toThrow();
+    // Saving again on purpose recreates it (PRD §5).
+    expect(await nb.save(tab, true)).toBe(true);
+    expect(await text(store, 'a.md')).toBe('xhello');
+  });
+
+  it('tells deleted from changed when the store only says "changed"', async () => {
+    class NasLike extends MemoryStore {
+      override write(path: string, bytes: Uint8Array, opts?: WriteOptions): Promise<string | null> {
+        return super.write(path, bytes, opts).catch((e: unknown) => {
+          if (e instanceof ConflictError && e.reason === 'deleted')
+            throw new ConflictError('changed', 'Precondition failed');
+          throw e;
+        });
+      }
+    }
+    const store = new NasLike('N', { 'a.md': 'hello' });
+    const nb = await openWith(store);
+    const tab = (await nb.openFile('a.md'))!;
+    tab.state!.insert('x');
+    store.touch('a.md', null);
+    expect(await nb.save(tab)).toBe(false);
+    expect(tab.conflict.value).toBe('deleted');
+  });
+});
+
+describe('Notebook moves, names, settings and session', () => {
+  it('takes the new version of a moved file, so the next save is no conflict', async () => {
+    const store = new CopyingStore('N', { 'f/a.md': 'hello' });
+    const nb = await openWith(store);
+    const tab = (await nb.openFile('f/a.md'))!;
+    expect(await nb.rename('f/a.md', 'b.md')).toBe('f/b.md');
+    expect(await nb.move('f', '')).toBeNull(); // already at the top
+    tab.state!.select(5);
+    tab.state!.insert('!');
+    expect(await nb.save(tab)).toBe(true);
+    expect(tab.conflict.value).toBe('none');
+    expect(await text(store, 'f/b.md')).toBe('hello!');
+  });
+
+  it('still conflicts when the file changed on disk before the move', async () => {
+    const store = new CopyingStore('N', { 'a.md': 'hello' });
+    const nb = await openWith(store);
+    const tab = (await nb.openFile('a.md'))!;
+    store.touch('a.md', 'theirs');
+    await nb.rename('a.md', 'b.md');
+    tab.state!.insert('mine ');
+    expect(await nb.save(tab)).toBe(false);
+    expect(tab.conflict.value).toBe('changed');
+  });
+
+  it('adds .md unless the name ends in a note extension', async () => {
+    expect(noteFileName('Meeting 2024.11')).toBe('Meeting 2024.11.md');
+    expect(noteFileName('v1.2')).toBe('v1.2.md');
+    expect(noteFileName('Ideas')).toBe('Ideas.md');
+    expect(noteFileName('todo.txt')).toBe('todo.txt');
+    expect(noteFileName('Notes.MARKDOWN')).toBe('Notes.MARKDOWN');
+    expect(noteFileName('photo.png')).toBe('photo.png.md');
+    const downloads: string[] = [];
+    const store = new MemoryStore('N', {});
+    const nb = await Notebook.open(store, {
+      prefs: memoryPrefs({ autoSave: false }),
+      download: (n) => downloads.push(n),
+    });
+    expect(await nb.createNote('', 'Meeting 2024.11')).toBe('Meeting 2024.11.md');
+    expect(nb.active.value?.path.value).toBe('Meeting 2024.11.md');
+    expect(downloads).toEqual([]);
+  });
+
+  it('shows hidden files as soon as the preference or the override changes', async () => {
+    const store = new MemoryStore('N', { '.hidden.md': 'x', 'a.md': '' });
+    const nb = await openWith(store);
+    const names = () => nb.tree.value.children.map((c) => c.name);
+    expect(names()).toEqual(['a.md']);
+    nb.setPreferences({ showHiddenFiles: true });
+    await vi.waitFor(() => expect(names()).toEqual(['.hidden.md', 'a.md']));
+    await nb.setOverrides({ showHiddenFiles: false });
+    await vi.waitFor(() => expect(names()).toEqual(['a.md']));
+  });
+
+  it('keeps the tree object when a refresh finds the same entries', async () => {
+    const store = new MemoryStore('N', { 'a.md': '', 'f/b.md': '' });
+    const nb = await openWith(store);
+    const before = nb.tree.value;
+    await nb.refresh();
+    expect(nb.tree.value).toBe(before);
+    store.touch('c.md', '');
+    await nb.refresh();
+    expect(nb.tree.value).not.toBe(before);
+  });
+
+  it('stops a search when its signal aborts', async () => {
+    const store = new GatedStore('N', { 'a.md': 'x', 'b.md': 'x', 'c.md': 'x' });
+    const nb = await openWith(store);
+    store.holdReads = true;
+    const abort = new AbortController();
+    const searching = nb.search('x', { signal: abort.signal });
+    await settle();
+    expect(store.reads).toHaveLength(1);
+    abort.abort();
+    store.reads.shift()!();
+    expect(await searching).toEqual([]);
+    expect(store.reads).toHaveLength(0); // no further files read
+  });
+
+  it('writes a pending session on dispose, and session writes land in order', async () => {
+    vi.useFakeTimers();
+    try {
+      const store = new MemoryStore('N', { 'a.md': '', 'b.md': '' });
+      const nb = await openWith(store);
+      await nb.openFile('a.md');
+      nb.panel.value = 'outline';
+      nb.dispose();
+      await vi.runAllTimersAsync();
+      const saved = JSON.parse(await text(store, sessionPath)) as {
+        tabs: { path: string }[];
+        sidebar: { panel: string };
+      };
+      expect(saved.tabs.map((t) => t.path)).toEqual(['a.md']);
+      expect(saved.sidebar.panel).toBe('outline');
+    } finally {
+      vi.useRealTimers();
+    }
+
+    const store = new GatedStore('N', { 'a.md': '' });
+    const nb = await openWith(store);
+    store.holdWrites = true;
+    nb.panel.value = 'search';
+    const first = nb.persist();
+    nb.panel.value = 'recent';
+    const second = nb.persist();
+    await settle();
+    // One write is out at a time. Releasing the newest first would land the older session last if they
+    // weren't serialized.
+    for (let i = 0; i < 10 && store.writes.length; i++) {
+      expect(store.writes).toHaveLength(1);
+      store.writes.pop()!.release();
+      await settle();
+    }
+    await Promise.all([first, second]);
+    expect((JSON.parse(await text(store, sessionPath)) as { sidebar: { panel: string } }).sidebar.panel).toBe(
+      'recent',
+    );
+    nb.dispose();
+  });
+});

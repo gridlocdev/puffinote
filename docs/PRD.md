@@ -89,9 +89,14 @@ The code cites this document as `PRD §n`. If you renumber a section, update tho
   - A tab with unsaved edits is left alone and flagged. Auto-save stops for it. Saving it asks whether to
     overwrite the file on disk or take the disk's version.
   - Taking the disk's version is **one undoable step**, so ⌘Z gives back what the tab held.
-  - A file deleted on disk under a dirty tab is flagged the same way. Saving recreates it.
+  - A file deleted on disk under a dirty tab is flagged the same way. Saving recreates it. Auto-save never
+    recreates it: a save that finds the file gone flags the tab instead. If the file comes back with the text
+    the tab last saved, the flag clears.
 - **Saving.** ⌘S saves the active tab; Save All saves every dirty tab. With auto-save on (the default), a note
   saves a second after the last edit. Revert to Saved discards the edits.
+  - A tab without unsaved edits isn't written (except Save on a tab flagged deleted, which recreates it).
+  - A tab's saves happen one at a time. A save asked for while one is in flight writes after it, with the text
+    the tab has by then.
 
 ## 6. The sidebar
 
@@ -100,6 +105,9 @@ The code cites this document as `PRD §n`. If you renumber a section, update tho
   are hidden unless Show File Extensions is on.
 - **Tree verbs:** new note, new folder, rename (F2), delete (confirmed), reveal the active file, refresh, and
   expand or collapse all. They are in each row's context menu and in the command menu.
+  - New Note adds `.md` to the name unless it already ends in a note extension (§5). A dot elsewhere is part
+    of the name: "Meeting 2024.11" becomes `Meeting 2024.11.md`.
+  - A rename that changes only the case of a name works on disks that ignore case.
 - **Drag to move.** The tree draws the drag itself: a ghost under the pointer, an outline on the folder it
   would land in, and a closed folder that opens after the pointer rests on it for a second.
   - A drop on a folder means that folder. A drop on a file means the folder that holds it. A drop on the empty
@@ -162,6 +170,8 @@ files are opened here.
 - Shortcuts are written once as `mod+shift+k` and shown in each platform's style (⌘⇧K, Ctrl+Shift+K).
 - **Resolution order:** an open overlay (a dialog, the command menu) gets keys first. Then the shell's
   reserved set: ⌘K, ⌘O, ⌘N, ⇧⌘N, ⌘S, ⌘W, ⌥⌘W, ⇧⌘], ⇧⌘[, ⌥⌘S, ⌥⌘E, ⌘\, ⌘, and ⇧⌘O. Then the editor.
+- While a question is up (Save changes?, a name to type), menu-bar commands do nothing. Quitting or opening
+  another folder still works: its own question replaces the open one, which is answered Cancel.
 - In a text field other than the note (a dialog, the filter box), editing shortcuts keep the field's own
   behaviour. For example, ⌘A selects the field's text.
 
@@ -195,7 +205,7 @@ switched from the status bar or the View commands:
 ### 10.1 Editing
 
 - **Caret and selection** move by grapheme cluster. IME composition works in place.
-- **Undo and redo.** Typing coalesces into runs. Structural edits and commands are single steps. Revert
+- **Undo and redo.** Typing coalesces into runs. Structural edits, commands and a paste are single steps. Revert
   resets the history. Taking an external change is one step (§5).
 - **Enter.** In the two formatted views, Enter writes a paragraph break (`\n\n`) that shows as one new line.
   In Raw text, Enter writes one newline. Either way, one press makes one visible line.
@@ -204,7 +214,10 @@ switched from the status bar or the View commands:
   instead. Ordered lists renumber as items are added, moved or re-indented.
 - **Tab and Shift+Tab** indent and outdent list items, by the Indent with setting. Elsewhere, Tab inserts the
   indent.
-- **Auto-pairing:** `*`, `_`, `` ` ``, `[` and `(` wrap a selection, or insert a pair.
+- **Auto-pairing:** `*`, `_`, `` ` ``, `[` and `(` wrap a selection, or insert a pair. `*`, `_` and `` ` ``
+  don't pair at the start of a line (a list item, a rule, a code fence), right after the same character, or
+  after a letter or digit (`2*3`, `snake_case`). A space typed right after a lone opener removes its closer
+  (`2 * 3`). Typing the closer steps over it.
 - **Line commands:** move line up/down (⌥↑/⌥↓), duplicate (⌘D), delete (⇧⌘K).
 - **Formatting:** bold ⌘B, italic ⌘I, inline code ⌘E, strikethrough ⇧⌘X, highlight ⇧⌘H, headings ⌘1–⌘6,
   paragraph ⌘0, bullet list ⌘., numbered list ⌘/, blockquote, link ⌥⌘K, code block ⇧⌘E, horizontal rule.
@@ -263,6 +276,13 @@ the character-exact offset map.
 
 The renderer walks the same tokens as the editor and writes one self-contained HTML document (styles
 included) or a fragment. It has no dependencies. The CLI's `html` command uses it (§12).
+
+Exported HTML must be safe to open. Every attribute value is escaped, including a fence's info string. A link
+or autolink keeps its `href` only when the URL has no scheme (a relative path, a `#fragment` or `//host`) or
+its scheme is `http`, `https` or `mailto`; an email autolink gets `mailto:`. An image `src` may also be a
+`data:image/` URL of a raster type (png, jpeg, gif, webp, avif or bmp; never SVG). Control characters and
+whitespace are ignored when the scheme is read. Any other URL (`javascript:`, `vbscript:`, `file:`, other
+`data:` and so on) is dropped: the link renders as its text, the image as its alt text.
 
 ## 11. Markdown processing
 

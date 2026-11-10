@@ -42,6 +42,9 @@ if (native) {
       if (fallback && inField) document.execCommand(fallback);
       return;
     }
+    // A question someone waits on (Save changes?, a name) takes no menu commands: answer it first. Quit and
+    // Open Folder still work; their own question replaces it, answering it as cancelled.
+    if (model.asking) return;
     if (model.overlay.value && !catalog.get(id)?.global) return;
     void catalog.run(id);
   });

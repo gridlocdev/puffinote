@@ -55,13 +55,13 @@ export class MemoryStore implements NotebookStore {
     if (opts.create && (existing || this.dirs.has(path))) {
       return Promise.reject(new ConflictError('exists', `“${baseName(path)}” already exists.`));
     }
-    if (
-      !opts.force &&
-      opts.expected !== undefined &&
-      existing &&
-      String(existing.version) !== opts.expected
-    ) {
-      return Promise.reject(new ConflictError('changed', 'The file changed since it was opened.'));
+    if (!opts.force && opts.expected != null) {
+      if (!existing) {
+        return Promise.reject(new ConflictError('deleted', 'The file was deleted since it was opened.'));
+      }
+      if (String(existing.version) !== opts.expected) {
+        return Promise.reject(new ConflictError('changed', 'The file changed since it was opened.'));
+      }
     }
     return Promise.resolve(String(this.put(path, bytes.slice())));
   }

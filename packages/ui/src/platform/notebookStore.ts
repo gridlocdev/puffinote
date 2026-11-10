@@ -22,7 +22,10 @@ export interface FileData {
 }
 
 export interface WriteOptions {
-  /** The version the caller last read. A different one on disk throws ConflictError('changed'). */
+  /**
+   * The version the caller last read. A different one on disk throws ConflictError('changed'); a file that
+   * is gone throws ConflictError('deleted') (the NAS and desktop stores say 'changed'), never recreating it.
+   */
   readonly expected?: string | null;
   /** Overwrite whatever is there, changed or not. */
   readonly force?: boolean;
@@ -62,11 +65,16 @@ export interface NotebookStore {
   openExternal?(path: string): Promise<void>;
 }
 
-/** The file changed, is locked, or already exists. A forced write overwrites a changed file. */
-export class ConflictError extends Error {
-  readonly reason: 'changed' | 'locked' | 'exists';
+export type ConflictReason = 'changed' | 'deleted' | 'locked' | 'exists';
 
-  constructor(reason: 'changed' | 'locked' | 'exists', message: string) {
+/**
+ * The file changed, was deleted, is locked, or already exists. A forced write overwrites a changed file and
+ * recreates a deleted one.
+ */
+export class ConflictError extends Error {
+  readonly reason: ConflictReason;
+
+  constructor(reason: ConflictReason, message: string) {
     super(message);
     this.name = 'ConflictError';
     this.reason = reason;

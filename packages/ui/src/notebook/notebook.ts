@@ -9,7 +9,12 @@ import {
   type TextFileFormat,
 } from '@puffinote/text';
 import { EditorState } from '../editor/editorState.ts';
-import { ConflictError, NotFoundError, type NotebookStore } from '../platform/notebookStore.ts';
+import {
+  ConflictError,
+  NotFoundError,
+  type FileData,
+  type NotebookStore,
+} from '../platform/notebookStore.ts';
 import {
   baseName,
   invalidNameReason,
@@ -35,6 +40,7 @@ import {
   fileKind,
   findNode,
   loadTree,
+  noteFileName,
   stateDir,
   type TreeNode,
 } from './tree.ts';
@@ -78,6 +84,11 @@ export class Tab {
   format: TextFileFormat;
   version: string | null;
   savedText: string;
+  /**
+   * Bumps whenever `version` or `savedText` changes (a save, a reload, a move), so a refresh that read the
+   * disk before the change can tell its answer is stale and drop it.
+   */
+  generation = 0;
   /** Where the editor was scrolled, restored when the tab comes back. */
   scrollTop = 0;
   private readonly disposers: (() => void)[] = [];
@@ -122,6 +133,7 @@ export class Tab {
   markSaved(version: string | null): void {
     this.version = version;
     this.savedText = this.state?.text ?? '';
+    this.generation++;
     this.dirty.value = false;
     this.conflict.value = 'none';
   }
@@ -203,6 +215,12 @@ export class Notebook {
   private persistTimer: ReturnType<typeof setTimeout> | null = null;
   private refreshTimer: ReturnType<typeof setTimeout> | null = null;
   private loaded = false;
+  /** Each tab's saves run one at a time (see `save`). */
+  private readonly saveSlots = new WeakMap<Tab, SaveSlot>();
+  /** Tabs with a write to the store in flight. */
+  private readonly writing = new Set<Tab>();
+  /** Session writes, one after another, so an older one never lands last. */
+  private persistChain: Promise<void> = Promise.resolve();
 
   private constructor(store: NotebookStore, options: NotebookOptions) {
     this.store = store;
@@ -264,6 +282,16 @@ export class Notebook {
         for (const t of this.tabs.value) if (t.state) t.state.indentUnit = unit;
       }),
     );
+    // Show Hidden Files changes the tree, from whichever layer it comes (PRD §6, §9).
+    let hidden = this.settings.peek().showHiddenFiles;
+    this.disposers.push(
+      effect(() => {
+        const now = this.settings.value.showHiddenFiles;
+        if (now === hidden) return;
+        hidden = now;
+        void this.reloadTree().catch((e: unknown) => this.report(e));
+      }),
+    );
     if (this.store.watch) this.disposers.push(this.store.watch(() => this.scheduleRefresh()));
     else if (typeof window !== 'undefined') {
       // No change notification (a browser folder, the NAS): look again whenever the window comes back.
@@ -274,9 +302,14 @@ export class Notebook {
   }
 
   dispose(): void {
+    // A session write still waiting on its debounce goes out now, before the tabs it describes go away.
+    if (this.persistTimer) {
+      clearTimeout(this.persistTimer);
+      this.persistTimer = null;
+      void this.persist();
+    }
     for (const d of this.disposers) d();
     for (const t of this.tabs.value) t.dispose();
-    if (this.persistTimer) clearTimeout(this.persistTimer);
     if (this.refreshTimer) clearTimeout(this.refreshTimer);
     for (const url of this.images.values()) if (url?.startsWith('blob:')) URL.revokeObjectURL(url);
   }
@@ -291,8 +324,10 @@ export class Notebook {
 
   // ----- Tree -----
 
+  /** Re-read the tree. The signal keeps its old value when nothing changed, so a refresh redraws nothing. */
   async reloadTree(): Promise<void> {
-    this.tree.value = await loadTree(this.store, this.settings.peek().showHiddenFiles);
+    const next = await loadTree(this.store, this.settings.peek().showHiddenFiles);
+    if (!sameTree(this.tree.peek(), next)) this.tree.value = next;
   }
 
   toggleFolder(path: string, open?: boolean): void {
@@ -324,22 +359,39 @@ export class Notebook {
     }
     for (const tab of this.tabs.value) {
       if (tab.kind !== 'note') continue;
+      // A save in flight is about to move the tab on: its answer, not this read, says what's on disk.
+      if (this.writing.has(tab)) continue;
+      const path = tab.path.value;
+      const generation = tab.generation;
+      // While the read is out, a save, reload or move may land. Then this answer is stale: drop it, so a
+      // clean tab never goes back to the text it had before the save.
+      const stale = () =>
+        tab.generation !== generation ||
+        tab.path.value !== path ||
+        this.writing.has(tab) ||
+        !this.tabs.peek().includes(tab);
+      let data: FileData;
       try {
-        const data = await this.store.read(tab.path.value);
-        if (data.version !== null && data.version === tab.version) {
-          if (tab.conflict.value === 'deleted') tab.conflict.value = 'none';
-          continue;
-        }
-        const text = readText(data.bytes).text;
-        if (text === tab.savedText) {
-          tab.version = data.version;
-          continue;
-        }
-        if (tab.dirty.value) tab.conflict.value = 'changed';
-        else this.replaceText(tab, text, data.version);
+        data = await this.store.read(path);
       } catch (e) {
-        if (e instanceof NotFoundError) tab.conflict.value = 'deleted';
+        if (e instanceof NotFoundError && !stale()) tab.conflict.value = 'deleted';
+        continue;
       }
+      if (stale()) continue;
+      if (data.version !== null && data.version === tab.version) {
+        if (tab.conflict.value === 'deleted') tab.conflict.value = 'none';
+        continue;
+      }
+      const text = readText(data.bytes).text;
+      if (text === tab.savedText) {
+        // Touched, or deleted and put back, with the same text: nothing to resolve.
+        tab.version = data.version;
+        tab.generation++;
+        if (tab.conflict.value === 'deleted') tab.conflict.value = 'none';
+        continue;
+      }
+      if (tab.dirty.value) tab.conflict.value = 'changed';
+      else this.replaceText(tab, text, data.version);
     }
   }
 
@@ -457,31 +509,72 @@ export class Notebook {
 
   /**
    * Save `tab`. A file changed on disk since it was read is a conflict: the tab is flagged and nothing is
-   * written unless `force`. Returns whether it saved.
+   * written unless `force`. A tab without unsaved edits isn't written unless `force`. Returns whether the
+   * tab's text is now on disk.
+   *
+   * A tab's saves run one at a time: a save asked for while one is in flight waits for it, then writes the
+   * text as it is by then, against the version that save got back. Saves asked for while one already waits
+   * share it.
    */
-  async save(tab: Tab, force = false): Promise<boolean> {
-    if (!tab.state || tab.readOnly) return false;
-    if (!force && tab.conflict.value !== 'none') return false;
+  save(tab: Tab, force = false): Promise<boolean> {
+    let slot = this.saveSlots.get(tab);
+    if (!slot) {
+      slot = { queued: null, force: false, tail: Promise.resolve(true) };
+      this.saveSlots.set(tab, slot);
+    }
+    slot.force ||= force;
+    if (slot.queued) return slot.queued;
+    const s = slot;
+    const run = s.tail.then(() => {
+      s.queued = null;
+      const f = s.force;
+      s.force = false;
+      return this.writeTab(tab, f);
+    });
+    s.queued = run;
+    s.tail = run;
+    return run;
+  }
+
+  private async writeTab(tab: Tab, force: boolean): Promise<boolean> {
+    if (!tab.state || tab.readOnly || !this.tabs.peek().includes(tab)) return false;
+    if (!force && tab.conflict.peek() !== 'none') return false;
+    if (!force && !tab.dirty.peek()) return true;
     const text = tab.state.text;
+    const path = tab.path.peek();
+    this.writing.add(tab);
     try {
-      const version = await this.store.write(tab.path.value, encodeText(text, tab.format), {
+      const version = await this.store.write(path, encodeText(text, tab.format), {
         expected: tab.version,
         force,
       });
       // Edits made while the write was in flight stay unsaved.
       tab.version = version;
       tab.savedText = text;
+      tab.generation++;
       tab.dirty.value = tab.state.text !== text;
       tab.conflict.value = 'none';
       this.flashSaved(tab);
       return true;
     } catch (e) {
-      if (e instanceof ConflictError && e.reason === 'changed') {
-        tab.conflict.value = 'changed';
+      if (e instanceof ConflictError && (e.reason === 'changed' || e.reason === 'deleted')) {
+        tab.conflict.value = e.reason === 'deleted' ? 'deleted' : await this.changedOrDeleted(path);
         return false;
       }
       this.report(e);
       return false;
+    } finally {
+      this.writing.delete(tab);
+    }
+  }
+
+  /** The NAS and the desktop answer a stale write to a deleted file as "changed": look to tell them apart. */
+  private async changedOrDeleted(path: string): Promise<TabConflict> {
+    try {
+      await this.store.read(path);
+      return 'changed';
+    } catch (e) {
+      return e instanceof NotFoundError ? 'deleted' : 'changed';
     }
   }
 
@@ -530,15 +623,14 @@ export class Notebook {
         caret,
       });
     }
-    tab.savedText = text;
     tab.markSaved(version);
   }
 
   // ----- Files and folders -----
 
-  /** Create a note in `dir` and open it. `name` may leave off `.md`. Returns the path. */
+  /** Create a note in `dir` and open it. `name` may leave off `.md` (see `noteFileName`). Returns the path. */
   async createNote(dir: string, name: string): Promise<string | null> {
-    const file = /\.[A-Za-z0-9]+$/.test(name) ? name : `${name}.md`;
+    const file = noteFileName(name);
     const path = joinPath(dir, file);
     if (!this.checkName(file)) return null;
     try {
@@ -602,10 +694,10 @@ export class Notebook {
       this.report(e);
       return null;
     }
-    for (const t of this.tabs.value) {
-      if (isWithin(t.path.value, from)) t.path.value = rebase(t.path.value, from, to);
-    }
+    const moved = this.tabs.value.filter((t) => isWithin(t.path.value, from));
+    for (const t of moved) t.path.value = rebase(t.path.value, from, to);
     this.tabs.value = [...this.tabs.value];
+    await Promise.all(moved.map((t) => this.adoptMovedVersion(t)));
     this.recent.value = this.recent.value.map((p) => (isWithin(p, from) ? rebase(p, from, to) : p));
     this.expanded.value = new Set(
       [...this.expanded.value]
@@ -617,6 +709,25 @@ export class Notebook {
     }
     await this.reloadTree();
     return to;
+  }
+
+  /**
+   * A move can give the file a new version token (the browser store copies, then deletes). Take the moved
+   * file's version when its text is still what the tab last saved, so the next save isn't a false conflict.
+   * A file that changed on disk before the move keeps the old token and conflicts as it should.
+   */
+  private async adoptMovedVersion(tab: Tab): Promise<void> {
+    if (tab.kind !== 'note' || this.writing.has(tab)) return;
+    const generation = tab.generation;
+    try {
+      const data = await this.store.read(tab.path.value);
+      if (tab.generation !== generation || this.writing.has(tab) || data.version === tab.version) return;
+      if (readText(data.bytes).text !== tab.savedText) return;
+      tab.version = data.version;
+      tab.generation++;
+    } catch {
+      // Gone already: the next refresh flags it.
+    }
   }
 
   /** Delete a file or folder (the shell confirms first). Its tabs close without saving. */
@@ -661,12 +772,19 @@ export class Notebook {
     if (next.join('\n') !== this.recent.value.join('\n')) this.recent.value = next;
   }
 
-  /** Full-text search across the notebook's notes (PRD §6.2), open tabs' unsaved text included. */
-  async search(query: string, opts: { caseSensitive?: boolean; regex?: boolean } = {}): Promise<SearchHit[]> {
+  /**
+   * Full-text search across the notebook's notes (PRD §6.2), open tabs' unsaved text included. An aborted
+   * `signal` stops the scan between files and resolves with no hits.
+   */
+  async search(
+    query: string,
+    opts: { caseSensitive?: boolean; regex?: boolean; signal?: AbortSignal } = {},
+  ): Promise<SearchHit[]> {
     if (!query.trim()) return [];
     const hits: SearchHit[] = [];
     const open = new Map(this.tabs.value.filter((t) => t.state).map((t) => [t.path.value, t.state!]));
     for (const file of allFiles(this.tree.value)) {
+      if (opts.signal?.aborted) return [];
       if (fileKind(file.path) !== 'note') continue;
       let text: string;
       try {
@@ -674,6 +792,7 @@ export class Notebook {
       } catch {
         continue;
       }
+      if (opts.signal?.aborted) return [];
       const matches = findAll(text, query, {
         caseSensitive: opts.caseSensitive ?? false,
         regex: opts.regex ?? false,
@@ -739,7 +858,7 @@ export class Notebook {
   async setOverrides(overrides: PartialSettings): Promise<void> {
     const clean = sanitize(overrides);
     if (JSON.stringify(clean) === JSON.stringify(this.overrides.value)) return;
-    const hiddenBefore = this.settings.peek().showHiddenFiles;
+    // The tree follows Show Hidden Files by itself (see `load`).
     this.overrides.value = clean;
     try {
       await this.ensureStateDir();
@@ -747,7 +866,6 @@ export class Notebook {
     } catch (e) {
       this.report(e);
     }
-    if (this.settings.peek().showHiddenFiles !== hiddenBefore) await this.reloadTree();
   }
 
   // ----- Session -----
@@ -778,14 +896,22 @@ export class Notebook {
     }, 500);
   }
 
-  /** Write the session now (before closing the notebook). */
-  async persist(): Promise<void> {
-    try {
-      await this.ensureStateDir();
-      await this.store.write(sessionPath, encodeJson(this.session()), { force: true });
-    } catch {
-      // A read-only notebook just doesn't remember its tabs.
-    }
+  /**
+   * Write the session now (before closing the notebook). The session is taken at the call; writes go out one
+   * after another, so the last call's session is the one left on disk.
+   */
+  persist(): Promise<void> {
+    const bytes = encodeJson(this.session());
+    const run = this.persistChain.then(async () => {
+      try {
+        await this.ensureStateDir();
+        await this.store.write(sessionPath, bytes, { force: true });
+      } catch {
+        // A read-only notebook just doesn't remember its tabs.
+      }
+    });
+    this.persistChain = run;
+    return run;
   }
 
   private async ensureStateDir(): Promise<void> {
@@ -813,6 +939,23 @@ export class Notebook {
   report(e: unknown): void {
     this.notify('error', e instanceof Error ? e.message : String(e));
   }
+}
+
+interface SaveSlot {
+  /** The save that hasn't started yet; later calls share it. */
+  queued: Promise<boolean> | null;
+  /** Whether that save overwrites. */
+  force: boolean;
+  /** The last save, the next one waits for. */
+  tail: Promise<boolean>;
+}
+
+/** Whether two trees list the same entries, so a refresh can keep the old object. */
+function sameTree(a: TreeNode, b: TreeNode): boolean {
+  if (a === b) return true;
+  if (a.path !== b.path || a.name !== b.name || a.kind !== b.kind) return false;
+  if (a.children.length !== b.children.length) return false;
+  return a.children.every((c, i) => sameTree(c, b.children[i]!));
 }
 
 function encodeJson(value: unknown): Uint8Array {

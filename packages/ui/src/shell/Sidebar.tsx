@@ -184,22 +184,26 @@ function SearchPanel({ model, nb }: { readonly model: ShellModel; readonly nb: N
   useEffect(() => {
     if (!query.trim()) {
       setHits(null);
+      setBusy(false);
       return;
     }
-    let live = true;
+    // A newer query (or a changed tree) stops this scan where it is, not just hides its answer.
+    const abort = new AbortController();
     setBusy(true);
     const t = setTimeout(() => {
-      void nb.search(query).then((h) => {
-        if (!live) return;
+      void nb.search(query, { signal: abort.signal }).then((h) => {
+        if (abort.signal.aborted) return;
         setHits(h);
         setIndex(0);
         setBusy(false);
       });
     }, 200);
     return () => {
-      live = false;
+      abort.abort();
       clearTimeout(t);
     };
+    // The tree keeps its object while its entries are the same (`Notebook.reloadTree`), so a refresh on
+    // window focus doesn't start the scan again.
   }, [query, nb.tree.value]);
 
   const open = async (hit: SearchHit) => {

@@ -3,7 +3,7 @@ import { CommandCatalog, type Command, type CommandSpec } from '../commands/comm
 import { markdownCommandSpecs } from '../editor/editorCommands.ts';
 import type { EditorState } from '../editor/editorState.ts';
 import { sidebarPanels, type Notebook, type SidebarPanel, type Tab } from '../notebook/notebook.ts';
-import { allFolders, findNode, hasFolders } from '../notebook/tree.ts';
+import { allFolders, findNode, hasFolders, noteFileName } from '../notebook/tree.ts';
 import { baseName, invalidNameReason, parentOf, stemOf } from '../platform/paths.ts';
 import type { ConfirmOptions, PromptOptions } from './Dialog.tsx';
 
@@ -96,47 +96,69 @@ export class ShellModel {
 
   private returnFocus: HTMLElement | null = null;
 
+  /**
+   * Show `overlay`. One replacing a prompt or confirm that is still up answers it as cancelled first, so
+   * whoever waits on it (a close, Open Notebook…, quit) goes on instead of waiting forever.
+   */
   open(overlay: Overlay): void {
+    const previous = this.overlay.peek();
     // Keys typed before the overlay draws must not land in the note: let go of the editor now, and take the
     // keyboard back to it on close.
-    if (!this.overlay.peek() && typeof document !== 'undefined') {
+    if (!previous && typeof document !== 'undefined') {
       const el = document.activeElement;
       this.returnFocus = el instanceof HTMLElement && el !== document.body ? el : null;
       this.returnFocus?.blur();
     }
     this.overlay.value = overlay;
+    if (previous && previous !== overlay) cancelDialog(previous);
   }
 
   close(): void {
+    const previous = this.overlay.peek();
     this.overlay.value = null;
     const el = this.returnFocus;
     this.returnFocus = null;
+    if (previous) cancelDialog(previous);
     if (el?.isConnected) el.focus({ preventScroll: true });
+  }
+
+  /** Whether a prompt or confirm is up: a question someone is waiting on. */
+  get asking(): boolean {
+    const kind = this.overlay.peek()?.kind;
+    return kind === 'prompt' || kind === 'confirm';
   }
 
   prompt(options: PromptOptions): Promise<string | null> {
     return new Promise((resolve) => {
-      this.open({
+      let answered = false;
+      const overlay: Overlay = {
         kind: 'prompt',
         options,
         done: (v) => {
-          this.close();
+          if (answered) return;
+          answered = true;
+          if (this.overlay.peek() === overlay) this.close();
           resolve(v);
         },
-      });
+      };
+      this.open(overlay);
     });
   }
 
   confirm(options: ConfirmOptions): Promise<string> {
     return new Promise((resolve) => {
-      this.open({
+      let answered = false;
+      const overlay: Overlay = {
         kind: 'confirm',
         options,
         done: (v) => {
-          this.close();
+          if (answered) return;
+          answered = true;
+          if (this.overlay.peek() === overlay) this.close();
           resolve(v);
         },
-      });
+      };
+      this.open(overlay);
     });
   }
 
@@ -257,7 +279,7 @@ export class ShellModel {
       value: 'Untitled',
       confirm: 'Create',
       validate: (v) => {
-        const file = /\.[A-Za-z0-9]+$/.test(v) ? v : `${v}.md`;
+        const file = noteFileName(v);
         return invalidNameReason(file) ?? (taken(file) ? `“${file}” already exists.` : null);
       },
     });
@@ -344,6 +366,12 @@ export class ShellModel {
     const mark = tab.dirty.value ? ' •' : tab.saved.value ? ' — Saved' : '';
     return `${tab.name}${mark} — ${nb.name}`;
   });
+}
+
+/** Answer a prompt or confirm that is going away unanswered: a prompt with null, a confirm with 'cancel'. */
+function cancelDialog(o: Overlay): void {
+  if (o.kind === 'prompt') o.done(null);
+  else if (o.kind === 'confirm') o.done('cancel');
 }
 
 /** The shell's own commands (PRD §8.1). Ids start `shell.` or `view.sidebar.`, apart from the editor's. */

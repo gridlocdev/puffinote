@@ -101,6 +101,8 @@ export class BrowserStore implements NotebookStore {
     const name = baseName(path);
     const handle = await dir.getFileHandle(name).catch(() => null);
     if (handle && opts.create) throw new ConflictError('exists', `“${name}” already exists.`);
+    if (!handle && !opts.force && opts.expected != null)
+      throw new ConflictError('deleted', 'The file was deleted since it was opened.');
     if (handle && !opts.force && opts.expected != null) {
       const current = String((await handle.getFile()).lastModified);
       if (current !== opts.expected)
@@ -119,10 +121,24 @@ export class BrowserStore implements NotebookStore {
 
   async move(from: string, to: string): Promise<void> {
     if (from === to) return;
-    if (await this.exists(to)) throw new ConflictError('exists', `“${baseName(to)}” already exists there.`);
-    // Handle.move() isn't everywhere and doesn't move folders in every engine: copy, then delete.
-    await this.copy(from, to);
-    await this.remove(from);
+    const source = await this.entry(from);
+    const target = await this.entry(to).catch(() => null);
+    if (target) {
+      if (!(await this.sameEntry(source, target, from, to)))
+        throw new ConflictError('exists', `“${baseName(to)}” already exists there.`);
+      // The same file under another spelling: a case-only rename on a case-insensitive disk. Copying it onto
+      // itself and deleting the original would delete it, so it goes by a free temporary name instead.
+      const temp = await this.freeName(from);
+      await this.copyThenRemove(from, temp);
+      try {
+        await this.copyThenRemove(temp, to);
+      } catch (e) {
+        await this.copyThenRemove(temp, from).catch(() => undefined);
+        throw e;
+      }
+      return;
+    }
+    await this.copyThenRemove(from, to);
   }
 
   async remove(path: string): Promise<void> {
@@ -132,6 +148,54 @@ export class BrowserStore implements NotebookStore {
 
   fileUrl(): string | null {
     return null;
+  }
+
+  /**
+   * Handle.move() isn't everywhere and doesn't move folders in every engine: copy, then delete. `to` must be
+   * free. A copy that fails is cleaned up and the original stays; the original goes only after a full copy.
+   */
+  private async copyThenRemove(from: string, to: string): Promise<void> {
+    try {
+      await this.copy(from, to);
+    } catch (e) {
+      await this.remove(to).catch(() => undefined);
+      throw e;
+    }
+    await this.remove(from);
+  }
+
+  private async sameEntry(a: FileSystemHandle, b: FileSystemHandle, aPath: string, bPath: string) {
+    if (typeof a.isSameEntry === 'function') return a.isSameEntry(b);
+    // No isSameEntry: the disk found `bPath` under `aPath`'s name, so it is the same entry when only the case
+    // differs.
+    return (
+      parentOf(aPath) === parentOf(bPath) && baseName(aPath).toLowerCase() === baseName(bPath).toLowerCase()
+    );
+  }
+
+  /** A hidden name beside `path` that nothing has. */
+  private async freeName(path: string): Promise<string> {
+    const dir = parentOf(path);
+    for (let i = 0; ; i++) {
+      const name = `.${baseName(path)}.moving${i === 0 ? '' : `-${i}`}`;
+      const candidate = dir ? `${dir}/${name}` : name;
+      if (!(await this.entry(candidate).catch(() => null))) return candidate;
+    }
+  }
+
+  /** The file or folder at `path`, as the disk resolves the name (case-insensitively on some disks). */
+  private async entry(path: string): Promise<FileSystemHandle> {
+    const parent = await this.dir(parentOf(path), false);
+    const name = baseName(path);
+    try {
+      return await parent.getFileHandle(name);
+    } catch {
+      try {
+        return await parent.getDirectoryHandle(name);
+      } catch {
+        throw new NotFoundError(path);
+      }
+    }
   }
 
   private async copy(from: string, to: string): Promise<void> {
@@ -148,17 +212,6 @@ export class BrowserStore implements NotebookStore {
     }
     await this.mkdir(to);
     for (const e of await this.list(from)) await this.copy(e.path, `${to}/${e.name}`);
-  }
-
-  private async exists(path: string): Promise<boolean> {
-    try {
-      const parent = await this.dir(parentOf(path), false);
-      const name = baseName(path);
-      for await (const n of parent.keys()) if (n === name) return true;
-      return false;
-    } catch {
-      return false;
-    }
   }
 
   private async dir(path: string, create: boolean): Promise<FileSystemDirectoryHandle> {

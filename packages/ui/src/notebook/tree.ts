@@ -24,6 +24,15 @@ export function fileKind(path: string): FileKind {
   return 'other';
 }
 
+/**
+ * The file name New Note creates for what the user typed (PRD §6): the name as typed when it already ends in
+ * a note extension (PRD §5), otherwise with `.md` added. A dot elsewhere ("Meeting 2024.11", "v1.2") is part
+ * of the name.
+ */
+export function noteFileName(name: string): string {
+  return isMarkdownFile(name) ? name : `${name}.md`;
+}
+
 const collator = new Intl.Collator(undefined, { numeric: true, sensitivity: 'base' });
 
 export function compareEntries(a: { kind: string; name: string }, b: { kind: string; name: string }): number {
