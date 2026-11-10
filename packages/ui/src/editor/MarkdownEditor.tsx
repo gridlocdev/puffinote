@@ -296,15 +296,33 @@ export function MarkdownEditor(props: MarkdownEditorProps) {
     return rowIndex.current.byLine[line] ?? null;
   }
 
+  /** Whether the next shown line after `line` is something other than a blank line. */
+  function textFollows(line: number): boolean {
+    for (let i = line + 1; ; i++) {
+      const next = lineEl(i);
+      if (!next) return false;
+      if (next.getBoundingClientRect().height === 0) continue; // a hidden line, like a setext underline
+      return !next.classList.contains('pn-blank');
+    }
+  }
+
   function caretBoxAt(offset: number) {
     const p = doc.getPosition(Math.min(offset, doc.length));
     const el = lineEl(p.line);
     if (!el || el.hasAttribute('data-widget')) return null;
     const box = caretBox(el, p.column);
     if (el.classList.contains('pn-blank')) {
-      // A blank line is shorter than a text line: centre a caret as tall as a text line's on it.
-      const h = fontHeight(getComputedStyle(el)) ?? box.height;
+      // A blank line is shorter than a text line, and grows into one when typed on. With nothing after it,
+      // the caret stands where that text will be, so typing doesn't move it; between two lines of text it
+      // is centred in the gap, so it doesn't run into the next line's letters.
+      const style = getComputedStyle(el);
+      const h = fontHeight(style) ?? box.height;
       const r = el.getBoundingClientRect();
+      if (!textFollows(p.line)) {
+        // The computed line-height is in pixels; the --pn-body-line it comes from is still a calc() here.
+        const lh = parseFloat(style.lineHeight) || r.height;
+        return { left: box.left, top: r.top + (lh - h) / 2, height: h };
+      }
       return { left: box.left, top: r.top + (r.height - h) / 2, height: h };
     }
     return box;
