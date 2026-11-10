@@ -1,0 +1,19 @@
+{
+  "name": "@puffinote/cli",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "license": "MIT",
+  "description": "puffinote — command-line tools for Markdown notebooks, for scripts and CI.",
+  "bin": {
+    "puffinote": "./bin/puffinote.mjs"
+  },
+  "scripts": {
+    "start": "node src/main.ts",
+    "build": "echo 'cli runs from source (node type stripping)'"
+  },
+  "dependencies": {
+    "@puffinote/markdown": "workspace:*",
+    "@puffinote/text": "workspace:*"
+  }
+}

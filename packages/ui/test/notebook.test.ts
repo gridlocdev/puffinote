@@ -3,7 +3,7 @@ import { MemoryStore } from '../src/platform/memoryStore.ts';
 import { Notebook, sessionPath } from '../src/notebook/notebook.ts';
 import { memoryPrefs } from '../src/notebook/settings.ts';
 import { filterTree, visibleRows } from '../src/notebook/tree.ts';
-import { outlineOf } from '../src/notebook/outline.ts';
+import { outlineOf } from '@puffinote/markdown';
 
 const text = async (store: MemoryStore, path: string) =>
   new TextDecoder().decode((await store.read(path)).bytes);

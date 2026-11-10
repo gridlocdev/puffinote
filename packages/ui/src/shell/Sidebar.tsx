@@ -1,6 +1,6 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'preact/hooks';
 import { sidebarPanels, type Notebook, type SearchHit } from '../notebook/notebook.ts';
-import { outlineOf } from '../notebook/outline.ts';
+import { outlineOf } from '@puffinote/markdown';
 import { filterTree, findNode, hasFolders } from '../notebook/tree.ts';
 import { baseName, parentOf } from '../platform/paths.ts';
 import { FileTree } from './FileTree.tsx';

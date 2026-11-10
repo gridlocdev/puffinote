@@ -30,6 +30,15 @@ importers:
         specifier: 5.1.0
         version: 5.1.0(@types/node@22.20.5)(vite@8.3.7(@types/node@22.20.5)(jiti@2.7.0))
 
+  apps/cli:
+    dependencies:
+      '@puffinote/markdown':
+        specifier: workspace:*
+        version: link:../../packages/markdown
+      '@puffinote/text':
+        specifier: workspace:*
+        version: link:../../packages/text
+
   apps/desktop:
     devDependencies:
       '@puffinote/web':

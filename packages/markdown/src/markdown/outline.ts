@@ -1,4 +1,4 @@
-import type { MarkdownModel } from '@puffinote/markdown';
+import type { MarkdownModel } from './markdownModel.ts';
 import type { TextDocument } from '@puffinote/text';
 
 /** A heading in the active note (PRD §7.2.3, the Outline panel). */

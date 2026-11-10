@@ -8,3 +8,4 @@ export * from './markdown/markdownModel.ts';
 export * from './markdown/taskState.ts';
 export * from './markdown/token.ts';
 export { isSetextTextLine, setextUnderlineLevel } from './markdown/lineTokenizer.ts';
+export * from './markdown/outline.ts';
