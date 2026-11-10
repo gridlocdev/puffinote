@@ -13,7 +13,13 @@ import {
 } from '../src/index.ts';
 
 /** Render `line` of `md` with the given selection, as the surface would. */
-function render(md: string, sel: Selection, line = 0, mode: ViewMode = 'live'): LineRender {
+function render(
+  md: string,
+  sel: Selection,
+  line = 0,
+  mode: ViewMode = 'live',
+  shownPicture: number | null = null,
+): LineRender {
   const doc = TextDocument.fromString(md);
   const model = MarkdownModel.build(doc);
   const blocks = findBlocks(doc, model);
@@ -23,14 +29,20 @@ function render(md: string, sel: Selection, line = 0, mode: ViewMode = 'live'): 
     : null;
   const start = doc.getLineStart(line);
   const tokens = model.lineTokens(line);
-  const reveal = lineReveal(tokens, start, doc.getLineEnd(line), sel, range);
+  const reveal = lineReveal(tokens, start, doc.getLineEnd(line), sel, range, shownPicture);
   return renderLine(doc.getLineText(line), start, tokens, reveal, mode, block?.kind ?? null);
 }
 
 /** The text the line shows: visible runs, with decorations as `<kind>`. */
-function visible(md: string, sel: Selection, line = 0, mode: ViewMode = 'live'): string {
+function visible(
+  md: string,
+  sel: Selection,
+  line = 0,
+  mode: ViewMode = 'live',
+  shownPicture: number | null = null,
+): string {
   const text = TextDocument.fromString(md).getLineText(line);
-  return render(md, sel, line, mode)
+  return render(md, sel, line, mode, shownPicture)
     .segments.map((s) => (s.concealed ? (s.deco ? `<${s.deco.kind}>` : '') : text.slice(s.from, s.to)))
     .join('');
 }
@@ -45,6 +57,16 @@ describe('concealment (PRD §10.2)', () => {
     expect(visible(md, caretAt(6))).toBe('a **bold** b'); // inside
     expect(visible(md, caretAt(10))).toBe('a **bold** b'); // just after: touching reveals
     expect(visible(md, caretAt(0))).toBe('a bold b'); // on the line, but not at the node
+  });
+
+  it('keeps a picture drawn wherever the caret is, and shows its link text only for View Link Text', () => {
+    const md = 'a ![cat](c.png) b';
+    expect(visible(md, caretAt(15))).toBe('a <image> b'); // just after it, as after a paste
+    expect(visible(md, caretAt(2))).toBe('a <image> b'); // just before it
+    expect(visible(md, { anchor: 0, caret: md.length })).toBe('a <image> b'); // selected with the text
+    expect(visible(md, { anchor: 2, caret: 15 }, 0, 'live', 2)).toBe('a ![cat](c.png) b');
+    expect(visible(md, caretAt(8), 0, 'live', 2)).toBe('a ![cat](c.png) b'); // editing it
+    expect(visible(md, caretAt(17), 0, 'live', 2)).toBe('a <image> b'); // the caret left it
   });
 
   it('reveals only the node the caret is in', () => {

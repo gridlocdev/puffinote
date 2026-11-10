@@ -37,6 +37,15 @@ export type Overlay =
       readonly items: readonly (MenuItem | null)[];
     };
 
+/** A picture of the note in front, shown on its own (PRD §10.6). */
+export interface PicturePreview {
+  readonly picture: PictureAt;
+  /** A URL the page can load it from. */
+  readonly src: string;
+  /** Its file name, or its URL when it isn't a notebook file. */
+  readonly name: string;
+}
+
 /** What the page around the shell provides (phase 5's hosts). */
 export interface ShellHost {
   /** Offer Open Notebook… (a folder picker, the NAS browser). Absent: the command is hidden. */
@@ -71,6 +80,8 @@ function loadZoom(): number {
 export class ShellModel {
   readonly notebook = signal<Notebook | null>(null);
   readonly overlay = signal<Overlay | null>(null);
+  /** The picture preview (PRD §10.6): under any menu or dialog, over everything else. */
+  readonly preview = signal<PicturePreview | null>(null);
   /** Toggle Tab Bar's session-only answer; null follows the setting (PRD §9). */
   readonly tabBarOverride = signal<boolean | null>(null);
   /** The Filter and Search panels' boxes, kept while the user looks elsewhere. */
@@ -319,30 +330,135 @@ export class ShellModel {
     this.open({ kind: 'menu', x: at.x, y: at.y, items });
   }
 
-  /** A picture's right-click menu: open it, copy it, show its Markdown, or delete it (PRD §10.6). */
+  /** A picture's right-click menu, in the note or in the picture preview (PRD §10.6). */
   private openPictureMenu(picture: PictureAt, at: { x: number; y: number }): void {
+    const items = this.pictureMenuItems(picture);
+    if (items) this.open({ kind: 'menu', x: at.x, y: at.y, items });
+  }
+
+  /**
+   * What a picture's menu offers: show it, open it elsewhere, copy it or its Markdown, change its description
+   * or file name, show its link text, or delete it. The same in the note and in the preview.
+   */
+  pictureMenuItems(picture: PictureAt): (MenuItem | null)[] | null {
     const nb = this.notebook.peek();
     const tab = this.activeTab.peek();
-    if (!nb || !tab?.state) return;
+    const state = tab?.state;
+    if (!nb || !tab || !state) return null;
     const file = this.pictureFile(picture.url, tab.path.peek());
-    const items: (MenuItem | null)[] = [
-      { label: 'Open Picture', disabled: file === null, run: () => void this.openFile(file!) },
+    const source = state.document.getText(picture.start, picture.end - picture.start);
+    const inPreview = this.preview.peek() !== null;
+    const store = nb.store;
+    const items: (MenuItem | null)[] = [];
+    if (!inPreview) items.push({ label: 'Preview Picture', run: () => this.openPreview(picture) });
+    items.push({
+      label: 'Open in Tab',
+      disabled: file === null,
+      run: () => void this.openPictureFile(file!),
+    });
+    if (store.openExternal) {
+      items.push({
+        label: 'Open in Default App',
+        disabled: file === null,
+        run: () => void store.openExternal!(file!),
+      });
+    }
+    if (store.reveal) {
+      items.push({ label: revealLabel(), disabled: file === null, run: () => void store.reveal!(file!) });
+    }
+    items.push(
+      null,
       {
         label: 'Copy Picture',
         run: () =>
           void this.copyPicture(file ?? nb.resolveImage(tab.path.peek(), picture.url), file !== null),
       },
+      { label: 'Copy Markdown', run: () => void this.copyText(source) },
+      null,
+      { label: 'Edit Description…', run: () => void this.editPictureDescription(picture) },
+      { label: 'Rename Picture…', disabled: file === null, run: () => void this.renamePicture(file!) },
       {
         label: 'View Link Text',
         run: () => {
-          tab.state?.select(picture.start, picture.end);
+          this.closePreview(false);
+          state.showLinkText(picture.start, picture.end);
           this.focusEditor();
         },
       },
       null,
       { label: 'Delete Picture', danger: true, run: () => void this.deletePicture(picture) },
-    ];
-    this.open({ kind: 'menu', x: at.x, y: at.y, items });
+    );
+    return items;
+  }
+
+  /** Show a picture of the note in front in the picture preview (PRD §10.6). */
+  openPreview(picture: PictureAt): void {
+    const nb = this.notebook.peek();
+    const tab = this.activeTab.peek();
+    if (!nb || !tab?.state) return;
+    const file = this.pictureFile(picture.url, tab.path.peek());
+    this.preview.value = {
+      picture,
+      src: nb.resolveImage(tab.path.peek(), picture.url),
+      name: file ? baseName(file) : picture.url,
+    };
+  }
+
+  /** The previewed picture's menu, at `at`. */
+  openPreviewMenu(at: { x: number; y: number }): void {
+    const shown = this.preview.peek();
+    if (shown) this.openPictureMenu(shown.picture, at);
+  }
+
+  /** Close the picture preview, giving the keyboard back to the note unless `refocus` is false. */
+  closePreview(refocus = true): void {
+    if (!this.preview.peek()) return;
+    this.preview.value = null;
+    if (refocus) this.focusEditor();
+  }
+
+  private async openPictureFile(file: string): Promise<void> {
+    this.closePreview(false);
+    await this.openFile(file);
+  }
+
+  private async copyText(text: string): Promise<void> {
+    try {
+      await navigator.clipboard.writeText(text);
+    } catch {
+      this.notebook.peek()?.notify('error', 'Puffinote couldn’t copy to the clipboard.');
+    }
+  }
+
+  /** Edit Description…: change a picture's alt text, the words read out in its place (one undo step). */
+  async editPictureDescription(picture: PictureAt): Promise<void> {
+    const state = this.activeTab.peek()?.state;
+    if (!state) return;
+    const written = state.document.getText(picture.start, picture.end - picture.start);
+    const m = /^!\[((?:\\.|[^\]\\])*)\]/.exec(written);
+    if (!m) return;
+    const next = await this.prompt({
+      title: 'Edit Description',
+      label: 'Description',
+      value: m[1]!.replace(/\\([\\[\]])/g, '$1'),
+      confirm: 'Save',
+    });
+    if (next === null) return;
+    if (state.document.getText(picture.start, picture.end - picture.start) !== written) return;
+    const alt = next.replace(/[\r\n]+/g, ' ').replace(/([\\[\]])/g, '\\$1');
+    const text = `![${alt}]${written.slice(m[0].length)}`;
+    const end = picture.start + text.length;
+    state.apply({ start: picture.start, length: written.length, text, anchor: end, caret: end });
+    const shown = this.preview.peek();
+    if (shown && shown.picture.start === picture.start) {
+      this.preview.value = { ...shown, picture: { ...shown.picture, end } };
+    }
+  }
+
+  /** Rename Picture…: rename the picture's file; every note's links to it follow (PRD §6.1). */
+  private async renamePicture(file: string): Promise<void> {
+    this.closePreview(false);
+    await this.rename(file);
   }
 
   /** The notebook file a picture link written in note `notePath` points at, or null (a web picture, missing). */
@@ -442,6 +558,7 @@ export class ShellModel {
           }
         : undefined;
     state.apply(removeRangeEdit(state.document, picture.start, picture.end), effect);
+    this.closePreview(false);
     this.focusEditor();
     if (deleteFile && file !== null) await nb.removeAll([file]);
   }

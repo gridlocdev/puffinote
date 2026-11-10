@@ -2,6 +2,7 @@ import { signal } from '@preact/signals';
 import { MarkdownModel } from '@puffinote/markdown';
 import {
   DocumentBuffer,
+  selectionIntersects,
   selectionLength,
   selectionStart,
   type Selection,
@@ -10,7 +11,7 @@ import {
 } from '@puffinote/text';
 import { findBlocks, updateBlocks, type Block } from './blocks.ts';
 import type { Edit, EditContext } from './commands.ts';
-import type { ViewMode } from './reveal.ts';
+import { pictureExtent, type ViewMode } from './reveal.ts';
 
 /**
  * The editor's state: the undoable buffer, the incrementally updated Markdown model and the view mode,
@@ -23,6 +24,11 @@ export class EditorState {
   readonly version = signal(0);
   readonly selection = signal<Selection>({ anchor: 0, caret: 0 });
   readonly mode = signal<ViewMode>('live');
+  /**
+   * The start of the picture showing its link text (View Link Text, PRD §10.6), or `null`. It clears once the
+   * selection leaves that picture, so the picture is drawn again.
+   */
+  readonly shownPicture = signal<number | null>(null);
   /** Bumps when `reveal` asks the surface to bring the caret into view. */
   readonly revealTick = signal(0);
   /** The editor's indent unit for Tab (PRD §10.1: four spaces by default). */
@@ -113,6 +119,12 @@ export class EditorState {
     this.revealTick.value++;
   }
 
+  /** Show a picture's link text and select it (View Link Text, PRD §10.6). */
+  showLinkText(start: number, end: number): void {
+    this.shownPicture.value = start;
+    this.select(start, end);
+  }
+
   /** The selected Markdown source, which is what copy puts on the clipboard (PRD §10.1). */
   selectedText(): string {
     const s = this.buffer.selection;
@@ -158,6 +170,12 @@ export class EditorState {
     const s = this.buffer.selection;
     const cur = this.selection.peek();
     if (cur.anchor !== s.anchor || cur.caret !== s.caret) this.selection.value = s;
+    const shown = this.shownPicture.peek();
+    if (shown !== null) {
+      const line = doc.getPosition(Math.min(shown, doc.length)).line;
+      const e = pictureExtent(this.modelValue.lineTokens(line), shown);
+      if (!e || !selectionIntersects(s, e.start, e.end - e.start)) this.shownPicture.value = null;
+    }
   }
 }
 

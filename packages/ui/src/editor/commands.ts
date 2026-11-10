@@ -508,13 +508,16 @@ interface ListItem {
   readonly done: boolean;
 }
 
-/** The items of the bulleted list that `line` is an item of (its own level only), or null. */
-function listItemsAround(doc: TextDocument, line: number): ListItem[] | null {
+/**
+ * The items of the list that `line` is an item of (its own level only), or null: a bulleted list, or with
+ * `anyKind` a numbered one too.
+ */
+function listItemsAround(doc: TextDocument, line: number, anyKind = false): ListItem[] | null {
   const p = parseLinePrefix(doc.getLineText(line));
-  if (!p.hasList || p.list !== 'unordered') return null;
+  if (!p.hasList || (p.list !== 'unordered' && !anyKind)) return null;
   const sibling = (i: number) => {
     const q = parseLinePrefix(doc.getLineText(i));
-    return q.hasList && q.list === 'unordered' && q.quote === p.quote && q.markerStart === p.markerStart;
+    return q.hasList && q.list === p.list && q.quote === p.quote && q.markerStart === p.markerStart;
   };
   // A nested line: not blank, in the same quote, and starting right of this level's marker.
   const nested = (i: number) => {
@@ -539,13 +542,62 @@ function listItemsAround(doc: TextDocument, line: number): ListItem[] | null {
   return items;
 }
 
+/** A list rewritten with its items in a new order: the range it covers, its new text, and where offsets go. */
+interface Reordered {
+  readonly start: number;
+  readonly end: number;
+  readonly text: string;
+  readonly map: (offset: number) => number;
+}
+
+/**
+ * Rewrite the list `items` in the order `order` (the same items), each keeping its nested lines. In a
+ * numbered list the numbers stay with the positions, so the list still counts up from where it started.
+ */
+function reorderItems(doc: TextDocument, items: readonly ListItem[], order: readonly ListItem[]): Reordered {
+  const start = doc.getLineStart(items[0]!.first);
+  const end = doc.getLineEnd(items[items.length - 1]!.last);
+  const numbers = items.map((it) => parseLinePrefix(doc.getLineText(it.first)));
+  let at = start;
+  const placed = order.map((it, k) => {
+    const a = doc.getLineStart(it.first);
+    const b = doc.getLineEnd(it.last);
+    let body = doc.getText(a, b - a);
+    // Renumber: the item takes the number of the position it lands in.
+    const p = parseLinePrefix(doc.getLineText(it.first));
+    let numberEnd = 0;
+    let delta = 0;
+    if (p.list === 'ordered' && numbers[k]!.list === 'ordered') {
+      const digits = String(numbers[k]!.number).padStart(numbers[k]!.digitCount, '0');
+      const from = p.markerStart;
+      numberEnd = from + p.digitCount;
+      delta = digits.length - p.digitCount;
+      body = body.slice(0, from) + digits + body.slice(numberEnd);
+    }
+    const to = at;
+    at += body.length + 1;
+    return { a, b, to, body, numberEnd, delta };
+  });
+  return {
+    start,
+    end,
+    text: placed.map((pl) => pl.body).join('\n'),
+    map: (o) => {
+      const hit = placed.find((pl) => o >= pl.a && o <= pl.b);
+      if (!hit) return o;
+      const rel = o - hit.a;
+      return hit.to + (rel >= hit.numberEnd ? rel + hit.delta : Math.min(rel, hit.numberEnd + hit.delta));
+    },
+  };
+}
+
 /**
  * "Move ticked tasks to the bottom" (PRD §10.1): reorder the bulleted lists holding `lines` so each list's
  * done tasks follow the others, every item keeping its nested lines and the two groups keeping their order.
  * The selection moves with the text it was in. Null when every list is already in that order.
  */
 export function sortTasksEdit(doc: TextDocument, sel: Selection, lines: readonly number[]): Edit | null {
-  const pieces: { start: number; end: number; text: string; map: (o: number) => number }[] = [];
+  const pieces: Reordered[] = [];
   const seen = new Set<number>();
   for (const line of lines) {
     const items = listItemsAround(doc, line);
@@ -553,27 +605,7 @@ export function sortTasksEdit(doc: TextDocument, sel: Selection, lines: readonly
     seen.add(items[0]!.first);
     const order = [...items.filter((it) => !it.done), ...items.filter((it) => it.done)];
     if (order.every((it, i) => it === items[i])) continue;
-    const start = doc.getLineStart(items[0]!.first);
-    const end = doc.getLineEnd(items[items.length - 1]!.last);
-    const spans = order.map((it) => {
-      const a = doc.getLineStart(it.first);
-      return { a, b: doc.getLineEnd(it.last) };
-    });
-    let at = start;
-    const placed = spans.map((sp) => {
-      const to = at;
-      at += sp.b - sp.a + 1;
-      return { ...sp, to };
-    });
-    pieces.push({
-      start,
-      end,
-      text: spans.map((sp) => doc.getText(sp.a, sp.b - sp.a)).join('\n'),
-      map: (o) => {
-        const hit = placed.find((sp) => o >= sp.a && o <= sp.b);
-        return hit ? hit.to + (o - hit.a) : o;
-      },
-    });
+    pieces.push(reorderItems(doc, items, order));
   }
   if (pieces.length === 0) return null;
   pieces.sort((x, y) => x.start - y.start);
@@ -587,6 +619,31 @@ export function sortTasksEdit(doc: TextDocument, sel: Selection, lines: readonly
   }
   const map = (o: number) => pieces.find((pc) => o >= pc.start && o <= pc.end)?.map(o) ?? o;
   return { start, length: end - start, text, anchor: map(sel.anchor), caret: map(sel.caret) };
+}
+
+/**
+ * ⌥⌘↑ / ⌥⌘↓: move the list item the selection is in (or the items it spans) to the top or bottom of its list,
+ * with its nested lines. Works in bulleted, numbered and task lists; a numbered list is renumbered. The
+ * selection moves with the item. Null outside a list item, or when the item is already there.
+ */
+export function moveItemsToEdgeEdit(doc: TextDocument, sel: Selection, dir: -1 | 1): Edit | null {
+  const [a, b] = selectedLines(doc, sel);
+  const items = listItemsAround(doc, a, true);
+  if (!items) return null;
+  const i0 = items.findIndex((it) => a >= it.first && a <= it.last);
+  const i1 = items.findIndex((it) => b >= it.first && b <= it.last);
+  if (i0 < 0 || i1 < 0) return null;
+  if ((dir < 0 && i0 === 0) || (dir > 0 && i1 === items.length - 1)) return null;
+  const moving = items.slice(i0, i1 + 1);
+  const rest = [...items.slice(0, i0), ...items.slice(i1 + 1)];
+  const r = reorderItems(doc, items, dir < 0 ? [...moving, ...rest] : [...rest, ...moving]);
+  return {
+    start: r.start,
+    length: r.end - r.start,
+    text: r.text,
+    anchor: r.map(sel.anchor),
+    caret: r.map(sel.caret),
+  };
 }
 
 /**

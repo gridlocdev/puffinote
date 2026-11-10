@@ -10,6 +10,7 @@ import {
   headingEdit,
   indentEdit,
   linkEdit,
+  moveItemsToEdgeEdit,
   moveLinesEdit,
   outdentEdit,
   removeRangeEdit,
@@ -354,6 +355,37 @@ describe('line moves and duplicates keep the line endings', () => {
     expect(run('a\r\nb|', duplicateLinesEdit)).toBe('a\r\nb\r\nb|');
     expect(run('a|\r\nb', duplicateLinesEdit)).toBe('a\r\na|\r\nb');
     expect(run('a\nb|', duplicateLinesEdit)).toBe('a\nb\nb|');
+  });
+});
+
+describe('Move Item to Top / Bottom of List', () => {
+  const edge = (marked: string, dir: -1 | 1) => run(marked, (d, s) => moveItemsToEdgeEdit(d, s, dir));
+
+  it('moves a task, with its nested lines, to the top or bottom of its list', () => {
+    expect(edge('x\n- [ ] a\n- [ ] b\n- [x] c|\n    note\ny', -1)).toBe(
+      'x\n- [x] c|\n    note\n- [ ] a\n- [ ] b\ny',
+    );
+    expect(edge('- [ ] a|\n    - sub\n- [ ] b\n- [ ] c', 1)).toBe('- [ ] b\n- [ ] c\n- [ ] a|\n    - sub');
+  });
+
+  it('moves bullets, and the items a selection spans', () => {
+    expect(edge('- a\n- ‹b\n- c›\n- d', 1)).toBe('- a\n- d\n- ‹b\n- c›');
+    expect(edge('* a\n* b|', -1)).toBe('* b|\n* a');
+  });
+
+  it('renumbers a numbered list, keeping where it starts', () => {
+    expect(edge('3. a\n4. b\n5. c|', -1)).toBe('3. c|\n4. a\n5. b');
+    expect(edge('1. a|\n2. b\n10. c', 1)).toBe('1. b\n2. c\n10. a|');
+  });
+
+  it('moves a nested item within its own list', () => {
+    expect(edge('- a\n    - x\n    - y|\n- b', -1)).toBe('- a\n    - y|\n    - x\n- b');
+  });
+
+  it('does nothing at the edge already, or outside a list', () => {
+    expect(edge('- a|\n- b', -1)).toBe('(none)');
+    expect(edge('- a\n- b|', 1)).toBe('(none)');
+    expect(edge('plain|\n- a', 1)).toBe('(none)');
   });
 });
 

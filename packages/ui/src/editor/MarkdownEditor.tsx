@@ -48,6 +48,8 @@ export interface MarkdownEditorProps {
   readonly sortTasks?: boolean;
   /** A right-click (or Control-click on macOS): show the editing menu at that point, or a picture's menu. */
   readonly onContextMenu?: (at: EditorMenuPoint) => void;
+  /** A click on a drawn picture: show it in the picture preview (PRD §10.6). */
+  readonly onOpenPicture?: (picture: PictureAt) => void;
   /** Save pasted or dropped pictures and return the Markdown for each; without it, only text pastes. */
   readonly onPictures?: (files: readonly File[]) => Promise<readonly string[]>;
 }
@@ -133,6 +135,7 @@ export function MarkdownEditor(props: MarkdownEditorProps) {
   void state.version.value;
   const sel = state.selection.value;
   const mode = state.mode.value;
+  const shownPicture = state.shownPicture.value;
   const revealTick = state.revealTick.value;
   const seenReveal = useRef(revealTick);
   const doc = state.document;
@@ -184,7 +187,7 @@ export function MarkdownEditor(props: MarkdownEditorProps) {
         text={text}
         start={start}
         tokens={tokens}
-        reveal={lineReveal(tokens, start, start + text.length, sel, range)}
+        reveal={lineReveal(tokens, start, start + text.length, sel, range, shownPicture)}
         mode={mode}
         block={block?.kind ?? null}
         resolveImage={resolveImage}
@@ -400,8 +403,8 @@ export function MarkdownEditor(props: MarkdownEditorProps) {
    * shows the marker instead of jumping over it.
    */
   function snapReveal(tokens: readonly Token[], start: number, end: number, offset: number): LineReveal {
-    const now = lineReveal(tokens, start, end, sel, null);
-    const there = lineReveal(tokens, start, end, { anchor: offset, caret: offset }, null);
+    const now = lineReveal(tokens, start, end, sel, null, shownPicture);
+    const there = lineReveal(tokens, start, end, { anchor: offset, caret: offset }, null, shownPicture);
     return now.prefixActive === there.prefixActive ? now : { ...now, prefixActive: there.prefixActive };
   }
 
@@ -752,6 +755,11 @@ export function MarkdownEditor(props: MarkdownEditorProps) {
           state.apply(props.sortTasks ? withTaskSort(doc, e) : e);
         }
       }
+      return;
+    }
+    const picture = props.onOpenPicture && !e.shiftKey ? pictureAt(target) : undefined;
+    if (picture) {
+      props.onOpenPicture!(picture);
       return;
     }
     const link = target.closest<HTMLElement>('[data-href]');

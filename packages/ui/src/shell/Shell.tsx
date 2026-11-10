@@ -1,3 +1,4 @@
+import { PicturePreview } from './PicturePreview.tsx';
 import { useSignalEffect } from '@preact/signals';
 import type { ComponentChildren } from 'preact';
 import { useEffect } from 'preact/hooks';
@@ -111,6 +112,13 @@ export function Shell(props: {
         <main class="pn-shell-main">
           <div class="pn-document">{props.welcome ?? <div class="pn-empty">No notebook open.</div>}</div>
         </main>
+      )}
+      {model.preview.value && (
+        <PicturePreview
+          preview={model.preview.value}
+          onClose={() => model.closePreview()}
+          onMenu={(at) => model.openPreviewMenu(at)}
+        />
       )}
       <Overlays model={model} prefs={props.prefs} />
     </div>

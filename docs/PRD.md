@@ -291,6 +291,10 @@ switched from the status bar or the View commands:
   after a letter or digit (`2*3`, `snake_case`). A space typed right after a lone opener removes its closer
   (`2 * 3`). Typing the closer steps over it.
 - **Line commands:** move line up/down (⌥↑/⌥↓), duplicate (⌘D), delete (⇧⌘K).
+- **Move to the top or bottom of a list** (⌥⌘↑/⌥⌘↓): the list item or task the caret is in, or the items a
+  selection spans, goes to the top or bottom of its list, with its nested lines. It works in bulleted,
+  numbered and task lists, at any nesting level (within that level's list). A numbered list keeps counting
+  from where it started. Outside a list item, or with the item already there, nothing happens.
 - **Formatting:** bold ⌘B, italic ⌘I, inline code ⌘E, strikethrough ⇧⌘X, highlight ⇧⌘H, headings ⌘1–⌘6,
   paragraph ⌘0, bullet list ⌘., numbered list ⌘/, blockquote, link ⌥⌘K, code block ⇧⌘E, horizontal rule.
 - **Tasks:** ⌘L toggles a checkbox (and adds one where there is none), ⌥⌘L steps the status, ⇧⌘L removes it.
@@ -318,6 +322,8 @@ switched from the status bar or the View commands:
   and the text in the next, so wrapped rows line up with the text above, as in Apple Notes, not under the
   bullet. The column stays when the marker shows (in Rich and Formatted views; not in Raw text). A click
   under the bullet or checkbox lands at the start of that row's text.
+- **Pictures** stay drawn wherever the caret or selection is, so a pasted picture shows straight away. Their
+  `![](…)` shows only after View Link Text (§10.6), and only until the caret leaves it.
 - **Blocks** (fenced code, tables, front matter): the raw source shows when the selection touches the block.
 - A selection reveals every node it touches.
 
@@ -405,10 +411,26 @@ whitespace are ignored when the scheme is read. Any other URL (`javascript:`, `v
   the last to show one, and When a Picture Is No Longer Used is Offer to Delete It, the status bar says so
   with a Move to Trash button (Delete where the notebook has no Trash). The offer stays up for twelve
   seconds. Set to Keep It, nothing is said.
-- **Picture menu.** A right-click on a picture in a note opens:
-  - **Open Picture:** the file in a tab of its own (off for a web picture or a missing file).
-  - **Copy Picture:** the picture on the clipboard, as a PNG.
-  - **View Link Text:** selects the picture's `![](…)`, so its Markdown shows.
+- **Picture preview.** A click on a picture in a note shows it alone over the window, fitted to it (never
+  enlarged), with its file name and zoom buttons above it.
+  - **Zoom** from fitted up to 800%: pinch or ⌘-scroll about the pointer, the − and + buttons or keys, `0` to
+    fit, `1` for 100%. A double-click, or a click on the percentage, switches between fitted and 100% (or 2×
+    the fit for a picture smaller than the window).
+  - **Pan** a picture larger than the window by dragging it, scrolling, or with the arrow keys (⇧ for bigger
+    steps). Its edges never come in past the window's.
+  - **Close** with Escape, the × button, or a click outside the picture.
+  - A right-click opens the picture menu, as in the note.
+- **Picture menu.** A right-click on a picture in a note, or in the preview, opens:
+  - **Preview Picture** (in the note only): the preview above.
+  - **Open in Tab:** the file in a tab of its own. **Open in Default App** and **Reveal in Finder** (Show in
+    Explorer, Show in Folder) where the notebook is a folder on this computer. These are off for a web
+    picture or a missing file.
+  - **Copy Picture:** the picture on the clipboard, as a PNG. **Copy Markdown:** its `![](…)` as text.
+  - **Edit Description…:** changes the alt text (the words between `[` and `]`, read out in the picture's
+    place), as an undoable step.
+  - **Rename Picture…:** renames the file; links to it in every note follow (see Moving keeps links working).
+  - **View Link Text:** closes the preview, and selects the picture's `![](…)` and shows it as text until the
+    caret leaves it.
   - **Delete Picture:** takes the picture out of the note (its line too, when it was alone on one), as an
     undoable step, and moves its file to the Trash (deletes it where the notebook has no Trash). When another
     note, or another spot in this note, also shows the file, it asks first and lists those notes: Keep File (the

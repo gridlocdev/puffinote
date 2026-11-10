@@ -49,6 +49,7 @@ export function Document(props: { readonly model: ShellModel; readonly nb: Noteb
           zoom={model.zoom.value}
           sortTasks={nb.settings.value.sortCheckedTasks}
           onContextMenu={(at) => model.openEditorMenu(at)}
+          onOpenPicture={(picture) => model.openPreview(picture)}
           onPictures={async (files) =>
             nb.addPictures(
               path,

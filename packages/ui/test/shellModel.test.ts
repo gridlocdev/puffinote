@@ -214,3 +214,72 @@ describe('ShellModel Delete Picture', () => {
     expect(findNode(nb.tree.value, 'pic.png')).toBeNull();
   });
 });
+
+describe('ShellModel picture preview and menu (PRD §10.6)', () => {
+  async function setup(files: Record<string, string>) {
+    const store = new MemoryStore('N', files);
+    const nb = await Notebook.open(store, { prefs: memoryPrefs({ autoSave: false }) });
+    const m = new ShellModel();
+    m.setNotebook(nb);
+    const tab = (await nb.openFile('a.md'))!;
+    const text = tab.state!.text;
+    const start = text.indexOf('![');
+    const end = text.indexOf(')', start) + 1;
+    return { nb, m, tab, picture: { start, end, url: 'pic.png' } };
+  }
+  const labels = (items: ReturnType<ShellModel['pictureMenuItems']>) =>
+    items?.map((it) => (it ? it.label : '-'));
+
+  it('offers the same menu in the note and in the preview, less Preview Picture', async () => {
+    const { m, picture } = await setup({ 'a.md': '![](pic.png)', 'pic.png': '' });
+    expect(labels(m.pictureMenuItems(picture))).toEqual([
+      'Preview Picture',
+      'Open in Tab',
+      '-',
+      'Copy Picture',
+      'Copy Markdown',
+      '-',
+      'Edit Description…',
+      'Rename Picture…',
+      'View Link Text',
+      '-',
+      'Delete Picture',
+    ]);
+    m.openPreview(picture);
+    expect(m.preview.value).toMatchObject({ picture, name: 'pic.png' });
+    expect(labels(m.pictureMenuItems(picture))?.[0]).toBe('Open in Tab');
+  });
+
+  it('View Link Text closes the preview and shows the picture’s Markdown, selected', async () => {
+    const { m, tab, picture } = await setup({ 'a.md': 'x ![](pic.png)', 'pic.png': '' });
+    m.openPreview(picture);
+    m.pictureMenuItems(picture)!
+      .find((it) => it?.label === 'View Link Text')!
+      .run();
+    expect(m.preview.value).toBeNull();
+    expect(tab.state!.shownPicture.value).toBe(picture.start);
+    expect(tab.state!.selection.value).toEqual({ anchor: picture.start, caret: picture.end });
+    tab.state!.select(0);
+    expect(tab.state!.shownPicture.value).toBeNull();
+  });
+
+  it('Edit Description… rewrites the alt text as one undo step', async () => {
+    const { m, tab, picture } = await setup({ 'a.md': 'x ![old \\] one](pic.png "t") y', 'pic.png': '' });
+    const editing = m.editPictureDescription(picture);
+    await vi.waitFor(() => expect(m.overlay.value?.kind).toBe('prompt'));
+    const o = m.overlay.value;
+    expect(o?.kind === 'prompt' && o.options.value).toBe('old ] one');
+    if (o?.kind === 'prompt') o.done('a [new] one');
+    await editing;
+    expect(tab.state!.text).toBe('x ![a \\[new\\] one](pic.png "t") y');
+    tab.state!.undo();
+    expect(tab.state!.text).toBe('x ![old \\] one](pic.png "t") y');
+  });
+
+  it('Delete Picture from the preview closes it', async () => {
+    const { m, picture } = await setup({ 'a.md': '![](pic.png)', 'pic.png': '' });
+    m.openPreview(picture);
+    await m.deletePicture(picture);
+    expect(m.preview.value).toBeNull();
+  });
+});

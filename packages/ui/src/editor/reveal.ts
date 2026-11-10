@@ -29,7 +29,9 @@ const none: ReadonlySet<number> = new Set();
 
 /**
  * The reveal state of a line spanning `[lineStart, lineEnd]`. Touching counts, so a caret just after `**b**`
- * reveals its markers, and a caret at the end of a line keeps that line's prefix visible.
+ * reveals its markers, and a caret at the end of a line keeps that line's prefix visible. A picture is the
+ * exception: it stays drawn wherever the selection is, and shows its link text only when it is the picture
+ * at `shownPicture` (View Link Text, PRD §10.6) and the selection still touches it.
  */
 export function lineReveal(
   tokens: readonly Token[],
@@ -37,6 +39,7 @@ export function lineReveal(
   lineEnd: number,
   selection: Selection,
   blockRange: { start: number; end: number } | null,
+  shownPicture: number | null = null,
 ): LineReveal {
   const lineActive = selectionIntersects(selection, lineStart, lineEnd - lineStart);
   const blockRevealed =
@@ -58,9 +61,14 @@ export function lineReveal(
       extents.set(t.node, { start: t.start, end: t.start + t.length });
     }
   }
+  const pictures = new Set<number>();
+  for (const t of tokens) if (t.type === 'imageUrl' && t.node !== 0) pictures.add(t.node);
   const nodes = new Set<number>();
   for (const [node, e] of extents) {
-    if (selectionIntersects(selection, e.start, e.end - e.start)) nodes.add(node);
+    if (!selectionIntersects(selection, e.start, e.end - e.start)) continue;
+    if (pictures.has(node) && (shownPicture === null || shownPicture < e.start || shownPicture >= e.end))
+      continue;
+    nodes.add(node);
   }
   return { lineActive, prefixActive, nodes, blockRevealed };
 }
@@ -84,6 +92,27 @@ function listPrefixTouched(
   if (isCollapsed(selection)) return selectionIntersects(selection, lineStart, end - lineStart);
   const inside = (o: number) => o > lineStart && o <= end;
   return inside(selection.anchor) || inside(selection.caret);
+}
+
+/** The source range of the picture on this line that covers `offset`, or `null` when none does. */
+export function pictureExtent(
+  tokens: readonly Token[],
+  offset: number,
+): { start: number; end: number } | null {
+  const url = tokens.find((t) => t.type === 'imageUrl' && t.node !== 0 && inNode(tokens, t.node, offset));
+  if (!url) return null;
+  let start = Infinity;
+  let end = -Infinity;
+  for (const t of tokens) {
+    if (t.node !== url.node) continue;
+    start = Math.min(start, t.start);
+    end = Math.max(end, t.start + t.length);
+  }
+  return { start, end };
+}
+
+function inNode(tokens: readonly Token[], node: number, offset: number): boolean {
+  return tokens.some((t) => t.node === node && offset >= t.start && offset < t.start + t.length);
 }
 
 /** A line nothing reveals (the caret is elsewhere). */
