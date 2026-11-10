@@ -234,3 +234,26 @@ describe('outline', () => {
     ]);
   });
 });
+
+describe('opening other files', () => {
+  it('asks before opening in the default app, unless the setting is off', async () => {
+    const store = new MemoryStore('Notes', { 'a.pdf': '' });
+    const opened: string[] = [];
+    Object.assign(store, { openExternal: async (p: string) => void opened.push(p) });
+    let answer = false;
+    const asked: string[] = [];
+    const prefs = memoryPrefs({ autoSave: false });
+    const nb = await Notebook.open(store, {
+      prefs,
+      confirmOpenExternal: async (name) => (asked.push(name), answer),
+    });
+    expect(await nb.openFile('a.pdf')).toBeNull();
+    expect([asked, opened]).toEqual([['a.pdf'], []]);
+    answer = true;
+    await nb.openFile('a.pdf');
+    expect(opened).toEqual(['a.pdf']);
+    nb.setPreferences({ confirmOpenExternal: false });
+    await nb.openFile('a.pdf');
+    expect([asked.length, opened.length]).toEqual([2, 2]);
+  });
+});

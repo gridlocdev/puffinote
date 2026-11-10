@@ -26,6 +26,8 @@ export interface Settings {
   readonly showHiddenFiles: boolean;
   /** Show the tab strip over the editor (PRD §9). */
   readonly showTabBar: boolean;
+  /** Ask before a file Puffinote can't show opens in its default app. */
+  readonly confirmOpenExternal: boolean;
 }
 
 export type SettingKey = keyof Settings;
@@ -41,6 +43,7 @@ export const defaultSettings: Settings = {
   showFileExtensions: false,
   showHiddenFiles: false,
   showTabBar: true,
+  confirmOpenExternal: true,
 };
 
 /** One field in the Settings dialog: its label, help, and the values it takes. */
@@ -117,6 +120,11 @@ export const settingFields: readonly SettingField[] = [
     key: 'showTabBar',
     label: 'Show the tab bar',
     help: 'Show open notes as tabs above the editor (Icon rail layout).',
+  },
+  {
+    key: 'confirmOpenExternal',
+    label: 'Ask before opening other files',
+    help: 'Ask before a file Puffinote can’t show, like a PDF, opens in its default app.',
   },
 ];
 

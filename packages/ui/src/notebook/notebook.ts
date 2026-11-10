@@ -197,6 +197,8 @@ export interface NotebookOptions {
   readonly prefs: PrefsStorage;
   /** Hand a file nobody here can open to the user (a download), when the store can't open it externally. */
   readonly download?: (name: string, bytes: Uint8Array, mime: string) => void;
+  /** Ask whether to open a file in its default app; true opens it. Without it, files open straight away. */
+  readonly confirmOpenExternal?: (name: string) => Promise<boolean>;
 }
 
 /**
@@ -809,6 +811,8 @@ export class Notebook {
   private async openElsewhere(path: string): Promise<void> {
     try {
       if (this.store.openExternal) {
+        const ask = this.options.confirmOpenExternal;
+        if (ask && this.settings.peek().confirmOpenExternal && !(await ask(baseName(path)))) return;
         await this.store.openExternal(path);
         return;
       }

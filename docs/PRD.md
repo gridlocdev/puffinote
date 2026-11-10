@@ -81,7 +81,8 @@ The code cites this document as `PRD §n`. If you renumber a section, update tho
 - **What opens where:**
   - A Markdown file (`.md`, `.markdown`, `.mdown`, `.mkd`, `.txt`) opens in the editor.
   - A picture opens in a tab as a read-only view.
-  - Anything else opens in its default app (desktop) or downloads (web, NAS).
+  - Anything else opens in its default app (desktop) or downloads (web, NAS). On the desktop Puffinote asks
+    first, with **Open** focused so Enter opens it, unless Ask before opening other files (§9) is off.
 - **Encoding.** A file is read as UTF-8, with or without a BOM. If it is not valid UTF-8, the encoding is
   guessed and the tab is read-only, so that a save cannot write the guess back.
 - **External changes.** The tree is re-read when the folder changes (desktop) or the window regains focus
@@ -212,17 +213,18 @@ Settings resolve in layers, lowest first: the defaults, the user's preferences (
 notebook's overrides in `.puffinote/settings.json`. The Settings dialog (⌘,) has two scopes over the same
 fields: **Preferences** and **This notebook**. A notebook field can be reset to inherit.
 
-| Setting              | Values                              | Default      |
-| -------------------- | ----------------------------------- | ------------ |
-| Appearance           | Match system, Light, Dark           | Match system |
-| Layout               | Icon rail, Library and note list    | Icon rail    |
-| Accent colour        | Blue, Amber, Teal, Purple           | Blue         |
-| Notes open in        | Rich view, Formatted view, Raw text | Rich view    |
-| Save automatically   | on/off                              | on           |
-| Indent with          | 4 spaces, 2 spaces, Tab             | 4 spaces     |
-| Show file extensions | on/off                              | off          |
-| Show hidden files    | on/off                              | off          |
-| Show tab bar         | on/off                              | on           |
+| Setting                        | Values                              | Default      |
+| ------------------------------ | ----------------------------------- | ------------ |
+| Appearance                     | Match system, Light, Dark           | Match system |
+| Layout                         | Icon rail, Library and note list    | Icon rail    |
+| Accent colour                  | Blue, Amber, Teal, Purple           | Blue         |
+| Notes open in                  | Rich view, Formatted view, Raw text | Rich view    |
+| Save automatically             | on/off                              | on           |
+| Indent with                    | 4 spaces, 2 spaces, Tab             | 4 spaces     |
+| Show file extensions           | on/off                              | off          |
+| Show hidden files              | on/off                              | off          |
+| Show tab bar                   | on/off                              | on           |
+| Ask before opening other files | on/off                              | on           |
 
 ## 10. The editor
 

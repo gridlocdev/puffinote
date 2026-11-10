@@ -190,6 +190,19 @@ export class ShellModel {
     });
   }
 
+  /** Ask before handing `name` to its default app; Open is focused, so Enter opens it (PRD §5). */
+  async confirmOpenExternal(name: string): Promise<boolean> {
+    const answer = await this.confirm({
+      title: `Open “${name}”?`,
+      message: 'Puffinote can’t show this file. It opens in its default app.',
+      buttons: [
+        { label: 'Cancel', value: 'cancel' },
+        { label: 'Open', value: 'open', kind: 'primary' },
+      ],
+    });
+    return answer === 'open';
+  }
+
   // ----- Focus -----
 
   focusEditor(): void {
