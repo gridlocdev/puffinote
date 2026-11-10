@@ -63,7 +63,8 @@ release page. It never installs anything by itself. You can turn the check off i
 ## Run it on a NAS (Docker)
 
 ```bash
-docker run -d -p 8790:8790 -v /volume1/notes:/data ghcr.io/gridlocdev/puffinote:latest
+docker build -t puffinote .
+docker run -d -p 8790:8790 -v /volume1/notes:/data puffinote
 ```
 
 Then open `http://<nas>:8790`. To expose several folders, add a password, or run as your NAS user, see
@@ -82,9 +83,6 @@ open it by name (for example `http://nas.lan:8790`), list that name in `PUFFINOT
 get `421 Misdirected Request`, which stops a hostile web page from reaching your notes through DNS rebinding.
 
 If someone else saved a note after you opened it, Puffinote warns you before overwriting their changes.
-
-The image runs on `amd64` and `arm64` NAS boxes. To build it yourself instead, run
-`docker build -t puffinote .` in a clone of this repository.
 
 ## Build it from source
 

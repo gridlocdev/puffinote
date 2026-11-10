@@ -112,8 +112,8 @@ old icon after a rebuild, that is the macOS icon cache: move the app, or log out
 ## Releasing
 
 Pushing a `vX.Y.Z` tag runs `.github/workflows/release.yml`. It packages the desktop app on macOS (Apple
-silicon and Intel), Windows and Linux, publishes them on a GitHub release, and pushes the NAS image to
-`ghcr.io/gridlocdev/puffinote` as `X.Y.Z` and `latest`, for `amd64` and `arm64`.
+silicon and Intel), Windows and Linux, and publishes them on a GitHub release. The NAS image isn't
+published: people build it from the repository (README).
 
 1. Set the same version in every `package.json` (the root, `apps/*` and `packages/*`). The workflow stops if
    the tag doesn't match `apps/desktop/package.json`.
@@ -125,8 +125,6 @@ silicon and Intel), Windows and Linux, publishes them on a GitHub release, and p
    git push origin main vX.Y.Z
    ```
 
-- The first time the image is pushed, make the `puffinote` package public in the repository's **Packages**
-  settings on GitHub, so a NAS can pull it without logging in.
 - The apps aren't notarized or code-signed, so the README tells people how to open them the first time.
   The desktop app's update check (PRD §3.1) reads the latest release from GitHub's API, so a published
   release reaches existing installs within a day.

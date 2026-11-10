@@ -21,7 +21,7 @@ and Linux), in the browser, and on a NAS.
 - **Settings per notebook**, kept in the notebook's `.puffinote` folder so they travel with it.
 - **Export to HTML**, and a `puffinote` command-line tool that prints a notebook's tree, searches it, and
   turns a note into HTML.
-- **A NAS server** in a Docker image (`ghcr.io/gridlocdev/puffinote`), with an optional access token and
+- **A NAS server** in a Docker image you build from the repository, with an optional access token and
   protection against DNS rebinding.
 - **Update check.** The desktop app looks for a new release once a day and links to it. It never installs
   anything by itself.
