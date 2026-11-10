@@ -17,7 +17,7 @@ It runs in the browser, on your NAS, or as a desktop app, all from the same code
 
 ## Download
 
-Get the desktop app from the [Releases page](https://github.com/gridlocdev/Puffinote/releases/latest):
+Get the desktop app from the [Releases page](https://github.com/gridlocdev/puffinote/releases/latest):
 
 | System                | File                        |
 | --------------------- | --------------------------- |

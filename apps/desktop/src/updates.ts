@@ -2,8 +2,8 @@ import { readFile } from 'node:fs/promises';
 import { writeAtomic } from './files.ts';
 
 /** Where releases are published. The update check only reads this; it never downloads anything. */
-export const RELEASES_API = 'https://api.github.com/repos/gridlocdev/Puffinote/releases/latest';
-export const RELEASES_PAGE = 'https://github.com/gridlocdev/Puffinote/releases';
+export const RELEASES_API = 'https://api.github.com/repos/gridlocdev/puffinote/releases/latest';
+export const RELEASES_PAGE = 'https://github.com/gridlocdev/puffinote/releases';
 /** The automatic check runs at most this often. */
 export const CHECK_INTERVAL_MS = 24 * 60 * 60 * 1000;
 
