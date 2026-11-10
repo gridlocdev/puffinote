@@ -150,7 +150,6 @@ function Document(props: { readonly model: ShellModel; readonly nb: Notebook; re
         <MarkdownEditor
           state={tab.state}
           resolveImage={(url) => nb.resolveImage(path, url)}
-          spellcheck={nb.settings.value.spellcheck}
           initialScrollTop={tab.scrollTop}
           onScroll={(top) => (tab.scrollTop = top)}
           placeholder="Start writing…"

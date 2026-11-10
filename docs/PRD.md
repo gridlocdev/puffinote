@@ -189,7 +189,6 @@ fields: **Preferences** and **This notebook**. A notebook field can be reset to 
 | Indent with          | 4 spaces, 2 spaces, Tab             | 4 spaces     |
 | Show file extensions | on/off                              | off          |
 | Show hidden files    | on/off                              | off          |
-| Spell check          | on/off (the browser's checker)      | off          |
 | Show tab bar         | on/off                              | on           |
 
 ## 10. The editor
@@ -245,13 +244,14 @@ An unterminated fence runs to the end of the file as code. Nothing flickers.
 **Pictures.** A line that holds only `![alt](url)` shows the picture, scaled down to the text column (never
 up). The caret sits before or after it, never inside. Relative paths resolve against the note's folder.
 
-### 10.3 Status bar, links and spell check
+### 10.3 Status bar and links
 
 - **Status bar:** the latest notice (an error, "Saved"), Ln/Col, the word count, and the view switcher.
 - **Links.** Hovering shows the destination. ⌘-click (Ctrl-click elsewhere) opens it. A plain click puts the
   caret in the link, so it stays editable. Only `http`, `https` and `mailto` links open. Other schemes,
   including `file:`, `javascript:` and `data:`, are never handed to the OS.
-- **Spell check** uses the browser's checker, when Spell check is on.
+- **No spell check.** The editor draws each line itself and the text under it isn't editable text, so the
+  browser's checker has nothing to underline.
 
 ### 10.4 The heading type scale
 

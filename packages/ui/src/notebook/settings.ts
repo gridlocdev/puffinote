@@ -17,8 +17,6 @@ export interface Settings {
   readonly showFileExtensions: boolean;
   /** Show files and folders whose names start with a dot. */
   readonly showHiddenFiles: boolean;
-  /** Spell-check the text being typed (the browser's checker). */
-  readonly spellcheck: boolean;
   /** Show the tab strip over the editor (PRD §9). */
   readonly showTabBar: boolean;
 }
@@ -33,7 +31,6 @@ export const defaultSettings: Settings = {
   indent: 'spaces4',
   showFileExtensions: false,
   showHiddenFiles: false,
-  spellcheck: false,
   showTabBar: true,
 };
 
@@ -87,7 +84,6 @@ export const settingFields: readonly SettingField[] = [
     label: 'Show hidden files',
     help: 'Show files and folders whose names start with a dot.',
   },
-  { key: 'spellcheck', label: 'Check spelling', help: 'Underline misspelled words as you type.' },
   { key: 'showTabBar', label: 'Show the tab bar', help: 'Show open notes as tabs above the editor.' },
 ];
 

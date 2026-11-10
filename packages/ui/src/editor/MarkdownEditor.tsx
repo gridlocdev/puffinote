@@ -31,8 +31,6 @@ export interface MarkdownEditorProps {
   readonly openLink?: (url: string) => void;
   readonly autoFocus?: boolean;
   readonly placeholder?: string;
-  /** Let the browser underline misspellings (PRD §10.3). */
-  readonly spellcheck?: boolean;
   /** Where to scroll on mount (a tab coming back). */
   readonly initialScrollTop?: number;
   readonly onScroll?: (top: number) => void;
@@ -609,7 +607,7 @@ export function MarkdownEditor(props: MarkdownEditorProps) {
             aria-multiline="true"
             autocapitalize="off"
             autocomplete="off"
-            spellcheck={props.spellcheck ?? false}
+            spellcheck={false}
             onKeyDown={onKeyDown}
             onInput={onInput}
             onCompositionStart={onCompositionStart}
