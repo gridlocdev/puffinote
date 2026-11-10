@@ -105,8 +105,8 @@ The code cites this document as `PRD §n`. If you renumber a section, update tho
 The Layout setting (§9) picks one. Both share the note, the status bar, the commands and the settings. The
 accent colour (§9) tints selections, active icons and highlights in both, light and dark.
 
-- **Icon rail (the default).** A narrow rail on the left: the notebook's initials (a click opens another
-  notebook), a button per panel (§6.2), Hide Sidebar and Settings. The chosen panel floats beside it in a
+- **Icon rail (the default).** A narrow rail on the left: the notebook's initials (a click shows the notebook's
+  folder in Finder or Explorer; on the web, it opens another notebook), a button per panel (§6.2), Hide Sidebar and Settings. The chosen panel floats beside it in a
   card with its title and, for Files and Filter, New Note, New Folder and a ⋯ menu (expand or collapse all
   folders, refresh). Clicking the shown panel's button hides it. The open notes are tabs in a second card
   (§7). The panel's width is dragged at its right edge.

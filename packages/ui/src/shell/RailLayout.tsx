@@ -4,7 +4,7 @@ import { Document, EmptyNotebook, StatusBar } from './DocPane.tsx';
 import { FileTree } from './FileTree.tsx';
 import { Icon } from './Icon.tsx';
 import { FilterPanel, OutlinePanel, RecentPanel, Resizer, SearchPanel } from './panels.tsx';
-import type { ShellModel } from './shellModel.ts';
+import { revealLabel, type ShellModel } from './shellModel.ts';
 import { TabStrip } from './TabStrip.tsx';
 
 /**
@@ -45,13 +45,19 @@ function RailNav({ model, nb }: { readonly model: ShellModel; readonly nb: Noteb
   const panel = nb.panel.value;
   const collapsed = nb.sidebarCollapsed.value;
   const open = model.menuCatalog.get('shell.openNotebook');
+  // The notebook's own folder in the file manager where there is one; otherwise, another notebook.
+  const reveal = nb.store.reveal?.bind(nb.store);
+  const label = reveal ? `${nb.name}: ${revealLabel()}` : open ? `${nb.name}: Open Notebook` : nb.name;
   return (
     <nav class="pn-rail" aria-label="Panels">
       <button
         class="pn-rail-notebook"
-        title={open ? `${nb.name}: ${tip(model, 'shell.openNotebook')}` : nb.name}
-        aria-label={open ? `${nb.name}: Open Notebook` : nb.name}
-        onClick={() => open && model.menuCatalog.run(open.id)}
+        title={reveal ? label : open ? `${nb.name}: ${tip(model, 'shell.openNotebook')}` : nb.name}
+        aria-label={label}
+        onClick={() => {
+          if (reveal) void reveal('').catch((e: unknown) => nb.report(e));
+          else if (open) model.menuCatalog.run(open.id);
+        }}
       >
         {initials(nb.name)}
       </button>
