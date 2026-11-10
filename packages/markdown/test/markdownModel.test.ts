@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { taskStateFromMark } from '../src/index.ts';
+import { outlineOf, taskStateFromMark } from '../src/index.ts';
 import { hasType, textsOfType, tokenize, typesIn } from './helpers.ts';
 
 describe('block constructs', () => {
@@ -190,5 +190,33 @@ describe('blockquote depth', () => {
     ['>>> three', '3'],
   ])('reads %j at depth %s', (md, depth) => {
     expect(tokenize(md).model.lineTokens(0)[0]).toMatchObject({ type: 'blockquoteMarker', meta: depth });
+  });
+});
+
+describe('outline', () => {
+  const outline = (md: string) => {
+    const { doc, model } = tokenize(md);
+    return outlineOf(doc, model);
+  };
+
+  it('strips closing sequences and inline markup from heading text', () => {
+    const items = outline(
+      '# A [link](http://x) and **b** ##\n## C #not closing\n### D\\#\n#### E   #####   ',
+    );
+    expect(items.map((o) => [o.level, o.text, o.offset])).toEqual([
+      [1, 'A link and b', 2],
+      [2, 'C #not closing', 37],
+      [3, 'D\\#', 56],
+      [4, 'E', 65],
+    ]);
+  });
+
+  it('reads long runs of blanks or brackets in a heading in linear time', () => {
+    const started = performance.now();
+    expect(outline('# a' + ' '.repeat(40000) + '#')[0]!.text).toBe('a');
+    expect(outline('# a' + ' '.repeat(40000) + 'x')[0]!.text).toHaveLength(40002);
+    expect(outline('# ' + '['.repeat(40000))[0]!.text).toHaveLength(40000);
+    expect(outline('# ' + '[a]('.repeat(10000))[0]!.text).toHaveLength(40000);
+    expect(performance.now() - started).toBeLessThan(1500);
   });
 });

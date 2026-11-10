@@ -1,6 +1,71 @@
 import { describe, expect, it } from 'vitest';
 import { TextDocument } from '../src/index.ts';
 
+describe('TextDocument.changeSince', () => {
+  it('reports the single edit that made a snapshot', () => {
+    const base = TextDocument.fromString('hello world');
+    expect(base.changeSince(base)).toEqual({ start: 0, removedLength: 0, insertedLength: 0 });
+    expect(base.insert(5, ',').changeSince(base)).toEqual({ start: 5, removedLength: 0, insertedLength: 1 });
+    expect(base.delete(0, 6).changeSince(base)).toEqual({ start: 0, removedLength: 6, insertedLength: 0 });
+    expect(base.replace(6, 5, 'there!').changeSince(base)).toEqual({
+      start: 6,
+      removedLength: 5,
+      insertedLength: 6,
+    });
+  });
+
+  it('knows nothing about snapshots further apart', () => {
+    const base = TextDocument.fromString('abc');
+    const one = base.insert(0, 'x');
+    expect(one.insert(0, 'y').changeSince(base)).toBeNull();
+    expect(base.changeSince(one)).toBeNull();
+    expect(TextDocument.fromString('abc').changeSince(base)).toBeNull();
+  });
+});
+
+describe('add buffer', () => {
+  it('reads correctly after a large paste followed by typing', () => {
+    const paste = Array.from({ length: 100000 }, (_, i) => `line ${i}`).join('\n');
+    let doc = TextDocument.fromString('start\n').insert(6, paste);
+    let expected = 'start\n' + paste;
+    for (let k = 0; k < 500; k++) {
+      const at = (k * 7919) % (doc.length + 1);
+      const ch = String.fromCharCode(97 + (k % 26));
+      doc = doc.insert(at, ch);
+      expected = expected.slice(0, at) + ch + expected.slice(at);
+    }
+    expect(doc.getText()).toBe(expected);
+    const lines = expected.split('\n');
+    for (const line of [0, 1, 500, 50000, lines.length - 1]) expect(doc.getLineText(line)).toBe(lines[line]);
+    for (const at of [0, 6, 300000, expected.length - 1]) expect(doc.charAt(at)).toBe(expected[at]);
+  });
+
+  it('reads a typed run that crosses add-buffer chunks', () => {
+    let doc = TextDocument.fromString('[]');
+    let typed = '';
+    for (let k = 0; k < 40000; k++) {
+      const ch = String.fromCharCode(97 + (k % 26)) + (k % 1000 === 999 ? '\n' : '');
+      doc = doc.insert(1 + typed.length, ch);
+      typed += ch;
+    }
+    expect(doc.getText()).toBe('[' + typed + ']');
+    expect(doc.getText(16000, 800)).toBe(('[' + typed).slice(16000, 16800));
+    expect(doc.getLineText(20)).toBe(typed.split('\n')[20]);
+  });
+
+  it('keeps typing after a paste cheap', () => {
+    let doc = TextDocument.fromString('').insert(0, 'x'.repeat(5_000_000));
+    const started = performance.now();
+    for (let k = 0; k < 200; k++) {
+      doc = doc.insert(doc.length, 'y');
+      doc.getLineText(0);
+    }
+    // Each keystroke used to re-flatten the whole add buffer (about 90ms for 200 here).
+    expect(performance.now() - started).toBeLessThan(500);
+    expect(doc.length).toBe(5_000_200);
+  });
+});
+
 function expectLineStartsMatchFromScratch(doc: TextDocument): void {
   const fresh = TextDocument.fromString(doc.getText());
   expect(doc.lineCount).toBe(fresh.lineCount);

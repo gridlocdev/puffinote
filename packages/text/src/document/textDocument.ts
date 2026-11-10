@@ -12,30 +12,77 @@ interface Piece {
  * run of typing lands in one contiguous stretch of it, so it becomes one piece instead of two
  * or three new pieces per keystroke. Content at `[0, length)` never changes, so every existing
  * piece stays valid as the buffer grows.
+ *
+ * The text is held in chunks of at most `chunkSize` code units; a larger single insert, such as a
+ * paste, is a chunk of its own. Only the last chunk grows, so a slice re-flattens at most one small
+ * chunk, however much was typed or pasted before it.
  */
 class AddBuffer {
-  private chunks: string[] = [];
-  private joined = '';
+  private static readonly chunkSize = 16 * 1024;
+  private readonly chunks: string[] = [];
+  /** The buffer offset of each chunk's first code unit. */
+  private readonly starts: number[] = [];
   length = 0;
 
   append(text: string): number {
     const start = this.length;
-    this.chunks.push(text);
+    const last = this.chunks.length - 1;
+    if (last >= 0 && this.chunks[last]!.length + text.length <= AddBuffer.chunkSize) {
+      this.chunks[last] += text;
+    } else {
+      this.chunks.push(text);
+      this.starts.push(start);
+    }
     this.length += text.length;
     return start;
   }
 
-  /** The whole buffer as one string. Joining is lazy, so typing doesn't rebuild it per key. */
-  text(): string {
-    if (this.chunks.length > 0) {
-      this.joined += this.chunks.join('');
-      this.chunks = [];
+  /** The text at `[from, from + take)`. */
+  slice(from: number, take: number): string {
+    let i = this.chunkAt(from);
+    let pos = from - this.starts[i]!;
+    let remaining = take;
+    let out = '';
+    while (remaining > 0) {
+      const chunk = this.chunks[i]!;
+      const n = Math.min(chunk.length - pos, remaining);
+      out += chunk.slice(pos, pos + n);
+      remaining -= n;
+      pos = 0;
+      i++;
     }
-    return this.joined;
+    return out;
+  }
+
+  charAt(index: number): string {
+    const i = this.chunkAt(index);
+    return this.chunks[i]!.charAt(index - this.starts[i]!);
+  }
+
+  /** The index of the chunk holding `offset`. */
+  private chunkAt(offset: number): number {
+    const starts = this.starts;
+    let lo = 0;
+    let hi = starts.length - 1;
+    while (lo < hi) {
+      const mid = (lo + hi + 1) >> 1;
+      if (starts[mid]! <= offset) lo = mid;
+      else hi = mid - 1;
+    }
+    return lo;
   }
 }
 
 const emptyAdd = new AddBuffer(); // never appended to; the first edit starts a fresh buffer
+
+let nextSerial = 0;
+
+/** One replacement: `removedLength` code units at `start` became `insertedLength` new ones. */
+export interface DocumentChange {
+  readonly start: number;
+  readonly removedLength: number;
+  readonly insertedLength: number;
+}
 
 /**
  * The document buffer: an immutable piece table. Every edit returns a new `TextDocument` that
@@ -55,6 +102,10 @@ export class TextDocument {
   private lineStarts: number[] | undefined;
   private pieceOffsetsCache: number[] | undefined;
   private textCache: string | undefined;
+  /** A per-process serial, so a child can name its parent without holding it alive. */
+  private readonly serial = nextSerial++;
+  /** The edit that made this document from the snapshot with serial `parent`, if it was made by one. */
+  private readonly origin: { readonly parent: number; readonly change: DocumentChange } | undefined;
 
   private constructor(
     original: string,
@@ -62,12 +113,25 @@ export class TextDocument {
     pieces: readonly Piece[],
     length: number,
     lineStarts?: number[],
+    origin?: { readonly parent: number; readonly change: DocumentChange },
   ) {
     this.original = original;
     this.add = add;
     this.pieces = pieces;
     this.length = length;
     this.lineStarts = lineStarts;
+    this.origin = origin;
+  }
+
+  /**
+   * The single replacement that turns `base` into this document, when that is known: an empty change
+   * when they are the same snapshot, the edit when this document was made from `base` by one
+   * `insert`, `delete` or `replace`, and `null` otherwise. Incremental consumers use it to find where
+   * the untouched tail begins without comparing text.
+   */
+  changeSince(base: TextDocument): DocumentChange | null {
+    if (base === this) return { start: 0, removedLength: 0, insertedLength: 0 };
+    return this.origin?.parent === base.serial ? this.origin.change : null;
   }
 
   /** Build a document from a string. The string becomes the shared original buffer. */
@@ -122,7 +186,7 @@ export class TextDocument {
     const i = this.pieceIndexAt(index);
     const p = this.pieces[i]!;
     const pos = p.start + (index - this.pieceOffsets()[i]!);
-    return p.fromAdd ? this.add.text()[pos]! : this.original[pos]!;
+    return p.fromAdd ? this.add.charAt(pos) : this.original.charAt(pos);
   }
 
   /** Insert `text` at `offset`, returning a new document. */
@@ -137,6 +201,7 @@ export class TextDocument {
       this.spliceAt(offset, 0, [piece]),
       this.length + text.length,
       this.patchedLineStarts(offset, 0, text),
+      this.originOf(offset, 0, text.length),
     );
   }
 
@@ -152,6 +217,7 @@ export class TextDocument {
       this.spliceAt(offset, length, []),
       this.length - length,
       this.patchedLineStarts(offset, length, ''),
+      this.originOf(offset, length, 0),
     );
   }
 
@@ -170,6 +236,7 @@ export class TextDocument {
       this.spliceAt(offset, length, [piece]),
       this.length - length + text.length,
       this.patchedLineStarts(offset, length, text),
+      this.originOf(offset, length, text.length),
     );
   }
 
@@ -223,12 +290,20 @@ export class TextDocument {
 
   // ----- Internals -----
 
+  private originOf(
+    start: number,
+    removedLength: number,
+    insertedLength: number,
+  ): { readonly parent: number; readonly change: DocumentChange } {
+    return { parent: this.serial, change: { start, removedLength, insertedLength } };
+  }
+
   private insertBuffer(): AddBuffer {
     return this.add.length > 0 ? this.add : new AddBuffer();
   }
 
   private slice(p: Piece, from: number, take: number): string {
-    return p.fromAdd ? this.add.text().slice(from, from + take) : this.original.slice(from, from + take);
+    return p.fromAdd ? this.add.slice(from, take) : this.original.slice(from, from + take);
   }
 
   /** Replace the pieces covering `[offset, offset + deleteLength)` with `insert`, splitting at the edges. */

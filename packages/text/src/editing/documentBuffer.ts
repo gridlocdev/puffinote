@@ -24,6 +24,7 @@ export class DocumentBuffer {
   private readonly history = new EditHistory();
   private selectionValue: Selection = caretAt(0);
   private statsCache: DocumentStats | undefined;
+  private dirtyCache: { doc: TextDocument; saved: TextDocument; dirty: boolean } | undefined;
   private readonly changeListeners = new Set<BufferListener>();
   private readonly textListeners = new Set<BufferListener>();
 
@@ -57,6 +58,11 @@ export class DocumentBuffer {
     return this.selectionValue;
   }
 
+  /** End the current typing run, so the next edit starts a new undo step (commands, paste). */
+  breakCoalescing(): void {
+    this.history.breakCoalescing();
+  }
+
   set selection(value: Selection) {
     const clamped = this.clamp(value);
     if (selectionsEqual(clamped, this.selectionValue)) return;
@@ -65,8 +71,21 @@ export class DocumentBuffer {
     this.changeListeners.forEach((l) => l());
   }
 
+  /**
+   * True when the text differs from the saved baseline. Snapshots are compared by text, not identity,
+   * so undoing (or retyping) back to the saved text is clean again. The answer is cached per pair of
+   * snapshots, so repeated reads between edits cost nothing.
+   */
   get isDirty(): boolean {
-    return this.document !== this.savedDocument;
+    const doc = this.document;
+    const saved = this.savedDocument;
+    if (doc === saved) return false;
+    if (doc.length !== saved.length) return true;
+    const cache = this.dirtyCache;
+    if (cache && cache.doc === doc && cache.saved === saved) return cache.dirty;
+    const dirty = doc.getText() !== saved.getText();
+    this.dirtyCache = { doc, saved, dirty };
+    return dirty;
   }
 
   get canUndo(): boolean {

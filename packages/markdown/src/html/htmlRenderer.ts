@@ -34,8 +34,41 @@ export function escapeHtml(s: string): string {
   return s.replace(/[&<>]/g, (c) => (c === '&' ? '&amp;' : c === '<' ? '&lt;' : '&gt;'));
 }
 
+/** Escape for a double-quoted attribute value: `&`, `<`, `>` and `"`. Every attribute the renderer writes from
+ * document text goes through this. */
 function escapeAttr(s: string): string {
   return escapeHtml(s).replaceAll('"', '&quot;');
+}
+
+/**
+ * The lower-cased URL scheme of `url`, or null for a scheme-less (relative, `#fragment`, `//host`) URL.
+ * Browsers ignore ASCII tabs and newlines anywhere in a URL and strip leading controls and spaces, so those
+ * are dropped first: `java\tscript:` is still `javascript:`.
+ */
+function schemeOf(url: string): string | null {
+  const m = /^([a-z][a-z0-9+.-]*):/i.exec(withoutControls(url));
+  return m ? m[1]!.toLowerCase() : null;
+}
+
+function withoutControls(url: string): string {
+  // eslint-disable-next-line no-control-regex
+  return url.replace(/[\u0000- ]/g, '');
+}
+
+/** Raster formats an exported `<img>` may embed as a `data:` URL. SVG is excluded: it is a document. */
+const dataImage = /^data:image\/(png|jpeg|gif|webp|avif|bmp)[;,]/i;
+
+/**
+ * The URL an exported link or image may carry (PRD §10.5), or null to render it with no live URL. Allowed:
+ * `http`, `https`, `mailto` and scheme-less URLs (relative paths, `#fragments`, protocol-relative `//host`);
+ * an image may also be a raster `data:image/…` URL. Everything else (`javascript:`, `vbscript:`, `file:`,
+ * other `data:` URLs, any other scheme) is dropped, matching what the editor will open (§10.3).
+ */
+function safeHref(url: string, kind: 'link' | 'image'): string | null {
+  const scheme = schemeOf(url);
+  if (scheme === null || scheme === 'http' || scheme === 'https' || scheme === 'mailto') return url;
+  if (kind === 'image' && scheme === 'data' && dataImage.test(withoutControls(url))) return url;
+  return null;
 }
 
 function stripCr(s: string): string {
@@ -76,7 +109,7 @@ class Renderer {
         this.out += '<hr>\n';
         return line + 1;
       case 'blockquoteMarker':
-        return this.quoteLevel(line, 1);
+        return this.quote(line);
       case 'listMarker':
         return this.listLevel(line, this.listIndent(line));
     }
@@ -104,37 +137,40 @@ class Renderer {
     const n = this.doc.lineCount;
     let i = line + 1;
     let code = '';
-    while (i < n && this.model.enteringState(i).kind === 'fencedCode') {
+    // The closing fence is entered in fenced-code state too; it is the line whose token is a fence.
+    while (
+      i < n &&
+      this.model.enteringState(i).kind === 'fencedCode' &&
+      this.first(i)?.type !== 'codeFence'
+    ) {
       code += escapeHtml(stripCr(this.doc.getLineText(i))) + '\n';
       i++;
     }
     if (i < n && this.first(i)?.type === 'codeFence') i++;
-    const cls = lang ? ` class="language-${escapeHtml(lang)}"` : '';
+    const cls = lang ? ` class="language-${escapeAttr(lang)}"` : '';
     this.out += `<pre><code${cls}>${code}</code></pre>\n`;
     return i;
   }
 
   /**
-   * One blockquote level: a line at this depth is a paragraph of this quote, a deeper run opens a nested
-   * `<blockquote>`, and a shallower line returns to the caller.
+   * A run of quoted lines: each line is a paragraph at its depth, opening nested `<blockquote>`s down to
+   * it and closing back up from a deeper one. Iterative, so any depth of `>` renders without recursion.
    */
-  private quoteLevel(line: number, depth: number): number {
+  private quote(line: number): number {
     const n = this.doc.lineCount;
     let i = line;
-    this.out += '<blockquote>\n';
+    let open = 0;
     while (i < n) {
       const d = this.quoteDepth(i);
-      if (d < depth) break;
-      if (d > depth) {
-        i = this.quoteLevel(i, depth + 1);
-        continue;
-      }
+      if (d < 1) break;
+      for (; open < d; open++) this.out += '<blockquote>\n';
+      for (; open > d; open--) this.out += '</blockquote>\n';
       this.out += '<p>';
       this.inline(this.model.lineTokens(i));
       this.out += '</p>\n';
       i++;
     }
-    this.out += '</blockquote>\n';
+    for (; open > 0; open--) this.out += '</blockquote>\n';
     return i;
   }
 
@@ -308,36 +344,41 @@ class Renderer {
     }
   }
 
-  /** Tokens: `[` inner… `](` linkUrl `)`. */
+  /**
+   * Tokens: `[` (node N), the link text (other nodes), then `](`, `linkUrl` and `)` (node N). The parts are
+   * found by the construct's node id, not by position, because a zero-length part (an empty URL) emits no
+   * token. An unsafe destination (§10.5) renders the text without a link.
+   */
   private link(tokens: readonly Token[], i: number, to: number): number {
-    let depth = 1;
-    let j = i + 1;
-    for (; j < to; j++) {
-      const t = tokens[j]!;
-      if (t.type !== 'marker') continue;
-      const m = this.doc.getText(t.start, t.length);
-      if (m === '[' || m === '![') {
-        depth++;
-      } else if (m === '](') {
-        depth--;
-        if (depth === 0) break;
-      }
+    const node = tokens[i]!.node;
+    let mid = i + 1;
+    while (mid < to && tokens[mid]!.node !== node) mid++;
+    let end = mid;
+    let href = '';
+    for (; end < to && tokens[end]!.node === node; end++) {
+      if (tokens[end]!.type === 'linkUrl') href = tokens[end]!.meta ?? '';
     }
-    if (j + 1 >= to) return to;
-    const href = tokens[j + 1]!.meta ?? '';
-    this.out += `<a href="${escapeAttr(href)}">`;
-    this.inline(tokens, i + 1, j);
-    this.out += '</a>';
-    return j + 3;
+    const safe = safeHref(href, 'link');
+    if (safe !== null) this.out += `<a href="${escapeAttr(safe)}">`;
+    this.inline(tokens, i + 1, mid);
+    if (safe !== null) this.out += '</a>';
+    return end;
   }
 
-  /** Tokens: `![` imageAlt `](` imageUrl `)`. */
+  /** Tokens, all of node N: `![` imageAlt `](` imageUrl `)`; the alt and URL are absent when empty. */
   private image(tokens: readonly Token[], i: number, to: number): number {
-    if (i + 4 >= to) return to;
-    const alt = tokens[i + 1]!.meta ?? '';
-    const src = tokens[i + 3]!.meta ?? '';
-    this.out += `<img src="${escapeAttr(src)}" alt="${escapeAttr(alt)}">`;
-    return i + 5;
+    const node = tokens[i]!.node;
+    let end = i + 1;
+    let alt = '';
+    let src = '';
+    for (; end < to && tokens[end]!.node === node; end++) {
+      const t = tokens[end]!;
+      if (t.type === 'imageAlt') alt = t.meta ?? '';
+      else if (t.type === 'imageUrl') src = t.meta ?? '';
+    }
+    const safe = safeHref(src, 'image');
+    this.out += safe !== null ? `<img src="${escapeAttr(safe)}" alt="${escapeAttr(alt)}">` : escapeHtml(alt);
+    return end;
   }
 
   private content(t: Token): void {
@@ -361,9 +402,13 @@ class Renderer {
       case 'inlineCode':
         this.out += `<code>${text}</code>`;
         break;
-      case 'autolink':
-        this.out += `<a href="${escapeAttr(t.meta ?? this.doc.getText(t.start, t.length))}">${text}</a>`;
+      case 'autolink': {
+        // `<user@host>` has no scheme: it is an email autolink (CommonMark §6.5).
+        const target = t.meta ?? this.doc.getText(t.start, t.length);
+        const safe = safeHref(schemeOf(target) === null ? `mailto:${target}` : target, 'link');
+        this.out += safe !== null ? `<a href="${escapeAttr(safe)}">${text}</a>` : text;
         break;
+      }
       case 'wikiLink':
         this.out += `<span class="wikilink">${text}</span>`;
         break;

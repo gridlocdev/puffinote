@@ -68,6 +68,22 @@ describe('DocumentBuffer editing', () => {
     expect(text(nl)).toBe('a\n');
   });
 
+  it('is clean again after undoing or retyping back to the saved text', () => {
+    const buf = new DocumentBuffer('hello');
+    buf.selection = caretAt(5);
+    buf.insert('!');
+    expect(buf.isDirty).toBe(true);
+    buf.undo();
+    expect(buf.isDirty).toBe(false);
+    buf.redo();
+    expect(buf.isDirty).toBe(true);
+    buf.backspace();
+    expect(text(buf)).toBe('hello');
+    expect(buf.isDirty).toBe(false);
+    buf.replaceRange(0, 1, 'j');
+    expect(buf.isDirty).toBe(true);
+  });
+
   it('tracks dirty against the saved baseline and clears history on load', () => {
     const buf = new DocumentBuffer('x');
     expect(buf.isDirty).toBe(false);

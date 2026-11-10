@@ -17,18 +17,51 @@ export interface MarkdownModelUpdate {
   readonly dirtyFromLine: number;
 }
 
+/** One line's tokens, as the run that made them left them. */
+interface LineEntry {
+  readonly tokens: readonly Token[];
+  /** The line's start offset when it was tokenized. Tokens of a line that has since moved shift lazily. */
+  readonly base: number;
+  /**
+   * Whether the run reached this line at the top of its loop, so its tokens depend only on its entering
+   * state and the text from here down. False for the lines a table or setext pair consumed with the line
+   * that opened it.
+   */
+  readonly top: boolean;
+}
+
+/** Where an update may stop: past `afterLine`, new line `i` is old line `i - lineDelta`, text unchanged. */
+interface Convergence {
+  readonly afterLine: number;
+  readonly lineDelta: number;
+  readonly oldEntering: readonly BlockState[];
+  readonly oldLines: readonly LineEntry[];
+}
+
 /**
  * The tokenized view of a document: per-line tokens plus the block-state checkpoint cache (PRD §11.1, §11.2).
  * Every line records the state it was entered with, so rendering a viewport can resume from the nearest line
- * above, and an edit re-tokenizes only from its first affected line down, reusing the untouched prefix.
+ * above, and an edit re-tokenizes only from its first affected line down to where the block state converges
+ * with the previous run, reusing the untouched prefix and the converged tail.
  */
 export class MarkdownModel {
+  private readonly doc: TextDocument;
   private readonly entering: readonly BlockState[];
-  private readonly lines: readonly (readonly Token[])[];
+  /** Entries are replaced in place when a moved line's tokens are first shifted; the array is this model's own. */
+  private readonly lines: LineEntry[];
+  /** Whether line 0 may open front matter, which depends on a closing fence anywhere below it. */
+  private readonly allowFrontMatter: boolean;
 
-  private constructor(entering: readonly BlockState[], lines: readonly (readonly Token[])[]) {
+  private constructor(
+    doc: TextDocument,
+    entering: readonly BlockState[],
+    lines: LineEntry[],
+    allowFrontMatter: boolean,
+  ) {
+    this.doc = doc;
     this.entering = entering;
     this.lines = lines;
+    this.allowFrontMatter = allowFrontMatter;
   }
 
   /** Number of lines covered. */
@@ -43,30 +76,50 @@ export class MarkdownModel {
 
   /** The tokens of `line`, in source order. */
   lineTokens(line: number): readonly Token[] {
-    return this.lines[line]!;
+    const entry = this.lines[line]!;
+    const start = this.doc.getLineStart(line);
+    if (entry.base === start) return entry.tokens;
+    // A line carried over from the previous run below an edit: shift its offsets once, on first use.
+    const delta = start - entry.base;
+    const tokens = entry.tokens.map((t) => ({ ...t, start: t.start + delta }));
+    this.lines[line] = { tokens, base: start, top: entry.top };
+    return tokens;
   }
 
   /** All tokens in document order. */
   allTokens(): Token[] {
-    return this.lines.flat();
+    const out: Token[] = [];
+    for (let line = 0; line < this.lines.length; line++) out.push(...this.lineTokens(line));
+    return out;
   }
 
   /** Tokenize a whole document from scratch. */
   static build(document: TextDocument): MarkdownModel {
-    const n = document.lineCount;
-    const entering = new Array<BlockState>(n);
-    const tokens = new Array<Token[]>(n);
-    tokenizeRange(document, 0, n, BlockStates.start, entering, tokens);
-    return new MarkdownModel(entering, tokens);
+    const allow = allowsFrontMatter(document);
+    const entering: BlockState[] = [];
+    const lines: LineEntry[] = [];
+    tokenizeRange(document, 0, BlockStates.start, allow, entering, lines, null);
+    return new MarkdownModel(document, entering, lines, allow);
   }
 
   /**
-   * Re-tokenize after an edit, reusing the untouched prefix `[0, firstChangedLine)`. The worst case is O(n),
-   * such as an opening fence typed at the top (PRD §11.2); a common edit re-runs a short tail.
+   * Re-tokenize after an edit, reusing the untouched prefix `[0, firstChangedLine)`. When the new document
+   * was made from this model's by one edit (`TextDocument.changeSince`), the run stops at the first line
+   * past the edit whose entering state matches the previous run's (PRD §11.2), and the rest is carried
+   * over. The worst case is O(n), such as an opening fence typed at the top; a common edit re-runs a few
+   * lines. The result always equals `build(newDocument)`.
    */
   update(newDocument: TextDocument, firstChangedLine: number): MarkdownModelUpdate {
     const n = newDocument.lineCount;
-    let first = Math.min(Math.max(firstChangedLine, 0), Math.max(0, n - 1));
+    const oldN = this.lines.length;
+    const change = newDocument.changeSince(this.doc);
+    let first = Math.min(Math.max(firstChangedLine, 0), n - 1, oldN - 1);
+    if (change) first = Math.min(first, newDocument.getPosition(change.start).line);
+
+    // Front matter at line 0 depends on a closing fence anywhere below, so typing or deleting that fence
+    // changes line 0 without touching it.
+    const allow = allowsFrontMatter(newDocument);
+    if (allow !== this.allowFrontMatter) first = 0;
 
     // A table body row depends on the header above it, which carried state doesn't track: back up to the
     // start of any run of pipe rows so the whole table is re-evaluated.
@@ -84,37 +137,84 @@ export class MarkdownModel {
       first--;
     }
 
+    // Never resume on a line the previous run reached inside a table or setext pair: its tokens depended on
+    // the line that opened the group.
+    while (first > 0 && !this.lines[first]!.top) first--;
+
     // Every line above `first` is unchanged, so its entering state is too.
-    const startState = first < this.entering.length ? this.entering[first]! : BlockStates.normal;
-    const keep = Math.min(first, this.entering.length);
-    const entering = this.entering.slice(0, keep) as BlockState[];
-    const tokens = this.lines.slice(0, keep) as Token[][];
-    entering.length = n;
-    tokens.length = n;
-    tokenizeRange(newDocument, first, n, startState, entering, tokens);
-    return { model: new MarkdownModel(entering, tokens), dirtyFromLine: first };
+    const startState = this.entering[first]!;
+    const converge: Convergence | null = change
+      ? {
+          afterLine: newDocument.getPosition(change.start + change.insertedLength).line,
+          lineDelta: n - oldN,
+          oldEntering: this.entering,
+          oldLines: this.lines,
+        }
+      : null;
+    let entering = this.entering.slice(0, first);
+    let lines = this.lines.slice(0, first);
+    const stop = tokenizeRange(newDocument, first, startState, allow, entering, lines, converge);
+    if (stop < n) {
+      // Converged: the old run's tail, from the matching line, is this run's. Its tokens shift lazily.
+      const from = stop - (n - oldN);
+      entering = entering.concat(this.entering.slice(from));
+      lines = lines.concat(this.lines.slice(from));
+    }
+    return { model: new MarkdownModel(newDocument, entering, lines, allow), dirtyFromLine: first };
   }
 }
 
 /**
- * Tokenize lines `[fromLine, toLine)`. Handles carried block state and the two one-line lookaheads: a table
- * (a header row followed by a delimiter row) and a setext heading (paragraph text followed by an underline).
+ * May the run stop at new line `i`, entered with `state`? Only past the edit, and only where the old run was
+ * at the top of the same (shifted) line with the same entering state.
+ */
+function converges(c: Convergence, i: number, state: BlockState): boolean {
+  if (i <= c.afterLine) return false;
+  const old = i - c.lineDelta;
+  const entry = c.oldLines[old];
+  return entry !== undefined && entry.top && sameState(c.oldEntering[old]!, state);
+}
+
+function sameState(a: BlockState, b: BlockState): boolean {
+  return (
+    a === b ||
+    (a.kind === b.kind &&
+      a.fenceChar === b.fenceChar &&
+      a.fenceLength === b.fenceLength &&
+      a.language === b.language &&
+      a.afterBlank === b.afterBlank)
+  );
+}
+
+/** Front matter opens at line 0 only when a closing fence exists below it. */
+function allowsFrontMatter(doc: TextDocument): boolean {
+  return doc.lineCount >= 2 && isFrontMatterFenceLine(doc.getLineText(0)) && hasClosingFrontMatterFence(doc);
+}
+
+/**
+ * Tokenize from `fromLine`, appending to `entering` and `lines` (which hold exactly the lines above it), to
+ * the end of the document or until `converge` says the rest is unchanged; returns the line it stopped at.
+ * Handles carried block state and the two one-line lookaheads: a table (a header row followed by a delimiter
+ * row) and a setext heading (paragraph text followed by an underline).
+ *
+ * Stopping is checked only at the top of the loop. There the run's future depends on nothing but the entering
+ * state and the text from this line down, so when both equal the old run's at a line where it too was at the
+ * top, everything below comes out the same.
  */
 function tokenizeRange(
   doc: TextDocument,
   fromLine: number,
-  toLine: number,
   startState: BlockState,
+  allowFrontMatter: boolean,
   entering: BlockState[],
-  tokens: Token[][],
-): void {
-  // Front matter opens at line 0 only when a closing fence exists below it.
-  const allowFrontMatter =
-    doc.lineCount >= 2 && isFrontMatterFenceLine(doc.getLineText(0)) && hasClosingFrontMatterFence(doc);
-
+  tokens: LineEntry[],
+  converge: Convergence | null,
+): number {
+  const toLine = doc.lineCount;
   let state = startState;
   let i = fromLine;
   while (i < toLine) {
+    if (converge && converges(converge, i, state)) return i;
     entering[i] = state;
 
     if (
@@ -144,10 +244,12 @@ function tokenizeRange(
     }
 
     const lineTokens: Token[] = [];
-    state = tokenizeLine(doc.getLineText(i), doc.getLineStart(i), i, state, lineTokens, allowFrontMatter);
-    tokens[i] = lineTokens;
+    const start = doc.getLineStart(i);
+    state = tokenizeLine(doc.getLineText(i), start, i, state, lineTokens, allowFrontMatter);
+    tokens[i] = { tokens: lineTokens, base: start, top: true };
     i++;
   }
+  return toLine;
 }
 
 /**
@@ -159,24 +261,22 @@ function tokenizeSetextHeading(
   line: number,
   level: number,
   entering: BlockState[],
-  tokens: Token[][],
+  tokens: LineEntry[],
 ): number {
   const start = doc.getLineStart(line);
   const heading: Token[] = [token(start, 0, 'headingMarker', 'marker', String(level))];
   tokenizeLineInline(doc.getLineText(line), start, heading);
-  entering[line] = BlockStates.normal;
-  tokens[line] = heading;
+  // The text line keeps the state it was entered with (set by the caller): an update may resume here.
+  tokens[line] = { tokens: heading, base: start, top: true };
 
   const underline = line + 1;
+  const underlineStart = doc.getLineStart(underline);
   entering[underline] = BlockStates.normal;
-  tokens[underline] = [
-    token(
-      doc.getLineStart(underline),
-      contentLength(doc.getLineText(underline)),
-      'setextUnderline',
-      'marker',
-    ),
-  ];
+  tokens[underline] = {
+    tokens: [token(underlineStart, contentLength(doc.getLineText(underline)), 'setextUnderline', 'marker')],
+    base: underlineStart,
+    top: false,
+  };
   return underline + 1;
 }
 
@@ -186,22 +286,21 @@ function tokenizeTable(
   start: number,
   toLine: number,
   entering: BlockState[],
-  tokens: Token[][],
+  tokens: LineEntry[],
 ): number {
+  // The header row keeps the state it was entered with (set by the caller): an update may resume there.
+  const row = (i: number, isDelimiter: boolean): void => {
+    if (i !== start) entering[i] = BlockStates.normal;
+    tokens[i] = {
+      tokens: tokenizeTableRow(doc, i, isDelimiter),
+      base: doc.getLineStart(i),
+      top: i === start,
+    };
+  };
   let i = start;
-  entering[i] = BlockStates.normal;
-  tokens[i] = tokenizeTableRow(doc, i, false);
-  i++;
-  if (i < toLine) {
-    entering[i] = BlockStates.normal;
-    tokens[i] = tokenizeTableRow(doc, i, true);
-    i++;
-  }
-  while (i < toLine && isPotentialTableRow(doc.getLineText(i))) {
-    entering[i] = BlockStates.normal;
-    tokens[i] = tokenizeTableRow(doc, i, false);
-    i++;
-  }
+  row(i++, false);
+  if (i < toLine) row(i++, true);
+  while (i < toLine && isPotentialTableRow(doc.getLineText(i))) row(i++, false);
   return i;
 }
 

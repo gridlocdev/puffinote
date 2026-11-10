@@ -89,6 +89,59 @@ describe('HTML renderer', () => {
     expect(html).toContain('&lt;b&gt;x&lt;/b&gt;');
   });
 
+  it('leaves the closing fence out of a code block', () => {
+    expect(body('```html\n<b>x</b>\n```')).toBe(
+      '<pre><code class="language-html">&lt;b&gt;x&lt;/b&gt;\n</code></pre>\n',
+    );
+    expect(body('~~~\na\n~~~\n\nafter')).toBe('<pre><code>a\n</code></pre>\n<p>after</p>\n');
+  });
+
+  it('escapes quotes in a fence info string (§10.5)', () => {
+    expect(body('```x" onmouseover="alert(1)\ncode\n```')).toBe(
+      '<pre><code class="language-x&quot; onmouseover=&quot;alert(1)">code\n</code></pre>\n',
+    );
+  });
+
+  it('drops links with an unsafe scheme, keeping the text (§10.5)', () => {
+    const html = body(
+      '[a](javascript:alert(1)) [b](JavaScript:x) [c](\u0001javascript:x) [d](vbscript:x) [e](data:text/html,x) [f](file:///etc)',
+    );
+    expect(html).toBe('<p>a b c d e f</p>\n');
+    expect(body('<javascript:alert(2)>')).toBe('<p>javascript:alert(2)</p>\n');
+  });
+
+  it('keeps links to safe URLs (§10.5)', () => {
+    expect(
+      body('[h](http://a.com) [s](https://a.com) [m](mailto:a@b.c) [r](docs/x.md) [f](#top) [n](//host/x)'),
+    ).toBe(
+      '<p><a href="http://a.com">h</a> <a href="https://a.com">s</a> <a href="mailto:a@b.c">m</a> ' +
+        '<a href="docs/x.md">r</a> <a href="#top">f</a> <a href="//host/x">n</a></p>\n',
+    );
+    expect(body('<https://a.com> <a@b.com>')).toBe(
+      '<p><a href="https://a.com">https://a.com</a> <a href="mailto:a@b.com">a@b.com</a></p>\n',
+    );
+  });
+
+  it('renders an image with an unsafe source as its alt text (§10.5)', () => {
+    expect(body('![p](javascript:x) ![q](data:image/svg+xml,x)')).toBe('<p>p q</p>\n');
+    expect(body('![i](data:image/png;base64,AAAA) ![j](pic.png)')).toBe(
+      '<p><img src="data:image/png;base64,AAAA" alt="i"> <img src="pic.png" alt="j"></p>\n',
+    );
+  });
+
+  it('keeps the text after an empty-alt image or an empty-URL link', () => {
+    expect(body('![](pic.png) caption after')).toBe('<p><img src="pic.png" alt=""> caption after</p>\n');
+    expect(body('[a]() tail text')).toBe('<p><a href="">a</a> tail text</p>\n');
+  });
+
+  it('renders a very deep blockquote without overflowing the stack', () => {
+    const depth = 20000;
+    const html = body('>'.repeat(depth) + ' deep');
+    expect(html.split('<blockquote>').length - 1).toBe(depth);
+    expect(html.split('</blockquote>').length - 1).toBe(depth);
+    expect(html).toContain('<p>deep</p>');
+  });
+
   it('renders a horizontal rule', () => {
     expect(body('a\n\n---\n\nb')).toContain('<hr>');
   });

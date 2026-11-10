@@ -119,4 +119,105 @@ describe('incremental tokenizing', () => {
       expect(model.allTokens()).toEqual(MarkdownModel.build(doc).allTokens());
     }
   });
+
+  it('matches when a front matter closing fence is typed or deleted far below line 0', () => {
+    const open = '---\ntitle: x\nmore: y\n';
+    expectIncrementalMatchesFull(open, open.length, 0, '---');
+    expectIncrementalMatchesFull(open + '---\nbody', open.length, 3, '');
+    expectIncrementalMatchesFull(open + '---\nbody', open.length + 1, 1, '');
+    expectIncrementalMatchesFull(open + '...\nbody', open.length, 3, 'x');
+  });
+
+  /** Every line's entering state and tokens, as a full rebuild must also give them. */
+  const snapshot = (doc: TextDocument, model: MarkdownModel): unknown[] =>
+    Array.from({ length: doc.lineCount }, (_, i) => [model.enteringState(i), model.lineTokens(i)]);
+
+  it('matches a full rebuild, entering states included, across chained random edits', () => {
+    let s = 0xc0ffee >>> 0;
+    const next = (n: number): number => {
+      s = (s * 1664525 + 1013904223) >>> 0;
+      return s % n;
+    };
+    const pieces = [
+      'a',
+      'b c',
+      '|',
+      '| a | b |',
+      '|-|-|',
+      '---',
+      '===',
+      '```',
+      '```js',
+      '~~~',
+      '    x',
+      '',
+      '> q',
+      '- i',
+      '1. n',
+      '# h',
+      '...',
+      '+++',
+      '\t\tt',
+      '-',
+      '=',
+      '\n',
+      '\n\n',
+      '**x**',
+      '[l](u)',
+      '\r\n',
+      'x  ',
+      '\\',
+    ];
+    for (let run = 0; run < 150; run++) {
+      const lineCount = 1 + next(12);
+      let doc = TextDocument.fromString(
+        Array.from({ length: lineCount }, () => pieces[next(pieces.length)]!).join('\n'),
+      );
+      let model = MarkdownModel.build(doc);
+      for (let step = 0; step < 30; step++) {
+        const offset = next(doc.length + 1);
+        const span = next(Math.min(8, doc.length - offset) + 1);
+        let insert = next(4) === 0 ? '' : pieces[next(pieces.length)]!;
+        if (next(3) === 0) insert += '\n' + pieces[next(pieces.length)]!;
+        const line = doc.getPosition(offset).line;
+        doc = doc.replace(offset, span, insert);
+        model = model.update(doc, line).model;
+        // Read some lines mid-chain, so later updates carry tokens that were already shifted.
+        if (next(5) === 0) model.lineTokens(next(doc.lineCount));
+        expect(snapshot(doc, model)).toEqual(snapshot(doc, MarkdownModel.build(doc)));
+      }
+    }
+  });
+
+  it('matches a full rebuild when the new document was not made from the old one by one edit', () => {
+    const before = '# T\n\n```\ncode\n```\n\n| a | b |\n|-|-|\n| 1 | 2 |\n\nText\n===\n';
+    const model = MarkdownModel.build(TextDocument.fromString(before));
+    for (const after of [
+      before.replace('```\n\n', '\n\n'),
+      before.replace('Text', 'Other'),
+      '---\nx: 1\n---\n' + before,
+    ]) {
+      const doc = TextDocument.fromString(after);
+      const line = doc.getPosition([...after].findIndex((c, i) => c !== before[i])).line;
+      expect(snapshot(doc, model.update(doc, line).model)).toEqual(snapshot(doc, MarkdownModel.build(doc)));
+    }
+  });
+
+  it('stops re-tokenizing once the block state converges (§11.2)', () => {
+    let doc = TextDocument.fromString(
+      Array.from({ length: 20000 }, (_, i) => `- item ${i} with **bold** and [link](u${i})`).join('\n'),
+    );
+    let model = MarkdownModel.build(doc);
+    const started = performance.now();
+    MarkdownModel.build(doc);
+    const oneBuild = performance.now() - started;
+    const typing = performance.now();
+    for (let k = 0; k < 100; k++) {
+      doc = doc.insert(2, 'a');
+      model = model.update(doc, 0).model;
+    }
+    // Each keystroke re-ran the whole note before; now 100 of them cost less than two full builds.
+    expect(performance.now() - typing).toBeLessThan(2 * oneBuild + 20);
+    expect(model.lineTokens(19999)).toEqual(MarkdownModel.build(doc).lineTokens(19999));
+  });
 });

@@ -86,6 +86,23 @@ describe('inline tokenizer', () => {
     expect(hasType('a `unterminated', 'inlineCode')).toBe(false);
     expect(hasType('****', 'strong')).toBe(false);
   });
+
+  it('reads an escaped trailing backslash as text, not a hard break', () => {
+    expect(hasType('path C:\\\\\nnext', 'hardBreak')).toBe(false);
+    expect(textsOfType('path C:\\\\\nnext', 'escape')).toEqual(['\\', '\\']);
+    expect(hasType('odd\\\\\\\nnext', 'hardBreak')).toBe(true);
+  });
+
+  it('tokenizes long pathological lines in linear time', () => {
+    // Each of these was quadratic: a failed closer or bracket search rescanned the rest of the line.
+    for (const unit of ['*a ', '~~a ', '==a ', '[a', '[a](', '![a](', '[[a', '<a ', '*', '`a``']) {
+      const small = tokenize(unit.repeat(50)).model.allTokens();
+      const started = performance.now();
+      const big = tokenize(unit.repeat(40000)).model.allTokens();
+      expect(performance.now() - started, unit).toBeLessThan(1500);
+      expect(new Set(big.map((t) => t.type)), unit).toEqual(new Set(small.map((t) => t.type)));
+    }
+  });
 });
 
 describe('inline nodes', () => {

@@ -22,7 +22,10 @@ export function tokenizeInline(
   let breakStart = -1;
   if (detectHardBreak && to > from) {
     if (text.charAt(to - 1) === '\\') {
-      breakStart = to - 1;
+      // Only an unescaped backslash breaks: `C:\\` ends in an escaped one (CommonMark §6.7).
+      let s = to - 1;
+      while (s > from && text.charAt(s - 1) === '\\') s--;
+      if (((to - s) & 1) === 1) breakStart = to - 1;
     } else {
       let s = to;
       while (s > from && text.charAt(s - 1) === ' ') s--;
@@ -35,6 +38,18 @@ export function tokenizeInline(
   if (breakStart >= 0) output.push(token(absStart + breakStart, to - breakStart, 'hardBreak', 'marker'));
 }
 
+/** A remembered forward search: scanning from `from` found `result` (-1 for none). */
+interface ScanMemo {
+  readonly from: number;
+  readonly result: number;
+}
+
+/**
+ * Every opener looks ahead for its closer, so a line of unmatched openers would rescan to its end once per
+ * opener. Searches are memoized instead: a forward scan's answer holds for any later start up to the position
+ * it found (or for every later start when it found nothing), and brackets are matched for the whole line in
+ * one pass. That keeps a line near-linear without changing what it tokenizes to.
+ */
 class InlineTokenizer {
   private readonly text: string;
   private readonly absStart: number;
@@ -42,11 +57,21 @@ class InlineTokenizer {
   private pendingTextStart = -1;
   /** Per-line node id; each construct claims one, shared across link-text recursion. */
   private nextNode = 1;
+  private scans: Map<string, ScanMemo> | undefined;
+  private pairTables: Map<string, Int32Array> | undefined;
+  /** Characters examined by plain (unmemoized) scans so far, and how many the line may spend that way. */
+  private work = 0;
+  private readonly budget: number;
+  private runChar = '';
+  private runTo = -1;
+  private runFrom = 0;
+  private runEnd = 0;
 
   constructor(text: string, absStart: number, out: Token[]) {
     this.text = text;
     this.absStart = absStart;
     this.out = out;
+    this.budget = 4 * text.length + 256;
   }
 
   run(from: number, to: number): void {
@@ -103,25 +128,26 @@ class InlineTokenizer {
   private tryInlineCode(i: number, to: number): number {
     const run = this.runLength(i, to, '`');
     const contentStart = i + run;
-    let j = contentStart;
-    while (j < to) {
-      if (this.text.charAt(j) === '`') {
-        const closeRun = this.runLength(j, to, '`');
-        if (closeRun === run) {
-          if (j === contentStart) return 0; // an empty `` `` stays literal
-          const node = this.nextNode++;
-          this.flushText(i);
-          this.emit(i, run, 'marker', 'marker', null, node);
-          this.emit(contentStart, j - contentStart, 'inlineCode', 'content', null, node);
-          this.emit(j, run, 'marker', 'marker', null, node);
-          return j + run - i;
+    const j = this.memoScan('`', run, to, contentStart, () => {
+      let k = contentStart;
+      while (k < to) {
+        if (this.text.charAt(k) === '`') {
+          const closeRun = this.runLength(k, to, '`');
+          if (closeRun === run) return k;
+          k += closeRun;
+        } else {
+          k++;
         }
-        j += closeRun;
-      } else {
-        j++;
       }
-    }
-    return 0;
+      return -1;
+    });
+    if (j < 0 || j === contentStart) return 0; // an empty `` `` stays literal
+    const node = this.nextNode++;
+    this.flushText(i);
+    this.emit(i, run, 'marker', 'marker', null, node);
+    this.emit(contentStart, j - contentStart, 'inlineCode', 'content', null, node);
+    this.emit(j, run, 'marker', 'marker', null, node);
+    return j + run - i;
   }
 
   private tryImageOrEmbed(i: number, to: number): number {
@@ -199,10 +225,10 @@ class InlineTokenizer {
   }
 
   private tryAutolink(i: number, to: number): number {
-    const close = this.text.indexOf('>', i + 1);
+    const close = this.find('>', i + 1);
     if (close < 0 || close >= to) return 0;
+    if (close === i + 1 || this.within(' ', i + 1, close) || !this.looksLikeUri(i + 1, close)) return 0;
     const inner = this.text.slice(i + 1, close);
-    if (inner.length === 0 || inner.includes(' ') || !looksLikeUri(inner)) return 0;
     const node = this.nextNode++;
     this.flushText(i);
     this.emit(i, 1, 'marker', 'marker', null, node);
@@ -268,26 +294,77 @@ class InlineTokenizer {
     // Underscore does not delimit intra-word, so snake_case stays literal (CommonMark's left-flanking rule).
     if (c === '_' && i > 0 && isLetterOrDigit(t.charAt(i - 1))) return 0;
 
-    let j = contentStart;
-    while (j < to) {
-      // A delimiter escaped by an odd run of backslashes is a literal, not a closer.
-      if (t.charAt(j) === c && !isWhiteSpace(t.charAt(j - 1)) && !this.isEscaped(j)) {
-        const closeRun = this.runLength(j, to, c);
-        const intraWord = c === '_' && j + closeRun < to && isLetterOrDigit(t.charAt(j + closeRun));
-        if (closeRun >= count && !intraWord) {
-          const node = this.nextNode++;
-          this.flushText(i);
-          this.emit(i, count, 'marker', 'marker', null, node);
-          this.emit(contentStart, j - contentStart, type, 'content', null, node);
-          this.emit(j, count, 'marker', 'marker', null, node);
-          return j + count - i;
+    // `contentStart` is never a `c`, so every scan enters each run of `c` at its first char and the answer
+    // depends only on where the scan starts: memoizable.
+    const j = this.memoScan(c, count, to, contentStart, () => {
+      let k = contentStart;
+      while (k < to) {
+        // A delimiter escaped by an odd run of backslashes is a literal, not a closer.
+        if (t.charAt(k) === c && !isWhiteSpace(t.charAt(k - 1)) && !this.isEscaped(k)) {
+          const closeRun = this.runLength(k, to, c);
+          const intraWord = c === '_' && k + closeRun < to && isLetterOrDigit(t.charAt(k + closeRun));
+          if (closeRun >= count && !intraWord) return k;
+          k += closeRun;
+        } else {
+          k++;
         }
-        j += closeRun;
-      } else {
-        j++;
       }
+      return -1;
+    });
+    if (j < 0) return 0;
+    const node = this.nextNode++;
+    this.flushText(i);
+    this.emit(i, count, 'marker', 'marker', null, node);
+    this.emit(contentStart, j - contentStart, type, 'content', null, node);
+    this.emit(j, count, 'marker', 'marker', null, node);
+    return j + count - i;
+  }
+
+  /**
+   * A forward scan from `from` that stops at `to` at the latest, memoized under `kind`, `param` and `to`
+   * (which must fix everything the scan depends on besides its start). A scan from `from` that found
+   * `result` answers any start in `[from, result]`, or any later start when it found nothing, provided
+   * starts never fall inside a run the scan skips over.
+   *
+   * Scans run plainly until they have cost a few times the line's length; only a line that pathological
+   * pays for the memo.
+   */
+  private memoScan(kind: string, param: number, to: number, from: number, scan: () => number): number {
+    if (this.work <= this.budget) {
+      const result = scan();
+      this.work += (result < 0 ? to : result) - from;
+      return result;
     }
-    return 0;
+    const key = `${kind}${param}:${to}`;
+    const scans = (this.scans ??= new Map());
+    const memo = scans.get(key);
+    if (memo && from >= memo.from && (memo.result < 0 || from <= memo.result)) return memo.result;
+    const result = scan();
+    scans.set(key, { from, result });
+    return result;
+  }
+
+  /** `text.indexOf(needle, from)`, memoized per needle. */
+  private find(needle: string, from: number): number {
+    return this.memoScan(needle, 0, this.text.length, from, () => this.text.indexOf(needle, from));
+  }
+
+  /** Whether `needle` occurs inside `[from, to)`. */
+  private within(needle: string, from: number, to: number): boolean {
+    const k = this.find(needle, from);
+    return k >= 0 && k + needle.length <= to;
+  }
+
+  /** Whether `text[from, to)` looks like an autolink target: `scheme:…`, or a bare email address. */
+  private looksLikeUri(from: number, to: number): boolean {
+    const colon = this.find(':', from);
+    if (colon < 0 || colon >= to || colon === from)
+      return this.within('@', from, to) && this.within('.', from, to);
+    for (let k = from; k < colon; k++) {
+      const c = this.text.charAt(k);
+      if (!isLetterOrDigit(c) && c !== '+' && c !== '-' && c !== '.') return false;
+    }
+    return true;
   }
 
   private isEscaped(pos: number): boolean {
@@ -327,14 +404,22 @@ class InlineTokenizer {
     return [s, e - s];
   }
 
+  /** The length of the run of `c` at `i`, bounded by `to`. Remembers the last run, so each position inside a
+   * long run costs O(1) instead of rescanning the rest of the run. */
   private runLength(i: number, to: number, c: string): number {
+    if (c === this.runChar && to === this.runTo && i >= this.runFrom && i < this.runEnd)
+      return this.runEnd - i;
     let n = 0;
     while (i + n < to && this.text.charAt(i + n) === c) n++;
+    this.runChar = c;
+    this.runTo = to;
+    this.runFrom = i;
+    this.runEnd = i + n;
     return n;
   }
 
   private indexOf(needle: string, from: number, to: number): number {
-    const idx = this.text.indexOf(needle, from);
+    const idx = this.find(needle, from);
     return idx >= 0 && idx + needle.length <= to ? idx : -1;
   }
 
@@ -348,7 +433,47 @@ class InlineTokenizer {
     return this.matchPair(open, to, '(', ')');
   }
 
+  /**
+   * Matches come from one stack pass over the whole line (`pairTable`). A scan from `open` sees the same
+   * escapes as that pass, because it enters every backslash run at its start, so the first closer that
+   * balances `open` is the same; it only has to lie before `to`. An opener that is itself escaped isn't in
+   * the table, and falls back to the direct scan.
+   */
   private matchPair(open: number, to: number, opener: string, closer: string): number {
+    if (this.work <= this.budget || this.isEscaped(open)) {
+      const k = this.scanPair(open, to, opener, closer);
+      this.work += (k < 0 ? to : k) - open;
+      return k;
+    }
+    const k = this.pairTable(opener, closer)[open]!;
+    return k >= 0 && k < to ? k : -1;
+  }
+
+  /** For each unescaped `opener` in the line, the index of its balancing `closer`, or -1. */
+  private pairTable(opener: string, closer: string): Int32Array {
+    const tables = (this.pairTables ??= new Map());
+    let table = tables.get(opener);
+    if (!table) {
+      const t = this.text;
+      table = new Int32Array(t.length).fill(-1);
+      const stack: number[] = [];
+      for (let k = 0; k < t.length; k++) {
+        const ch = t.charAt(k);
+        if (ch === '\\') {
+          k++;
+        } else if (ch === opener) {
+          stack.push(k);
+        } else if (ch === closer) {
+          const o = stack.pop();
+          if (o !== undefined) table[o] = k;
+        }
+      }
+      tables.set(opener, table);
+    }
+    return table;
+  }
+
+  private scanPair(open: number, to: number, opener: string, closer: string): number {
     let depth = 0;
     for (let k = open; k < to; k++) {
       const ch = this.text.charAt(k);
@@ -365,16 +490,6 @@ class InlineTokenizer {
     }
     return -1;
   }
-}
-
-function looksLikeUri(s: string): boolean {
-  const colon = s.indexOf(':');
-  if (colon <= 0) return s.includes('@') && s.includes('.'); // a bare email autolink
-  for (let k = 0; k < colon; k++) {
-    const c = s.charAt(k);
-    if (!isLetterOrDigit(c) && c !== '+' && c !== '-' && c !== '.') return false;
-  }
-  return true;
 }
 
 function isTrailingUrlPunct(c: string): boolean {
