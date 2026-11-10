@@ -213,6 +213,17 @@ export function sanitize(raw: unknown): PartialSettings {
   return out as PartialSettings;
 }
 
+/**
+ * The entries of `raw` that `sanitize` drops: keys this version doesn't know, or values it doesn't accept.
+ * Writing them back keeps what a newer Puffinote stored, so opening the same notebook in an older one and
+ * changing a setting doesn't erase it.
+ */
+export function unrecognized(raw: unknown): Record<string, unknown> {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return {};
+  const kept = sanitize(raw) as Record<string, unknown>;
+  return Object.fromEntries(Object.entries(raw).filter(([k]) => !(k in kept)));
+}
+
 /** Where the user's own preferences live: localStorage in a browser, a config file on the desktop. */
 export interface PrefsStorage {
   load(): PartialSettings;
@@ -231,7 +242,13 @@ export const localPrefs: PrefsStorage = {
   },
   save(prefs) {
     try {
-      localStorage.setItem(PREFS_KEY, JSON.stringify(prefs));
+      let stored: unknown = null;
+      try {
+        stored = JSON.parse(localStorage.getItem(PREFS_KEY) ?? 'null');
+      } catch {
+        // Unreadable: nothing to keep.
+      }
+      localStorage.setItem(PREFS_KEY, JSON.stringify({ ...unrecognized(stored), ...prefs }));
     } catch {
       // Storage disabled: preferences last until the page closes.
     }

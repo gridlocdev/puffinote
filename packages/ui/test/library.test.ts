@@ -20,6 +20,21 @@ describe('layout and accent settings', () => {
   });
 });
 
+describe('settings from a newer Puffinote', () => {
+  it('ignores what it does not understand, and keeps it when it rewrites the notebook settings', async () => {
+    const store = new MemoryStore('N', {
+      '.puffinote/settings.json': JSON.stringify({ accent: 'green', future: { on: true }, theme: 'dark' }),
+      'a.md': 'x',
+    });
+    const nb = await Notebook.open(store, { prefs: memoryPrefs() });
+    expect(nb.settings.value.accent).toBe('blue');
+    expect(nb.settings.value.theme).toBe('dark');
+    await nb.setOverrides({ theme: 'light' });
+    const saved = JSON.parse(new TextDecoder().decode((await store.read('.puffinote/settings.json')).bytes));
+    expect(saved).toEqual({ accent: 'green', future: { on: true }, theme: 'light' });
+  });
+});
+
 describe('excerptOf', () => {
   it('drops front matter, the title heading and Markdown marks', () => {
     const md =

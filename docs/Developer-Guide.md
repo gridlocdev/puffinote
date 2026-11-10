@@ -109,6 +109,30 @@ just icons  # icon.icns (macOS), icon.ico (Windows) and icon.png (Linux window) 
 It needs Inkscape (`brew install --cask inkscape`) and, for the `.icns`, macOS. If the Dock still shows the
 old icon after a rebuild, that is the macOS icon cache: move the app, or log out and back in.
 
+## Releasing
+
+Pushing a `vX.Y.Z` tag runs `.github/workflows/release.yml`. It packages the desktop app on macOS (Apple
+silicon and Intel), Windows and Linux, publishes them on a GitHub release, and pushes the NAS image to
+`ghcr.io/gridlocdev/puffinote` as `X.Y.Z` and `latest`, for `amd64` and `arm64`.
+
+1. Set the same version in every `package.json` (the root, `apps/*` and `packages/*`). The workflow stops if
+   the tag doesn't match `apps/desktop/package.json`.
+2. Add a `## X.Y.Z` section to `CHANGELOG.md`. It becomes the release notes.
+3. Run `just check`, commit, then tag and push:
+
+   ```bash
+   git tag -a vX.Y.Z -m "Puffinote X.Y.Z"
+   git push origin main vX.Y.Z
+   ```
+
+- The first time the image is pushed, make the `puffinote` package public in the repository's **Packages**
+  settings on GitHub, so a NAS can pull it without logging in.
+- The apps aren't notarized or code-signed, so the README tells people how to open them the first time.
+  The desktop app's update check (PRD §3.1) reads the latest release from GitHub's API, so a published
+  release reaches existing installs within a day.
+- `.github/workflows/check.yml` runs `pnpm check` on Linux, macOS and Windows for every push to `main` and
+  every pull request, and builds and starts the Docker image.
+
 ## Cleaning up
 
 ```bash

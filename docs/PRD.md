@@ -58,6 +58,21 @@ The code cites this document as `PRD §n`. If you renumber a section, update tho
 - **The server is optional to deploy and safe by default:** paths are confined to their root, writes are
   atomic, an optional bearer token protects it, and a Host check blocks DNS rebinding (ARCHITECTURE.md).
 
+### 3.1 Desktop updates
+
+The desktop app checks GitHub for a newer release. It never downloads or installs anything itself: the
+builds aren't signed for automatic updates, and a notes app shouldn't replace itself unasked.
+
+- **Once a day, on start**, a packaged app asks GitHub's API for the latest release (not a draft or
+  pre-release). If it's newer than the running version and the user hasn't skipped it, a dialog says so with
+  **Download** (opens the release page in the browser), **Later**, and **Skip This Version**.
+- **Check for Updates…** (the app menu on macOS, Help elsewhere) checks at once and always answers: a newer
+  version, "up to date", or why it couldn't check. It shows a skipped version too.
+- **Check for updates automatically** is a checkbox in the dialog. The choice, the skipped version and the
+  time of the last check live in `updates.json` in the app's user data folder, not in the notebook settings.
+- A development build (`just desktop`) and a headless one never check on their own;
+  `PUFFINOTE_NO_UPDATE_CHECK=1` turns the automatic check off too.
+
 ## 4. Principles
 
 1. **Never lose text.** A save is atomic. A failed save keeps the buffer. Closing, switching notebooks and
@@ -256,6 +271,9 @@ fields: **Preferences** and **This notebook**. A notebook field can be reset to 
 | Save pasted pictures in          | The notebook's picture folder, A folder beside each note           | The notebook's picture folder |
 | Picture folder                   | a folder name                                                      | attachments                   |
 | When a picture is no longer used | Offer to delete it, Keep it                                        | Offer to delete it            |
+
+A setting Puffinote doesn't recognise, or a value it can't use, is ignored when it reads the settings but kept
+when it saves them. A notebook opened in an older version keeps the settings a newer one wrote.
 
 ## 10. The editor
 

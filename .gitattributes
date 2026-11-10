@@ -1,0 +1,6 @@
+# LF everywhere, so a Windows checkout passes `prettier --check` and the tests read the same text.
+* text=auto eol=lf
+*.png binary
+*.webp binary
+*.icns binary
+*.ico binary

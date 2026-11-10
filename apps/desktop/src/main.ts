@@ -35,6 +35,14 @@ import {
   withFileLocks,
   writeAtomic,
 } from './files.ts';
+import {
+  checkDue,
+  fetchLatestRelease,
+  isNewer,
+  loadUpdatePrefs,
+  saveUpdatePrefs,
+  type UpdatePrefs,
+} from './updates.ts';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const webRoot = path.join(here, 'web');
@@ -452,7 +460,32 @@ function registerIpc(): void {
     const win = fromEvent(e);
     if (!win || !trusted(e) || !Array.isArray(items)) return;
     const template = toTemplate(items, win);
-    if (process.platform === 'darwin') template.unshift({ role: 'appMenu' });
+    const updates: MenuItemConstructorOptions = {
+      label: 'Check for Updates…',
+      click: () => void checkForUpdates(true),
+    };
+    if (process.platform === 'darwin') {
+      template.unshift({
+        label: app.name,
+        submenu: [
+          { role: 'about' },
+          updates,
+          { type: 'separator' },
+          { role: 'services' },
+          { type: 'separator' },
+          { role: 'hide' },
+          { role: 'hideOthers' },
+          { role: 'unhide' },
+          { type: 'separator' },
+          { role: 'quit' },
+        ],
+      });
+    } else {
+      let help = template.find((m) => m.label === 'Help');
+      if (!help) template.push((help = { label: 'Help', submenu: [] }));
+      const sub = Array.isArray(help.submenu) ? help.submenu : [];
+      help.submenu = [...sub, ...(sub.length > 0 ? [{ type: 'separator' as const }] : []), updates];
+    }
     Menu.setApplicationMenu(Menu.buildFromTemplate(template));
   });
   ipcMain.on(Channels.closeAck, (e) => {
@@ -506,6 +539,78 @@ app.on('before-quit', () => {
   quitting = true;
 });
 
+const updatePrefsFile = path.join(app.getPath('userData'), 'updates.json');
+let checkingUpdates = false;
+
+/**
+ * Look for a newer release on GitHub (PRD §3.1). Puffinote never downloads or installs anything itself: when
+ * there is one, Download opens its release page. A check from the menu always answers; the daily automatic
+ * one stays quiet unless there's a version the user hasn't skipped.
+ */
+async function checkForUpdates(manual: boolean): Promise<void> {
+  if (checkingUpdates) return;
+  checkingUpdates = true;
+  try {
+    let prefs: UpdatePrefs = await loadUpdatePrefs(updatePrefsFile);
+    if (!manual) {
+      prefs = { ...prefs, lastCheck: Date.now() };
+      await saveUpdatePrefs(updatePrefsFile, prefs).catch(() => undefined);
+    }
+    const parent = BrowserWindow.getFocusedWindow() ?? BrowserWindow.getAllWindows()[0];
+    const show = (opts: Electron.MessageBoxOptions) =>
+      parent ? dialog.showMessageBox(parent, opts) : dialog.showMessageBox(opts);
+    let release;
+    try {
+      release = await fetchLatestRelease(net.fetch as typeof fetch);
+    } catch (err) {
+      if (manual)
+        await show({
+          type: 'warning',
+          message: 'Puffinote couldn’t check for updates.',
+          detail: `${err instanceof Error ? err.message : String(err)}. Check your connection and try again.`,
+        });
+      return;
+    }
+    const current = app.getVersion();
+    if (!isNewer(release.version, current)) {
+      if (manual)
+        await show({
+          type: 'info',
+          message: 'Puffinote is up to date.',
+          detail: `Version ${current} is the newest.`,
+        });
+      return;
+    }
+    if (!manual && prefs.skipped === release.version) return;
+    const { response, checkboxChecked } = await show({
+      type: 'info',
+      message: `Puffinote ${release.version} is available.`,
+      detail: `You have ${current}. Download opens the release page, where you can read what’s new and get the new version.`,
+      buttons: ['Download', 'Later', 'Skip This Version'],
+      defaultId: 0,
+      cancelId: 1,
+      checkboxLabel: 'Check for updates automatically',
+      checkboxChecked: prefs.auto,
+    });
+    prefs = {
+      ...prefs,
+      auto: checkboxChecked,
+      skipped: response === 2 ? release.version : prefs.skipped,
+    };
+    await saveUpdatePrefs(updatePrefsFile, prefs).catch(() => undefined);
+    if (response === 0) await shell.openExternal(release.url);
+  } finally {
+    checkingUpdates = false;
+  }
+}
+
+/** On start, in a packaged app, check once a day unless the user turned it off. */
+async function autoCheckForUpdates(): Promise<void> {
+  if (!app.isPackaged || headless || process.env.PUFFINOTE_NO_UPDATE_CHECK === '1') return;
+  if (!checkDue(await loadUpdatePrefs(updatePrefsFile), Date.now())) return;
+  setTimeout(() => void checkForUpdates(false), 5000);
+}
+
 /** `pnfile://local/Users/me/Notes/pic.png` → the absolute path, on macOS/Linux and Windows. */
 function fileFromUrl(url: string): string {
   const pathname = decodeURIComponent(new URL(url).pathname);
@@ -528,6 +633,7 @@ void app.whenReady().then(async () => {
   registerIpc();
   await grants.load();
   createWindow();
+  void autoCheckForUpdates();
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();
   });

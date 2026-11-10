@@ -44,6 +44,7 @@ import {
   indentUnit,
   resolveSettings,
   sanitize,
+  unrecognized,
   type PartialSettings,
   type PrefsStorage,
   type Settings,
@@ -247,6 +248,8 @@ export class Notebook {
   readonly scope = signal<LibraryScope>('folder:');
   readonly userPrefs: Signal<PartialSettings>;
   readonly overrides = signal<PartialSettings>({});
+  /** What `.puffinote/settings.json` holds that this version doesn't understand; kept when it's rewritten. */
+  private overridesUnrecognized: Record<string, unknown> = {};
   readonly settings = computed<Settings>(() => resolveSettings(this.userPrefs.value, this.overrides.value));
   readonly notice = signal<Notice | null>(null);
   /** Bumps when an image a note shows has loaded, so the editor redraws it. */
@@ -282,7 +285,9 @@ export class Notebook {
   }
 
   private async load(): Promise<void> {
-    this.overrides.value = sanitize(await this.readJson(overridesPath));
+    const rawOverrides = await this.readJson(overridesPath);
+    this.overrides.value = sanitize(rawOverrides);
+    this.overridesUnrecognized = unrecognized(rawOverrides);
     const session = (await this.readJson(sessionPath)) as Partial<Session> | null;
     await this.reloadTree();
     if (session) {
@@ -1211,7 +1216,10 @@ export class Notebook {
     this.overrides.value = clean;
     try {
       await this.ensureStateDir();
-      await this.store.write(overridesPath, encodeJson(clean), { force: true });
+      // Settings from a newer Puffinote stay in the file.
+      await this.store.write(overridesPath, encodeJson({ ...this.overridesUnrecognized, ...clean }), {
+        force: true,
+      });
     } catch (e) {
       this.report(e);
     }

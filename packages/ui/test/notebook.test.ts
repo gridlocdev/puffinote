@@ -248,7 +248,8 @@ describe('Notebook session and settings', () => {
     expect(nb.settings.value.autoSave).toBe(true);
     await nb.setOverrides({});
     expect(nb.settings.value.indent).toBe('spaces2');
-    expect(JSON.parse(await text(store, '.puffinote/settings.json'))).toEqual({});
+    // A key this version doesn't know (from a newer Puffinote, say) is kept, not dropped.
+    expect(JSON.parse(await text(store, '.puffinote/settings.json'))).toEqual({ bogus: 1 });
   });
 });
 

@@ -9,6 +9,8 @@ files:
   # The window icon on Linux and Windows (macOS takes the bundle's icon.icns).
   - build/icon.png
 asar: true
+# One naming scheme on every system: Puffinote-1.0.0-mac-arm64.dmg, Puffinote-1.0.0-win-x64.exe, …
+artifactName: ${productName}-${version}-${os}-${arch}.${ext}
 mac:
   category: public.app-category.productivity
   target: [dmg, zip]
