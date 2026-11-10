@@ -1,0 +1,11 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "editor-demo",
+      "runtimeExecutable": "pnpm",
+      "runtimeArgs": ["--filter", "@puffinote/ui", "demo"],
+      "port": 5199
+    }
+  ]
+}

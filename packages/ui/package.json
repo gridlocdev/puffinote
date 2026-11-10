@@ -1,0 +1,24 @@
+{
+  "name": "@puffinote/ui",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "license": "MIT",
+  "exports": {
+    ".": "./src/index.ts",
+    "./styles.css": "./src/styles.css"
+  },
+  "scripts": {
+    "demo": "vite demo"
+  },
+  "dependencies": {
+    "@preact/signals": "2.11.4",
+    "@puffinote/markdown": "workspace:*",
+    "@puffinote/text": "workspace:*",
+    "preact": "11.1.1"
+  },
+  "devDependencies": {
+    "@preact/preset-vite": "2.10.6",
+    "vite": "8.3.5"
+  }
+}
