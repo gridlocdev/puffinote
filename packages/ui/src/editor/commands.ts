@@ -426,3 +426,135 @@ export function setTaskStateEdit(
     insert: taskMark(state),
   }));
 }
+
+/** ⇧⌘L: take the task box off each selected line, leaving the list item. */
+export function removeTaskEdit(doc: TextDocument, sel: Selection): Edit | null {
+  const [a, b] = selectedLines(doc, sel);
+  return spliceLines(doc, sel, a, b, (text) => {
+    const p = parseLinePrefix(text);
+    if (!p.hasTask) return null;
+    return { at: p.afterMarker, remove: p.length - p.afterMarker, insert: '' };
+  });
+}
+
+// ----- Block formatting -----
+
+function nonBlank(doc: TextDocument, a: number, b: number): number[] {
+  const out: number[] = [];
+  for (let i = a; i <= b; i++) if (contentOf(doc.getLineText(i)).trim().length > 0) out.push(i);
+  return out.length > 0 ? out : [a];
+}
+
+/** Toggle a blockquote on the selected lines: remove one level when every line is quoted, else add one. */
+export function quoteEdit(doc: TextDocument, sel: Selection): Edit | null {
+  const [a, b] = selectedLines(doc, sel);
+  const lines = nonBlank(doc, a, b);
+  const allQuoted = lines.every((i) => /^[ \t]*>/.test(doc.getLineText(i)));
+  return spliceLines(doc, sel, a, b, (text, i) => {
+    if (!lines.includes(i)) return null;
+    if (allQuoted) {
+      const m = /^([ \t]*)> ?/.exec(text)!;
+      const indent = m[1]!.length;
+      return { at: indent, remove: m[0].length - indent, insert: '' };
+    }
+    return { at: 0, remove: 0, insert: '> ' };
+  });
+}
+
+/**
+ * Toggle a bulleted or numbered list on the selected lines: when every line already is that kind the markers
+ * come off; otherwise each line gets (or switches to) that marker, numbered from 1.
+ */
+export function listEdit(doc: TextDocument, sel: Selection, kind: 'unordered' | 'ordered'): Edit | null {
+  const [a, b] = selectedLines(doc, sel);
+  const lines = nonBlank(doc, a, b);
+  const all = lines.every((i) => parseLinePrefix(doc.getLineText(i)).list === kind);
+  let n = 0;
+  return spliceLines(doc, sel, a, b, (text, i) => {
+    if (!lines.includes(i)) return null;
+    const p = parseLinePrefix(text);
+    const remove = p.hasList ? p.afterMarker - p.markerStart : 0;
+    if (all) return { at: p.markerStart, remove, insert: '' };
+    n++;
+    return { at: p.markerStart, remove, insert: kind === 'ordered' ? `${n}. ` : '- ' };
+  });
+}
+
+/** ⇧⌘E: fence the selected lines as a code block, or open an empty one on a blank line. */
+export function codeBlockEdit(doc: TextDocument, sel: Selection): Edit {
+  const [a, b] = selectedLines(doc, sel);
+  const start = doc.getLineStart(a);
+  const end = doc.getLineEnd(b);
+  const body = doc.getText().slice(start, end);
+  if (isCollapsed(sel) && body.trim().length === 0) {
+    return { start, length: end - start, text: '```\n\n```', anchor: start + 4, caret: start + 4 };
+  }
+  const text = '```\n' + body + '\n```';
+  return { start, length: end - start, text, anchor: start + 4, caret: start + 4 + body.length };
+}
+
+/** Insert a horizontal rule below the caret's line, as its own paragraph. */
+export function ruleEdit(doc: TextDocument, sel: Selection): Edit {
+  const line = lineOf(doc, sel.caret);
+  const end = doc.getLineEnd(line);
+  if (contentOf(doc.getLineText(line)).trim().length === 0) {
+    const start = doc.getLineStart(line);
+    return { start, length: end - start, text: '---\n', anchor: start + 4, caret: start + 4 };
+  }
+  const text = '\n\n---\n\n';
+  return { start: end, length: 0, text, anchor: end + text.length, caret: end + text.length };
+}
+
+// ----- Line operations -----
+
+/** ⌘D: duplicate the selected lines below themselves; the selection moves to the copy. */
+export function duplicateLinesEdit(doc: TextDocument, sel: Selection): Edit {
+  const [a, b] = selectedLines(doc, sel);
+  const start = doc.getLineStart(a);
+  const end = doc.getLineEnd(b);
+  const shift = end - start + 1;
+  const text = '\n' + doc.getText().slice(start, end);
+  return { start: end, length: 0, text, anchor: sel.anchor + shift, caret: sel.caret + shift };
+}
+
+/** ⇧⌘K: delete the selected lines. */
+export function deleteLinesEdit(doc: TextDocument, sel: Selection): Edit {
+  const [a, b] = selectedLines(doc, sel);
+  let start = doc.getLineStart(a);
+  let end = doc.getLineEnd(b);
+  if (b + 1 < doc.lineCount) end = doc.getLineStart(b + 1);
+  else if (a > 0) start = doc.getLineEnd(a - 1);
+  return { start, length: end - start, text: '', anchor: start, caret: start };
+}
+
+/** ⌥↑ / ⌥↓: move the selected lines past their neighbour; the selection moves with them. */
+export function moveLinesEdit(doc: TextDocument, sel: Selection, dir: -1 | 1): Edit | null {
+  const [a, b] = selectedLines(doc, sel);
+  if ((dir < 0 && a === 0) || (dir > 0 && b === doc.lineCount - 1)) return null;
+  const text = doc.getText();
+  const blockStart = doc.getLineStart(a);
+  const blockEnd = doc.getLineEnd(b);
+  const block = text.slice(blockStart, blockEnd);
+  if (dir < 0) {
+    const prevStart = doc.getLineStart(a - 1);
+    const prev = text.slice(prevStart, blockStart - 1);
+    const shift = -(prev.length + 1);
+    return {
+      start: prevStart,
+      length: blockEnd - prevStart,
+      text: block + '\n' + prev,
+      anchor: sel.anchor + shift,
+      caret: sel.caret + shift,
+    };
+  }
+  const nextEnd = doc.getLineEnd(b + 1);
+  const next = text.slice(blockEnd + 1, nextEnd);
+  const shift = next.length + 1;
+  return {
+    start: blockStart,
+    length: nextEnd - blockStart,
+    text: next + '\n' + block,
+    anchor: sel.anchor + shift,
+    caret: sel.caret + shift,
+  };
+}

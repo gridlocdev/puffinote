@@ -22,6 +22,8 @@ export class EditorState {
   readonly version = signal(0);
   readonly selection = signal<Selection>({ anchor: 0, caret: 0 });
   readonly mode = signal<ViewMode>('live');
+  /** Bumps when `reveal` asks the surface to bring the caret into view. */
+  readonly revealTick = signal(0);
   /** The editor's indent unit for Tab (PRD §7.2: four spaces by default). */
   indentUnit = '    ';
 
@@ -74,6 +76,12 @@ export class EditorState {
   select(anchor: number, caret = anchor): void {
     this.buffer.selection = { anchor, caret };
     this.sync();
+  }
+
+  /** Select and ask the surface to scroll the caret into the middle of the view (Outline, Search). */
+  reveal(anchor: number, caret = anchor): void {
+    this.select(anchor, caret);
+    this.revealTick.value++;
   }
 
   /** The selected Markdown source, which is what copy puts on the clipboard (PRD §7.2). */

@@ -1,26 +1,19 @@
-import {
-  stripDuplicateTaskMarker,
-  toggledTaskState,
-  parseLinePrefix,
-  taskStateOrder,
-} from '@puffinote/markdown';
+import { stripDuplicateTaskMarker, toggledTaskState, parseLinePrefix } from '@puffinote/markdown';
 import { isCollapsed, selectionEnd, selectionStart } from '@puffinote/text';
-import { useLayoutEffect, useRef } from 'preact/hooks';
+import { useLayoutEffect, useMemo, useRef } from 'preact/hooks';
 import type { JSX } from 'preact';
+import { CommandCatalog } from '../commands/command.ts';
 import { blockAtLine } from './blocks.ts';
 import {
   backspacePairEdit,
   enterEdit,
-  headingEdit,
   indentEdit,
-  linkEdit,
   outdentEdit,
   setTaskStateEdit,
   softBreakEdit,
-  toggleInlineEdit,
-  toggleTaskEdit,
   typeCharEdit,
 } from './commands.ts';
+import { markdownCommandSpecs } from './editorCommands.ts';
 import type { EditorState } from './editorState.ts';
 import { caretBox, hitTest, lineElements, lineSelectionRects } from './geometry.ts';
 import { renderLine, snapOutOfConcealed } from './lineRender.ts';
@@ -36,6 +29,11 @@ export interface MarkdownEditorProps {
   readonly openLink?: (url: string) => void;
   readonly autoFocus?: boolean;
   readonly placeholder?: string;
+  /** Let the browser underline misspellings (PRD §7.5). */
+  readonly spellcheck?: boolean;
+  /** Where to scroll on mount (a tab coming back). */
+  readonly initialScrollTop?: number;
+  readonly onScroll?: (top: number) => void;
 }
 
 const identity = (url: string): string => url;
@@ -63,11 +61,22 @@ export function MarkdownEditor(props: MarkdownEditorProps) {
   const goalX = useRef<number | null>(null);
   const composing = useRef(false);
   const revealCaret = useRef(false);
+  const stateRef = useRef(state);
+  stateRef.current = state;
+  const catalog = useMemo(
+    () =>
+      new CommandCatalog(
+        markdownCommandSpecs({ state: () => stateRef.current, focus: () => inputRef.current?.focus() }),
+      ),
+    [],
+  );
 
   // Subscribing: reading the signals re-renders on any text, selection or mode change.
   void state.version.value;
   const sel = state.selection.value;
   const mode = state.mode.value;
+  const revealTick = state.revealTick.value;
+  const seenReveal = useRef(revealTick);
   const doc = state.document;
   const model = state.model;
   const blocks = state.blocks;
@@ -132,7 +141,10 @@ export function MarkdownEditor(props: MarkdownEditorProps) {
       caretEl.classList.remove('pn-blink');
       void caretEl.offsetWidth;
       caretEl.classList.add('pn-blink');
-      if (revealCaret.current) scrollIntoView(box);
+      if (seenReveal.current !== revealTick) {
+        seenReveal.current = revealTick;
+        centreInView(box);
+      } else if (revealCaret.current) scrollIntoView(box);
     } else {
       caretEl.style.display = 'none';
     }
@@ -161,6 +173,10 @@ export function MarkdownEditor(props: MarkdownEditorProps) {
   });
 
   useLayoutEffect(() => {
+    if (props.initialScrollTop && scrollerRef.current) scrollerRef.current.scrollTop = props.initialScrollTop;
+  }, []);
+
+  useLayoutEffect(() => {
     if (props.autoFocus) inputRef.current?.focus({ preventScroll: true });
   }, []);
 
@@ -180,6 +196,13 @@ export function MarkdownEditor(props: MarkdownEditorProps) {
       return { left: box.left, top: r.top + (r.height - lh) / 2, height: lh };
     }
     return box;
+  }
+
+  function centreInView(box: { top: number; height: number }): void {
+    const scroller = scrollerRef.current;
+    if (!scroller) return;
+    const r = scroller.getBoundingClientRect();
+    scroller.scrollTop += box.top - (r.top + r.height / 3);
   }
 
   function scrollIntoView(box: { top: number; height: number }): void {
@@ -296,6 +319,15 @@ export function MarkdownEditor(props: MarkdownEditorProps) {
 
   function onKeyDown(e: KeyboardEvent): void {
     if (composing.current || e.isComposing || e.keyCode === 229) return;
+    // Bound commands first (⌘B, ⌥↑, …): one catalog serves these keys and the Command Menu.
+    const command = catalog.forEvent(e, false);
+    if (command) {
+      revealCaret.current = true;
+      catalog.run(command.id);
+      e.preventDefault();
+      e.stopPropagation();
+      return;
+    }
     const mod = isMac ? e.metaKey : e.ctrlKey;
     const word = isMac ? e.altKey : e.ctrlKey;
     const shift = e.shiftKey;
@@ -343,7 +375,7 @@ export function MarkdownEditor(props: MarkdownEditorProps) {
         else apply(shift ? outdentEdit(doc, sel, state.indentUnit) : indentEdit(doc, sel, state.indentUnit));
         break;
       default:
-        handled = mod ? shortcut(e) : false;
+        handled = false;
     }
     if (handled) {
       e.preventDefault();
@@ -353,64 +385,6 @@ export function MarkdownEditor(props: MarkdownEditorProps) {
 
   function rangeEdit(start: number, end: number) {
     return { start, length: end - start, text: '', anchor: start, caret: start };
-  }
-
-  /** ⌘ shortcuts (PRD §7.3). Returns false for keys left to the host or the browser (⌘C, ⌘S, …). */
-  function shortcut(e: KeyboardEvent): boolean {
-    const key = e.key.toLowerCase();
-    if (e.altKey && key === 'l') {
-      // ⌥⌘L: step the task through its three states (the picker UI comes with the notebook shell).
-      const line = doc.getPosition(sel.caret).line;
-      const p = parseLinePrefix(doc.getLineText(line));
-      if (!p.hasTask) return true;
-      const next = taskStateOrder[(taskStateOrder.indexOf(p.task) + 1) % taskStateOrder.length]!;
-      apply(setTaskStateEdit(doc, sel, line, next));
-      return true;
-    }
-    if (e.altKey) return false;
-    if (/^[0-6]$/.test(key) && !e.shiftKey) {
-      apply(headingEdit(doc, sel, Number(key)));
-      return true;
-    }
-    switch (key) {
-      case 'z':
-        if (e.shiftKey) state.redo();
-        else state.undo();
-        revealCaret.current = true;
-        return true;
-      case 'y':
-        if (isMac) return false;
-        state.redo();
-        return true;
-      case 'a':
-        state.select(0, doc.length);
-        return true;
-      case 'b':
-        apply(toggleInlineEdit(doc, sel, '**'));
-        return true;
-      case 'i':
-        apply(toggleInlineEdit(doc, sel, '*'));
-        return true;
-      case 'e':
-        apply(toggleInlineEdit(doc, sel, '`'));
-        return true;
-      case 'k':
-        apply(linkEdit(doc, sel));
-        return true;
-      case 'l':
-        apply(toggleTaskEdit(doc, sel));
-        return true;
-      case 'x':
-        if (!e.shiftKey) return false;
-        apply(toggleInlineEdit(doc, sel, '~~'));
-        return true;
-      case 'h':
-        if (!e.shiftKey) return false;
-        apply(toggleInlineEdit(doc, sel, '=='));
-        return true;
-      default:
-        return false;
-    }
   }
 
   // ----- Text input, IME and clipboard -----
@@ -528,7 +502,14 @@ export function MarkdownEditor(props: MarkdownEditorProps) {
   const empty = doc.length === 0;
   return (
     <div class={`pn-editor pn-mode-${mode}`}>
-      <div class="pn-scroller" ref={scrollerRef} onMouseDown={onMouseDown}>
+      <div
+        class="pn-scroller"
+        ref={scrollerRef}
+        onMouseDown={onMouseDown}
+        onScroll={
+          props.onScroll ? (e) => props.onScroll!((e.currentTarget as HTMLElement).scrollTop) : undefined
+        }
+      >
         <div class="pn-content" ref={contentRef} data-placeholder={empty ? props.placeholder : undefined}>
           {rows}
           <div class="pn-selection-layer" ref={selectionRef} aria-hidden="true" />
@@ -540,7 +521,7 @@ export function MarkdownEditor(props: MarkdownEditorProps) {
             aria-multiline="true"
             autocapitalize="off"
             autocomplete="off"
-            spellcheck={false}
+            spellcheck={props.spellcheck ?? false}
             onKeyDown={onKeyDown}
             onInput={onInput}
             onCompositionStart={onCompositionStart}

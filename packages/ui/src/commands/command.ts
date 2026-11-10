@@ -1,0 +1,140 @@
+import { formatShortcut, matches, parseShortcut, type Shortcut } from './shortcut.ts';
+
+/** Menu groups — the native menu bar and the palette's section labels. */
+export type CommandGroup = 'File' | 'Edit' | 'View' | 'Insert' | 'Format' | 'Go' | 'Help';
+
+export interface CommandSpec {
+  readonly id: string;
+  readonly title: string;
+  readonly description: string;
+  readonly group: CommandGroup;
+  readonly shortcut?: string;
+  /** Unadvertised extra chords (⌘+ alongside ⌘=). */
+  readonly alternates?: readonly string[];
+  readonly icon?: string;
+  /** Extra search words for the palette. */
+  readonly keywords?: string;
+  readonly run: () => void | Promise<void>;
+  readonly enabled?: () => boolean;
+  /** Toggle commands: whether it is on. */
+  readonly active?: () => boolean;
+  /** Hidden from the palette (e.g. the palette command itself). */
+  readonly hidden?: boolean;
+  /** Works while a text field (the find box, a dialog field) has focus. */
+  readonly global?: boolean;
+}
+
+export interface Command extends CommandSpec {
+  readonly shortcutKey: Shortcut | null;
+  readonly alternateKeys: readonly Shortcut[];
+  readonly shortcutText: string;
+}
+
+/**
+ * The one command catalog: menus, toolbar, ⌘K palette, and key bindings all read it. Running a
+ * command from anywhere goes through `run`, which also records it for the palette's recents.
+ */
+export class CommandCatalog {
+  readonly all: readonly Command[];
+  private readonly byId: Map<string, Command>;
+  private readonly recent: string[] = [];
+
+  constructor(specs: readonly CommandSpec[]) {
+    this.all = specs.map((s) => {
+      const key = s.shortcut ? parseShortcut(s.shortcut) : null;
+      return {
+        ...s,
+        shortcutKey: key,
+        alternateKeys: (s.alternates ?? []).map(parseShortcut),
+        shortcutText: key ? formatShortcut(key) : '',
+      };
+    });
+    this.byId = new Map(this.all.map((c) => [c.id, c]));
+    if (this.byId.size !== this.all.length) throw new Error('Duplicate command id');
+  }
+
+  get(id: string): Command | undefined {
+    return this.byId.get(id);
+  }
+
+  isEnabled(c: Command): boolean {
+    return c.enabled?.() ?? true;
+  }
+
+  /** Called before every command runs; returning false cancels it (a dialog is open). */
+  beforeRun: ((c: Command) => boolean) | null = null;
+
+  run(id: string): boolean {
+    const c = this.byId.get(id);
+    if (!c || !this.isEnabled(c)) return false;
+    if (this.beforeRun && !this.beforeRun(c)) return false;
+    if (!c.hidden) {
+      const at = this.recent.indexOf(id);
+      if (at >= 0) this.recent.splice(at, 1);
+      this.recent.unshift(id);
+      this.recent.length = Math.min(this.recent.length, 5);
+    }
+    void Promise.resolve(c.run()).catch((e: unknown) => console.error(`command ${id} failed`, e));
+    return true;
+  }
+
+  get recentIds(): readonly string[] {
+    return this.recent;
+  }
+
+  /** The command a key event triggers, if any. `inText` = focus is in a text field. */
+  forEvent(e: KeyboardEvent, inText: boolean): Command | undefined {
+    return this.all.find(
+      (c) =>
+        (!inText || c.global) && [c.shortcutKey, ...c.alternateKeys].some((k) => k !== null && matches(k, e)),
+    );
+  }
+
+  /**
+   * Palette search. Spaces in the query are ignored, so "insertrow" and "ins row" both find
+   * Insert Row. Best first: the title starts with the query, then contains it, then the query
+   * appears in the group, keywords, or description (or each typed word does), then the title
+   * holds the query's letters in order (fuzzy).
+   */
+  search(query: string): Command[] {
+    const q = compact(query);
+    const visible = this.all.filter((c) => !c.hidden);
+    if (!q) {
+      const recent = this.recent.map((id) => this.byId.get(id)!).filter((c) => c && !c.hidden);
+      return [...recent, ...visible.filter((c) => !recent.includes(c))];
+    }
+    const words = query.toLowerCase().split(/\s+/).filter(Boolean);
+    const scored: [Command, number][] = [];
+    for (const c of visible) {
+      const title = compact(c.title);
+      const rest = `${c.group} ${c.keywords ?? ''} ${c.description}`.toLowerCase();
+      const score = title.startsWith(q)
+        ? 0
+        : title.includes(q)
+          ? 1
+          : compact(rest).includes(q) || words.every((w) => `${c.title.toLowerCase()} ${rest}`.includes(w))
+            ? 2
+            : inOrder(q, title)
+              ? 3
+              : -1;
+      if (score >= 0) scored.push([c, score]);
+    }
+    // Array.sort is stable, so equal scores keep the catalog's order.
+    return scored.sort((a, b) => a[1] - b[1]).map(([c]) => c);
+  }
+}
+
+/** Lower-cased with every space removed: what the palette compares. */
+export function compact(text: string): string {
+  return text.toLowerCase().replace(/\s+/g, '');
+}
+
+/** True when every character of `needle` appears in `hay`, in order (gaps allowed). */
+export function inOrder(needle: string, hay: string): boolean {
+  let at = 0;
+  for (const ch of needle) {
+    at = hay.indexOf(ch, at) + 1;
+    if (at === 0) return false;
+  }
+  return true;
+}

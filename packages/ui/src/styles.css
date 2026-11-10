@@ -1,5 +1,7 @@
 /* Puffinote editor theme. Colours are tokens, redefined for dark mode. Type scale from PRD §7.6 (16px body). */
 
+@import './shell/shell.css';
+
 :root {
   --pn-bg: #ffffff;
   --pn-fg: #1f2328;
