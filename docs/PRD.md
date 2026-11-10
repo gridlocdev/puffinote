@@ -246,6 +246,9 @@ switched from the status bar or the View commands:
 ### 10.1 Editing
 
 - **Caret and selection** move by grapheme cluster. IME composition works in place.
+- **Context menu.** A right-click (a two-finger click, or Control-click on macOS) opens Cut, Copy, Paste and
+  Select All, in every view. A click inside the selection keeps it; anywhere else moves the caret there
+  first. Cut and Copy are off with nothing selected. ⌘X, ⌘C and ⌘V stay the platform's own keys.
 - **Undo and redo.** Typing coalesces into runs. Structural edits, commands and a paste are single steps. Revert
   resets the history. Taking an external change is one step (§5).
 - **Enter.** In the two formatted views, Enter writes a paragraph break (`\n\n`) that shows as one new line.

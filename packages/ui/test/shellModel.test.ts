@@ -81,6 +81,28 @@ describe('ShellModel Move To', () => {
   });
 });
 
+describe('ShellModel editor menu', () => {
+  it('offers the clipboard and Select All, with Cut and Copy off for an empty selection', async () => {
+    const store = new MemoryStore('N', { 'a.md': 'hello' });
+    const nb = await Notebook.open(store, { prefs: memoryPrefs({ autoSave: false }) });
+    const m = new ShellModel();
+    m.setNotebook(nb);
+    const tab = (await nb.openFile('a.md'))!;
+    const labels = () => {
+      const o = m.overlay.value;
+      return o?.kind === 'menu'
+        ? o.items.map((i) => (i ? `${i.label}${i.disabled ? ' (off)' : ''}` : '-'))
+        : [];
+    };
+    m.openEditorMenu({ x: 0, y: 0 });
+    expect(labels()).toEqual(['Cut (off)', 'Copy (off)', 'Paste', '-', 'Select All']);
+    tab.state!.select(0, 2);
+    m.openEditorMenu({ x: 0, y: 0 });
+    expect(labels()).toEqual(['Cut', 'Copy', 'Paste', '-', 'Select All']);
+    m.setNotebook(null);
+  });
+});
+
 describe('ShellModel zoom', () => {
   it('steps by 10%, clamps, resets, and runs from the catalog', async () => {
     const m = new ShellModel();

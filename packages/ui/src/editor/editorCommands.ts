@@ -26,6 +26,8 @@ export interface EditorCommandTarget {
   readonly state: () => EditorState | null;
   /** Put the keyboard back in the editor after a command run from elsewhere (the Command Menu). */
   readonly focus: () => void;
+  /** The editor's text input, which takes the clipboard events (Cut, Copy and Paste from a menu). */
+  readonly input?: () => HTMLElement | null;
 }
 
 /**
@@ -55,6 +57,29 @@ export function markdownCommandSpecs(target: EditorCommandTarget): CommandSpec[]
     return m ? m[1]!.length : 0;
   };
 
+  const hasSelection = (): boolean => {
+    const sel = target.state()?.selection.value;
+    return !!sel && sel.anchor !== sel.caret;
+  };
+  const input = (): HTMLElement | null => {
+    const el = target.input?.() ?? null;
+    el?.focus({ preventScroll: true });
+    return el;
+  };
+  const clipboard = (verb: 'cut' | 'copy'): void => {
+    // The editor's own copy and cut handlers write the Markdown of the selection.
+    if (input()) document.execCommand(verb);
+  };
+  async function paste(): Promise<void> {
+    const text = await navigator.clipboard.readText().catch(() => '');
+    const el = input();
+    if (!el || !text) return;
+    // Hand it to the editor's paste handler, which tidies line endings and doubled task markers.
+    const data = new DataTransfer();
+    data.setData('text/plain', text);
+    el.dispatchEvent(new ClipboardEvent('paste', { clipboardData: data, bubbles: true, cancelable: true }));
+  }
+
   const specs: CommandSpec[] = [
     {
       id: 'edit.undo',
@@ -76,6 +101,35 @@ export function markdownCommandSpecs(target: EditorCommandTarget): CommandSpec[]
       icon: 'redo',
       enabled: has,
       run: () => target.state()?.redo(),
+    },
+    // Cut, Copy and Paste for menus (PRD §10.1). They carry no shortcut here: ⌘X, ⌘C and ⌘V stay the
+    // platform's own, so the editor's clipboard handlers see real events.
+    {
+      id: 'edit.cut',
+      title: 'Cut',
+      description: 'Move the selection to the clipboard.',
+      group: 'Edit',
+      keywords: 'clipboard',
+      enabled: () => hasSelection(),
+      run: () => clipboard('cut'),
+    },
+    {
+      id: 'edit.copy',
+      title: 'Copy',
+      description: 'Copy the selection to the clipboard.',
+      group: 'Edit',
+      keywords: 'clipboard',
+      enabled: () => hasSelection(),
+      run: () => clipboard('copy'),
+    },
+    {
+      id: 'edit.paste',
+      title: 'Paste',
+      description: 'Insert the text on the clipboard.',
+      group: 'Edit',
+      keywords: 'clipboard',
+      enabled: has,
+      run: paste,
     },
     {
       id: 'edit.selectAll',

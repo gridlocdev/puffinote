@@ -1,5 +1,6 @@
 import { computed, signal } from '@preact/signals';
 import { CommandCatalog, type Command, type CommandSpec } from '../commands/command.ts';
+import { formatShortcut, parseShortcut } from '../commands/shortcut.ts';
 import { markdownCommandSpecs } from '../editor/editorCommands.ts';
 import type { EditorState } from '../editor/editorState.ts';
 import { sidebarPanels, type Notebook, type SidebarPanel, type Tab } from '../notebook/notebook.ts';
@@ -102,6 +103,7 @@ export class ShellModel {
     const editor = markdownCommandSpecs({
       state: () => this.activeState.peek(),
       focus: () => this.focusEditor(),
+      input: () => document.querySelector<HTMLElement>('.pn-shell-main .pn-input'),
     });
     this.menuCatalog = new CommandCatalog([...shell, ...editor]);
   }
@@ -275,6 +277,29 @@ export class ShellModel {
       if (store.reveal) items.push({ label: revealLabel(), run: () => void store.reveal!(node.path) });
       items.push(null, { label: 'Delete…', danger: true, run: () => void this.remove(node.path) });
     }
+    this.open({ kind: 'menu', x: at.x, y: at.y, items });
+  }
+
+  /** The editor's right-click menu (PRD §10.1): the clipboard and Select All, from the command catalog. */
+  openEditorMenu(at: { x: number; y: number }): void {
+    const item = (id: string, shortcut: string): MenuItem | null => {
+      const c = this.menuCatalog.get(id);
+      if (!c) return null;
+      return {
+        label: c.title,
+        shortcut,
+        disabled: c.enabled ? !c.enabled() : false,
+        run: () => void c.run(),
+      };
+    };
+    const key = (k: string) => formatShortcut(parseShortcut(k));
+    const items = [
+      item('edit.cut', key('mod+x')),
+      item('edit.copy', key('mod+c')),
+      item('edit.paste', key('mod+v')),
+      null,
+      item('edit.selectAll', key('mod+a')),
+    ];
     this.open({ kind: 'menu', x: at.x, y: at.y, items });
   }
 

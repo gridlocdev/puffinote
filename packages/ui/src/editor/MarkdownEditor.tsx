@@ -36,6 +36,8 @@ export interface MarkdownEditorProps {
   readonly onScroll?: (top: number) => void;
   /** How large to draw the note (1 is 100%). A change re-measures the caret and selection. */
   readonly zoom?: number;
+  /** A right-click (or Control-click on macOS): show the editing menu at that point. */
+  readonly onContextMenu?: (at: { readonly x: number; readonly y: number }) => void;
 }
 
 const identity = (url: string): string => url;
@@ -564,6 +566,18 @@ export function MarkdownEditor(props: MarkdownEditorProps) {
 
   // ----- Mouse -----
 
+  function onContextMenu(e: MouseEvent): void {
+    if (!props.onContextMenu) return;
+    e.preventDefault();
+    inputRef.current?.focus({ preventScroll: true });
+    // Like a text field: a right-click inside the selection keeps it, anywhere else moves the caret there.
+    const offset = offsetAt(e.clientX, e.clientY);
+    const from = selectionStart(sel);
+    const to = Math.max(sel.anchor, sel.caret);
+    if (offset !== null && (isCollapsed(sel) || offset < from || offset > to)) state.select(offset, offset);
+    props.onContextMenu({ x: e.clientX, y: e.clientY });
+  }
+
   function offsetAt(x: number, y: number, dir: 1 | -1 = 1): number | null {
     const content = contentRef.current;
     if (!content) return null;
@@ -575,6 +589,11 @@ export function MarkdownEditor(props: MarkdownEditorProps) {
 
   function onMouseDown(e: MouseEvent): void {
     if (e.button !== 0) return;
+    // Control-click is macOS's right-click: onContextMenu handles it.
+    if (isMac && e.ctrlKey && props.onContextMenu) {
+      e.preventDefault();
+      return;
+    }
     const target = e.target as HTMLElement;
     e.preventDefault();
     inputRef.current?.focus({ preventScroll: true });
@@ -632,7 +651,13 @@ export function MarkdownEditor(props: MarkdownEditorProps) {
   const empty = doc.length === 0;
   return (
     <div class={`pn-editor pn-mode-${mode}`} style={props.zoom ? { '--pn-z': props.zoom } : undefined}>
-      <div class="pn-scroller" ref={scrollerRef} onMouseDown={onMouseDown} onScroll={onScrollerScroll}>
+      <div
+        class="pn-scroller"
+        ref={scrollerRef}
+        onMouseDown={onMouseDown}
+        onContextMenu={onContextMenu}
+        onScroll={onScrollerScroll}
+      >
         <div class="pn-content" ref={contentRef} data-placeholder={empty ? props.placeholder : undefined}>
           {rows}
           <div class="pn-selection-layer" ref={selectionRef} aria-hidden="true" />

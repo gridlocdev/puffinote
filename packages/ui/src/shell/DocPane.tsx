@@ -47,6 +47,7 @@ export function Document(props: { readonly model: ShellModel; readonly nb: Noteb
           onScroll={(top) => (tab.scrollTop = top)}
           placeholder="Start writing…"
           zoom={model.zoom.value}
+          onContextMenu={(at) => model.openEditorMenu(at)}
         />
       </div>
     </>
