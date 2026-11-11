@@ -64,12 +64,10 @@ describe('Enter (PRD §10.1)', () => {
   const enter = (marked: string, mode: 'live' | 'raw' = 'live', context: 'text' | 'code' = 'text') =>
     run(marked, (d, s) => enterEdit(d, s, mode, context));
 
-  it('starts a new paragraph with a blank line in the formatted views', () => {
-    expect(enter('hello|')).toBe('hello\n\n|');
+  it('writes one newline, in every view', () => {
+    expect(enter('hello|')).toBe('hello\n|');
+    expect(enter('hel|lo')).toBe('hel\n|lo');
     expect(enter('hello|', 'raw')).toBe('hello\n|');
-  });
-
-  it('writes a single newline on a blank line', () => {
     expect(enter('a\n|')).toBe('a\n\n|');
   });
 
@@ -396,12 +394,12 @@ describe('EditorState', () => {
     state.select(5);
     state.apply(enterEdit(state.document, state.selection.value, 'live', 'text'));
     state.insert('# Title');
-    expect(state.text).toBe('hello\n\n# Title');
-    expect(state.model.lineTokens(2)[0]!.type).toBe('headingMarker');
+    expect(state.text).toBe('hello\n# Title');
+    expect(state.model.lineTokens(1)[0]!.type).toBe('headingMarker');
     expect(state.version.value).toBeGreaterThan(v0);
     state.undo();
-    expect(state.model.lineTokens(2)).toEqual([]);
-    expect(state.selection.value.caret).toBe(7);
+    expect(state.model.lineTokens(1)).toEqual([]);
+    expect(state.selection.value.caret).toBe(6);
   });
 
   it('tells code from text for Enter and Tab', () => {

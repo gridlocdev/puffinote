@@ -152,11 +152,9 @@ describe('HTML renderer', () => {
     expect(body('a\n\n---\n\nb')).toContain('<hr>');
   });
 
-  it('renders a hard break as <br> and a soft wrap as a newline', () => {
+  it('keeps every line break in a paragraph as <br>', () => {
     expect(body('first  \nsecond')).toContain('first<br>\nsecond');
-    const soft = body('first\nsecond');
-    expect(soft).toContain('first\nsecond');
-    expect(soft).not.toContain('<br>');
+    expect(body('first\nsecond')).toBe('<p>first<br>\nsecond</p>\n');
   });
 
   it('renders a table', () => {

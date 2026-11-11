@@ -303,13 +303,10 @@ class Renderer {
     this.out += '<p>';
     let i = line;
     let firstLine = true;
-    let prevHardBreak = false;
     while (i < n && !this.isBlank(i) && this.isParagraphLine(i)) {
-      // A hard break at the end of the previous line becomes a <br>; otherwise a soft join.
-      if (!firstLine) this.out += prevHardBreak ? '<br>\n' : '\n';
-      const tokens = this.model.lineTokens(i);
-      this.inline(tokens);
-      prevHardBreak = tokens.at(-1)?.type === 'hardBreak';
+      // Every line break inside a paragraph is kept as a <br>, as the editor shows it (PRD §10.5).
+      if (!firstLine) this.out += '<br>\n';
+      this.inline(this.model.lineTokens(i));
       firstLine = false;
       i++;
     }

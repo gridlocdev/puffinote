@@ -87,8 +87,7 @@ export function enterEdit(doc: TextDocument, sel: Selection, mode: ViewMode, con
     const caret = lineStart + text.length + p.length;
     return withRenumber(doc, { start: lineStart, length: 0, text, anchor: caret, caret });
   }
-  const blank = lineText.trim().length === 0;
-  return replaceSelection(sel, blank ? '\n' : '\n\n');
+  return replaceSelection(sel, '\n');
 }
 
 /**
@@ -128,7 +127,7 @@ export function removeRangeEdit(doc: TextDocument, start: number, end: number): 
   return { start: from, length: to - from, text: '', anchor: caret, caret };
 }
 
-/** Shift+Enter: a single line break, never a new paragraph. */
+/** Shift+Enter: a single line break that never continues a list or quote. */
 export function softBreakEdit(sel: Selection): Edit {
   return replaceSelection(sel, '\n');
 }

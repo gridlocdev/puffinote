@@ -193,7 +193,7 @@ A custom editing surface, not a `contenteditable`. Lines render as DOM. A hidden
 - **Caret and selection** move by grapheme cluster. IME composition works in place.
 - **Context menu.** A right-click (a two-finger click, or Control-click on macOS) opens Cut, Copy, Paste and Select All, in every view. A click inside the selection keeps it; anywhere else moves the caret there first. Cut and Copy are off with nothing selected. ⌘X, ⌘C and ⌘V stay the platform's own keys. A right-click on a picture opens the picture's own menu instead (§10.6).
 - **Undo and redo.** Typing coalesces into runs. Structural edits, commands and a paste are single steps. Revert resets the history. Taking an external change is one step (§5).
-- **Enter.** In the two formatted views, Enter writes a paragraph break (`\n\n`) that shows as one new line. In Raw text, Enter writes one newline. Either way, one press makes one visible line.
+- **Enter.** Enter writes one newline, in every view, so one press makes one visible line and each line in the editor is one line in the file. A blank line (Enter twice) starts a new paragraph. Shift+Enter writes one newline without continuing a list or quote.
 - **Lists and quotes.** Enter continues a list item, task (always as `[ ]`), or quote. Enter on an empty top-level item leaves the block and lands on a visible line. An empty nested item goes up one level instead. Enter with the caret at the start of an item's text (or inside its marker) pushes the whole item down, keeping its marker and tick, and keeps the caret at the start of its text. Inside a list it opens one empty item above (a task as `[ ]`). On the first item of a list it opens a blank line above instead. Ordered lists renumber as items are added, moved or re-indented.
 - **Tab and Shift+Tab** indent and outdent list items, by the Indent with setting. Elsewhere, Tab inserts the indent.
 - **Auto-pairing:** `*`, `_`, `` ` ``, `[` and `(` wrap a selection, or insert a pair. `*`, `_` and `` ` `` don't pair at the start of a line (a list item, a rule, a code fence), right after the same character, or after a letter or digit (`2*3`, `snake_case`). A space typed right after a lone opener removes its closer (`2 * 3`). Typing the closer steps over it.
@@ -247,7 +247,7 @@ Headings bond downward: a large space before and a small space after. Adjacent m
 
 ### 10.5 Export to HTML
 
-The renderer walks the same tokens as the editor and writes one self-contained HTML document (styles included) or a fragment. It has no dependencies. The CLI's `html` command uses it (§12).
+The renderer walks the same tokens as the editor and writes one self-contained HTML document (styles included) or a fragment. Every line break inside a paragraph becomes a `<br>`, so the export keeps the lines as the editor shows them. It has no dependencies. The CLI's `html` command uses it (§12).
 
 Exported HTML must be safe to open. Every attribute value is escaped, including a fence's info string. A link or autolink keeps its `href` only when the URL has no scheme (a relative path, a `#fragment` or `//host`) or its scheme is `http`, `https` or `mailto`; an email autolink gets `mailto:`. An image `src` may also be a `data:image/` URL of a raster type (png, jpeg, gif, webp, avif or bmp; never SVG). Control characters and whitespace are ignored when the scheme is read. Any other URL (`javascript:`, `vbscript:`, `file:`, other `data:` and so on) is dropped: the link renders as its text, the image as its alt text.
 
