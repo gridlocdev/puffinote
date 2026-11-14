@@ -35,6 +35,7 @@ import {
   writeAtomic,
 } from './files.ts';
 import { afterRendererGone } from './recovery.ts';
+import { loadSavedWindow, placeWindow, saveWindow, type SavedWindow } from './windowState.ts';
 import {
   checkDue,
   fetchLatestRelease,
@@ -107,16 +108,37 @@ function stopWatching(state: WindowState): void {
   }
 }
 
+/** Where the window was when it last closed (PRD §3), in the user-data folder. */
+const windowFile = path.join(app.getPath('userData'), 'window-state.json');
+let lastWindow: SavedWindow | null = null;
+const MIN_SIZE = { width: 560, height: 400 };
+
+/** Remember `win`'s place, unless this is a headless run (which must not move the user's window). */
+function rememberWindow(win: BrowserWindow): void {
+  if (headless || win.isDestroyed() || win.isMinimized()) return;
+  const b = win.getNormalBounds();
+  lastWindow = { x: b.x, y: b.y, width: b.width, height: b.height, maximized: win.isMaximized() };
+  void saveWindow(windowFile, lastWindow).catch(() => undefined);
+}
+
 function createWindow(): BrowserWindow {
-  // Fill the usable part of the screen the pointer is on: below the menu bar, clear of the Dock or taskbar.
-  const { x, y, width, height } = screen.getDisplayNearestPoint(screen.getCursorScreenPoint()).workArea;
+  // Where it last was, kept on a screen still attached; the first time, fill the usable part of the screen the
+  // pointer is on: below the menu bar, clear of the Dock or taskbar.
+  const fallback = screen.getDisplayNearestPoint(screen.getCursorScreenPoint()).workArea;
+  const placed = placeWindow(
+    headless ? null : lastWindow,
+    screen.getAllDisplays().map((d) => d.workArea),
+    fallback,
+    MIN_SIZE,
+  );
+  const { x, y, width, height } = placed;
   const win = new BrowserWindow({
     x,
     y,
     width,
     height,
-    minWidth: 560,
-    minHeight: 400,
+    minWidth: MIN_SIZE.width,
+    minHeight: MIN_SIZE.height,
     title: 'Puffinote',
     // macOS ignores this and shows the bundle's icon.
     ...(process.platform === 'darwin' ? {} : { icon: path.join(here, '..', 'build', 'icon.png') }),
@@ -143,8 +165,24 @@ function createWindow(): BrowserWindow {
   };
   windows.set(win.id, state);
 
-  if (!headless) win.once('ready-to-show', () => win.show());
+  if (!headless) {
+    win.once('ready-to-show', () => {
+      if (placed.maximized) win.maximize();
+      win.show();
+    });
+  }
+  let placeTimer: ReturnType<typeof setTimeout> | null = null;
+  const placeChanged = () => {
+    if (placeTimer) clearTimeout(placeTimer);
+    placeTimer = setTimeout(() => rememberWindow(win), 500);
+  };
+  win.on('resize', placeChanged);
+  win.on('move', placeChanged);
+  win.on('maximize', placeChanged);
+  win.on('unmaximize', placeChanged);
   win.on('close', (e) => {
+    if (placeTimer) clearTimeout(placeTimer);
+    rememberWindow(win);
     if (state.allowClose || state.rendererGone) return;
     e.preventDefault();
     if (state.unresponsive) return void offerForceClose(win, state);
@@ -156,6 +194,7 @@ function createWindow(): BrowserWindow {
     }, CLOSE_ACK_MS);
   });
   win.on('closed', () => {
+    if (placeTimer) clearTimeout(placeTimer);
     stopWatching(state);
     if (state.closeTimer) clearTimeout(state.closeTimer);
     windows.delete(win.id);
@@ -619,6 +658,7 @@ void app.whenReady().then(async () => {
   });
   registerIpc();
   await grants.load();
+  lastWindow = await loadSavedWindow(windowFile);
   createWindow();
   void autoCheckForUpdates();
   app.on('activate', () => {
