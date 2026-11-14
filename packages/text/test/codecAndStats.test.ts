@@ -66,6 +66,22 @@ describe('text file codec', () => {
     expect(readText(Uint8Array.of(0xe2, 0x82)).confidence).toBe('guessed');
   });
 
+  it('opens a UTF-8 BOM file with invalid bytes read-only', () => {
+    const read = readText(Uint8Array.of(0xef, 0xbb, 0xbf, 0x61, 0xff, 0x62));
+    expect(read.confidence).toBe('guessed');
+    expect(isReadOnlyDecode(read)).toBe(true);
+    expect(read.format.encoding).toBe('utf-8');
+  });
+
+  it('opens UTF-16 with a dangling odd byte read-only', () => {
+    const le = readText(Uint8Array.of(0xff, 0xfe, 0x61, 0x00, 0x62));
+    expect(le.confidence).toBe('guessed');
+    expect(le.format.encoding).toBe('utf-16le');
+    const be = readText(Uint8Array.of(0xfe, 0xff, 0x00, 0x61, 0x62));
+    expect(be.confidence).toBe('guessed');
+    expect(be.format.encoding).toBe('utf-16be');
+  });
+
   it('round-trips an undecodable file byte for byte', () => {
     const bytes = Uint8Array.from({ length: 256 }, (_, i) => i);
     const read = readText(bytes);

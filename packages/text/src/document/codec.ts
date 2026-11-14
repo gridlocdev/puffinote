@@ -1,6 +1,6 @@
 /**
  * Reading a file's bytes into text and writing them back unchanged. A byte-order mark is
- * trusted. Without one, the bytes are checked as UTF-8 rather than assumed to be UTF-8. Bytes
+ * trusted while the bytes agree with it (PRD §5). Without one, the bytes are checked as UTF-8 rather than assumed to be UTF-8. Bytes
  * that aren't valid UTF-8 fall back to Latin-1 and open read-only, instead of being rewritten
  * through a guess.
  *
@@ -36,8 +36,9 @@ export const latin1: TextFileFormat = { encoding: 'latin-1', bom: false, display
  * How the encoding was decided:
  * - `declared`: a BOM said so, or the user picked it.
  * - `valid-utf8`: no BOM, and the bytes are valid UTF-8.
- * - `guessed`: not UTF-8, read as Latin-1. The document is read-only until the user confirms an
- *   encoding, because saving would write the guess back.
+ * - `guessed`: not UTF-8, read as Latin-1; or a BOM's encoding that the bytes break (invalid UTF-8
+ *   after a UTF-8 BOM, an odd byte count after a UTF-16 one). The document is read-only until the
+ *   user confirms an encoding, because saving would write the guess back.
  */
 export type TextDecodeConfidence = 'declared' | 'valid-utf8' | 'guessed';
 
@@ -54,9 +55,18 @@ export function isReadOnlyDecode(d: DecodedText): boolean {
 
 /** Decode `bytes`, reporting how much was guessed. */
 export function readText(bytes: Uint8Array): DecodedText {
-  if (startsWith(bytes, [0xef, 0xbb, 0xbf])) return declared(utf8Bom, bytes, 3);
-  if (startsWith(bytes, [0xff, 0xfe])) return declared(utf16Le, bytes, 2);
-  if (startsWith(bytes, [0xfe, 0xff])) return declared(utf16Be, bytes, 2);
+  if (startsWith(bytes, [0xef, 0xbb, 0xbf])) {
+    // The BOM says UTF-8, but bytes that aren't UTF-8 would be replaced with U+FFFD and written back
+    // changed, so a damaged file opens read-only like any other guess.
+    if (decodeUtf8Strict(bytes, 3) === undefined) return guessed(declared(utf8Bom, bytes, 3));
+    return declared(utf8Bom, bytes, 3);
+  }
+  const utf16 = startsWith(bytes, [0xff, 0xfe]) ? utf16Le : startsWith(bytes, [0xfe, 0xff]) ? utf16Be : null;
+  if (utf16) {
+    // A dangling odd byte decodes to U+FFFD, which saves as two bytes: not the file that was read.
+    const read = declared(utf16, bytes, 2);
+    return bytes.length % 2 === 1 ? guessed(read) : read;
+  }
   const utf8 = decodeUtf8Strict(bytes, 0);
   if (utf8 !== undefined) return { text: utf8, format: utf8NoBom, confidence: 'valid-utf8' };
   return { text: decodeLatin1(bytes, 0), format: latin1, confidence: 'guessed' };
@@ -97,6 +107,10 @@ function declared(format: TextFileFormat, bytes: Uint8Array, skip: number): Deco
       break;
   }
   return { text, format, confidence: 'declared' };
+}
+
+function guessed(d: DecodedText): DecodedText {
+  return { ...d, confidence: 'guessed' };
 }
 
 function preamble(format: TextFileFormat): number[] {
