@@ -16,15 +16,15 @@ contextBridge.exposeInMainWorld('puffinoteNative', {
   platform: process.platform,
   pickFolder: (): Promise<string | null> => ipcRenderer.invoke('puffinote:pick-folder'),
   list: (dir: string): Promise<NativeEntry[]> => ipcRenderer.invoke('puffinote:list', dir),
-  read: (path: string): Promise<{ bytes: Uint8Array; modified: number }> =>
+  read: (path: string): Promise<{ bytes: Uint8Array; modified: number; version: string }> =>
     ipcRenderer.invoke('puffinote:read', path),
   write: (
     path: string,
     bytes: Uint8Array,
-    expected: number | null,
+    expected: string | null,
     force: boolean,
     create: boolean,
-  ): Promise<number> => ipcRenderer.invoke('puffinote:write', path, bytes, expected, force, create),
+  ): Promise<string> => ipcRenderer.invoke('puffinote:write', path, bytes, expected, force, create),
   mkdir: (path: string): Promise<void> => ipcRenderer.invoke('puffinote:mkdir', path),
   move: (from: string, to: string): Promise<void> => ipcRenderer.invoke('puffinote:move', from, to),
   trash: (path: string): Promise<void> => ipcRenderer.invoke('puffinote:trash', path),

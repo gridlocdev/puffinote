@@ -1,6 +1,6 @@
 // File-system helpers for the main process. No Electron imports, so the tests can run them in Node.
 import { randomBytes } from 'node:crypto';
-import { statSync, watch, type FSWatcher } from 'node:fs';
+import { statSync, watch, type FSWatcher, type Stats } from 'node:fs';
 import {
   access,
   chown,
@@ -17,7 +17,7 @@ import {
   unlink,
 } from 'node:fs/promises';
 import path from 'node:path';
-import { CONFLICT_EXISTS, NOT_FOUND, type NativeEntry } from './bridge.ts';
+import { CONFLICT_CHANGED, CONFLICT_EXISTS, NOT_FOUND, type NativeEntry } from './bridge.ts';
 
 /** Only the app's own pages may use the bridge (not a navigated-away or injected frame). */
 export function isAppUrl(url: string | undefined | null): boolean {
@@ -42,11 +42,49 @@ export function folderArgs(argv: readonly string[], cwd: string): string[] {
 }
 
 /**
+ * A file's version for conflict checks: its mtime, size and inode. The mtime alone can't tell a write from
+ * another app on a disk with coarse times (one second, or two on FAT), and an atomic save there brings a new
+ * inode even when the size and time match.
+ */
+export function fileVersion(s: { mtimeMs: number; size: number; ino: number }): string {
+  return `${s.mtimeMs}:${s.size}:${s.ino}`;
+}
+
+/** Whether two `fileVersion`s are the same file state: the size and inode match, the mtime within 1 ms. */
+export function sameVersion(a: string, b: string): boolean {
+  const [am, as, ai] = a.split(':');
+  const [bm, bs, bi] = b.split(':');
+  return as === bs && ai === bi && Math.abs(Number(am) - Number(bm)) <= 1;
+}
+
+/**
+ * Save a notebook file atomically, one save per file at a time, and return the version of what it wrote.
+ * Refuses if the file isn't at version `expected` any more (unless `force`), or exists when `create` is set.
+ */
+export function saveFile(
+  p: string,
+  bytes: Uint8Array,
+  expected: string | null,
+  force: boolean,
+  create: boolean,
+): Promise<string> {
+  return withFileLock(p, async () => {
+    const s = await stat(p).catch(() => null);
+    if (create && s) throw new Error(`${CONFLICT_EXISTS}: ${path.basename(p)}`);
+    if (!force && expected !== null && (!s || !sameVersion(fileVersion(s), expected)))
+      throw new Error(`${CONFLICT_CHANGED}: the file changed on disk`);
+    await mkdir(path.dirname(p), { recursive: true });
+    return fileVersion(await writeAtomic(p, bytes));
+  });
+}
+
+/**
  * Atomic save: a temp file beside the target, fsync, rename. A symlink is followed, so the link stays and its
  * target is replaced. The replacement keeps the target's mode (and owner, where permitted). A hard-linked
- * target is written in place instead (`overwriteInPlace`), since a rename would split the link.
+ * target is written in place instead (`overwriteInPlace`), since a rename would split the link. Resolves to the
+ * written file's stat, taken from its own handle, so a write by another app after the rename can't pass for it.
  */
-export async function writeAtomic(p: string, bytes: Uint8Array): Promise<void> {
+export async function writeAtomic(p: string, bytes: Uint8Array): Promise<Stats> {
   const real = await realTarget(path.resolve(p));
   const target = await stat(real).catch(() => null);
   // A rename would replace a read-only file as long as its folder is writable: refuse instead.
@@ -56,14 +94,15 @@ export async function writeAtomic(p: string, bytes: Uint8Array): Promise<void> {
     try {
       await overwriteInPlace(h, bytes, (await h.stat()).size);
       await h.sync();
+      return await h.stat();
     } finally {
       await h.close();
     }
-    return;
   }
   const mode = target ? target.mode & 0o7777 : 0o644;
   const tmp = path.join(path.dirname(real), `.${path.basename(real)}.${randomBytes(8).toString('hex')}.tmp`);
   let created = false;
+  let written: Stats;
   try {
     const h = await open(tmp, 'wx', mode);
     created = true;
@@ -71,6 +110,8 @@ export async function writeAtomic(p: string, bytes: Uint8Array): Promise<void> {
       await h.chmod(mode); // open() applies the umask
       await h.writeFile(bytes);
       await h.sync();
+      // The rename keeps the inode, size and mtime, so this is the saved file's version.
+      written = await h.stat();
     } finally {
       await h.close();
     }
@@ -81,6 +122,7 @@ export async function writeAtomic(p: string, bytes: Uint8Array): Promise<void> {
     throw e;
   }
   await syncDir(path.dirname(real));
+  return written;
 }
 
 /**
@@ -343,13 +385,17 @@ async function sameFile(from: string, to: string): Promise<boolean> {
   return a !== null && a === b && from !== to;
 }
 
-/** A file's bytes and the mtime of exactly those bytes (one handle, so no write can come between). */
-export async function readWithMtime(file: string): Promise<{ bytes: Uint8Array; modified: number }> {
+/**
+ * A file's bytes and the mtime and version of exactly those bytes (one handle, so no write can come between).
+ */
+export async function readWithMtime(
+  file: string,
+): Promise<{ bytes: Uint8Array; modified: number; version: string }> {
   const h = await open(file, 'r');
   try {
     const s = await h.stat();
     const bytes = await h.readFile();
-    return { bytes: new Uint8Array(bytes), modified: s.mtimeMs };
+    return { bytes: new Uint8Array(bytes), modified: s.mtimeMs, version: fileVersion(s) };
   } finally {
     await h.close();
   }

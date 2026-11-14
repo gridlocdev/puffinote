@@ -7,16 +7,20 @@ import {
   readdir,
   readFile,
   realpath,
+  rename,
   rm,
   stat,
   symlink,
+  utimes,
   writeFile,
 } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { CONFLICT_CHANGED } from '../src/bridge.ts';
 import {
   FolderGrants,
+  fileVersion,
   folderArgs,
   isAppUrl,
   isOpenableDocument,
@@ -26,6 +30,8 @@ import {
   overwriteInPlace,
   pdfFileName,
   readWithMtime,
+  sameVersion,
+  saveFile,
   watchTree,
   withFileLock,
   withFileLocks,
@@ -376,6 +382,37 @@ describe('withFileLocks and readWithMtime', () => {
     const { bytes: got, modified } = await readWithMtime(f);
     expect(new TextDecoder().decode(got)).toBe('hello');
     expect(modified).toBe((await stat(f)).mtimeMs);
+  });
+});
+
+describe('file versions', () => {
+  it('compare the mtime, the size and the inode', () => {
+    expect(sameVersion('1000:5:7', '1000:5:7')).toBe(true);
+    expect(sameVersion('1000:5:7', '1000.6:5:7')).toBe(true); // the same instant, rounded differently
+    expect(sameVersion('1000:5:7', '1000:6:7')).toBe(false);
+    expect(sameVersion('1000:5:7', '1000:5:8')).toBe(false);
+    expect(sameVersion('1000:5:7', '1002:5:7')).toBe(false);
+  });
+
+  it('save returns the version of exactly what it wrote', async () => {
+    const p = path.join(dir, 'version.md');
+    const v = await saveFile(p, bytes('first'), null, false, true);
+    expect(sameVersion(v, fileVersion(await stat(p)))).toBe(true);
+    const next = await saveFile(p, bytes('second'), v, false, false);
+    expect(sameVersion(next, fileVersion(await stat(p)))).toBe(true);
+    expect((await readWithMtime(p)).version).toBe(next);
+  });
+
+  it('a save refuses a file written outside within the same mtime', async () => {
+    const p = path.join(dir, 'coarse.md');
+    const v = await saveFile(p, bytes('ours'), null, false, true);
+    const before = await stat(p);
+    // Another app saves within the same second on a disk with coarse times: the mtime doesn't move.
+    await writeFile(p + '.other', 'theirs, longer');
+    await rename(p + '.other', p);
+    await utimes(p, before.atime, before.mtime);
+    await expect(saveFile(p, bytes('mine'), v, false, false)).rejects.toThrow(CONFLICT_CHANGED);
+    expect(await readFile(p, 'utf8')).toBe('theirs, longer');
   });
 });
 

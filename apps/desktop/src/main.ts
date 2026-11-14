@@ -14,16 +14,10 @@ import type { MenuItemConstructorOptions } from 'electron';
 import { mkdir, stat } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
-import {
-  Channels,
-  CONFLICT_CHANGED,
-  CONFLICT_EXISTS,
-  FILE_SCHEME,
-  NOT_FOUND,
-  type NativeMenuItem,
-} from './bridge.ts';
+import { Channels, CONFLICT_EXISTS, FILE_SCHEME, NOT_FOUND, type NativeMenuItem } from './bridge.ts';
 import {
   FolderGrants,
+  fileVersion,
   folderArgs,
   isAppUrl,
   isOpenableDocument,
@@ -31,8 +25,9 @@ import {
   moveEntry,
   pdfFileName,
   readWithMtime,
+  sameVersion,
+  saveFile,
   watchTree,
-  withFileLock,
   writeAtomic,
 } from './files.ts';
 import { htmlToPdf } from './pdf.ts';
@@ -84,8 +79,8 @@ if (!single) {
   grants.disablePersist();
   app.quit();
 }
-/** mtime we last wrote per path, so the watcher can leave out our own saves. */
-const knownMtime = new Map<string, number>();
+/** The version (`fileVersion`) we last wrote per path, so the watcher can leave out our own saves. */
+const knownVersion = new Map<string, string>();
 /** Set by Cmd+Q / app.quit() so the last window closing ends the app on macOS too. */
 let quitting = false;
 
@@ -104,9 +99,9 @@ function stopWatching(state: WindowState): void {
   state.watchRoot = null;
   // Forget our saves in that folder unless another window still watches it.
   if (root === null || [...windows.values()].some((s) => s.watchRoot === root)) return;
-  for (const p of knownMtime.keys()) {
+  for (const p of knownVersion.keys()) {
     const rel = path.relative(root, p);
-    if (!rel.startsWith('..') && !path.isAbsolute(rel)) knownMtime.delete(p);
+    if (!rel.startsWith('..') && !path.isAbsolute(rel)) knownVersion.delete(p);
   }
 }
 
@@ -337,25 +332,17 @@ async function allowFolder(win: BrowserWindow | null, p: unknown): Promise<void>
   grants.grant(p);
 }
 
-/** Atomic save, one per file at a time. Refuses if the file changed since it was read, or exists on create. */
-function writeNative(
+/** Atomic save (`saveFile`), remembering the version written so the watcher can leave this save out. */
+async function writeNative(
   p: string,
   bytes: Uint8Array,
-  expected: number | null,
+  expected: string | null,
   force: boolean,
   create: boolean,
-): Promise<number> {
-  return withFileLock(p, async () => {
-    const s = await stat(p).catch(() => null);
-    if (create && s) throw new Error(`${CONFLICT_EXISTS}: ${path.basename(p)}`);
-    if (!force && expected !== null && (!s || Math.abs(s.mtimeMs - expected) > 1))
-      throw new Error(`${CONFLICT_CHANGED}: the file changed on disk`);
-    await mkdir(path.dirname(p), { recursive: true });
-    await writeAtomic(p, bytes);
-    const after = await stat(p);
-    knownMtime.set(p, after.mtimeMs);
-    return after.mtimeMs;
-  });
+): Promise<string> {
+  const version = await saveFile(p, bytes, expected, force, create);
+  knownVersion.set(p, version);
+  return version;
 }
 
 function toTemplate(items: readonly NativeMenuItem[], win: BrowserWindow): MenuItemConstructorOptions[] {
@@ -416,7 +403,7 @@ function registerIpc(): void {
       return writeNative(
         file,
         bytes,
-        typeof expected === 'number' ? expected : null,
+        typeof expected === 'string' ? expected : null,
         force === true,
         create === true,
       );
@@ -470,12 +457,12 @@ function registerIpc(): void {
     state.stopWatch = watchTree(root, (paths) => {
       void Promise.all(
         paths.map(async (p) => {
-          const known = knownMtime.get(p);
+          const known = knownVersion.get(p);
           if (known === undefined) return p;
           const s = await stat(p).catch(() => null);
-          if (s && Math.abs(s.mtimeMs - known) <= 1) return null; // our own save
+          if (s && sameVersion(fileVersion(s), known)) return null; // our own save
           // Changed by someone else, or gone: forget it, unless a newer save of ours landed meanwhile.
-          if (knownMtime.get(p) === known) knownMtime.delete(p);
+          if (knownVersion.get(p) === known) knownVersion.delete(p);
           return p;
         }),
       ).then((changed) => {

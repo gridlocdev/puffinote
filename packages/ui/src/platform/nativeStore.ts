@@ -38,14 +38,15 @@ export interface PuffinoteNative {
   readonly platform: string;
   pickFolder(): Promise<string | null>;
   list(dir: string): Promise<NativeEntry[]>;
-  read(path: string): Promise<{ bytes: Uint8Array; modified: number }>;
+  /** The bytes, their mtime, and their version: the mtime, size and inode, compared whole on save. */
+  read(path: string): Promise<{ bytes: Uint8Array; modified: number; version: string }>;
   write(
     path: string,
     bytes: Uint8Array,
-    expected: number | null,
+    expected: string | null,
     force: boolean,
     create: boolean,
-  ): Promise<number>;
+  ): Promise<string>;
   mkdir(path: string): Promise<void>;
   move(from: string, to: string): Promise<void>;
   /** Moves to the OS trash. */
@@ -83,7 +84,7 @@ export function nativeBridge(): PuffinoteNative | null {
   return (globalThis as { puffinoteNative?: PuffinoteNative }).puffinoteNative ?? null;
 }
 
-/** A notebook folder on disk, through Electron's main process. Versions are mtimes. */
+/** A notebook folder on disk, through Electron's main process. Versions are the mtime, size and inode. */
 export class NativeStore implements NotebookStore {
   readonly kind = 'native' as const;
   readonly name: string;
@@ -110,15 +111,14 @@ export class NativeStore implements NotebookStore {
 
   async read(path: string): Promise<FileData> {
     const f = await this.call(() => this.bridge.read(this.abs(path)));
-    return { bytes: f.bytes, version: String(f.modified) };
+    return { bytes: f.bytes, version: f.version };
   }
 
   async write(path: string, bytes: Uint8Array, opts: WriteOptions = {}): Promise<string | null> {
-    const expected = opts.expected == null ? null : Number(opts.expected);
-    const m = await this.call(() =>
+    const expected = opts.expected ?? null;
+    return await this.call(() =>
       this.bridge.write(this.abs(path), bytes, expected, opts.force ?? false, opts.create ?? false),
     );
-    return String(m);
   }
 
   mkdir(path: string): Promise<void> {
