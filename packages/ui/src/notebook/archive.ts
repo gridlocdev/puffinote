@@ -1,14 +1,21 @@
 import type { NotebookStore } from '../platform/notebookStore.ts';
 import { joinPath } from '../platform/paths.ts';
 import { zip, type ZipEntry } from '../platform/zip.ts';
+import { trashDir } from './trash.ts';
 import { stateDir } from './tree.ts';
 
 /**
- * Whether Download Notebook leaves `path` out (PRD §5): git's own folder, and the window state in
- * `.puffinote/session.json`, which belongs to this machine. The notebook's settings go with it.
+ * Whether Download Notebook leaves `path` out (PRD §5): git's own folder, the notebook's Trash (what was
+ * deleted), and the window state in `.puffinote/session.json`, which belongs to this machine. The notebook's
+ * settings go with it.
  */
 export function leftOutOfArchive(path: string): boolean {
-  return path === `${stateDir}/session.json` || path.split('/').includes('.git');
+  return (
+    path === `${stateDir}/session.json` ||
+    path === trashDir ||
+    path.startsWith(`${trashDir}/`) ||
+    path.split('/').includes('.git')
+  );
 }
 
 /** A notebook's name as a file name: no path separators or characters Windows refuses. */

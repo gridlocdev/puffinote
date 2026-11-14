@@ -88,6 +88,9 @@ describe('notebookArchive', () => {
 
   it('leaves out git and the window state only', () => {
     expect(leftOutOfArchive('.puffinote/session.json')).toBe(true);
+    expect(leftOutOfArchive('.puffinote/trash')).toBe(true);
+    expect(leftOutOfArchive('.puffinote/trash/1700000000000/a.md')).toBe(true);
+    expect(leftOutOfArchive('.puffinote/settings.json')).toBe(false);
     expect(leftOutOfArchive('.git/config')).toBe(true);
     expect(leftOutOfArchive('sub/.git')).toBe(true);
     expect(leftOutOfArchive('.puffinote/settings.json')).toBe(false);
