@@ -64,7 +64,7 @@ The desktop app checks GitHub for a newer release. It never downloads or install
 
 ## 5. The notebook
 
-- **A notebook is one root folder.** One notebook is open at a time. Open Notebook… (⇧⌘O) asks about unsaved tabs, then switches. Reading the new notebook can be slow (the NAS): if a tab has unsaved changes by the time it is read, Puffinote asks again just before switching, and Cancel stays in the old notebook. When a second notebook is opened before the first has been read, the second wins. Switching closes whatever was open over the old notebook (a dialog, a menu, the picture preview, the find bar); a question still up is answered as cancelled, and the old notebook changes no files after it closes.
+- **A notebook is one root folder.** One notebook is open at a time. Open Notebook… (⇧⌘O) asks about unsaved tabs, then switches. Reading the new notebook can be slow (the NAS): if a tab has unsaved changes by the time it is read, Puffinote asks again just before switching, and Cancel stays in the old notebook. When a second notebook is opened before the first has been read, the second wins. Switching closes whatever was open over the old notebook (a dialog, a menu, the picture preview, the find bar); a question still up is answered as cancelled, and the old notebook changes no files after it closes. The one write as it closes is its own window state (`session.json`), so the next open restores its tabs.
 - **The notebook keeps its own state in `.puffinote/`:**
   - `session.json`: the open tabs, the active tab, the sidebar (width, panel, open folders), the recent files, the pinned notes, and the library's folder and sort order.
   - `settings.json`: this notebook's settings overrides (§9).
@@ -295,7 +295,7 @@ Exported HTML must be safe to open. Every attribute value is escaped, including 
 
 ### 10.6 Pasted and dropped pictures
 
-- **Paste or drop a picture** (PNG, JPEG, GIF, WebP, SVG, AVIF or BMP) into a note to save it in the notebook and insert `![](path)` at the caret, or after the line it is dropped on. Each picture gets a line of its own, so the rich view shows it. It goes where it was pasted or dropped even if the caret moved while it saved, and a selection made meanwhile is kept, not replaced. A picture that can't be saved is said in the status bar. Files that aren't pictures are ignored.
+- **Paste or drop a picture** (PNG, JPEG, GIF, WebP, SVG, AVIF or BMP) into a note to save it in the notebook and insert `![](path)` at the caret, or after the line it is dropped on. Each picture gets a line of its own, so the rich view shows it. It goes where it was pasted or dropped even if the caret moved while it saved, following that spot through edits made meanwhile (if the text around it is deleted, it goes where the deletion was), and a selection made meanwhile is kept, not replaced. A picture that can't be saved is said in the status bar. Files that aren't pictures are ignored.
 - **Where it's saved** follows Save Pasted Pictures In:
   - **The notebook's picture folder:** one folder for the whole notebook, named by Picture Folder (`attachments` by default), from the notebook's top level. It may be nested (`assets/images`).
   - **A folder beside each note:** `Meeting.assets/` next to `Meeting.md`.
