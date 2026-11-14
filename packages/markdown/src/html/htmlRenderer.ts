@@ -270,18 +270,44 @@ class Renderer {
         this.out += '<li>';
       }
       this.inline(tokens);
-      if (box) this.out += '</span>';
       i++;
+      // Continuation lines straight after the item belong to it, a line break each (PRD §10.5).
+      while (i < n && this.isContinuation(i, quote)) {
+        this.out += '<br>\n';
+        this.inline(this.model.lineTokens(i));
+        i++;
+      }
+      if (box) this.out += '</span>';
 
-      if (i < n && this.isListLine(i, quote) && this.listIndent(i) > levelIndent) {
+      // A deeper item, right below or past blank lines, nests inside this one.
+      for (;;) {
+        let j = i;
+        while (j < n && this.isBlankIn(j, quote)) j++;
+        if (!(j < n && this.isListLine(j, quote) && this.listIndent(j) > levelIndent)) break;
         this.out += '\n';
-        i = this.listLevel(i, this.listIndent(i), depth + 1, quote);
+        i = this.listLevel(j, this.listIndent(j), depth + 1, quote);
       }
       this.out += '</li>\n';
     }
 
     this.out += ordered ? '</ol>\n' : '</ul>\n';
     return i;
+  }
+
+  /**
+   * Whether `line` continues the list item above it: prose at the same quote depth that opens no block of
+   * its own (a hard-wrapped item's second line, or an indented one).
+   */
+  private isContinuation(line: number, quote: number): boolean {
+    if (quote === 0) return this.isParagraphLine(line);
+    const tokens = this.model.lineTokens(line);
+    const second = tokens[1];
+    return (
+      this.quoteDepth(line) === quote &&
+      second !== undefined &&
+      second.type !== 'listMarker' &&
+      second.type !== 'headingMarker'
+    );
   }
 
   /** The line's list marker: its first token, or the one right after its blockquote prefix. */

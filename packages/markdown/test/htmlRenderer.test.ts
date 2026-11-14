@@ -61,6 +61,21 @@ describe('HTML renderer', () => {
     expect(body('1. one\n\n2. two').match(/<ol/g)).toHaveLength(1);
   });
 
+  it('keeps a continuation line inside its item', () => {
+    expect(body('1. a\n2. b\n   continued\n3. c')).toBe(
+      '<ol>\n<li>a</li>\n<li>b<br>\n   continued</li>\n<li>c</li>\n</ol>\n',
+    );
+    expect(body('> - a\n> more\n> - b')).toContain('<li>a<br>\nmore</li>\n<li>b</li>');
+  });
+
+  it('nests an item after a blank line inside the item above', () => {
+    for (const md of ['- a\n\n  - b', '- a\n\n    - b', '- a\n\n\t- b']) {
+      expect(body(md)).toBe('<ul>\n<li>a\n<ul>\n<li>b</li>\n</ul>\n</li>\n</ul>\n');
+    }
+    expect(body('- a\n\n  - b\n\n- c').match(/<li>/g)).toHaveLength(3);
+    expect(body('- a\n\n  - b\n\n- c').match(/<ul>/g)).toHaveLength(2);
+  });
+
   it('renders task boxes with a state class and label', () => {
     const html = body('- [ ] todo\n- [x] done');
     expect(html).toContain('<li class="task t-not">');
