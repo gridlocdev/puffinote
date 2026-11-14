@@ -150,4 +150,16 @@ describe('BrowserStore write', () => {
     await store.write('a.md', bytes, { expected: version, force: true });
     expect(await text(store, 'a.md')).toBe('again');
   });
+  it('doesn’t bring back the folder of a note deleted since it was read', async () => {
+    const { store } = await storeWith({ 'f/a.md': 'a' }, false);
+    const { version } = await store.read('f/a.md');
+    await store.remove('f');
+    const bytes = new TextEncoder().encode('again');
+    await expect(store.write('f/a.md', bytes, { expected: version })).rejects.toMatchObject({
+      reason: 'deleted',
+    });
+    expect(await names(store)).toEqual([]);
+    await store.write('f/a.md', bytes, { expected: version, force: true });
+    expect(await text(store, 'f/a.md')).toBe('again');
+  });
 });

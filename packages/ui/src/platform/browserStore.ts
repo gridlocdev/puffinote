@@ -105,7 +105,14 @@ export class BrowserStore implements NotebookStore {
   }
 
   async write(path: string, bytes: Uint8Array, opts: WriteOptions = {}): Promise<string | null> {
-    const dir = await this.dir(parentOf(path), true);
+    // A write that expects the file to be there doesn't make its folders: a folder deleted since the read
+    // would come back before the check below could refuse.
+    const conditional = !opts.force && opts.expected != null;
+    const dir = await this.dir(parentOf(path), !conditional).catch((e: unknown) => {
+      if (conditional && e instanceof NotFoundError)
+        throw new ConflictError('deleted', 'The file was deleted since it was opened.');
+      throw e;
+    });
     const name = baseName(path);
     const handle = await dir.getFileHandle(name).catch(() => null);
     if (handle && opts.create) throw new ConflictError('exists', `“${name}” already exists.`);
