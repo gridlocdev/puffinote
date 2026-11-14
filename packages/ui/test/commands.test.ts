@@ -118,6 +118,10 @@ describe('Enter (PRD §10.1)', () => {
     expect(enter('1. a\n    1. b\n    2. |\n2. c')).toBe('1. a\n    1. b\n2. |\n3. c');
   });
 
+  it('moves an empty nested item in a quote up one level', () => {
+    expect(enter('> - a\n>     - b\n>     - |')).toBe('> - a\n>     - b\n> - |');
+  });
+
   it('numbers the next ordered item and renumbers those below', () => {
     expect(enter('1. a|\n2. b')).toBe('1. a\n2. |\n3. b');
   });
@@ -158,6 +162,13 @@ describe('Tab and Shift+Tab', () => {
   it('starts a nested numbered list at 1 when an item is indented under its parent', () => {
     expect(run('1. a\n2. b|\n3. c', (d, s) => indentEdit(d, s))).toBe('1. a\n    1. b|\n2. c');
     expect(run('1. a\n    1. b\n2. c|', (d, s) => indentEdit(d, s))).toBe('1. a\n    1. b\n    2. c|');
+  });
+
+  it('indents and outdents a list item inside a quote after the quote marker', () => {
+    expect(run('> - a\n> - b|', (d, s) => indentEdit(d, s))).toBe('> - a\n>     - b|');
+    expect(run('> - a\n>     - b|', (d, s) => outdentEdit(d, s))).toBe('> - a\n> - b|');
+    expect(run('> > - a\n> > - b|', (d, s) => indentEdit(d, s, '\t'))).toBe('> > - a\n> > \t- b|');
+    expect(run('> - b|', (d, s) => outdentEdit(d, s))).toBe('(none)');
   });
 
   it('restarts the nested items left behind when the first one is outdented', () => {

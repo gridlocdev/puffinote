@@ -108,7 +108,7 @@ export function enterEdit(
     // An empty nested item goes up one level, as Shift+Tab would, keeping its marker; a top-level one leaves
     // the list.
     const p = parseLinePrefix(lineText);
-    if (p.hasList && !p.hasQuote && p.indent > 0) {
+    if (p.hasList && (p.indent > 0 || nestedInQuote(lineText, p))) {
       const up = outdentEdit(doc, sel, indent);
       if (up) return up;
     }
@@ -266,19 +266,41 @@ export function indentEdit(doc: TextDocument, sel: Selection, indent = defaultIn
   const isList = parseLinePrefix(doc.getLineText(a)).hasList;
   if (a === b && !isList) return replaceSelection(sel, indent);
   const edit = spliceLines(doc, sel, a, b, (text) =>
-    contentOf(text).length === 0 && a !== b ? null : { at: 0, remove: 0, insert: indent },
+    contentOf(text).length === 0 && a !== b ? null : { at: indentColumn(text), remove: 0, insert: indent },
   );
   return edit ? withRenumber(doc, edit, [a, b + 1], 'nested') : null;
+}
+
+/**
+ * Where a line's indent goes: the line start, or for a list item in a quote, after the quote marker and the one
+ * space that follows it (`> - b` indents to `>     - b`), so the item nests inside the quote.
+ */
+function indentColumn(text: string): number {
+  const p = parseLinePrefix(text);
+  return p.hasQuote && p.hasList ? Math.min(quoteMarkerEnd(text, p) + 1, p.markerStart) : 0;
+}
+
+/** The column just past the last `>` of a quoted line's prefix. */
+function quoteMarkerEnd(text: string, p: LinePrefix): number {
+  return p.indent + p.quote.lastIndexOf('>') + 1;
+}
+
+/** Whether a quoted list item is nested inside its quote: more than one space or a tab after the last `>`. */
+function nestedInQuote(text: string, p: LinePrefix): boolean {
+  return p.hasQuote && p.hasList && p.markerStart - quoteMarkerEnd(text, p) > 1;
 }
 
 /** Shift+Tab: remove one indent step (a tab, or up to `indent.length` spaces) from each selected line. */
 export function outdentEdit(doc: TextDocument, sel: Selection, indent = defaultIndent): Edit | null {
   const [a, b] = selectedLines(doc, sel);
   const edit = spliceLines(doc, sel, a, b, (text) => {
-    if (text.startsWith('\t')) return { at: 0, remove: 1, insert: '' };
+    // A list item nested in a quote outdents after the quote marker, keeping the space that follows `>`.
+    const p = parseLinePrefix(text);
+    const at = nestedInQuote(text, p) ? quoteMarkerEnd(text, p) + 1 : 0;
+    if (text.charAt(at) === '\t') return { at, remove: 1, insert: '' };
     let n = 0;
-    while (n < indent.length && text.charAt(n) === ' ') n++;
-    return n > 0 ? { at: 0, remove: n, insert: '' } : null;
+    while (n < indent.length && text.charAt(at + n) === ' ' && (at === 0 || at + n < p.markerStart)) n++;
+    return n > 0 ? { at, remove: n, insert: '' } : null;
   });
   return edit ? withRenumber(doc, edit, [a, b + 1], 'nested') : null;
 }
