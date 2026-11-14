@@ -61,7 +61,13 @@ function contentOf(line: string): string {
  * Enter (PRD §10.1): continue a list or quote, exit an empty item, keep a code block's indent, and otherwise
  * start a new paragraph, which is a blank line (`\n\n`) in the formatted views and one `\n` in raw view.
  */
-export function enterEdit(doc: TextDocument, sel: Selection, mode: ViewMode, context: EditContext): Edit {
+export function enterEdit(
+  doc: TextDocument,
+  sel: Selection,
+  mode: ViewMode,
+  context: EditContext,
+  indent = defaultIndent,
+): Edit {
   const start = selectionStart(sel);
   const line = lineOf(doc, start);
   const lineStart = doc.getLineStart(line);
@@ -77,6 +83,13 @@ export function enterEdit(doc: TextDocument, sel: Selection, mode: ViewMode, con
 
   const r = computeEnter(lineText, col);
   if (r.kind === 'exit' && isCollapsed(sel)) {
+    // An empty nested item goes up one level, as Shift+Tab would, keeping its marker; a top-level one leaves
+    // the list.
+    const p = parseLinePrefix(lineText);
+    if (p.hasList && !p.hasQuote && p.indent > 0) {
+      const up = outdentEdit(doc, sel, indent);
+      if (up) return up;
+    }
     const at = lineStart + r.exitStart;
     return { start: at, length: r.exitLength, text: '', anchor: at, caret: at };
   }
@@ -91,6 +104,34 @@ export function enterEdit(doc: TextDocument, sel: Selection, mode: ViewMode, con
     return withRenumber(doc, { start: lineStart, length: 0, text, anchor: caret, caret });
   }
   return replaceSelection(sel, '\n');
+}
+
+// ----- Backspace and Delete -----
+
+/**
+ * Backspace at the start of a list item's text (PRD §10.1): take off the whole marker (bullet or number and
+ * any task box) in one step, keeping the indent and quote, so the item becomes a plain line. Numbered items
+ * after it start a new list at 1. Null anywhere else, so Backspace deletes one character.
+ */
+export function backspaceItemEdit(doc: TextDocument, sel: Selection): Edit | null {
+  if (!isCollapsed(sel)) return null;
+  const line = lineOf(doc, sel.caret);
+  const lineStart = doc.getLineStart(line);
+  const p = parseLinePrefix(doc.getLineText(line));
+  if (!p.hasList || sel.caret - lineStart !== p.length) return null;
+  const at = lineStart + p.markerStart;
+  const edit = { start: at, length: p.length - p.markerStart, text: '', anchor: at, caret: at };
+  return withRenumber(doc, edit, [line + 1], 'all');
+}
+
+/**
+ * Delete `[start, end)`. When that joins lines (a selection across items, Backspace at a line start, Delete at
+ * a line end), numbered lists around the caret renumber in the same step (PRD §10.1). Null when the range
+ * stays inside one line, so the caller deletes as typing does.
+ */
+export function joinLinesDeleteEdit(doc: TextDocument, start: number, end: number): Edit | null {
+  if (end <= start || lineOf(doc, start) === lineOf(doc, end)) return null;
+  return withRenumber(doc, { start, length: end - start, text: '', anchor: start, caret: start });
 }
 
 /** An empty item like `p`'s (same indent, quote and bullet, an open box for a task), numbered `n`. */
@@ -205,7 +246,7 @@ export function indentEdit(doc: TextDocument, sel: Selection, indent = defaultIn
   const edit = spliceLines(doc, sel, a, b, (text) =>
     contentOf(text).length === 0 && a !== b ? null : { at: 0, remove: 0, insert: indent },
   );
-  return edit ? withRenumber(doc, edit, [a, b + 1], true) : null;
+  return edit ? withRenumber(doc, edit, [a, b + 1], 'nested') : null;
 }
 
 /** Shift+Tab: remove one indent step (a tab, or up to `indent.length` spaces) from each selected line. */
@@ -217,7 +258,7 @@ export function outdentEdit(doc: TextDocument, sel: Selection, indent = defaultI
     while (n < indent.length && text.charAt(n) === ' ') n++;
     return n > 0 ? { at: 0, remove: n, insert: '' } : null;
   });
-  return edit ? withRenumber(doc, edit, [a, b + 1], true) : null;
+  return edit ? withRenumber(doc, edit, [a, b + 1], 'nested') : null;
 }
 
 // ----- Ordered-list renumbering -----
@@ -225,15 +266,16 @@ export function outdentEdit(doc: TextDocument, sel: Selection, indent = defaultI
 /**
  * Fold ordered-list renumbering into `edit` (PRD §10.1), so typing an item or changing its depth leaves the
  * numbers right in the same undo step. `lines` are lines of the edited document whose lists to check; by
- * default the caret's line and the line after it. With `restartNested` (Tab and Shift+Tab), a nested list
+ * default the caret's line and the line after it. With `restart: 'nested'` (Tab and Shift+Tab), a nested list
  * that one of those lines now starts counts from 1, so an item indented under its parent becomes its first
- * child instead of keeping its old place in the outer count.
+ * child instead of keeping its old place in the outer count. With `'all'`, any list one of those lines now
+ * starts counts from 1 (the items left after an item loses its marker).
  */
 export function withRenumber(
   doc: TextDocument,
   edit: Edit,
   lines?: readonly number[],
-  restartNested = false,
+  restart: 'nested' | 'all' | false = false,
 ): Edit {
   const after = applyEditTo(doc, edit);
   const all: string[] = [];
@@ -246,8 +288,9 @@ export function withRenumber(
     if (target < 0 || target >= all.length) continue;
     const start = listStart(all, target);
     if (start === null) continue;
-    const restart = restartNested && start === target && nestedListStart(all, start);
-    const r = renumberOrderedList(all, start, restart ? 1 : undefined);
+    const fromOne =
+      start === target && (restart === 'all' || (restart === 'nested' && nestedListStart(all, start)));
+    const r = renumberOrderedList(all, start, fromOne ? 1 : undefined);
     if (!r) continue;
     all.splice(r.startLine, r.lines.length, ...r.lines);
     changed = true;

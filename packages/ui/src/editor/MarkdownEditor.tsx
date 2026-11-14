@@ -6,8 +6,10 @@ import { CommandCatalog } from '../commands/command.ts';
 import { isMac } from '../commands/shortcut.ts';
 import { blockAtLine, type Block } from './blocks.ts';
 import {
+  backspaceItemEdit,
   backspacePairEdit,
   enterEdit,
+  joinLinesDeleteEdit,
   indentEdit,
   outdentEdit,
   setTaskStateEdit,
@@ -484,8 +486,27 @@ export function MarkdownEditor(props: MarkdownEditorProps) {
     else if (unit === 'line') {
       const line = doc.getPosition(at).line;
       to = dir > 0 ? lineContentEnd(doc, line) : startOf(line, at);
-    } else to = snap(dir > 0 ? state.buffer.nextCaret(at) : state.buffer.previousCaret(at), dir);
+    } else
+      to =
+        listHop(at, dir) ?? snap(dir > 0 ? state.buffer.nextCaret(at) : state.buffer.previousCaret(at), dir);
     moveTo(to, extend);
+  }
+
+  /**
+   * ← and → across a list item's hidden marker in Rich view (PRD §10.2): ← from the start of an item's text
+   * goes to the end of the line above, and → from the end of a line goes to the start of the next item's
+   * text, so the bullet or number is one step, not one per character. Null for an ordinary step.
+   */
+  function listHop(at: number, dir: 1 | -1): number | null {
+    if (mode !== 'live') return null;
+    const line = doc.getPosition(at).line;
+    if (dir < 0) {
+      const text = listTextStart(doc, line);
+      return line > 0 && at === text && text > doc.getLineStart(line) ? lineContentEnd(doc, line - 1) : null;
+    }
+    if (line + 1 >= doc.lineCount || at !== lineContentEnd(doc, line)) return null;
+    const next = listTextStart(doc, line + 1);
+    return next > doc.getLineStart(line + 1) ? next : null;
   }
 
   /** Where a list item's text starts on `line` in Rich view; the line start in the views that show markers. */
@@ -597,21 +618,31 @@ export function MarkdownEditor(props: MarkdownEditorProps) {
         vertical(action.dir, shift);
         break;
       case 'deleteBack':
-        if (!isCollapsed(sel)) state.insert('');
+        if (!isCollapsed(sel)) deleteSelection();
         else if (action.unit === 'line') {
           apply(rangeEdit(doc.getLineStart(doc.getPosition(sel.caret).line), sel.caret));
-        } else if (action.unit === 'word') apply(rangeEdit(wordLeft(doc, sel.caret), sel.caret));
-        else if (!state.apply(backspacePairEdit(doc, sel))) state.buffer.backspace();
+        } else if (action.unit === 'word') apply(deleteRange(wordLeft(doc, sel.caret), sel.caret));
+        else if (mode !== 'raw' && state.apply(backspaceItemEdit(doc, sel))) goalX.current = null;
+        else if (state.apply(backspacePairEdit(doc, sel))) goalX.current = null;
+        else if (!state.apply(joinLinesDeleteEdit(doc, state.buffer.previousCaret(sel.caret), sel.caret))) {
+          state.buffer.backspace();
+        }
         revealCaret.current = true;
         break;
       case 'deleteForward':
-        if (!isCollapsed(sel)) state.insert('');
-        else if (action.unit === 'word') apply(rangeEdit(sel.caret, wordRight(doc, sel.caret)));
-        else state.buffer.deleteForward();
+        if (!isCollapsed(sel)) deleteSelection();
+        else if (action.unit === 'word') apply(deleteRange(sel.caret, wordRight(doc, sel.caret)));
+        else if (!state.apply(joinLinesDeleteEdit(doc, sel.caret, state.buffer.nextCaret(sel.caret)))) {
+          state.buffer.deleteForward();
+        }
         revealCaret.current = true;
         break;
       case 'enter':
-        apply(action.soft ? softBreakEdit(sel) : enterEdit(doc, sel, mode, state.contextAt(sel.caret)));
+        apply(
+          action.soft
+            ? softBreakEdit(sel)
+            : enterEdit(doc, sel, mode, state.contextAt(sel.caret), state.indentUnit),
+        );
         break;
       case 'tab':
         apply(
@@ -625,6 +656,16 @@ export function MarkdownEditor(props: MarkdownEditorProps) {
 
   function rangeEdit(start: number, end: number) {
     return { start, length: end - start, text: '', anchor: start, caret: start };
+  }
+
+  /** Delete `[start, end)`, renumbering lists when that joins lines. */
+  function deleteRange(start: number, end: number) {
+    return joinLinesDeleteEdit(doc, start, end) ?? rangeEdit(start, end);
+  }
+
+  /** Delete the selection; across lines it renumbers lists in the same step, inside one it deletes as typing. */
+  function deleteSelection(): void {
+    if (!state.apply(joinLinesDeleteEdit(doc, selectionStart(sel), selectionEnd(sel)))) state.insert('');
   }
 
   // ----- Text input, IME and clipboard -----

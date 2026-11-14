@@ -3,12 +3,14 @@ import { TextDocument, type Selection } from '@puffinote/text';
 import { describe, expect, it } from 'vitest';
 import {
   applyEditTo,
+  backspaceItemEdit,
   backspacePairEdit,
   duplicateLinesEdit,
   EditorState,
   enterEdit,
   headingEdit,
   indentEdit,
+  joinLinesDeleteEdit,
   linkEdit,
   moveItemsToEdgeEdit,
   moveLinesEdit,
@@ -105,6 +107,13 @@ describe('Enter (PRD §10.1)', () => {
 
   it('exits an empty item', () => {
     expect(enter('- a\n- |')).toBe('- a\n|');
+  });
+
+  it('moves an empty nested item up one level, numbered on from the outer list', () => {
+    expect(enter('1. a\n    1. b\n    2. |')).toBe('1. a\n    1. b\n2. |');
+    expect(enter('- a\n    - b\n    - |')).toBe('- a\n    - b\n- |');
+    expect(enter('- a\n    - b\n        - |')).toBe('- a\n    - b\n    - |');
+    expect(enter('1. a\n    1. b\n    2. |\n2. c')).toBe('1. a\n    1. b\n2. |\n3. c');
   });
 
   it('numbers the next ordered item and renumbers those below', () => {
@@ -447,5 +456,33 @@ describe('removeRangeEdit (Delete Picture)', () => {
     expect(remove('one\n![](a.png)\ntwo', '![](a.png)')).toBe('one\ntwo');
     expect(remove('one\n  ![](a.png)', '![](a.png)')).toBe('one');
     expect(remove('![](a.png)', '![](a.png)')).toBe('');
+  });
+});
+
+describe('Backspace and Delete in lists', () => {
+  it('takes off the whole marker at the start of an item, and restarts the numbers after it', () => {
+    expect(run('1. a\n2. |b\n3. c\n4. d', backspaceItemEdit)).toBe('1. a\n|b\n1. c\n2. d');
+    expect(run('- a\n- |b', backspaceItemEdit)).toBe('- a\n|b');
+    expect(run('- [x] a\n- [ ] |b', backspaceItemEdit)).toBe('- [x] a\n|b');
+    expect(run('1. a\n    1. |b\n    2. c', backspaceItemEdit)).toBe('1. a\n    |b\n    1. c');
+    expect(run('> - |a', backspaceItemEdit)).toBe('> |a');
+    expect(run('1. a\n2. |', backspaceItemEdit)).toBe('1. a\n|');
+  });
+
+  it('leaves Backspace alone away from the start of an item', () => {
+    expect(run('1. a\n2. b|c', backspaceItemEdit)).toBe('(none)');
+    expect(run('1. a\n2.| b', backspaceItemEdit)).toBe('(none)');
+    expect(run('plain|', backspaceItemEdit)).toBe('(none)');
+    expect(run('1. a\n2. ‹b›', backspaceItemEdit)).toBe('(none)');
+  });
+
+  it('renumbers when a delete joins lines', () => {
+    const del = (marked: string) =>
+      run(marked, (doc, sel) =>
+        joinLinesDeleteEdit(doc, Math.min(sel.anchor, sel.caret), Math.max(sel.anchor, sel.caret)),
+      );
+    expect(del('1. a\n‹2. b\n›3. c')).toBe('1. a\n|2. c');
+    expect(del('1. a‹\n›b\n1. c')).toBe('1. a|b\n2. c');
+    expect(del('1. a\n2. ‹b›')).toBe('(none)');
   });
 });
