@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { findBlocks } from '../src/editor/blocks.ts';
 import { EditorState, enterEdit } from '../src/index.ts';
 import { firstRowEndingBelow, nearestRowIndex, type RectSource } from '../src/editor/geometry.ts';
-import { keyAction, undoRunFor, type KeyLike } from '../src/editor/keys.ts';
+import { keyAction, primaryHeld, undoRunFor, type KeyLike } from '../src/editor/keys.ts';
 import { joinLinesDeleteEdit } from '../src/editor/commands.ts';
 import { lineViewPropsEqual, type LineViewProps } from '../src/editor/lineProps.ts';
 import type { LineReveal } from '../src/editor/reveal.ts';
@@ -343,5 +343,14 @@ describe('row lookup (findings 6 and 9)', () => {
     ];
     expect(nearestRowIndex(list, 30)).toBe(0);
     expect(nearestRowIndex(list, 50)).toBe(1);
+  });
+});
+
+describe('drag selection', () => {
+  it('ends once the primary button is no longer held, even if its release was missed', () => {
+    expect(primaryHeld({ buttons: 1 })).toBe(true);
+    expect(primaryHeld({ buttons: 3 })).toBe(true);
+    expect(primaryHeld({ buttons: 0 })).toBe(false);
+    expect(primaryHeld({ buttons: 2 })).toBe(false);
   });
 });

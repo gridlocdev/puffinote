@@ -77,3 +77,11 @@ export function undoRunFor(action: KeyAction, key: string, repeat: boolean): Und
       return undefined;
   }
 }
+
+/**
+ * Whether a mouse event still has the primary button down. A drag-selection ends when it doesn't: the
+ * release can happen outside the window, or after it lost focus, and then no `mouseup` arrives.
+ */
+export function primaryHeld(e: { readonly buttons: number }): boolean {
+  return (e.buttons & 1) !== 0;
+}

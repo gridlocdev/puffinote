@@ -34,7 +34,7 @@ import {
   wordRight,
 } from './motion.ts';
 import { matchesBetween, type TextRange } from './find.ts';
-import { keyAction, undoRunFor } from './keys.ts';
+import { keyAction, primaryHeld, undoRunFor } from './keys.ts';
 import { carryLineCache, lineTextOf, type LineCache } from './lineCache.ts';
 import { keepReveal, lineReveal, type LineReveal } from './reveal.ts';
 
@@ -966,6 +966,10 @@ export function MarkdownEditor(props: MarkdownEditorProps) {
 
     const fixedAnchor = anchor;
     const onMove = (m: MouseEvent): void => {
+      if (!primaryHeld(m)) {
+        onUp();
+        return;
+      }
       let to = offsetAt(m.clientX, m.clientY, m.clientX > e.clientX ? 1 : -1);
       if (to !== null && to < fixedAnchor) to = itemStartLeftOf(to, m.clientX);
       if (to !== null) {
@@ -976,9 +980,13 @@ export function MarkdownEditor(props: MarkdownEditorProps) {
     const onUp = (): void => {
       window.removeEventListener('mousemove', onMove);
       window.removeEventListener('mouseup', onUp);
+      window.removeEventListener('blur', onUp);
     };
     window.addEventListener('mousemove', onMove);
     window.addEventListener('mouseup', onUp);
+    // Switching apps mid-drag can swallow the release; a later move with no button down, or the window
+    // losing focus, ends the drag so the selection doesn't follow the pointer.
+    window.addEventListener('blur', onUp);
   }
 
   const empty = doc.length === 0;
