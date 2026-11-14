@@ -239,13 +239,31 @@ class InlineTokenizer {
 
   private tryBareUrl(i: number, to: number): number {
     const t = this.text;
-    if (!t.startsWith('http://', i) && !t.startsWith('https://', i)) return 0;
+    // The scheme is case-insensitive (`HTTP://` is a URL too).
+    const head = t.slice(i, i + 8).toLowerCase();
+    if (!head.startsWith('http://') && !head.startsWith('https://')) return 0;
     // Only at a word boundary.
     if (i > 0 && (isLetterOrDigit(t.charAt(i - 1)) || t.charAt(i - 1) === '/')) return 0;
 
     let j = i;
-    while (j < to && !isWhiteSpace(t.charAt(j)) && t.charAt(j) !== '<' && t.charAt(j) !== ')') j++;
-    while (j > i && isTrailingUrlPunct(t.charAt(j - 1))) j--;
+    let open = 0; // `(` minus `)` in [i, j)
+    while (j < to && !isWhiteSpace(t.charAt(j)) && t.charAt(j) !== '<') {
+      if (t.charAt(j) === '(') open++;
+      else if (t.charAt(j) === ')') open--;
+      j++;
+    }
+    // Trailing punctuation isn't part of the URL. A trailing `)` is, while it closes a `(` inside the URL
+    // (`…/wiki/Foo_(bar)`), as in GFM; an unmatched one belongs to the sentence around it.
+    while (j > i) {
+      const c = t.charAt(j - 1);
+      if (c === ')') {
+        if (open >= 0) break;
+        open++;
+      } else if (!isTrailingUrlPunct(c)) {
+        break;
+      }
+      j--;
+    }
     if (j - i < 11) return 0;
 
     this.flushText(i);
@@ -519,5 +537,5 @@ function isTitle(s: string): boolean {
 }
 
 function isTrailingUrlPunct(c: string): boolean {
-  return c === '.' || c === ',' || c === ';' || c === ':' || c === '!' || c === '?' || c === ')';
+  return c === '.' || c === ',' || c === ';' || c === ':' || c === '!' || c === '?';
 }

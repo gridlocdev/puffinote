@@ -331,6 +331,8 @@ An edit re-tokenizes from the first changed line and stops once the block state 
 
 A setext heading carries a zero-length heading marker that holds its level, so consumers read the level from the line's first token whichever spelling made it. A lone `---` with no paragraph above it is a rule.
 
+A bare URL starts with `http://` or `https://`, in any case, at a word boundary, and runs to whitespace or `<`. Trailing punctuation (`.` `,` `;` `:` `!` `?`) is left out. A trailing `)` stays only while it closes a `(` inside the URL (`…/wiki/Foo_(bar)`), as in GFM, so a URL in parentheses ends before the sentence's `)`.
+
 ### 11.4 Task states
 
 One character between the brackets, three states:

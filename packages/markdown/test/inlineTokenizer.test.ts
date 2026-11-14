@@ -77,6 +77,21 @@ describe('inline tokenizer', () => {
     expect(textsOfType('go to https://example.com.', 'autolink')).toEqual(['https://example.com']);
   });
 
+  it('keeps balanced parentheses in a bare URL and drops an unmatched closing one', () => {
+    expect(textsOfType('see https://en.wikipedia.org/wiki/Foo_(bar) now', 'autolink')).toEqual([
+      'https://en.wikipedia.org/wiki/Foo_(bar)',
+    ]);
+    expect(textsOfType('(see https://en.wikipedia.org/wiki/Foo_(bar))', 'autolink')).toEqual([
+      'https://en.wikipedia.org/wiki/Foo_(bar)',
+    ]);
+    expect(textsOfType('(at https://example.com/a).', 'autolink')).toEqual(['https://example.com/a']);
+  });
+
+  it('reads a bare URL whose scheme is upper case', () => {
+    expect(textsOfType('go to HTTP://EXAMPLE.COM/x', 'autolink')).toEqual(['HTTP://EXAMPLE.COM/x']);
+    expect(textsOfType('go to Https://example.com', 'autolink')).toEqual(['Https://example.com']);
+  });
+
   it('renders an escape as a literal', () => {
     expect(hasType('\\*not italic\\*', 'emphasis')).toBe(false);
     expect(hasType('\\*not italic\\*', 'escape')).toBe(true);
