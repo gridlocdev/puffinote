@@ -52,7 +52,8 @@ export function keyAction(e: KeyLike, mac: boolean): KeyAction | null {
     case 'Enter':
       return mod ? null : { kind: 'enter', soft: e.shiftKey };
     case 'Tab':
-      return mod || e.altKey ? null : { kind: 'tab', outdent: e.shiftKey };
+      // ⌃Tab is Next Tab on macOS too, so any modifier but Shift leaves Tab to the catalog.
+      return mod || e.ctrlKey || e.altKey ? null : { kind: 'tab', outdent: e.shiftKey };
     default:
       return null;
   }

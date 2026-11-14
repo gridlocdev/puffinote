@@ -289,6 +289,9 @@ describe('platform keys (finding 5)', () => {
   it('leaves modified Enter and Tab to the shortcut catalog', () => {
     expect(keyAction(key('Enter', { metaKey: true }), true)).toBeNull();
     expect(keyAction(key('Tab', { ctrlKey: true }), false)).toBeNull();
+    // ⌃Tab and ⌃⇧Tab on macOS switch tabs.
+    expect(keyAction(key('Tab', { ctrlKey: true }), true)).toBeNull();
+    expect(keyAction(key('Tab', { ctrlKey: true, shiftKey: true }), true)).toBeNull();
     expect(keyAction(key('Enter', { shiftKey: true }), false)).toEqual({ kind: 'enter', soft: true });
   });
 });
