@@ -67,6 +67,27 @@ export function parseRoots(spec: string, baseDir: string): Root[] {
   return roots;
 }
 
+/** How many entries a listing stats at once: enough to hide latency on a NAS disk, few enough not to hog it. */
+const LIST_CONCURRENCY = 32;
+
+/** `items.map(fn)`, with at most `limit` calls in flight at once; the results keep the items' order. */
+export async function mapLimit<T, R>(
+  items: readonly T[],
+  limit: number,
+  fn: (item: T) => Promise<R>,
+): Promise<R[]> {
+  const out = new Array<R>(items.length);
+  let next = 0;
+  const worker = async (): Promise<void> => {
+    while (next < items.length) {
+      const i = next++;
+      out[i] = await fn(items[i]!);
+    }
+  };
+  await Promise.all(Array.from({ length: Math.min(limit, items.length) }, worker));
+  return out;
+}
+
 /** Our own in-flight save files (`.<name>.<hex>.tmp`): never listed. */
 const TEMP = /^\..+\.[0-9a-f]{12}\.tmp$/;
 
@@ -135,25 +156,33 @@ export class FileApi {
       throw fsError(e);
     }
     const above = await realAncestors(dir);
-    const entries: Entry[] = [];
-    for (const d of dirents) {
-      if (TEMP.test(d.name)) continue;
+    const found = await mapLimit(dirents, LIST_CONCURRENCY, async (d): Promise<Entry | null> => {
+      if (TEMP.test(d.name)) return null;
       const full = path.join(dir, d.name);
-      // Follow symlinks for the kind, but only ones that stay inside the root.
-      const s = await this.resolveReal(root, path.relative(root.dir, full))
-        .then(() => stat(full))
-        .catch(() => null);
-      if (!s || (!s.isDirectory() && !s.isFile())) continue;
-      if (s.isDirectory() && d.isSymbolicLink() && (await closesLoop(full, above))) continue;
-      entries.push({
+      // lstat, not the dirent's type: an entry swapped for a symlink since readdir still gets checked. A
+      // plain entry of a folder inside the root is inside it too; a symlink is followed for its kind only
+      // when it stays inside the root, and a folder link that loops back up is left out.
+      let s = await lstat(full).catch(() => null);
+      if (s?.isSymbolicLink()) {
+        s = await this.resolveReal(root, path.relative(root.dir, full))
+          .then(() => stat(full))
+          .catch(() => null);
+        if (s?.isDirectory() && (await closesLoop(full, above))) return null;
+      }
+      if (!s || (!s.isDirectory() && !s.isFile())) return null;
+      return {
         name: d.name,
         path: path.relative(root.dir, full).split(path.sep).join('/'),
         kind: s.isDirectory() ? 'dir' : 'file',
         size: s.isDirectory() ? 0 : s.size,
         modified: s.mtimeMs,
         created: s.birthtimeMs,
-      });
-    }
+      };
+    });
+    // The plain entries trust that the folder is inside the root: check it again now they are read, in case
+    // it was swapped for a link out meanwhile.
+    await this.resolveReal(root, rel);
+    const entries = found.filter((e): e is Entry => e !== null);
     entries.sort((a, b) => (a.kind === b.kind ? a.name.localeCompare(b.name) : a.kind === 'dir' ? -1 : 1));
     return entries;
   }

@@ -21,6 +21,7 @@ import {
   isAppUrl,
   isOpenableDocument,
   listDir,
+  mapLimit,
   moveEntry,
   overwriteInPlace,
   readWithMtime,
@@ -242,6 +243,45 @@ describe('listDir', () => {
     await symlink('../A', path.join(nb, 'B', 'toA'));
     expect(await names(path.join(nb, 'A'))).toEqual(['toB']);
     expect(await names(path.join(nb, 'A', 'toB'))).toEqual([]);
+  });
+});
+
+describe('mapLimit', () => {
+  it('maps with at most so many calls in flight, keeping the order', async () => {
+    let inFlight = 0;
+    let most = 0;
+    const out = await mapLimit([1, 2, 3, 4, 5, 6, 7], 3, async (n) => {
+      most = Math.max(most, ++inFlight);
+      await wait(5 * (8 - n));
+      inFlight--;
+      return n * 10;
+    });
+    expect(out).toEqual([10, 20, 30, 40, 50, 60, 70]);
+    expect(most).toBe(3);
+  });
+
+  it('lists a large folder, following only links that stay inside the notebook', async () => {
+    const nb = path.join(dir, 'big-nb');
+    const outside = await mkdtemp(path.join(os.tmpdir(), 'puffinote-outside-'));
+    await writeFile(path.join(outside, 'secret.md'), 'nope');
+    await mkdir(path.join(nb, 'Sub'), { recursive: true });
+    for (let i = 0; i < 300; i++) await writeFile(path.join(nb, `n${i}.md`), String(i));
+    await symlink(path.join(outside, 'secret.md'), path.join(nb, 'leak.md'));
+    await symlink(outside, path.join(nb, 'leak-dir'));
+    await symlink('n1.md', path.join(nb, 'inside.md'));
+    await symlink('missing.md', path.join(nb, 'dangling.md'));
+    const grants = new FolderGrants(null);
+    grants.grant(nb);
+    const entries = await listDir(nb, (p) => grants.allows(p));
+    const names = entries.map((e) => e.name);
+    expect(names).toHaveLength(302);
+    expect(names).toContain('inside.md');
+    expect(names).not.toContain('leak.md');
+    expect(names).not.toContain('leak-dir');
+    expect(names).not.toContain('dangling.md');
+    expect(entries.find((e) => e.name === 'n12.md')).toMatchObject({ kind: 'file', size: 2 });
+    await expect(listDir(outside, (p) => grants.allows(p))).rejects.toThrow('Forbidden');
+    await rm(outside, { recursive: true, force: true });
   });
 });
 

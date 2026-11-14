@@ -15,7 +15,7 @@ import type { AddressInfo } from 'node:net';
 import os from 'node:os';
 import path from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { etagOf, FileApi, overwriteInPlace, parseRoots } from '../src/fileApi.ts';
+import { etagOf, FileApi, mapLimit, overwriteInPlace, parseRoots } from '../src/fileApi.ts';
 import { createServer, hostAllowed, isLoopback, parseHosts, refuseWithoutToken } from '../src/server.ts';
 
 /** A file on a disk with room for `capacity` bytes: writes past it fail with ENOSPC, like a full volume. */
@@ -134,6 +134,40 @@ describe('the file API', () => {
     await symlink('../A', path.join(dir, 'Loop', 'B', 'toA'));
     expect(await names('Loop/A')).toEqual(['toB']);
     expect(await names('Loop/A/toB')).toEqual([]);
+  });
+
+  it('lists a large folder, following only links that stay inside the root', async () => {
+    const big = path.join(dir, 'Big');
+    await mkdir(path.join(big, 'Sub'), { recursive: true });
+    for (let i = 0; i < 300; i++) await writeFile(path.join(big, `n${i}.md`), String(i));
+    await symlink(path.join(outside, 'secret.md'), path.join(big, 'leak.md'));
+    await symlink(outside, path.join(big, 'leak-dir'));
+    await symlink('n1.md', path.join(big, 'inside.md'));
+    await symlink('Sub', path.join(big, 'inside-dir'));
+    await symlink('missing.md', path.join(big, 'dangling.md'));
+    const api = new FileApi(parseRoots(`My Notes=${dir}`, '/'));
+    const entries = await api.list('my-notes', 'Big');
+    const names = entries.map((e) => e.name);
+    expect(names).toHaveLength(303);
+    expect(names.slice(0, 2)).toEqual(['inside-dir', 'Sub']);
+    expect(names).toContain('inside.md');
+    expect(names).not.toContain('leak.md');
+    expect(names).not.toContain('leak-dir');
+    expect(names).not.toContain('dangling.md');
+    expect(entries.find((e) => e.name === 'n12.md')).toMatchObject({ kind: 'file', size: 2 });
+  });
+
+  it('maps with at most so many calls in flight, keeping the order', async () => {
+    let inFlight = 0;
+    let most = 0;
+    const out = await mapLimit([1, 2, 3, 4, 5, 6, 7], 3, async (n) => {
+      most = Math.max(most, ++inFlight);
+      await new Promise((r) => setTimeout(r, 5 * (8 - n)));
+      inFlight--;
+      return n * 10;
+    });
+    expect(out).toEqual([10, 20, 30, 40, 50, 60, 70]);
+    expect(most).toBe(3);
   });
 
   it('refuses paths that leave the root', async () => {

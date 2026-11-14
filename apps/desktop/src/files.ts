@@ -5,6 +5,7 @@ import {
   access,
   chown,
   constants as fsConstants,
+  lstat,
   mkdir,
   open,
   readdir,
@@ -236,30 +237,60 @@ export async function isOpenableDocument(p: string): Promise<boolean> {
 }
 
 /**
- * The entries of a notebook folder for the renderer. `stat` follows symlinks for the kind; a link that leaves
- * the notebook (`allows` says no) or dangles is left out, and so is our own temp file. A folder link back to
+ * The entries of a notebook folder for the renderer, `dir` itself being one `allows` accepts. Entries are
+ * stat'ed a few dozen at a time. A symlink is followed for its kind; one that leaves the notebook (`allows`
+ * says no) or dangles is left out, and so is our own temp file. A folder link back to
  * the listed folder, a folder above it, or a folder holding one is left out too: the renderer loads the tree
  * recursively, and following it would never end.
  */
 export async function listDir(dir: string, allows: (p: string) => Promise<boolean>): Promise<NativeEntry[]> {
+  if (!(await allows(dir))) throw new Error('Forbidden');
   const dirents = await readdir(dir, { withFileTypes: true });
   const above = await realAncestors(dir);
-  const out: NativeEntry[] = [];
-  for (const d of dirents) {
-    if (TEMP_FILE.test(d.name)) continue;
+  const found = await mapLimit(dirents, LIST_CONCURRENCY, async (d): Promise<NativeEntry | null> => {
+    if (TEMP_FILE.test(d.name)) return null;
     const p = path.join(dir, d.name);
-    const s = await stat(p).catch(() => null);
-    if (!s || !(s.isFile() || s.isDirectory()) || !(await allows(p))) continue;
-    if (s.isDirectory() && d.isSymbolicLink() && (await closesLoop(p, above))) continue;
-    out.push({
+    // lstat, not the dirent's type: an entry swapped for a symlink since readdir still gets checked. A plain
+    // entry of an allowed folder is allowed; only a symlink needs the full check.
+    let s = await lstat(p).catch(() => null);
+    if (s?.isSymbolicLink()) {
+      s = (await allows(p)) ? await stat(p).catch(() => null) : null;
+      if (s?.isDirectory() && (await closesLoop(p, above))) return null;
+    }
+    if (!s || !(s.isFile() || s.isDirectory())) return null;
+    return {
       path: p,
       name: d.name,
       kind: s.isDirectory() ? 'dir' : 'file',
       size: s.isDirectory() ? 0 : s.size,
       modified: s.mtimeMs,
       created: s.birthtimeMs,
-    });
-  }
+    };
+  });
+  // The plain entries trust that the folder is allowed: check it again now they are read, in case it was
+  // swapped for a link out meanwhile.
+  if (!(await allows(dir))) throw new Error('Forbidden');
+  return found.filter((e): e is NativeEntry => e !== null);
+}
+
+/** How many entries a listing stats at once: enough to hide disk latency, few enough not to hog it. */
+const LIST_CONCURRENCY = 32;
+
+/** `items.map(fn)`, with at most `limit` calls in flight at once; the results keep the items' order. */
+export async function mapLimit<T, R>(
+  items: readonly T[],
+  limit: number,
+  fn: (item: T) => Promise<R>,
+): Promise<R[]> {
+  const out = new Array<R>(items.length);
+  let next = 0;
+  const worker = async (): Promise<void> => {
+    while (next < items.length) {
+      const i = next++;
+      out[i] = await fn(items[i]!);
+    }
+  };
+  await Promise.all(Array.from({ length: Math.min(limit, items.length) }, worker));
   return out;
 }
 
