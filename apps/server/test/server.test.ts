@@ -204,6 +204,17 @@ describe('the file API', () => {
     expect(((await create.json()) as { error: string }).error).toContain('exists');
   });
 
+  it('does not bring back a deleted folder when a stale save is refused', async () => {
+    await mkdir(path.join(dir, 'Gone'));
+    await writeFile(path.join(dir, 'Gone', 'n.md'), 'n');
+    const url = `${base}/file?${q({ path: 'Gone/n.md' })}`;
+    const etag = (await fetch(url, { headers: auth })).headers.get('etag')!;
+    await rm(path.join(dir, 'Gone'), { recursive: true });
+    const res = await fetch(url, { method: 'PUT', body: 'late', headers: { ...auth, 'If-Match': etag } });
+    expect(res.status).toBe(412);
+    expect(await lstat(path.join(dir, 'Gone')).catch(() => null)).toBeNull();
+  });
+
   it('refuses to save over a read-only file', async () => {
     const file = path.join(dir, 'locked.md');
     await writeFile(file, 'locked');

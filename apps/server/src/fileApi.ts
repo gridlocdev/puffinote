@@ -300,10 +300,6 @@ export class FileApi {
     bytes: Buffer,
     opts: { ifMatch?: string | null; ifNoneMatch?: string | null },
   ): Promise<{ etag: string }> {
-    await mkdir(path.dirname(full), { recursive: true }).catch((e: unknown) => {
-      throw fsError(e);
-    });
-
     const target = await stat(full).catch(() => null);
     if (target && !target.isFile()) throw new ApiError(400, 'Not a file');
     // A symlink stays a link: replace the file it names (resolveEntry checked that it is inside the root).
@@ -339,6 +335,8 @@ export class FileApi {
     const mode = target ? target.mode & 0o7777 : 0o644;
     const tmp = path.join(dir, `.${base}.${randomBytes(6).toString('hex')}.tmp`);
     try {
+      // Only now, past the checks above: a refused save must not bring back a folder deleted since it read.
+      if (!target) await mkdir(dir, { recursive: true });
       const handle = await open(tmp, fsConstants.O_CREAT | fsConstants.O_EXCL | fsConstants.O_WRONLY, mode);
       try {
         await handle.chmod(mode); // open() applies the umask; the replacement keeps the original bits
