@@ -8,6 +8,7 @@ import { blockAtLine, type Block } from './blocks.ts';
 import {
   backspaceItemEdit,
   backspacePairEdit,
+  deleteRangeEdit,
   enterEdit,
   joinLinesDeleteEdit,
   indentEdit,
@@ -624,7 +625,7 @@ export function MarkdownEditor(props: MarkdownEditorProps) {
       case 'deleteBack':
         if (!isCollapsed(sel)) deleteSelection();
         else if (action.unit === 'line') {
-          apply(rangeEdit(doc.getLineStart(doc.getPosition(sel.caret).line), sel.caret), run);
+          apply(deleteRange(doc.getLineStart(doc.getPosition(sel.caret).line), sel.caret), run);
         } else if (action.unit === 'word') apply(deleteRange(wordLeft(doc, sel.caret), sel.caret), run);
         else if (mode !== 'raw' && state.apply(backspaceItemEdit(doc, sel), undefined, run))
           goalX.current = null;
@@ -669,13 +670,9 @@ export function MarkdownEditor(props: MarkdownEditorProps) {
     e.stopPropagation();
   }
 
-  function rangeEdit(start: number, end: number) {
-    return { start, length: end - start, text: '', anchor: start, caret: start };
-  }
-
   /** Delete `[start, end)`, renumbering lists when that joins lines. */
   function deleteRange(start: number, end: number) {
-    return joinLinesDeleteEdit(doc, start, end) ?? rangeEdit(start, end);
+    return deleteRangeEdit(doc, start, end);
   }
 
   /** Delete the selection as one undo step; across lines it renumbers lists in the same step. */
@@ -712,8 +709,9 @@ export function MarkdownEditor(props: MarkdownEditorProps) {
     e.preventDefault();
     e.clipboardData?.setData('text/plain', state.selectedText());
     if (cut) {
+      // As Delete does: one undo step, and numbered lists renumber when the cut joins lines.
       revealCaret.current = true;
-      state.insert('');
+      deleteSelection();
     }
   }
 

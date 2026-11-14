@@ -156,6 +156,19 @@ export function joinLinesDeleteEdit(doc: TextDocument, start: number, end: numbe
   return withRenumber(doc, { start, length: end - start, text: '', anchor: start, caret: start });
 }
 
+/** Delete `[start, end)` as one edit (Backspace on a selection, Cut), renumbering lists when it joins lines. */
+export function deleteRangeEdit(doc: TextDocument, start: number, end: number): Edit {
+  return (
+    joinLinesDeleteEdit(doc, start, end) ?? {
+      start,
+      length: end - start,
+      text: '',
+      anchor: start,
+      caret: start,
+    }
+  );
+}
+
 /** An empty item like `p`'s (same indent, quote and bullet, an open box for a task), numbered `n`. */
 function itemPrefix(p: LinePrefix, n: number): string {
   let prefix = p.indentText + p.quote;

@@ -5,6 +5,7 @@ import {
   applyEditTo,
   backspaceItemEdit,
   backspacePairEdit,
+  deleteRangeEdit,
   duplicateLinesEdit,
   EditorState,
   enterEdit,
@@ -525,5 +526,18 @@ describe('Backspace and Delete in lists', () => {
     expect(del('1. a\n‹2. b\n›3. c')).toBe('1. a\n|2. c');
     expect(del('1. a‹\n›b\n1. c')).toBe('1. a|b\n2. c');
     expect(del('1. a\n2. ‹b›')).toBe('(none)');
+  });
+});
+
+describe('Cut and deleting a selection', () => {
+  const cut = (marked: string) =>
+    run(marked, (d, s) => deleteRangeEdit(d, Math.min(s.anchor, s.caret), Math.max(s.anchor, s.caret)));
+
+  it('renumbers the list when the cut joins items', () => {
+    expect(cut('1. a\n‹2. b\n›3. c\n4. d')).toBe('1. a\n|2. c\n3. d');
+  });
+
+  it('deletes inside one line', () => {
+    expect(cut('a‹bc›d')).toBe('a|d');
   });
 });
