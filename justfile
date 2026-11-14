@@ -20,7 +20,7 @@ run-web:
 [group('run')]
 run-nas:
     mkdir -p "{{ nas_data }}"
-    pnpm --parallel --filter @puffinote/server --filter @puffinote/web run dev
+    PUFFINOTE_NAS_DEV=1 pnpm --parallel --filter @puffinote/server --filter @puffinote/web run dev
 
 # NAS server only (http://localhost:8790), serving ./.nas-data; restarts when its source changes.
 [group('run')]

@@ -26,7 +26,8 @@ export default defineConfig({
   plugins: [preact(), csp],
   build: { outDir: 'dist', emptyOutDir: true, sourcemap: true, target: 'es2023' },
   server: {
-    // `pnpm dev` talks to a locally running `apps/server` for the NAS store; without one it's the plain web app.
-    proxy: { '/api': 'http://localhost:8790' },
+    // `just run-nas` sets PUFFINOTE_NAS_DEV so the dev client talks to the NAS server it starts. Without it
+    // (`just run-web`) there's no proxy: /api/info isn't JSON, so the page runs as the plain web app.
+    proxy: process.env.PUFFINOTE_NAS_DEV ? { '/api': 'http://localhost:8790' } : {},
   },
 });
