@@ -15,6 +15,11 @@ export interface ScopeInputs {
   readonly sort: NoteSort;
 }
 
+/** The folder a scope shows, where New Note and New Folder put things: the top level for All, Pinned, Recent. */
+export function folderOf(scope: LibraryScope): string {
+  return scope.startsWith('folder:') ? scope.slice('folder:'.length) : '';
+}
+
 /**
  * The files a scope lists: a folder's own files, every file, the pinned ones, or the recent ones. Pinned
  * files come first in their pinning order, then the rest by `sort`; Recent keeps the order they were opened.

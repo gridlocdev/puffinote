@@ -9,6 +9,7 @@ import type { EditorState } from '../editor/editorState.ts';
 import { pictureExtent } from '../editor/reveal.ts';
 import { findAll, matchAt, matchFrom, replaceAllEdit, type TextRange } from '../editor/find.ts';
 import { sidebarPanels, type Notebook, type SidebarPanel, type Tab } from '../notebook/notebook.ts';
+import { folderOf } from '../notebook/library.ts';
 import { headingFor, parseLinkHref, resolveNoteLink } from '../notebook/noteLinks.ts';
 import type { TrashItem } from '../notebook/trash.ts';
 import {
@@ -918,9 +919,24 @@ export class ShellModel {
 
   // ----- Files -----
 
-  /** Where New Note and New Folder put things: the selected folder, or the selected file's folder. */
+  /**
+   * What Rename… and Delete… act on: the tree's selected row, or in the Library layout, which has no tree, the
+   * note in front.
+   */
+  selectedPath(): string | null {
+    const nb = this.notebook.peek();
+    if (!nb) return null;
+    if (this.layout.peek() === 'library') return this.activeTab.peek()?.path.peek() ?? null;
+    return nb.selected.peek();
+  }
+
+  /**
+   * Where New Note and New Folder put things: the selected folder, or the selected file's folder. In the
+   * Library layout, the folder the note list shows (as its New Note button does).
+   */
   targetDir(): string {
     const nb = this.notebook.peek();
+    if (nb && this.layout.peek() === 'library') return folderOf(nb.scope.peek());
     const sel = nb?.selected.peek();
     if (!nb || !sel) return '';
     const node = findNode(nb.tree.peek(), sel);
@@ -1391,8 +1407,8 @@ function shellCommandSpecs(m: ShellModel): CommandSpec[] {
       description: 'Rename the selected file or folder, or the note in front.',
       group: 'File',
       icon: 'pencil',
-      enabled: () => hasNb() && !!(nb()!.selected.peek() ?? tab()?.path.peek()),
-      run: () => m.rename(nb()!.selected.peek() ?? tab()!.path.peek()),
+      enabled: () => hasNb() && !!(m.selectedPath() ?? tab()?.path.peek()),
+      run: () => m.rename(m.selectedPath() ?? tab()!.path.peek()),
     },
     {
       id: 'shell.delete',
@@ -1400,8 +1416,8 @@ function shellCommandSpecs(m: ShellModel): CommandSpec[] {
       description: 'Delete the selected file or folder.',
       group: 'File',
       icon: 'trash-2',
-      enabled: () => !!nb()?.selected.peek(),
-      run: () => m.remove(nb()!.selected.peek()!),
+      enabled: () => !!m.selectedPath(),
+      run: () => m.remove(m.selectedPath()!),
     },
     {
       id: 'shell.showTrash',

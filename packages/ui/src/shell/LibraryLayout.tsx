@@ -1,6 +1,6 @@
 import { useSignalEffect } from '@preact/signals';
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'preact/hooks';
-import { scopeList } from '../notebook/library.ts';
+import { folderOf, scopeList } from '../notebook/library.ts';
 import type { LibraryScope, Notebook, NoteSort } from '../notebook/notebook.ts';
 import { excerptOf, relativeDate } from '../notebook/noteMeta.ts';
 import { fileKind, findNode, type TreeNode } from '../notebook/tree.ts';
@@ -167,10 +167,6 @@ function FolderRow(props: {
         ))}
     </>
   );
-}
-
-function folderOf(scope: LibraryScope): string {
-  return scope.startsWith('folder:') ? scope.slice('folder:'.length) : '';
 }
 
 function scopeTitle(nb: Notebook, scope: LibraryScope): string {

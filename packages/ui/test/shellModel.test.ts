@@ -481,3 +481,36 @@ describe('ShellModel closing a tab that changed on disk', () => {
     expect(b.dirty.peek()).toBe(false);
   });
 });
+
+describe('ShellModel in the Library layout (PRD §6)', () => {
+  it('renames, deletes and creates for the note in front and the folder shown, not an old tree selection', async () => {
+    const store = new MemoryStore('N', { 'a/x.md': 'x', 'b/y.md': 'y' });
+    const nb = await Notebook.open(store, { prefs: memoryPrefs({ autoSave: false, layout: 'library' }) });
+    const m = new ShellModel();
+    m.setNotebook(nb);
+    await nb.createNote('a', 'new'); // leaves the tree's selection on a/new.md
+    nb.scope.value = 'folder:b';
+    await nb.openFile('b/y.md'); // a card click
+    const asked = () => {
+      const o = m.overlay.value;
+      const title = o?.kind === 'prompt' || o?.kind === 'confirm' ? o.options.title : null;
+      const value = o?.kind === 'prompt' ? (o.options.value ?? '') : '';
+      const label = o?.kind === 'prompt' ? (o.options.label ?? '') : '';
+      m.close();
+      return { title, value, label };
+    };
+
+    void m.menuCatalog.run('shell.rename');
+    await vi.waitFor(() => expect(m.overlay.value).not.toBeNull());
+    expect(asked()).toMatchObject({ title: 'Rename', value: 'y.md' });
+
+    void m.menuCatalog.run('shell.delete');
+    await vi.waitFor(() => expect(m.overlay.value).not.toBeNull());
+    expect(asked().title).toBe('Delete “y.md”?');
+
+    void m.menuCatalog.run('shell.newNote');
+    await vi.waitFor(() => expect(m.overlay.value).not.toBeNull());
+    expect(asked().label).toBe('Name (in b)');
+    m.setNotebook(null);
+  });
+});
