@@ -7,6 +7,7 @@ import {
   constants as fsConstants,
   mkdir,
   open,
+  readdir,
   readFile,
   readlink,
   realpath,
@@ -15,6 +16,7 @@ import {
   unlink,
 } from 'node:fs/promises';
 import path from 'node:path';
+import type { NativeEntry } from './bridge.ts';
 
 /** Only the app's own pages may use the bridge (not a navigated-away or injected frame). */
 export function isAppUrl(url: string | undefined | null): boolean {
@@ -207,6 +209,50 @@ export async function isOpenableDocument(p: string): Promise<boolean> {
   if (!s?.isFile()) return false;
   const ext = (name: string) => path.extname(name).slice(1).toLowerCase();
   return OPENABLE.has(ext(p)) && OPENABLE.has(ext(real));
+}
+
+/**
+ * The entries of a notebook folder for the renderer. `stat` follows symlinks for the kind; a link that leaves
+ * the notebook (`allows` says no) or dangles is left out, and so is our own temp file. A folder link back to
+ * the listed folder, a folder above it, or a folder holding one is left out too: the renderer loads the tree
+ * recursively, and following it would never end.
+ */
+export async function listDir(dir: string, allows: (p: string) => Promise<boolean>): Promise<NativeEntry[]> {
+  const dirents = await readdir(dir, { withFileTypes: true });
+  const above = await realAncestors(dir);
+  const out: NativeEntry[] = [];
+  for (const d of dirents) {
+    if (TEMP_FILE.test(d.name)) continue;
+    const p = path.join(dir, d.name);
+    const s = await stat(p).catch(() => null);
+    if (!s || !(s.isFile() || s.isDirectory()) || !(await allows(p))) continue;
+    if (s.isDirectory() && d.isSymbolicLink() && (await closesLoop(p, above))) continue;
+    out.push({
+      path: p,
+      name: d.name,
+      kind: s.isDirectory() ? 'dir' : 'file',
+      size: s.isDirectory() ? 0 : s.size,
+      modified: s.mtimeMs,
+      created: s.birthtimeMs,
+    });
+  }
+  return out;
+}
+
+/** The real paths of `dir` and every folder above it. */
+async function realAncestors(dir: string): Promise<string[]> {
+  const out: string[] = [];
+  for (let p = dir; ; p = path.dirname(p)) {
+    const real = await realpath(p).catch(() => null);
+    if (real !== null) out.push(real);
+    if (path.dirname(p) === p) return out;
+  }
+}
+
+/** Does the folder link at `p` lead to one of `above` or a folder holding it? (Dangling counts as yes.) */
+async function closesLoop(p: string, above: readonly string[]): Promise<boolean> {
+  const real = await realpath(p).catch(() => null);
+  return real === null || above.some((a) => inside(real, a));
 }
 
 /** A file's bytes and the mtime of exactly those bytes (one handle, so no write can come between). */

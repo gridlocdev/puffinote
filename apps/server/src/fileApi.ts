@@ -134,6 +134,7 @@ export class FileApi {
     } catch (e) {
       throw fsError(e);
     }
+    const above = await realAncestors(dir);
     const entries: Entry[] = [];
     for (const d of dirents) {
       if (TEMP.test(d.name)) continue;
@@ -143,6 +144,7 @@ export class FileApi {
         .then(() => stat(full))
         .catch(() => null);
       if (!s || (!s.isDirectory() && !s.isFile())) continue;
+      if (s.isDirectory() && d.isSymbolicLink() && (await closesLoop(full, above))) continue;
       entries.push({
         name: d.name,
         path: path.relative(root.dir, full).split(path.sep).join('/'),
@@ -385,6 +387,30 @@ async function queueKey(full: string): Promise<string> {
     tail.unshift(path.basename(probe));
     probe = parent;
   }
+}
+
+/**
+ * The real paths of `dir` and every folder above it. A folder link to any of them, or to a folder holding
+ * one, leads back up the path being listed, so following it never ends (the client loads the tree
+ * recursively): `list` leaves such a link out, like the CLI's walk does.
+ */
+async function realAncestors(dir: string): Promise<string[]> {
+  const out: string[] = [];
+  for (let p = dir; ; p = path.dirname(p)) {
+    const real = await realpath(p).catch(() => null);
+    if (real !== null) out.push(real);
+    if (path.dirname(p) === p) return out;
+  }
+}
+
+/** Does the folder link at `full` lead to one of `above` or a folder holding it? (Dangling counts as yes.) */
+async function closesLoop(full: string, above: readonly string[]): Promise<boolean> {
+  const real = await realpath(full).catch(() => null);
+  if (real === null) return true;
+  return above.some((a) => {
+    const rel = path.relative(real, a);
+    return rel === '' || (!rel.startsWith('..') && !path.isAbsolute(rel));
+  });
 }
 
 /**

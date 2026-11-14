@@ -20,6 +20,7 @@ import {
   folderArgs,
   isAppUrl,
   isOpenableDocument,
+  listDir,
   overwriteInPlace,
   readWithMtime,
   watchTree,
@@ -189,6 +190,31 @@ describe('FolderGrants', () => {
     const again = new FolderGrants(file);
     await again.load();
     expect(again.isRoot(path.join(dir, 'nb'))).toBe(true);
+  });
+});
+
+describe('listDir', () => {
+  it('lists files and folders, leaving out temp files and links that loop or leave', async () => {
+    const nb = path.join(dir, 'list-nb');
+    await mkdir(path.join(nb, 'Inner'), { recursive: true });
+    await writeFile(path.join(nb, 'Inner', 'n.md'), 'n');
+    await writeFile(path.join(nb, 'Inner', '.n.md.0123456789abcdef.tmp'), 'x');
+    await symlink('..', path.join(nb, 'Inner', 'up'));
+    await symlink('.', path.join(nb, 'Inner', 'self'));
+    await symlink(os.tmpdir(), path.join(nb, 'Inner', 'out'));
+    await symlink('Inner', path.join(nb, 'down'));
+    const grants = new FolderGrants(null);
+    grants.grant(nb);
+    const allows = (p: string) => grants.allows(p);
+    const names = async (d: string) => (await listDir(d, allows)).map((e) => e.name).sort();
+    expect(await names(path.join(nb, 'Inner'))).toEqual(['n.md']);
+    expect(await names(nb)).toEqual(['Inner', 'down']);
+    await mkdir(path.join(nb, 'A'));
+    await mkdir(path.join(nb, 'B'));
+    await symlink('../B', path.join(nb, 'A', 'toB'));
+    await symlink('../A', path.join(nb, 'B', 'toA'));
+    expect(await names(path.join(nb, 'A'))).toEqual(['toB']);
+    expect(await names(path.join(nb, 'A', 'toB'))).toEqual([]);
   });
 });
 

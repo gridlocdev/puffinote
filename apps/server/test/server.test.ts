@@ -116,6 +116,26 @@ describe('the file API', () => {
     expect(entries[1]).toMatchObject({ path: 'Notes/a.md', kind: 'file' });
   });
 
+  it('leaves out a folder link back to the folder or one above it', async () => {
+    await mkdir(path.join(dir, 'Loop', 'Inner'), { recursive: true });
+    await writeFile(path.join(dir, 'Loop', 'Inner', 'n.md'), 'n');
+    await symlink('..', path.join(dir, 'Loop', 'Inner', 'up'));
+    await symlink('.', path.join(dir, 'Loop', 'Inner', 'self'));
+    await symlink('../..', path.join(dir, 'Loop', 'Inner', 'top'));
+    await symlink('Inner', path.join(dir, 'Loop', 'down'));
+    const api = new FileApi(parseRoots(`My Notes=${dir}`, '/'));
+    const names = async (rel: string) => (await api.list('my-notes', rel)).map((e) => e.name);
+    expect(await names('Loop/Inner')).toEqual(['n.md']);
+    expect(await names('Loop')).toEqual(['down', 'Inner']);
+    // Two folders linking to each other: each shows the other once, then the loop is cut.
+    await mkdir(path.join(dir, 'Loop', 'A'));
+    await mkdir(path.join(dir, 'Loop', 'B'));
+    await symlink('../B', path.join(dir, 'Loop', 'A', 'toB'));
+    await symlink('../A', path.join(dir, 'Loop', 'B', 'toA'));
+    expect(await names('Loop/A')).toEqual(['toB']);
+    expect(await names('Loop/A/toB')).toEqual([]);
+  });
+
   it('refuses paths that leave the root', async () => {
     // `..` is clamped to the root, so it names a file that isn't there.
     const up = await fetch(`${base}/file?${q({ path: `../${path.basename(outside)}/secret.md` })}`, {

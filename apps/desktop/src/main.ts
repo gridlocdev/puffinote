@@ -11,7 +11,7 @@ import {
   shell,
 } from 'electron';
 import type { MenuItemConstructorOptions } from 'electron';
-import { mkdir, readdir, realpath, rename, stat } from 'node:fs/promises';
+import { mkdir, realpath, rename, stat } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import {
@@ -20,7 +20,6 @@ import {
   CONFLICT_EXISTS,
   FILE_SCHEME,
   NOT_FOUND,
-  type NativeEntry,
   type NativeMenuItem,
 } from './bridge.ts';
 import {
@@ -28,8 +27,8 @@ import {
   folderArgs,
   isAppUrl,
   isOpenableDocument,
+  listDir,
   readWithMtime,
-  TEMP_FILE,
   watchTree,
   withFileLock,
   withFileLocks,
@@ -267,27 +266,6 @@ async function allowFolder(win: BrowserWindow | null, p: unknown): Promise<void>
   grants.grant(p);
 }
 
-async function listDir(dir: string): Promise<NativeEntry[]> {
-  const names = await readdir(dir).catch((e: unknown) => notFound(e, dir));
-  const out: NativeEntry[] = [];
-  for (const name of names) {
-    if (TEMP_FILE.test(name)) continue;
-    const p = path.join(dir, name);
-    // stat follows symlinks; a link that leaves the notebook (or dangles) is left out.
-    const s = await stat(p).catch(() => null);
-    if (!s || !(s.isFile() || s.isDirectory()) || !(await grants.allows(p))) continue;
-    out.push({
-      path: p,
-      name,
-      kind: s.isDirectory() ? 'dir' : 'file',
-      size: s.isDirectory() ? 0 : s.size,
-      modified: s.mtimeMs,
-      created: s.birthtimeMs,
-    });
-  }
-  return out;
-}
-
 /** Atomic save, one per file at a time. Refuses if the file changed since it was read, or exists on create. */
 function writeNative(
   p: string,
@@ -356,7 +334,8 @@ function registerIpc(): void {
     if (!trusted(e)) forbidden();
     // Listing a notebook's own folder is how one opens: a folder not granted yet gets asked about.
     await allowFolder(fromEvent(e), dir);
-    return listDir(path.resolve(dir as string));
+    const folder = path.resolve(dir as string);
+    return listDir(folder, (p) => grants.allows(p)).catch((err: unknown) => notFound(err, folder));
   });
   ipcMain.handle(Channels.read, async (e, p: unknown) => {
     const file = await guard(e, p);
