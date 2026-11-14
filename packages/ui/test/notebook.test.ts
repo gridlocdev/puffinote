@@ -303,6 +303,27 @@ describe('Notebook settings written by someone else too', () => {
     expect(nb.overrides.value).toEqual({ accent: 'purple', layout: 'library' });
   });
 
+  it('a dialog opened before a refresh writes only what it changed, keeping what the refresh brought', async () => {
+    const store = new MemoryStore('N', {});
+    const nb = await Notebook.open(store, { prefs: memoryPrefs() });
+    const atOpen = nb.overrides.value; // the Settings dialog opens
+    store.touch('.puffinote/settings.json', '{"accent":"teal"}'); // git pull
+    await nb.refresh();
+    await nb.setOverrides({ ...atOpen, layout: 'library' }, atOpen); // Done
+    expect(await read(store)).toEqual({ accent: 'teal', layout: 'library' });
+    expect(nb.overrides.value).toEqual({ accent: 'teal', layout: 'library' });
+  });
+
+  it('a dialog writes only the preferences it changed, keeping another window’s', async () => {
+    const prefs = memoryPrefs({ indent: 'tab' });
+    const nb = await Notebook.open(new MemoryStore('N', {}), { prefs });
+    const atOpen = nb.userPrefs.value;
+    prefs.save({ ...prefs.load(), accent: 'purple' }); // another window
+    nb.setPreferences({ ...atOpen, autoSave: false }, atOpen);
+    expect(prefs.load()).toEqual({ indent: 'tab', accent: 'purple', autoSave: false });
+    expect(nb.userPrefs.value).toEqual({ indent: 'tab', accent: 'purple', autoSave: false });
+  });
+
   it('takes the file’s changes on refresh', async () => {
     const store = new MemoryStore('N', {});
     const nb = await Notebook.open(store, { prefs: memoryPrefs() });

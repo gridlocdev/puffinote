@@ -1,11 +1,13 @@
 import { useState } from 'preact/hooks';
 import type { Notebook } from '../notebook/notebook.ts';
 import {
+  changedSettings,
   defaultSettings,
   settingFields,
   type PartialSettings,
   type PrefsStorage,
   type SettingField,
+  withChanges,
 } from '../notebook/settings.ts';
 import { Dialog } from './Dialog.tsx';
 
@@ -23,13 +25,19 @@ export function SettingsDialog(props: {
 }) {
   const { nb } = props;
   const [scope, setScope] = useState<Scope>('user');
-  const [user, setUser] = useState<PartialSettings>(nb ? { ...nb.userPrefs.peek() } : props.prefs.load());
-  const [book, setBook] = useState<PartialSettings>(nb ? { ...nb.overrides.peek() } : {});
+  // What the dialog showed when it opened. Done writes only what differs from it, so a setting that changed
+  // meanwhile (a refresh after git pull, another window) is kept (PRD §9).
+  const [atOpen] = useState(() => ({
+    user: nb ? nb.userPrefs.peek() : props.prefs.load(),
+    book: nb ? nb.overrides.peek() : {},
+  }));
+  const [user, setUser] = useState<PartialSettings>({ ...atOpen.user });
+  const [book, setBook] = useState<PartialSettings>({ ...atOpen.book });
   const apply = () => {
     if (nb) {
-      nb.setPreferences(user);
-      void nb.setOverrides(book);
-    } else props.prefs.save(user);
+      nb.setPreferences(user, atOpen.user);
+      void nb.setOverrides(book, atOpen.book);
+    } else props.prefs.save(withChanges(props.prefs.load(), user, changedSettings(atOpen.user, user)));
     props.onClose();
   };
   const layer = scope === 'user' ? user : book;

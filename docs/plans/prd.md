@@ -207,7 +207,7 @@ Settings resolve in layers, lowest first: the defaults, the user's preferences (
 | Picture folder | a folder name | attachments |
 | When a picture is no longer used | Offer to delete it, Keep it | Offer to delete it |
 
-A setting Puffinote doesn't recognise, or a value it can't use, is ignored when it reads the settings but kept when it saves them. A notebook opened in an older version keeps the settings a newer one wrote. `.puffinote/settings.json` may change under Puffinote (a sync, git, another window): a refresh takes its changes, and a change in the dialog is written over what the file holds by then, touching only the settings that changed, and is tried again if the file changes between the read and the write.
+A setting Puffinote doesn't recognise, or a value it can't use, is ignored when it reads the settings but kept when it saves them. A notebook opened in an older version keeps the settings a newer one wrote. `.puffinote/settings.json` may change under Puffinote (a sync, git, another window): a refresh takes its changes, and a change in the dialog is written over what the file holds by then, touching only the settings changed in the dialog, and is tried again if the file changes between the read and the write. A setting that changed while the dialog was open (a refresh, another window) is kept unless the dialog changed it too; Preferences work the same way.
 
 ## 10. The editor
 

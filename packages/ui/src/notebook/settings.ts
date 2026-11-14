@@ -198,6 +198,29 @@ export function resolveSettings(...layers: readonly unknown[]): Settings {
   return out as unknown as Settings;
 }
 
+/** The settings whose values differ between `base` and `next`. */
+export function changedSettings(base: PartialSettings, next: PartialSettings): string[] {
+  const a = base as Record<string, unknown>;
+  const b = next as Record<string, unknown>;
+  return [...new Set([...Object.keys(a), ...Object.keys(b)])].filter(
+    (k) => JSON.stringify(a[k]) !== JSON.stringify(b[k]),
+  );
+}
+
+/**
+ * `current` with `keys` set as `next` has them, and removed where `next` has none: what a dialog opened on one
+ * version of the settings changed, applied over what they hold by now (PRD §9).
+ */
+export function withChanges<T extends object>(current: T, next: PartialSettings, keys: readonly string[]): T {
+  const out = { ...current } as Record<string, unknown>;
+  for (const k of keys) {
+    const v = (next as Record<string, unknown>)[k];
+    if (v === undefined) delete out[k];
+    else out[k] = v;
+  }
+  return out as T;
+}
+
 /** The valid keys of `raw`, as a partial: unknown keys and wrong types are dropped. */
 export function sanitize(raw: unknown): PartialSettings {
   if (!raw || typeof raw !== 'object') return {};

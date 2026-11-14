@@ -48,7 +48,9 @@ import {
 import {
   indentUnit,
   resolveSettings,
+  changedSettings,
   sanitize,
+  withChanges,
   unrecognized,
   type PartialSettings,
   type PrefsStorage,
@@ -1841,8 +1843,14 @@ export class Notebook {
   // ----- Settings -----
 
   /** Change the user's preferences (every notebook). */
-  setPreferences(prefs: PartialSettings): void {
-    const clean = sanitize(prefs);
+  /**
+   * Change the user's preferences. With `base` (what the Settings dialog showed when it opened), only the
+   * preferences that differ from it are changed, over what is saved by now: another window's changes stay.
+   */
+  setPreferences(prefs: PartialSettings, base?: PartialSettings): void {
+    const clean = sanitize(
+      base ? withChanges(this.options.prefs.load(), prefs, changedSettings(base, sanitize(prefs))) : prefs,
+    );
     this.options.prefs.save(clean);
     this.userPrefs.value = clean;
   }
@@ -1851,28 +1859,25 @@ export class Notebook {
    * Change this notebook's overrides, saved in `.puffinote/settings.json`. Written only when they changed.
    * Another program (a sync, git, another window) may have changed the file since it was read, so the
    * settings that changed here are applied over what the file holds now, and written against its version;
-   * the rest of the file, settings this version doesn't know included, stays as it is (PRD §9).
+   * the rest of the file, settings this version doesn't know included, stays as it is (PRD §9). `base` is what
+   * the overrides were when the change began (the Settings dialog opening); only settings that differ from it
+   * count as changed, so one a refresh brought in meanwhile isn't undone.
    */
-  async setOverrides(overrides: PartialSettings): Promise<void> {
-    const clean = sanitize(overrides);
-    const before = this.overrides.peek() as Record<string, unknown>;
-    const after = clean as Record<string, unknown>;
-    const changed = [...new Set([...Object.keys(before), ...Object.keys(after)])].filter(
-      (k) => JSON.stringify(before[k]) !== JSON.stringify(after[k]),
-    );
+  async setOverrides(
+    overrides: PartialSettings,
+    base: PartialSettings = this.overrides.peek(),
+  ): Promise<void> {
+    const after = sanitize(overrides);
+    const changed = changedSettings(base, after);
     if (changed.length === 0) return;
     // The tree follows Show Hidden Files by itself (see `load`).
-    this.overrides.value = clean;
+    this.overrides.value = sanitize(withChanges(this.overrides.peek(), after, changed));
     this.settingsWrites++;
     try {
       await this.ensureStateDir();
       for (let attempt = 0; ; attempt++) {
         const disk = await this.readOverrides();
-        const merged: Record<string, unknown> = { ...disk.known };
-        for (const k of changed) {
-          if (after[k] === undefined) delete merged[k];
-          else merged[k] = after[k];
-        }
+        const merged = withChanges(disk.known, after, changed);
         try {
           const bytes = encodeJson({ ...disk.rest, ...merged });
           if (disk.version === undefined) await this.store.write(overridesPath, bytes, { create: true });
