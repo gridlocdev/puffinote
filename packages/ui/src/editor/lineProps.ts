@@ -6,7 +6,7 @@ export interface LineViewProps {
   /** The line number. Not compared: the surface renumbers shifted rows' `data-line` itself. */
   readonly index: number;
   readonly text: string;
-  readonly start: number;
+  /** Line-relative (`MarkdownModel.lineTokensRelative`): a line an edit moved keeps the same array. */
   readonly tokens: readonly Token[];
   readonly reveal: LineReveal;
   readonly mode: ViewMode;
@@ -17,8 +17,8 @@ export interface LineViewProps {
 }
 
 /**
- * True when two props draw the same line. Tokens carry absolute offsets and the surface hands each render
- * fresh arrays, so they compare line-relative; the line's start and number don't matter. That is what lets a
+ * True when two props draw the same line. Tokens are line-relative, so the line's start and number don't
+ * matter, and a line the edit didn't re-tokenize hands over the very same array. That is what lets a
  * keystroke near the top of a long note skip every line below it.
  */
 export function lineViewPropsEqual(a: LineViewProps, b: LineViewProps): boolean {
@@ -26,9 +26,7 @@ export function lineViewPropsEqual(a: LineViewProps, b: LineViewProps): boolean 
     return false;
   }
   if (!revealEqual(a.reveal, b.reveal)) return false;
-  if ((a.tokens !== b.tokens || a.start !== b.start) && !tokensEqual(a.tokens, a.start, b.tokens, b.start)) {
-    return false;
-  }
+  if (a.tokens !== b.tokens && !tokensEqual(a.tokens, b.tokens)) return false;
   return a.resolveImage === b.resolveImage || !b.tokens.some((t) => t.type === 'imageUrl');
 }
 
@@ -45,13 +43,13 @@ function revealEqual(a: LineReveal, b: LineReveal): boolean {
   return true;
 }
 
-function tokensEqual(a: readonly Token[], aStart: number, b: readonly Token[], bStart: number): boolean {
+function tokensEqual(a: readonly Token[], b: readonly Token[]): boolean {
   if (a.length !== b.length) return false;
   for (let i = 0; i < a.length; i++) {
     const x = a[i]!;
     const y = b[i]!;
     if (
-      x.start - aStart !== y.start - bStart ||
+      x.start !== y.start ||
       x.length !== y.length ||
       x.type !== y.type ||
       x.role !== y.role ||

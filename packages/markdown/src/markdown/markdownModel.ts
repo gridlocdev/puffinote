@@ -17,17 +17,24 @@ export interface MarkdownModelUpdate {
   readonly dirtyFromLine: number;
 }
 
-/** One line's tokens, as the run that made them left them. */
+/**
+ * One line's tokens, as the run that made them left them. Offsets count from the line's start, so a line that
+ * moves (an edit above it) is carried into the next model as is, in O(1).
+ */
 interface LineEntry {
   readonly tokens: readonly Token[];
-  /** The line's start offset when it was tokenized. Tokens of a line that has since moved shift lazily. */
-  readonly base: number;
   /**
    * Whether the run reached this line at the top of its loop, so its tokens depend only on its entering
    * state and the text from here down. False for the lines a table or setext pair consumed with the line
    * that opened it.
    */
   readonly top: boolean;
+  /**
+   * The tokens at absolute offsets for a line starting at `absoluteBase`, made on first use. Models share
+   * entries, so a line read at another start simply makes them again.
+   */
+  absolute?: readonly Token[];
+  absoluteBase?: number;
 }
 
 /** Where an update may stop: past `afterLine`, new line `i` is old line `i - lineDelta`, text unchanged. */
@@ -47,15 +54,14 @@ interface Convergence {
 export class MarkdownModel {
   private readonly doc: TextDocument;
   private readonly entering: readonly BlockState[];
-  /** Entries are replaced in place when a moved line's tokens are first shifted; the array is this model's own. */
-  private readonly lines: LineEntry[];
+  private readonly lines: readonly LineEntry[];
   /** Whether line 0 may open front matter, which depends on a closing fence anywhere below it. */
   private readonly allowFrontMatter: boolean;
 
   private constructor(
     doc: TextDocument,
     entering: readonly BlockState[],
-    lines: LineEntry[],
+    lines: readonly LineEntry[],
     allowFrontMatter: boolean,
   ) {
     this.doc = doc;
@@ -74,16 +80,24 @@ export class MarkdownModel {
     return this.entering[line]!;
   }
 
-  /** The tokens of `line`, in source order. */
+  /** The tokens of `line`, in source order, at document offsets. */
   lineTokens(line: number): readonly Token[] {
     const entry = this.lines[line]!;
     const start = this.doc.getLineStart(line);
-    if (entry.base === start) return entry.tokens;
-    // A line carried over from the previous run below an edit: shift its offsets once, on first use.
-    const delta = start - entry.base;
-    const tokens = entry.tokens.map((t) => ({ ...t, start: t.start + delta }));
-    this.lines[line] = { tokens, base: start, top: entry.top };
+    if (start === 0) return entry.tokens;
+    if (entry.absoluteBase === start) return entry.absolute!;
+    const tokens = entry.tokens.map((t) => ({ ...t, start: t.start + start }));
+    entry.absolute = tokens;
+    entry.absoluteBase = start;
     return tokens;
+  }
+
+  /**
+   * The tokens of `line` with offsets from the line's start. A line an update didn't re-tokenize keeps the
+   * same array, wherever it moved, so reading these costs nothing per line (PRD §13).
+   */
+  lineTokensRelative(line: number): readonly Token[] {
+    return this.lines[line]!.tokens;
   }
 
   /** All tokens in document order. */
@@ -155,7 +169,7 @@ export class MarkdownModel {
     let lines = this.lines.slice(0, first);
     const stop = tokenizeRange(newDocument, first, startState, allow, entering, lines, converge);
     if (stop < n) {
-      // Converged: the old run's tail, from the matching line, is this run's. Its tokens shift lazily.
+      // Converged: the old run's tail, from the matching line, is this run's, with line-relative tokens.
       const from = stop - (n - oldN);
       entering = entering.concat(this.entering.slice(from));
       lines = lines.concat(this.lines.slice(from));
@@ -233,9 +247,8 @@ function tokenizeRange(
     }
 
     const lineTokens: Token[] = [];
-    const start = doc.getLineStart(i);
-    state = tokenizeLine(doc.getLineText(i), start, i, state, lineTokens, allowFrontMatter);
-    tokens[i] = { tokens: lineTokens, base: start, top: true };
+    state = tokenizeLine(doc.getLineText(i), 0, i, state, lineTokens, allowFrontMatter);
+    tokens[i] = { tokens: lineTokens, top: true };
     i++;
   }
   return toLine;
@@ -252,18 +265,15 @@ function tokenizeSetextHeading(
   entering: BlockState[],
   tokens: LineEntry[],
 ): number {
-  const start = doc.getLineStart(line);
-  const heading: Token[] = [token(start, 0, 'headingMarker', 'marker', String(level))];
-  tokenizeLineInline(doc.getLineText(line), start, heading);
+  const heading: Token[] = [token(0, 0, 'headingMarker', 'marker', String(level))];
+  tokenizeLineInline(doc.getLineText(line), 0, heading);
   // The text line keeps the state it was entered with (set by the caller): an update may resume here.
-  tokens[line] = { tokens: heading, base: start, top: true };
+  tokens[line] = { tokens: heading, top: true };
 
   const underline = line + 1;
-  const underlineStart = doc.getLineStart(underline);
   entering[underline] = BlockStates.normal;
   tokens[underline] = {
-    tokens: [token(underlineStart, contentLength(doc.getLineText(underline)), 'setextUnderline', 'marker')],
-    base: underlineStart,
+    tokens: [token(0, contentLength(doc.getLineText(underline)), 'setextUnderline', 'marker')],
     top: false,
   };
   return underline + 1;
@@ -280,11 +290,7 @@ function tokenizeTable(
   // The header row keeps the state it was entered with (set by the caller): an update may resume there.
   const row = (i: number, isDelimiter: boolean): void => {
     if (i !== start) entering[i] = BlockStates.normal;
-    tokens[i] = {
-      tokens: tokenizeTableRow(doc, i, isDelimiter),
-      base: doc.getLineStart(i),
-      top: i === start,
-    };
+    tokens[i] = { tokens: tokenizeTableRow(doc.getLineText(i), isDelimiter), top: i === start };
   };
   let i = start;
   row(i++, false);
@@ -293,14 +299,13 @@ function tokenizeTable(
   return i;
 }
 
-function tokenizeTableRow(doc: TextDocument, line: number, isDelimiter: boolean): Token[] {
-  const text = doc.getLineText(line);
-  const start = doc.getLineStart(line);
+/** A table row's tokens, with offsets from the line's start. */
+function tokenizeTableRow(text: string, isDelimiter: boolean): Token[] {
   const len = contentLength(text);
   const output: Token[] = [];
 
   if (isDelimiter) {
-    if (len > 0) output.push(token(start, len, 'tableDelimiter', 'marker'));
+    if (len > 0) output.push(token(0, len, 'tableDelimiter', 'marker'));
     return output;
   }
 
@@ -308,9 +313,9 @@ function tokenizeTableRow(doc: TextDocument, line: number, isDelimiter: boolean)
   for (let k = 0; k <= len; k++) {
     const isPipe = k < len && isUnescapedPipe(text, k);
     if (isPipe || k === len) {
-      if (k > cellStart) tokenizeInline(text, start, cellStart, k, output);
+      if (k > cellStart) tokenizeInline(text, 0, cellStart, k, output);
       if (isPipe) {
-        output.push(token(start + k, 1, 'marker', 'marker'));
+        output.push(token(k, 1, 'marker', 'marker'));
         cellStart = k + 1;
       }
     }

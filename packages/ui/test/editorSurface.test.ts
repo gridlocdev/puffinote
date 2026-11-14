@@ -22,8 +22,7 @@ function propsOf(state: EditorState, i: number): LineViewProps {
   return {
     index: i,
     text: doc.getLineText(i),
-    start: doc.getLineStart(i),
-    tokens: [...state.model.lineTokens(i)],
+    tokens: state.model.lineTokensRelative(i),
     reveal: idle(),
     mode: 'live',
     block: null,
@@ -56,8 +55,7 @@ describe('line memo (finding 1)', () => {
   const base: LineViewProps = {
     index: 3,
     text: 'a **b**',
-    start: 10,
-    tokens: [token(12, 2, 'marker', 'marker', null, 1), token(14, 1, 'strong', 'content', null, 1)],
+    tokens: [token(2, 2, 'marker', 'marker', null, 1), token(4, 1, 'strong', 'content', null, 1)],
     reveal: idle(),
     mode: 'live',
     block: null,
@@ -68,8 +66,7 @@ describe('line memo (finding 1)', () => {
     const shifted: LineViewProps = {
       ...base,
       index: 4,
-      start: 25,
-      tokens: base.tokens.map((t) => ({ ...t, start: t.start + 15 })),
+      tokens: base.tokens.map((t) => ({ ...t })),
       reveal: idle(),
     };
     expect(lineViewPropsEqual(base, shifted)).toBe(true);
@@ -77,7 +74,7 @@ describe('line memo (finding 1)', () => {
 
   it('redraws when the text, a token, the reveal or the mode changes', () => {
     expect(lineViewPropsEqual(base, { ...base, text: 'a **c**' })).toBe(false);
-    const moved: Token[] = [base.tokens[0]!, { ...base.tokens[1]!, start: 15 }];
+    const moved: Token[] = [base.tokens[0]!, { ...base.tokens[1]!, start: 5 }];
     expect(lineViewPropsEqual(base, { ...base, tokens: moved })).toBe(false);
     expect(lineViewPropsEqual(base, { ...base, reveal: { ...idle(), nodes: new Set([1]) } })).toBe(false);
     expect(lineViewPropsEqual(base, { ...base, reveal: { ...idle(), lineActive: true } })).toBe(false);
@@ -87,7 +84,7 @@ describe('line memo (finding 1)', () => {
 
   it('only cares about the image resolver on a line with an image', () => {
     expect(lineViewPropsEqual(base, { ...base, resolveImage: (u) => `x${u}` })).toBe(true);
-    const img = { ...base, tokens: [token(12, 3, 'imageUrl', 'content', null, 1)] };
+    const img = { ...base, tokens: [token(2, 3, 'imageUrl', 'content', null, 1)] };
     expect(lineViewPropsEqual(img, { ...img, resolveImage: (u) => `x${u}` })).toBe(false);
   });
 
@@ -106,6 +103,19 @@ describe('line memo (finding 1)', () => {
     state.apply(enterEdit(state.document, state.selection.value, 'live', 'text'));
     // the split line and the inserted lines redraw; the other 999 lines keep their keys and props
     expect(memoHits(before, render(state))).toBe(999);
+  });
+
+  it('hands the lines below an edit the same token arrays, so their memo compares nothing', () => {
+    const state = new EditorState(longNote());
+    state.select(3);
+    const before = render(state);
+    state.insert('x\ny');
+    const after = render(state);
+    let same = 0;
+    for (let i = 2; i < state.document.lineCount; i++) {
+      if (before.get(state.lineKey(i))?.tokens === after.get(state.lineKey(i))!.tokens) same++;
+    }
+    expect(same).toBe(state.document.lineCount - 2);
   });
 
   it('moves line keys with their lines', () => {

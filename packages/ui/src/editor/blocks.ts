@@ -39,10 +39,10 @@ function scanBlocks(doc: TextDocument, model: MarkdownModel, from: number, block
   const n = Math.min(model.lineCount, doc.lineCount);
   let i = from;
   while (i < n) {
-    const first = model.lineTokens(i)[0];
+    const first = model.lineTokensRelative(i)[0];
     if (first?.type === 'frontMatterFence' && i === 0) {
       let end = 1;
-      while (end < n && model.lineTokens(end)[0]?.type !== 'frontMatterFence') end++;
+      while (end < n && model.lineTokensRelative(end)[0]?.type !== 'frontMatterFence') end++;
       blocks.push({ kind: 'frontMatter', startLine: 0, endLine: Math.min(end, n - 1) });
       i = end + 1;
       continue;
@@ -54,7 +54,7 @@ function scanBlocks(doc: TextDocument, model: MarkdownModel, from: number, block
       i = end + 1;
       continue;
     }
-    if (i + 1 < n && model.lineTokens(i + 1)[0]?.type === 'tableDelimiter') {
+    if (i + 1 < n && model.lineTokensRelative(i + 1)[0]?.type === 'tableDelimiter') {
       let end = i + 2;
       while (end < n && isTableBodyRow(doc, model, end)) end++;
       blocks.push({ kind: 'table', startLine: i, endLine: end - 1 });
@@ -67,7 +67,7 @@ function scanBlocks(doc: TextDocument, model: MarkdownModel, from: number, block
 }
 
 function isFenceLine(model: MarkdownModel, line: number): boolean {
-  return model.lineTokens(line)[0]?.type === 'codeFence';
+  return model.lineTokensRelative(line)[0]?.type === 'codeFence';
 }
 
 function isTableBodyRow(doc: TextDocument, model: MarkdownModel, line: number): boolean {

@@ -48,7 +48,7 @@ Puffinote is one TypeScript code base with three hosts and a CLI. The browser, t
 - **Tokens.** A token is `{ type, start, length, role, meta, node }`. The role is `content` or `marker`. The editor hides markers in the live preview; the engine doesn't know that. `meta` carries a heading level or a task state. `node` groups the tokens of one inline construct, so the editor can reveal it as a unit.
 - **Line tokenizer.** It classifies one line from the block state it enters with, and returns the tokens and the state it leaves. Block state covers fences, indented code, quotes, lists, tables and front matter.
 - **Inline tokenizer.** It runs within one line, with delimiter runs for emphasis. It is tolerant: an unclosed marker is literal text.
-- **`MarkdownModel`** holds the tokens and the entering state of every line. After an edit it re-tokenizes from the first changed line until the state converges with the old run.
+- **`MarkdownModel`** holds the tokens and the entering state of every line. After an edit it re-tokenizes from the first changed line until the state converges with the old run. It keeps each line's tokens with offsets from the line's start, so the lines below an edit carry over untouched: `lineTokensRelative` hands out those arrays (the editor draws from them), and `lineTokens` gives document offsets.
 - **Editing helpers** are pure functions from a document and selection to an edit: line prefixes (lists, quotes, headings, tasks) and ordered-list renumbering.
 - **`renderHtmlDocument` / `renderHtmlBody`** walk the same tokens to self-contained HTML. Task boxes are inline SVG that matches the editor's.
 - **`outlineOf`** lists the headings for the Outline panel and the CLI.

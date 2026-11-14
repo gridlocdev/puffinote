@@ -225,7 +225,7 @@ export function MarkdownEditor(props: MarkdownEditorProps) {
     }
     const start = doc.getLineStart(i);
     const text = lineTextOf(cache, i);
-    const tokens = model.lineTokens(i);
+    const tokens = model.lineTokensRelative(i);
     const key = state.lineKey(i);
     let reveal = lineReveal(tokens, start, start + text.length, sel, range, shownPicture);
     if (reveal.lineActive) {
@@ -238,7 +238,6 @@ export function MarkdownEditor(props: MarkdownEditorProps) {
         key={key}
         index={i}
         text={text}
-        start={start}
         tokens={tokens}
         reveal={reveal}
         mode={mode}
@@ -550,10 +549,9 @@ export function MarkdownEditor(props: MarkdownEditorProps) {
   function snap(offset: number, dir: 1 | -1): number {
     const p = doc.getPosition(offset);
     const start = doc.getLineStart(p.line);
-    const tokens = model.lineTokens(p.line);
+    const tokens = model.lineTokensRelative(p.line);
     const r = renderLine(
       doc.getLineText(p.line),
-      start,
       tokens,
       snapReveal(tokens, start, doc.getLineEnd(p.line), offset),
       mode,

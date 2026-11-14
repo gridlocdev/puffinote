@@ -28,7 +28,8 @@ export interface LineReveal {
 const none: ReadonlySet<number> = new Set();
 
 /**
- * The reveal state of a line spanning `[lineStart, lineEnd]`. Touching counts, so a caret just after `**b**`
+ * The reveal state of a line spanning `[lineStart, lineEnd]`, from its line-relative tokens
+ * (`MarkdownModel.lineTokensRelative`). Touching counts, so a caret just after `**b**`
  * reveals its markers, and a caret at the end of a line keeps that line's prefix visible. A picture is the
  * exception: it stays drawn wherever the selection is, and shows its link text only when it is the picture
  * at `shownPicture` (View Link Text, PRD §10.6) and the selection still touches it.
@@ -55,10 +56,10 @@ export function lineReveal(
     if (t.node === 0) continue;
     const e = extents.get(t.node);
     if (e) {
-      e.start = Math.min(e.start, t.start);
-      e.end = Math.max(e.end, t.start + t.length);
+      e.start = Math.min(e.start, lineStart + t.start);
+      e.end = Math.max(e.end, lineStart + t.start + t.length);
     } else {
-      extents.set(t.node, { start: t.start, end: t.start + t.length });
+      extents.set(t.node, { start: lineStart + t.start, end: lineStart + t.start + t.length });
     }
   }
   const pictures = new Set<number>();
@@ -108,7 +109,8 @@ function listPrefixTouched(
   const list = tokens.find((t) => t.type === 'listMarker');
   if (!task && !list) return null;
   // The tokens run on through the space after the marker; a caret there, before the item's text, doesn't count.
-  const end = task ? task.start + Math.min(3, task.length) : list!.start + Math.max(1, list!.length - 1);
+  const end =
+    lineStart + (task ? task.start + Math.min(3, task.length) : list!.start + Math.max(1, list!.length - 1));
   if (isCollapsed(selection)) return selectionIntersects(selection, lineStart, end - lineStart);
   const inside = (o: number) => o > lineStart && o <= end;
   return inside(selection.anchor) || inside(selection.caret);

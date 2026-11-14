@@ -7,7 +7,7 @@ import type { ViewMode } from './reveal.ts';
 
 /** One source line. Memoized by `lineViewPropsEqual`: a line redraws only when what it draws changes. */
 export const LineView = memo(function LineView(p: LineViewProps) {
-  const r = renderLine(p.text, p.start, p.tokens, p.reveal, p.mode, p.block, p.listDepth);
+  const r = renderLine(p.text, p.tokens, p.reveal, p.mode, p.block, p.listDepth);
   const view = (s: Segment) => <SegmentView key={s.from} s={s} text={p.text} resolveImage={p.resolveImage} />;
   const hang = hangingPrefix(p.text, r.segments, p.mode);
   return (

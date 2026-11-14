@@ -278,4 +278,24 @@ describe('incremental tokenizing', () => {
     expect(performance.now() - typing).toBeLessThan(2 * oneBuild + 20);
     expect(model.lineTokens(19999)).toEqual(MarkdownModel.build(doc).lineTokens(19999));
   });
+
+  it('keeps the lines below an edit as they were, without rebuilding their tokens', () => {
+    const lines = Array.from({ length: 200 }, (_, i) => (i % 3 === 0 ? `## H${i}` : `- **b** ${i}`));
+    const doc1 = TextDocument.fromString(lines.join('\n'));
+    const model1 = MarkdownModel.build(doc1);
+    const offset = doc1.getLineStart(2) + 4;
+    const doc2 = doc1.replace(offset, 0, 'typed\n');
+    const model2 = model1.update(doc2, 2).model;
+    // Below the edit, every line is old line `i - 1`, and its line-relative tokens are the same array.
+    for (let i = 4; i < doc2.lineCount; i++) {
+      expect(model2.lineTokensRelative(i)).toBe(model1.lineTokensRelative(i - 1));
+    }
+    // A line's tokens are its line-relative tokens moved to where the line starts now.
+    for (let i = 0; i < doc2.lineCount; i++) {
+      const start = doc2.getLineStart(i);
+      const shifted = model2.lineTokensRelative(i).map((t) => ({ ...t, start: t.start + start }));
+      expect(model2.lineTokens(i)).toEqual(shifted);
+    }
+    expect(model2.allTokens()).toEqual(MarkdownModel.build(doc2).allTokens());
+  });
 });

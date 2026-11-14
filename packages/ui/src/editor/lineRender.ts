@@ -81,10 +81,10 @@ const linePrefixTypes = new Set<TokenType>([
 /**
  * Lay out one source line as styled segments, deciding which markers conceal (PRD §10.2):
  * inline markers by their node, line-prefix markers by the caret's line, block fences by their block.
+ * `tokens` are line-relative (`MarkdownModel.lineTokensRelative`).
  */
 export function renderLine(
   lineText: string,
-  lineStart: number,
   tokens: readonly Token[],
   reveal: LineReveal,
   mode: ViewMode,
@@ -141,7 +141,7 @@ export function renderLine(
   // Nodes drawn as an image: all their tokens hide behind one picture until revealed.
   const imageNodes = new Set<number>();
   for (const t of tokens) if (t.type === 'imageUrl' && t.node !== 0) imageNodes.add(t.node);
-  const linkSpans = linkTextSpans(tokens, lineStart, lineText);
+  const linkSpans = linkTextSpans(tokens, lineText);
 
   const isConcealed = (t: Token): boolean => {
     if (!live) return false;
@@ -165,8 +165,8 @@ export function renderLine(
   };
 
   for (const t of tokens) {
-    const s = Math.max(pos, t.start - lineStart);
-    const e = Math.min(len, t.start - lineStart + t.length);
+    const s = Math.max(pos, t.start);
+    const e = Math.min(len, t.start + t.length);
     if (e <= s) continue;
 
     // A nested item's leading whitespace lays out as an indent step, not as narrow proportional spaces.
@@ -383,10 +383,10 @@ interface LinkSpan {
  * The linked runs on a line, line-relative: the text of each `[text](url)` (between the `[` and the `](`) and
  * each autolink.
  */
-function linkTextSpans(tokens: readonly Token[], lineStart: number, lineText: string): LinkSpan[] {
+function linkTextSpans(tokens: readonly Token[], lineText: string): LinkSpan[] {
   const spans: LinkSpan[] = [];
   for (const u of tokens) {
-    const uStart = u.start - lineStart;
+    const uStart = u.start;
     if (u.type === 'autolink') {
       const url = u.meta ?? lineText.slice(uStart, uStart + u.length);
       spans.push({ start: uStart, end: uStart + u.length, url });
@@ -412,7 +412,7 @@ function linkTextSpans(tokens: readonly Token[], lineStart: number, lineText: st
       if (m.start + m.length === u.start) midStart = m.start;
     }
     if (openEnd >= 0 && midStart > openEnd) {
-      spans.push({ start: openEnd - lineStart, end: midStart - lineStart, url });
+      spans.push({ start: openEnd, end: midStart, url });
     }
   }
   return spans;

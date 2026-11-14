@@ -33,9 +33,9 @@ function render(
     ? { start: doc.getLineStart(block.startLine), end: doc.getLineEnd(block.endLine) }
     : null;
   const start = doc.getLineStart(line);
-  const tokens = model.lineTokens(line);
+  const tokens = model.lineTokensRelative(line);
   const reveal = lineReveal(tokens, start, doc.getLineEnd(line), sel, range, shownPicture);
-  return renderLine(doc.getLineText(line), start, tokens, reveal, mode, block?.kind ?? null);
+  return renderLine(doc.getLineText(line), tokens, reveal, mode, block?.kind ?? null);
 }
 
 /** The text the line shows: visible runs, with decorations as `<kind>`. */
@@ -243,9 +243,9 @@ describe('nested numbered lists (PRD §10.2)', () => {
     const model = MarkdownModel.build(doc);
     const deco = (line: number, depth: number) => {
       const start = doc.getLineStart(line);
-      const tokens = model.lineTokens(line);
+      const tokens = model.lineTokensRelative(line);
       const reveal = lineReveal(tokens, start, doc.getLineEnd(line), elsewhere, null, null);
-      const r = renderLine(doc.getLineText(line), start, tokens, reveal, 'live', null, depth);
+      const r = renderLine(doc.getLineText(line), tokens, reveal, 'live', null, depth);
       return r.segments.find((s) => s.deco?.kind === 'number')?.deco?.text;
     };
     expect(deco(0, 0)).toBe('1.');
@@ -256,12 +256,11 @@ describe('nested numbered lists (PRD §10.2)', () => {
   it('draws a bullet as a disc, a circle, then a square by depth', () => {
     const doc = TextDocument.fromString('- a');
     const model = MarkdownModel.build(doc);
-    const tokens = model.lineTokens(0);
+    const tokens = model.lineTokensRelative(0);
     const reveal = lineReveal(tokens, 0, doc.getLineEnd(0), elsewhere, null, null);
     const glyph = (depth: number) =>
-      renderLine('- a', 0, tokens, reveal, 'live', null, depth).segments.find(
-        (s) => s.deco?.kind === 'bullet',
-      )?.deco?.text;
+      renderLine('- a', tokens, reveal, 'live', null, depth).segments.find((s) => s.deco?.kind === 'bullet')
+        ?.deco?.text;
     expect([0, 1, 2, 3].map(glyph)).toEqual(['•', '◦', '▪', '•']);
   });
 
@@ -277,7 +276,7 @@ describe('shared reveals', () => {
   const reveals = (md: string, sels: Selection[]) => {
     const doc = TextDocument.fromString(md);
     const model = MarkdownModel.build(doc);
-    const tokens = model.lineTokens(0);
+    const tokens = model.lineTokensRelative(0);
     return sels.map((sel) => lineReveal(tokens, 0, doc.getLineEnd(0), sel, null, null));
   };
 
