@@ -578,7 +578,13 @@ export class ShellModel {
       const hereAgain = imageTargets(text.slice(0, picture.start) + text.slice(picture.end), notePath).has(
         file,
       );
-      const others = await nb.notesShowing(file, notePath);
+      let others: string[];
+      try {
+        others = await nb.notesShowing(file, notePath);
+      } catch (e) {
+        nb.report(e);
+        return;
+      }
       if (hereAgain || others.length > 0) {
         const names = others.map((p) => p.replace(/\.[^./]+$/, ''));
         if (hereAgain) names.unshift(`${stemOf(notePath)} (this note, elsewhere)`);
@@ -806,7 +812,13 @@ export class ShellModel {
   async findUnusedPictures(): Promise<void> {
     const nb = this.notebook.peek();
     if (!nb) return;
-    const paths = await nb.unusedPictures();
+    let paths: string[];
+    try {
+      paths = await nb.unusedPictures();
+    } catch (e) {
+      nb.report(e);
+      return;
+    }
     if (paths.length === 0) nb.notify('info', 'Every picture in the notebook is used by a note.');
     else this.open({ kind: 'unusedPictures', paths });
   }

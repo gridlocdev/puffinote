@@ -179,3 +179,28 @@ describe('Notebook pictures', () => {
     expect(await nb.unusedPictures()).toEqual(['docs/c.png', 'z.jpg']);
   });
 });
+
+describe('Find Unused Pictures safety', () => {
+  it('counts links in hidden folders, whatever Show Hidden Files says', async () => {
+    const { nb } = await open({ '.drafts/one.md': '![](../a.png)', 'a.png': '', 'b.png': '' });
+    expect(await nb.unusedPictures()).toEqual(['b.png']);
+  });
+
+  it('stops with an error when a note can’t be read', async () => {
+    const store = new MemoryStore('Notes', { 'one.md': '![](a.png)', 'two.md': '', 'a.png': '' });
+    const nb = await Notebook.open(store, { prefs: memoryPrefs({ autoSave: false }) });
+    const read = store.read.bind(store);
+    store.read = (p: string) => (p === 'one.md' ? Promise.reject(new Error('offline')) : read(p));
+    await expect(nb.unusedPictures()).rejects.toThrow(/one\.md/);
+  });
+
+  it('makes no offer when a note can’t be read', async () => {
+    const store = new MemoryStore('Notes', { 'one.md': '![](a.png)', 'two.md': '![](a.png)', 'a.png': '' });
+    const nb = await Notebook.open(store, { prefs: memoryPrefs({ autoSave: false }) });
+    const read = store.read.bind(store);
+    store.read = (p: string) => (p === 'two.md' ? Promise.reject(new Error('offline')) : read(p));
+    await nb.remove('one.md');
+    await new Promise((r) => setTimeout(r, 10));
+    expect(nb.notice.value?.action).toBeUndefined();
+  });
+});

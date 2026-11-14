@@ -281,7 +281,7 @@ Exported HTML must be safe to open. Every attribute value is escaped, including 
   - **Rename Picture…:** renames the file; links to it in every note follow (see Moving keeps links working).
   - **View Link Text:** closes the preview, and selects the picture's `![](…)` and shows it as text until the caret leaves it.
   - **Delete Picture:** takes the picture out of the note (its line too, when it was alone on one), as an undoable step, and moves its file to the Trash (deletes it where the notebook has no Trash). When another note, or another spot in this note, also shows the file, it asks first and lists those notes: Keep File (the default) takes the picture out of this note only, Delete File also deletes the file, Cancel does nothing. Undo puts the picture and its file back; Redo takes them out again.
-- **Find Unused Pictures…** (command menu) lists every picture no note links to, with a thumbnail and its folder, all ticked. Move to Trash deletes the ticked ones. A picture counts as used when a note links to it with `![](…)` or `[…](…)`, outside code. Unsaved text in open tabs counts.
+- **Find Unused Pictures…** (command menu) lists every picture no note links to, with a thumbnail and its folder, all ticked. Move to Trash deletes the ticked ones. A picture counts as used when a note links to it with `![](…)` or `[…](…)`, outside code. Unsaved text in open tabs counts, and so do notes in hidden folders, whatever Show Hidden Files says. If a note can't be read (a NAS gone offline, say), it stops with an error instead of listing anything; the no-longer-used offer and Delete Picture's question hold back the same way.
 
 ### 10.7 Find in Note
 

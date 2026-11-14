@@ -1105,13 +1105,34 @@ export class Notebook {
     }
   }
 
-  /** Every picture some note links to, by notebook path. */
+  /**
+   * Every note in the notebook, hidden folders included whatever Show Hidden Files says: a picture a hidden
+   * note shows is still used.
+   */
+  private async allNotes(): Promise<string[]> {
+    const tree = await loadTree(this.store, true);
+    return allFiles(tree)
+      .map((f) => f.path)
+      .filter((p) => fileKind(p) === 'note');
+  }
+
+  /** A note's text, like `noteText`, but a note that can't be read is an error: nothing can be said about it. */
+  private async readNote(path: string): Promise<string> {
+    const text = await this.noteText(path);
+    if (text === null)
+      throw new Error(`Puffinote couldn’t read “${path}”, so it can’t tell which pictures are used.`);
+    return text;
+  }
+
+  /**
+   * Every picture some note links to, by notebook path. Throws when a note can't be read, so a picture it
+   * shows is never called unused.
+   */
   private async linkedPictures(): Promise<Set<string>> {
     const out = new Set<string>();
-    for (const f of allFiles(this.tree.peek())) {
-      if (fileKind(f.path) !== 'note') continue;
-      const text = await this.noteText(f.path);
-      if (text?.includes('](')) for (const t of imageTargets(text, f.path)) out.add(t);
+    for (const path of await this.allNotes()) {
+      const text = await this.readNote(path);
+      if (text.includes('](')) for (const t of imageTargets(text, path)) out.add(t);
     }
     return out;
   }
@@ -1148,18 +1169,24 @@ export class Notebook {
     await this.reloadTree();
   }
 
-  /** The notes other than `except` that link to the picture at `path`, in tree order. */
+  /**
+   * The notes other than `except` that link to the picture at `path`, in tree order, hidden ones included.
+   * Throws when a note can't be read.
+   */
   async notesShowing(path: string, except: string): Promise<string[]> {
     const out: string[] = [];
-    for (const f of allFiles(this.tree.peek())) {
-      if (fileKind(f.path) !== 'note' || f.path === except) continue;
-      const text = await this.noteText(f.path);
-      if (text?.includes('](') && imageTargets(text, f.path).has(path)) out.push(f.path);
+    for (const note of await this.allNotes()) {
+      if (note === except) continue;
+      const text = await this.readNote(note);
+      if (text.includes('](') && imageTargets(text, note).has(path)) out.push(note);
     }
     return out;
   }
 
-  /** The notebook's pictures that no note links to (Find Unused Pictures…), in tree order. */
+  /**
+   * The notebook's pictures that no note links to (Find Unused Pictures…), in tree order. Throws when a note
+   * can't be read.
+   */
   async unusedPictures(): Promise<string[]> {
     const linked = await this.linkedPictures();
     return allFiles(this.tree.peek())
@@ -1175,7 +1202,13 @@ export class Notebook {
     if (this.settings.peek().unusedImages !== 'ask') return;
     const present = paths.filter((p) => findNode(this.tree.peek(), p)?.kind === 'file');
     if (present.length === 0) return;
-    const linked = await this.linkedPictures();
+    let linked: Set<string>;
+    try {
+      linked = await this.linkedPictures();
+    } catch {
+      // A note that can't be read may show them: say nothing rather than offer to delete a used picture.
+      return;
+    }
     const unused = present.filter((p) => !linked.has(p));
     if (unused.length === 0) return;
     const trash = this.store.kind === 'native';
