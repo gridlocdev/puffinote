@@ -62,7 +62,7 @@ The desktop app checks GitHub for a newer release. It never downloads or install
 
 ## 5. The notebook
 
-- **A notebook is one root folder.** One notebook is open at a time. Open Notebook… (⇧⌘O) asks about unsaved tabs, then switches. Switching closes whatever was open over the old notebook (a dialog, a menu, the picture preview, the find bar); a question still up is answered as cancelled, and the old notebook changes no files after it closes.
+- **A notebook is one root folder.** One notebook is open at a time. Open Notebook… (⇧⌘O) asks about unsaved tabs, then switches. Reading the new notebook can be slow (the NAS): if a tab has unsaved changes by the time it is read, Puffinote asks again just before switching, and Cancel stays in the old notebook. When a second notebook is opened before the first has been read, the second wins. Switching closes whatever was open over the old notebook (a dialog, a menu, the picture preview, the find bar); a question still up is answered as cancelled, and the old notebook changes no files after it closes.
 - **The notebook keeps its own state in `.puffinote/`:**
   - `session.json`: the open tabs, the active tab, the sidebar (width, panel, open folders), the recent files, the pinned notes, and the library's folder and sort order.
   - `settings.json`: this notebook's settings overrides (§9).

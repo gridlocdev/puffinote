@@ -373,3 +373,37 @@ describe('ShellModel Delete…', () => {
     await removing;
   });
 });
+
+describe('ShellModel opening another notebook slowly', () => {
+  const opened = (name: string, files: Record<string, string> = { 'a.md': '' }) =>
+    Notebook.open(new MemoryStore(name, files), { prefs: memoryPrefs({ autoSave: false }) });
+
+  it('asks again about text typed while the new notebook was opening', async () => {
+    const m = new ShellModel();
+    const old = await opened('Old');
+    m.setNotebook(old);
+    const ticket = m.beginNotebookOpen();
+    const next = await opened('New');
+    (await old.openFile('a.md'))!.state!.insert('typed meanwhile');
+    const adopting = m.adoptNotebook(next, ticket);
+    await vi.waitFor(() => expect(m.overlay.value?.kind).toBe('confirm'));
+    const o = m.overlay.value;
+    if (o?.kind === 'confirm') o.done('cancel');
+    expect(await adopting).toBe(false);
+    expect(m.notebook.value).toBe(old);
+    expect(old.dirtyTabs).toHaveLength(1);
+    m.setNotebook(null);
+  });
+
+  it('drops an open that a later one overtook', async () => {
+    const m = new ShellModel();
+    const first = m.beginNotebookOpen();
+    const second = m.beginNotebookOpen();
+    const two = await opened('Two');
+    expect(await m.adoptNotebook(two, second)).toBe(true);
+    const one = await opened('One');
+    expect(await m.adoptNotebook(one, first)).toBe(false);
+    expect(m.notebook.value).toBe(two);
+    m.setNotebook(null);
+  });
+});

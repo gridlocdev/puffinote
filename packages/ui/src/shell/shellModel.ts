@@ -169,6 +169,29 @@ export class ShellModel {
     this.notebook.value = nb;
   }
 
+  /** Bumps when an open of another notebook starts (see `adoptNotebook`). */
+  private notebookTicket = 0;
+
+  /** Say that opening another notebook has started; pass the ticket to `adoptNotebook` when it is read. */
+  beginNotebookOpen(): number {
+    return ++this.notebookTicket;
+  }
+
+  /**
+   * Put `nb`, opened under `ticket`, in place of the notebook in front. Reading a notebook can be slow (the NAS),
+   * so this asks about unsaved tabs again just before the switch: text typed meanwhile is never dropped without
+   * asking. An open that a later one overtook, or that the user cancels here, is closed and resolves false.
+   */
+  async adoptNotebook(nb: Notebook, ticket: number): Promise<boolean> {
+    const stale = () => ticket !== this.notebookTicket;
+    if (stale() || !(await this.confirmDiscardAll()) || stale()) {
+      if (this.notebook.peek() !== nb) nb.dispose();
+      return false;
+    }
+    this.setNotebook(nb);
+    return true;
+  }
+
   // ----- Overlays -----
 
   private returnFocus: HTMLElement | null = null;
