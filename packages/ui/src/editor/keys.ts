@@ -9,13 +9,15 @@ export interface KeyLike {
   readonly shiftKey: boolean;
 }
 
-/** What a key the catalog doesn't bind does in the editor: caret motion, deletion, Enter and Tab. */
+/** What a key the catalog doesn't bind does in the editor: caret motion, deletion, Cut, Enter and Tab. */
 export type KeyAction =
   | { readonly kind: 'move'; readonly unit: 'char' | 'word' | 'row' | 'line' | 'doc'; readonly dir: 1 | -1 }
   | { readonly kind: 'vertical'; readonly dir: 1 | -1 }
   | { readonly kind: 'page'; readonly dir: 1 | -1 }
   | { readonly kind: 'deleteBack'; readonly unit: 'char' | 'word' | 'line' }
   | { readonly kind: 'deleteForward'; readonly unit: 'char' | 'word' | 'line' }
+  /** Shift+Delete off macOS: Cut the selection; with nothing selected, Delete. */
+  | { readonly kind: 'cut' }
   | { readonly kind: 'enter'; readonly soft: boolean }
   | { readonly kind: 'tab'; readonly outdent: boolean };
 
@@ -39,7 +41,8 @@ const emacsKeys: Readonly<Record<string, KeyAction>> = {
 /**
  * Map a key to its editing action, by platform convention. On macOS ⌘ works by row or document (⌘←, ⌘↑,
  * ⌘⌫), ⌥ by word (⌥←, ⌥⌫), and Control takes the Emacs keys (`emacsKeys`). Elsewhere Ctrl works by word
- * (Ctrl+←, Ctrl+Backspace) and Ctrl+Home/End by document; there is no delete-to-line-start key. Home, End
+ * (Ctrl+←, Ctrl+Backspace) and Ctrl+Home/End by document; there is no delete-to-line-start key, and
+ * Shift+Delete is Cut, as everywhere on Windows and Linux. Home, End
  * and ⌘←/→ go by visual row; Page Up and Page Down by a screen. Shift extends a motion; the caller reads
  * it. Null means the editor leaves the key alone.
  */
@@ -73,6 +76,7 @@ export function keyAction(e: KeyLike, mac: boolean): KeyAction | null {
       if (mac && e.metaKey) return { kind: 'deleteBack', unit: 'line' };
       return { kind: 'deleteBack', unit: word ? 'word' : 'char' };
     case 'Delete':
+      if (!mac && e.shiftKey && !e.ctrlKey && !e.altKey && !e.metaKey) return { kind: 'cut' };
       return { kind: 'deleteForward', unit: word ? 'word' : 'char' };
     case 'Enter':
       return mod ? null : { kind: 'enter', soft: e.shiftKey };
@@ -94,6 +98,7 @@ export function undoRunFor(action: KeyAction, key: string, repeat: boolean): Und
     case 'deleteBack':
       return deleteBackRun;
     case 'deleteForward':
+    case 'cut':
       return deleteForwardRun;
     case 'enter':
     case 'tab':

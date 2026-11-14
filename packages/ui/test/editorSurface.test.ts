@@ -275,6 +275,23 @@ describe('platform keys (finding 5)', () => {
     });
   });
 
+  it('cuts with Shift+Delete off macOS, where it is the platform Cut key', () => {
+    expect(keyAction(key('Delete', { shiftKey: true }), false)).toEqual({ kind: 'cut' });
+    // A run of Delete it ends up as, with nothing selected, still undoes as one step.
+    expect(undoRunFor({ kind: 'cut' }, 'Delete', false)).toBe(
+      undoRunFor({ kind: 'deleteForward', unit: 'char' }, 'Delete', false),
+    );
+    // On macOS, ⇧ with forward delete is plain forward delete; Ctrl+Shift+Delete stays a word delete.
+    expect(keyAction(key('Delete', { shiftKey: true }), true)).toEqual({
+      kind: 'deleteForward',
+      unit: 'char',
+    });
+    expect(keyAction(key('Delete', { shiftKey: true, ctrlKey: true }), false)).toEqual({
+      kind: 'deleteForward',
+      unit: 'word',
+    });
+  });
+
   it('goes to the document start and end with Ctrl+Home/End off macOS and Cmd+Up/Down on macOS', () => {
     expect(keyAction(key('Home', { ctrlKey: true }), false)).toEqual({ kind: 'move', unit: 'doc', dir: -1 });
     expect(keyAction(key('End', { ctrlKey: true }), false)).toEqual({ kind: 'move', unit: 'doc', dir: 1 });

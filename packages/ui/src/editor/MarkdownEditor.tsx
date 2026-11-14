@@ -802,21 +802,15 @@ export function MarkdownEditor(props: MarkdownEditorProps) {
         revealCaret.current = true;
         break;
       }
-      case 'deleteForward': {
-        // ⌃K: to the end of the line, or the line break when the caret is already there.
-        const lineEnd =
-          action.unit === 'line' ? lineContentEnd(doc, doc.getPosition(sel.caret).line) : sel.caret;
-        if (!isCollapsed(sel)) deleteSelection();
-        else if (lineEnd > sel.caret) apply(deleteRange(sel.caret, lineEnd), run);
-        else if (action.unit === 'word') apply(deleteRange(sel.caret, wordRight(doc, sel.caret)), run);
-        else if (
-          !state.apply(joinLinesDeleteEdit(doc, sel.caret, state.buffer.nextCaret(sel.caret)), undefined, run)
-        ) {
-          state.buffer.deleteForward();
-        }
-        revealCaret.current = true;
+      case 'deleteForward':
+        deleteForward(action.unit, run);
         break;
-      }
+      case 'cut':
+        // Shift+Delete off macOS (PRD §10.1): a real cut, so the editor's cut handler writes the clipboard
+        // before it deletes, as the Cut command does. With nothing selected it is Delete.
+        if (isCollapsed(sel)) deleteForward('char', run);
+        else document.execCommand('cut');
+        break;
       case 'enter':
         apply(
           action.soft
@@ -834,6 +828,21 @@ export function MarkdownEditor(props: MarkdownEditorProps) {
     }
     e.preventDefault();
     e.stopPropagation();
+  }
+
+  /** Delete, ⌃K and Ctrl+Delete: delete the selection, or forward from the caret by `unit`. */
+  function deleteForward(unit: 'char' | 'word' | 'line', run: UndoRun | undefined): void {
+    // ⌃K: to the end of the line, or the line break when the caret is already there.
+    const lineEnd = unit === 'line' ? lineContentEnd(doc, doc.getPosition(sel.caret).line) : sel.caret;
+    if (!isCollapsed(sel)) deleteSelection();
+    else if (lineEnd > sel.caret) apply(deleteRange(sel.caret, lineEnd), run);
+    else if (unit === 'word') apply(deleteRange(sel.caret, wordRight(doc, sel.caret)), run);
+    else if (
+      !state.apply(joinLinesDeleteEdit(doc, sel.caret, state.buffer.nextCaret(sel.caret)), undefined, run)
+    ) {
+      state.buffer.deleteForward();
+    }
+    revealCaret.current = true;
   }
 
   /** ⌘⌫: where deleting to the line start stops (the visual row's start, a list item's text), or null. */
