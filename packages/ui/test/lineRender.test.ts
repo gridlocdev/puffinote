@@ -250,6 +250,18 @@ describe('nested numbered lists (PRD §10.2)', () => {
     expect(deco(2, 1)).toBe('b)');
   });
 
+  it('draws a bullet as a disc, a circle, then a square by depth', () => {
+    const doc = TextDocument.fromString('- a');
+    const model = MarkdownModel.build(doc);
+    const tokens = model.lineTokens(0);
+    const reveal = lineReveal(tokens, 0, doc.getLineEnd(0), elsewhere, null, null);
+    const glyph = (depth: number) =>
+      renderLine('- a', 0, tokens, reveal, 'live', null, depth).segments.find(
+        (s) => s.deco?.kind === 'bullet',
+      )?.deco?.text;
+    expect([0, 1, 2, 3].map(glyph)).toEqual(['•', '◦', '▪', '•']);
+  });
+
   it('tracks how deep each item sits', () => {
     const lines = ['1. a', '    1. b', '        - c', '', '    2. d', '2. e', 'para', '    1. f'];
     const t = new ListDepthTracker();

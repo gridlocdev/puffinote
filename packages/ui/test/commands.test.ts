@@ -89,14 +89,16 @@ describe('Enter (PRD §10.1)', () => {
     expect(enter('- a\n- |b')).toBe('- a\n- \n- |b');
   });
 
-  it('opens a blank line above the first item of a top-level list instead of an empty item', () => {
-    expect(enter('- [x] |a\n- [ ] b')).toBe('\n- [x] |a\n- [ ] b');
-    expect(enter('Tasks\n- [ ] |a')).toBe('Tasks\n\n- [ ] |a');
-    expect(enter('> - [ ] |a')).toBe('>\n> - [ ] |a');
+  it('opens an empty item above the first item of a list, keeping its number', () => {
+    expect(enter('- [x] |a\n- [ ] b')).toBe('- [ ] \n- [x] |a\n- [ ] b');
+    expect(enter('Tasks\n- |a')).toBe('Tasks\n- \n- |a');
+    expect(enter('> - [ ] |a')).toBe('> - [ ] \n> - [ ] |a');
+    expect(enter('|1. a\n2. b')).toBe('1. \n2. |a\n3. b');
   });
 
   it('opens an empty item above the first item of a nested list, and renumbers it', () => {
     expect(enter('- [ ] a\n  - [x] |c')).toBe('- [ ] a\n  - [ ] \n  - [x] |c');
+    expect(enter('- a\n    - |b')).toBe('- a\n    - \n    - |b');
     expect(enter('1. a\n    1. |b\n    2. c')).toBe('1. a\n    1. \n    2. |b\n    3. c');
     expect(enter('1. a\n    |1. b')).toBe('1. a\n    1. \n    2. |b');
   });

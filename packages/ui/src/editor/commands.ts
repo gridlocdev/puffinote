@@ -83,38 +83,14 @@ export function enterEdit(doc: TextDocument, sel: Selection, mode: ViewMode, con
   if (r.kind === 'continue') return withRenumber(doc, replaceSelection(sel, r.text));
   if (r.kind === 'above' && isCollapsed(sel)) {
     // One new line above, with the caret at the start of the text of the item it pushed down: an empty item
-    // inside a list, or a blank line (kept in its quote) when the item is the first of a top-level list. The
-    // first item of a nested list gets an empty item too, numbered as itself, since a blank line would end the
-    // parent item and turn the nested lines into an indented code block.
+    // like it (a task as `[ ]`), numbered as itself so the renumber counts the pushed item on from it. The
+    // first item of a list gets one too, so the list grows upward instead of leaving a blank line behind.
     const p = parseLinePrefix(lineText);
-    const first = p.hasList ? firstListItem(doc, line) : null;
-    const text =
-      first === 'top'
-        ? p.quote.trimEnd() + '\n'
-        : first === 'nested'
-          ? itemPrefix(p, p.number) + '\n'
-          : r.text;
+    const text = p.hasList ? itemPrefix(p, p.number) + '\n' : r.text;
     const caret = lineStart + text.length + p.length;
     return withRenumber(doc, { start: lineStart, length: 0, text, anchor: caret, caret });
   }
   return replaceSelection(sel, '\n');
-}
-
-/**
- * Whether list item `line` is the first item of its list, past the lines nested under earlier items: 'top' for
- * the first item of a top-level list, 'nested' for the first child of an item, null when an item at its level
- * comes before it.
- */
-function firstListItem(doc: TextDocument, line: number): 'top' | 'nested' | null {
-  const p = parseLinePrefix(doc.getLineText(line));
-  for (let i = line - 1; i >= 0; i--) {
-    const text = doc.getLineText(i);
-    const q = parseLinePrefix(text);
-    if (q.quote !== p.quote || text.slice(q.markerStart).trim().length === 0) return 'top';
-    if (q.markerStart < p.markerStart) return q.hasList ? 'nested' : 'top';
-    if (q.markerStart === p.markerStart) return q.hasList && q.list === p.list ? null : 'top';
-  }
-  return 'top';
 }
 
 /** An empty item like `p`'s (same indent, quote and bullet, an open box for a task), numbered `n`. */

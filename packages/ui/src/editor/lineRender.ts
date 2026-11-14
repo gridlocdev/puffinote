@@ -279,7 +279,7 @@ function decorationFor(
       const marker = text.trim();
       const m = /^(\d+)([.)])$/.exec(marker);
       if (m) return { kind: 'number', text: listOrdinal(Number(m[1]), listDepth) + m[2]! };
-      return task ? null : { kind: 'bullet', text: '•' };
+      return task ? null : { kind: 'bullet', text: bulletGlyphs[listDepth % bulletGlyphs.length]! };
     }
     case 'taskMarker':
       return { kind: 'checkbox', text: '', task: task ?? 'notStarted' };
@@ -291,6 +291,9 @@ function decorationFor(
       return null;
   }
 }
+
+/** A bullet's glyph by nesting depth (PRD §10.2): a disc, then a circle, then a square, and round again. */
+const bulletGlyphs = ['•', '◦', '▪'] as const;
 
 /**
  * How an ordered item's number is drawn at nesting depth `depth` (PRD §10.2): 1, 2, 3 at the top level, then
