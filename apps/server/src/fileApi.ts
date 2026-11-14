@@ -139,6 +139,13 @@ export class FileApi {
     }
   }
 
+  /** Refuse a real (symlink-resolved) path outside the root. */
+  private async assertInside(root: Root, real: string): Promise<void> {
+    const rootReal = await realpath(root.dir).catch(() => root.dir);
+    const inside = path.relative(rootReal, real);
+    if (inside.startsWith('..') || path.isAbsolute(inside)) throw new ApiError(403, 'Path escapes root');
+  }
+
   /** A path that must name something inside the root, not the root itself. */
   private async resolveEntry(root: Root, rel: string | null): Promise<string> {
     const full = await this.resolveReal(root, rel);
@@ -218,7 +225,12 @@ export class FileApi {
   ): Promise<{ etag: string }> {
     const root = this.root(rootId);
     const full = await this.resolveEntry(root, rel);
-    return this.serialized(await queueKey(full), () => this.writeLocked(full, bytes, opts));
+    return this.serialized(await queueKey(full), async () => {
+      // Check again now the save has its turn: while it waited, a folder on the path may have been swapped
+      // for a link out of the root.
+      await this.resolveReal(root, rel);
+      return this.writeLocked(root, full, bytes, opts);
+    });
   }
 
   async mkdir(rootId: string | null, rel: string | null): Promise<void> {
@@ -296,14 +308,16 @@ export class FileApi {
   }
 
   private async writeLocked(
+    root: Root,
     full: string,
     bytes: Buffer,
     opts: { ifMatch?: string | null; ifNoneMatch?: string | null },
   ): Promise<{ etag: string }> {
     const target = await stat(full).catch(() => null);
     if (target && !target.isFile()) throw new ApiError(400, 'Not a file');
-    // A symlink stays a link: replace the file it names (resolveEntry checked that it is inside the root).
+    // A symlink stays a link: replace the file it names, as long as that is inside the root.
     const dest = target ? await realpath(full) : full;
+    if (target) await this.assertInside(root, dest);
     const dir = path.dirname(dest);
     const base = path.basename(dest);
     if (opts.ifNoneMatch === '*' && target) throw new ApiError(412, 'A file with that name already exists');
@@ -337,6 +351,7 @@ export class FileApi {
     try {
       // Only now, past the checks above: a refused save must not bring back a folder deleted since it read.
       if (!target) await mkdir(dir, { recursive: true });
+      await this.assertInside(root, await realpath(dir));
       const handle = await open(tmp, fsConstants.O_CREAT | fsConstants.O_EXCL | fsConstants.O_WRONLY, mode);
       try {
         await handle.chmod(mode); // open() applies the umask; the replacement keeps the original bits

@@ -4,7 +4,9 @@ import {
   lstat,
   mkdtemp,
   mkdir,
+  readdir,
   readFile,
+  realpath,
   rename,
   rm,
   stat,
@@ -213,6 +215,30 @@ describe('the file API', () => {
     const res = await fetch(url, { method: 'PUT', body: 'late', headers: { ...auth, 'If-Match': etag } });
     expect(res.status).toBe(412);
     expect(await lstat(path.join(dir, 'Gone')).catch(() => null)).toBeNull();
+  });
+
+  it('checks the path is inside the root again once a queued save gets its turn', async () => {
+    await mkdir(path.join(dir, 'Swap'));
+    await writeFile(path.join(dir, 'Swap', 'n.md'), 'n');
+    await mkdir(path.join(outside, 'swapped'));
+    const api = new FileApi(parseRoots(`My Notes=${dir}`, '/'));
+    const queue = (api as unknown as { writeQueue: Map<string, Promise<unknown>> }).writeQueue;
+    const key = path
+      .join(await realpath(dir), 'Swap', 'n.md')
+      .normalize('NFC')
+      .toLowerCase();
+    let release = () => {};
+    const gate = new Promise<void>((r) => (release = r));
+    queue.set(key, gate);
+    const save = api.write('my-notes', 'Swap/n.md', Buffer.from('leaked'), {});
+    save.catch(() => {});
+    while (queue.get(key) === gate) await new Promise((r) => setTimeout(r, 1));
+    // While the save waits its turn, the folder is swapped for a link out of the root.
+    await rename(path.join(dir, 'Swap'), path.join(dir, 'Swap-old'));
+    await symlink(path.join(outside, 'swapped'), path.join(dir, 'Swap'));
+    release();
+    await expect(save).rejects.toMatchObject({ status: 403 });
+    expect(await readdir(path.join(outside, 'swapped'))).toEqual([]);
   });
 
   it('refuses to save over a read-only file', async () => {
