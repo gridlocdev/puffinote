@@ -1353,6 +1353,16 @@ function shellCommandSpecs(m: ShellModel): CommandSpec[] {
       run: () => m.findUnusedPictures(),
     },
     {
+      id: 'shell.downloadNotebook',
+      title: 'Download Notebook (.zip)…',
+      description: 'Save every file in the notebook to one zip file, as a backup or to move it.',
+      group: 'File',
+      icon: 'save',
+      keywords: 'export backup archive zip',
+      enabled: () => nb()?.canDownload ?? false,
+      run: async () => void (await nb()?.downloadArchive()),
+    },
+    {
       id: 'shell.revealActive',
       title: 'Reveal Active File in Sidebar',
       description: 'Show the note in front in the file tree.',

@@ -9,6 +9,7 @@ import {
   type TextFileFormat,
 } from '@puffinote/text';
 import { EditorState } from '../editor/editorState.ts';
+import { archiveName, notebookArchive } from './archive.ts';
 import {
   applyRefEdits,
   attachmentDir,
@@ -1255,6 +1256,34 @@ export class Notebook {
       else this.notify('info', `Puffinote can’t open “${baseName(path)}”.`);
     } catch (e) {
       this.report(e);
+    }
+  }
+
+  /** Whether this notebook can hand files to the user as downloads (Download Notebook, PRD §5). */
+  get canDownload(): boolean {
+    return !!this.options.download;
+  }
+
+  /**
+   * Download Notebook (PRD §5): save the notes with unsaved changes, then hand the whole notebook to the user
+   * as one zip named after it. A note that can't be saved stops it, so the archive never misses an edit.
+   */
+  async downloadArchive(): Promise<boolean> {
+    const download = this.options.download;
+    if (!download || this.disposed) return false;
+    if (!(await this.saveAll())) {
+      this.notify(
+        'error',
+        'Save or revert the notes with unsaved changes, then download the notebook again.',
+      );
+      return false;
+    }
+    try {
+      download(`${archiveName(this.name)}.zip`, await notebookArchive(this.store), 'application/zip');
+      return true;
+    } catch (e) {
+      this.report(e);
+      return false;
     }
   }
 
