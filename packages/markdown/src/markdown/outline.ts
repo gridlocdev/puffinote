@@ -18,7 +18,10 @@ export function outlineOf(doc: TextDocument, model: MarkdownModel): OutlineItem[
     const marker = tokens.find((t) => t.type === 'headingMarker');
     if (marker) {
       const text = doc.getLineText(line).replace(/\r$/, '');
-      const content = withoutClosingSequence(text.replace(/^\s*#{1,6}[ \t]*/, '')).trim();
+      // An ATX heading's `#` run and closing sequence are markup. A setext heading's marker is zero-length,
+      // and its text keeps every `#` it has (`#hashtag` over `===`).
+      const atx = marker.length > 0;
+      const content = atx ? withoutClosingSequence(text.replace(/^\s*#{1,6}[ \t]*/, '')).trim() : text.trim();
       const start = doc.getLineStart(line);
       out.push({
         level: Number(marker.meta),

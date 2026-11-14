@@ -211,6 +211,14 @@ describe('outline', () => {
     ]);
   });
 
+  it('keeps a leading or trailing # in a setext heading', () => {
+    const items = outline('#hashtag notes #\n===\n\n#2 item\n---');
+    expect(items.map((o) => [o.level, o.text, o.offset])).toEqual([
+      [1, '#hashtag notes #', 0],
+      [2, '#2 item', 22],
+    ]);
+  });
+
   it('reads long runs of blanks or brackets in a heading in linear time', () => {
     const started = performance.now();
     expect(outline('# a' + ' '.repeat(40000) + '#')[0]!.text).toBe('a');
