@@ -53,6 +53,68 @@ export function withLineEnding(doc: TextDocument, text: string): string {
 }
 
 /**
+ * Where `[from, to)` of `before` lies in `after`, taking what changed between them as one replaced stretch (the
+ * edits made while pasted pictures saved). A range that ran into the changed stretch collapses to its start.
+ */
+export function mapRange(
+  before: TextDocument,
+  after: TextDocument,
+  from: number,
+  to: number,
+): { from: number; to: number } {
+  if (before === after) return { from, to };
+  const a = before.getText();
+  const b = after.getText();
+  const max = Math.min(a.length, b.length);
+  let prefix = 0;
+  while (prefix < max && a.charCodeAt(prefix) === b.charCodeAt(prefix)) prefix++;
+  let suffix = 0;
+  while (
+    suffix < max - prefix &&
+    a.charCodeAt(a.length - 1 - suffix) === b.charCodeAt(b.length - 1 - suffix)
+  ) {
+    suffix++;
+  }
+  const changedEnd = a.length - suffix;
+  const map = (x: number): number | null =>
+    x <= prefix ? x : x >= changedEnd ? x + b.length - a.length : null;
+  const f = map(from);
+  const t = map(to);
+  if (f === null || t === null) {
+    const at = f ?? prefix;
+    return { from: at, to: at };
+  }
+  return { from: f, to: t };
+}
+
+/** Where `offset` is after `edit`: past the edit it shifts, inside it it moves to the end of the new text. */
+export function offsetAfterEdit(edit: Edit, offset: number): number {
+  if (offset <= edit.start) return offset;
+  if (offset >= edit.start + edit.length) return offset + edit.text.length - edit.length;
+  return edit.start + edit.text.length;
+}
+
+/**
+ * Replace `[from, to)` with a line for each picture link, each on a line of its own, so the rich view shows it
+ * (PRD §10.6). The caret goes after the last one.
+ */
+export function pictureLinesEdit(
+  doc: TextDocument,
+  from: number,
+  to: number,
+  links: readonly string[],
+): Edit {
+  const start = doc.getLineStart(doc.getPosition(from).line);
+  const endLine = doc.getPosition(to).line;
+  const end = doc.getLineStart(endLine) + doc.getLineText(endLine).length;
+  const before = doc.getText(start, from - start).trim() ? '\n' : '';
+  const after = doc.getText(to, end - to).trim() ? '\n' : '';
+  const text = withLineEnding(doc, before + links.join('\n') + after);
+  const caret = from + text.length;
+  return { start: from, length: to - from, text, anchor: caret, caret };
+}
+
+/**
  * The text a paste inserts at `at`: plain text with the note's line ending, without a task marker that would
  * double the one already at the caret (PRD §10.1).
  */

@@ -417,3 +417,46 @@ describe('leaving the editor with the keyboard', () => {
     expect(leavesEditor(key('a'), true)).toBe(false);
   });
 });
+
+describe('pasted pictures land where they were pasted (PRD §10.6)', () => {
+  const link = '![](attachments/a.png)';
+
+  it('puts the picture on a line of its own at the caret', () => {
+    const state = new EditorState('one two');
+    state.select(3);
+    state.insertPictureLines(state.pictureSpot(), [link]);
+    expect(state.text).toBe(`one\n${link}\n two`);
+    expect(state.selection.peek()).toEqual({ anchor: 5 + link.length, caret: 5 + link.length });
+  });
+
+  it('never replaces a selection made while the picture saved', () => {
+    const state = new EditorState('first\nsecond');
+    state.select(6);
+    const spot = state.pictureSpot();
+    state.select(0, state.document.length); // ⌘A during the upload
+    state.insertPictureLines(spot, [link]);
+    expect(state.text).toBe(`first\n${link}\nsecond`);
+    expect(state.selection.peek()).toEqual({ anchor: 0, caret: state.document.length });
+  });
+
+  it('follows edits made while the picture saved', () => {
+    const state = new EditorState('first\nsecond');
+    state.select(6);
+    const spot = state.pictureSpot();
+    state.select(0);
+    state.insert('new ');
+    state.insertPictureLines(spot, [link]);
+    expect(state.text).toBe(`new first\n${link}\nsecond`);
+    expect(state.selection.peek()).toEqual({ anchor: 4, caret: 4 });
+  });
+
+  it('collapses onto the edit when the pasted-over text was changed meanwhile', () => {
+    const state = new EditorState('aa bb cc');
+    state.select(3, 5);
+    const spot = state.pictureSpot();
+    state.select(0, 8);
+    state.insert('x');
+    state.insertPictureLines(spot, [link]);
+    expect(state.text).toBe(`${link}\nx`);
+  });
+});

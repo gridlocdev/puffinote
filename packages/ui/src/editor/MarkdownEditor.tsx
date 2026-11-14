@@ -66,7 +66,10 @@ export interface MarkdownEditorProps {
   readonly onContextMenu?: (at: EditorMenuPoint) => void;
   /** A click on a drawn picture: show it in the picture preview (PRD §10.6). */
   readonly onOpenPicture?: (picture: PictureAt) => void;
-  /** Save pasted or dropped pictures and return the Markdown for each; without it, only text pastes. */
+  /**
+   * Save pasted or dropped pictures and return the Markdown for each; without it, only text pastes. It reports
+   * its own errors and never rejects.
+   */
   readonly onPictures?: (files: readonly File[]) => Promise<readonly string[]>;
   /** Find in Note's matches to mark, and which one is current (PRD §10.7). */
   readonly findMatches?: { readonly matches: readonly TextRange[]; readonly current: number };
@@ -943,21 +946,16 @@ export function MarkdownEditor(props: MarkdownEditorProps) {
     state.paste(pasteText(doc, selectionStart(sel), pasted));
   }
 
-  /** Save `files` and put a picture line for each at the caret, each on a line of its own (PRD §10.6). */
+  /**
+   * Save `files` and put a picture line for each where the caret was when they were pasted or dropped, each on
+   * a line of its own (PRD §10.6). The spot is taken now, so a selection made while they save isn't replaced.
+   */
   async function insertPictures(files: readonly File[]): Promise<void> {
+    const spot = state.pictureSpot();
     const links = await props.onPictures!(files);
     if (links.length === 0) return;
-    const now = state.selection.peek();
-    const from = selectionStart(now);
-    const to = Math.max(now.anchor, now.caret);
-    const d = state.document;
-    const start = d.getLineStart(d.getPosition(from).line);
-    const endLine = d.getPosition(to).line;
-    const end = d.getLineStart(endLine) + d.getLineText(endLine).length;
-    const before = d.getText(start, from - start).trim() ? '\n' : '';
-    const after = d.getText(to, end - to).trim() ? '\n' : '';
     revealCaret.current = true;
-    state.paste(withLineEnding(d, before + links.join('\n') + after));
+    state.insertPictureLines(spot, links);
   }
 
   function onDragOver(e: DragEvent): void {

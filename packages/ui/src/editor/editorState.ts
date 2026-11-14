@@ -2,7 +2,9 @@ import { signal } from '@preact/signals';
 import { MarkdownModel } from '@puffinote/markdown';
 import {
   DocumentBuffer,
+  selectionEnd,
   selectionIntersects,
+  selectionsEqual,
   selectionLength,
   selectionStart,
   type Selection,
@@ -11,8 +13,21 @@ import {
   type UndoRun,
 } from '@puffinote/text';
 import { findBlocks, updateBlocks, type Block } from './blocks.ts';
-import { backspacePairEdit, type Edit, type EditContext } from './commands.ts';
+import {
+  backspacePairEdit,
+  mapRange,
+  offsetAfterEdit,
+  pictureLinesEdit,
+  type Edit,
+  type EditContext,
+} from './commands.ts';
 import { pictureExtent, type ViewMode } from './reveal.ts';
+
+/** Where pasted or dropped pictures go: the document and selection when they were pasted. */
+export interface PictureSpot {
+  readonly doc: TextDocument;
+  readonly selection: Selection;
+}
 
 /**
  * The editor's state: the undoable buffer, the incrementally updated Markdown model and the view mode,
@@ -137,6 +152,25 @@ export class EditorState {
     breakUndoRun(this.buffer);
     this.buffer.insert(text);
     breakUndoRun(this.buffer);
+  }
+
+  /** Remember where pictures pasted or dropped now go, for `insertPictureLines` once they are saved. */
+  pictureSpot(): PictureSpot {
+    return { doc: this.document, selection: this.buffer.selection };
+  }
+
+  /**
+   * Put a line for each picture link where `spot` was, as one undo step (PRD §10.6). Edits made while the
+   * pictures saved move the spot along, and a selection made meanwhile is kept, never replaced.
+   */
+  insertPictureLines(spot: PictureSpot, links: readonly string[]): void {
+    const doc = this.document;
+    const range = mapRange(spot.doc, doc, selectionStart(spot.selection), selectionEnd(spot.selection));
+    const edit = pictureLinesEdit(doc, range.from, range.to, links);
+    const now = this.buffer.selection;
+    const moved = doc !== spot.doc || !selectionsEqual(now, spot.selection);
+    this.apply(edit);
+    if (moved) this.select(offsetAfterEdit(edit, now.anchor), offsetAfterEdit(edit, now.caret));
   }
 
   select(anchor: number, caret = anchor): void {

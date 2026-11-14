@@ -69,18 +69,24 @@ export function Document(props: { readonly model: ShellModel; readonly nb: Noteb
           onOpenPicture={(picture) => model.openPreview(picture)}
           onFollowLink={(href) => void model.followLink(path, href)}
           findMatches={model.findMatches.value ?? undefined}
-          onPictures={async (files) =>
-            nb.addPictures(
-              path,
-              await Promise.all(
-                files.map(async (f) => ({
-                  name: f.name,
-                  type: f.type,
-                  bytes: new Uint8Array(await f.arrayBuffer()),
-                })),
-              ),
-            )
-          }
+          onPictures={async (files) => {
+            // A picture that can't be read or saved is said in the status bar, and nothing is inserted.
+            try {
+              return await nb.addPictures(
+                path,
+                await Promise.all(
+                  files.map(async (f) => ({
+                    name: f.name,
+                    type: f.type,
+                    bytes: new Uint8Array(await f.arrayBuffer()),
+                  })),
+                ),
+              );
+            } catch (e) {
+              nb.report(e);
+              return [];
+            }
+          }}
         />
       </div>
     </>

@@ -295,7 +295,7 @@ Exported HTML must be safe to open. Every attribute value is escaped, including 
 
 ### 10.6 Pasted and dropped pictures
 
-- **Paste or drop a picture** (PNG, JPEG, GIF, WebP, SVG, AVIF or BMP) into a note to save it in the notebook and insert `![](path)` at the caret, or after the line it is dropped on. Each picture gets a line of its own, so the rich view shows it. Files that aren't pictures are ignored.
+- **Paste or drop a picture** (PNG, JPEG, GIF, WebP, SVG, AVIF or BMP) into a note to save it in the notebook and insert `![](path)` at the caret, or after the line it is dropped on. Each picture gets a line of its own, so the rich view shows it. It goes where it was pasted or dropped even if the caret moved while it saved, and a selection made meanwhile is kept, not replaced. A picture that can't be saved is said in the status bar. Files that aren't pictures are ignored.
 - **Where it's saved** follows Save Pasted Pictures In:
   - **The notebook's picture folder:** one folder for the whole notebook, named by Picture Folder (`attachments` by default), from the notebook's top level. It may be nested (`assets/images`).
   - **A folder beside each note:** `Meeting.assets/` next to `Meeting.md`.
