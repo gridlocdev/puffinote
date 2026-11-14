@@ -18,7 +18,7 @@ just run-editor-demo      # the editor alone, with no shell, on http://localhost
 just cli tree ~/Notes     # the puffinote CLI from source (any arguments)
 ```
 
-- The web client runs in three modes, chosen at runtime: in the desktop app, served with a NAS server (`run-nas`, `preview-nas`), or as a plain web page like gridloc.dev (`run-web`, `preview-web`), which opens a folder through the browser (Chromium) or keeps notes in the browser's private storage.
+- The web client runs in three modes, chosen at runtime: in the desktop app, served with a NAS server (`run-nas`, `preview-nas`), or as a plain web page like gridloc.dev (`run-web`, `preview-web`), which keeps notes in the browser's private storage.
 - `just run-nas`, `just preview-nas` and `just run-server` serve `.nas-data/` in the repository as the root `Sample`. The folder is gitignored.
 - `just cli` runs from the folder you are in, so relative paths work as they would with an installed `puffinote`.
 

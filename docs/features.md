@@ -37,4 +37,4 @@ Puffinote stores each notebook's settings in a `.puffinote` folder inside the no
 
 ## Desktop, browser and NAS
 
-The same app runs in all three. The desktop app opens any folder on disk and watches it for changes. In a browser it opens a folder through the File System Access API (Chromium browsers) or keeps notes in the browser's private storage. On a NAS, a small server shows the folders you choose to any browser on your network. See [Getting started](getting-started.md) for each one.
+The same app runs in all three. The desktop app opens any folder on disk and watches it for changes. In a browser it keeps notes in the browser's private storage. On a NAS, a small server shows the folders you choose to any browser on your network. See [Getting started](getting-started.md) for each one.

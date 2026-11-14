@@ -1,6 +1,6 @@
 import { useSignal } from '@preact/signals';
 import { useEffect } from 'preact/hooks';
-import { canPickFolder, Icon, type Entry, type NasClient, type NasRoot } from '@puffinote/ui';
+import { Icon, type Entry, type NasClient, type NasRoot } from '@puffinote/ui';
 import { recentKey, recentPlace, type Launcher, type Recent } from './launcher.ts';
 
 /** What the window shows with no notebook open: recent notebooks and the ways to open one. */
@@ -75,12 +75,12 @@ function RecentRow(props: { readonly launcher: Launcher; readonly recent: Recent
 }
 
 /**
- * Where a folder can be opened (the desktop app, Chromium), that is the one action. A browser shows this only
- * when its last folder waits for a click to reopen, or its own notebook couldn't open (PRD §3).
+ * The desktop app opens a folder. A browser has only its own notebook, so it shows this only when that
+ * notebook couldn't open (PRD §3).
  */
 function LocalActions(props: { readonly launcher: Launcher }) {
   const { launcher } = props;
-  if (launcher.kind === 'native' || canPickFolder()) {
+  if (launcher.kind === 'native') {
     return (
       <section class="pw-section pw-actions" aria-label="Open a notebook">
         <button class="pw-primary" onClick={() => void launcher.openFolder()}>

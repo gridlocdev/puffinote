@@ -7,7 +7,7 @@ Puffinote is one TypeScript code base with three hosts and a CLI. The browser, t
      │  Shell · Rail/Library layouts · FileTree · TabStrip · ⌘K / ⌘O · dialogs  │
      │  ShellModel (commands, overlays) · Notebook (tree, tabs, session)        │
      │  MarkdownEditor (DOM lines, hidden textarea, caret overlay)              │
-     │  NotebookStore ─┬─ BrowserStore  (File System Access / private folder)   │
+     │  NotebookStore ─┬─ BrowserStore  (the browser's private folder)         │
      │                 ├─ NasStore      (fetch /api, ETag)                      │
      │                 ├─ NativeStore   (window.puffinoteNative IPC)            │
      │                 └─ MemoryStore   (demo, tests)                           │

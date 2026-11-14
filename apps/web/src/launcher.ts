@@ -2,21 +2,17 @@ import { signal } from '@preact/signals';
 import {
   AuthError,
   BrowserStore,
-  canPickFolder,
-  ensurePermission,
   NasClient,
   NasStore,
   nativeBridge,
   NativeStore,
   Notebook,
-  pickFolder,
   privateFolder,
   type NotebookStore,
   type PrefsStorage,
   type PuffinoteNative,
   type ShellModel,
 } from '@puffinote/ui';
-import { deleteHandle, findHandle, getHandle, putHandle } from './handles.ts';
 
 /** Where this page runs: inside the desktop app, served by the NAS server, or as a plain web page. */
 export type HostKind = 'native' | 'nas' | 'browser';
@@ -31,7 +27,6 @@ export type Recent =
       readonly base: string;
       readonly name: string;
     }
-  | { readonly kind: 'browser'; readonly id: string; readonly name: string }
   | { readonly kind: 'private'; readonly name: string };
 
 const RECENTS_KEY = 'puffinote.recentNotebooks';
@@ -43,8 +38,6 @@ export function recentKey(r: Recent): string {
       return `native:${r.path}`;
     case 'nas':
       return `nas:${r.root}:${r.base}`;
-    case 'browser':
-      return `browser:${r.id}`;
     case 'private':
       return 'private';
   }
@@ -57,8 +50,6 @@ export function recentPlace(r: Recent): string {
       return r.path.replace(/[\\/][^\\/]*$/, '') || r.path;
     case 'nas':
       return [r.rootName, ...r.base.split('/').slice(0, -1)].filter(Boolean).join(' › ');
-    case 'browser':
-      return 'A folder on this computer';
     case 'private':
       return 'Kept in this browser';
   }
@@ -67,7 +58,9 @@ export function recentPlace(r: Recent): string {
 function loadRecents(): Recent[] {
   try {
     const raw: unknown = JSON.parse(localStorage.getItem(RECENTS_KEY) ?? '[]');
-    return Array.isArray(raw) ? (raw as Recent[]).filter((r) => r && typeof r.kind === 'string') : [];
+    // Folders picked in Chromium (kind 'browser') aren't supported any more.
+    const kinds = new Set(['native', 'nas', 'private']);
+    return Array.isArray(raw) ? (raw as Recent[]).filter((r) => r && kinds.has(r.kind)) : [];
   } catch {
     return [];
   }
@@ -125,27 +118,20 @@ export class Launcher {
   }
 
   /**
-   * Reopen the last notebook, if that needs no permission prompt. Otherwise open the one obvious notebook: in a
-   * browser the browser notebook (Open Notebook… picks a folder from inside the app where the browser can), on
-   * a NAS server with one root that root. The welcome screen is left up only where there's a choice to make:
-   * the last folder, which the browser lets us ask about only after a click, or a server with several roots.
+   * Reopen the last notebook. Otherwise open the one obvious notebook: in a browser its own notebook, on a NAS
+   * server with one root that root. The welcome screen is left up where there's a choice to make: the desktop
+   * app with nothing to reopen, or a server with several roots.
    */
   async start(): Promise<void> {
     this.starting.value = true;
     try {
       const last = this.available()[0];
-      if (last && (await this.canReopen(last))) await this.open(last);
-      else if (this.kind === 'browser' && !(last && (await this.waitsForClick(last))))
-        await this.openPrivate();
+      if (last) await this.open(last);
+      else if (this.kind === 'browser') await this.openPrivate();
       else if (this.kind === 'nas') await this.openOnlyRoot();
     } finally {
       this.starting.value = false;
     }
-  }
-
-  /** A folder the browser can reopen, once a click lets us ask for permission again. */
-  private async waitsForClick(last: Recent): Promise<boolean> {
-    return last.kind === 'browser' && canPickFolder() && !!(await getHandle(last.id));
   }
 
   private async openOnlyRoot(): Promise<void> {
@@ -158,15 +144,6 @@ export class Launcher {
     }
   }
 
-  private async canReopen(last: Recent): Promise<boolean> {
-    if (last.kind === 'nas') return this.kind === 'nas';
-    if (last.kind === 'native') return this.kind === 'native';
-    if (this.kind !== 'browser') return false;
-    if (last.kind === 'private') return true;
-    const handle = await getHandle(last.id);
-    return !!handle && (await ensurePermission(handle, false));
-  }
-
   /** The recents this page can open. */
   available(): Recent[] {
     return this.recents.value.filter((r) =>
@@ -174,7 +151,7 @@ export class Launcher {
         ? r.kind === 'native'
         : this.kind === 'nas'
           ? r.kind === 'nas'
-          : r.kind !== 'nas',
+          : r.kind === 'private',
     );
   }
 
@@ -192,20 +169,12 @@ export class Launcher {
     }
   }
 
-  /** Ask for a folder (the OS dialog, or the browser's folder picker) and open it. */
+  /** Ask for a folder in the OS dialog (the desktop app) and open it. */
   async openFolder(): Promise<void> {
+    if (!this.native) return;
     try {
-      if (this.native) {
-        const path = await this.native.pickFolder();
-        if (path) await this.openNativePath(path);
-        return;
-      }
-      const handle = await pickFolder();
-      if (!handle) return;
-      const ids = this.recents.value.flatMap((r) => (r.kind === 'browser' ? [r.id] : []));
-      const id = (await findHandle(ids, handle)) ?? crypto.randomUUID();
-      await putHandle(id, handle);
-      await this.openStore(new BrowserStore(handle), { kind: 'browser', id, name: handle.name });
+      const path = await this.native.pickFolder();
+      if (path) await this.openNativePath(path);
     } catch (e) {
       this.reportError(e);
     }
@@ -244,7 +213,6 @@ export class Launcher {
   forget(r: Recent): void {
     const key = recentKey(r);
     this.saveRecents(this.recents.value.filter((x) => recentKey(x) !== key));
-    if (r.kind === 'browser') void deleteHandle(r.id);
   }
 
   /** Back to the welcome screen. The caller has already dealt with unsaved notes. */
@@ -265,16 +233,6 @@ export class Launcher {
         const dir = await privateFolder();
         if (!dir) throw new Error('This browser can’t keep a notebook.');
         return new BrowserStore(dir, true);
-      }
-      case 'browser': {
-        const handle = await getHandle(r.id);
-        if (!handle) {
-          this.forget(r);
-          throw new Error(`“${r.name}” can’t be opened any more. Open the folder again.`);
-        }
-        // Asking needs the click that got us here; a refusal leaves the welcome screen up.
-        if (!(await ensurePermission(handle, true))) return null;
-        return new BrowserStore(handle);
       }
     }
   }

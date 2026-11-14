@@ -2,29 +2,15 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { NasClient, NasRoot, PrefsStorage, ShellModel } from '@puffinote/ui';
 import { Launcher, type HostKind } from '../src/launcher.ts';
 
-const handles = vi.hoisted(() => ({ known: new Set<string>() }));
-vi.mock('../src/handles.ts', () => ({
-  getHandle: async (id: string) =>
-    handles.known.has(id) ? ({ name: id } as FileSystemDirectoryHandle) : undefined,
-  putHandle: async () => undefined,
-  deleteHandle: async () => undefined,
-  findHandle: async () => undefined,
-}));
-
-const g = globalThis as { showDirectoryPicker?: unknown };
-
 function launcher(kind: HostKind, roots: NasRoot[] = []): Launcher {
   const nas = kind === 'nas' ? ({ roots: async () => roots } as unknown as NasClient) : null;
   return new Launcher({} as ShellModel, {} as PrefsStorage, { kind, native: null, nas });
 }
 
 describe('Launcher.start', () => {
-  afterEach(() => {
-    delete g.showDirectoryPicker;
-    vi.restoreAllMocks();
-  });
+  afterEach(() => vi.restoreAllMocks());
 
-  it('opens the browser notebook straight away where folders can’t be opened', async () => {
+  it('opens the browser notebook straight away in a browser', async () => {
     const l = launcher('browser');
     let startingDuringOpen = false;
     const open = vi.spyOn(l, 'openPrivate').mockImplementation(async () => {
@@ -34,26 +20,6 @@ describe('Launcher.start', () => {
     expect(open).toHaveBeenCalledOnce();
     expect(startingDuringOpen).toBe(true);
     expect(l.starting.value).toBe(false);
-  });
-
-  it('opens the browser notebook where a folder can be opened too, with no folder to go back to', async () => {
-    g.showDirectoryPicker = () => undefined;
-    const l = launcher('browser');
-    const open = vi.spyOn(l, 'openPrivate').mockResolvedValue();
-    await l.start();
-    expect(open).toHaveBeenCalledOnce();
-  });
-
-  it('leaves the last folder to the welcome screen when reopening it needs a click', async () => {
-    g.showDirectoryPicker = () => undefined;
-    handles.known.add('f1');
-    const l = launcher('browser');
-    l.recents.value = [{ kind: 'browser', id: 'f1', name: 'Notes' }];
-    vi.spyOn(l as unknown as { canReopen: () => Promise<boolean> }, 'canReopen').mockResolvedValue(false);
-    const open = vi.spyOn(l, 'openPrivate').mockResolvedValue();
-    await l.start();
-    expect(open).not.toHaveBeenCalled();
-    handles.known.clear();
   });
 
   it('never opens the browser notebook on the NAS', async () => {
@@ -73,17 +39,44 @@ describe('Launcher.start', () => {
     expect(fresh).not.toHaveBeenCalled();
   });
 
+  it('skips a NAS recent in a plain browser and opens the browser notebook', async () => {
+    const l = launcher('browser');
+    l.recents.value = [{ kind: 'nas', root: 'sample', rootName: 'Sample', base: '', name: 'Sample' }];
+    const reopen = vi.spyOn(l, 'open').mockResolvedValue(true);
+    await l.start();
+    expect(reopen).toHaveBeenCalledWith({ kind: 'private', name: 'Browser notebook' });
+  });
+
   it('opens a NAS server’s only root as the notebook', async () => {
-    const l = launcher('nas', [{ id: 'r1', name: 'Notes' } as NasRoot]);
+    const l = launcher('nas', [{ id: 'r1', name: 'Notes' }]);
     const open = vi.spyOn(l, 'openNas').mockResolvedValue();
     await l.start();
     expect(open).toHaveBeenCalledWith({ id: 'r1', name: 'Notes' }, '');
   });
 
   it('leaves the choice of root to the welcome screen when there are several', async () => {
-    const l = launcher('nas', [{ id: 'a', name: 'A' } as NasRoot, { id: 'b', name: 'B' } as NasRoot]);
+    const l = launcher('nas', [
+      { id: 'a', name: 'A' },
+      { id: 'b', name: 'B' },
+    ]);
     const open = vi.spyOn(l, 'openNas').mockResolvedValue();
     await l.start();
     expect(open).not.toHaveBeenCalled();
+  });
+});
+
+describe('recents', () => {
+  afterEach(() => vi.unstubAllGlobals());
+
+  it('drops folders picked through the old Chromium folder picker', async () => {
+    const saved = JSON.stringify([
+      { kind: 'browser', id: 'x', name: 'Old' },
+      { kind: 'private', name: 'Browser notebook' },
+    ]);
+    vi.stubGlobal('localStorage', { getItem: () => saved, setItem: () => undefined });
+    vi.resetModules();
+    const { Launcher: Fresh } = await import('../src/launcher.ts');
+    const l = new Fresh({} as ShellModel, {} as PrefsStorage, { kind: 'browser', native: null, nas: null });
+    expect(l.recents.value).toEqual([{ kind: 'private', name: 'Browser notebook' }]);
   });
 });

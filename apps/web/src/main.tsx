@@ -1,6 +1,6 @@
 import { computed, effect } from '@preact/signals';
 import { render } from 'preact';
-import { canPickFolder, localPrefs, Shell, ShellModel } from '@puffinote/ui';
+import { localPrefs, Shell, ShellModel } from '@puffinote/ui';
 import '@puffinote/ui/styles.css';
 import { Launcher } from './launcher.ts';
 import { nativeMenu } from './nativeMenu.ts';
@@ -9,14 +9,13 @@ import './welcome.css';
 
 const host = await Launcher.detect();
 const model = new ShellModel({
-  // The desktop app and a browser that can open folders bring the folder picker straight up; on a NAS it's the
-  // server's folders on the welcome screen. A browser that can't open folders has only its own notebook.
-  openNotebook:
-    host.kind === 'nas'
+  // The desktop app brings the folder dialog straight up; a NAS shows the server's folders on the welcome
+  // screen. A plain browser has only its own notebook, so the command is hidden there.
+  openNotebook: host.native
+    ? (): void => void launcher.openFolder()
+    : host.kind === 'nas'
       ? (): void => launcher.close()
-      : host.native || canPickFolder()
-        ? (): void => void launcher.openFolder()
-        : undefined,
+      : undefined,
   titleBar: host.native?.platform === 'darwin',
   setTitleBarHeight: (h) => host.native?.setTitleBarHeight(h),
 });

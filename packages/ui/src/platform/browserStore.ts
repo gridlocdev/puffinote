@@ -9,38 +9,9 @@ import {
 } from './notebookStore.ts';
 import { baseName, parentOf } from './paths.ts';
 
-interface PermissionHandle {
-  queryPermission?(d: { mode: 'read' | 'readwrite' }): Promise<PermissionState>;
-  requestPermission?(d: { mode: 'read' | 'readwrite' }): Promise<PermissionState>;
-}
-
-interface PickerWindow {
-  showDirectoryPicker?: (opts?: {
-    mode?: 'read' | 'readwrite';
-    id?: string;
-  }) => Promise<FileSystemDirectoryHandle>;
-}
-
-/** True when this browser can open a folder from disk (Chromium's File System Access API). */
-export function canPickFolder(): boolean {
-  return typeof (globalThis as PickerWindow).showDirectoryPicker === 'function';
-}
-
-/** Ask the user for a folder to open as the notebook. Null when cancelled. */
-export async function pickFolder(): Promise<FileSystemDirectoryHandle | null> {
-  const picker = (globalThis as PickerWindow).showDirectoryPicker;
-  if (!picker) return null;
-  try {
-    return await picker({ mode: 'readwrite', id: 'puffinote-notebook' });
-  } catch (e) {
-    if (e instanceof DOMException && e.name === 'AbortError') return null;
-    throw e;
-  }
-}
-
 /**
- * The browser's private notebook folder (the origin-private file system): every modern browser has one, so a
- * browser that can't open a folder from disk still gets a notebook that survives a reload.
+ * The browser's private notebook folder (the origin-private file system): every modern browser has one, so the
+ * web app's notebook survives a reload without touching the disk.
  */
 export async function privateFolder(timeoutMs = 5000): Promise<FileSystemDirectoryHandle | null> {
   // A browser with site storage blocked can leave this hanging rather than refuse; give up after a while.
@@ -52,16 +23,8 @@ export async function privateFolder(timeoutMs = 5000): Promise<FileSystemDirecto
   return Promise.race([folder, timeout]);
 }
 
-/** Make sure we may write to `handle`, asking only when `ask` (a prompt needs a user gesture). */
-export async function ensurePermission(handle: FileSystemHandle, ask: boolean): Promise<boolean> {
-  const h = handle as FileSystemHandle & PermissionHandle;
-  if (!h.queryPermission) return true;
-  if ((await h.queryPermission({ mode: 'readwrite' })) === 'granted') return true;
-  return ask && (await h.requestPermission?.({ mode: 'readwrite' })) === 'granted';
-}
-
 /**
- * A notebook in a browser folder handle: one the user picked, or the private folder. Versions are the file's
+ * A notebook in a browser folder handle (the private folder; tests pass in-memory ones). Versions are the file's
  * lastModified, re-checked before each write. There is no change notification, so the shell re-reads the tree
  * when the window regains focus.
  */
