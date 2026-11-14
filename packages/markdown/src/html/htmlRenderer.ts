@@ -107,6 +107,17 @@ function stripColumns(s: string, columns: number): string {
   return ' '.repeat(Math.max(0, col - columns)) + s.slice(k);
 }
 
+/** How many columns of blanks `s` starts with, a tab reaching the next multiple of four. */
+function leadingColumns(s: string): number {
+  let col = 0;
+  for (const c of s) {
+    if (c === ' ') col++;
+    else if (c === '\t') col += 4 - (col % 4);
+    else break;
+  }
+  return col;
+}
+
 class Renderer {
   out = '';
   private readonly doc: TextDocument;
@@ -307,6 +318,7 @@ class Renderer {
       const indent = this.listIndent(i);
       if (indent !== levelIndent) break; // shallower: an outer list's; deeper with no sibling: the caller's
 
+      const column = this.itemColumn(i);
       const tokens = this.model.lineTokens(i);
       const at = tokens.indexOf(this.listMarkerOf(i)!);
       const box = tokens[at + 1]?.type === 'taskMarker' ? tokens[at + 1]! : null;
@@ -330,13 +342,25 @@ class Renderer {
       }
       if (box) this.out += '</span>';
 
-      // A deeper item, right below or past blank lines, nests inside this one.
+      // A deeper item, right below or past blank lines, nests inside this one. So does any other block
+      // indented to the item's text, such as a paragraph or code after a blank line (PRD §10.5).
       for (;;) {
         let j = i;
         while (j < n && this.isBlankIn(j, quote)) j++;
-        if (!(j < n && this.isListLine(j, quote) && this.listIndent(j) > levelIndent)) break;
-        this.out += '\n';
-        i = this.listLevel(j, this.listIndent(j), depth + 1, quote);
+        if (j >= n) break;
+        if (this.isListLine(j, quote) && this.listIndent(j) > levelIndent) {
+          if (!this.out.endsWith('\n')) this.out += '\n';
+          i = this.listLevel(j, this.listIndent(j), depth + 1, quote);
+        } else if (
+          quote === 0 &&
+          !this.isListLine(j, 0) &&
+          leadingColumns(this.doc.getLineText(j)) >= column
+        ) {
+          if (!this.out.endsWith('\n')) this.out += '\n';
+          i = this.block(j);
+        } else {
+          break;
+        }
       }
       this.out += '</li>\n';
     }
@@ -359,6 +383,16 @@ class Renderer {
       second.type !== 'listMarker' &&
       second.type !== 'headingMarker'
     );
+  }
+
+  /**
+   * The column a list item's own blocks are indented to: the content column the model opens for the item on
+   * `line` (just past its marker). Infinite when nothing follows, so no line counts as inside it.
+   */
+  private itemColumn(line: number): number {
+    if (line + 1 >= this.doc.lineCount) return Number.POSITIVE_INFINITY;
+    const columns = this.model.enteringState(line + 1).listColumns;
+    return columns.length > 0 ? columns[columns.length - 1]! : Number.POSITIVE_INFINITY;
   }
 
   /** The line's list marker: its first token, or the one right after its blockquote prefix. */

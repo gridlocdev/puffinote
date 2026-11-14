@@ -76,6 +76,20 @@ describe('HTML renderer', () => {
     expect(body('- a\n\n  - b\n\n- c').match(/<ul>/g)).toHaveLength(2);
   });
 
+  it('keeps a paragraph or code indented under an item, past a blank line, inside the item', () => {
+    expect(body('1. one\n\n   more\n2. two')).toBe(
+      '<ol>\n<li>one\n<p>   more</p>\n</li>\n<li>two</li>\n</ol>\n',
+    );
+    expect(body('- item\n\n      code\n- two')).toBe(
+      '<ul>\n<li>item\n<pre><code>code\n</code></pre>\n</li>\n<li>two</li>\n</ul>\n',
+    );
+    expect(body('- a\n  - b\n\n  for a').match(/<li>/g)).toHaveLength(2);
+    expect(body('- a\n  - b\n\n  for a')).toContain('</ul>\n<p>  for a</p>\n</li>\n</ul>');
+    // Not indented to the item's text: the list ends.
+    expect(body('- a\n\nafter')).toBe('<ul>\n<li>a</li>\n</ul>\n<p>after</p>\n');
+    expect(body('- a\n\n after')).toBe('<ul>\n<li>a</li>\n</ul>\n<p> after</p>\n');
+  });
+
   it('renders task boxes with a state class and label', () => {
     const html = body('- [ ] todo\n- [x] done');
     expect(html).toContain('<li class="task t-not">');
