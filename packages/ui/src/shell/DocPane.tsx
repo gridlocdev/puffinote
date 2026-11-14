@@ -1,5 +1,7 @@
+import { useMemo } from 'preact/hooks';
 import { MAX_MATCHES } from '../editor/find.ts';
 import { MarkdownEditor } from '../editor/MarkdownEditor.tsx';
+import { settleMs, useSettled } from '../editor/settled.ts';
 import type { Notebook, Tab } from '../notebook/notebook.ts';
 import { Icon } from './Icon.tsx';
 import type { ShellModel } from './shellModel.ts';
@@ -181,13 +183,14 @@ export function StatusBar({
   const notice = nb.notice.value;
   const state = tab?.state ?? null;
   const zoom = model.zoom.value;
+  const version = state?.version.value ?? 0;
+  // Counted once typing pauses, not on every keystroke or caret move.
+  const settled = useSettled(version, state, settleMs);
+  const words = useMemo(() => (state ? (state.text.match(/\S+/g)?.length ?? 0) : 0), [state, settled]);
   let position = '';
-  let words = 0;
   if (state) {
-    void state.version.value;
     const p = state.document.getPosition(state.selection.value.caret);
     position = `Ln ${p.line + 1}, Col ${p.column + 1}`;
-    words = state.text.match(/\S+/g)?.length ?? 0;
   }
   return (
     <footer class="pn-status">

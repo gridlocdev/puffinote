@@ -3,6 +3,7 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'preact/hooks';
 import type { Notebook, SearchHit } from '../notebook/notebook.ts';
 import { outlineOf } from '@puffinote/markdown';
+import { settleMs, useSettled } from '../editor/settled.ts';
 import { filterTree, findNode } from '../notebook/tree.ts';
 import { baseName, parentOf } from '../platform/paths.ts';
 import { FileTree } from './FileTree.tsx';
@@ -246,9 +247,11 @@ export function Marked({ hit }: { readonly hit: SearchHit }) {
 
 export function OutlinePanel({ model, nb }: { readonly model: ShellModel; readonly nb: Notebook }) {
   const state = nb.active.value?.state ?? null;
+  const version = state?.version.value ?? 0;
+  // Read again once typing pauses, not on every keystroke or caret move.
+  const settled = useSettled(version, state, settleMs);
+  const items = useMemo(() => (state ? outlineOf(state.document, state.model) : []), [state, settled]);
   if (!state) return <p class="pn-panel-note">Open a note to see its headings.</p>;
-  void state.version.value;
-  const items = outlineOf(state.document, state.model);
   const caret = state.selection.value.caret;
   let current = -1;
   for (let i = 0; i < items.length; i++) if (items[i]!.offset <= caret + 1) current = i;
@@ -264,12 +267,12 @@ export function OutlinePanel({ model, nb }: { readonly model: ShellModel; readon
           aria-selected={i === current}
           style={{ paddingLeft: `${10 + (o.level - min) * 14}px` }}
           onClick={() => {
-            state.reveal(o.offset);
+            state.reveal(Math.min(o.offset, state.document.length));
             model.focusEditor();
           }}
           onKeyDown={(e) => {
             if (e.key === 'Enter') {
-              state.reveal(o.offset);
+              state.reveal(Math.min(o.offset, state.document.length));
               model.focusEditor();
             } else if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
               e.preventDefault();

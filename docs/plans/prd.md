@@ -126,7 +126,7 @@ The rail's buttons change the panel. Filter and Search put the caret in their bo
 
 - **Filter** narrows the tree to entries whose whole name (extension included) contains the text, case-insensitively. It keeps the folders above a match and everything inside a matching folder, opens the folders that lead to matches, and counts the matches (or says "No matches"). It is the same tree, with the same keys, menu and drag.
 - **Search** (⇧⌘F) finds note names and the text in every note, including the unsaved text of open tabs. Notes whose name matches come first, led by the name with the match marked. Each text hit shows its line with the match marked. Enter or a click opens the note, at the hit for a text hit. When the query changes, the old hits go at once and the panel says Searching… until the new answer; a search that fails says "Search failed" with the reason.
-- **Outline** lists the headings of the active note, indented by level. A click moves the caret to the heading.
+- **Outline** lists the headings of the active note, indented by level, and catches up with edits once typing pauses for a third of a second. A click moves the caret to the heading.
 - **Recent** lists this notebook's recently opened files.
 
 ### 6.4 Quick Open (⌘O)
@@ -233,7 +233,7 @@ A custom editing surface, not a `contenteditable`. Lines render as DOM. A hidden
 
 ### 10.3 Status bar and links
 
-- **Status bar:** the latest notice (an error, "Saved"), Ln/Col, the word count, the zoom when it isn't 100% (a click resets it), and the view switcher.
+- **Status bar:** the latest notice (an error, "Saved"), Ln/Col, the word count (counted again once typing pauses for a third of a second, so a long note doesn't recount on every keystroke), the zoom when it isn't 100% (a click resets it), and the view switcher.
 - **Zoom.** Zoom In (⌘=), Zoom Out (⌘-) and Actual Size scale the note's text and spacing from 50% to 300% in 10% steps. The zoom is remembered per browser or desktop app, not per notebook.
 - **Links.** Hovering shows the destination. ⌘-click (Ctrl-click elsewhere) opens it. A plain click puts the caret in the link, so it stays editable. Only `http`, `https` and `mailto` links open. Other schemes, including `file:`, `javascript:` and `data:`, are never handed to the OS.
 - **No spell check.** The editor draws each line itself and the text under it isn't editable text, so the browser's checker has nothing to underline.
