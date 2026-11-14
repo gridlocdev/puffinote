@@ -29,11 +29,13 @@ import {
   isOpenableDocument,
   listDir,
   moveEntry,
+  pdfFileName,
   readWithMtime,
   watchTree,
   withFileLock,
   writeAtomic,
 } from './files.ts';
+import { htmlToPdf } from './pdf.ts';
 import { afterRendererGone } from './recovery.ts';
 import { loadSavedWindow, placeWindow, saveWindow, type SavedWindow } from './windowState.ts';
 import {
@@ -447,6 +449,15 @@ function registerIpc(): void {
     if (!(await isOpenableDocument(target))) return shell.showItemInFolder(target);
     const error = await shell.openPath(target);
     if (error) throw new Error(error);
+  });
+  ipcMain.handle(Channels.savePdf, async (e, html: unknown, name: unknown) => {
+    if (!trusted(e) || typeof html !== 'string') forbidden();
+    const win = fromEvent(e);
+    const opts = { defaultPath: pdfFileName(name), filters: [{ name: 'PDF', extensions: ['pdf'] }] };
+    const result = win ? await dialog.showSaveDialog(win, opts) : await dialog.showSaveDialog(opts);
+    if (result.canceled || !result.filePath) return false;
+    await writeAtomic(result.filePath, await htmlToPdf(html));
+    return true;
   });
   ipcMain.on(Channels.watch, (e, root: unknown) => {
     const win = fromEvent(e);

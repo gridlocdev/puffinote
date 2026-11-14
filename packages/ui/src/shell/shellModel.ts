@@ -1318,6 +1318,20 @@ function shellCommandSpecs(m: ShellModel): CommandSpec[] {
       },
     },
     {
+      id: 'shell.exportPdf',
+      title: 'Export as PDF…',
+      description: 'Print the note in front, or save it as a PDF.',
+      group: 'File',
+      shortcut: 'mod+p',
+      global: true,
+      keywords: 'print',
+      enabled: () => tab()?.state != null && !!nb()?.canPrint,
+      run: async () => {
+        const t = tab();
+        if (t) await nb()?.exportPdf(t);
+      },
+    },
+    {
       id: 'shell.closeTab',
       title: 'Close Tab',
       description: 'Close the tab in front.',

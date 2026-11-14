@@ -8,6 +8,7 @@ import {
   NativeStore,
   Notebook,
   persistStorage,
+  printHtml,
   privateFolder,
   webRecovery,
   type NotebookStore,
@@ -241,6 +242,15 @@ export class Launcher {
     }
   }
 
+  /**
+   * Print a note's HTML (PRD §10.5): the desktop app saves it as a PDF where the user picks; a browser shows
+   * its print dialog, where Save as PDF is one choice.
+   */
+  private async print(html: string, name: string): Promise<void> {
+    if (this.native) await this.native.savePdf(html, name);
+    else await printHtml(html);
+  }
+
   private async openStore(store: NotebookStore, r: Recent): Promise<boolean> {
     this.opening.value = r.name;
     this.error.value = null;
@@ -249,6 +259,7 @@ export class Launcher {
       const nb = await Notebook.open(store, {
         prefs: this.prefs,
         download,
+        print: (html, name) => this.print(html, name),
         confirmOpenExternal: (name) => this.model.confirmOpenExternal(name),
         recovery: webRecovery(recentKey(r)),
       });

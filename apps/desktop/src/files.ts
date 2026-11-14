@@ -526,3 +526,10 @@ export class FolderGrants {
     }
   }
 }
+
+/** The file name to suggest for a PDF: the name the page asked for, without folders, ending in `.pdf`. */
+export function pdfFileName(name: unknown): string {
+  const base = typeof name === 'string' ? path.basename(name.replace(/\\/g, '/')).trim() : '';
+  if (!base || base === '.pdf') return 'Note.pdf';
+  return /\.pdf$/i.test(base) ? base : `${base}.pdf`;
+}

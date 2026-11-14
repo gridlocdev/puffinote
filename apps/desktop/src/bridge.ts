@@ -35,6 +35,8 @@ export const Channels = {
   trash: 'puffinote:trash',
   reveal: 'puffinote:reveal',
   openExternal: 'puffinote:open-external',
+  /** Lay a note's exported HTML out for print and save it as a PDF where the user picks. */
+  savePdf: 'puffinote:save-pdf',
   watch: 'puffinote:watch',
   setTitle: 'puffinote:set-title',
   /** The height of the page's title bar, so the macOS traffic lights sit in its middle. */

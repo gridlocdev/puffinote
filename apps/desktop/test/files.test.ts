@@ -24,6 +24,7 @@ import {
   mapLimit,
   moveEntry,
   overwriteInPlace,
+  pdfFileName,
   readWithMtime,
   watchTree,
   withFileLock,
@@ -403,5 +404,16 @@ describe('isOpenableDocument', () => {
     expect(await isOpenableDocument(path.join(d, 'folder.pdf'))).toBe(false);
     expect(await isOpenableDocument(path.join(d, 'disguised.pdf'))).toBe(false);
     expect(await isOpenableDocument(path.join(d, 'missing.pdf'))).toBe(false);
+  });
+});
+
+describe('pdfFileName', () => {
+  it('suggests the asked-for name without folders, ending in .pdf', () => {
+    expect(pdfFileName('Trip.pdf')).toBe('Trip.pdf');
+    expect(pdfFileName('Trip')).toBe('Trip.pdf');
+    expect(pdfFileName('../../etc/Trip.PDF')).toBe('Trip.PDF');
+    expect(pdfFileName('a\\b\\c.pdf')).toBe('c.pdf');
+    expect(pdfFileName('')).toBe('Note.pdf');
+    expect(pdfFileName(42)).toBe('Note.pdf');
   });
 });

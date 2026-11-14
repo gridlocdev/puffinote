@@ -3,6 +3,7 @@ import { MAX_EMBED_BYTES, noteHtml, toBase64 } from '../src/notebook/export.ts';
 import { Notebook } from '../src/notebook/notebook.ts';
 import { memoryPrefs } from '../src/notebook/settings.ts';
 import { MemoryStore } from '../src/platform/memoryStore.ts';
+import { printHtml } from '../src/platform/print.ts';
 
 const png = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 1, 2, 3]);
 
@@ -55,5 +56,61 @@ describe('Export as HTML', () => {
     expect(html).toContain('<strong>unsaved</strong>');
     expect(html).toContain('data:image/png;base64,');
     expect(nb.notice.value?.text).toContain('“x.png”');
+  });
+});
+
+describe('Export as PDF', () => {
+  it('hands the same standalone HTML to the host to print, named after the note', async () => {
+    const store = new MemoryStore('N', { 'a/n.md': '# Hi', 'a/p.png': png });
+    const print = vi.fn(async () => {});
+    const nb = await Notebook.open(store, { prefs: memoryPrefs({ autoSave: false }), print });
+    expect(nb.canPrint).toBe(true);
+    const tab = (await nb.openFile('a/n.md'))!;
+    tab.state!.select(4);
+    tab.state!.insert('\n\n![p](p.png)');
+    await nb.exportPdf(tab);
+    expect(print).toHaveBeenCalledTimes(1);
+    const [html, name] = print.mock.calls[0]! as unknown as [string, string];
+    expect(name).toBe('n.pdf');
+    expect(html).toContain('<h1>Hi</h1>');
+    expect(html).toContain('data:image/png;base64,');
+    expect(html).toContain('@media print');
+  });
+
+  it('is off where the host can’t print', async () => {
+    const nb = await Notebook.open(new MemoryStore('N', { 'n.md': '' }), { prefs: memoryPrefs() });
+    expect(nb.canPrint).toBe(false);
+  });
+
+  it('prints from a hidden, sandboxed frame and removes it after the dialog', async () => {
+    const listeners = new Map<string, () => void>();
+    const winListeners = new Map<string, () => void>();
+    const win = {
+      print: vi.fn(),
+      focus: vi.fn(),
+      addEventListener: (type: string, cb: () => void) => winListeners.set(type, cb),
+    };
+    const attrs = new Map<string, string>();
+    const frame = {
+      style: {},
+      tabIndex: 0,
+      srcdoc: '',
+      contentWindow: win,
+      className: '',
+      remove: vi.fn(),
+      setAttribute: (k: string, v: string) => attrs.set(k, v),
+      addEventListener: (type: string, cb: () => void) => listeners.set(type, cb),
+    };
+    const doc = { createElement: () => frame, body: { append: vi.fn() } };
+    const done = printHtml('<p>x</p>', doc as unknown as Document);
+    expect(frame.srcdoc).toBe('<p>x</p>');
+    expect(attrs.get('sandbox')).toBe('allow-same-origin allow-modals');
+    expect(doc.body.append).toHaveBeenCalledWith(frame);
+    listeners.get('load')!();
+    await done;
+    expect(win.print).toHaveBeenCalledTimes(1);
+    expect(frame.remove).not.toHaveBeenCalled();
+    winListeners.get('afterprint')!();
+    expect(frame.remove).toHaveBeenCalled();
   });
 });

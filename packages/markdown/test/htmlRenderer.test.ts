@@ -288,6 +288,16 @@ describe('HTML renderer', () => {
     expect(html).toContain('alt="a"> b</p>');
   });
 
+  it('prints light, with page margins and no break inside code or pictures', () => {
+    const html = renderHtmlDocument(TextDocument.fromString('x'));
+    expect(html).toContain('@page { margin: 18mm 16mm; }');
+    const print = html.slice(html.indexOf('@media print'));
+    expect(print).toContain('color-scheme: light');
+    expect(print).toMatch(/pre, img[^{]*\{ break-inside: avoid; \}/);
+    // Dark colours are for the screen only.
+    expect(html).not.toMatch(/@media \(prefers-color-scheme: dark\)/);
+  });
+
   it('renders a self-contained document', () => {
     const page = renderHtmlDocument(TextDocument.fromString('# Hi'), 'My Doc');
     expect(page.startsWith('<!DOCTYPE html>')).toBe(true);

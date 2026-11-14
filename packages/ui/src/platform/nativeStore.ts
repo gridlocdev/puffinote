@@ -52,6 +52,11 @@ export interface PuffinoteNative {
   trash(path: string): Promise<void>;
   reveal(path: string): Promise<void>;
   openExternal(path: string): Promise<void>;
+  /**
+   * Ask where to save a PDF (suggesting `name`), lay `html` out for print and write it there. False when the
+   * user cancels.
+   */
+  savePdf(html: string, name: string): Promise<boolean>;
   /** A URL the renderer can load the file from (a custom protocol in the desktop app). */
   fileUrl(path: string): string;
   /** Watch the notebook folder; `null` stops watching. */

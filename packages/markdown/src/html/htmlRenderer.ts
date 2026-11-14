@@ -724,7 +724,7 @@ pre code { background: none; padding: 0; }
 blockquote { border-left: 3px solid rgba(127,127,127,0.5); margin: 0; padding: 0 1rem; color: #666; }
 mark { background: #fdf6b2; color: #1f1f1f; }
 a { color: #0b62d6; }
-@media (prefers-color-scheme: dark) {
+@media screen and (prefers-color-scheme: dark) {
   blockquote { color: #a8a8a8; }
   mark { background: #6b5a12; color: inherit; }
   a { color: #6aa6ff; }
@@ -737,7 +737,7 @@ img { max-width: 100%; }
 /* Task states (PRD §11.4). One accent, single-hue: the dash and the check share it, so "under way" and
    "done" read as two points on one path. A resting box is a bare outline in the quiet border colour. */
 :root { --t-border:#B1B8C2; --t-accent:#216BE0; --t-check:#fff; --t-off:#6E7781; }
-@media (prefers-color-scheme: dark) {
+@media screen and (prefers-color-scheme: dark) {
   :root { --t-border:#5A6272; --t-accent:#3B82F6; --t-check:#fff; --t-off:#9AA3B5; }
 }
 li.task { list-style: none; margin-left: -1.35em; }
@@ -748,4 +748,15 @@ li.task > .tbox svg { position: absolute; top: 50%; left: 50%; transform: transl
                       width: 1.15em; height: 1.15em; display: block; }
 li.t-prog > .tbox { color: var(--t-accent); }
 li.t-done > .tbox { background: var(--t-accent); border-color: var(--t-accent); color: var(--t-check); }
-li.t-done > .ttext { color: var(--t-off); text-decoration: line-through; }`;
+li.t-done > .ttext { color: var(--t-off); text-decoration: line-through; }
+
+/* Print and PDF (PRD §10.5): light, the page's own margins, and no break inside a code block or picture. */
+@page { margin: 18mm 16mm; }
+@media print {
+  :root { color-scheme: light; }
+  body { max-width: none; margin: 0; padding: 0; font-size: 11pt; }
+  pre { white-space: pre-wrap; overflow-wrap: anywhere; overflow: visible; }
+  pre, img, tr, blockquote, li.task { break-inside: avoid; }
+  h1, h2, h3, h4, h5, h6 { break-after: avoid; }
+  a { color: inherit; }
+}`;

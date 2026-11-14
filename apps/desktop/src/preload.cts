@@ -30,6 +30,8 @@ contextBridge.exposeInMainWorld('puffinoteNative', {
   trash: (path: string): Promise<void> => ipcRenderer.invoke('puffinote:trash', path),
   reveal: (path: string): Promise<void> => ipcRenderer.invoke('puffinote:reveal', path),
   openExternal: (path: string): Promise<void> => ipcRenderer.invoke('puffinote:open-external', path),
+  savePdf: (html: string, name: string): Promise<boolean> =>
+    ipcRenderer.invoke('puffinote:save-pdf', html, name),
   fileUrl: (path: string): string =>
     'pnfile://local/' +
     path.replace(/\\/g, '/').replace(/^\//, '').split('/').map(encodeURIComponent).join('/'),

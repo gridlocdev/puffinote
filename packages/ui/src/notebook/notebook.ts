@@ -245,6 +245,11 @@ export interface NotebookOptions {
   readonly prefs: PrefsStorage;
   /** Hand a file nobody here can open to the user (a download), when the store can't open it externally. */
   readonly download?: (name: string, bytes: Uint8Array, mime: string) => void;
+  /**
+   * Print a standalone HTML document or save it as a PDF named `name` (PRD §10.5): the browser's print dialog,
+   * or the desktop app's save dialog. Without it, Export as PDF is off.
+   */
+  readonly print?: (html: string, name: string) => Promise<void>;
   /** Ask whether to open a file in its default app; true opens it. Without it, files open straight away. */
   readonly confirmOpenExternal?: (name: string) => Promise<boolean>;
   /** Where recovery copies of unsaved edits go (PRD §5). Without it, none are kept. */
@@ -1386,6 +1391,27 @@ export class Notebook {
     try {
       const out = await noteHtml(this.store, tab.path.peek(), tab.state.text);
       download(out.name, new TextEncoder().encode(out.html), 'text/html');
+      this.noteSkipped(out.skipped);
+    } catch (e) {
+      this.report(e);
+    }
+  }
+
+  /** Whether this host can print a note or save it as a PDF. */
+  get canPrint(): boolean {
+    return this.options.print !== undefined;
+  }
+
+  /**
+   * Print the note in `tab`, or save it as a PDF (PRD §10.5): the same standalone HTML as Export as HTML,
+   * laid out for paper by its print stylesheet.
+   */
+  async exportPdf(tab: Tab): Promise<void> {
+    const print = this.options.print;
+    if (!tab.state || !print) return;
+    try {
+      const out = await noteHtml(this.store, tab.path.peek(), tab.state.text);
+      await print(out.html, `${stemOf(tab.path.peek())}.pdf`);
       this.noteSkipped(out.skipped);
     } catch (e) {
       this.report(e);
