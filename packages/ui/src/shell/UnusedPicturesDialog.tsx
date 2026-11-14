@@ -5,7 +5,7 @@ import { Dialog } from './Dialog.tsx';
 
 /**
  * Find Unused Pictures… (PRD §10.6): the notebook's pictures that no note links to, each ticked, and a button
- * that moves the ticked ones to the Trash (or deletes them where the notebook has no Trash).
+ * that moves the ticked ones to the Trash (the notebook's own Trash in the browser and on the NAS).
  */
 export function UnusedPicturesDialog(props: {
   readonly nb: Notebook;
@@ -14,7 +14,6 @@ export function UnusedPicturesDialog(props: {
 }) {
   const { nb, paths } = props;
   const [picked, setPicked] = useState<ReadonlySet<string>>(new Set(paths));
-  const trash = nb.store.kind === 'native';
   const count = picked.size;
   const toggle = (p: string) => {
     const next = new Set(picked);
@@ -37,7 +36,7 @@ export function UnusedPicturesDialog(props: {
             Cancel
           </button>
           <button type="submit" class="pn-danger" disabled={count === 0}>
-            {trash ? 'Move to Trash' : 'Delete'}
+            Move to Trash
             {count > 0 ? ` (${count})` : ''}
           </button>
         </>
@@ -45,7 +44,7 @@ export function UnusedPicturesDialog(props: {
     >
       <p>
         No note links to {paths.length === 1 ? 'this picture' : `these ${paths.length} pictures`}.
-        {trash ? ' Ticked ones go to the Trash.' : ' Ticked ones are deleted, which can’t be undone.'}
+        {nb.notebookTrash ? ' Ticked ones go to the notebook’s Trash.' : ' Ticked ones go to the Trash.'}
       </p>
       <ul class="pn-unused-list">
         {paths.map((p) => (

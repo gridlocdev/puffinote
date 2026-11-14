@@ -165,7 +165,7 @@ describe('Notebook pictures', () => {
   it('offers to delete the pictures of a deleted note', async () => {
     const { nb } = await open({ 'one.md': '![](a.png)', 'a.png': '' });
     await nb.remove('one.md');
-    await vi.waitFor(() => expect(nb.notice.value?.action).toBeDefined());
+    await vi.waitFor(() => expect(nb.notice.value?.action?.label).toBe('Move to Trash'));
   });
 
   it('lists the pictures no note links to', async () => {
@@ -201,7 +201,7 @@ describe('Find Unused Pictures safety', () => {
     store.read = (p: string) => (p === 'two.md' ? Promise.reject(new Error('offline')) : read(p));
     await nb.remove('one.md');
     await new Promise((r) => setTimeout(r, 10));
-    expect(nb.notice.value?.action).toBeUndefined();
+    expect(nb.notice.value?.action?.label).not.toBe('Move to Trash');
   });
 });
 
@@ -224,7 +224,7 @@ describe('pictures shown by wiki embeds and <img>', () => {
     expect(await nb.notesShowing('a.png', 'one.md')).toEqual(['two.md']);
     await nb.remove('one.md');
     await new Promise((r) => setTimeout(r, 10));
-    expect(nb.notice.value?.action).toBeUndefined();
+    expect(nb.notice.value?.action?.label).not.toBe('Move to Trash');
   });
 });
 

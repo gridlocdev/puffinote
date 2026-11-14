@@ -63,6 +63,14 @@ import {
   type FileStat,
   type TreeNode,
 } from './tree.ts';
+import {
+  emptyTrash,
+  hasNotebookTrash,
+  listTrash,
+  moveToTrash,
+  restoreFromTrash,
+  type TrashItem,
+} from './trash.ts';
 
 export type SidebarPanel = 'files' | 'filter' | 'search' | 'outline' | 'recent';
 
@@ -994,8 +1002,86 @@ export class Notebook {
     }
   }
 
-  /** Delete a file or folder (the shell confirms first). Its tabs close without saving. */
+  /** Deleted files go to the notebook's own Trash (browser, NAS), not the system's (desktop). PRD §6.1. */
+  get notebookTrash(): boolean {
+    return hasNotebookTrash(this.store);
+  }
+
+  /**
+   * Delete a file or folder (the shell confirms first). Its tabs close without saving. Where the notebook keeps
+   * its own Trash, the status bar says so with an Undo button.
+   */
   async remove(path: string): Promise<boolean> {
+    const result = await this.deleteEntry(path);
+    if (result === false) return false;
+    if (result) this.offerUndo([result], `Moved “${baseName(path)}” to the notebook’s Trash.`);
+    return true;
+  }
+
+  /** The status bar says what went to the Trash, with Undo. */
+  private offerUndo(items: readonly TrashItem[], text: string): void {
+    this.offer = null;
+    this.notice.value = {
+      kind: 'info',
+      text,
+      action: { label: 'Undo', run: () => void this.restore(items) },
+    };
+  }
+
+  /** What is in the notebook's Trash, newest first (none on the desktop, whose files go to the system Trash). */
+  async trashItems(): Promise<TrashItem[]> {
+    if (!this.notebookTrash) return [];
+    return listTrash(this.store);
+  }
+
+  /**
+   * Put trashed items back where they were, under a free name when the old one is taken (never overwriting).
+   * Returns the paths they went to.
+   */
+  async restore(items: readonly TrashItem[]): Promise<string[]> {
+    if (this.disposed) return [];
+    const out: string[] = [];
+    for (const item of items) {
+      try {
+        out.push(await restoreFromTrash(this.store, item));
+      } catch (e) {
+        this.report(e);
+      }
+    }
+    if (out.length === 0) return out;
+    // A note showing a restored picture drew it as missing.
+    this.forgetImages(out);
+    await this.reloadTree();
+    const renamed = items.length === 1 && out[0] !== items[0]!.path;
+    if (out.length === 1) {
+      this.notify(
+        'info',
+        renamed
+          ? `Restored “${baseName(items[0]!.path)}” as “${baseName(out[0]!)}”: the name was taken.`
+          : `Restored “${baseName(out[0]!)}”.`,
+      );
+    } else this.notify('info', `Restored ${out.length} items.`);
+    return out;
+  }
+
+  /** Delete everything in the notebook's Trash for good (the shell confirms first). */
+  async emptyTrash(): Promise<boolean> {
+    if (this.disposed || !this.notebookTrash) return false;
+    try {
+      await emptyTrash(this.store);
+    } catch (e) {
+      this.report(e);
+      return false;
+    }
+    this.notify('info', 'The notebook’s Trash is empty.');
+    return true;
+  }
+
+  /**
+   * Delete `path` (to the notebook's Trash or the system's) and reconcile tabs, lists and the tree. False when
+   * it failed; the trash item when it went to the notebook's Trash; null otherwise.
+   */
+  private async deleteEntry(path: string): Promise<TrashItem | null | false> {
     if (this.disposed) return false;
     const node = findNode(this.tree.peek(), path);
     const notes = (!node ? [] : node.kind === 'file' ? [path] : allFiles(node).map((f) => f.path)).filter(
@@ -1008,8 +1094,10 @@ export class Notebook {
         if (text !== null) for (const t of imageTargets(text, p)) if (!isWithin(t, path)) linked.add(t);
       }
     }
+    let item: TrashItem | null = null;
     try {
-      await this.store.remove(path);
+      if (this.notebookTrash) item = await moveToTrash(this.store, path, node?.kind ?? 'file');
+      else await this.store.remove(path);
     } catch (e) {
       this.report(e);
       return false;
@@ -1026,7 +1114,7 @@ export class Notebook {
     if (this.selected.value && isWithin(this.selected.value, path)) this.selected.value = null;
     await this.reloadTree();
     if (linked.size > 0) void this.offerUnused([...linked]);
-    return true;
+    return item;
   }
 
   private async openElsewhere(path: string): Promise<void> {
@@ -1369,7 +1457,6 @@ export class Notebook {
     }
     const unused = present.filter((p) => !linked.has(p));
     if (unused.length === 0) return;
-    const trash = this.store.kind === 'native';
     const notice: Notice = {
       kind: 'info',
       text:
@@ -1377,7 +1464,7 @@ export class Notebook {
           ? `No note shows “${baseName(unused[0]!)}” any more.`
           : `No note shows ${unused.length} of these pictures any more.`,
       action: {
-        label: trash ? 'Move to Trash' : 'Delete',
+        label: 'Move to Trash',
         run: () => void this.removeUnused(unused),
       },
     };
@@ -1417,20 +1504,37 @@ export class Notebook {
     }
     const unused = paths.filter((p) => !linked.has(p));
     const kept = paths.length - unused.length;
-    let done = 0;
-    for (const p of unused) if (await this.remove(p)) done++;
+    const { done, items } = await this.deleteEach(unused);
     if (kept > 0) {
       const which = kept === 1 ? `“${baseName(paths.find((p) => linked.has(p))!)}”` : `${kept} pictures`;
       this.notify('info', `Kept ${which}: a note shows ${kept === 1 ? 'it' : 'them'} again.`);
-    } else if (done > 0) this.notify('info', `Deleted ${done} ${done === 1 ? 'picture' : 'pictures'}.`);
+    } else this.sayPicturesDeleted(done, items);
   }
 
   /** Delete each of `paths`, whoever shows them (Delete Picture's Delete File). */
   async removeAll(paths: readonly string[]): Promise<void> {
     if (this.disposed) return;
+    const { done, items } = await this.deleteEach(paths);
+    this.sayPicturesDeleted(done, items);
+  }
+
+  private async deleteEach(paths: readonly string[]): Promise<{ done: number; items: TrashItem[] }> {
     let done = 0;
-    for (const p of paths) if (await this.remove(p)) done++;
-    if (done > 0) this.notify('info', `Deleted ${done} ${done === 1 ? 'picture' : 'pictures'}.`);
+    const items: TrashItem[] = [];
+    for (const p of paths) {
+      const result = await this.deleteEntry(p);
+      if (result === false) continue;
+      done++;
+      if (result) items.push(result);
+    }
+    return { done, items };
+  }
+
+  private sayPicturesDeleted(done: number, items: readonly TrashItem[]): void {
+    if (done === 0) return;
+    const what = `${done} ${done === 1 ? 'picture' : 'pictures'}`;
+    if (items.length > 0) this.offerUndo(items, `Moved ${what} to the notebook’s Trash.`);
+    else this.notify('info', `Moved ${what} to the Trash.`);
   }
 
   // ----- Settings -----

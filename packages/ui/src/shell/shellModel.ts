@@ -8,6 +8,7 @@ import type { EditorState } from '../editor/editorState.ts';
 import { findAll, matchAt, matchFrom, type TextRange } from '../editor/find.ts';
 import { sidebarPanels, type Notebook, type SidebarPanel, type Tab } from '../notebook/notebook.ts';
 import { allFolders, fileKind, findNode, hasFolders, noteFileName, type TreeNode } from '../notebook/tree.ts';
+import type { TrashItem } from '../notebook/trash.ts';
 import {
   baseName,
   invalidNameReason,
@@ -36,6 +37,7 @@ export type Overlay =
   | { readonly kind: 'moveTo'; readonly path: string }
   | { readonly kind: 'settings' }
   | { readonly kind: 'unusedPictures'; readonly paths: readonly string[] }
+  | { readonly kind: 'trash'; readonly items: readonly TrashItem[] }
   | { readonly kind: 'prompt'; readonly options: PromptOptions; readonly done: (v: string | null) => void }
   | { readonly kind: 'confirm'; readonly options: ConfirmOptions; readonly done: (v: string) => void }
   | {
@@ -635,11 +637,11 @@ export class ShellModel {
       if (hereAgain || others.length > 0) {
         const names = others.map((p) => p.replace(/\.[^./]+$/, ''));
         if (hereAgain) names.unshift(`${stemOf(notePath)} (this note, elsewhere)`);
-        const trash = nb.store.kind === 'native';
+        const trash = nb.notebookTrash ? 'the notebook’s Trash' : 'the Trash';
         const answer = await this.confirm({
           title: `“${baseName(file)}” is in other notes`,
           message:
-            `Keep File takes it out of this note only. Delete File ${trash ? 'moves the file to the Trash' : 'deletes the file'}, ` +
+            `Keep File takes it out of this note only. Delete File moves the file to ${trash}, ` +
             `so it's gone from ${names.length === 1 ? 'that note' : 'those notes'} too:`,
           list: names,
           buttons: [
@@ -872,11 +874,10 @@ export class ShellModel {
     const nb = this.notebook.peek();
     if (!nb || !path) return;
     const node = findNode(nb.tree.peek(), path);
-    const trash = nb.store.kind === 'native';
     const what = node?.kind === 'dir' ? 'folder and everything in it' : 'file';
-    let message = trash
-      ? `The ${what} will be moved to the Trash.`
-      : `The ${what} will be deleted. This can’t be undone.`;
+    let message = nb.notebookTrash
+      ? `The ${what} will be moved to the notebook’s Trash, where Show Trash… can restore it.`
+      : `The ${what} will be moved to the Trash.`;
     // Its tabs close without saving, so say what that loses.
     const unsaved = nb.dirtyTabs.filter((t) => isWithin(t.path.peek(), path)).length;
     if (unsaved > 0) {
@@ -900,10 +901,55 @@ export class ShellModel {
       list: showing.map((p) => p.replace(/\.[^./]+$/, '')),
       buttons: [
         { label: 'Cancel', value: 'cancel' },
-        { label: trash ? 'Move to Trash' : 'Delete', value: 'delete', kind: 'danger' },
+        { label: 'Move to Trash', value: 'delete', kind: 'danger' },
       ],
     });
     if (answer === 'delete') await nb.remove(path);
+  }
+
+  /** Show Trash… (PRD §6.1): what the notebook's Trash holds, to restore, or say it is empty. */
+  async showTrash(): Promise<void> {
+    const nb = this.notebook.peek();
+    if (!nb?.notebookTrash) return;
+    let items: TrashItem[];
+    try {
+      items = await nb.trashItems();
+    } catch (e) {
+      nb.report(e);
+      return;
+    }
+    if (this.notebook.peek() !== nb) return;
+    if (items.length === 0) nb.notify('info', 'The notebook’s Trash is empty.');
+    else this.open({ kind: 'trash', items });
+  }
+
+  /** Empty Trash… (PRD §6.1): asks first; the only delete that can't be undone. */
+  async emptyTrash(): Promise<boolean> {
+    const nb = this.notebook.peek();
+    if (!nb?.notebookTrash) return false;
+    let count: number;
+    try {
+      count = (await nb.trashItems()).length;
+    } catch (e) {
+      nb.report(e);
+      return false;
+    }
+    if (this.notebook.peek() !== nb) return false;
+    if (count === 0) {
+      nb.notify('info', 'The notebook’s Trash is empty.');
+      return false;
+    }
+    const answer = await this.confirm({
+      title: 'Empty the notebook’s Trash?',
+      message: `${count === 1 ? 'The item' : `All ${count} items`} in the Trash will be deleted for good. This can’t be undone.`,
+      // Cancel is last, so Enter doesn't delete for good.
+      buttons: [
+        { label: 'Empty Trash', value: 'empty', kind: 'danger' },
+        { label: 'Cancel', value: 'cancel', kind: 'primary' },
+      ],
+    });
+    if (answer !== 'empty' || this.notebook.peek() !== nb) return false;
+    return nb.emptyTrash();
   }
 
   /** Find Unused Pictures… (PRD §10.6): list them, or say there are none. */
@@ -1139,6 +1185,25 @@ function shellCommandSpecs(m: ShellModel): CommandSpec[] {
       icon: 'trash-2',
       enabled: () => !!nb()?.selected.peek(),
       run: () => m.remove(nb()!.selected.peek()!),
+    },
+    {
+      id: 'shell.showTrash',
+      title: 'Show Trash…',
+      description:
+        'List what was deleted in this notebook, and restore it. (The desktop app uses the system Trash.)',
+      group: 'File',
+      icon: 'trash-2',
+      enabled: () => !!nb()?.notebookTrash,
+      run: () => m.showTrash(),
+    },
+    {
+      id: 'shell.emptyTrash',
+      title: 'Empty Trash…',
+      description: 'Delete everything in this notebook’s Trash for good.',
+      group: 'File',
+      icon: 'trash-2',
+      enabled: () => !!nb()?.notebookTrash,
+      run: () => void m.emptyTrash(),
     },
     {
       id: 'shell.unusedPictures',

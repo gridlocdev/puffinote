@@ -11,6 +11,7 @@ import { LibraryLayout } from './LibraryLayout.tsx';
 import { CommandMenu, MoveToPopup, QuickOpen } from './ListPopup.tsx';
 import { baseName } from '../platform/paths.ts';
 import { SettingsDialog } from './SettingsDialog.tsx';
+import { TrashDialog } from './TrashDialog.tsx';
 import { UnusedPicturesDialog } from './UnusedPicturesDialog.tsx';
 import type { ShellModel } from './shellModel.ts';
 import { RailLayout } from './RailLayout.tsx';
@@ -169,6 +170,18 @@ function Overlays({ model, prefs }: { readonly model: ShellModel; readonly prefs
       return <SettingsDialog nb={nb} prefs={prefs} onClose={close} />;
     case 'unusedPictures':
       return nb ? <UnusedPicturesDialog nb={nb} paths={o.paths} onClose={close} /> : null;
+    case 'trash':
+      return nb ? (
+        <TrashDialog
+          nb={nb}
+          items={o.items}
+          onClose={close}
+          onEmpty={() => {
+            close();
+            void model.emptyTrash();
+          }}
+        />
+      ) : null;
     case 'prompt':
       return <PromptDialog {...o.options} onDone={o.done} />;
     case 'confirm':

@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { BrowserStore } from '../src/platform/browserStore.ts';
 import { ConflictError } from '../src/platform/notebookStore.ts';
+import { listTrash, moveToTrash, restoreFromTrash } from '../src/notebook/trash.ts';
 
 /**
  * Just enough of the File System Access API, in memory. `caseInsensitive` resolves names the way macOS and
@@ -161,5 +162,19 @@ describe('BrowserStore write', () => {
     expect(await names(store)).toEqual([]);
     await store.write('f/a.md', bytes, { expected: version, force: true });
     expect(await text(store, 'f/a.md')).toBe('again');
+  });
+});
+
+describe('BrowserStore trash (PRD §6.1)', () => {
+  it('moves a folder into the notebook’s Trash and back, under a free name when it is taken', async () => {
+    const { store } = await storeWith({ 'f/a.md': 'one', 'f/sub/b.md': 'two' }, true);
+    const item = await moveToTrash(store, 'f', 'dir', 5);
+    expect((await store.list('')).map((e) => e.name)).toEqual(['.puffinote']);
+    expect(new TextDecoder().decode((await store.read('.puffinote/trash/5/f/sub/b.md')).bytes)).toBe('two');
+    expect(await listTrash(store)).toEqual([item]);
+    await store.mkdir('F'); // the same name to this disk
+    expect(await restoreFromTrash(store, item)).toBe('f 2');
+    expect(new TextDecoder().decode((await store.read('f 2/a.md')).bytes)).toBe('one');
+    expect(await listTrash(store)).toEqual([]);
   });
 });

@@ -1613,6 +1613,21 @@
   font-size: 12px;
 }
 
+/* Show Trash… (PRD §6.1) */
+.pn-trash-list li {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-rows: auto auto;
+  align-items: center;
+  gap: 0 10px;
+  padding: 4px 0;
+}
+
+.pn-trash-list button {
+  grid-column: 2;
+  grid-row: 1 / 3;
+}
+
 /* ----- Picture preview (PRD §10.6) ----- */
 
 .pn-preview {
