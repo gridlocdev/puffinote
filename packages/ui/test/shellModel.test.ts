@@ -407,3 +407,49 @@ describe('ShellModel opening another notebook slowly', () => {
     m.setNotebook(null);
   });
 });
+
+describe('ShellModel closing a tab that changed on disk', () => {
+  async function conflicted() {
+    const store = new MemoryStore('N', { 'a.md': 'one', 'b.md': 'two' });
+    const nb = await Notebook.open(store, { prefs: memoryPrefs({ autoSave: false }) });
+    const m = new ShellModel();
+    m.setNotebook(nb);
+    const a = (await nb.openFile('a.md'))!;
+    const b = (await nb.openFile('b.md'))!;
+    a.state!.insert('mine ');
+    await store.write('a.md', new TextEncoder().encode('theirs'), { force: true });
+    expect(await nb.save(a)).toBe(false);
+    expect(a.conflict.peek()).toBe('changed');
+    return { store, nb, m, a, b };
+  }
+
+  async function answer(m: ShellModel, value: string) {
+    await vi.waitFor(() => expect(m.overlay.value?.kind).toBe('confirm'));
+    const o = m.overlay.value;
+    if (o?.kind !== 'confirm') throw new Error('no confirm');
+    o.done(value);
+    return o;
+  }
+
+  it('offers to keep my version when one tab is closed', async () => {
+    const { store, nb, m, a } = await conflicted();
+    const closing = m.closeTab(a);
+    const o = await answer(m, 'save');
+    expect(o.options.message).toMatch(/changed on disk/);
+    expect(await closing).toBe(true);
+    expect(nb.tabs.peek()).not.toContain(a);
+    expect(new TextDecoder().decode((await store.read('a.md')).bytes)).toBe('mine one');
+  });
+
+  it('brings the conflicted tab to the front and says why when Save All can’t save it', async () => {
+    const { nb, m, a, b } = await conflicted();
+    b.state!.insert('more ');
+    nb.activate(b);
+    const asking = m.confirmDiscardAll();
+    await answer(m, 'save');
+    expect(await asking).toBe(false);
+    expect(nb.active.peek()).toBe(a);
+    expect(nb.notice.peek()?.text).toMatch(/“a.md” changed on disk/);
+    expect(b.dirty.peek()).toBe(false);
+  });
+});

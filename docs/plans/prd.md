@@ -137,7 +137,7 @@ Type part of a file name to open it. Ranking: names that start with the query, t
 - One tab per open file. A click shows it, a middle-click or × closes it, and the context menu has Pin Tab, Close, Close Others and Close All. ⇧⌘] and ⇧⌘[ step through tabs.
 - A file opened again while it is still being read (a double click, a slow NAS) gets the same tab. When several opens are out at once, the file asked for last stays in front, unless a tab was picked after it.
 - **Pinned tabs** sit at the start of the strip in their own group, which stays in view while the other tabs scroll. A pinned tab shows a pin in place of its ×; clicking the pin unpins it. Close Others and Close All leave pinned tabs open; ⌘W, a middle-click or Close Tab still closes one. Pins are remembered with the open tabs.
-- A dirty tab shows a dot. Closing it asks Save, Don't Save or Cancel.
+- A dirty tab shows a dot. Closing it asks Save, Don't Save or Cancel. When the note changed on disk since it was opened, the question says so and Save becomes Keep My Version, which writes the tab over the disk. When closing several tabs, switching notebooks or quitting, Save All saves the rest but leaves a note that changed on disk; then nothing closes, that tab comes to the front and the status bar says why, so the user can pick Reload from Disk or Keep My Version and try again.
 - After a save, the status bar says "Saved" for a moment.
 - Each tab keeps its scroll position, caret, undo history and view (§10).
 - Show Tab Bar (§9) hides the strip. The tabs stay open.

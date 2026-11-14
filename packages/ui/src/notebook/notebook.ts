@@ -712,7 +712,8 @@ export class Notebook {
 
   async saveAll(): Promise<boolean> {
     let ok = true;
-    for (const t of this.dirtyTabs) ok = (await this.save(t)) && ok;
+    // A note deleted on disk is saved again (PRD §5); one that changed there is left flagged.
+    for (const t of this.dirtyTabs) ok = (await this.save(t, t.conflict.peek() === 'deleted')) && ok;
     return ok;
   }
 

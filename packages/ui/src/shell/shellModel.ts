@@ -711,17 +711,24 @@ export class ShellModel {
     if (!nb) return false;
     if (tab.dirty.peek()) {
       nb.activate(tab);
+      // A plain save won't write over a file that changed on disk, so the question offers to.
+      const changed = tab.conflict.peek() === 'changed';
       const answer = await this.confirm({
         title: `Save changes to “${tab.name}”?`,
-        message: 'Your changes will be lost if you don’t save them.',
+        message: changed
+          ? `“${tab.name}” changed on disk since you opened it. Keep My Version writes yours over it.`
+          : 'Your changes will be lost if you don’t save them.',
         buttons: [
           { label: 'Don’t Save', value: 'discard', kind: 'danger' },
           { label: 'Cancel', value: 'cancel' },
-          { label: 'Save', value: 'save', kind: 'primary' },
+          { label: changed ? 'Keep My Version' : 'Save', value: 'save', kind: 'primary' },
         ],
       });
       if (answer === 'cancel') return false;
-      if (answer === 'save' && !(await nb.save(tab, tab.conflict.peek() === 'deleted'))) return false;
+      if (answer === 'save' && !(await nb.save(tab, tab.conflict.peek() !== 'none'))) {
+        this.explainUnsaved(nb, [tab]);
+        return false;
+      }
     }
     nb.closeTab(tab);
     if (nb.active.peek()?.state) this.focusEditor();
@@ -758,8 +765,26 @@ export class ShellModel {
       ],
     });
     if (answer === 'cancel') return false;
-    if (answer === 'save') return nb.saveAll();
+    if (answer === 'save' && !(await nb.saveAll())) {
+      this.explainUnsaved(nb, dirty);
+      return false;
+    }
     return true;
+  }
+
+  /** A save asked for on the way out failed: bring the first tab still unsaved to the front and say why. */
+  private explainUnsaved(nb: Notebook, tabs: readonly Tab[]): void {
+    const tab = tabs.find((t) => nb.tabs.peek().includes(t) && t.dirty.peek());
+    if (!tab) return;
+    nb.activate(tab);
+    if (tab.conflict.peek() === 'changed') {
+      nb.notify(
+        'error',
+        `“${tab.name}” changed on disk since you opened it. Reload from Disk or Keep My Version, then try again.`,
+      );
+    } else if (nb.notice.peek()?.kind !== 'error') {
+      nb.notify('error', `Puffinote couldn’t save “${tab.name}”.`);
+    }
   }
 
   // ----- Files -----
