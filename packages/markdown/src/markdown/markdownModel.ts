@@ -221,7 +221,7 @@ function tokenizeRange(
       state.kind === 'normal' &&
       i + 1 < doc.lineCount &&
       isPotentialTableRow(doc.getLineText(i)) &&
-      isTableDelimiterRow(doc.getLineText(i + 1))
+      isTableDelimiterRow(doc.getLineText(i + 1), doc.getLineText(i))
     ) {
       i = tokenizeTable(doc, i, toLine, entering, tokens);
       state = BlockStates.normal; // a table row is non-blank, so the next line isn't a fresh block position
@@ -348,20 +348,34 @@ function isPotentialTableRow(line: string): boolean {
   return false;
 }
 
-function isTableDelimiterRow(line: string): boolean {
+/**
+ * Whether `line` is the delimiter row of a table whose header is `header` (GFM): at least one pipe, every
+ * cell a run of `-` with optional `:` at either end, and as many cells as the header. Requiring the pipe and
+ * the count is what stops a lone `-` typed under `name | price` from turning it into a table for one
+ * keystroke (PRD §10.2, §11.3).
+ */
+function isTableDelimiterRow(line: string, header: string): boolean {
+  if (!isPotentialTableRow(line)) return false;
+  const cells = tableCells(line);
+  return (
+    cells.length > 0 &&
+    cells.length === tableCells(header).length &&
+    cells.every((c) => /^:?-+:?$/.test(c.trim()))
+  );
+}
+
+/** A table row's cells: the text between unescaped pipes, without the empty edges an outer `|` leaves. */
+function tableCells(line: string): string[] {
   const len = contentLength(line);
-  let sawDash = false;
-  let sawContent = false;
-  for (let k = 0; k < len; k++) {
-    const c = line.charAt(k);
-    if (c === '-') {
-      sawDash = true;
-      sawContent = true;
-    } else if (c === '|' || c === ':') {
-      sawContent = true;
-    } else if (c !== ' ') {
-      return false;
+  const cells: string[] = [];
+  let cellStart = 0;
+  for (let k = 0; k <= len; k++) {
+    if (k === len || isUnescapedPipe(line, k)) {
+      cells.push(line.slice(cellStart, k));
+      cellStart = k + 1;
     }
   }
-  return sawDash && sawContent;
+  if (cells.length > 1 && cells[0]!.trim() === '') cells.shift();
+  if (cells.length > 1 && cells[cells.length - 1]!.trim() === '') cells.pop();
+  return cells;
 }

@@ -184,7 +184,9 @@ function normal(
 
 /**
  * The setext level `line` underlines (1 for `=`, 2 for `-`), or 0 when it is not an underline: a run of one
- * character and nothing else, indented at most three columns, with optional trailing whitespace.
+ * character and nothing else, indented at most three columns, with optional trailing whitespace. A lone `-`
+ * is not an underline: it is the first keystroke of a list item, and taking it for one would flash the
+ * paragraph above into a heading while the user types `- ` (PRD §10.2, §11.3).
  */
 export function setextUnderlineLevel(line: string): number {
   const len = contentLength(line);
@@ -194,6 +196,7 @@ export function setextUnderlineLevel(line: string): number {
   if (c !== '=' && c !== '-') return 0;
   let p = indent;
   while (p < len && line.charAt(p) === c) p++;
+  if (c === '-' && p - indent < 2) return 0;
   while (p < len && (line.charAt(p) === ' ' || line.charAt(p) === '\t')) p++;
   if (p !== len) return 0;
   return c === '=' ? 1 : 2;

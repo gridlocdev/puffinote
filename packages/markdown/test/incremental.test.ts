@@ -44,6 +44,19 @@ describe('incremental tokenizing', () => {
     expectIncrementalMatchesFull('intro\n| A | B |\n| - | - |\n| 1 | 2 |', 0, 5, '# Title');
   });
 
+  it('matches as a table header gains or loses the cell its delimiter row needs', () => {
+    expectIncrementalMatchesFull('a | b\n--- | ---\n1 | 2', 5, 0, ' | c');
+    expectIncrementalMatchesFull('a | b | c\n--- | ---\n1 | 2', 5, 4, '');
+    expectIncrementalMatchesFull('a | b\n--- | ---\n1 | 2', 15, 0, ' | ---');
+  });
+
+  it('matches while a list item is typed under a paragraph or a pipe row', () => {
+    expectIncrementalMatchesFull('Groceries:\n', 11, 0, '-');
+    expectIncrementalMatchesFull('Groceries:\n-', 12, 0, ' ');
+    expectIncrementalMatchesFull('name | price\n', 13, 0, '-');
+    expectIncrementalMatchesFull('name | price\n-', 14, 0, '-');
+  });
+
   it.each([
     ['Title\nX', 1, '==='],
     ['Title\n===', 1, ''],

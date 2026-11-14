@@ -103,6 +103,18 @@ describe('block constructs', () => {
     expect(hasType('a | b | c\njust text', 'tableDelimiter')).toBe(false);
   });
 
+  it('needs a delimiter row with a pipe and the header cell count, so a typed `-` never flickers a table', () => {
+    expect(hasType('name | price\n-', 'tableDelimiter')).toBe(false);
+    expect(hasType('name | price\n--', 'tableDelimiter')).toBe(false);
+    expect(hasType('name | price\n- |', 'tableDelimiter')).toBe(false);
+    expect(hasType('a | b | c\n--- | ---', 'tableDelimiter')).toBe(false);
+    expect(hasType('a | b\nx - | ---', 'tableDelimiter')).toBe(false);
+    expect(hasType('name | price\n--- | ---', 'tableDelimiter')).toBe(true);
+    expect(hasType('| name | price |\n|:--|--:|', 'tableDelimiter')).toBe(true);
+    expect(hasType('| one |\n| --- |', 'tableDelimiter')).toBe(true);
+    expect(hasType('a \\| b | c\n--- | ---', 'tableDelimiter')).toBe(true);
+  });
+
   it('treats CRLF lines like LF lines', () => {
     expect(textsOfType('# Title\r\n- item\r\n', 'listMarker')).toEqual(['- ']);
     expect(textsOfType('a **b**\r\n', 'strong')).toEqual(['b']);
@@ -159,7 +171,7 @@ describe('setext headings', () => {
     ['Title\n=====', '1'],
     ['Title\n-----', '2'],
     ['Title\n=', '1'],
-    ['Title\n-', '2'],
+    ['Title\n--', '2'],
     ['Title\n===   ', '1'],
     ['  Title\n  ===', '1'],
   ])('reads %j as a heading of level %s', (md, level) => {
@@ -173,6 +185,12 @@ describe('setext headings', () => {
   it('takes a dashed underline over a horizontal rule', () => {
     expect(first('Title\n---', 0)).toMatchObject({ type: 'headingMarker', meta: '2' });
     expect(first('Title\n---', 1)!.type).toBe('setextUnderline');
+  });
+
+  it('does not take a lone `-` typed under a paragraph for an underline', () => {
+    expect(first('Groceries:\n-', 0)!.type).toBe('text');
+    expect(first('Groceries:\n-', 1)!.type).toBe('text');
+    expect(first('Groceries:\n- ', 1)!.type).toBe('listMarker');
   });
 
   it('keeps a lone rule a rule', () => {
