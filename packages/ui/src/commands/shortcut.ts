@@ -30,6 +30,7 @@ export function parseShortcut(spec: string): Shortcut {
 export const isMac: boolean =
   typeof navigator !== 'undefined' && /Mac|iPhone|iPad/.test(navigator.platform || navigator.userAgent);
 
+/** The character each physical punctuation key types on a US layout, for keys that type no ASCII here. */
 const PUNCTUATION: Record<string, string> = {
   Semicolon: ';',
   Equal: '=',
@@ -44,36 +45,73 @@ const PUNCTUATION: Record<string, string> = {
   Quote: "'",
 };
 
-/** Which key a keyboard event pressed, normalised to the names `parseShortcut` uses. */
-function eventKey(e: KeyboardEvent): string {
-  // The layout's own letter or digit wins (AZERTY ⌘Z is the key labelled Z, Dvorak too) ...
-  if (/^[a-z0-9]$/i.test(e.key)) return e.key.toLowerCase();
-  // ... else the physical key, so ⌥/⇧ layers don't change the match (⌥K → "˚").
-  if (/^Key[A-Z]$/.test(e.code)) return e.code.slice(3).toLowerCase();
-  if (/^Digit\d$/.test(e.code)) return e.code.slice(5);
-  // Punctuation by physical key too, so ⌘⇧; and ⌥= match their specs on any shift/option layer.
-  const punct = PUNCTUATION[e.code];
-  if (punct) return punct;
-  const k = e.key.toLowerCase();
-  const names: Record<string, string> = {
-    ' ': 'space',
-    arrowup: 'up',
-    arrowdown: 'down',
-    arrowleft: 'left',
-    arrowright: 'right',
-    escape: 'esc',
-  };
-  return names[k] ?? k;
-}
+/** Shifted punctuation and the character on the same key unshifted (`}` is ⇧]), for `mod+shift+]`. */
+const UNSHIFTED: Record<string, string> = {
+  '{': '[',
+  '}': ']',
+  '+': '=',
+  _: '-',
+  ':': ';',
+  '"': "'",
+  '<': ',',
+  '>': '.',
+  '?': '/',
+  '|': '\\',
+  '~': '`',
+};
 
-export function matches(s: Shortcut, e: KeyboardEvent, mac = isMac): boolean {
+const NAMES: Record<string, string> = {
+  ' ': 'space',
+  arrowup: 'up',
+  arrowdown: 'down',
+  arrowleft: 'left',
+  arrowright: 'right',
+  escape: 'esc',
+};
+
+/** The parts of a keyboard event shortcut matching reads. */
+export type ShortcutEvent = Pick<
+  KeyboardEvent,
+  'key' | 'code' | 'metaKey' | 'ctrlKey' | 'altKey' | 'shiftKey'
+>;
+
+/**
+ * How well a key event matches a shortcut: 0 when it doesn't, else a rank where lower is better, so a lookup
+ * can prefer exact matches across the whole catalog before looser ones.
+ *
+ * 1. The typed character (or the named key) and shift are exactly the shortcut's. A character goes by what the
+ *    layout typed, so AZERTY Ctrl+- is Ctrl+- even though the key is labelled 6, and German ⌘- is ⌘-.
+ * 2. Typed punctuation or a digit that needed shift on this layout (Dvorak ⌘+, AZERTY Ctrl+⇧6) matches the
+ *    shortcut without shift.
+ * 3. Shifted punctuation matches the shortcut written with shift and the unshifted character (⇧⌘} is ⇧⌘]).
+ * 4. A key that typed no ASCII character (an ⌥ layer, a Cyrillic layout) goes by its physical key, so ⌥⌘L
+ *    (¬) and ⌘Я are ⌥⌘L and ⌘Z.
+ */
+export function matchRank(s: Shortcut, e: ShortcutEvent, mac = isMac): number {
   const mod = mac ? e.metaKey : e.ctrlKey;
   const ctrl = mac ? e.ctrlKey : false;
-  if (mod !== s.mod || e.altKey !== s.alt || ctrl !== s.ctrl) return false;
-  const key = eventKey(e);
-  // Punctuation produced with shift (e.g. "+" on ⇧=) matches without requiring shift in the spec.
-  if (key === s.key && e.shiftKey === s.shift) return true;
-  return !/^[a-z0-9]$/.test(s.key) && e.key === s.key && !s.shift;
+  if (mod !== s.mod || e.altKey !== s.alt || ctrl !== s.ctrl) return 0;
+  if (/^[\x21-\x7e]$/.test(e.key)) {
+    const ch = e.key.toLowerCase();
+    if (ch === s.key && e.shiftKey === s.shift) return 1;
+    if (ch === s.key && e.shiftKey && !s.shift && !/^[a-z]$/.test(ch)) return 2;
+    if (UNSHIFTED[ch] === s.key && e.shiftKey && s.shift) return 3;
+    return 0;
+  }
+  if ([...e.key].length === 1 && e.key !== ' ') {
+    // A character outside ASCII: the physical key.
+    let physical: string | undefined;
+    if (/^Key[A-Z]$/.test(e.code)) physical = e.code.slice(3).toLowerCase();
+    else if (/^Digit\d$/.test(e.code)) physical = e.code.slice(5);
+    else physical = PUNCTUATION[e.code];
+    return physical === s.key && e.shiftKey === s.shift ? 4 : 0;
+  }
+  const k = e.key.toLowerCase();
+  return (NAMES[k] ?? k) === s.key && e.shiftKey === s.shift ? 1 : 0;
+}
+
+export function matches(s: Shortcut, e: ShortcutEvent, mac = isMac): boolean {
+  return matchRank(s, e, mac) > 0;
 }
 
 const MAC_SYMBOLS: Record<string, string> = {

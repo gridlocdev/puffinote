@@ -1,4 +1,11 @@
-import { formatShortcut, matches, parseShortcut, type Shortcut } from './shortcut.ts';
+import {
+  formatShortcut,
+  isMac,
+  matchRank,
+  parseShortcut,
+  type Shortcut,
+  type ShortcutEvent,
+} from './shortcut.ts';
 
 /** Menu groups — the native menu bar and the palette's section labels. */
 export type CommandGroup = 'File' | 'Edit' | 'View' | 'Insert' | 'Format' | 'Go' | 'Help';
@@ -82,12 +89,24 @@ export class CommandCatalog {
     return this.recent;
   }
 
-  /** The command a key event triggers, if any. `inText` = focus is in a text field. */
-  forEvent(e: KeyboardEvent, inText: boolean): Command | undefined {
-    return this.all.find(
-      (c) =>
-        (!inText || c.global) && [c.shortcutKey, ...c.alternateKeys].some((k) => k !== null && matches(k, e)),
-    );
+  /**
+   * The command a key event triggers, if any. `inText` = focus is in a text field. The best match wins across
+   * the whole catalog (an exact one before one by the physical key; see `matchRank`), then catalog order.
+   */
+  forEvent(e: ShortcutEvent, inText: boolean, mac = isMac): Command | undefined {
+    let best: Command | undefined;
+    let bestRank = Infinity;
+    for (const c of this.all) {
+      if (inText && !c.global) continue;
+      for (const k of [c.shortcutKey, ...c.alternateKeys]) {
+        const rank = k ? matchRank(k, e, mac) : 0;
+        if (rank > 0 && rank < bestRank) {
+          best = c;
+          bestRank = rank;
+        }
+      }
+    }
+    return best;
   }
 
   /**
