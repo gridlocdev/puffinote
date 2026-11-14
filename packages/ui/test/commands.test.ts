@@ -12,6 +12,8 @@ import {
   indentEdit,
   joinLinesDeleteEdit,
   linkEdit,
+  pasteText,
+  softBreakEdit,
   moveItemsToEdgeEdit,
   moveLinesEdit,
   outdentEdit,
@@ -378,6 +380,34 @@ describe('line moves and duplicates keep the line endings', () => {
     expect(run('a\r\nb|', duplicateLinesEdit)).toBe('a\r\nb\r\nb|');
     expect(run('a|\r\nb', duplicateLinesEdit)).toBe('a\r\na|\r\nb');
     expect(run('a\nb|', duplicateLinesEdit)).toBe('a\nb\nb|');
+  });
+});
+
+describe('a CRLF note keeps CRLF', () => {
+  const crlf = (marked: string) => marked.replace(/\n/g, '\r\n');
+  const enter = (
+    marked: string,
+    mode: 'live' | 'raw' = 'live',
+    context: 'text' | 'code' | 'table' = 'text',
+  ) => run(crlf(marked), (d, s) => enterEdit(d, s, mode, context));
+
+  it('breaks lines with CRLF on Enter, in every view and context', () => {
+    expect(enter('a\nhello|')).toBe(crlf('a\nhello\n|'));
+    expect(enter('a\nhello|', 'raw')).toBe(crlf('a\nhello\n|'));
+    expect(enter('a\n    code|', 'live', 'code')).toBe(crlf('a\n    code\n    |'));
+    expect(enter('a\nrow|', 'live', 'table')).toBe(crlf('a\nrow\n|'));
+    expect(enter('a\n- one|')).toBe(crlf('a\n- one\n- |'));
+    expect(enter('a\n1. |one\n2. two')).toBe(crlf('a\n1. \n2. |one\n3. two'));
+  });
+
+  it('breaks lines with CRLF on Shift+Enter', () => {
+    expect(run(crlf('a\nb|c'), (d, s) => softBreakEdit(s, d))).toBe(crlf('a\nb\n|c'));
+  });
+
+  it("pastes with the note's line ending", () => {
+    const { doc } = parse(crlf('a\nb'));
+    expect(pasteText(doc, 1, 'x\ny\r\nz')).toBe('x\r\ny\r\nz');
+    expect(pasteText(TextDocument.fromString('a\nb'), 1, 'x\r\ny\rz')).toBe('x\ny\nz');
   });
 });
 

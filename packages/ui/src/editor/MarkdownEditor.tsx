@@ -1,4 +1,4 @@
-import { stripDuplicateTaskMarker, toggledTaskState, parseLinePrefix, type Token } from '@puffinote/markdown';
+import { toggledTaskState, parseLinePrefix, type Token } from '@puffinote/markdown';
 import { isCollapsed, selectionEnd, selectionLength, selectionStart, type UndoRun } from '@puffinote/text';
 import { useLayoutEffect, useMemo, useRef } from 'preact/hooks';
 import type { JSX } from 'preact';
@@ -12,10 +12,12 @@ import {
   joinLinesDeleteEdit,
   indentEdit,
   outdentEdit,
+  pasteText,
   setTaskStateEdit,
   withTaskSort,
   softBreakEdit,
   typeCharEdit,
+  withLineEnding,
 } from './commands.ts';
 import { markdownCommandSpecs } from './editorCommands.ts';
 import type { EditorState } from './editorState.ts';
@@ -651,7 +653,7 @@ export function MarkdownEditor(props: MarkdownEditorProps) {
       case 'enter':
         apply(
           action.soft
-            ? softBreakEdit(sel)
+            ? softBreakEdit(sel, doc)
             : enterEdit(doc, sel, mode, state.contextAt(sel.caret), state.indentUnit),
           run,
         );
@@ -688,7 +690,7 @@ export function MarkdownEditor(props: MarkdownEditorProps) {
     const ta = e.currentTarget as HTMLTextAreaElement;
     const text = ta.value;
     ta.value = '';
-    if (text) insertText(text.replace(/\r\n?/g, '\n'));
+    if (text) insertText(withLineEnding(doc, text));
   }
 
   function onCompositionStart(): void {
@@ -725,11 +727,8 @@ export function MarkdownEditor(props: MarkdownEditorProps) {
     const pasted = e.clipboardData?.getData('text/plain');
     e.preventDefault();
     if (!pasted) return;
-    const at = selectionStart(sel);
-    const p = doc.getPosition(at);
-    const text = stripDuplicateTaskMarker(pasted.replace(/\r\n?/g, '\n'), doc.getLineText(p.line), p.column);
     revealCaret.current = true;
-    state.paste(text);
+    state.paste(pasteText(doc, selectionStart(sel), pasted));
   }
 
   /** Save `files` and put a picture line for each at the caret, each on a line of its own (PRD §10.6). */
@@ -746,7 +745,7 @@ export function MarkdownEditor(props: MarkdownEditorProps) {
     const before = d.getText(start, from - start).trim() ? '\n' : '';
     const after = d.getText(to, end - to).trim() ? '\n' : '';
     revealCaret.current = true;
-    state.paste(before + links.join('\n') + after);
+    state.paste(withLineEnding(d, before + links.join('\n') + after));
   }
 
   function onDragOver(e: DragEvent): void {

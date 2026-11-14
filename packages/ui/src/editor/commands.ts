@@ -4,6 +4,7 @@ import {
   parseLinePrefix,
   type LinePrefix,
   renumberOrderedList,
+  stripDuplicateTaskMarker,
   taskMark,
   toggledTaskState,
   type TaskState,
@@ -41,6 +42,26 @@ export function applyEditTo(doc: TextDocument, edit: Edit): TextDocument {
   return doc.replace(edit.start, edit.length, edit.text);
 }
 
+/** The document's line ending: CRLF when its first line break is one, else LF. */
+export function lineEnding(doc: TextDocument): string {
+  return doc.lineCount > 1 && doc.getLineText(0).endsWith('\r') ? '\r\n' : '\n';
+}
+
+/** `text` with its line breaks (LF, CRLF or CR) written as `doc`'s, so a CRLF note stays CRLF. */
+export function withLineEnding(doc: TextDocument, text: string): string {
+  return lineEnding(doc) === '\n' ? text.replace(/\r\n?/g, '\n') : text.replace(/\r\n?|\n/g, '\r\n');
+}
+
+/**
+ * The text a paste inserts at `at`: plain text with the note's line ending, without a task marker that would
+ * double the one already at the caret (PRD §10.1).
+ */
+export function pasteText(doc: TextDocument, at: number, pasted: string): string {
+  const p = doc.getPosition(at);
+  const lf = pasted.replace(/\r\n?/g, '\n');
+  return withLineEnding(doc, stripDuplicateTaskMarker(lf, doc.getLineText(p.line), p.column));
+}
+
 function replaceSelection(sel: Selection, text: string, caretInText = text.length): Edit {
   const start = selectionStart(sel);
   const caret = start + caretInText;
@@ -74,12 +95,13 @@ export function enterEdit(
   const lineText = contentOf(doc.getLineText(line));
   const col = start - lineStart;
 
-  if (mode === 'raw') return replaceSelection(sel, '\n');
+  const eol = lineEnding(doc);
+  if (mode === 'raw') return replaceSelection(sel, eol);
   if (context === 'code') {
     const indent = /^[ \t]*/.exec(lineText)![0].slice(0, col);
-    return replaceSelection(sel, '\n' + indent);
+    return replaceSelection(sel, eol + indent);
   }
-  if (context === 'table') return replaceSelection(sel, '\n');
+  if (context === 'table') return replaceSelection(sel, eol);
 
   const r = computeEnter(lineText, col);
   if (r.kind === 'exit' && isCollapsed(sel)) {
@@ -93,17 +115,17 @@ export function enterEdit(
     const at = lineStart + r.exitStart;
     return { start: at, length: r.exitLength, text: '', anchor: at, caret: at };
   }
-  if (r.kind === 'continue') return withRenumber(doc, replaceSelection(sel, r.text));
+  if (r.kind === 'continue') return withRenumber(doc, replaceSelection(sel, withLineEnding(doc, r.text)));
   if (r.kind === 'above' && isCollapsed(sel)) {
     // One new line above, with the caret at the start of the text of the item it pushed down: an empty item
     // like it (a task as `[ ]`), numbered as itself so the renumber counts the pushed item on from it. The
     // first item of a list gets one too, so the list grows upward instead of leaving a blank line behind.
     const p = parseLinePrefix(lineText);
-    const text = p.hasList ? itemPrefix(p, p.number) + '\n' : r.text;
+    const text = withLineEnding(doc, p.hasList ? itemPrefix(p, p.number) + '\n' : r.text);
     const caret = lineStart + text.length + p.length;
     return withRenumber(doc, { start: lineStart, length: 0, text, anchor: caret, caret });
   }
-  return replaceSelection(sel, '\n');
+  return replaceSelection(sel, eol);
 }
 
 // ----- Backspace and Delete -----
@@ -164,9 +186,9 @@ export function removeRangeEdit(doc: TextDocument, start: number, end: number): 
   return { start: from, length: to - from, text: '', anchor: caret, caret };
 }
 
-/** Shift+Enter: a single line break that never continues a list or quote. */
-export function softBreakEdit(sel: Selection): Edit {
-  return replaceSelection(sel, '\n');
+/** Shift+Enter: a single line break (the note's line ending) that never continues a list or quote. */
+export function softBreakEdit(sel: Selection, doc?: TextDocument): Edit {
+  return replaceSelection(sel, doc ? lineEnding(doc) : '\n');
 }
 
 // ----- Line transforms -----
@@ -807,11 +829,6 @@ export function ruleEdit(doc: TextDocument, sel: Selection): Edit {
 }
 
 // ----- Line operations -----
-
-/** The document's line ending: CRLF when its first line break is one, else LF. */
-function lineEnding(doc: TextDocument): string {
-  return doc.lineCount > 1 && doc.getLineText(0).endsWith('\r') ? '\r\n' : '\n';
-}
 
 /**
  * ⌘D: duplicate the selected lines below themselves; the selection moves to the copy. The copy keeps its
