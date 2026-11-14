@@ -187,6 +187,11 @@ describe('HTML renderer', () => {
     expect(html).toContain('<td>1</td>');
   });
 
+  it('ends a table at the first line without a pipe, even one with inline markup', () => {
+    const html = body('| A | B |\n| - | - |\n| 1 | 2 |\nafter **bold** and [l](u)');
+    expect(html).toContain('</table>\n<p>after <strong>bold</strong> and <a href="u">l</a></p>');
+  });
+
   it('escapes HTML in text', () => {
     expect(body('a <script> b')).toContain('a &lt;script&gt; b');
   });

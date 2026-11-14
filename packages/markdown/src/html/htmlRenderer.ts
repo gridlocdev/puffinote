@@ -295,9 +295,9 @@ class Renderer {
     this.tableRow(this.model.lineTokens(line), 'th');
     this.out += '</thead>\n';
     let i = line + 2; // past the header and delimiter rows
-    if (i < n && this.hasTableTokens(i)) {
+    if (i < n && this.isTableRow(i)) {
       this.out += '<tbody>\n';
-      while (i < n && this.hasTableTokens(i)) {
+      while (i < n && this.isTableRow(i)) {
         this.tableRow(this.model.lineTokens(i), 'td');
         i++;
       }
@@ -313,8 +313,7 @@ class Renderer {
     let cellStart = 0;
     for (let i = 0; i <= tokens.length; i++) {
       const t = tokens[i];
-      const isPipe =
-        t !== undefined && t.type === 'marker' && t.length === 1 && this.doc.getText(t.start, 1) === '|';
+      const isPipe = t !== undefined && this.isPipe(t);
       if (isPipe || i === tokens.length) {
         if (i > cellStart || (isPipe && cellStart !== 0)) {
           const outer = this.out;
@@ -485,13 +484,21 @@ class Renderer {
   private isTableStart(line: number): boolean {
     return (
       line + 1 < this.doc.lineCount &&
-      this.hasTableTokens(line) &&
+      this.isTableRow(line) &&
       this.first(line + 1)?.type === 'tableDelimiter'
     );
   }
 
-  private hasTableTokens(line: number): boolean {
-    return this.model.lineTokens(line).some((t) => t.type === 'marker' || t.type === 'tableDelimiter');
+  /**
+   * A table row: the model splits a row's cells at its unescaped pipes and marks each one, so a line with a
+   * `|` marker is a row. Other inline markers (`**`, `[`) don't count, so the line after a table ends it.
+   */
+  private isTableRow(line: number): boolean {
+    return this.model.lineTokens(line).some((t) => this.isPipe(t));
+  }
+
+  private isPipe(t: Token): boolean {
+    return t.type === 'marker' && t.length === 1 && this.doc.getText(t.start, 1) === '|';
   }
 }
 
