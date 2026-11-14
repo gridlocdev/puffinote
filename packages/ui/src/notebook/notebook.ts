@@ -250,8 +250,8 @@ export class Notebook {
   readonly scope = signal<LibraryScope>('folder:');
   readonly userPrefs: Signal<PartialSettings>;
   readonly overrides = signal<PartialSettings>({});
-  /** What `.puffinote/settings.json` holds that this version doesn't understand; kept when it's rewritten. */
-  private overridesUnrecognized: Record<string, unknown> = {};
+  /** Writes of `.puffinote/settings.json` in flight; a refresh doesn't read it meanwhile. */
+  private settingsWrites = 0;
   readonly settings = computed<Settings>(() => resolveSettings(this.userPrefs.value, this.overrides.value));
   readonly notice = signal<Notice | null>(null);
   /** Bumps when an image a note shows has loaded, so the editor redraws it. */
@@ -300,9 +300,7 @@ export class Notebook {
   }
 
   private async load(): Promise<void> {
-    const rawOverrides = await this.readJson(overridesPath);
-    this.overrides.value = sanitize(rawOverrides);
-    this.overridesUnrecognized = unrecognized(rawOverrides);
+    this.overrides.value = sanitize(await this.readJson(overridesPath));
     const session = (await this.readJson(sessionPath)) as Partial<Session> | null;
     await this.reloadTree();
     if (session) {
@@ -479,6 +477,7 @@ export class Notebook {
       if (tab.dirty.value) tab.conflict.value = 'changed';
       else this.replaceText(tab, text, data.version);
     }
+    await this.reloadOverrides();
   }
 
   scheduleRefresh(): void {
@@ -1372,21 +1371,86 @@ export class Notebook {
     this.userPrefs.value = clean;
   }
 
-  /** Change this notebook's overrides, saved in `.puffinote/settings.json`. Written only when they changed. */
+  /**
+   * Change this notebook's overrides, saved in `.puffinote/settings.json`. Written only when they changed.
+   * Another program (a sync, git, another window) may have changed the file since it was read, so the
+   * settings that changed here are applied over what the file holds now, and written against its version;
+   * the rest of the file, settings this version doesn't know included, stays as it is (PRD §9).
+   */
   async setOverrides(overrides: PartialSettings): Promise<void> {
     const clean = sanitize(overrides);
-    if (JSON.stringify(clean) === JSON.stringify(this.overrides.value)) return;
+    const before = this.overrides.peek() as Record<string, unknown>;
+    const after = clean as Record<string, unknown>;
+    const changed = [...new Set([...Object.keys(before), ...Object.keys(after)])].filter(
+      (k) => JSON.stringify(before[k]) !== JSON.stringify(after[k]),
+    );
+    if (changed.length === 0) return;
     // The tree follows Show Hidden Files by itself (see `load`).
     this.overrides.value = clean;
+    this.settingsWrites++;
     try {
       await this.ensureStateDir();
-      // Settings from a newer Puffinote stay in the file.
-      await this.store.write(overridesPath, encodeJson({ ...this.overridesUnrecognized, ...clean }), {
-        force: true,
-      });
+      for (let attempt = 0; ; attempt++) {
+        const disk = await this.readOverrides();
+        const merged: Record<string, unknown> = { ...disk.known };
+        for (const k of changed) {
+          if (after[k] === undefined) delete merged[k];
+          else merged[k] = after[k];
+        }
+        try {
+          await this.store.write(
+            overridesPath,
+            encodeJson({ ...disk.rest, ...merged }),
+            disk.version === undefined ? { create: true } : { expected: disk.version },
+          );
+          this.overrides.value = sanitize(merged);
+          return;
+        } catch (e) {
+          // Changed again between the read and the write: read it again.
+          if (!(e instanceof ConflictError) || e.reason === 'locked' || attempt >= 3) throw e;
+        }
+      }
     } catch (e) {
       this.report(e);
+    } finally {
+      this.settingsWrites--;
     }
+  }
+
+  /** `.puffinote/settings.json` as it is now: what this version uses, the rest, and its version (undefined: no file). */
+  private async readOverrides(): Promise<{
+    known: PartialSettings;
+    rest: Record<string, unknown>;
+    version: string | null | undefined;
+  }> {
+    let data: FileData;
+    try {
+      data = await this.store.read(overridesPath);
+    } catch (e) {
+      if (e instanceof NotFoundError) return { known: {}, rest: {}, version: undefined };
+      throw e;
+    }
+    let raw: unknown = null;
+    try {
+      raw = JSON.parse(readText(data.bytes).text) as unknown;
+    } catch {
+      // Not JSON: nothing in it can be kept.
+    }
+    return { known: sanitize(raw), rest: unrecognized(raw), version: data.version };
+  }
+
+  /** Take changes another program made to `.puffinote/settings.json` (on refresh). */
+  private async reloadOverrides(): Promise<void> {
+    if (this.settingsWrites > 0) return;
+    let disk: Awaited<ReturnType<Notebook['readOverrides']>>;
+    try {
+      disk = await this.readOverrides();
+    } catch {
+      return;
+    }
+    if (this.settingsWrites > 0) return;
+    if (JSON.stringify(disk.known) !== JSON.stringify(this.overrides.peek()))
+      this.overrides.value = disk.known;
   }
 
   // ----- Session -----

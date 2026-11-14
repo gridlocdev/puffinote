@@ -289,3 +289,25 @@ describe('opening other files', () => {
     expect([asked.length, opened.length]).toEqual([2, 2]);
   });
 });
+
+describe('Notebook settings written by someone else too', () => {
+  const read = async (store: MemoryStore) =>
+    JSON.parse(new TextDecoder().decode((await store.read('.puffinote/settings.json')).bytes)) as unknown;
+
+  it('merges a change into what the file holds now, keeping keys it doesn’t know', async () => {
+    const store = new MemoryStore('N', { '.puffinote/settings.json': '{"accent":"teal"}' });
+    const nb = await Notebook.open(store, { prefs: memoryPrefs() });
+    store.touch('.puffinote/settings.json', '{"accent":"purple","futureThing":1}');
+    await nb.setOverrides({ ...nb.overrides.value, layout: 'library' });
+    expect(await read(store)).toEqual({ accent: 'purple', futureThing: 1, layout: 'library' });
+    expect(nb.overrides.value).toEqual({ accent: 'purple', layout: 'library' });
+  });
+
+  it('takes the file’s changes on refresh', async () => {
+    const store = new MemoryStore('N', {});
+    const nb = await Notebook.open(store, { prefs: memoryPrefs() });
+    store.touch('.puffinote/settings.json', '{"layout":"library"}');
+    await nb.refresh();
+    expect(nb.settings.value.layout).toBe('library');
+  });
+});
