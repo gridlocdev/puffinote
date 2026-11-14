@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.2.1
+
+### Bugs fixed
+
+- A pasted or dropped picture goes where you pasted it, even if you select something else while it saves, and a picture that can't be saved is said in the status bar.
+- **Delete Picture** and **Edit Description…** act on the note that shows the picture. The picture preview closes when another note comes to the front.
+- The desktop app no longer writes over a file another app saved in the same second.
+- After you switch notebooks and choose **Don't Save**, nothing more is written to the old notebook.
+- Dropping a note onto a folder that opened while you hovered over it moves the note into that folder.
+- In the Library layout, commands act on the note in front.
+- The **Settings** dialog saves only the settings you changed, so it doesn't undo changes made elsewhere while it was open.
+
 ## 0.2.0
 
 ### Before you update
