@@ -24,6 +24,7 @@ import {
   toggleTaskEdit,
   withTaskSort,
   itemTextStart,
+  lineDeleteStart,
   smartLineStart,
   typeCharEdit,
   wordLeft,
@@ -539,5 +540,21 @@ describe('Cut and deleting a selection', () => {
 
   it('deletes inside one line', () => {
     expect(cut('a‹bc›d')).toBe('a|d');
+  });
+});
+
+describe('⌘⌫ deletes to the start of the row', () => {
+  it("stops at the start of the caret's visual row in a wrapped line", () => {
+    expect(lineDeleteStart(50, 40, 0)).toBe(40);
+  });
+
+  it("keeps a list item's marker and checkbox", () => {
+    expect(lineDeleteStart(12, 0, 6)).toBe(6); // "- [ ] |text|"
+    expect(lineDeleteStart(30, 20, 6)).toBe(20); // a later row of the item
+  });
+
+  it('deletes as Backspace with nothing before the caret on the row', () => {
+    expect(lineDeleteStart(6, 0, 6)).toBeNull();
+    expect(lineDeleteStart(40, 40, 0)).toBeNull();
   });
 });

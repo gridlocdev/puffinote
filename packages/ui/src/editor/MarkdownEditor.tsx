@@ -27,6 +27,7 @@ import { ListDepthTracker, renderLine, snapOutOfConcealed } from './lineRender.t
 import { BlockWidget, LineView } from './LineView.tsx';
 import {
   itemTextStart as listTextStart,
+  lineDeleteStart,
   lineContentEnd,
   smartLineStart,
   wordLeft,
@@ -622,11 +623,11 @@ export function MarkdownEditor(props: MarkdownEditorProps) {
       case 'vertical':
         vertical(action.dir, shift);
         break;
-      case 'deleteBack':
+      case 'deleteBack': {
+        const lineFrom = isCollapsed(sel) && action.unit === 'line' ? lineDeleteFrom() : null;
         if (!isCollapsed(sel)) deleteSelection();
-        else if (action.unit === 'line') {
-          apply(deleteRange(doc.getLineStart(doc.getPosition(sel.caret).line), sel.caret), run);
-        } else if (action.unit === 'word') apply(deleteRange(wordLeft(doc, sel.caret), sel.caret), run);
+        else if (lineFrom !== null) apply(deleteRange(lineFrom, sel.caret), run);
+        else if (action.unit === 'word') apply(deleteRange(wordLeft(doc, sel.caret), sel.caret), run);
         else if (mode !== 'raw' && state.apply(backspaceItemEdit(doc, sel), undefined, run))
           goalX.current = null;
         else if (state.apply(backspacePairEdit(doc, sel), undefined, run)) goalX.current = null;
@@ -641,6 +642,7 @@ export function MarkdownEditor(props: MarkdownEditorProps) {
         }
         revealCaret.current = true;
         break;
+      }
       case 'deleteForward':
         if (!isCollapsed(sel)) deleteSelection();
         else if (action.unit === 'word') apply(deleteRange(sel.caret, wordRight(doc, sel.caret)), run);
@@ -671,6 +673,35 @@ export function MarkdownEditor(props: MarkdownEditorProps) {
   }
 
   /** Delete `[start, end)`, renumbering lists when that joins lines. */
+  /** ⌘⌫: where deleting to the line start stops (the visual row's start, a list item's text), or null. */
+  function lineDeleteFrom(): number | null {
+    const line = doc.getPosition(sel.caret).line;
+    const rowStart = visualRowEdge(sel.caret, -1) ?? doc.getLineStart(line);
+    return lineDeleteStart(sel.caret, rowStart, itemTextStart(line));
+  }
+
+  /**
+   * The offset at the start (`dir` -1) or end (1) of the visual row the caret at `offset` is drawn on, read from
+   * the rendered line; null when the line isn't drawn as text.
+   */
+  function visualRowEdge(offset: number, dir: 1 | -1): number | null {
+    const content = contentRef.current;
+    const p = doc.getPosition(offset);
+    const el = lineEl(p.line);
+    const box = caretBoxAt(offset);
+    if (!content || !el || !box) return null;
+    const r = el.getBoundingClientRect();
+    const hit = hitTest(
+      content,
+      dir < 0 ? r.left : r.right - 1,
+      box.top + box.height / 2,
+      rowIndex.current.rows,
+    );
+    if (!hit || hit.line !== p.line) return null;
+    const start = doc.getLineStart(p.line);
+    return start + Math.min(hit.col, lineContentEnd(doc, p.line) - start);
+  }
+
   function deleteRange(start: number, end: number) {
     return deleteRangeEdit(doc, start, end);
   }

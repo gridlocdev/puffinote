@@ -67,3 +67,14 @@ export function smartLineStart(doc: TextDocument, from: number): number {
   const text = itemTextStart(doc, line);
   return from > text ? text : doc.getLineStart(line);
 }
+
+/**
+ * ⌘⌫ (PRD §10.1): where deleting back to the line start stops, given the start of the caret's visual row and
+ * where the line's text starts (past a list item's marker and box in Rich view). A wrapped paragraph loses
+ * only the caret's row, and a list item keeps its bullet or checkbox. Null when nothing is before the caret
+ * on the row, so ⌘⌫ deletes as Backspace does.
+ */
+export function lineDeleteStart(caret: number, rowStart: number, textStart: number): number | null {
+  const start = Math.max(rowStart, textStart);
+  return start < caret ? start : null;
+}
