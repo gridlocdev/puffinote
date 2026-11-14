@@ -157,6 +157,12 @@ describe('HTML renderer', () => {
     expect(html).toContain('<p>deep</p>');
   });
 
+  it('finishes on whitespace-only lines inside and after indented code', () => {
+    expect(body('    code\n    \n    more')).toContain('more');
+    expect(body('para\n   \nnext')).toBe('<p>para</p>\n<p>next</p>\n');
+    expect(body('\t\n  \n')).toBe('');
+  });
+
   it('renders a horizontal rule', () => {
     expect(body('a\n\n---\n\nb')).toContain('<hr>');
   });

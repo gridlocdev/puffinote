@@ -25,7 +25,8 @@ export function renderHtmlDocument(document: TextDocument, title?: string | null
 export function renderHtmlBody(document: TextDocument): string {
   const r = new Renderer(document, MarkdownModel.build(document));
   let line = 0;
-  while (line < document.lineCount) line = r.block(line);
+  // Every block consumes at least one line, so the walk always ends.
+  while (line < document.lineCount) line = Math.max(line + 1, r.block(line));
   return r.out;
 }
 
@@ -300,12 +301,13 @@ class Renderer {
     this.out += '</tr>\n';
   }
 
+  /** A paragraph from `line`, which it always takes, through the lines that continue it. */
   private paragraph(line: number): number {
     const n = this.doc.lineCount;
     this.out += '<p>';
     let i = line;
     let firstLine = true;
-    while (i < n && !this.isBlank(i) && this.isParagraphLine(i)) {
+    while (i < n && (firstLine || (!this.isBlank(i) && this.isParagraphLine(i)))) {
       // Every line break inside a paragraph is kept as a <br>, as the editor shows it (PRD §10.5).
       if (!firstLine) this.out += '<br>\n';
       this.inline(this.model.lineTokens(i));
@@ -426,8 +428,9 @@ class Renderer {
     return this.model.lineTokens(line)[0];
   }
 
+  /** Empty or whitespace only: the tokenizer gives such a line no tokens and treats it as blank. */
   private isBlank(line: number): boolean {
-    return stripCr(this.doc.getLineText(line)).length === 0;
+    return this.doc.getLineText(line).trim().length === 0;
   }
 
   private isParagraphLine(line: number): boolean {
