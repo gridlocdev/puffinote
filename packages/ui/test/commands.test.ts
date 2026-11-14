@@ -477,6 +477,41 @@ describe('EditorState', () => {
     expect(state.contextAt(state.document.length)).toBe('text');
   });
 
+  it('deletes both halves of a pair only right after it was auto-inserted', () => {
+    const typeChar = (state: EditorState, ch: string) => {
+      const edit = typeCharEdit(state.document, state.selection.value, ch);
+      if (edit) state.applyTyping(edit);
+      else state.insert(ch);
+    };
+    const state = new EditorState('');
+    typeChar(state, '(');
+    expect(state.text).toBe('()');
+    expect(state.backspacePair()).toBe(true);
+    expect(state.text).toBe('');
+    // Nested pairs come off one at a time.
+    typeChar(state, '(');
+    typeChar(state, '[');
+    expect(state.text).toBe('([])');
+    expect(state.backspacePair()).toBe(true);
+    expect(state.backspacePair()).toBe(true);
+    expect(state.text).toBe('');
+  });
+
+  it('leaves a pair the user typed, or came back to, to an ordinary Backspace', () => {
+    const typed = new EditorState('a ()');
+    typed.select(3);
+    expect(typed.backspacePair()).toBe(false);
+    const state = new EditorState('');
+    const edit = typeCharEdit(state.document, state.selection.value, '(')!;
+    state.applyTyping(edit);
+    state.select(0);
+    state.select(1);
+    expect(state.backspacePair()).toBe(false);
+    state.insert('x');
+    state.buffer.backspace();
+    expect(state.backspacePair()).toBe(false);
+  });
+
   it('copies the Markdown source of the selection', () => {
     const state = new EditorState('a **b** c');
     state.select(2, 7);

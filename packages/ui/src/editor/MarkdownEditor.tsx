@@ -7,7 +7,6 @@ import { isMac } from '../commands/shortcut.ts';
 import { blockAtLine, type Block } from './blocks.ts';
 import {
   backspaceItemEdit,
-  backspacePairEdit,
   deleteRangeEdit,
   enterEdit,
   joinLinesDeleteEdit,
@@ -630,7 +629,7 @@ export function MarkdownEditor(props: MarkdownEditorProps) {
         else if (action.unit === 'word') apply(deleteRange(wordLeft(doc, sel.caret), sel.caret), run);
         else if (mode !== 'raw' && state.apply(backspaceItemEdit(doc, sel), undefined, run))
           goalX.current = null;
-        else if (state.apply(backspacePairEdit(doc, sel), undefined, run)) goalX.current = null;
+        else if (state.backspacePair(run)) goalX.current = null;
         else if (
           !state.apply(
             joinLinesDeleteEdit(doc, state.buffer.previousCaret(sel.caret), sel.caret),

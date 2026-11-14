@@ -11,7 +11,7 @@ import {
   type UndoRun,
 } from '@puffinote/text';
 import { findBlocks, updateBlocks, type Block } from './blocks.ts';
-import type { Edit, EditContext } from './commands.ts';
+import { backspacePairEdit, type Edit, type EditContext } from './commands.ts';
 import { pictureExtent, type ViewMode } from './reveal.ts';
 
 /**
@@ -39,6 +39,12 @@ export class EditorState {
   private blocksValue: Block[];
   private modelDoc: TextDocument;
   private keys: number[];
+  /**
+   * The openers of pairs the editor auto-inserted (`(` of `(|)`), innermost last. Backspace removes both
+   * halves only of these, and only until any other edit or caret move.
+   */
+  private autoPairs: number[] = [];
+  private keepAutoPairs = false;
 
   constructor(text = '') {
     this.buffer = new DocumentBuffer(text);
@@ -94,8 +100,31 @@ export class EditorState {
 
   /** Apply the result of typing one character (an auto-pair, a step over a closer): it is part of the run. */
   applyTyping(edit: Edit): void {
-    this.buffer.replaceRange(edit.start, edit.length, edit.text, edit.caret);
-    this.select(edit.anchor, edit.caret);
+    const pair = edit.length === 0 && edit.text.length === 2 && edit.caret === edit.start + 1;
+    this.keepAutoPairs = pair;
+    try {
+      this.buffer.replaceRange(edit.start, edit.length, edit.text, edit.caret);
+      this.select(edit.anchor, edit.caret);
+    } finally {
+      this.keepAutoPairs = false;
+    }
+    if (pair) this.autoPairs.push(edit.start);
+  }
+
+  /**
+   * Backspace inside an empty pair the editor has just auto-inserted removes both halves (PRD §10.1). False
+   * anywhere else, including a pair the user typed, so Backspace deletes one character.
+   */
+  backspacePair(run?: UndoRun): boolean {
+    const sel = this.buffer.selection;
+    const top = this.autoPairs[this.autoPairs.length - 1];
+    if (top === undefined || sel.caret !== top + 1) return false;
+    const edit = backspacePairEdit(this.document, sel);
+    if (!edit) return false;
+    const rest = this.autoPairs.slice(0, -1);
+    this.apply(edit, undefined, run);
+    this.autoPairs = rest;
+    return true;
   }
 
   /** Insert text over the selection, as typing does. */
@@ -154,6 +183,7 @@ export class EditorState {
   }
 
   private sync(): void {
+    if (!this.keepAutoPairs) this.autoPairs = [];
     const doc = this.buffer.document;
     if (doc !== this.modelDoc) {
       const first = Math.min(this.buffer.lastChangedLine, Math.max(0, this.modelValue.lineCount - 1));
