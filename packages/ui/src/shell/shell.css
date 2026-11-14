@@ -1045,14 +1045,20 @@
   right: 16px;
   z-index: 5;
   display: flex;
-  align-items: center;
-  gap: 2px;
+  flex-direction: column;
+  gap: 4px;
   padding: 4px;
   border: 1px solid var(--pn-border);
   border-radius: 10px;
   background: var(--pn-chrome-bg);
   box-shadow: var(--pn-shadow);
   font: var(--pn-ui-font);
+}
+
+.pn-find-row {
+  display: flex;
+  align-items: center;
+  gap: 2px;
 }
 
 .pn-find input {
@@ -1089,6 +1095,13 @@
   border-radius: 6px;
   background: none;
   color: var(--pn-chrome-fg);
+}
+
+.pn-find button.pn-find-text {
+  width: auto;
+  padding: 0 8px;
+  font: inherit;
+  font-size: 12px;
 }
 
 .pn-find button:hover:not(:disabled) {

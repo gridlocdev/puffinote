@@ -170,7 +170,7 @@ Type part of a file name to open it. Ranking: names that start with the query, t
 - **Keyboard layouts.** A shortcut matches the character the layout types, not the key's position: Ctrl+- is Zoom Out on French AZERTY (where `-` is on the 6 key) and ⌘- is Zoom Out on a German Mac. Punctuation or a digit that needs Shift on the layout matches without it (Dvorak ⌘+ zooms in; AZERTY Ctrl+Shift+6 is Heading 6). Only a key that types no ASCII character (an ⌥ layer, a Cyrillic layout) matches by its physical key, so ⌥⌘L and Ctrl+Я (Ctrl+Z) still work. An exact match anywhere in the catalog wins over a looser one.
 - **AltGr.** On Windows and Linux a character typed with AltGr (which Windows reports as Ctrl+Alt) never runs a shortcut, so Polish AltGr+S types ś instead of focusing the file tree.
 - **Input methods.** While an IME composition is open (Japanese, Chinese, Korean), its keys belong to it: Enter that commits a conversion, Escape that cancels it and arrows that pick a candidate run no shortcut, in the note or in the find bar.
-- **Resolution order:** an open overlay (a dialog, the command menu) gets keys first. Then the shell's reserved set: ⌘K, ⌘O, ⌘N, ⇧⌘N, ⌘S, ⌘W, ⌥⌘W, ⇧⌘], ⇧⌘[, ⌥⌘S, ⌥⌘E, ⌘\, ⌘, (Settings), ⇧⌘O, ⌘F, ⇧⌘F, ⌘G and ⇧⌘G. Then the editor.
+- **Resolution order:** an open overlay (a dialog, the command menu) gets keys first. Then the shell's reserved set: ⌘K, ⌘O, ⌘N, ⇧⌘N, ⌘S, ⌘W, ⌥⌘W, ⇧⌘], ⇧⌘[, ⌥⌘S, ⌥⌘E, ⌘\, ⌘, (Settings), ⇧⌘O, ⌘F, ⌥⌘F (Ctrl+H elsewhere), ⇧⌘F, ⌘G and ⇧⌘G. Then the editor.
 - The desktop menu bar's built-in items (clipboard, Window) never take a catalog shortcut. On Windows and Linux the Window menu has Minimize only, since Electron's own Close would take Ctrl+W from Close Tab.
 - While a question is up (Save changes?, a name to type), menu-bar commands do nothing. Quitting or opening another folder still works: its own question replaces the open one, which is answered Cancel.
 - In a text field other than the note (a dialog, the filter box), editing shortcuts keep the field's own behaviour. For example, ⌘A selects the field's text.
@@ -308,6 +308,11 @@ Exported HTML must be safe to open. Every attribute value is escaped, including 
 - Matching ignores case, and the text is matched as typed (no patterns). Every match in the note is marked, and the current one more strongly; the marks are drawn for the rows in view and a screen either side, and follow scrolling. The bar counts them ("3 of 12", or "No results").
 - Typing selects the first match from the selection onwards. Enter or ⌘G selects the next match, and ⇧Enter or ⇧⌘G the previous one, wrapping around the note. Matches follow edits while the bar is open.
 - Escape or the close button closes the bar and puts the caret back in the note, with the match selected.
+- **Find and Replace… (⌥⌘F; Ctrl+H elsewhere)** opens the same bar with a Replace row under it, starting from the selection as ⌘F does. The caret goes to the Replace box when there is text to find, else to the Find box. ⌘F leaves the row as it is; closing the bar hides it. The Replace box keeps its text between openings.
+  - The replacement is taken as typed (no patterns or `$1`), and matching is the same as Find's: ignoring case.
+  - **Replace** (Enter in the Replace box) replaces the match the selection is on, as one undo step, and selects the next match after it (wrapping). With the selection on no match, it only selects the next one.
+  - **Replace All** replaces every match in the note as one undo step, with no limit on the count, and leaves the caret after the last replacement. The status bar says how many ("Replaced 3 matches", or "Nothing to replace"). It rewrites only the span from the first match to the end of the last.
+  - In a note Puffinote won't save (an encoding it had to guess, §5), Replace and Replace All are off.
 - Searching every note is the sidebar's Search panel (§6.3), opened with ⇧⌘F.
 
 ## 11. Markdown processing

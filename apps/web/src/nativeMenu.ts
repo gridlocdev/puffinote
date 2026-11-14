@@ -18,7 +18,14 @@ const CLIPBOARD: readonly NativeMenuItem[] = [
 ];
 
 /** These go at the end of their menu, after the editor's own items. */
-const LAST = new Set(['shell.find', 'shell.findNext', 'shell.findPrevious']);
+const LAST = new Set([
+  'shell.find',
+  'shell.findNext',
+  'shell.findPrevious',
+  'shell.replace',
+  'shell.replaceOne',
+  'shell.replaceAll',
+]);
 
 /** Separators before these ids. */
 const BREAKS = new Set([

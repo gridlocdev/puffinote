@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { Notebook } from '../src/notebook/notebook.ts';
 import { memoryPrefs } from '../src/notebook/settings.ts';
-import { findAll, matchAt, matchFrom, matchesBetween } from '../src/editor/find.ts';
+import { findAll, matchAt, matchFrom, matchesBetween, replaceAllEdit } from '../src/editor/find.ts';
 import { MemoryStore } from '../src/platform/memoryStore.ts';
 import { ShellModel } from '../src/shell/shellModel.ts';
 
@@ -109,5 +109,96 @@ describe('find in note', () => {
     const m = new ShellModel();
     expect(m.shellCatalog.get('view.sidebar.search')?.shortcut).toBe('mod+shift+f');
     expect(m.shellCatalog.get('shell.find')?.shortcut).toBe('mod+f');
+  });
+
+  it('builds Replace All as one edit over the span of the matches, keeping the text between them', () => {
+    const text = 'a cat, a Cat; dog';
+    const m = findAll(text, 'cat');
+    expect(replaceAllEdit(text, m, 'puffin')).toEqual({
+      start: 2,
+      length: 10,
+      text: 'puffin, a puffin',
+      anchor: 18,
+      caret: 18,
+    });
+    expect(replaceAllEdit(text, [], 'x')).toBeNull();
+    expect(findAll('x'.repeat(20_000), 'x', Infinity)).toHaveLength(20_000);
+  });
+
+  it('opens the bar with Replace showing on ⌥⌘F / Ctrl+H', () => {
+    const m = new ShellModel();
+    const spec = m.shellCatalog.get('shell.replace')!;
+    expect(['mod+alt+f', 'mod+h']).toContain(spec.shortcut);
+    expect(spec.global).toBe(true);
+  });
+
+  it('replaces the match the selection is on and goes to the next, one undo step each', async () => {
+    const { m, state } = await setup('egg and Egg and egg');
+    state.select(0);
+    m.shellCatalog.run('shell.replace');
+    expect(m.replaceOpen.value).toBe(true);
+    m.setFindQuery('egg');
+    expect(state.selection.value).toEqual({ anchor: 0, caret: 3 });
+    m.replaceText.value = 'eggs';
+    expect(m.shellCatalog.run('shell.replaceOne')).toBe(true);
+    expect(state.text).toBe('eggs and Egg and egg');
+    expect(state.selection.value).toEqual({ anchor: 9, caret: 12 });
+    m.shellCatalog.run('shell.replaceOne');
+    expect(state.text).toBe('eggs and eggs and egg');
+    expect(state.selection.value).toEqual({ anchor: 18, caret: 21 });
+    state.undo();
+    expect(state.text).toBe('eggs and Egg and egg');
+    state.undo();
+    expect(state.text).toBe('egg and Egg and egg');
+  });
+
+  it('only goes to the next match when the selection is on none, and replaces the last one in place', async () => {
+    const { m, state } = await setup('ab ab');
+    m.openFind(true);
+    m.setFindQuery('ab');
+    m.replaceText.value = 'abab'; // the replacement holds the query: it is never matched again in this step
+    state.select(1);
+    m.replaceCurrent();
+    expect(state.text).toBe('ab ab');
+    expect(state.selection.value).toEqual({ anchor: 3, caret: 5 });
+    m.replaceCurrent();
+    expect(state.text).toBe('ab abab');
+    expect(state.selection.value).toEqual({ anchor: 0, caret: 2 });
+  });
+
+  it('replaces every match as one undo step, and says how many', async () => {
+    const { m, state } = await setup('Puffin puffin PUFFIN gannet');
+    m.openFind(true);
+    m.setFindQuery('puffin');
+    m.replaceText.value = '';
+    m.shellCatalog.run('shell.replaceAll');
+    expect(state.text).toBe('   gannet');
+    expect(m.notebook.value!.notice.value?.text).toBe('Replaced 3 matches');
+    state.undo();
+    expect(state.text).toBe('Puffin puffin PUFFIN gannet');
+    m.setFindQuery('heron');
+    expect(m.shellCatalog.isEnabled(m.shellCatalog.get('shell.replaceAll')!)).toBe(true);
+    m.replaceAll();
+    expect(m.notebook.value!.notice.value?.text).toBe('Nothing to replace');
+    m.closeFind();
+    expect(m.replaceOpen.value).toBe(false);
+    expect(m.shellCatalog.isEnabled(m.shellCatalog.get('shell.replaceAll')!)).toBe(false);
+  });
+
+  it('never replaces in a note Puffinote won’t save', async () => {
+    const bytes = new Uint8Array([0x65, 0x67, 0x67, 0x20, 0xff, 0xfe, 0x80]); // "egg " and bytes that aren't UTF-8
+    const nb = await Notebook.open(new MemoryStore('N', { 'a.md': bytes }), { prefs: memoryPrefs() });
+    const m = new ShellModel();
+    m.setNotebook(nb);
+    const tab = (await nb.openFile('a.md'))!;
+    expect(tab.readOnly).toBe(true);
+    const before = tab.state!.text;
+    m.openFind(true);
+    m.setFindQuery('egg');
+    m.replaceText.value = 'x';
+    expect(m.shellCatalog.isEnabled(m.shellCatalog.get('shell.replaceOne')!)).toBe(false);
+    m.replaceCurrent();
+    m.replaceAll();
+    expect(tab.state!.text).toBe(before);
   });
 });

@@ -1,11 +1,11 @@
 import { computed, signal } from '@preact/signals';
 import { CommandCatalog, type Command, type CommandSpec } from '../commands/command.ts';
-import { formatShortcut, parseShortcut } from '../commands/shortcut.ts';
+import { formatShortcut, isMac, parseShortcut } from '../commands/shortcut.ts';
 import { removeRangeEdit } from '../editor/commands.ts';
 import { markdownCommandSpecs } from '../editor/editorCommands.ts';
 import type { EditorMenuPoint, PictureAt } from '../editor/MarkdownEditor.tsx';
 import type { EditorState } from '../editor/editorState.ts';
-import { findAll, matchAt, matchFrom, type TextRange } from '../editor/find.ts';
+import { findAll, matchAt, matchFrom, replaceAllEdit, type TextRange } from '../editor/find.ts';
 import { sidebarPanels, type Notebook, type SidebarPanel, type Tab } from '../notebook/notebook.ts';
 import { allFolders, fileKind, findNode, hasFolders, noteFileName, type TreeNode } from '../notebook/tree.ts';
 import type { TrashItem } from '../notebook/trash.ts';
@@ -101,6 +101,10 @@ export class ShellModel {
   readonly focusPanelTick = signal(0);
   /** Find in Note's box (PRD §10.7): its text while the bar is open, null while it is closed. */
   readonly findQuery = signal<string | null>(null);
+  /** Whether the find bar shows its Replace row (Find and Replace…, PRD §10.7). */
+  readonly replaceOpen = signal(false);
+  /** The Replace box's text, kept while the bar is closed. */
+  readonly replaceText = signal('');
   /** The Library layout's popover under the path bar, if one is open. */
   readonly popover = signal<'outline' | 'recent' | null>(null);
   /** How large notes are drawn (1 is 100%). Remembered across sessions in this browser or app. */
@@ -168,6 +172,7 @@ export class ShellModel {
       if (this.overlay.peek()) this.close();
       this.preview.value = null;
       this.findQuery.value = null;
+      this.replaceOpen.value = false;
     }
     if (old && old !== nb) old.dispose();
     this.tabBarOverride.value = null;
@@ -294,19 +299,73 @@ export class ShellModel {
   /** The find bar's text when it was last closed, for the next ⌘F with nothing selected. */
   private lastFind = '';
 
-  /** Open the find bar with the caret in its box, starting from the selected text when it is on one line. */
-  openFind(): void {
+  /**
+   * Open the find bar with the caret in its box, starting from the selected text when it is on one line. With
+   * `replace`, the bar shows its Replace row too, and the caret goes to the Replace box when there is text to
+   * find. ⌘F alone keeps the Replace row as it was.
+   */
+  openFind(replace = false): void {
     const state = this.activeState.peek();
     if (!state) return;
     const sel = state.selection.peek();
     const picked = state.text.slice(Math.min(sel.anchor, sel.caret), Math.max(sel.anchor, sel.caret));
     if (picked && !picked.includes('\n') && picked.length <= 200) this.findQuery.value = picked;
     else if (this.findQuery.peek() === null) this.findQuery.value = this.lastFind;
+    if (replace) this.replaceOpen.value = true;
+    const which = replace && this.findQuery.peek() ? '.pn-find-replace input' : '.pn-find input';
     setTimeout(() => {
-      const box = globalThis.document?.querySelector<HTMLInputElement>('.pn-find input');
+      const box = globalThis.document?.querySelector<HTMLInputElement>(which);
       box?.focus();
       box?.select();
     });
+  }
+
+  /** Whether the note in front can take a replace: a note, not a picture, that Puffinote will save. */
+  canReplace(): boolean {
+    const tab = this.activeTab.peek();
+    return tab?.state != null && !tab.readOnly && !!this.findQuery.peek();
+  }
+
+  /**
+   * Replace (PRD §10.7): the match the selection is on becomes the Replace box's text, as one undo step, and
+   * the next match is selected. With the selection on no match, it only goes to the next one.
+   */
+  replaceCurrent(): void {
+    const state = this.activeState.peek();
+    const query = this.findQuery.peek();
+    if (!state || !query || !this.canReplace()) return;
+    const sel = state.selection.peek();
+    const start = Math.min(sel.anchor, sel.caret);
+    const end = Math.max(sel.anchor, sel.caret);
+    const matches = findAll(state.text, query);
+    if (matchAt(matches, start, end) === -1) {
+      this.findStep(0);
+      return;
+    }
+    const text = this.replaceText.peek();
+    const after = start + text.length;
+    state.apply({ start, length: end - start, text, anchor: after, caret: after });
+    const next = findAll(state.text, query);
+    const i = matchFrom(next, after, 0);
+    if (i >= 0) state.reveal(next[i]!.start, next[i]!.end);
+  }
+
+  /** Replace All (PRD §10.7): every match, as one undo step. Says how many it replaced. */
+  replaceAll(): void {
+    const state = this.activeState.peek();
+    const query = this.findQuery.peek();
+    if (!state || !query || !this.canReplace()) return;
+    const matches = findAll(state.text, query, Infinity);
+    const edit = replaceAllEdit(state.text, matches, this.replaceText.peek());
+    if (edit) state.apply(edit);
+    state.revealTick.value++;
+    const n = matches.length;
+    this.notebook
+      .peek()
+      ?.notify(
+        'info',
+        n === 0 ? 'Nothing to replace' : n === 1 ? 'Replaced 1 match' : `Replaced ${n} matches`,
+      );
   }
 
   /** The find bar's text changed: select the first match from where the selection starts. */
@@ -330,6 +389,7 @@ export class ShellModel {
   closeFind(): void {
     this.lastFind = this.findQuery.peek() ?? '';
     this.findQuery.value = null;
+    this.replaceOpen.value = false;
     if (this.activeState.peek()) this.focusEditor();
   }
 
@@ -1066,6 +1126,38 @@ function shellCommandSpecs(m: ShellModel): CommandSpec[] {
       global: true,
       enabled: () => m.activeState.peek() !== null && !!m.findQuery.peek(),
       run: () => m.findStep(-1),
+    },
+    {
+      id: 'shell.replace',
+      title: 'Find and Replace…',
+      description: 'Find text in the note in front and replace it.',
+      group: 'Edit',
+      shortcut: isMac ? 'mod+alt+f' : 'mod+h',
+      icon: 'search',
+      keywords: 'search find replace text in note substitute',
+      global: true,
+      enabled: () => m.activeState.peek() !== null,
+      run: () => m.openFind(true),
+    },
+    {
+      id: 'shell.replaceOne',
+      title: 'Replace',
+      description: 'Replace the selected match with the Replace box’s text and go to the next one.',
+      group: 'Edit',
+      keywords: 'find replace next',
+      global: true,
+      enabled: () => m.replaceOpen.peek() && m.canReplace(),
+      run: () => m.replaceCurrent(),
+    },
+    {
+      id: 'shell.replaceAll',
+      title: 'Replace All',
+      description: 'Replace every match of the find bar’s text in the note.',
+      group: 'Edit',
+      keywords: 'find replace all every',
+      global: true,
+      enabled: () => m.replaceOpen.peek() && m.canReplace(),
+      run: () => m.replaceAll(),
     },
     {
       id: 'shell.newNote',

@@ -8,12 +8,15 @@ export interface TextRange {
 /** At most this many matches are found; a query that matches more stops counting. */
 export const MAX_MATCHES = 10_000;
 
-/** Every match of `query` in `text`, ignoring case, left to right and not overlapping. */
-export function findAll(text: string, query: string): TextRange[] {
+/**
+ * Every match of `query` in `text`, ignoring case, left to right and not overlapping; at most `limit` of them
+ * (Replace All passes no limit).
+ */
+export function findAll(text: string, query: string, limit = MAX_MATCHES): TextRange[] {
   if (!query) return [];
   const re = new RegExp(query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'giu');
   const out: TextRange[] = [];
-  for (let m = re.exec(text); m && out.length < MAX_MATCHES; m = re.exec(text)) {
+  for (let m = re.exec(text); m && out.length < limit; m = re.exec(text)) {
     out.push({ start: m.index, end: m.index + m[0].length });
   }
   return out;
@@ -63,4 +66,37 @@ export function matchesBetween(matches: readonly TextRange[], start: number, end
   let to = lo;
   while (to < matches.length && matches[to]!.start < end) to++;
   return [lo, to];
+}
+
+/** One edit, as the editor applies it: replace `[start, start + length)` with `text`, then select. */
+export interface ReplaceEdit {
+  readonly start: number;
+  readonly length: number;
+  readonly text: string;
+  readonly anchor: number;
+  readonly caret: number;
+}
+
+/**
+ * Replace All (PRD §10.7) as one edit, so it undoes as one step: the span from the first match to the end of
+ * the last, with every match in it replaced by `replacement` (taken as typed) and the text between them kept.
+ * Nothing outside that span is touched. The caret goes to the end of the last replacement. Null when there
+ * is nothing to replace.
+ */
+export function replaceAllEdit(
+  text: string,
+  matches: readonly TextRange[],
+  replacement: string,
+): ReplaceEdit | null {
+  const first = matches[0];
+  const last = matches[matches.length - 1];
+  if (!first || !last) return null;
+  let out = '';
+  let at = first.start;
+  for (const m of matches) {
+    out += text.slice(at, m.start) + replacement;
+    at = m.end;
+  }
+  const caret = first.start + out.length;
+  return { start: first.start, length: last.end - first.start, text: out, anchor: caret, caret };
 }

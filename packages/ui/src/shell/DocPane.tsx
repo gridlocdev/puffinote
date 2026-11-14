@@ -101,48 +101,91 @@ function FindBar({ model }: { readonly model: ShellModel }) {
         ? `${found!.current + 1} of ${total}`
         : `${total} found`;
   const key = (id: string) => model.menuCatalog.get(id)?.shortcutText ?? '';
+  const replaceOpen = model.replaceOpen.value;
+  // Read the signals the enabled state depends on, so the buttons follow them.
+  void model.activeTab.value;
+  const canReplace = count > 0 && model.canReplace();
+  const run = (id: string) => model.shellCatalog.run(id);
   return (
     <div class="pn-find" role="search">
-      <input
-        type="text"
-        value={query}
-        placeholder="Find in note"
-        aria-label="Find in note"
-        spellcheck={false}
-        autocomplete="off"
-        onInput={(e) => model.setFindQuery((e.target as HTMLInputElement).value)}
-        onKeyDown={(e) => {
-          // Enter or Escape that commits or cancels an IME composition stays with it.
-          if (isComposingKey(e)) return;
-          if (e.key === 'Enter') model.findStep(e.shiftKey ? -1 : 1);
-          else if (e.key === 'Escape') model.closeFind();
-          else return;
-          e.preventDefault();
-          e.stopPropagation();
-        }}
-      />
-      <span class="pn-find-count" aria-live="polite">
-        {status}
-      </span>
-      <button
-        title={`Previous Match (${key('shell.findPrevious')})`}
-        aria-label="Previous match"
-        disabled={count === 0}
-        onClick={() => model.findStep(-1)}
-      >
-        <Icon name="chevron-up" />
-      </button>
-      <button
-        title={`Next Match (${key('shell.findNext')})`}
-        aria-label="Next match"
-        disabled={count === 0}
-        onClick={() => model.findStep(1)}
-      >
-        <Icon name="chevron-down" />
-      </button>
-      <button title="Close (Esc)" aria-label="Close" onClick={() => model.closeFind()}>
-        <Icon name="x" />
-      </button>
+      <div class="pn-find-row">
+        <input
+          type="text"
+          value={query}
+          placeholder="Find in note"
+          aria-label="Find in note"
+          spellcheck={false}
+          autocomplete="off"
+          onInput={(e) => model.setFindQuery((e.target as HTMLInputElement).value)}
+          onKeyDown={(e) => {
+            // Enter or Escape that commits or cancels an IME composition stays with it.
+            if (isComposingKey(e)) return;
+            if (e.key === 'Enter') model.findStep(e.shiftKey ? -1 : 1);
+            else if (e.key === 'Escape') model.closeFind();
+            else return;
+            e.preventDefault();
+            e.stopPropagation();
+          }}
+        />
+        <span class="pn-find-count" aria-live="polite">
+          {status}
+        </span>
+        <button
+          title={`Previous Match (${key('shell.findPrevious')})`}
+          aria-label="Previous match"
+          disabled={count === 0}
+          onClick={() => model.findStep(-1)}
+        >
+          <Icon name="chevron-up" />
+        </button>
+        <button
+          title={`Next Match (${key('shell.findNext')})`}
+          aria-label="Next match"
+          disabled={count === 0}
+          onClick={() => model.findStep(1)}
+        >
+          <Icon name="chevron-down" />
+        </button>
+        <button title="Close (Esc)" aria-label="Close" onClick={() => model.closeFind()}>
+          <Icon name="x" />
+        </button>
+      </div>
+      {replaceOpen && (
+        <div class="pn-find-row pn-find-replace">
+          <input
+            type="text"
+            value={model.replaceText.value}
+            placeholder="Replace with"
+            aria-label="Replace with"
+            spellcheck={false}
+            autocomplete="off"
+            onInput={(e) => (model.replaceText.value = (e.target as HTMLInputElement).value)}
+            onKeyDown={(e) => {
+              if (isComposingKey(e)) return;
+              if (e.key === 'Enter') run('shell.replaceOne');
+              else if (e.key === 'Escape') model.closeFind();
+              else return;
+              e.preventDefault();
+              e.stopPropagation();
+            }}
+          />
+          <button
+            class="pn-find-text"
+            title={
+              model.activeTab.value?.readOnly
+                ? 'This note can’t be saved, so it can’t be changed'
+                : 'Replace (Enter)'
+            }
+            disabled={!canReplace}
+            onClick={() => run('shell.replaceOne')}
+          >
+            Replace
+          </button>
+          <button class="pn-find-text" disabled={!canReplace} onClick={() => run('shell.replaceAll')}>
+            Replace All
+          </button>
+        </div>
+      )}
     </div>
   );
 }
