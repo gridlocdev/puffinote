@@ -239,7 +239,9 @@ export function FileTree(props: {
       if (!tree || !hit || !tree.contains(hit)) return { dir: null, row: null };
       const rowEl = hit.closest<HTMLElement>('[data-path]');
       const path = rowEl?.dataset.path;
-      const row = path !== undefined ? (rows.find((r) => r.node.path === path)?.node ?? null) : null;
+      // The rows as drawn now: a folder the drag opened by hovering has rows the pointer-down render lacked.
+      const row =
+        path !== undefined ? (rowsRef.current.find((r) => r.node.path === path)?.node ?? null) : null;
       const dir = row ? (row.kind === 'dir' ? row.path : parentOf(row.path)) : root.path;
       return { dir: nb.canMove(node.path, dir) ? dir : null, row };
     };
@@ -286,9 +288,11 @@ export function FileTree(props: {
     window.addEventListener('pointerup', onUp);
     window.addEventListener('keydown', onKey, true);
   }
-  // The drag's listeners outlive renders; they read the current open folders through this.
+  // The drag's listeners outlive renders; they read the current open folders and rows through these.
   const expandedRef = useRef(expanded);
   expandedRef.current = expanded;
+  const rowsRef = useRef(rows);
+  rowsRef.current = rows;
 
   // ----- Files dropped from the desktop (PRD §6.1) -----
   const rowAt = (t: EventTarget | null): TreeNode | null => {
