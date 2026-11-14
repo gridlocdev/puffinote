@@ -45,6 +45,36 @@ export function hostAllowed(hostHeader: string | undefined, allowed: readonly st
   return allowed.includes(bare);
 }
 
+/** Is this bind address reachable only from this machine? (`127.0.0.0/8`, `::1`, `localhost`) */
+export function isLoopback(host: string): boolean {
+  const bare = host
+    .trim()
+    .toLowerCase()
+    .replace(/^\[|\]$/g, '');
+  if (bare === 'localhost' || bare.endsWith('.localhost')) return true;
+  if (bare === '::1') return true;
+  const v4 = bare.startsWith('::ffff:') ? bare.slice(7) : bare;
+  return isIP(v4) === 4 && v4.startsWith('127.');
+}
+
+/**
+ * Why the server must not start, or null. Listening beyond loopback without a token would let anyone on the
+ * network read, change and delete every note, so that needs `PUFFINOTE_ALLOW_NO_TOKEN=1`: the opt-out for a
+ * reverse proxy that does the authentication (PRD §3).
+ */
+export function refuseWithoutToken(opts: {
+  readonly host: string;
+  readonly token: string | null;
+  readonly allowNoToken: boolean;
+}): string | null {
+  if (opts.token !== null || opts.allowNoToken || isLoopback(opts.host)) return null;
+  return [
+    `Refusing to listen on ${opts.host} without PUFFINOTE_TOKEN: anyone on the network could change or delete your notes.`,
+    'Set PUFFINOTE_TOKEN to a shared secret, or bind to 127.0.0.1 with PUFFINOTE_HOST,',
+    'or set PUFFINOTE_ALLOW_NO_TOKEN=1 if a reverse proxy in front of the server already authenticates.',
+  ].join('\n');
+}
+
 const MIME: Record<string, string> = {
   '.html': 'text/html; charset=utf-8',
   '.js': 'text/javascript; charset=utf-8',

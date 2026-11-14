@@ -15,7 +15,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { etagOf, FileApi, parseRoots } from '../src/fileApi.ts';
-import { createServer, hostAllowed, parseHosts } from '../src/server.ts';
+import { createServer, hostAllowed, isLoopback, parseHosts, refuseWithoutToken } from '../src/server.ts';
 
 let dir: string;
 let outside: string;
@@ -63,6 +63,22 @@ describe('configuration', () => {
     expect(hostAllowed('nas.lan', extra)).toBe(true);
     expect(hostAllowed('evil.example', extra)).toBe(false);
     expect(hostAllowed(undefined, extra)).toBe(false);
+  });
+
+  it('tells loopback bind addresses from ones the network can reach', () => {
+    for (const h of ['127.0.0.1', '127.1.2.3', '::1', '[::1]', 'localhost', '::ffff:127.0.0.1'])
+      expect(isLoopback(h), h).toBe(true);
+    for (const h of ['0.0.0.0', '::', '192.168.1.4', 'nas.lan', '']) expect(isLoopback(h), h).toBe(false);
+  });
+
+  it('refuses to listen on the network without a token unless told to', () => {
+    expect(refuseWithoutToken({ host: '0.0.0.0', token: null, allowNoToken: false })).toMatch(
+      /PUFFINOTE_TOKEN.*PUFFINOTE_ALLOW_NO_TOKEN=1/s,
+    );
+    expect(refuseWithoutToken({ host: '192.168.1.4', token: null, allowNoToken: false })).not.toBeNull();
+    expect(refuseWithoutToken({ host: '0.0.0.0', token: 's3cret', allowNoToken: false })).toBeNull();
+    expect(refuseWithoutToken({ host: '0.0.0.0', token: null, allowNoToken: true })).toBeNull();
+    expect(refuseWithoutToken({ host: '127.0.0.1', token: null, allowNoToken: false })).toBeNull();
   });
 });
 

@@ -31,7 +31,7 @@ run-desktop: build-web
 [group('run')]
 preview-web: build-web
     mkdir -p "{{ nas_data }}"
-    PUFFINOTE_ROOTS="Sample={{ nas_data }}" PUFFINOTE_STATIC="{{ justfile_directory() }}/apps/web/dist" node apps/server/src/main.ts
+    PUFFINOTE_HOST=127.0.0.1 PUFFINOTE_ROOTS="Sample={{ nas_data }}" PUFFINOTE_STATIC="{{ justfile_directory() }}/apps/web/dist" node apps/server/src/main.ts
 
 # The live-preview editor on its own, with no shell around it (http://localhost:5199).
 [group('run')]
@@ -109,11 +109,11 @@ icons:
 build-docker tag="puffinote:latest":
     docker build -t {{ tag }} .
 
-# Run the NAS Docker image against ./.nas-data (http://localhost:8790).
+# Run the NAS Docker image against ./.nas-data (http://localhost:8790, this machine only, no token).
 [group('build')]
 run-docker tag="puffinote:latest":
     mkdir -p "{{ nas_data }}"
-    docker run --rm -p 8790:8790 -v "{{ nas_data }}:/data" {{ tag }}
+    docker run --rm -p 127.0.0.1:8790:8790 -e PUFFINOTE_ALLOW_NO_TOKEN=1 -v "{{ nas_data }}:/data" {{ tag }}
 
 # ── Quality ───────────────────────────────────────────────────────────────
 

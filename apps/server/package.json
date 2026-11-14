@@ -7,7 +7,7 @@
   "description": "Serves the Puffinote web client and a small file API over notebook folders on a NAS.",
   "scripts": {
     "start": "node src/main.ts",
-    "dev": "PUFFINOTE_ROOTS=Sample=../../.nas-data PUFFINOTE_STATIC= node --watch src/main.ts",
+    "dev": "PUFFINOTE_ROOTS=Sample=../../.nas-data PUFFINOTE_STATIC= PUFFINOTE_HOST=127.0.0.1 node --watch src/main.ts",
     "build": "echo 'server runs from source (node type stripping)'"
   }
 }

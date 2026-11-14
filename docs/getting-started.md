@@ -38,18 +38,22 @@ The desktop app checks for a new version once a day and tells you when one is ou
 
 ```bash
 docker build -t puffinote .
-docker run -d -p 8790:8790 -v /volume1/notes:/data puffinote
+docker run -d -p 8790:8790 -e PUFFINOTE_TOKEN=change-me -v /volume1/notes:/data puffinote
 ```
 
-Then open `http://<nas>:8790`. To expose several folders, add a password, or run as your NAS user, see [compose.example.yaml](../compose.example.yaml).
+Then open `http://<nas>:8790` and enter the token. To expose several folders or run as your NAS user, see [compose.example.yaml](../compose.example.yaml).
 
-| Variable           | Default       | Meaning                                                           |
-| ------------------ | ------------- | ----------------------------------------------------------------- |
-| `PUFFINOTE_ROOTS`  | `Notes=/data` | The folders to show, as `Name=/path;Other=/path2`                 |
-| `PUFFINOTE_TOKEN`  | unset         | If set, the browser asks for this token before it shows any files |
-| `PUFFINOTE_HOSTS`  | unset         | Without a token, the extra host names to answer (comma-separated) |
-| `PORT`             | `8790`        | The port to listen on                                             |
-| `PUFFINOTE_MAX_MB` | `64`          | The largest file you can save, in MB                              |
+| Variable | Default | Meaning |
+| --- | --- | --- |
+| `PUFFINOTE_ROOTS` | `Notes=/data` | The folders to show, as `Name=/path;Other=/path2` |
+| `PUFFINOTE_TOKEN` | unset | The browser asks for this token before it shows any files. Required unless the server listens on loopback only |
+| `PUFFINOTE_ALLOW_NO_TOKEN` | unset | `1` lets the server listen on the network without a token, for a reverse proxy that already asks for a password |
+| `PUFFINOTE_HOST` | `0.0.0.0` | The address to listen on (`127.0.0.1` answers this machine only) |
+| `PUFFINOTE_HOSTS` | unset | Without a token, the extra host names to answer (comma-separated) |
+| `PORT` | `8790` | The port to listen on |
+| `PUFFINOTE_MAX_MB` | `64` | The largest file you can save, in MB |
+
+Anyone who can reach the server can change and delete your notes, so it refuses to start on a network address (such as the default `0.0.0.0`) without `PUFFINOTE_TOKEN`. If your NAS's reverse proxy already asks for a password, set `PUFFINOTE_ALLOW_NO_TOKEN=1` instead, and publish the port only to the proxy.
 
 Without `PUFFINOTE_TOKEN`, the server only answers requests addressed to an IP address or `localhost`. If you open it by name (for example `http://nas.lan:8790`), list that name in `PUFFINOTE_HOSTS=nas.lan`. Other names get `421 Misdirected Request`, which stops a hostile web page from reaching your notes through DNS rebinding.
 

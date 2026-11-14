@@ -14,6 +14,8 @@ COPY apps/web apps/web
 RUN pnpm --filter @puffinote/web build
 
 FROM node:22-alpine
+# The server listens on 0.0.0.0 here, so it refuses to start without PUFFINOTE_TOKEN (pass it with -e), unless
+# PUFFINOTE_ALLOW_NO_TOKEN=1 says a reverse proxy in front authenticates. /api/info stays public for the check.
 ENV NODE_ENV=production PORT=8790 PUFFINOTE_STATIC=/app/web PUFFINOTE_ROOTS="Notes=/data"
 WORKDIR /app
 COPY apps/server/package.json server/

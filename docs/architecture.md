@@ -78,7 +78,7 @@ Puffinote is one TypeScript code base with three hosts and a CLI. The browser, t
 - **Configuration** is environment only:
   - `PUFFINOTE_ROOTS=Name=/dir;Other=/dir2` names the folders that hold notebooks (required).
   - `PUFFINOTE_STATIC` is the built web client (default `../web/dist`; empty means API only).
-  - `PUFFINOTE_TOKEN` requires a bearer token.
+  - `PUFFINOTE_TOKEN` requires a bearer token. Without one the server refuses to start on a non-loopback address, unless `PUFFINOTE_ALLOW_NO_TOKEN=1` says a reverse proxy in front authenticates.
   - `PUFFINOTE_HOST` and `PORT` set the bind address (default `0.0.0.0:8790`).
   - `PUFFINOTE_HOSTS` lists extra Host names accepted without a token.
   - `PUFFINOTE_MAX_MB` caps an upload (default 64).

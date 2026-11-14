@@ -8,8 +8,11 @@ services:
     environment:
       # One or more notebook folders (or folders of notebooks): Name=/container/path;Other=/container/path2
       PUFFINOTE_ROOTS: 'Notes=/data/notes;Shared=/data/shared'
-      # Optional shared secret. Leave unset if your NAS reverse proxy already authenticates.
-      # PUFFINOTE_TOKEN: change-me
+      # Shared secret the browser asks for. The server refuses to start without one, since anyone who can
+      # reach it could change or delete your notes.
+      PUFFINOTE_TOKEN: change-me
+      # Only if your NAS reverse proxy already asks for a password: drop the token and set this instead.
+      # PUFFINOTE_ALLOW_NO_TOKEN: '1'
       # Without a token, only IP addresses and localhost are answered. Add the names you browse to:
       # PUFFINOTE_HOSTS: 'nas.lan,puffinote.home.arpa'
     volumes:

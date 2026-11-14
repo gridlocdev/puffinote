@@ -12,7 +12,7 @@ jobs:
       - run: docker build -t puffinote:ci .
       - name: Smoke test
         run: |
-          docker run -d --name pn -p 8790:8790 puffinote:ci
+          docker run -d --name pn -p 8790:8790 -e PUFFINOTE_TOKEN=ci puffinote:ci
           for i in $(seq 1 20); do curl -fs http://127.0.0.1:8790/api/info && exit 0; sleep 1; done
           docker logs pn
           exit 1
