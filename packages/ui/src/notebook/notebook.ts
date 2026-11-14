@@ -1550,6 +1550,33 @@ export class Notebook {
   }
 
   /**
+   * Which of the notes at `paths` have `query` in their text, ignoring case, open tabs' unsaved text included:
+   * the Library's Filter box (PRD §6). Unlike `search`, it has no cap, so a common word keeps every note that
+   * has it. An aborted `signal` stops the scan between files and resolves with nothing.
+   */
+  async notesContaining(
+    query: string,
+    paths: readonly string[],
+    opts: { signal?: AbortSignal } = {},
+  ): Promise<Set<string>> {
+    const found = new Set<string>();
+    if (!query.trim()) return found;
+    const open = new Map(this.tabs.value.filter((t) => t.state).map((t) => [t.path.value, t.state!]));
+    for (const path of paths) {
+      if (opts.signal?.aborted) return new Set();
+      if (fileKind(path) !== 'note') continue;
+      let text: string;
+      try {
+        text = open.get(path)?.text ?? readText((await this.store.read(path)).bytes).text;
+      } catch {
+        continue;
+      }
+      if (containsText(text, query)) found.add(path);
+    }
+    return opts.signal?.aborted ? new Set() : found;
+  }
+
+  /**
    * The URL for an image a note at `notePath` refers to: web and data URLs as they are, notebook files
    * straight from the store, or read once into a blob URL (the editor redraws when it arrives).
    */
@@ -2093,4 +2120,9 @@ function sameListing(checked: FileStat & { readonly path: string }, path: string
     checked.modified === listed.modified &&
     checked.size === listed.size
   );
+}
+
+/** Does `text` contain `query`, ignoring case, as `search` matches it? */
+function containsText(text: string, query: string): boolean {
+  return findAll(text, query, { caseSensitive: false, regex: false }).length > 0;
 }

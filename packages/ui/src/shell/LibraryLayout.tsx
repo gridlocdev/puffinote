@@ -200,7 +200,7 @@ function NoteList({ model, nb }: { readonly model: ShellModel; readonly nb: Note
       }),
     [nb.tree.value, scope, nb.pinned.value, nb.recent.value, nb.stats.value, sort],
   );
-  const textHits = useTextHits(nb, query);
+  const textHits = useTextHits(nb, query, files);
   const shown = query ? files.filter((f) => nameMatches(f.name, query) || textHits.has(f.path)) : files;
   const activePath = nb.active.value?.path.value ?? null;
   const list = useRef<HTMLDivElement>(null);
@@ -337,9 +337,15 @@ function NoteList({ model, nb }: { readonly model: ShellModel; readonly nb: Note
   );
 }
 
-/** The notes whose text has the filter box's words in it, looked up a moment after typing stops. */
-function useTextHits(nb: Notebook, query: string): ReadonlySet<string> {
+/**
+ * The notes in the list whose text has the filter box's words in it, looked up a moment after typing stops.
+ * Every note is checked: no cap, so a common word doesn't drop notes from the list (PRD §6).
+ */
+function useTextHits(nb: Notebook, query: string, files: readonly TreeNode[]): ReadonlySet<string> {
   const [hits, setHits] = useState<ReadonlySet<string>>(new Set());
+  const paths = useMemo(() => files.map((f) => f.path), [files]);
+  // The same notes in another order (a save re-sorting the list) need no new look.
+  const key = [...paths].sort().join('\n');
   useEffect(() => {
     if (!query) {
       setHits(new Set());
@@ -347,15 +353,15 @@ function useTextHits(nb: Notebook, query: string): ReadonlySet<string> {
     }
     const abort = new AbortController();
     const t = setTimeout(() => {
-      void nb.search(query, { signal: abort.signal }).then((h) => {
-        if (!abort.signal.aborted) setHits(new Set(h.map((x) => x.path)));
+      void nb.notesContaining(query, paths, { signal: abort.signal }).then((found) => {
+        if (!abort.signal.aborted) setHits(found);
       });
     }, 200);
     return () => {
       abort.abort();
       clearTimeout(t);
     };
-  }, [query, nb.tree.value]);
+  }, [query, key, nb.tree.value]);
   return hits;
 }
 

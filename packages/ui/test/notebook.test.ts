@@ -216,6 +216,21 @@ describe('Notebook files', () => {
     // The extension isn't part of the name a search sees.
     expect(await nb.search('md')).toEqual([]);
   });
+
+  it('finds every note whose text has the filter words, however many there are', async () => {
+    const files: Record<string, string> = { 'pic.png': 'the', 'none.md': 'nothing' };
+    for (let i = 0; i < 600; i++) files[`n${i}.md`] = 'the cat and the hat\n'.repeat(3);
+    const { nb } = await open(files);
+    const tab = (await nb.openFile('none.md'))!;
+    tab.state!.insert('THE ');
+    const paths = [...Object.keys(files)];
+    const found = await nb.notesContaining('the', paths);
+    expect(found.size).toBe(601);
+    expect(found.has('none.md')).toBe(true);
+    expect(found.has('pic.png')).toBe(false);
+    // Only the paths asked about are read.
+    expect(await nb.notesContaining('the', ['n1.md', 'none.md'])).toEqual(new Set(['n1.md', 'none.md']));
+  });
 });
 
 describe('Notebook session and settings', () => {
