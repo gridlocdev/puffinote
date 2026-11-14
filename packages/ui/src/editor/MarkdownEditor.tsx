@@ -1,5 +1,5 @@
 import { toggledTaskState, parseLinePrefix, type Token } from '@puffinote/markdown';
-import { isCollapsed, selectionEnd, selectionLength, selectionStart, type UndoRun } from '@puffinote/text';
+import { isCollapsed, selectionEnd, selectionStart, type UndoRun } from '@puffinote/text';
 import { useLayoutEffect, useMemo, useRef } from 'preact/hooks';
 import type { JSX } from 'preact';
 import { CommandCatalog } from '../commands/command.ts';
@@ -37,6 +37,7 @@ import {
   wordRight,
 } from './motion.ts';
 import { matchesBetween, type TextRange } from './find.ts';
+import { emptyMirror, mirrorFor, readInput, type InputMirror } from './hiddenInput.ts';
 import { keyAction, leavesEditor, primaryHeld, undoRunFor } from './keys.ts';
 import { carryLineCache, lineTextOf, type LineCache } from './lineCache.ts';
 import { keepReveal, lineReveal, type LineReveal } from './reveal.ts';
@@ -113,6 +114,18 @@ function pictureFiles(data: DataTransfer | null | undefined): File[] {
   return [...(data?.files ?? [])].filter((f) => f.type.startsWith('image/'));
 }
 
+let measureCanvas: HTMLCanvasElement | null = null;
+
+/** How wide `text` is drawn in `el`'s font, in CSS pixels. */
+function textWidth(el: HTMLElement, text: string): number {
+  measureCanvas ??= document.createElement('canvas');
+  const ctx = measureCanvas.getContext('2d');
+  if (!ctx) return 0;
+  const cs = getComputedStyle(el);
+  ctx.font = `${cs.fontStyle} ${cs.fontWeight} ${cs.fontSize} ${cs.fontFamily}`;
+  return Math.ceil(ctx.measureText(text).width);
+}
+
 /** The links a ⌘-click may open (PRD §10.3). */
 export function isOpenableLink(url: string): boolean {
   return /^(https?:|mailto:)/i.test(url.trim());
@@ -133,6 +146,8 @@ export function MarkdownEditor(props: MarkdownEditorProps) {
   const selectionRef = useRef<HTMLDivElement>(null);
   const goalX = useRef<number | null>(null);
   const composing = useRef(false);
+  /** What the hidden input holds besides new text: the selection, or the letter before the caret. */
+  const mirrorRef = useRef<InputMirror>(emptyMirror);
   const revealCaret = useRef(false);
   /** The latest render's vertical move, for a move that finishes on the next frame. */
   const verticalRef = useRef<(dir: 1 | -1, extend: boolean) => void>(() => {});
@@ -308,14 +323,14 @@ export function MarkdownEditor(props: MarkdownEditorProps) {
     // Mirror a non-empty selection in the input, selected, so the browser enables Copy and Cut (Safari
     // dispatches neither for an empty textarea selection). A long selection mirrors as one space: the copy
     // handler writes the real Markdown source either way, and typing replaces the mirror like any selection.
+    // An empty selection mirrors the letter before the caret, so a press-and-hold accent can replace it
+    // (`hiddenInput.ts`).
     if (!composing.current) {
-      const mirror = isCollapsed(sel)
-        ? ''
-        : selectionLength(sel) <= maxMirrorLength
-          ? state.selectedText()
-          : ' ';
-      if (input.value !== mirror) input.value = mirror;
-      if (mirror) input.setSelectionRange(0, mirror.length);
+      const mirror = mirrorFor(doc, sel, maxMirrorLength);
+      mirrorRef.current = mirror;
+      if (input.value !== mirror.text) input.value = mirror.text;
+      if (mirror.kind === 'selection') input.setSelectionRange(0, mirror.text.length);
+      else input.setSelectionRange(mirror.text.length, mirror.text.length);
     }
   });
 
@@ -861,26 +876,46 @@ export function MarkdownEditor(props: MarkdownEditorProps) {
 
   // ----- Text input, IME and clipboard -----
 
-  function onInput(e: Event): void {
-    if (composing.current) return;
-    const ta = e.currentTarget as HTMLTextAreaElement;
-    const text = ta.value;
+  /**
+   * Take what the input gained since it was mirrored, and empty it; the next render mirrors again. `typed`
+   * applies text typed at the caret.
+   */
+  function takeInput(ta: HTMLTextAreaElement, typed: (text: string) => void): void {
+    const edit = readInput(mirrorRef.current, ta.value, doc, sel);
     ta.value = '';
-    if (text) insertText(withLineEnding(doc, text));
+    mirrorRef.current = emptyMirror;
+    if (!edit) return;
+    goalX.current = null;
+    revealCaret.current = true;
+    if (edit.kind === 'type') typed(edit.text);
+    else {
+      // The OS replaced the letter before the caret (a press-and-hold accent): one edit, its own undo step.
+      const caret = edit.start + edit.text.length;
+      state.apply({ start: edit.start, length: edit.length, text: edit.text, anchor: caret, caret });
+    }
   }
 
-  function onCompositionStart(): void {
+  function onInput(e: Event): void {
+    if (composing.current) return;
+    takeInput(e.currentTarget as HTMLTextAreaElement, (text) => insertText(withLineEnding(doc, text)));
+  }
+
+  function onCompositionStart(e: CompositionEvent): void {
     composing.current = true;
-    inputRef.current?.classList.add('pn-composing');
+    const ta = e.currentTarget as HTMLTextAreaElement;
+    ta.classList.add('pn-composing');
+    // The input shows the text being composed at the caret. A mirrored letter sits before it in the input;
+    // pull the text left by its width, so the letter is clipped and the composition starts at the caret.
+    const before = mirrorRef.current.kind === 'context' ? mirrorRef.current.text : '';
+    if (before) ta.style.textIndent = `-${textWidth(ta, before)}px`;
   }
 
   function onCompositionEnd(e: CompositionEvent): void {
     composing.current = false;
     const ta = e.currentTarget as HTMLTextAreaElement;
     ta.classList.remove('pn-composing');
-    const text = ta.value;
-    ta.value = '';
-    if (text) state.insert(text);
+    ta.style.textIndent = '';
+    takeInput(ta, (text) => state.insert(text));
   }
 
   function onCopy(e: ClipboardEvent, cut: boolean): void {
@@ -1111,6 +1146,7 @@ export function MarkdownEditor(props: MarkdownEditorProps) {
             aria-label="Markdown editor"
             aria-multiline="true"
             autocapitalize="off"
+            autocorrect="off"
             autocomplete="off"
             spellcheck={false}
             onKeyDown={onKeyDown}
