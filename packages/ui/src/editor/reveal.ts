@@ -70,7 +70,27 @@ export function lineReveal(
       continue;
     nodes.add(node);
   }
+  if (nodes.size === 0) return activeReveals[(prefixActive ? 1 : 0) + (blockRevealed ? 2 : 0)]!;
   return { lineActive, prefixActive, nodes, blockRevealed };
+}
+
+/**
+ * `prev` when it reveals the same as `next`, else `next`. The surface keeps each line's last reveal through
+ * this, so a selection that moves without changing what a line shows (extending a select-all) leaves the
+ * memoized line alone.
+ */
+export function keepReveal(prev: LineReveal | undefined, next: LineReveal): LineReveal {
+  if (!prev || prev === next) return next;
+  if (
+    prev.lineActive !== next.lineActive ||
+    prev.prefixActive !== next.prefixActive ||
+    prev.blockRevealed !== next.blockRevealed ||
+    prev.nodes.size !== next.nodes.size
+  ) {
+    return next;
+  }
+  for (const n of next.nodes) if (!prev.nodes.has(n)) return next;
+  return prev;
 }
 
 /**
@@ -122,6 +142,14 @@ export const concealedReveal: LineReveal = {
   nodes: none,
   blockRevealed: false,
 };
+
+/** The reveals of an active line with no inline markers to show, by `prefixActive + 2 * blockRevealed`. */
+const activeReveals: readonly LineReveal[] = [false, true, false, true].map((prefixActive, i) => ({
+  lineActive: true,
+  prefixActive,
+  nodes: none,
+  blockRevealed: i >= 2,
+}));
 
 /** A line inside a revealed block that the caret isn't on. */
 export const blockOnlyReveal: LineReveal = {

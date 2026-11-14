@@ -35,7 +35,8 @@ import {
 } from './motion.ts';
 import type { TextRange } from './find.ts';
 import { keyAction, undoRunFor } from './keys.ts';
-import { lineReveal, type LineReveal } from './reveal.ts';
+import { carryLineCache, lineTextOf, type LineCache } from './lineCache.ts';
+import { keepReveal, lineReveal, type LineReveal } from './reveal.ts';
 
 export interface MarkdownEditorProps {
   readonly state: EditorState;
@@ -80,12 +81,6 @@ const identity = (url: string): string => url;
 const defaultOpen = (url: string): void => void window.open(url, '_blank', 'noopener,noreferrer');
 /** The longest selection the hidden input mirrors as text; longer ones mirror as a stand-in. */
 const maxMirrorLength = 2000;
-
-interface LineCache {
-  readonly doc: EditorState['document'];
-  readonly texts: string[];
-  readonly starts: number[];
-}
 
 interface RowIndex {
   /** The line each row draws, in row order. */
@@ -151,11 +146,16 @@ export function MarkdownEditor(props: MarkdownEditorProps) {
   const blocks = state.blocks;
 
   // ----- Render the lines -----
-  // Line texts and starts for this snapshot, kept across renders so a caret move re-reads nothing and the
-  // memoized rows compare identical strings.
-  const lineCache = useRef<LineCache>({ doc, texts: [], starts: [] });
-  if (lineCache.current.doc !== doc) lineCache.current = { doc, texts: [], starts: [] };
+  // Line texts, kept across renders and carried across edits, so a caret move re-reads nothing and a keystroke
+  // re-reads only the lines it edited.
+  const lineCache = useRef<LineCache>({ doc, texts: [] });
+  lineCache.current = carryLineCache(lineCache.current, doc);
   const cache = lineCache.current;
+  // Each active line's last reveal, by line key: a selection change that doesn't change what a line shows
+  // hands its memoized row the same object (`keepReveal`).
+  const revealCache = useRef(new Map<number, LineReveal>());
+  const prevReveals = revealCache.current;
+  const reveals = new Map<number, LineReveal>();
   const rows: JSX.Element[] = [];
   /** The line each row draws (a widget row draws its block's first line). */
   const rowLines: number[] = [];
@@ -187,18 +187,24 @@ export function MarkdownEditor(props: MarkdownEditorProps) {
         continue;
       }
     }
-    const start = (cache.starts[i] ??= doc.getLineStart(i));
-    const text = (cache.texts[i] ??= doc.getLineText(i));
+    const start = doc.getLineStart(i);
+    const text = lineTextOf(cache, i);
     const tokens = model.lineTokens(i);
+    const key = state.lineKey(i);
+    let reveal = lineReveal(tokens, start, start + text.length, sel, range, shownPicture);
+    if (reveal.lineActive) {
+      reveal = keepReveal(prevReveals.get(key), reveal);
+      reveals.set(key, reveal);
+    }
     const listDepth = depths.next(text, !block && tokens.some((t) => t.type === 'listMarker'));
     rows.push(
       <LineView
-        key={state.lineKey(i)}
+        key={key}
         index={i}
         text={text}
         start={start}
         tokens={tokens}
-        reveal={lineReveal(tokens, start, start + text.length, sel, range, shownPicture)}
+        reveal={reveal}
         mode={mode}
         block={block?.kind ?? null}
         listDepth={listDepth}
@@ -207,6 +213,7 @@ export function MarkdownEditor(props: MarkdownEditorProps) {
     );
     rowLines.push(i);
   }
+  revealCache.current = reveals;
 
   // The row elements in order and by line, rebuilt only when the rows changed. Memoized rows that moved
   // (a line inserted above them) skip their render, so their `data-line` is renumbered here.

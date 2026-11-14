@@ -8,6 +8,7 @@ import {
   listOrdinal,
   isInsideConcealed,
   lineReveal,
+  keepReveal,
   renderLine,
   snapOutOfConcealed,
   type LineRender,
@@ -267,5 +268,27 @@ describe('nested numbered lists (PRD §10.2)', () => {
     const t = new ListDepthTracker();
     const depths = lines.map((l) => t.next(l, /^\s*(?:\d+\.|-) /.test(l)));
     expect(depths).toEqual([0, 1, 2, 0, 1, 0, 0, 0]);
+  });
+});
+
+describe('shared reveals', () => {
+  const reveals = (md: string, sels: Selection[]) => {
+    const doc = TextDocument.fromString(md);
+    const model = MarkdownModel.build(doc);
+    const tokens = model.lineTokens(0);
+    return sels.map((sel) => lineReveal(tokens, 0, doc.getLineEnd(0), sel, null, null));
+  };
+
+  it('gives an active line with nothing inline to reveal a shared object', () => {
+    const [a, b] = reveals('plain text', [caretAt(2), { anchor: 0, caret: 10 }]);
+    expect(a).toBe(b);
+  });
+
+  it('keeps the previous reveal while the selection reveals the same markers', () => {
+    const [a, b, c] = reveals('a *b* c', [{ anchor: 0, caret: 7 }, { anchor: 0, caret: 6 }, caretAt(0)]);
+    expect(a).not.toBe(b);
+    expect(keepReveal(a, b!)).toBe(a);
+    expect(keepReveal(a, c!)).toBe(c);
+    expect(keepReveal(undefined, c!)).toBe(c);
   });
 });
