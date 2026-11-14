@@ -198,8 +198,11 @@ class Renderer {
   }
 
   /**
-   * A run of quoted lines: each line is a paragraph at its depth, opening nested `<blockquote>`s down to
-   * it and closing back up from a deeper one. Iterative, so any depth of `>` renders without recursion.
+   * A run of quoted lines, opening nested `<blockquote>`s down to each line's depth and closing back up from
+   * a deeper one. Inside, the text after the `>` prefix is classified like a line of its own: a bare `>`
+   * ends a paragraph, list items make a list, `#` makes a heading, and consecutive prose lines at one depth
+   * are one paragraph with a `<br>` per line break (PRD §10.5). Iterative, so any depth renders without
+   * recursion.
    */
   private quote(line: number): number {
     const n = this.doc.lineCount;
@@ -210,17 +213,50 @@ class Renderer {
       if (d < 1) break;
       for (; open < d; open++) this.out += '<blockquote>\n';
       for (; open > d; open--) this.out += '</blockquote>\n';
+      if (this.isBlankIn(i, d)) {
+        i++;
+        continue;
+      }
       if (this.isListLine(i, d)) {
         i = this.listLevel(i, this.listIndent(i), 0, d);
         continue;
       }
+      const heading = this.quotedHeading(i);
+      if (heading) {
+        this.out += `<h${heading.level}>`;
+        this.inline(this.model.lineTokens(i), 0, undefined, heading.textStart);
+        this.out += `</h${heading.level}>\n`;
+        i++;
+        continue;
+      }
       this.out += '<p>';
-      this.inline(this.model.lineTokens(i));
+      let first = true;
+      while (
+        i < n &&
+        this.quoteDepth(i) === d &&
+        !this.isBlankIn(i, d) &&
+        !this.isListLine(i, d) &&
+        !this.quotedHeading(i)
+      ) {
+        if (!first) this.out += '<br>\n';
+        this.inline(this.model.lineTokens(i));
+        first = false;
+        i++;
+      }
       this.out += '</p>\n';
-      i++;
     }
     for (; open > 0; open--) this.out += '</blockquote>\n';
     return i;
+  }
+
+  /** An ATX heading after a quote prefix (`> ## Note`): its level and the offset its text starts at. */
+  private quotedHeading(line: number): { level: number; textStart: number } | null {
+    const prefix = this.first(line);
+    if (prefix?.type !== 'blockquoteMarker') return null;
+    const after = prefix.start + prefix.length;
+    const rest = stripCr(this.doc.getText(after, this.doc.getLineEnd(line) - after));
+    const m = /^(#{1,6})(?: |$)/.exec(rest);
+    return m ? { level: m[1]!.length, textStart: after + m[0].length } : null;
   }
 
   private quoteDepth(line: number): number {
@@ -419,10 +455,19 @@ class Renderer {
 
   // ----- inline rendering: pairs link and image structure out of the flat token stream -----
 
-  private inline(tokens: readonly Token[], from = 0, to = tokens.length): void {
+  /** Render `tokens[from, to)`; text before the offset `skipBefore` is left out (a quoted heading's `#`). */
+  private inline(tokens: readonly Token[], from = 0, to = tokens.length, skipBefore = -1): void {
     let i = from;
     while (i < to) {
-      const t = tokens[i]!;
+      let t = tokens[i]!;
+      if (t.start < skipBefore) {
+        if (t.start + t.length <= skipBefore) {
+          i++;
+          continue;
+        }
+        const cut = skipBefore - t.start;
+        t = { ...t, start: skipBefore, length: t.length - cut };
+      }
       if (t.type === 'marker') {
         const text = this.doc.getText(t.start, t.length);
         if (text === '[') {

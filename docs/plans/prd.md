@@ -250,7 +250,7 @@ Headings bond downward: a large space before and a small space after. Adjacent m
 
 ### 10.5 Export to HTML
 
-The renderer walks the same tokens as the editor and writes one self-contained HTML document (styles included) or a fragment. Every line break inside a paragraph becomes a `<br>`, so the export keeps the lines as the editor shows them. It has no dependencies. The CLI's `html` command uses it (§12).
+The renderer walks the same tokens as the editor and writes one self-contained HTML document (styles included) or a fragment. Every line break inside a paragraph becomes a `<br>`, so the export keeps the lines as the editor shows them. Inside a blockquote the same holds: consecutive quoted lines at one depth are one paragraph, a bare `>` line ends it, and a heading or list item after the `>` exports as a heading or list inside the `<blockquote>`. It has no dependencies. The CLI's `html` command uses it (§12).
 
 Exported HTML must be safe to open. Every attribute value is escaped, including a fence's info string. A link or autolink keeps its `href` only when the URL has no scheme (a relative path, a `#fragment` or `//host`) or its scheme is `http`, `https` or `mailto`; an email autolink gets `mailto:`. An image `src` may also be a `data:image/` URL of a raster type (png, jpeg, gif, webp, avif or bmp; never SVG). Control characters and whitespace are ignored when the scheme is read. Any other URL (`javascript:`, `vbscript:`, `file:`, other `data:` and so on) is dropped: the link renders as its text, the image as its alt text.
 

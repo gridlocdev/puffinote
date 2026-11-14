@@ -113,6 +113,22 @@ describe('HTML renderer', () => {
     expect(html.indexOf('inner')).toBeGreaterThan(inner);
   });
 
+  it('joins the lines of a quoted paragraph with <br>, splitting at a bare >', () => {
+    expect(body('> one\n> two\n>\n> three')).toBe(
+      '<blockquote>\n<p>one<br>\ntwo</p>\n<p>three</p>\n</blockquote>\n',
+    );
+    expect(body('> a\n>> b\n>> c\n> d')).toBe(
+      '<blockquote>\n<p>a</p>\n<blockquote>\n<p>b<br>\nc</p>\n</blockquote>\n<p>d</p>\n</blockquote>\n',
+    );
+  });
+
+  it('renders a heading inside a blockquote', () => {
+    expect(body('> ## Note **this**\n> body')).toBe(
+      '<blockquote>\n<h2>Note <strong>this</strong></h2>\n<p>body</p>\n</blockquote>\n',
+    );
+    expect(body('> #hashtag')).toContain('<p>#hashtag</p>');
+  });
+
   it('renders list and task items inside a blockquote as a list', () => {
     const html = body('> - [x] task\n> - plain');
     expect(html).toContain('<blockquote>\n<ul>\n<li class="task t-done">');
