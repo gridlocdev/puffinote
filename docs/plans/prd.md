@@ -81,6 +81,11 @@ The desktop app checks GitHub for a newer release. It never downloads or install
 - **Saving.** ⌘S saves the active tab; Save All saves every dirty tab. With auto-save on (the default), a note saves a second after the last edit. Revert to Saved discards the edits.
   - A tab without unsaved edits isn't written (except Save on a tab flagged deleted, which recreates it).
   - A tab's saves happen one at a time. A save asked for while one is in flight writes after it, with the text the tab has by then.
+- **Recovery of unsaved edits.** While a tab has unsaved edits, Puffinote keeps a recovery copy of its text outside the notebook, so a crash, a killed app or a closed browser tab doesn't lose it. The note's file is never touched.
+  - The copy is taken a second after the last edit, and at least every five seconds while typing goes on, and again as the page goes away. It lives in the page's local storage, keyed by notebook and note path. Every host has that storage: the browser, the NAS client (per browser, so a copy is offered only in the browser that made it) and the desktop app (whose page storage lives in the app's user-data folder).
+  - A save, Revert to Saved, closing the tab with Don't Save, or Don't Save when switching notebooks or quitting drops the copy. A rename or move takes it along.
+  - A note longer than a million characters gets no copy. When the storage is full, the oldest copies of other notes make room.
+  - **Offering it back.** When a note opens and its copy differs from the file, a banner says “Recovered unsaved changes to “name” from (time)” with **Restore** and **Discard**. A copy that matches the file is dropped quietly. Notes with a copy that the session didn't reopen get a tab when the notebook opens, so the banner is seen. Restore loads the copy into the tab as one undoable step, unsaved: nothing is written until the tab saves as usual. Discard drops the copy. Until the user answers, nothing is saved over the file, the copy is kept (no newer copy is taken for that tab), and closing the tab keeps it for next time. A copy whose note is gone stays until the note comes back.
 
 ## 6. The layouts
 

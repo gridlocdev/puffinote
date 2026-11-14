@@ -773,6 +773,7 @@ export class ShellModel {
       ],
     });
     if (answer === 'cancel') return false;
+    if (answer === 'discard') nb.forgetRecovery(dirty);
     if (answer === 'save' && !(await nb.saveAll())) {
       this.explainUnsaved(nb, dirty);
       return false;

@@ -8,6 +8,7 @@ import {
   NativeStore,
   Notebook,
   privateFolder,
+  webRecovery,
   type NotebookStore,
   type PrefsStorage,
   type PuffinoteNative,
@@ -246,6 +247,7 @@ export class Launcher {
         prefs: this.prefs,
         download,
         confirmOpenExternal: (name) => this.model.confirmOpenExternal(name),
+        recovery: webRecovery(recentKey(r)),
       });
       if (!(await this.model.adoptNotebook(nb, ticket))) return false;
       const key = recentKey(r);

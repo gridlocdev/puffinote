@@ -69,7 +69,11 @@ export function Shell(props: {
     const onBeforeUnload = (e: BeforeUnloadEvent) => {
       if (model.notebook.peek()?.dirtyTabs.length) e.preventDefault();
     };
-    const onHide = () => void model.notebook.peek()?.persist();
+    const onHide = () => {
+      const nb = model.notebook.peek();
+      nb?.flushRecovery();
+      void nb?.persist();
+    };
     window.addEventListener('beforeunload', onBeforeUnload);
     window.addEventListener('pagehide', onHide);
     return () => {

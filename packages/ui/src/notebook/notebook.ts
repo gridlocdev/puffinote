@@ -71,6 +71,7 @@ import {
   restoreFromTrash,
   type TrashItem,
 } from './trash.ts';
+import type { RecoveryEntry, RecoveryStorage } from './recovery.ts';
 
 export type SidebarPanel = 'files' | 'filter' | 'search' | 'outline' | 'recent';
 
@@ -92,6 +93,10 @@ export type LibraryScope = 'all' | 'pinned' | 'recent' | `folder:${string}`;
 export type TabConflict = 'none' | 'changed' | 'deleted';
 
 const AUTOSAVE_MS = 1000;
+/** A recovery copy is taken this long after the last edit (PRD §5)… */
+const RECOVERY_MS = 1000;
+/** …and at least this often while the typing goes on. */
+const RECOVERY_MAX_WAIT_MS = 5000;
 const SAVED_FLASH_MS = 3000;
 const RECENT_LIMIT = 20;
 
@@ -126,6 +131,13 @@ export class Tab {
   scrollTop = 0;
   /** Kept at the front of the strip and in view (PRD §7); Close Other and Close All leave it open. */
   readonly pinned = signal(false);
+  /**
+   * Unsaved text a crash or a closed page left behind, different from the file (PRD §5): the banner offers to
+   * restore or discard it. Until then the copy is kept and no new one is taken.
+   */
+  readonly recovered = signal<RecoveryEntry | null>(null);
+  /** The user threw the edits away (Don't Save): stop keeping recovery copies. */
+  recoveryOff = false;
   private readonly disposers: (() => void)[] = [];
 
   constructor(
@@ -232,6 +244,8 @@ export interface NotebookOptions {
   readonly download?: (name: string, bytes: Uint8Array, mime: string) => void;
   /** Ask whether to open a file in its default app; true opens it. Without it, files open straight away. */
   readonly confirmOpenExternal?: (name: string) => Promise<boolean>;
+  /** Where recovery copies of unsaved edits go (PRD §5). Without it, none are kept. */
+  readonly recovery?: RecoveryStorage;
 }
 
 /**
@@ -347,6 +361,7 @@ export class Notebook {
         this.tabs.value.find((t) => t.path.value === session.active) ?? this.tabs.value[0] ?? null;
       this.active.value = active;
     }
+    await this.openRecovered();
     this.loaded = true;
 
     // Remember the session whenever any of its parts changes.
@@ -573,6 +588,7 @@ export class Notebook {
       tab.state!.mode.value = this.settings.peek().defaultView;
       tab.state!.indentUnit = indentUnit(this.settings.peek());
       this.watchAutosave(tab);
+      this.watchRecovery(tab);
     }
     this.tabs.value = [...this.tabs.value, tab];
     return tab;
@@ -599,6 +615,108 @@ export class Notebook {
     });
   }
 
+  /**
+   * Keep a recovery copy of the tab's text while it is dirty (PRD §5): a second after the last edit, and at
+   * least every five seconds while typing goes on. A tab that is clean again (saved, reverted) drops its copy.
+   */
+  private watchRecovery(tab: Tab): void {
+    const store = this.options.recovery;
+    if (!store || tab.readOnly) return;
+    const offered = store.get(tab.path.peek());
+    if (offered) {
+      if (offered.text !== tab.savedText) tab.recovered.value = offered;
+      else store.remove(tab.path.peek());
+    }
+    let timer: ReturnType<typeof setTimeout> | null = null;
+    let since = 0;
+    let lastPath = tab.path.peek();
+    const write = () => {
+      if (timer) clearTimeout(timer);
+      timer = null;
+      if (tab.recoveryOff || tab.recovered.peek() || !tab.dirty.peek() || !this.tabs.peek().includes(tab))
+        return;
+      store.set(tab.path.peek(), { text: tab.state!.text, time: Date.now() });
+    };
+    tab.onDispose(
+      effect(() => {
+        void tab.state!.version.value;
+        const path = tab.path.value;
+        const dirty = tab.dirty.value;
+        const pending = tab.recovered.value;
+        if (path !== lastPath) {
+          // Renamed or moved: the copy follows the note.
+          const old = store.get(lastPath);
+          store.remove(lastPath);
+          if (old) store.set(path, old);
+          lastPath = path;
+        }
+        if (pending || tab.recoveryOff) return;
+        if (!dirty) {
+          if (timer) clearTimeout(timer);
+          timer = null;
+          store.remove(path);
+          return;
+        }
+        const now = Date.now();
+        if (!timer) since = now;
+        else if (now - since >= RECOVERY_MAX_WAIT_MS) return;
+        else clearTimeout(timer);
+        timer = setTimeout(write, RECOVERY_MS);
+      }),
+    );
+    this.flushers.set(tab, write);
+    tab.onDispose(() => {
+      if (timer) clearTimeout(timer);
+      this.flushers.delete(tab);
+    });
+  }
+
+  /** Recovery writes waiting on their debounce, by tab; `flushRecovery` runs them now. */
+  private readonly flushers = new Map<Tab, () => void>();
+
+  /** Take every pending recovery copy now (the page is going away). */
+  flushRecovery(): void {
+    for (const f of this.flushers.values()) f();
+  }
+
+  /** Load a tab's recovered text as an undoable edit; the tab is dirty and nothing is saved yet. */
+  restoreRecovered(tab: Tab): void {
+    const entry = tab.recovered.peek();
+    if (!entry || !tab.state) return;
+    tab.recovered.value = null;
+    this.applyText(tab, entry.text);
+  }
+
+  /** Throw a tab's recovered text away. */
+  discardRecovered(tab: Tab): void {
+    if (!tab.recovered.peek()) return;
+    tab.recovered.value = null;
+    this.options.recovery?.remove(tab.path.peek());
+  }
+
+  /** The user chose Don't Save for `tabs`: drop their recovery copies and take no more. */
+  forgetRecovery(tabs: readonly Tab[]): void {
+    for (const t of tabs) {
+      t.recoveryOff = true;
+      if (!t.recovered.peek()) this.options.recovery?.remove(t.path.peek());
+    }
+  }
+
+  /**
+   * Notes with a recovery copy that the session didn't reopen get a tab now, behind the others, so their
+   * banner shows. A copy whose note is gone is kept until it comes back.
+   */
+  private async openRecovered(): Promise<void> {
+    const store = this.options.recovery;
+    if (!store) return;
+    for (const path of store.paths()) {
+      if (this.tabs.peek().some((t) => t.path.peek() === path)) continue;
+      if (fileKind(path) !== 'note' || findNode(this.tree.peek(), path)?.kind !== 'file') continue;
+      const tab = await this.openTab(path).catch(() => null);
+      if (tab && !this.active.peek()) this.active.value = tab;
+    }
+  }
+
   activate(tab: Tab | null): void {
     this.frontTicket++;
     this.active.value = tab;
@@ -610,6 +728,8 @@ export class Notebook {
     const tabs = this.tabs.value;
     const i = tabs.indexOf(tab);
     if (i < 0) return;
+    // Its edits are thrown away with it, but a recovered copy nobody answered yet is kept for next time.
+    if (!tab.recovered.peek()) this.options.recovery?.remove(tab.path.peek());
     const next = tabs.filter((t) => t !== tab);
     this.tabs.value = next;
     if (this.active.value === tab) this.active.value = next[Math.min(i, next.length - 1)] ?? null;
@@ -785,6 +905,12 @@ export class Notebook {
   }
 
   private replaceText(tab: Tab, text: string, version: string | null): void {
+    this.applyText(tab, text);
+    tab.markSaved(version);
+  }
+
+  /** Replace the tab's text as one undoable step, changing only the part that differs. */
+  private applyText(tab: Tab, text: string): void {
     const state = tab.state;
     if (!state) return;
     const caret = Math.min(state.selection.peek().caret, text.length);
@@ -806,7 +932,6 @@ export class Notebook {
         caret,
       });
     }
-    tab.markSaved(version);
   }
 
   // ----- Files and folders -----

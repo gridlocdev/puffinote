@@ -9,6 +9,7 @@ export * from './commands/index.ts';
 export * from './editor/editorCommands.ts';
 export * from './notebook/notebook.ts';
 export * from './notebook/quickOpen.ts';
+export * from './notebook/recovery.ts';
 export * from './notebook/settings.ts';
 export * from './notebook/tree.ts';
 export * from './platform/index.ts';

@@ -9,6 +9,8 @@ import type { ShellModel } from './shellModel.ts';
 
 /* The note in front, its banners, and the status bar under it: the same in both layouts. */
 
+const recoveredAt = new Intl.DateTimeFormat(undefined, { dateStyle: 'medium', timeStyle: 'short' });
+
 export function Document(props: { readonly model: ShellModel; readonly nb: Notebook; readonly tab: Tab }) {
   const { model, nb, tab } = props;
   if (!tab.state) {
@@ -16,6 +18,7 @@ export function Document(props: { readonly model: ShellModel; readonly nb: Noteb
   }
   void nb.imagesLoaded.value;
   const conflict = tab.conflict.value;
+  const recovered = tab.recovered.value;
   const path = tab.path.value;
   return (
     <>
@@ -34,6 +37,15 @@ export function Document(props: { readonly model: ShellModel; readonly nb: Noteb
           actions={[
             { label: 'Save Again', run: () => void nb.save(tab, true) },
             { label: 'Close Tab', run: () => void model.closeTab(tab) },
+          ]}
+        />
+      )}
+      {recovered && (
+        <Banner
+          text={`Recovered unsaved changes to “${tab.name}” from ${recoveredAt.format(recovered.time)}.`}
+          actions={[
+            { label: 'Restore', run: () => nb.restoreRecovered(tab) },
+            { label: 'Discard', run: () => nb.discardRecovered(tab) },
           ]}
         />
       )}
