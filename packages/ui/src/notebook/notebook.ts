@@ -804,6 +804,8 @@ export class Notebook {
     // A move in progress: wait, so the path read below is where the move put the note. From here to the
     // write going out, nothing awaits, so a move can't start in between.
     while (this.moveLock) await this.moveLock;
+    // A closed notebook changes no files (PRD §5): a save queued before it closed doesn't go out.
+    if (this.disposed) return false;
     if (!tab.state || tab.readOnly || !this.tabs.peek().includes(tab)) return false;
     if (!force && tab.conflict.peek() !== 'none') return false;
     if (!force && !tab.dirty.peek()) return true;
@@ -885,6 +887,7 @@ export class Notebook {
       throw e;
     }
     if (!unchanged(now.bytes)) throw new ConflictError('changed', 'The file changed since it was opened.');
+    if (this.disposed) throw new Error('The notebook was closed.');
     return this.store.write(path, bytes, { expected: now.version });
   }
 
@@ -1067,6 +1070,7 @@ export class Notebook {
     const follow = (p: string) => (isWithin(p, from) ? rebase(p, from, to) : p);
     let changed = 0;
     for (const now of notes) {
+      if (this.disposed) return;
       const was = isWithin(now, to) ? rebase(now, to, from) : now;
       if (await this.editNote(now, (text) => relinkEdits(text, was, now, follow))) changed++;
     }
@@ -1080,6 +1084,8 @@ export class Notebook {
    * away when the tab had nothing unsaved), on disk otherwise. True when anything changed.
    */
   private async editNote(path: string, edits: (text: string) => RefEdit[]): Promise<boolean> {
+    // A closed notebook changes no files (PRD §5).
+    if (this.disposed) return false;
     const tab = this.tabs.peek().find((t) => t.state && t.path.peek() === path);
     if (tab?.state) {
       const list = edits(tab.state.text);
@@ -1102,7 +1108,7 @@ export class Notebook {
       const decoded = readText(data.bytes);
       if (isReadOnlyDecode(decoded)) return false;
       const list = edits(decoded.text);
-      if (list.length === 0) return false;
+      if (list.length === 0 || this.disposed) return false;
       await this.writeOver(
         path,
         encodeText(applyRefEdits(decoded.text, list), decoded.format),

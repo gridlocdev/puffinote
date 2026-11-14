@@ -409,3 +409,38 @@ describe('Notebook moves and saves in flight', () => {
     await expect(store.read('a.md')).rejects.toThrow();
   });
 });
+
+describe('Notebook after it closes (PRD §5)', () => {
+  it('writes no queued save once disposed', async () => {
+    const store = new GatedStore('N', { 'a.md': 'one' });
+    const nb = await openWith(store);
+    const tab = (await nb.openFile('a.md'))!;
+    store.holdWrites = true;
+    tab.state!.insert('A');
+    const first = nb.save(tab);
+    await settle();
+    tab.state!.insert('B');
+    const second = nb.save(tab);
+    nb.dispose(); // switched notebooks and chose Don't Save
+    store.writes.shift()!.release();
+    await first;
+    await settle();
+    expect(store.writes.filter((w) => w.path === 'a.md')).toHaveLength(0);
+    expect(await second).toBe(false);
+    expect(await text(store, 'a.md')).toBe('Aone');
+  });
+
+  it('rewrites no picture links in closed notes once disposed', async () => {
+    const store = new GatedStore('N', { 'a.md': '![](pic.png)', 'pic.png': '', 'sub/x.md': '' });
+    const nb = await openWith(store);
+    store.holdReads = true;
+    const moving = nb.move('pic.png', 'sub');
+    await vi.waitFor(() => expect(store.reads.length).toBeGreaterThan(0));
+    nb.dispose();
+    store.holdReads = false;
+    for (const r of store.reads.splice(0)) r();
+    await moving;
+    await settle();
+    expect(await text(store, 'a.md')).toBe('![](pic.png)');
+  });
+});
