@@ -41,7 +41,7 @@ The code cites this document as `PRD §n`. If you renumber a section, update tho
 | Desktop | Any folder on disk: the open dialog, the Dock, `puffinote <folder>`, or Recent | A folder watcher in the main process |
 
 - **One build serves all three.** The page detects at runtime whether it is in Electron, served by the NAS server, or a plain page. There is no build flag.
-- **The welcome screen** lists the recent notebooks and the ways to open one that this host has. The last notebook reopens on start when it can do so without asking.
+- **The welcome screen** lists the recent notebooks and the ways to open one that this host has. The last notebook reopens on start when it can do so without asking. In the desktop app and in a browser that can open folders (Chrome, Edge), the one way to open a notebook is Open Folder…. A browser that can't (Firefox, Safari) has only the browser notebook, so it skips the welcome screen and opens that notebook on start; the welcome screen shows there only after Open Notebook or when the browser can't keep a notebook. While start-up reopens a notebook, the welcome screen shows only "Opening …".
 - **The server is optional to deploy and safe by default:** paths are confined to their root, writes are atomic, a bearer token (`PUFFINOTE_TOKEN`) protects it, and a Host check blocks DNS rebinding (architecture.md). Without a token it refuses to start on any address but loopback (`127.0.0.1`, `::1`, `localhost`), unless `PUFFINOTE_ALLOW_NO_TOKEN=1` says a reverse proxy in front does the authentication.
 
 ### 3.1 Desktop updates

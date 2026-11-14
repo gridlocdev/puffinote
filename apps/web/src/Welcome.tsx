@@ -8,6 +8,10 @@ export function Welcome(props: { readonly launcher: Launcher }) {
   const { launcher } = props;
   const recents = launcher.available();
   const opening = launcher.opening.value;
+  // While start-up reopens a notebook, show only that, so the welcome screen doesn't flash past.
+  if (launcher.starting.value) {
+    return <div class="pw-welcome">{opening && <p class="pw-opening">Opening “{opening}”…</p>}</div>;
+  }
   return (
     <div class="pw-welcome">
       <header class="pw-hero">
@@ -66,30 +70,29 @@ function RecentRow(props: { readonly launcher: Launcher; readonly recent: Recent
   );
 }
 
+/**
+ * Where a folder can be opened (the desktop app, Chromium), that is the one action. Elsewhere the browser
+ * notebook opens on start, so this shows only after it was closed or couldn't open (PRD §3).
+ */
 function LocalActions(props: { readonly launcher: Launcher }) {
   const { launcher } = props;
-  const canPick = launcher.kind === 'native' || canPickFolder();
-  return (
-    <section class="pw-section pw-actions" aria-label="Open a notebook">
-      {canPick && (
+  if (launcher.kind === 'native' || canPickFolder()) {
+    return (
+      <section class="pw-section pw-actions" aria-label="Open a notebook">
         <button class="pw-primary" onClick={() => void launcher.openFolder()}>
           <Icon name="folder-open" />
           Open Folder…
         </button>
-      )}
-      {launcher.kind === 'browser' && (
-        <>
-          <button onClick={() => void launcher.openPrivate()}>
-            <Icon name="book-open" />
-            Use the Browser Notebook
-          </button>
-          <p class="pw-note">
-            {canPick
-              ? 'Open Folder edits a folder on this computer. The browser notebook keeps notes inside this browser instead.'
-              : 'This browser can’t open folders on your computer, so notes are kept inside the browser. Chrome and Edge can open folders.'}
-          </p>
-        </>
-      )}
+      </section>
+    );
+  }
+  return (
+    <section class="pw-section pw-actions" aria-label="Open a notebook">
+      <button class="pw-primary" onClick={() => void launcher.openPrivate()}>
+        <Icon name="book-open" />
+        Open the Browser Notebook
+      </button>
+      <p class="pw-note">Notes are kept in this browser.</p>
     </section>
   );
 }

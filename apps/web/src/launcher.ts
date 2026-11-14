@@ -2,6 +2,7 @@ import { signal } from '@preact/signals';
 import {
   AuthError,
   BrowserStore,
+  canPickFolder,
   ensurePermission,
   NasClient,
   NasStore,
@@ -98,6 +99,8 @@ export class Launcher {
   readonly error = signal<string | null>(null);
   /** The NAS server wants a token we don't have (or ours is wrong). */
   readonly needsToken = signal(false);
+  /** `start` is reopening the last notebook (or the browser notebook). */
+  readonly starting = signal(false);
 
   constructor(
     model: ShellModel,
@@ -121,17 +124,28 @@ export class Launcher {
     return { kind: 'browser', native: null, nas: null };
   }
 
-  /** Reopen the last notebook, if that needs no permission prompt. */
+  /**
+   * Reopen the last notebook, if that needs no permission prompt. A browser that can't open folders (Firefox,
+   * Safari) has nothing to choose, so it goes straight into the browser notebook.
+   */
   async start(): Promise<void> {
-    const last = this.recents.value[0];
-    if (!last) return;
-    if (last.kind === 'browser') {
-      const handle = await getHandle(last.id);
-      if (!handle || !(await ensurePermission(handle, false))) return;
+    this.starting.value = true;
+    try {
+      const last = this.recents.value[0];
+      if (last && (await this.canReopen(last))) await this.open(last);
+      else if (this.kind === 'browser' && !canPickFolder()) await this.openPrivate();
+    } finally {
+      this.starting.value = false;
     }
-    if (last.kind === 'nas' && this.kind !== 'nas') return;
-    if (last.kind === 'native' && this.kind !== 'native') return;
-    await this.open(last);
+  }
+
+  private async canReopen(last: Recent): Promise<boolean> {
+    if (last.kind === 'nas') return this.kind === 'nas';
+    if (last.kind === 'native') return this.kind === 'native';
+    if (this.kind !== 'browser') return false;
+    if (last.kind === 'private') return true;
+    const handle = await getHandle(last.id);
+    return !!handle && (await ensurePermission(handle, false));
   }
 
   /** The recents this page can open. */
