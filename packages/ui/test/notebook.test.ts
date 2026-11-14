@@ -354,3 +354,52 @@ describe('Notebook pictures read into the editor', () => {
     });
   });
 });
+
+describe('Notebook saving to a store that has no versions', () => {
+  /** Like a NAS that sends no ETag: every read and write reports a null version. */
+  class Unversioned extends MemoryStore {
+    override async read(path: string) {
+      return { ...(await super.read(path)), version: null };
+    }
+    override async write(...args: Parameters<MemoryStore['write']>) {
+      await super.write(...args);
+      return null;
+    }
+  }
+  const enc = (s: string) => new TextEncoder().encode(s);
+
+  async function edited() {
+    const store = new Unversioned('N', { 'a.md': 'one' });
+    const nb = await Notebook.open(store, { prefs: memoryPrefs({ autoSave: false }) });
+    const tab = (await nb.openFile('a.md'))!;
+    tab.state!.insert('mine ');
+    return { store, nb, tab };
+  }
+
+  it('saves when the file still holds what was read', async () => {
+    const { store, nb, tab } = await edited();
+    expect(await nb.save(tab)).toBe(true);
+    expect(await text(store, 'a.md')).toBe('mine one');
+    tab.state!.insert('again ');
+    expect(await nb.save(tab)).toBe(true);
+    expect(await text(store, 'a.md')).toBe('mine again one');
+  });
+
+  it('flags a file changed by someone else instead of writing over it', async () => {
+    const { store, nb, tab } = await edited();
+    await MemoryStore.prototype.write.call(store, 'a.md', enc('theirs'), { force: true });
+    expect(await nb.save(tab)).toBe(false);
+    expect(tab.conflict.peek()).toBe('changed');
+    expect(await text(store, 'a.md')).toBe('theirs');
+    expect(await nb.save(tab, true)).toBe(true);
+    expect(await text(store, 'a.md')).toBe('mine one');
+  });
+
+  it('flags a file deleted by someone else instead of recreating it', async () => {
+    const { store, nb, tab } = await edited();
+    await store.remove('a.md');
+    expect(await nb.save(tab)).toBe(false);
+    expect(tab.conflict.peek()).toBe('deleted');
+    await expect(store.read('a.md')).rejects.toThrow();
+  });
+});

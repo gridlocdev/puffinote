@@ -678,10 +678,10 @@ export class Notebook {
     let finished!: () => void;
     this.writeDone.set(tab, new Promise<void>((r) => (finished = r)));
     try {
-      const version = await this.store.write(path, encodeText(text, tab.format), {
-        expected: tab.version,
-        force,
-      });
+      const bytes = encodeText(text, tab.format);
+      const version = force
+        ? await this.store.write(path, bytes, { force })
+        : await this.writeOver(path, bytes, tab.version, (now) => readText(now).text === before);
       // Edits made while the write was in flight stay unsaved.
       tab.version = version;
       tab.savedText = text;
@@ -726,6 +726,30 @@ export class Notebook {
     } catch (e) {
       return e instanceof NotFoundError ? 'deleted' : 'changed';
     }
+  }
+
+  /**
+   * Write `bytes` over a file last read at version `expected`. A store that gave no version (a server without
+   * ETags) can't refuse a stale write itself, so the file is read again first and must still hold what was
+   * read (`unchanged`); otherwise this throws the ConflictError a versioned store would (PRD §5).
+   */
+  private async writeOver(
+    path: string,
+    bytes: Uint8Array,
+    expected: string | null,
+    unchanged: (now: Uint8Array) => boolean,
+  ): Promise<string | null> {
+    if (expected != null) return this.store.write(path, bytes, { expected });
+    let now: FileData;
+    try {
+      now = await this.store.read(path);
+    } catch (e) {
+      if (e instanceof NotFoundError)
+        throw new ConflictError('deleted', 'The file was deleted since it was opened.');
+      throw e;
+    }
+    if (!unchanged(now.bytes)) throw new ConflictError('changed', 'The file changed since it was opened.');
+    return this.store.write(path, bytes, { expected: now.version });
   }
 
   async saveAll(): Promise<boolean> {
@@ -938,9 +962,12 @@ export class Notebook {
       if (isReadOnlyDecode(decoded)) return false;
       const list = edits(decoded.text);
       if (list.length === 0) return false;
-      await this.store.write(path, encodeText(applyRefEdits(decoded.text, list), decoded.format), {
-        expected: data.version,
-      });
+      await this.writeOver(
+        path,
+        encodeText(applyRefEdits(decoded.text, list), decoded.format),
+        data.version,
+        (now) => sameBytes(now, data.bytes),
+      );
       return true;
     } catch (e) {
       this.report(e);
@@ -1442,11 +1469,9 @@ export class Notebook {
           else merged[k] = after[k];
         }
         try {
-          await this.store.write(
-            overridesPath,
-            encodeJson({ ...disk.rest, ...merged }),
-            disk.version === undefined ? { create: true } : { expected: disk.version },
-          );
+          const bytes = encodeJson({ ...disk.rest, ...merged });
+          if (disk.version === undefined) await this.store.write(overridesPath, bytes, { create: true });
+          else await this.writeOver(overridesPath, bytes, disk.version, (now) => sameBytes(now, disk.bytes));
           this.overrides.value = sanitize(merged);
           return;
         } catch (e) {
@@ -1466,12 +1491,14 @@ export class Notebook {
     known: PartialSettings;
     rest: Record<string, unknown>;
     version: string | null | undefined;
+    bytes: Uint8Array;
   }> {
     let data: FileData;
     try {
       data = await this.store.read(overridesPath);
     } catch (e) {
-      if (e instanceof NotFoundError) return { known: {}, rest: {}, version: undefined };
+      if (e instanceof NotFoundError)
+        return { known: {}, rest: {}, version: undefined, bytes: new Uint8Array() };
       throw e;
     }
     let raw: unknown = null;
@@ -1480,7 +1507,7 @@ export class Notebook {
     } catch {
       // Not JSON: nothing in it can be kept.
     }
-    return { known: sanitize(raw), rest: unrecognized(raw), version: data.version };
+    return { known: sanitize(raw), rest: unrecognized(raw), version: data.version, bytes: data.bytes };
   }
 
   /** Take changes another program made to `.puffinote/settings.json` (on refresh). */
@@ -1609,4 +1636,8 @@ function isString(v: unknown): v is string {
 
 export function clampWidth(w: number): number {
   return Math.max(180, Math.min(560, Math.round(w)));
+}
+
+function sameBytes(a: Uint8Array, b: Uint8Array): boolean {
+  return a.length === b.length && a.every((x, i) => x === b[i]);
 }

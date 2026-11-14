@@ -130,7 +130,7 @@ export class NasStore implements NotebookStore {
   async write(path: string, bytes: Uint8Array, opts: WriteOptions = {}): Promise<string | null> {
     const headers: Record<string, string> = { 'Content-Type': 'application/octet-stream' };
     if (opts.create) headers['If-None-Match'] = '*';
-    else if (!opts.force && opts.expected) headers['If-Match'] = opts.expected;
+    else if (!opts.force && opts.expected != null) headers['If-Match'] = opts.expected;
     const res = await this.client.request(`/file?${this.query({ path: this.full(path) })}`, {
       method: 'PUT',
       body: bytes as Uint8Array<ArrayBuffer>,

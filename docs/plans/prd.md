@@ -77,6 +77,7 @@ The desktop app checks GitHub for a newer release. It never downloads or install
   - A tab with unsaved edits is left alone and flagged. Auto-save stops for it. Saving it asks whether to overwrite the file on disk or take the disk's version.
   - Taking the disk's version is **one undoable step**, so ⌘Z gives back what the tab held.
   - A file deleted on disk under a dirty tab is flagged the same way. Saving recreates it. Auto-save never recreates it: a save that finds the file gone flags the tab instead. If the file comes back with the text the tab last saved, the flag clears.
+  - Where the disk can't give a version to check against (a NAS server that sends no ETag), Puffinote reads the file again just before saving and saves only if it still holds what the tab last read or saved; otherwise the tab is flagged as changed or deleted, as above. The same goes for picture-link updates in closed notes and for the settings file. This narrows, but can't close, the gap a versioned save closes: a change landing between that read and the write is still written over.
 - **Saving.** ⌘S saves the active tab; Save All saves every dirty tab. With auto-save on (the default), a note saves a second after the last edit. Revert to Saved discards the edits.
   - A tab without unsaved edits isn't written (except Save on a tab flagged deleted, which recreates it).
   - A tab's saves happen one at a time. A save asked for while one is in flight writes after it, with the text the tab has by then.
