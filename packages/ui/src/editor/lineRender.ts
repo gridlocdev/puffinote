@@ -428,3 +428,23 @@ export function snapOutOfConcealed(segments: readonly Segment[], col: number, di
   }
   return col;
 }
+
+const taskStateWords: Readonly<Record<TaskState, string>> = {
+  notStarted: 'not done',
+  inProgress: 'in progress',
+  done: 'done',
+};
+
+/**
+ * A task checkbox's accessible name: the task's text and its state ("Buy milk, not done"), so a screen
+ * reader says which task a checkbox belongs to.
+ */
+export function checkboxLabel(lineText: string, task: TaskState): string {
+  const text = lineText.replace(/^[\s>]*(?:[-*+]|\d+[.)])\s+\[.\]\s?/u, '').trim();
+  return `${text || 'Empty task'}, ${taskStateWords[task]}`;
+}
+
+/** What the editor announces when the caret moves to another line: its number and its source text. */
+export function lineAnnouncement(lineText: string, line: number): string {
+  return `Line ${line + 1}: ${lineText.trim() ? lineText.trim() : 'blank'}`;
+}

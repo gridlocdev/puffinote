@@ -110,3 +110,11 @@ export function undoRunFor(action: KeyAction, key: string, repeat: boolean): Und
 export function primaryHeld(e: { readonly buttons: number }): boolean {
   return (e.buttons & 1) !== 0;
 }
+
+/**
+ * Whether Tab leaves the editor instead of indenting: right after Escape, Tab and Shift+Tab move the focus
+ * on as they do everywhere else, so a keyboard user is never trapped in the note (PRD §10.1).
+ */
+export function leavesEditor(e: KeyLike, afterEscape: boolean): boolean {
+  return afterEscape && e.key === 'Tab' && !e.metaKey && !e.ctrlKey && !e.altKey;
+}

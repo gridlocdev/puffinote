@@ -9,6 +9,8 @@ import {
   isInsideConcealed,
   lineReveal,
   keepReveal,
+  checkboxLabel,
+  lineAnnouncement,
   renderLine,
   snapOutOfConcealed,
   type LineRender,
@@ -290,5 +292,19 @@ describe('shared reveals', () => {
     expect(keepReveal(a, b!)).toBe(a);
     expect(keepReveal(a, c!)).toBe(c);
     expect(keepReveal(undefined, c!)).toBe(c);
+  });
+});
+
+describe('screen reader text', () => {
+  it("names a checkbox after its task's text and state", () => {
+    expect(checkboxLabel('- [ ] Buy milk', 'notStarted')).toBe('Buy milk, not done');
+    expect(checkboxLabel('    - [x] **Ship** it', 'done')).toBe('**Ship** it, done');
+    expect(checkboxLabel('> - [/] half', 'inProgress')).toBe('half, in progress');
+    expect(checkboxLabel('- [ ] ', 'notStarted')).toBe('Empty task, not done');
+  });
+
+  it('announces a line by its text, and a blank line as blank', () => {
+    expect(lineAnnouncement('## Plans', 3)).toBe('Line 4: ## Plans');
+    expect(lineAnnouncement('   ', 0)).toBe('Line 1: blank');
   });
 });

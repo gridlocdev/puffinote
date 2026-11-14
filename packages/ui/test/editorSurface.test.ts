@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { findBlocks } from '../src/editor/blocks.ts';
 import { EditorState, enterEdit } from '../src/index.ts';
 import { firstRowEndingBelow, nearestRowIndex, type RectSource } from '../src/editor/geometry.ts';
-import { keyAction, primaryHeld, undoRunFor, type KeyLike } from '../src/editor/keys.ts';
+import { keyAction, leavesEditor, primaryHeld, undoRunFor, type KeyLike } from '../src/editor/keys.ts';
 import { joinLinesDeleteEdit } from '../src/editor/commands.ts';
 import { lineViewPropsEqual, type LineViewProps } from '../src/editor/lineProps.ts';
 import type { LineReveal } from '../src/editor/reveal.ts';
@@ -393,5 +393,27 @@ describe('drag selection', () => {
     expect(primaryHeld({ buttons: 3 })).toBe(true);
     expect(primaryHeld({ buttons: 0 })).toBe(false);
     expect(primaryHeld({ buttons: 2 })).toBe(false);
+  });
+});
+
+describe('leaving the editor with the keyboard', () => {
+  const key = (k: string, mods: Partial<KeyLike> = {}): KeyLike => ({
+    key: k,
+    metaKey: false,
+    ctrlKey: false,
+    altKey: false,
+    shiftKey: false,
+    ...mods,
+  });
+
+  it('lets Tab or Shift+Tab move the focus right after Escape', () => {
+    expect(leavesEditor(key('Tab'), true)).toBe(true);
+    expect(leavesEditor(key('Tab', { shiftKey: true }), true)).toBe(true);
+  });
+
+  it('keeps Tab as indent otherwise', () => {
+    expect(leavesEditor(key('Tab'), false)).toBe(false);
+    expect(leavesEditor(key('Tab', { ctrlKey: true }), true)).toBe(false);
+    expect(leavesEditor(key('a'), true)).toBe(false);
   });
 });

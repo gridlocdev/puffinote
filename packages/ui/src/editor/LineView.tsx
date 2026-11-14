@@ -2,7 +2,7 @@ import { parseLinePrefix, renderHtmlBody } from '@puffinote/markdown';
 import { TextDocument } from '@puffinote/text';
 import { memo } from 'preact/compat';
 import { lineViewPropsEqual, type LineViewProps } from './lineProps.ts';
-import { renderLine, type Segment } from './lineRender.ts';
+import { checkboxLabel, renderLine, type Segment } from './lineRender.ts';
 import type { ViewMode } from './reveal.ts';
 
 /** One source line. Memoized by `lineViewPropsEqual`: a line redraws only when what it draws changes. */
@@ -66,6 +66,7 @@ function SegmentView({
             class={`pn-deco pn-checkbox pn-checkbox-${d.task}`}
             role="checkbox"
             aria-checked={d.task === 'done' ? 'true' : d.task === 'inProgress' ? 'mixed' : 'false'}
+            aria-label={checkboxLabel(text, d.task ?? 'notStarted')}
           />
         );
       case 'indent':

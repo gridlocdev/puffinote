@@ -22,7 +22,8 @@ import {
 import { markdownCommandSpecs } from './editorCommands.ts';
 import type { EditorState } from './editorState.ts';
 import { caretBox, firstRowEndingBelow, hitTest, lineSelectionRects, textRanges } from './geometry.ts';
-import { ListDepthTracker, renderLine, snapOutOfConcealed } from './lineRender.ts';
+import { lineAnnouncement, ListDepthTracker, renderLine, snapOutOfConcealed } from './lineRender.ts';
+import { settleMs, useSettled } from './settled.ts';
 import { BlockWidget, LineView } from './LineView.tsx';
 import {
   graphemeColumn,
@@ -36,7 +37,7 @@ import {
   wordRight,
 } from './motion.ts';
 import { matchesBetween, type TextRange } from './find.ts';
-import { keyAction, primaryHeld, undoRunFor } from './keys.ts';
+import { keyAction, leavesEditor, primaryHeld, undoRunFor } from './keys.ts';
 import { carryLineCache, lineTextOf, type LineCache } from './lineCache.ts';
 import { keepReveal, lineReveal, type LineReveal } from './reveal.ts';
 
@@ -83,6 +84,16 @@ const identity = (url: string): string => url;
 const defaultOpen = (url: string): void => void window.open(url, '_blank', 'noopener,noreferrer');
 /** The longest selection the hidden input mirrors as text; longer ones mirror as a stand-in. */
 const maxMirrorLength = 2000;
+
+/** Read by screen readers, never drawn. */
+const visuallyHidden = {
+  position: 'absolute',
+  width: '1px',
+  height: '1px',
+  overflow: 'hidden',
+  clipPath: 'inset(50%)',
+  whiteSpace: 'nowrap',
+} as const;
 
 interface RowIndex {
   /** The line each row draws, in row order. */
@@ -707,8 +718,24 @@ export function MarkdownEditor(props: MarkdownEditorProps) {
 
   // ----- Keyboard -----
 
+  const afterEscape = useRef(false);
+
+  // The caret's line for screen readers, announced once the caret settles on another line (not on every
+  // keystroke within it, and not for each line an arrow key passes while held).
+  const caretLine = doc.getPosition(Math.min(sel.caret, doc.length)).line;
+  const spokenLine = useSettled(caretLine, state, settleMs);
+  const announcement = useMemo(
+    () => (spokenLine < doc.lineCount ? lineAnnouncement(lineTextOf(cache, spokenLine), spokenLine) : ''),
+    // Only a new line is announced; edits within it are not.
+    [spokenLine, state],
+  );
+
   function onKeyDown(e: KeyboardEvent): void {
     if (composing.current || e.isComposing || e.keyCode === 229) return;
+    // Escape, then Tab or Shift+Tab: the browser moves the focus out of the note (PRD §10.1).
+    const leaving = leavesEditor(e, afterEscape.current);
+    afterEscape.current = e.key === 'Escape';
+    if (leaving) return;
     // Bound commands first (⌘B, ⌥↑, …): one catalog serves these keys and the Command Menu.
     const command = catalog.forEvent(e, false);
     if (command) {
@@ -975,6 +1002,7 @@ export function MarkdownEditor(props: MarkdownEditorProps) {
   }
 
   function onMouseDown(e: MouseEvent): void {
+    afterEscape.current = false;
     if (e.button !== 0) return;
     // Control-click is macOS's right-click: onContextMenu handles it.
     if (isMac && e.ctrlKey && props.onContextMenu) {
@@ -1068,6 +1096,9 @@ export function MarkdownEditor(props: MarkdownEditorProps) {
           {rows}
           <div class="pn-selection-layer" ref={selectionRef} aria-hidden="true" />
           <div class="pn-caret pn-blink" ref={caretRef} aria-hidden="true" />
+          <div aria-live="polite" style={visuallyHidden}>
+            {announcement}
+          </div>
           <textarea
             ref={inputRef}
             class="pn-input"
