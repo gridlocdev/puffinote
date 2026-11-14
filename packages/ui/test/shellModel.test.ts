@@ -276,6 +276,34 @@ describe('ShellModel picture preview and menu (PRD §10.6)', () => {
     expect(tab.state!.text).toBe('x ![old \\] one](pic.png "t") y');
   });
 
+  it('closes the preview when another note comes to the front', async () => {
+    const { nb, m, picture } = await setup({ 'a.md': '![](pic.png)', 'b.md': 'b', 'pic.png': '' });
+    m.openPreview(picture);
+    expect(m.preview.value).not.toBeNull();
+    await nb.openFile('b.md');
+    expect(m.preview.value).toBeNull();
+  });
+
+  it('Delete Picture and Edit Description… change nothing in a note that has no such picture there', async () => {
+    const { nb, m, picture } = await setup({
+      'a.md': '![](pic.png)',
+      'b.md': 'plain words here',
+      'other.png': '',
+      'pic.png': '',
+    });
+    const b = (await nb.openFile('b.md'))!;
+    await m.deletePicture(picture);
+    expect(b.state!.text).toBe('plain words here');
+    expect(findNode(nb.tree.value, 'pic.png')).not.toBeNull();
+    await m.editPictureDescription(picture);
+    expect(m.overlay.value).toBeNull();
+    // A different picture at the same offsets isn't the one asked for either.
+    b.state!.load('![](other.png)');
+    await m.deletePicture(picture);
+    expect(b.state!.text).toBe('![](other.png)');
+    expect(findNode(nb.tree.value, 'other.png')).not.toBeNull();
+  });
+
   it('Delete Picture from the preview closes it', async () => {
     const { m, picture } = await setup({ 'a.md': '![](pic.png)', 'pic.png': '' });
     m.openPreview(picture);

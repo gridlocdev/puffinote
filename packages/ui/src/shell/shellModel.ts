@@ -1,4 +1,4 @@
-import { computed, signal } from '@preact/signals';
+import { computed, effect, signal } from '@preact/signals';
 import { CommandCatalog, type Command, type CommandSpec } from '../commands/command.ts';
 import { formatShortcut, isMac, parseShortcut } from '../commands/shortcut.ts';
 import { outlineOf } from '@puffinote/markdown';
@@ -6,6 +6,7 @@ import { removeRangeEdit } from '../editor/commands.ts';
 import { markdownCommandSpecs } from '../editor/editorCommands.ts';
 import type { EditorMenuPoint, PictureAt } from '../editor/MarkdownEditor.tsx';
 import type { EditorState } from '../editor/editorState.ts';
+import { pictureExtent } from '../editor/reveal.ts';
 import { findAll, matchAt, matchFrom, replaceAllEdit, type TextRange } from '../editor/find.ts';
 import { sidebarPanels, type Notebook, type SidebarPanel, type Tab } from '../notebook/notebook.ts';
 import { headingFor, parseLinkHref, resolveNoteLink } from '../notebook/noteLinks.ts';
@@ -61,6 +62,8 @@ export type Overlay =
 /** A picture of the note in front, shown on its own (PRD §10.6). */
 export interface PicturePreview {
   readonly picture: PictureAt;
+  /** The tab whose note shows it; the preview closes when another tab comes to the front. */
+  readonly tab: Tab;
   /** A URL the page can load it from. */
   readonly src: string;
   /** Its file name, or its URL when it isn't a notebook file. */
@@ -173,6 +176,11 @@ export class ShellModel {
       sortTasks: () => this.notebook.peek()?.settings.peek().sortCheckedTasks ?? false,
     });
     this.menuCatalog = new CommandCatalog([...shell, ...editor]);
+    // The preview's offsets belong to the note it was opened from: another note in front closes it.
+    effect(() => {
+      const tab = this.activeTab.value;
+      if (this.preview.peek() && this.preview.peek()!.tab !== tab) this.preview.value = null;
+    });
   }
 
   /** Whether the Command Menu lists `c` now: an editor command only while a note is in front. */
@@ -580,6 +588,7 @@ export class ShellModel {
     const file = this.pictureFile(picture.url, tab.path.peek());
     this.preview.value = {
       picture,
+      tab,
       src: nb.resolveImage(tab.path.peek(), picture.url),
       name: file ? baseName(file) : picture.url,
     };
@@ -614,7 +623,7 @@ export class ShellModel {
   /** Edit Description…: change a picture's alt text, the words read out in its place (one undo step). */
   async editPictureDescription(picture: PictureAt): Promise<void> {
     const state = this.activeTab.peek()?.state;
-    if (!state) return;
+    if (!state || !pictureStillAt(state, picture)) return;
     const written = state.document.getText(picture.start, picture.end - picture.start);
     const m = /^!\[((?:\\.|[^\]\\])*)\]/.exec(written);
     if (!m) return;
@@ -689,7 +698,7 @@ export class ShellModel {
     const nb = this.notebook.peek();
     const tab = this.activeTab.peek();
     const state = tab?.state;
-    if (!nb || !tab || !state) return;
+    if (!nb || !tab || !state || !pictureStillAt(state, picture)) return;
     const notePath = tab.path.peek();
     const written = state.document.getText(picture.start, picture.end - picture.start);
     const file = this.pictureFile(picture.url, notePath);
@@ -1612,4 +1621,22 @@ function shellCommandSpecs(m: ShellModel): CommandSpec[] {
     });
   }
   return specs;
+}
+
+/**
+ * Whether `state`'s note still has `picture` at its offsets: a picture there, from `start` to `end`, with the
+ * same link. A menu or preview opened over another note (or before an edit) must not act on whatever is there.
+ */
+function pictureStillAt(state: EditorState, picture: PictureAt): boolean {
+  const doc = state.document;
+  if (picture.end > doc.length || picture.start >= picture.end) return false;
+  const tokens = state.model.lineTokens(doc.getPosition(picture.start).line);
+  const url = tokens.find((t) => t.type === 'imageUrl' && t.start >= picture.start && t.start < picture.end);
+  if (!url) return false;
+  const extent = pictureExtent(tokens, url.start);
+  return (
+    extent?.start === picture.start &&
+    extent.end === picture.end &&
+    (url.meta ?? doc.getText(url.start, url.length)) === picture.url
+  );
 }

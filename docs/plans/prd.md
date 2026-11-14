@@ -310,7 +310,7 @@ Exported HTML must be safe to open. Every attribute value is escaped, including 
 - **Picture preview.** A click on a picture in a note shows it alone over the window, fitted to it (never enlarged), with its file name and zoom buttons above it.
   - **Zoom** from fitted up to 800%: pinch or ⌘-scroll about the pointer, the − and + buttons or keys, `0` to fit, `1` for 100%. A double-click, or a click on the percentage, switches between fitted and 100% (or 2× the fit for a picture smaller than the window).
   - **Pan** a picture larger than the window by dragging it, scrolling, or with the arrow keys (⇧ for bigger steps). Its edges never come in past the window's.
-  - **Close** with Escape, the × button, or a click outside the picture.
+  - **Close** with Escape, the × button, or a click outside the picture. It also closes when another note comes to the front, and a picture command from a menu left open does nothing once the note no longer has that picture at that spot.
   - A right-click opens the picture menu, as in the note.
 - **Picture menu.** A right-click on a picture in a note, or in the preview, opens:
   - **Preview Picture** (in the note only): the preview above.
