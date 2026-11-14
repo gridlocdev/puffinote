@@ -1,5 +1,5 @@
 import { stripDuplicateTaskMarker, toggledTaskState, parseLinePrefix, type Token } from '@puffinote/markdown';
-import { isCollapsed, selectionEnd, selectionLength, selectionStart } from '@puffinote/text';
+import { isCollapsed, selectionEnd, selectionLength, selectionStart, type UndoRun } from '@puffinote/text';
 import { useLayoutEffect, useMemo, useRef } from 'preact/hooks';
 import type { JSX } from 'preact';
 import { CommandCatalog } from '../commands/command.ts';
@@ -31,7 +31,7 @@ import {
   wordRight,
 } from './motion.ts';
 import type { TextRange } from './find.ts';
-import { keyAction } from './keys.ts';
+import { keyAction, undoRunFor } from './keys.ts';
 import { lineReveal, type LineReveal } from './reveal.ts';
 
 export interface MarkdownEditorProps {
@@ -574,10 +574,10 @@ export function MarkdownEditor(props: MarkdownEditorProps) {
 
   verticalRef.current = vertical;
 
-  function apply(edit: Parameters<EditorState['apply']>[0]): void {
+  function apply(edit: Parameters<EditorState['apply']>[0], run?: UndoRun): void {
     goalX.current = null;
     revealCaret.current = true;
-    state.apply(edit);
+    state.apply(edit, undefined, run);
   }
 
   function insertText(text: string): void {
@@ -609,6 +609,8 @@ export function MarkdownEditor(props: MarkdownEditorProps) {
     const action = keyAction(e, isMac);
     if (!action) return;
     const shift = e.shiftKey;
+    // A run of Backspace or Delete, or a key held down, undoes as one step (PRD §10.1).
+    const run = undoRunFor(action, e.key, e.repeat);
     switch (action.kind) {
       case 'move':
         if (action.unit === 'doc') moveTo(action.dir > 0 ? doc.length : startOf(0, sel.caret), shift);
@@ -620,19 +622,28 @@ export function MarkdownEditor(props: MarkdownEditorProps) {
       case 'deleteBack':
         if (!isCollapsed(sel)) deleteSelection();
         else if (action.unit === 'line') {
-          apply(rangeEdit(doc.getLineStart(doc.getPosition(sel.caret).line), sel.caret));
-        } else if (action.unit === 'word') apply(deleteRange(wordLeft(doc, sel.caret), sel.caret));
-        else if (mode !== 'raw' && state.apply(backspaceItemEdit(doc, sel))) goalX.current = null;
-        else if (state.apply(backspacePairEdit(doc, sel))) goalX.current = null;
-        else if (!state.apply(joinLinesDeleteEdit(doc, state.buffer.previousCaret(sel.caret), sel.caret))) {
+          apply(rangeEdit(doc.getLineStart(doc.getPosition(sel.caret).line), sel.caret), run);
+        } else if (action.unit === 'word') apply(deleteRange(wordLeft(doc, sel.caret), sel.caret), run);
+        else if (mode !== 'raw' && state.apply(backspaceItemEdit(doc, sel), undefined, run))
+          goalX.current = null;
+        else if (state.apply(backspacePairEdit(doc, sel), undefined, run)) goalX.current = null;
+        else if (
+          !state.apply(
+            joinLinesDeleteEdit(doc, state.buffer.previousCaret(sel.caret), sel.caret),
+            undefined,
+            run,
+          )
+        ) {
           state.buffer.backspace();
         }
         revealCaret.current = true;
         break;
       case 'deleteForward':
         if (!isCollapsed(sel)) deleteSelection();
-        else if (action.unit === 'word') apply(deleteRange(sel.caret, wordRight(doc, sel.caret)));
-        else if (!state.apply(joinLinesDeleteEdit(doc, sel.caret, state.buffer.nextCaret(sel.caret)))) {
+        else if (action.unit === 'word') apply(deleteRange(sel.caret, wordRight(doc, sel.caret)), run);
+        else if (
+          !state.apply(joinLinesDeleteEdit(doc, sel.caret, state.buffer.nextCaret(sel.caret)), undefined, run)
+        ) {
           state.buffer.deleteForward();
         }
         revealCaret.current = true;
@@ -642,11 +653,13 @@ export function MarkdownEditor(props: MarkdownEditorProps) {
           action.soft
             ? softBreakEdit(sel)
             : enterEdit(doc, sel, mode, state.contextAt(sel.caret), state.indentUnit),
+          run,
         );
         break;
       case 'tab':
         apply(
           action.outdent ? outdentEdit(doc, sel, state.indentUnit) : indentEdit(doc, sel, state.indentUnit),
+          run,
         );
         break;
     }
@@ -663,9 +676,9 @@ export function MarkdownEditor(props: MarkdownEditorProps) {
     return joinLinesDeleteEdit(doc, start, end) ?? rangeEdit(start, end);
   }
 
-  /** Delete the selection; across lines it renumbers lists in the same step, inside one it deletes as typing. */
+  /** Delete the selection as one undo step; across lines it renumbers lists in the same step. */
   function deleteSelection(): void {
-    if (!state.apply(joinLinesDeleteEdit(doc, selectionStart(sel), selectionEnd(sel)))) state.insert('');
+    state.apply(deleteRange(selectionStart(sel), selectionEnd(sel)));
   }
 
   // ----- Text input, IME and clipboard -----

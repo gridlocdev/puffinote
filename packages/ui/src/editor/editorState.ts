@@ -8,6 +8,7 @@ import {
   type Selection,
   type TextDocument,
   type UndoEffect,
+  type UndoRun,
 } from '@puffinote/text';
 import { findBlocks, updateBlocks, type Block } from './blocks.ts';
 import type { Edit, EditContext } from './commands.ts';
@@ -79,14 +80,15 @@ export class EditorState {
 
   /**
    * Apply one command result (Enter, Tab, a line move, a format) as its own undo step: it never coalesces
-   * with the typing before or after it (PRD §10.1).
+   * with the typing before or after it (PRD §10.1). With `run`, the edit is part of a key's run instead
+   * (a run of Backspace, a held key), which folds into one step (`UndoRun`).
    */
-  apply(edit: Edit | null, effect?: UndoEffect): boolean {
+  apply(edit: Edit | null, effect?: UndoEffect, run?: UndoRun): boolean {
     if (!edit) return false;
-    breakUndoRun(this.buffer);
-    this.buffer.replaceRange(edit.start, edit.length, edit.text, edit.caret, effect);
+    if (!run) breakUndoRun(this.buffer);
+    this.buffer.replaceRange(edit.start, edit.length, edit.text, edit.caret, effect, run);
     this.select(edit.anchor, edit.caret);
-    breakUndoRun(this.buffer);
+    if (!run) breakUndoRun(this.buffer);
     return true;
   }
 

@@ -1,5 +1,16 @@
 import { describe, expect, it } from 'vitest';
-import { caretAt, DocumentBuffer, nextBoundary, previousBoundary } from '../src/index.ts';
+import {
+  applyEdit,
+  caretAt,
+  compose,
+  DocumentBuffer,
+  invertEdit,
+  nextBoundary,
+  previousBoundary,
+  TextDocument,
+  touches,
+  type TextEdit,
+} from '../src/index.ts';
 
 const text = (b: DocumentBuffer): string => b.document.getText();
 
@@ -201,5 +212,92 @@ describe('undo effects', () => {
     buf.redo();
     expect(text(buf)).toBe('b');
     expect(log).toEqual(['undo', 'redo']);
+  });
+});
+
+describe('undo runs of one key', () => {
+  it('undoes a run of Backspace as one step, graphemes included', () => {
+    const buf = new DocumentBuffer('ab👍🏽cd');
+    buf.selection = caretAt(buf.document.length);
+    for (let i = 0; i < 4; i++) buf.backspace();
+    expect(text(buf)).toBe('a');
+    buf.undo();
+    expect(text(buf)).toBe('ab👍🏽cd');
+    expect(buf.selection).toEqual(caretAt(buf.document.length));
+    expect(buf.canUndo).toBe(false);
+  });
+
+  it('undoes a run of Delete as one step', () => {
+    const buf = new DocumentBuffer('abcd');
+    buf.selection = caretAt(1);
+    buf.deleteForward();
+    buf.deleteForward();
+    expect(text(buf)).toBe('ad');
+    buf.undo();
+    expect(text(buf)).toBe('abcd');
+    expect(buf.canUndo).toBe(false);
+  });
+
+  it('keeps typing, Backspace and Delete runs apart, and a caret move ends a run', () => {
+    const buf = new DocumentBuffer('');
+    buf.insert('abc');
+    buf.backspace();
+    buf.insert('X');
+    buf.undo();
+    expect(text(buf)).toBe('ab');
+    buf.undo();
+    expect(text(buf)).toBe('abc');
+    buf.backspace();
+    buf.selection = caretAt(0);
+    buf.selection = caretAt(2);
+    buf.backspace();
+    buf.undo();
+    expect(text(buf)).toBe('ab');
+  });
+
+  it('joins a key held down only on its repeats', () => {
+    const buf = new DocumentBuffer('');
+    const press = (repeat: boolean) =>
+      buf.replaceRange(buf.selection.caret, 0, '\n', undefined, undefined, {
+        group: 'key:Enter',
+        join: repeat,
+      });
+    press(false);
+    press(true);
+    press(true);
+    press(false); // released and pressed again: a new step
+    buf.undo();
+    expect(text(buf)).toBe('\n\n\n');
+    buf.undo();
+    expect(text(buf)).toBe('');
+  });
+});
+
+describe('compose', () => {
+  const doc = (s: string) => TextDocument.fromString(s);
+  const check = (start: string, a: TextEdit, b: TextEdit) => {
+    expect(touches(a, b)).toBe(true);
+    const two = applyEdit(b, applyEdit(a, doc(start)));
+    const c = compose(a, b);
+    expect(applyEdit(c, doc(start)).getText()).toBe(two.getText());
+    expect(applyEdit(invertEdit(c), two).getText()).toBe(start);
+  };
+
+  it('folds touching edits into one that applies and inverts', () => {
+    check('abcd', { start: 3, removed: 'd', inserted: '' }, { start: 2, removed: 'c', inserted: '' });
+    check('abcd', { start: 1, removed: 'b', inserted: '' }, { start: 1, removed: 'c', inserted: '' });
+    check(
+      '- a\n- b',
+      { start: 3, removed: '', inserted: '\n- ' },
+      { start: 6, removed: '', inserted: '\n- ' },
+    );
+    check('12345', { start: 1, removed: '23', inserted: 'XYZ' }, { start: 0, removed: '1XY', inserted: 'q' });
+    check('12345', { start: 1, removed: '', inserted: 'XY' }, { start: 2, removed: 'Y23', inserted: '' });
+  });
+
+  it('does not touch edits apart from each other', () => {
+    expect(touches({ start: 5, removed: 'x', inserted: '' }, { start: 2, removed: 'y', inserted: '' })).toBe(
+      false,
+    );
   });
 });

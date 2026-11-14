@@ -3,7 +3,8 @@ import { describe, expect, it } from 'vitest';
 import { findBlocks } from '../src/editor/blocks.ts';
 import { EditorState, enterEdit } from '../src/index.ts';
 import { firstRowEndingBelow, nearestRowIndex, type RectSource } from '../src/editor/geometry.ts';
-import { keyAction, type KeyLike } from '../src/editor/keys.ts';
+import { keyAction, undoRunFor, type KeyLike } from '../src/editor/keys.ts';
+import { joinLinesDeleteEdit } from '../src/editor/commands.ts';
 import { lineViewPropsEqual, type LineViewProps } from '../src/editor/lineProps.ts';
 import type { LineReveal } from '../src/editor/reveal.ts';
 
@@ -183,6 +184,55 @@ describe('undo steps (finding 2)', () => {
     expect(state.text).toBe('abpastedcd');
     state.undo();
     expect(state.text).toBe('abpasted');
+    state.undo();
+    expect(state.text).toBe('ab');
+  });
+});
+
+describe('undo runs of one key', () => {
+  const enter = (state: EditorState, repeat: boolean) =>
+    state.apply(
+      enterEdit(state.document, state.selection.value, 'live', 'text'),
+      undefined,
+      undoRunFor({ kind: 'enter', soft: false }, 'Enter', repeat),
+    );
+  const backspace = (state: EditorState) => {
+    const run = undoRunFor({ kind: 'deleteBack', unit: 'char' }, 'Backspace', false);
+    const sel = state.selection.value;
+    if (!state.apply(joinLinesDeleteEdit(state.document, sel.caret - 1, sel.caret), undefined, run)) {
+      state.buffer.backspace();
+    }
+  };
+
+  it('undoes Enter held down as one step, and separate presses one at a time', () => {
+    const state = new EditorState('- a');
+    state.select(3);
+    enter(state, false);
+    enter(state, true);
+    enter(state, true);
+    const held = state.text;
+    enter(state, false);
+    state.undo();
+    expect(state.text).toBe(held);
+    state.undo();
+    expect(state.text).toBe('- a');
+  });
+
+  it('undoes a run of Backspace across lines as one step, renumbering included', () => {
+    const state = new EditorState('1. a\n2. b\n3. c');
+    state.select(9); // end of "2. b"
+    for (let i = 0; i < 5; i++) backspace(state);
+    expect(state.text).toBe('1. a\n2. c');
+    state.undo();
+    expect(state.text).toBe('1. a\n2. b\n3. c');
+    expect(state.buffer.canUndo).toBe(false);
+  });
+
+  it('starts a new step when typing follows a run of Backspace', () => {
+    const state = new EditorState('abc');
+    state.select(3);
+    backspace(state);
+    state.insert('X');
     state.undo();
     expect(state.text).toBe('ab');
   });

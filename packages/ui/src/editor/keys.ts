@@ -1,3 +1,5 @@
+import { deleteBackRun, deleteForwardRun, type UndoRun } from '@puffinote/text';
+
 /** The parts of a keyboard event the editor's own keys read. */
 export interface KeyLike {
   readonly key: string;
@@ -53,5 +55,24 @@ export function keyAction(e: KeyLike, mac: boolean): KeyAction | null {
       return mod || e.altKey ? null : { kind: 'tab', outdent: e.shiftKey };
     default:
       return null;
+  }
+}
+
+/**
+ * How the edit an editor key makes joins the undo history (PRD §10.1): a run of Backspace, or of Delete, is
+ * one step however it is pressed; any other key held down (auto-repeat, `repeat`) is one step until it is
+ * released. Undefined for keys that make no edit.
+ */
+export function undoRunFor(action: KeyAction, key: string, repeat: boolean): UndoRun | undefined {
+  switch (action.kind) {
+    case 'deleteBack':
+      return deleteBackRun;
+    case 'deleteForward':
+      return deleteForwardRun;
+    case 'enter':
+    case 'tab':
+      return { group: `key:${key}`, join: repeat };
+    default:
+      return undefined;
   }
 }

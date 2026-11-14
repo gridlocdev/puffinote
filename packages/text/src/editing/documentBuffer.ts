@@ -9,7 +9,12 @@ import {
 } from '../document/selection.ts';
 import { computeStats, type DocumentStats } from '../document/stats.ts';
 import { TextDocument } from '../document/textDocument.ts';
-import { EditHistory, type UndoEffect } from './editHistory.ts';
+import { EditHistory, type UndoEffect, type UndoRun } from './editHistory.ts';
+
+/** A run of Backspace presses undoes as one step (PRD §10.1). */
+export const deleteBackRun: UndoRun = { group: 'deleteBack', join: true };
+/** A run of Delete presses undoes as one step (PRD §10.1). */
+export const deleteForwardRun: UndoRun = { group: 'deleteForward', join: true };
 import { applyEdit, caretAfter as editCaretAfter, invertEdit, replaceEdit } from './textEdit.ts';
 
 export type BufferListener = () => void;
@@ -107,36 +112,43 @@ export class DocumentBuffer {
     this.replaceRange(selectionStart(s), selectionLength(s), text);
   }
 
-  /** Delete the selection, or else the grapheme before the caret. */
+  /** Delete the selection, or else the grapheme before the caret. A run of these undoes as one step. */
   backspace(): void {
     const s = this.selectionValue;
     if (!isCollapsed(s)) return this.replaceRange(selectionStart(s), selectionLength(s), '');
     if (s.caret === 0) return;
     const prev = this.previousCaret(s.caret);
-    this.replaceRange(prev, s.caret - prev, '');
+    this.replaceRange(prev, s.caret - prev, '', undefined, undefined, deleteBackRun);
   }
 
-  /** Delete the selection, or else the grapheme after the caret. */
+  /** Delete the selection, or else the grapheme after the caret. A run of these undoes as one step. */
   deleteForward(): void {
     const s = this.selectionValue;
     if (!isCollapsed(s)) return this.replaceRange(selectionStart(s), selectionLength(s), '');
     if (s.caret >= this.document.length) return;
     const next = this.nextCaret(s.caret);
-    this.replaceRange(s.caret, next - s.caret, '');
+    this.replaceRange(s.caret, next - s.caret, '', undefined, undefined, deleteForwardRun);
   }
 
   /**
    * Replace `[start, start + length)` with `text` as one undoable edit. The caret goes to
    * `caretAfter` when given, otherwise just after the inserted text. `effect` is work outside the text that
-   * undoing and redoing this edit also undo and redo.
+   * undoing and redoing this edit also undo and redo. `run` makes the edit part of a key's run (`UndoRun`).
    */
-  replaceRange(start: number, length: number, text: string, caretAfter?: number, effect?: UndoEffect): void {
+  replaceRange(
+    start: number,
+    length: number,
+    text: string,
+    caretAfter?: number,
+    effect?: UndoEffect,
+    run?: UndoRun,
+  ): void {
     const edit = replaceEdit(this.document, start, length, text);
     if (edit.removed.length === 0 && edit.inserted.length === 0) return;
     const before = this.selectionValue;
     this.document = applyEdit(edit, this.document);
     this.selectionValue = caretAt(caretAfter ?? editCaretAfter(edit));
-    this.history.record(edit, before, this.selectionValue, effect);
+    this.history.record(edit, before, this.selectionValue, effect, run);
     this.textChanged(this.document.getPosition(edit.start).line);
   }
 
