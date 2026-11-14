@@ -97,7 +97,7 @@ Puffinote is one TypeScript code base with three hosts and a CLI. The browser, t
 - **Loading.** The UI loads from `app://puffinote/`, a privileged standard scheme backed by `out/web`. Navigation away is blocked, and links open in the system browser. Pictures load from `pnfile://local/<path>`, served only inside granted folders.
 - **Grants.** The renderer may only touch folders the user handed over: the open dialog, `open-file`, argv, or an earlier open, kept in `granted-files.json` under userData. Any other folder asks first. Every IPC call must come from an `app://puffinote/` frame.
 - **Files.** Saves are atomic with an mtime conflict check and one save per file at a time. A read-only file is refused, not replaced. Deletes go to the Trash. A folder watcher reports changes, debounced, and leaves out the app's own temp files and saves.
-- **Menu and window.** The native menu is built from the renderer's catalog. The close guard asks the renderer about unsaved tabs; if it doesn't answer within 3 s, the user may force the close.
+- **Menu and window.** The native menu is built from the renderer's catalog. The close guard asks the renderer about unsaved tabs; if it doesn't answer within 3 s, the user may force the close. If the page crashes while the window stays open, a dialog says so and Reload loads it again (`recovery.ts`); a headless run reloads without asking.
 - **`PUFFINOTE_HEADLESS=1`** renders offscreen with no window or Dock icon, for automated checks.
 
 ## CLI (`apps/cli`)

@@ -34,6 +34,7 @@ import {
   withFileLocks,
   writeAtomic,
 } from './files.ts';
+import { afterRendererGone } from './recovery.ts';
 import {
   checkDue,
   fetchLatestRelease,
@@ -160,14 +161,14 @@ function createWindow(): BrowserWindow {
   });
   win.on('unresponsive', () => (state.unresponsive = true));
   win.on('responsive', () => (state.unresponsive = false));
-  win.webContents.on('render-process-gone', () => {
+  win.webContents.on('render-process-gone', (_e, details) => {
     state.rendererGone = true;
     stopWatching(state);
-    if (state.closeTimer || quitting) {
-      if (state.closeTimer) clearTimeout(state.closeTimer);
-      state.closeTimer = null;
-      win.destroy();
-    }
+    const action = afterRendererGone({ closing: state.closeTimer !== null, quitting, headless });
+    if (state.closeTimer) clearTimeout(state.closeTimer);
+    state.closeTimer = null;
+    if (action === 'destroy') win.destroy();
+    else void recoverRenderer(win, state, details.reason, action === 'ask');
   });
   // The page's beforeunload guard blocks unloading while notes are dirty. Once the close handshake has asked
   // (and the user chose Don't Save), let it through; otherwise (a reload, a page-initiated close) it holds.
@@ -190,6 +191,34 @@ function createWindow(): BrowserWindow {
 
   void win.loadURL('app://puffinote/index.html');
   return win;
+}
+
+/**
+ * The page crashed or was killed while the window stays open: say so and reload it (the notebook reopens on
+ * its own), or close the window if the user prefers. Without this the window stays blank.
+ */
+async function recoverRenderer(
+  win: BrowserWindow,
+  state: WindowState,
+  reason: string,
+  ask: boolean,
+): Promise<void> {
+  if (win.isDestroyed()) return;
+  if (ask) {
+    const { response } = await dialog.showMessageBox(win, {
+      type: 'warning',
+      buttons: ['Reload', 'Close Window'],
+      defaultId: 0,
+      cancelId: 0,
+      message: 'Puffinote’s window stopped working.',
+      detail: `The page ${reason === 'killed' ? 'was stopped' : 'crashed'} (${reason}). Changes that weren’t saved yet are lost; reloading opens the notebook again.`,
+    });
+    if (win.isDestroyed()) return;
+    if (response === 1) return void win.destroy();
+  }
+  state.rendererGone = false;
+  state.unresponsive = false;
+  win.webContents.reload();
 }
 
 /** The renderer is hung or never answered the close request: let the user force it. */
