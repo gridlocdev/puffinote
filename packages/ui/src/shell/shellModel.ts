@@ -146,6 +146,13 @@ export class ShellModel {
 
   setNotebook(nb: Notebook | null): void {
     const old = this.notebook.peek();
+    if (old !== nb) {
+      // Nothing opened over the old notebook may act on the new one: a question still up is answered as
+      // cancelled, and the preview's offsets belonged to the old note in front.
+      if (this.overlay.peek()) this.close();
+      this.preview.value = null;
+      this.findQuery.value = null;
+    }
     if (old && old !== nb) old.dispose();
     this.tabBarOverride.value = null;
     this.filterQuery.value = '';
@@ -621,7 +628,9 @@ export class ShellModel {
         // Unreadable: it's deleted all the same, and Undo brings back only the link.
       }
     }
-    // The note may have changed while the question was open: only take out the picture if it's still there.
+    // The notebook may have been switched, or the note changed, while the question was open: only take out
+    // the picture if it's still there.
+    if (this.notebook.peek() !== nb) return;
     if (state.document.getText(picture.start, picture.end - picture.start) !== written) return;
     const effect =
       file !== null && bytes !== null

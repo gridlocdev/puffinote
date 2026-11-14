@@ -265,6 +265,8 @@ export class Notebook {
   private persistTimer: ReturnType<typeof setTimeout> | null = null;
   private refreshTimer: ReturnType<typeof setTimeout> | null = null;
   private loaded = false;
+  /** Closed: a dialog or menu left over from it must not change files any more. */
+  private disposed = false;
   /** Each tab's saves run one at a time (see `save`). */
   private readonly saveSlots = new WeakMap<Tab, SaveSlot>();
   /** Tabs with a write to the store in flight. */
@@ -371,6 +373,7 @@ export class Notebook {
   }
 
   dispose(): void {
+    this.disposed = true;
     // A session write still waiting on its debounce goes out now, before the tabs it describes go away.
     if (this.persistTimer) {
       clearTimeout(this.persistTimer);
@@ -728,6 +731,7 @@ export class Notebook {
 
   /** Create a note in `dir` and open it. `name` may leave off `.md` (see `noteFileName`). Returns the path. */
   async createNote(dir: string, name: string): Promise<string | null> {
+    if (this.disposed) return null;
     const file = noteFileName(name);
     const path = joinPath(dir, file);
     if (!this.checkName(file)) return null;
@@ -745,6 +749,7 @@ export class Notebook {
   }
 
   async createFolder(dir: string, name: string): Promise<string | null> {
+    if (this.disposed) return null;
     if (!this.checkName(name)) return null;
     const path = joinPath(dir, name);
     if (findNode(this.tree.value, path)) {
@@ -786,6 +791,7 @@ export class Notebook {
   }
 
   private async relocate(from: string, to: string): Promise<string | null> {
+    if (this.disposed) return null;
     const node = findNode(this.tree.peek(), from);
     const movedFiles = !node ? [] : node.kind === 'file' ? [from] : allFiles(node).map((f) => f.path);
     try {
@@ -900,6 +906,7 @@ export class Notebook {
 
   /** Delete a file or folder (the shell confirms first). Its tabs close without saving. */
   async remove(path: string): Promise<boolean> {
+    if (this.disposed) return false;
     const node = findNode(this.tree.peek(), path);
     const notes = (!node ? [] : node.kind === 'file' ? [path] : allFiles(node).map((f) => f.path)).filter(
       (p) => fileKind(p) === 'note',
@@ -1173,6 +1180,7 @@ export class Notebook {
 
   /** Put a deleted picture's file back (undoing Delete Picture), and redraw the notes that show it. */
   async restorePicture(path: string, bytes: Uint8Array): Promise<void> {
+    if (this.disposed) return;
     try {
       await this.store.write(path, bytes, { create: true });
     } catch (e) {
@@ -1264,6 +1272,7 @@ export class Notebook {
    * one when a note can't be read.
    */
   async removeUnused(paths: readonly string[], ignoring: ReadonlySet<string> = new Set()): Promise<void> {
+    if (this.disposed) return;
     let linked: PictureUsage;
     try {
       linked = await this.linkedPictures(ignoring);
@@ -1283,6 +1292,7 @@ export class Notebook {
 
   /** Delete each of `paths`, whoever shows them (Delete Picture's Delete File). */
   async removeAll(paths: readonly string[]): Promise<void> {
+    if (this.disposed) return;
     let done = 0;
     for (const p of paths) if (await this.remove(p)) done++;
     if (done > 0) this.notify('info', `Deleted ${done} ${done === 1 ? 'picture' : 'pictures'}.`);

@@ -304,3 +304,39 @@ describe('ShellModel Delete Picture Redo', () => {
     m.setNotebook(null);
   });
 });
+
+describe('ShellModel switching notebooks', () => {
+  it('closes overlays, the preview and the find bar, and answers open questions as cancelled', async () => {
+    const one = new MemoryStore('One', { 'a.md': '![](pic.png)', 'pic.png': '' });
+    const two = new MemoryStore('Two', { 'a.md': '', 'pic.png': '' });
+    const nb1 = await Notebook.open(one, { prefs: memoryPrefs({ autoSave: false }) });
+    const nb2 = await Notebook.open(two, { prefs: memoryPrefs({ autoSave: false }) });
+    const m = new ShellModel();
+    m.setNotebook(nb1);
+    await nb1.openFile('a.md');
+    m.openPreview({ start: 0, end: 12, url: 'pic.png' });
+    m.findQuery.value = 'x';
+    const asking = m.confirm({ title: 'Delete?', message: '', buttons });
+    m.setNotebook(nb2);
+    expect(await asking).toBe('cancel');
+    expect(m.overlay.value).toBeNull();
+    expect(m.preview.value).toBeNull();
+    expect(m.findQuery.value).toBeNull();
+    m.setNotebook(null);
+  });
+
+  it('a closed notebook refuses to delete or move files', async () => {
+    const one = new MemoryStore('One', { 'pic.png': '', 'a.md': '' });
+    const nb1 = await Notebook.open(one, { prefs: memoryPrefs({ autoSave: false }) });
+    const m = new ShellModel();
+    m.setNotebook(nb1);
+    m.open({ kind: 'unusedPictures', paths: ['pic.png'] });
+    m.setNotebook(null);
+    expect(m.overlay.value).toBeNull();
+    await nb1.removeUnused(['pic.png']);
+    await nb1.removeAll(['pic.png']);
+    await nb1.move('a.md', 'x');
+    await one.read('pic.png');
+    await one.read('a.md');
+  });
+});
