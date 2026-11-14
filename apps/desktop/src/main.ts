@@ -11,7 +11,7 @@ import {
   shell,
 } from 'electron';
 import type { MenuItemConstructorOptions } from 'electron';
-import { mkdir, realpath, rename, stat } from 'node:fs/promises';
+import { mkdir, stat } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import {
@@ -28,10 +28,10 @@ import {
   isAppUrl,
   isOpenableDocument,
   listDir,
+  moveEntry,
   readWithMtime,
   watchTree,
   withFileLock,
-  withFileLocks,
   writeAtomic,
 } from './files.ts';
 import { afterRendererGone } from './recovery.ts';
@@ -316,12 +316,6 @@ function writeNative(
   });
 }
 
-/** Is `to` the same file as `from` under another spelling (a case-only rename on macOS/Windows)? */
-async function sameFile(from: string, to: string): Promise<boolean> {
-  const [a, b] = await Promise.all([realpath(from).catch(() => null), realpath(to).catch(() => null)]);
-  return a !== null && a === b && from !== to;
-}
-
 function toTemplate(items: readonly NativeMenuItem[], win: BrowserWindow): MenuItemConstructorOptions[] {
   return items.map((item): MenuItemConstructorOptions => {
     if (item.type === 'separator') return { type: 'separator' };
@@ -395,19 +389,8 @@ function registerIpc(): void {
   ipcMain.handle(Channels.move, async (e, from: unknown, to: unknown) => {
     const src = await guard(e, from);
     const dest = await guard(e, to);
-    if (!(await exists(src))) notFound({ code: 'ENOENT' }, src);
-    if (dest === src) return;
-    const rel = path.relative(src, dest);
-    if (rel && !rel.startsWith('..') && !path.isAbsolute(rel))
-      throw new Error('A folder cannot move into itself');
-    // Under both files' save locks: a save in flight can't land on the old path after the move, and a new
-    // file can't appear at the destination between the check and the rename.
-    await withFileLocks([src, dest], async () => {
-      if ((await exists(dest)) && !(await sameFile(src, dest)))
-        throw new Error(`${CONFLICT_EXISTS}: ${path.basename(dest)}`);
-      await mkdir(path.dirname(dest), { recursive: true });
-      await rename(src, dest);
-    });
+    // Like trash: a granted notebook folder itself never moves.
+    await moveEntry(src, dest, (p) => grants.isRoot(p));
   });
   ipcMain.handle(Channels.trash, async (e, p: unknown) => {
     const target = await guard(e, p);

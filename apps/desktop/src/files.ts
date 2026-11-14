@@ -16,7 +16,7 @@ import {
   unlink,
 } from 'node:fs/promises';
 import path from 'node:path';
-import type { NativeEntry } from './bridge.ts';
+import { CONFLICT_EXISTS, NOT_FOUND, type NativeEntry } from './bridge.ts';
 
 /** Only the app's own pages may use the bridge (not a navigated-away or injected frame). */
 export function isAppUrl(url: string | undefined | null): boolean {
@@ -253,6 +253,39 @@ async function realAncestors(dir: string): Promise<string[]> {
 async function closesLoop(p: string, above: readonly string[]): Promise<boolean> {
   const real = await realpath(p).catch(() => null);
   return real === null || above.some((a) => inside(real, a));
+}
+
+/**
+ * Rename or move a file or folder inside a notebook. A notebook folder itself (`isRoot`) never moves: the
+ * renderer only moves things within one. A taken name is refused, except a change of case on one file. Runs
+ * under both paths' save locks, so a save in flight can't land on the old path after the move, and a new file
+ * can't appear at the destination between the check and the rename.
+ */
+export async function moveEntry(src: string, dest: string, isRoot: (p: string) => boolean): Promise<void> {
+  if (isRoot(src) || isRoot(dest)) throw new Error('Forbidden');
+  if (!(await exists(src))) throw new Error(`${NOT_FOUND}: ${path.basename(src)}`);
+  if (dest === src) return;
+  const rel = path.relative(src, dest);
+  if (rel && !rel.startsWith('..') && !path.isAbsolute(rel))
+    throw new Error('A folder cannot move into itself');
+  await withFileLocks([src, dest], async () => {
+    if ((await exists(dest)) && !(await sameFile(src, dest)))
+      throw new Error(`${CONFLICT_EXISTS}: ${path.basename(dest)}`);
+    await mkdir(path.dirname(dest), { recursive: true });
+    await rename(src, dest);
+  });
+}
+
+const exists = (p: string) =>
+  stat(p).then(
+    () => true,
+    () => false,
+  );
+
+/** Is `to` the same file as `from` under another spelling (a case-only rename on macOS/Windows)? */
+async function sameFile(from: string, to: string): Promise<boolean> {
+  const [a, b] = await Promise.all([realpath(from).catch(() => null), realpath(to).catch(() => null)]);
+  return a !== null && a === b && from !== to;
 }
 
 /** A file's bytes and the mtime of exactly those bytes (one handle, so no write can come between). */

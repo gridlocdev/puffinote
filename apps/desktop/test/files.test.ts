@@ -21,6 +21,7 @@ import {
   isAppUrl,
   isOpenableDocument,
   listDir,
+  moveEntry,
   overwriteInPlace,
   readWithMtime,
   watchTree,
@@ -215,6 +216,28 @@ describe('listDir', () => {
     await symlink('../A', path.join(nb, 'B', 'toA'));
     expect(await names(path.join(nb, 'A'))).toEqual(['toB']);
     expect(await names(path.join(nb, 'A', 'toB'))).toEqual([]);
+  });
+});
+
+describe('moveEntry', () => {
+  it('moves a file, refuses a taken name, and never moves a notebook folder itself', async () => {
+    const nb = path.join(dir, 'move-nb');
+    await mkdir(path.join(nb, 'Sub'), { recursive: true });
+    await writeFile(path.join(nb, 'a.md'), 'a');
+    await writeFile(path.join(nb, 'b.md'), 'b');
+    const grants = new FolderGrants(null);
+    grants.grant(nb);
+    const isRoot = (p: string) => grants.isRoot(p);
+    await moveEntry(path.join(nb, 'a.md'), path.join(nb, 'Sub', 'a.md'), isRoot);
+    expect(await readFile(path.join(nb, 'Sub', 'a.md'), 'utf8')).toBe('a');
+    await expect(moveEntry(path.join(nb, 'b.md'), path.join(nb, 'Sub', 'a.md'), isRoot)).rejects.toThrow(
+      /CONFLICT_EXISTS/,
+    );
+    await expect(moveEntry(path.join(nb, 'Sub'), path.join(nb, 'Sub', 'In'), isRoot)).rejects.toThrow(
+      /into itself/,
+    );
+    await expect(moveEntry(nb, path.join(dir, 'moved-nb'), isRoot)).rejects.toThrow('Forbidden');
+    expect((await stat(nb)).isDirectory()).toBe(true);
   });
 });
 
