@@ -10,6 +10,7 @@ import {
 } from '@puffinote/text';
 import { EditorState } from '../editor/editorState.ts';
 import { archiveName, notebookArchive } from './archive.ts';
+import { fileCount, importName, isImportJunk, type ImportFile, type ImportResult } from './importFiles.ts';
 import {
   applyRefEdits,
   attachmentDir,
@@ -1285,6 +1286,90 @@ export class Notebook {
       this.report(e);
       return false;
     }
+  }
+
+  /**
+   * Copy files from outside into folder `dir` (Import Notes… and drops from the desktop, PRD §5). Nothing is
+   * overwritten: a top-level file or folder whose name is taken there gets a number ("Trip 2", "a 2.md"), and
+   * a folder is never merged into one that exists. OS clutter and `.git` are skipped. Files are read and
+   * written one at a time; one that fails is counted and the rest go on. The status bar says what happened.
+   */
+  async importFiles(dir: string, files: readonly ImportFile[]): Promise<ImportResult> {
+    let imported = 0;
+    let failed = 0;
+    const roots: string[] = [];
+    const folders = new Set<string>();
+    if (this.disposed) return { imported, failed, roots };
+    // Names in use per folder, without case: a disk that ignores case would refuse "A.md" beside "a.md".
+    const takenIn = new Map<string, Set<string>>();
+    const taken = async (d: string): Promise<Set<string>> => {
+      let set = takenIn.get(d);
+      if (!set) {
+        const entries = await this.store.list(d).catch(() => [] as Entry[]);
+        set = new Set(entries.map((e) => e.name.toLowerCase()));
+        takenIn.set(d, set);
+      }
+      return set;
+    };
+    const free = (name: string, set: Set<string>): string => {
+      const n = uniqueName(name, { has: (x: string) => set.has(x.toLowerCase()) } as ReadonlySet<string>);
+      set.add(n.toLowerCase());
+      return n;
+    };
+    // Each top-level item's name in the notebook, decided by its first file.
+    const tops = new Map<string, string>();
+    for (const f of files) {
+      if (this.disposed) break;
+      if (isImportJunk(f.path)) continue;
+      const raw = f.path.split('/').filter(Boolean);
+      if (raw.length === 0) continue;
+      const parts = raw.map(importName);
+      if (!parts.every((p): p is string => p !== null)) {
+        failed++;
+        continue;
+      }
+      let topName = tops.get(raw[0]!);
+      if (topName === undefined) {
+        topName = free(parts[0]!, await taken(dir));
+        tops.set(raw[0]!, topName);
+      }
+      const folder = joinPath(dir, [topName, ...parts.slice(1, -1)].join('/'));
+      const into = parts.length === 1 ? dir : folder;
+      try {
+        const bytes = await f.read();
+        const set = await taken(into);
+        let name = parts.length === 1 ? topName : free(parts[parts.length - 1]!, set);
+        for (;;) {
+          try {
+            await this.store.write(joinPath(into, name), bytes, { create: true });
+            break;
+          } catch (e) {
+            // Taken after all (the listing was stale): the next free name.
+            if (!(e instanceof ConflictError && e.reason === 'exists')) throw e;
+            name = free(name, set);
+          }
+        }
+        imported++;
+        const root = joinPath(dir, parts.length === 1 ? name : topName);
+        if (!roots.includes(root)) roots.push(root);
+        if (parts.length > 1) folders.add(root);
+      } catch {
+        failed++;
+      }
+    }
+    if (imported > 0) {
+      if (dir) this.toggleFolder(dir, true);
+      await this.reloadTree().catch((e: unknown) => this.report(e));
+      if (roots.length === 1) this.selected.value = roots[0]!;
+    }
+    const only = roots.length === 1 && folders.has(roots[0]!) ? roots[0]! : null;
+    const into = only ? ` into “${baseName(only)}”` : dir ? ` into “${baseName(dir)}”` : '';
+    const lost = failed > 0 ? ` ${fileCount(failed)} couldn’t be copied.` : '';
+    if (imported > 0)
+      this.notify(failed > 0 ? 'error' : 'info', `Imported ${fileCount(imported)}${into}.${lost}`);
+    else if (failed > 0) this.notify('error', `Nothing was imported.${lost}`);
+    else this.notify('info', 'There was nothing to import.');
+    return { imported, failed, roots };
   }
 
   private checkName(name: string): boolean {

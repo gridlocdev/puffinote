@@ -28,6 +28,7 @@ import {
   resolveRelative,
   stemOf,
 } from '../platform/paths.ts';
+import type { ImportFile } from '../notebook/importFiles.ts';
 import type { ConfirmOptions, PromptOptions } from './Dialog.tsx';
 
 /** A row in a context menu; `null` draws a separator. */
@@ -70,6 +71,11 @@ export interface PicturePreview {
 export interface ShellHost {
   /** Offer Open Notebook… (a folder picker, the NAS browser). Absent: the command is hidden. */
   readonly openNotebook?: () => void;
+  /**
+   * Ask for files to import, a folder's or separate ones (the browser's file dialog). Absent: Import Notes… is
+   * hidden (the desktop app, whose menu bar can't bring up a page's file dialog).
+   */
+  readonly pickFiles?: (folder: boolean) => Promise<readonly ImportFile[] | null>;
   /** Show the window title somewhere besides `document.title` (the desktop window). */
   readonly setTitle?: (title: string) => void;
   /** Draw a title bar at the top of the page (the macOS desktop window, whose own bar is hidden). */
@@ -1059,6 +1065,29 @@ export class ShellModel {
   }
 
   /** Find Unused Pictures… (PRD §10.6): list them, or say there are none. */
+  /**
+   * Import Notes… (PRD §5): ask whether to pick a folder or files, then copy them into the selected folder (or
+   * the top level), never over a file that's there.
+   */
+  async importNotes(dir = this.targetDir()): Promise<void> {
+    const nb = this.notebook.peek();
+    const pick = this.host.pickFiles;
+    if (!nb || !pick) return;
+    const choice = await this.confirm({
+      title: 'Import Notes',
+      message: `Copy a folder or files from this computer into ${dir ? `“${baseName(dir)}”` : 'the notebook'}. Nothing is replaced: a name that’s taken gets a number.`,
+      buttons: [
+        { label: 'Cancel', value: 'cancel' },
+        { label: 'Choose Files…', value: 'files' },
+        { label: 'Choose Folder…', value: 'folder', kind: 'primary' },
+      ],
+    });
+    if (choice === 'cancel') return;
+    const files = await pick(choice === 'folder');
+    if (!files || this.notebook.peek() !== nb) return;
+    await nb.importFiles(dir, files);
+  }
+
   async findUnusedPictures(): Promise<void> {
     const nb = this.notebook.peek();
     if (!nb) return;
@@ -1513,6 +1542,19 @@ function shellCommandSpecs(m: ShellModel): CommandSpec[] {
       run: () => m.open({ kind: 'settings' }),
     },
   ];
+  if (m.host.pickFiles) {
+    const at = specs.findIndex((s) => s.id === 'shell.downloadNotebook');
+    specs.splice(at, 0, {
+      id: 'shell.importNotes',
+      title: 'Import Notes…',
+      description: 'Copy a folder or files from this computer into the notebook.',
+      group: 'File',
+      icon: 'folder-plus',
+      keywords: 'import add copy upload folder files',
+      enabled: hasNb,
+      run: () => m.importNotes(),
+    });
+  }
   if (m.host.openNotebook) {
     const openNotebook = m.host.openNotebook;
     specs.splice(1, 0, {
