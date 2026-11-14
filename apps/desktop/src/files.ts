@@ -149,6 +149,8 @@ async function realTarget(abs: string): Promise<string> {
 }
 
 const fileLocks = new Map<string, Promise<unknown>>();
+/** Keys are worked out one call at a time, so calls take a lock in the order they were made. */
+let keying: Promise<unknown> = Promise.resolve();
 
 /**
  * Run `fn` after every earlier `withFileLock` call for the same file has settled, so a save's check-then-write
@@ -156,7 +158,9 @@ const fileLocks = new Map<string, Promise<unknown>>();
  * volume usually is case-insensitive (macOS, Windows).
  */
 export async function withFileLock<T>(p: string, fn: () => Promise<T>): Promise<T> {
-  const key = lockKey(p);
+  const keyed = keying.then(() => lockKey(p));
+  keying = keyed.catch(() => {});
+  const key = await keyed;
   const prev = fileLocks.get(key) ?? Promise.resolve();
   const run = prev.then(fn, fn);
   const tail = run.catch(() => {});
@@ -168,14 +172,34 @@ export async function withFileLock<T>(p: string, fn: () => Promise<T>): Promise<
   }
 }
 
-function lockKey(p: string): string {
-  const abs = path.resolve(p);
-  return process.platform === 'linux' ? abs : abs.normalize('NFC').toLowerCase();
+/**
+ * The lock key for a path: the same file under any spelling gets the same key. Symlinks are resolved (for a
+ * new file, through its nearest existing folder), then the key is case-folded except on Linux.
+ */
+async function lockKey(p: string): Promise<string> {
+  let probe = path.resolve(p);
+  const tail: string[] = [];
+  let key: string;
+  for (;;) {
+    const real = await realpath(probe).catch(() => null);
+    if (real !== null) {
+      key = path.join(real, ...tail);
+      break;
+    }
+    const parent = path.dirname(probe);
+    if (parent === probe) {
+      key = path.resolve(p);
+      break;
+    }
+    tail.unshift(path.basename(probe));
+    probe = parent;
+  }
+  return process.platform === 'linux' ? key : key.normalize('NFC').toLowerCase();
 }
 
 /** `withFileLock` over several files, taken in one order so two callers can't wait on each other. */
-export function withFileLocks<T>(paths: readonly string[], fn: () => Promise<T>): Promise<T> {
-  const byKey = new Map(paths.map((p) => [lockKey(p), p]));
+export async function withFileLocks<T>(paths: readonly string[], fn: () => Promise<T>): Promise<T> {
+  const byKey = new Map(await Promise.all(paths.map(async (p) => [await lockKey(p), p] as const)));
   const sorted = [...byKey.keys()].sort().map((k) => byKey.get(k));
   const run = (i: number): Promise<T> => {
     const p = sorted[i];

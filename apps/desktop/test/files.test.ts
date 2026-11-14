@@ -128,6 +128,32 @@ describe('withFileLock', () => {
     expect(order).toEqual(['a1', 'a2', 'b']);
   });
 
+  it('treats a file and a symlink to it, or to its folder, as one file', async () => {
+    const real = path.join(dir, 'lock-real.md');
+    await writeFile(real, '');
+    await symlink(real, path.join(dir, 'lock-alias.md'));
+    await mkdir(path.join(dir, 'lock-dir'));
+    await symlink(path.join(dir, 'lock-dir'), path.join(dir, 'lock-dir-link'));
+    const pairs = [
+      [real, path.join(dir, 'lock-alias.md')],
+      [path.join(dir, 'lock-dir', 'new.md'), path.join(dir, 'lock-dir-link', 'new.md')],
+    ] as const;
+    for (const [a, b] of pairs) {
+      const order: string[] = [];
+      await Promise.all([
+        withFileLock(a, async () => {
+          order.push('a1');
+          await wait(20);
+          order.push('a2');
+        }),
+        withFileLock(b, async () => {
+          order.push('b');
+        }),
+      ]);
+      expect(order).toEqual(['a1', 'a2', 'b']);
+    }
+  });
+
   it('keeps going after a failed call', async () => {
     const p = path.join(dir, 'lock2.md');
     await expect(withFileLock(p, () => Promise.reject(new Error('x')))).rejects.toThrow('x');
