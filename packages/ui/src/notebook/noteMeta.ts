@@ -1,4 +1,4 @@
-import { signal } from '@preact/signals';
+import { signal, type Signal } from '@preact/signals';
 import { readText } from '@puffinote/text';
 import type { NotebookStore } from '../platform/notebookStore.ts';
 import { baseName } from '../platform/paths.ts';
@@ -44,6 +44,22 @@ export function excerptOf(text: string): string {
     .replace(/\\([\\`*_{}[\]()#+\-.!>~=|])/g, '$1');
   t = t.replace(/\s+/g, ' ').trim().replace(/\s*—$/, '');
   return t.length > EXCERPT_CHARS ? `${t.slice(0, EXCERPT_CHARS).trimEnd()}…` : t;
+}
+
+/** A picture's format from its name, for a size the page measured (`NoteMetaCache`): `photo.jpg` → JPEG. */
+export function imageFormatOf(name: string): string {
+  const ext = name.slice(name.lastIndexOf('.') + 1).toLowerCase();
+  const known: Record<string, string> = {
+    png: 'PNG',
+    jpg: 'JPEG',
+    jpeg: 'JPEG',
+    gif: 'GIF',
+    webp: 'WebP',
+    avif: 'AVIF',
+    bmp: 'BMP',
+    svg: 'SVG',
+  };
+  return known[ext] ?? ext.toUpperCase();
 }
 
 /** A picture's format and size from its first bytes: PNG, JPEG, GIF, WebP, or SVG's own attributes. */
@@ -144,13 +160,14 @@ export function relativeDate(ms: number, now = Date.now()): string {
 }
 
 /**
- * Reads what the note list shows for each file, once per version of it, a few at a time. `version` bumps
- * whenever something new arrives, for the list to redraw.
+ * Reads what the note list shows for each file, once per version of it, a few at a time. Each file's answer
+ * is a signal of its own, so a card redraws when its own file's arrives, not on every file's (with thousands
+ * of notes, a shared signal redrew every card once per note).
  */
 export class NoteMetaCache {
-  readonly version = signal(0);
   private readonly store: NotebookStore;
   private readonly cache = new Map<string, { modified: number; meta: NoteMeta }>();
+  private readonly slots = new Map<string, Signal<NoteMeta | null>>();
   private readonly queue: { path: string; modified: number }[] = [];
   private readonly queued = new Set<string>();
   private running = 0;
@@ -160,11 +177,23 @@ export class NoteMetaCache {
     this.store = store;
   }
 
-  /** What's known about `path` at `modified`; asks for it when it isn't known yet. */
+  /**
+   * What's known about `path` at `modified` (or an older version, until that arrives); asks for it when it
+   * isn't known yet. A component or effect that calls this redraws when `path`'s answer arrives.
+   */
   get(path: string, modified: number): NoteMeta | null {
     const hit = this.cache.get(path);
     if (!hit || hit.modified !== modified) this.request(path, modified);
-    return hit?.meta ?? null;
+    return this.slot(path).value;
+  }
+
+  private slot(path: string): Signal<NoteMeta | null> {
+    let s = this.slots.get(path);
+    if (!s) {
+      s = signal(this.cache.get(path)?.meta ?? null);
+      this.slots.set(path, s);
+    }
+    return s;
   }
 
   dispose(): void {
@@ -190,7 +219,7 @@ export class NoteMetaCache {
         if (this.disposed) return;
         if (meta) {
           this.cache.set(job.path, { modified: job.modified, meta });
-          this.version.value++;
+          this.slot(job.path).value = meta;
         }
         this.pump();
       });
@@ -201,6 +230,10 @@ export class NoteMetaCache {
     try {
       const kind = fileKind(path);
       if (kind === 'other') return {};
+      // A picture the page loads from a URL (the NAS, the desktop) is downloaded for its thumbnail anyway:
+      // the card takes its size from that (`imageFormatOf`), rather than downloading it a second time here.
+      // An SVG is read, since its size is in its attributes, which the page's image doesn't always report.
+      if (kind === 'image' && !/\.svg$/i.test(path) && this.store.fileUrl(path) !== null) return {};
       const { bytes } = await this.store.read(path);
       if (kind === 'image') return { image: imageInfo(bytes, baseName(path)) };
       return { excerpt: excerptOf(readText(bytes).text) };

@@ -1,6 +1,7 @@
-import { describe, expect, it } from 'vitest';
+import { effect } from '@preact/signals';
+import { describe, expect, it, vi } from 'vitest';
 import { scopeList, sortNotes } from '../src/notebook/library.ts';
-import { excerptOf, imageInfo, relativeDate } from '../src/notebook/noteMeta.ts';
+import { excerptOf, imageInfo, NoteMetaCache, relativeDate } from '../src/notebook/noteMeta.ts';
 import { resolveSettings, sanitize } from '../src/notebook/settings.ts';
 import { Notebook, sessionPath } from '../src/notebook/notebook.ts';
 import { memoryPrefs } from '../src/notebook/settings.ts';
@@ -143,5 +144,56 @@ describe('Library note list', () => {
     expect(again.pinned.value).toEqual(['b.md']);
     expect(again.scope.value).toBe('folder:g');
     expect(again.sort.value).toBe('title');
+  });
+});
+
+describe('NoteMetaCache', () => {
+  /** A MemoryStore that counts reads and, optionally, serves files from a URL as the NAS and desktop do. */
+  class UrlStore extends MemoryStore {
+    readonly readPaths: string[] = [];
+    urls = false;
+
+    override read(path: string) {
+      this.readPaths.push(path);
+      return super.read(path);
+    }
+
+    override fileUrl(path: string): string | null {
+      return this.urls ? `/files/${path}` : null;
+    }
+  }
+
+  it('wakes only the reader of the note whose excerpt arrived', async () => {
+    const files: Record<string, string> = {};
+    for (let i = 0; i < 20; i++) files[`n${i}.md`] = `note ${i}`;
+    const cache = new NoteMetaCache(new UrlStore('N', files));
+    let runs = 0;
+    let seen: string | undefined;
+    const stop = effect(() => {
+      runs++;
+      seen = cache.get('n0.md', 1)?.excerpt;
+    });
+    for (let i = 1; i < 20; i++) cache.get(`n${i}.md`, 1);
+    await vi.waitFor(() => expect(seen).toBe('note 0'));
+    await new Promise((r) => setTimeout(r, 20));
+    expect(runs).toBe(2);
+    stop();
+    cache.dispose();
+  });
+
+  it('reads a picture for its size only when the page can’t load it from a URL', async () => {
+    const png = new Uint8Array([
+      0x89, 0x50, 0x4e, 0x47, 13, 10, 26, 10, 0, 0, 0, 13, 73, 72, 68, 82, 0, 0, 0, 4,
+    ]);
+    const store = new UrlStore('N', { 'a.png': png, 'b.svg': '<svg width="4" height="2"></svg>' });
+    store.urls = true;
+    const cache = new NoteMetaCache(store);
+    cache.get('a.png', 1);
+    await vi.waitFor(() =>
+      expect(cache.get('b.svg', 1)?.image).toEqual({ format: 'SVG', width: 4, height: 2 }),
+    );
+    expect(store.readPaths).toEqual(['b.svg']);
+    expect(cache.get('a.png', 1)).toEqual({});
+    cache.dispose();
   });
 });

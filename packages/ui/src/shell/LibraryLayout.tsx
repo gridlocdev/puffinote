@@ -2,7 +2,7 @@ import { useSignalEffect } from '@preact/signals';
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'preact/hooks';
 import { folderOf, scopeList } from '../notebook/library.ts';
 import type { LibraryScope, Notebook, NoteSort } from '../notebook/notebook.ts';
-import { excerptOf, relativeDate } from '../notebook/noteMeta.ts';
+import { excerptOf, imageFormatOf, relativeDate, type ImageInfo } from '../notebook/noteMeta.ts';
 import { fileKind, findNode, type TreeNode } from '../notebook/tree.ts';
 import { parentOf, stemOf } from '../platform/paths.ts';
 import { Document, EmptyNotebook, StatusBar } from './DocPane.tsx';
@@ -375,8 +375,11 @@ function NoteCard(props: {
   const stat = nb.stats.value.get(file.path);
   const sort = nb.sort.value;
   const kind = fileKind(file.path);
-  void nb.meta.version.value;
-  const meta = stat ? nb.meta.get(file.path, stat.modified) : null;
+  // Reading this file's meta redraws this card alone when it arrives.
+  const meta = stat && kind !== 'other' ? nb.meta.get(file.path, stat.modified) : null;
+  // A picture served from a URL isn't read for its size: the thumbnail's own load says it.
+  const [measured, setMeasured] = useState<ImageInfo | null>(null);
+  const image = meta?.image ?? measured;
   const pinned = nb.pinned.value.includes(file.path);
   const showExt = nb.settings.value.showFileExtensions;
   const name = showExt ? file.name : stemOf(file.name) || file.name;
@@ -412,8 +415,8 @@ function NoteCard(props: {
           <p class="pn-card-excerpt">{excerpt || (meta ? 'Empty note' : ' ')}</p>
         ) : kind === 'image' ? (
           <p class="pn-card-info">
-            {meta?.image
-              ? `${meta.image.format} · ${meta.image.width} × ${meta.image.height}`
+            {image
+              ? `${image.format} · ${image.width} × ${image.height}`
               : file.name.slice(file.name.lastIndexOf('.') + 1).toUpperCase()}
           </p>
         ) : (
@@ -422,7 +425,24 @@ function NoteCard(props: {
       </div>
       {kind === 'image' && (
         <span class="pn-card-thumb">
-          {url ? <img src={url} alt="" loading="lazy" /> : <Icon name="image" />}
+          {url ? (
+            <img
+              src={url}
+              alt=""
+              loading="lazy"
+              onLoad={(e) => {
+                const img = e.currentTarget;
+                if (img.naturalWidth > 0)
+                  setMeasured({
+                    format: imageFormatOf(file.name),
+                    width: img.naturalWidth,
+                    height: img.naturalHeight,
+                  });
+              }}
+            />
+          ) : (
+            <Icon name="image" />
+          )}
         </span>
       )}
     </div>
