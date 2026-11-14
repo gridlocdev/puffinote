@@ -92,8 +92,10 @@ export class NativeStore implements NotebookStore {
     // macOS and Windows disks ignore case by default; Linux ones don't.
     const folds = bridge.platform === 'darwin' || bridge.platform === 'win32';
     this.capabilities = { watch: true, reveal: true, openExternal: true, ignoresCase: folds };
-    this.root = root.replace(/[\\/]+$/, '');
-    this.name = baseName(this.root.replace(/\\/g, '/'));
+    // Watch events are mapped to '/' separators before they are compared with the root, so the root is held
+    // with '/' too: a Windows root kept with backslashes never matched one.
+    this.root = root.replace(/\\/g, '/').replace(/\/+$/, '');
+    this.name = baseName(this.root);
   }
 
   async list(dir: string): Promise<Entry[]> {
@@ -131,13 +133,14 @@ export class NativeStore implements NotebookStore {
   }
 
   watch(onChange: (paths: readonly string[]) => void): () => void {
-    this.bridge.watch(this.root);
+    this.bridge.watch(this.abs(''));
     const off = this.bridge.onChanged((paths) => {
-      const prefix = this.root + '/';
+      const fold = (p: string) => (this.capabilities.ignoresCase ? p.toLowerCase() : p);
+      const prefix = fold(this.root + '/');
       onChange(
         paths
           .map((p) => p.replace(/\\/g, '/'))
-          .filter((p) => p.startsWith(prefix))
+          .filter((p) => fold(p).startsWith(prefix))
           .map((p) => p.slice(prefix.length)),
       );
     });
@@ -155,8 +158,10 @@ export class NativeStore implements NotebookStore {
     return this.bridge.openExternal(this.abs(path));
   }
 
+  /** The absolute path for the bridge, in the platform's own separators. */
   private abs(path: string): string {
-    return path ? `${this.root}/${path}` : this.root;
+    const full = path ? `${this.root}/${path}` : this.root;
+    return this.bridge.platform === 'win32' ? full.replace(/\//g, '\\') : full;
   }
 
   private async call<T>(fn: () => Promise<T>): Promise<T> {
