@@ -104,7 +104,7 @@ The Layout setting (§9) picks one. Both share the note, the status bar, the com
 - **Drag to move.** The tree draws the drag itself: a ghost under the pointer, an outline on the folder it would land in, and a closed folder that opens after the pointer rests on it for a second. Holding the pointer near the tree's top or bottom edge for half a second scrolls the tree that way, faster the closer the pointer is to the edge.
   - A drop on a folder means that folder. A drop on a file means the folder that holds it. A drop on the empty space means the top level.
   - A move that changes nothing, or a folder into itself, shows no indicator. A name that is already taken is refused. Escape cancels.
-  - A move is a plain move. Links to the file are not rewritten, except links to pictures (§10.6). Open tabs and the recent list follow it.
+  - A move is a plain move. Links to the file are not rewritten, except links to pictures (§10.6). Open tabs and the recent list follow it. A save already under way on a moved note finishes before the move starts; a save asked for during it (auto-save included) waits and writes to the new place.
 
 ### 6.2 Keyboard
 

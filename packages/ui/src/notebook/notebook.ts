@@ -275,6 +275,13 @@ export class Notebook {
   private readonly saveSlots = new WeakMap<Tab, SaveSlot>();
   /** Tabs with a write to the store in flight. */
   private readonly writing = new Set<Tab>();
+  /** Each in-flight write's end (after the tab took its answer), for a move to wait on. */
+  private readonly writeDone = new Map<Tab, Promise<void>>();
+  /**
+   * Held while a rename or move changes paths under the store: saves wait for it, then write to the path
+   * the move left the tab at. One move at a time.
+   */
+  private moveLock: Promise<void> | null = null;
   /** Session writes, one after another, so an older one never lands last. */
   private persistChain: Promise<void> = Promise.resolve();
 
@@ -641,6 +648,9 @@ export class Notebook {
   }
 
   private async writeTab(tab: Tab, force: boolean): Promise<boolean> {
+    // A move in progress: wait, so the path read below is where the move put the note. From here to the
+    // write going out, nothing awaits, so a move can't start in between.
+    while (this.moveLock) await this.moveLock;
     if (!tab.state || tab.readOnly || !this.tabs.peek().includes(tab)) return false;
     if (!force && tab.conflict.peek() !== 'none') return false;
     if (!force && !tab.dirty.peek()) return true;
@@ -648,6 +658,8 @@ export class Notebook {
     const path = tab.path.peek();
     const before = tab.savedText;
     this.writing.add(tab);
+    let finished!: () => void;
+    this.writeDone.set(tab, new Promise<void>((r) => (finished = r)));
     try {
       const version = await this.store.write(path, encodeText(text, tab.format), {
         expected: tab.version,
@@ -684,6 +696,8 @@ export class Notebook {
       return false;
     } finally {
       this.writing.delete(tab);
+      this.writeDone.delete(tab);
+      finished();
     }
   }
 
@@ -810,18 +824,31 @@ export class Notebook {
 
   private async relocate(from: string, to: string): Promise<string | null> {
     if (this.disposed) return null;
+    while (this.moveLock) await this.moveLock;
+    let release!: () => void;
+    this.moveLock = new Promise<void>((r) => (release = r));
+    let moved: Tab[];
     const node = findNode(this.tree.peek(), from);
     const movedFiles = !node ? [] : node.kind === 'file' ? [from] : allFiles(node).map((f) => f.path);
     try {
-      await this.store.move(from, to);
-    } catch (e) {
-      this.report(e);
-      return null;
+      // Saves already writing to the old path land first; later ones wait for the lock (see writeTab).
+      await Promise.all(
+        this.tabs.peek().flatMap((t) => (isWithin(t.path.peek(), from) ? [this.writeDone.get(t)] : [])),
+      );
+      try {
+        await this.store.move(from, to);
+      } catch (e) {
+        this.report(e);
+        return null;
+      }
+      moved = this.tabs.value.filter((t) => isWithin(t.path.value, from));
+      for (const t of moved) t.path.value = rebase(t.path.value, from, to);
+      this.tabs.value = [...this.tabs.value];
+      await Promise.all(moved.map((t) => this.adoptMovedVersion(t)));
+    } finally {
+      this.moveLock = null;
+      release();
     }
-    const moved = this.tabs.value.filter((t) => isWithin(t.path.value, from));
-    for (const t of moved) t.path.value = rebase(t.path.value, from, to);
-    this.tabs.value = [...this.tabs.value];
-    await Promise.all(moved.map((t) => this.adoptMovedVersion(t)));
     this.recent.value = this.recent.value.map((p) => (isWithin(p, from) ? rebase(p, from, to) : p));
     if (this.pinned.value.some((p) => isWithin(p, from))) {
       this.pinned.value = this.pinned.value.map((p) => (isWithin(p, from) ? rebase(p, from, to) : p));

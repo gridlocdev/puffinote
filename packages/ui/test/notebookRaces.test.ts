@@ -354,3 +354,58 @@ describe('Notebook opens in flight', () => {
     expect(nb.tabs.value).toHaveLength(2);
   });
 });
+
+describe('Notebook moves and saves in flight', () => {
+  class SlowMoves extends GatedStore {
+    holdMoves = false;
+    readonly moves: (() => void)[] = [];
+    /** Copies, then (held when `holdMoves`) deletes the original, as the browser store does. */
+    override async move(from: string, to: string): Promise<void> {
+      const data = await MemoryStore.prototype.read.call(this, from);
+      await MemoryStore.prototype.write.call(this, to, data.bytes, { force: true });
+      if (this.holdMoves) await new Promise<void>((r) => this.moves.push(r));
+      await this.remove(from);
+    }
+  }
+
+  it('waits for a save in flight before moving the note', async () => {
+    const store = new SlowMoves('N', { 'a.md': 'hello', 'sub/x.md': '' });
+    const nb = await openWith(store);
+    const tab = (await nb.openFile('a.md'))!;
+    tab.state!.select(5);
+    tab.state!.insert(' world');
+    store.holdWrites = true;
+    const saving = nb.save(tab);
+    await settle();
+    const moving = nb.move('a.md', 'sub');
+    await settle();
+    expect(store.writes).toHaveLength(1);
+    store.holdWrites = false;
+    store.writes.shift()!.release();
+    expect(await saving).toBe(true);
+    expect(await moving).toBe('sub/a.md');
+    expect(await text(store, 'sub/a.md')).toBe('hello world');
+    await expect(store.read('a.md')).rejects.toThrow();
+    expect(tab.path.value).toBe('sub/a.md');
+    expect(tab.conflict.value).toBe('none');
+  });
+
+  it('holds a save asked for during a move, then writes to the new place', async () => {
+    const store = new SlowMoves('N', { 'a.md': 'hello', 'sub/x.md': '' });
+    const nb = await openWith(store);
+    const tab = (await nb.openFile('a.md'))!;
+    store.holdMoves = true;
+    const moving = nb.move('a.md', 'sub');
+    await settle();
+    tab.state!.select(5);
+    tab.state!.insert('!');
+    const saving = nb.save(tab);
+    await settle();
+    store.holdMoves = false;
+    store.moves.shift()!();
+    expect(await moving).toBe('sub/a.md');
+    expect(await saving).toBe(true);
+    expect(await text(store, 'sub/a.md')).toBe('hello!');
+    await expect(store.read('a.md')).rejects.toThrow();
+  });
+});
