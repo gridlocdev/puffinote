@@ -249,3 +249,39 @@ describe('picture names compared as the disk compares them', () => {
     expect(await nb.unusedPictures()).toEqual(['photo.png']);
   });
 });
+
+describe('the no-longer-used offer checks again before deleting', () => {
+  async function offered() {
+    const opened = await open({ 'one.md': '![](a.png)', 'a.png': '' });
+    const tab = (await opened.nb.openFile('one.md'))!;
+    tab.state!.select(0, tab.state!.text.length);
+    tab.state!.insert('');
+    await opened.nb.save(tab);
+    await vi.waitFor(() => expect(opened.nb.notice.value?.action).toBeDefined());
+    return { ...opened, tab };
+  }
+
+  it('keeps a picture a note shows again by the time Delete is clicked', async () => {
+    const { store, nb, tab } = await offered();
+    const run = nb.notice.value!.action!.run;
+    tab.state!.undo(); // the link is back, unsaved
+    run();
+    await new Promise((r) => setTimeout(r, 10));
+    await store.read('a.png');
+    expect(nb.notice.value?.text).toMatch(/a\.png/);
+  });
+
+  it('takes the offer down when a save brings the link back', async () => {
+    const { nb, tab } = await offered();
+    tab.state!.undo();
+    await nb.save(tab);
+    expect(nb.notice.value).toBeNull();
+  });
+
+  it('deletes only the pictures still unused', async () => {
+    const { store, nb } = await open({ 'one.md': '![](a.png)', 'a.png': '', 'b.png': '' });
+    await nb.removeUnused(['a.png', 'b.png']);
+    await store.read('a.png');
+    await expect(store.read('b.png')).rejects.toThrow();
+  });
+});

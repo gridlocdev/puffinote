@@ -283,3 +283,24 @@ describe('ShellModel picture preview and menu (PRD §10.6)', () => {
     expect(m.preview.value).toBeNull();
   });
 });
+
+describe('ShellModel Delete Picture Redo', () => {
+  it('keeps the file on Redo when another note shows it by then', async () => {
+    const store = new MemoryStore('N', { 'a.md': '![](pic.png)', 'b.md': '', 'pic.png': 'PNG' });
+    const nb = await Notebook.open(store, { prefs: memoryPrefs({ autoSave: false }) });
+    const m = new ShellModel();
+    m.setNotebook(nb);
+    const b = (await nb.openFile('b.md'))!;
+    const tab = (await nb.openFile('a.md'))!;
+    await m.deletePicture({ start: 0, end: 12, url: 'pic.png' });
+    expect(findNode(nb.tree.value, 'pic.png')).toBeNull();
+    tab.state!.undo();
+    await vi.waitFor(() => expect(findNode(nb.tree.value, 'pic.png')).not.toBeNull());
+    b.state!.insert('![](pic.png)');
+    tab.state!.redo();
+    await new Promise((r) => setTimeout(r, 10));
+    expect(findNode(nb.tree.value, 'pic.png')).not.toBeNull();
+    await store.read('pic.png');
+    m.setNotebook(null);
+  });
+});

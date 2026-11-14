@@ -572,6 +572,8 @@ export class ShellModel {
     const written = state.document.getText(picture.start, picture.end - picture.start);
     const file = this.pictureFile(picture.url, notePath);
     let deleteFile = file !== null;
+    /** The notes the user agreed to take the file from, by choosing Delete File. */
+    const agreed = new Set<string>();
     if (file !== null) {
       const text = state.text;
       const hereAgain = nb.showsPicture(
@@ -604,6 +606,10 @@ export class ShellModel {
         });
         if (answer === 'cancel') return;
         deleteFile = answer === 'file';
+        if (deleteFile) {
+          for (const p of others) agreed.add(p);
+          if (hereAgain) agreed.add(notePath);
+        }
       }
     }
     // Keep the file's bytes, so Undo can put it back and Redo delete it again.
@@ -621,7 +627,8 @@ export class ShellModel {
       file !== null && bytes !== null
         ? {
             undo: () => void nb.restorePicture(file, bytes),
-            redo: () => void nb.removeAll([file]),
+            // Only if no note shows it by then, apart from those the user agreed to take it from.
+            redo: () => void nb.removeUnused([file], agreed),
           }
         : undefined;
     state.apply(removeRangeEdit(state.document, picture.start, picture.end), effect);

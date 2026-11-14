@@ -646,6 +646,7 @@ export class Notebook {
         created: stat?.created || now,
       });
       this.flashSaved(tab);
+      this.withdrawOfferShownBy(text, path);
       if (before.includes('](')) {
         const key = (p: string) => pathKey(p, this.ignoresCase);
         const now = new Set([...imageTargets(text, path)].map(key));
@@ -1133,12 +1134,14 @@ export class Notebook {
   }
 
   /**
-   * Every picture some note links to, by notebook path. Throws when a note can't be read, so a picture it
+   * Every picture some note (other than those in `except`) links to, by notebook path. Throws when a note can't be read, so a picture it
    * shows is never called unused.
    */
-  private async linkedPictures(): Promise<PictureUsage> {
+  private async linkedPictures(except: ReadonlySet<string> = new Set()): Promise<PictureUsage> {
     const out = new PictureUsage(this.ignoresCase);
-    for (const path of await this.allNotes()) out.add(await this.readNote(path), path);
+    for (const path of await this.allNotes()) {
+      if (!except.has(path)) out.add(await this.readNote(path), path);
+    }
     return out;
   }
 
@@ -1224,7 +1227,7 @@ export class Notebook {
     const unused = present.filter((p) => !linked.has(p));
     if (unused.length === 0) return;
     const trash = this.store.kind === 'native';
-    this.notice.value = {
+    const notice: Notice = {
       kind: 'info',
       text:
         unused.length === 1
@@ -1232,12 +1235,53 @@ export class Notebook {
           : `No note shows ${unused.length} of these pictures any more.`,
       action: {
         label: trash ? 'Move to Trash' : 'Delete',
-        run: () => void this.removeAll(unused),
+        run: () => void this.removeUnused(unused),
       },
     };
+    this.offer = { notice, paths: unused };
+    this.notice.value = notice;
   }
 
-  /** Delete each of `paths` (unused pictures). */
+  /** The no-longer-used offer, while it is the notice, taken down when a save shows one of its pictures again. */
+  private offer: { readonly notice: Notice; readonly paths: readonly string[] } | null = null;
+
+  private withdrawOfferShownBy(text: string, notePath: string): void {
+    const offer = this.offer;
+    if (!offer) return;
+    if (this.notice.peek() !== offer.notice) {
+      this.offer = null;
+      return;
+    }
+    if (offer.paths.some((p) => this.showsPicture(text, notePath, p))) {
+      this.offer = null;
+      this.notice.value = null;
+    }
+  }
+
+  /**
+   * Delete those of `paths` no note shows now, leaving out the notes in `ignoring` (the no-longer-used offer,
+   * Find Unused Pictures, Delete Picture's Redo). A picture a note shows again by now is kept, and so is every
+   * one when a note can't be read.
+   */
+  async removeUnused(paths: readonly string[], ignoring: ReadonlySet<string> = new Set()): Promise<void> {
+    let linked: PictureUsage;
+    try {
+      linked = await this.linkedPictures(ignoring);
+    } catch (e) {
+      this.report(e);
+      return;
+    }
+    const unused = paths.filter((p) => !linked.has(p));
+    const kept = paths.length - unused.length;
+    let done = 0;
+    for (const p of unused) if (await this.remove(p)) done++;
+    if (kept > 0) {
+      const which = kept === 1 ? `“${baseName(paths.find((p) => linked.has(p))!)}”` : `${kept} pictures`;
+      this.notify('info', `Kept ${which}: a note shows ${kept === 1 ? 'it' : 'them'} again.`);
+    } else if (done > 0) this.notify('info', `Deleted ${done} ${done === 1 ? 'picture' : 'pictures'}.`);
+  }
+
+  /** Delete each of `paths`, whoever shows them (Delete Picture's Delete File). */
   async removeAll(paths: readonly string[]): Promise<void> {
     let done = 0;
     for (const p of paths) if (await this.remove(p)) done++;
