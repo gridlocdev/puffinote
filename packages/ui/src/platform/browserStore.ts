@@ -24,6 +24,21 @@ export async function privateFolder(timeoutMs = 5000): Promise<FileSystemDirecto
 }
 
 /**
+ * Ask the browser to keep this site's storage under storage pressure instead of evicting it (PRD §3), so the
+ * private notebook isn't cleared to make room. Resolves to whether the storage is persistent; never throws.
+ */
+export async function persistStorage(): Promise<boolean> {
+  try {
+    const storage = typeof navigator === 'undefined' ? undefined : navigator.storage;
+    if (typeof storage?.persist !== 'function') return false;
+    if (typeof storage.persisted === 'function' && (await storage.persisted())) return true;
+    return await storage.persist();
+  } catch {
+    return false;
+  }
+}
+
+/**
  * A notebook in a browser folder handle (the private folder; tests pass in-memory ones). Versions are the file's
  * lastModified, re-checked before each write. There is no change notification, so the shell re-reads the tree
  * when the window regains focus.

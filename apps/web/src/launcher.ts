@@ -7,6 +7,7 @@ import {
   nativeBridge,
   NativeStore,
   Notebook,
+  persistStorage,
   privateFolder,
   webRecovery,
   type NotebookStore,
@@ -233,6 +234,8 @@ export class Launcher {
       case 'private': {
         const dir = await privateFolder();
         if (!dir) throw new Error('This browser can’t keep a notebook.');
+        // Not awaited: Firefox asks the user, and the notebook opens meanwhile. A refusal changes nothing.
+        void persistStorage();
         return new BrowserStore(dir, true);
       }
     }

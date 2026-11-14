@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { privateFolder } from '../src/platform/browserStore.ts';
+import { persistStorage, privateFolder } from '../src/platform/browserStore.ts';
 
 describe('privateFolder', () => {
   afterEach(() => vi.unstubAllGlobals());
@@ -14,5 +14,34 @@ describe('privateFolder', () => {
       storage: { getDirectory: () => Promise.reject(new Error('SecurityError')) },
     });
     expect(await privateFolder(20)).toBeNull();
+  });
+});
+
+describe('persistStorage', () => {
+  afterEach(() => vi.unstubAllGlobals());
+
+  it('asks the browser to keep the notebook', async () => {
+    const persist = vi.fn(async () => true);
+    vi.stubGlobal('navigator', { storage: { persisted: async () => false, persist } });
+    expect(await persistStorage()).toBe(true);
+    expect(persist).toHaveBeenCalledOnce();
+  });
+
+  it('does not ask again when the storage is already persistent', async () => {
+    const persist = vi.fn(async () => true);
+    vi.stubGlobal('navigator', { storage: { persisted: async () => true, persist } });
+    expect(await persistStorage()).toBe(true);
+    expect(persist).not.toHaveBeenCalled();
+  });
+
+  it('ignores a refusal, a failure and a browser without the API', async () => {
+    vi.stubGlobal('navigator', { storage: { persist: async () => false } });
+    expect(await persistStorage()).toBe(false);
+    vi.stubGlobal('navigator', { storage: { persist: () => Promise.reject(new Error('nope')) } });
+    expect(await persistStorage()).toBe(false);
+    vi.stubGlobal('navigator', { storage: {} });
+    expect(await persistStorage()).toBe(false);
+    vi.stubGlobal('navigator', {});
+    expect(await persistStorage()).toBe(false);
   });
 });
