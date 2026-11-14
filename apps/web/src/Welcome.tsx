@@ -126,7 +126,7 @@ function TokenForm(props: { readonly launcher: Launcher }) {
   );
 }
 
-/** Pick a notebook folder on the NAS: a root, then folders inside it. */
+/** Pick a notebook on the NAS: a root, or a folder inside it. With one root, start-up opens it instead. */
 function NasBrowser(props: { readonly launcher: Launcher; readonly client: NasClient }) {
   const { launcher, client } = props;
   const roots = useSignal<NasRoot[] | null>(null);
@@ -180,55 +180,65 @@ function NasBrowser(props: { readonly launcher: Launcher; readonly client: NasCl
   const r = root.value;
   const parts = path.value ? path.value.split('/') : [];
   const here = parts.at(-1) ?? r.name;
+  const folders = entries.value;
   return (
-    <section class="pw-section" aria-label="Server folders">
-      <h2>Choose a notebook folder</h2>
-      <nav class="pw-crumbs" aria-label="Folder">
-        {roots.value.length > 1 && (
-          <button
-            onClick={() => {
-              root.value = null;
-              path.value = '';
-            }}
-          >
-            Server
+    <section class="pw-section" aria-label="Notebooks on this server">
+      <h2>Open a notebook on this server</h2>
+      {(parts.length > 0 || roots.value.length > 1) && (
+        <nav class="pw-crumbs" aria-label="Folder">
+          {roots.value.length > 1 && (
+            <button
+              onClick={() => {
+                root.value = null;
+                path.value = '';
+              }}
+            >
+              Server
+            </button>
+          )}
+          <button onClick={() => (path.value = '')} aria-current={parts.length === 0 ? 'page' : undefined}>
+            {r.name}
           </button>
-        )}
-        <button onClick={() => (path.value = '')} aria-current={parts.length === 0 ? 'page' : undefined}>
-          {r.name}
-        </button>
-        {parts.map((p, i) => (
-          <button
-            key={i}
-            onClick={() => (path.value = parts.slice(0, i + 1).join('/'))}
-            aria-current={i === parts.length - 1 ? 'page' : undefined}
-          >
-            {p}
-          </button>
-        ))}
-      </nav>
-      <ul class="pw-list pw-folders">
-        {entries.value === null ? (
-          <li class="pw-note">Loading…</li>
-        ) : entries.value.length === 0 ? (
-          <li class="pw-note">No folders in here.</li>
-        ) : (
-          entries.value.map((e) => (
-            <li key={e.path} class="pw-row">
-              <button class="pw-row-main" onClick={() => (path.value = e.path)}>
-                <Icon name="folder" />
-                <span class="pw-row-name">{e.name}</span>
-              </button>
-            </li>
-          ))
-        )}
-      </ul>
+          {parts.map((p, i) => (
+            <button
+              key={i}
+              onClick={() => (path.value = parts.slice(0, i + 1).join('/'))}
+              aria-current={i === parts.length - 1 ? 'page' : undefined}
+            >
+              {p}
+            </button>
+          ))}
+        </nav>
+      )}
       <div class="pw-actions">
         <button class="pw-primary" onClick={() => void launcher.openNas(r, path.value)}>
           <Icon name="book-open" />
-          Open “{here}” as a Notebook
+          Open “{here}”
         </button>
       </div>
+      {folders && folders.length > 0 && (
+        <>
+          <p class="pw-note">Or open a folder inside it:</p>
+          <ul class="pw-list pw-folders">
+            {folders.map((e) => (
+              <li key={e.path} class="pw-row">
+                <button class="pw-row-main" onClick={() => void launcher.openNas(r, e.path)}>
+                  <Icon name="book-open" />
+                  <span class="pw-row-name">{e.name}</span>
+                </button>
+                <button
+                  class="pn-icon-button pw-row-into"
+                  title={`Folders in ${e.name}`}
+                  aria-label={`Show the folders in ${e.name}`}
+                  onClick={() => (path.value = e.path)}
+                >
+                  <Icon name="chevron-right" />
+                </button>
+              </li>
+            ))}
+          </ul>
+        </>
+      )}
     </section>
   );
 }

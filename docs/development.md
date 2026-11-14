@@ -8,16 +8,18 @@ You need Node 22.18 or later, pnpm (through `corepack enable`) and [just](https:
 
 ```bash
 just setup                # corepack enable, then pnpm install
-just run-web              # web client on http://localhost:5173 plus the NAS server on :8790
+just run-web              # the web app as gridloc.dev serves it, on http://localhost:5173 (no server)
+just run-nas              # the web app on a NAS: the client on :5173 plus the NAS server on :8790
 just run-server           # the NAS server only, serving ./.nas-data, restarting on changes
 just run-desktop          # the desktop app in dev mode (builds the web client first)
-just preview-web          # the built client served by the NAS server, as on a NAS (:8790)
+just preview-web          # the built client as static files, as on gridloc.dev (:4173)
+just preview-nas          # the built client served by the NAS server, as on a NAS (:8790)
 just run-editor-demo      # the editor alone, with no shell, on http://localhost:5199
 just cli tree ~/Notes     # the puffinote CLI from source (any arguments)
 ```
 
-- `just run-web` and `just run-server` serve `.nas-data/` in the repository as the root `Sample`. Put a notebook folder in it to try the NAS flow. The folder is gitignored.
-- Without the NAS server, `pnpm --filter @puffinote/web dev` is the plain web app: it opens a folder through the browser (Chromium) or uses the browser's private storage.
+- The web client runs in three modes, chosen at runtime: in the desktop app, served with a NAS server (`run-nas`, `preview-nas`), or as a plain web page like gridloc.dev (`run-web`, `preview-web`), which opens a folder through the browser (Chromium) or keeps notes in the browser's private storage.
+- `just run-nas`, `just preview-nas` and `just run-server` serve `.nas-data/` in the repository as the root `Sample`. The folder is gitignored.
 - `just cli` runs from the folder you are in, so relative paths work as they would with an installed `puffinote`.
 
 ## Checking your work
@@ -34,7 +36,7 @@ just fmt-check        # check the formatting
 
 `just check` must pass before every commit. When you change behaviour, add or update a test in that package's `test/` folder.
 
-Check UI changes headlessly: run `just run-web` (or `just preview-web`) and drive it in a browser that isn't in your way. The desktop app renders offscreen with `PUFFINOTE_HEADLESS=1`.
+Check UI changes headlessly: run `just run-web` or `just run-nas` (or a `preview-` recipe) and drive it in a browser that isn't in your way. The desktop app renders offscreen with `PUFFINOTE_HEADLESS=1`.
 
 ## The spec and its references
 

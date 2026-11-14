@@ -125,8 +125,9 @@ export class Launcher {
   }
 
   /**
-   * Reopen the last notebook, if that needs no permission prompt. A browser that can't open folders (Firefox,
-   * Safari) has nothing to choose, so it goes straight into the browser notebook.
+   * Reopen the last notebook, if that needs no permission prompt. Otherwise, where there is nothing to choose,
+   * open the one choice: a browser that can't open folders (Firefox, Safari, Brave) opens the browser notebook,
+   * and a NAS server with one root opens that root.
    */
   async start(): Promise<void> {
     this.starting.value = true;
@@ -134,8 +135,19 @@ export class Launcher {
       const last = this.recents.value[0];
       if (last && (await this.canReopen(last))) await this.open(last);
       else if (this.kind === 'browser' && !canPickFolder()) await this.openPrivate();
+      else if (this.kind === 'nas') await this.openOnlyRoot();
     } finally {
       this.starting.value = false;
+    }
+  }
+
+  private async openOnlyRoot(): Promise<void> {
+    if (!this.nas) return;
+    try {
+      const roots = await this.nas.roots();
+      if (roots.length === 1) await this.openNas(roots[0]!, '');
+    } catch (e) {
+      this.reportError(e);
     }
   }
 

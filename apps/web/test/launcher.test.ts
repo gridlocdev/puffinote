@@ -1,11 +1,12 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import type { PrefsStorage, ShellModel } from '@puffinote/ui';
+import type { NasClient, NasRoot, PrefsStorage, ShellModel } from '@puffinote/ui';
 import { Launcher, type HostKind } from '../src/launcher.ts';
 
 const g = globalThis as { showDirectoryPicker?: unknown };
 
-function launcher(kind: HostKind): Launcher {
-  return new Launcher({} as ShellModel, {} as PrefsStorage, { kind, native: null, nas: null });
+function launcher(kind: HostKind, roots: NasRoot[] = []): Launcher {
+  const nas = kind === 'nas' ? ({ roots: async () => roots } as unknown as NasClient) : null;
+  return new Launcher({} as ShellModel, {} as PrefsStorage, { kind, native: null, nas });
 }
 
 describe('Launcher.start', () => {
@@ -49,5 +50,19 @@ describe('Launcher.start', () => {
     await l.start();
     expect(reopen).toHaveBeenCalledWith({ kind: 'private', name: 'Browser notebook' });
     expect(fresh).not.toHaveBeenCalled();
+  });
+
+  it('opens a NAS server’s only root as the notebook', async () => {
+    const l = launcher('nas', [{ id: 'r1', name: 'Notes' } as NasRoot]);
+    const open = vi.spyOn(l, 'openNas').mockResolvedValue();
+    await l.start();
+    expect(open).toHaveBeenCalledWith({ id: 'r1', name: 'Notes' }, '');
+  });
+
+  it('leaves the choice of root to the welcome screen when there are several', async () => {
+    const l = launcher('nas', [{ id: 'a', name: 'A' } as NasRoot, { id: 'b', name: 'B' } as NasRoot]);
+    const open = vi.spyOn(l, 'openNas').mockResolvedValue();
+    await l.start();
+    expect(open).not.toHaveBeenCalled();
   });
 });

@@ -63,13 +63,14 @@ If someone else saved a note after you opened it, Puffinote warns you before ove
 
 ```bash
 just setup     # corepack enable, then pnpm install
-just run-web   # the web client on http://localhost:5173, plus the NAS server on :8790
+just run-web   # the web app on http://localhost:5173, as gridloc.dev serves it
+just run-nas   # the same, plus the NAS server on :8790 serving ./.nas-data
 ```
 
 In the browser, Puffinote opens a folder from your disk through the File System Access API (Chromium browsers), or keeps notes in the browser's private storage. See [Development](development.md) for every other way to run and build it.
 
 ## First run
 
-The welcome screen lists your recent notebooks and the ways to open one in this host: a folder on disk in the desktop app, a folder from the server on a NAS, or a folder in Chrome and Edge. The last notebook reopens on start when it can do so without asking. Firefox and Safari can't open folders, so they skip the welcome screen and open a notebook kept in the browser's own storage.
+The welcome screen lists your recent notebooks and the ways to open one in this host: a folder on disk in the desktop app, a folder from the server on a NAS, or a folder in Chrome and Edge. The last notebook reopens on start when it can do so without asking. Firefox, Safari and Brave can't open folders, so they skip the welcome screen and open a notebook kept in the browser's own storage. A NAS server with a single folder opens that folder on start.
 
 Each notebook keeps its own settings in a `.puffinote` folder inside it, so they travel with the folder. The desktop app's update settings live in `updates.json` in the app's user data folder.

@@ -10,9 +10,15 @@ default:
 
 # ── Run (dev) ─────────────────────────────────────────────────────────────
 
-# Web client dev server (http://localhost:5173) plus the NAS server it talks to. Ctrl-C stops both.
+# The web app as gridloc.dev serves it: no server, notes in a picked folder or the browser (http://localhost:5173).
 [group('run')]
 run-web:
+    pnpm --filter @puffinote/web dev
+
+# The web app on a NAS: the dev client (http://localhost:5173) plus the NAS server serving ./.nas-data as
+# "Sample". Ctrl-C stops both.
+[group('run')]
+run-nas:
     mkdir -p "{{ nas_data }}"
     pnpm --parallel --filter @puffinote/server --filter @puffinote/web run dev
 
@@ -27,9 +33,14 @@ run-server:
 run-desktop: build-web
     pnpm --filter @puffinote/desktop start
 
-# The built web client served by the NAS server, as it runs on a NAS (http://localhost:8790).
+# The built web app as gridloc.dev serves it: static files, no server (http://localhost:4173).
 [group('run')]
 preview-web: build-web
+    pnpm --filter @puffinote/web exec vite preview --strictPort
+
+# The built web app served by the NAS server, as it runs on a NAS (http://localhost:8790).
+[group('run')]
+preview-nas: build-web
     mkdir -p "{{ nas_data }}"
     PUFFINOTE_HOST=127.0.0.1 PUFFINOTE_ROOTS="Sample={{ nas_data }}" PUFFINOTE_STATIC="{{ justfile_directory() }}/apps/web/dist" node apps/server/src/main.ts
 
@@ -172,6 +183,7 @@ clean-all: clean
     find . -name node_modules -type d -prune -exec rm -rf {} +
 
 alias web := run-web
+alias nas := run-nas
 alias server := run-server
 alias desktop := run-desktop
 alias package := package-desktop

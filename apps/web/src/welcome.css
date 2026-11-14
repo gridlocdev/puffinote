@@ -129,6 +129,10 @@ body {
   visibility: hidden;
 }
 
+.pw-row-into {
+  margin-right: 6px;
+}
+
 .pw-row:hover .pw-row-forget,
 .pw-row-forget:focus-visible {
   visibility: visible;
@@ -146,7 +150,7 @@ body {
   flex-basis: 100%;
 }
 
-.pw-welcome button:not(.pw-row-main):not(.pn-icon-button) {
+.pw-welcome button:where(:not(.pw-row-main):not(.pn-icon-button)) {
   display: inline-flex;
   align-items: center;
   gap: 6px;
