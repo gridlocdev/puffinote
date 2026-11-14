@@ -47,6 +47,11 @@ export interface MarkdownEditorProps {
   readonly resolveImage?: (url: string) => string;
   /** Open a link the user ⌘-clicked. Only http, https and mailto links reach it. */
   readonly openLink?: (url: string) => void;
+  /**
+   * Follow any other link the user ⌘-clicked: a relative link (`other.md`) or a wiki link, whose href is
+   * `[[target]]` (PRD §10.3). Without it, those links do nothing.
+   */
+  readonly onFollowLink?: (href: string) => void;
   readonly autoFocus?: boolean;
   readonly placeholder?: string;
   /** Where to scroll on mount (a tab coming back). */
@@ -1035,6 +1040,7 @@ export function MarkdownEditor(props: MarkdownEditorProps) {
     if (link && (isMac ? e.metaKey : e.ctrlKey)) {
       const url = link.getAttribute('data-href') ?? '';
       if (isOpenableLink(url)) (props.openLink ?? defaultOpen)(url);
+      else props.onFollowLink?.(url);
       return;
     }
 

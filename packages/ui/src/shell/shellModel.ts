@@ -1,14 +1,24 @@
 import { computed, signal } from '@preact/signals';
 import { CommandCatalog, type Command, type CommandSpec } from '../commands/command.ts';
 import { formatShortcut, isMac, parseShortcut } from '../commands/shortcut.ts';
+import { outlineOf } from '@puffinote/markdown';
 import { removeRangeEdit } from '../editor/commands.ts';
 import { markdownCommandSpecs } from '../editor/editorCommands.ts';
 import type { EditorMenuPoint, PictureAt } from '../editor/MarkdownEditor.tsx';
 import type { EditorState } from '../editor/editorState.ts';
 import { findAll, matchAt, matchFrom, replaceAllEdit, type TextRange } from '../editor/find.ts';
 import { sidebarPanels, type Notebook, type SidebarPanel, type Tab } from '../notebook/notebook.ts';
-import { allFolders, fileKind, findNode, hasFolders, noteFileName, type TreeNode } from '../notebook/tree.ts';
+import { headingFor, parseLinkHref, resolveNoteLink } from '../notebook/noteLinks.ts';
 import type { TrashItem } from '../notebook/trash.ts';
+import {
+  allFiles,
+  allFolders,
+  fileKind,
+  findNode,
+  hasFolders,
+  noteFileName,
+  type TreeNode,
+} from '../notebook/tree.ts';
 import {
   baseName,
   invalidNameReason,
@@ -771,6 +781,41 @@ export class ShellModel {
     if (!nb) return;
     const tab = await nb.openFile(path);
     if (tab?.state) this.focusEditor();
+  }
+
+  /**
+   * Follow a ⌘-clicked link in the note at `from` (PRD §10.3): a relative link or a wiki link opens that note in
+   * a tab, at the heading its `#fragment` names; a link to a missing note says so and creates nothing.
+   */
+  async followLink(from: string, href: string): Promise<void> {
+    const nb = this.notebook.peek();
+    const link = parseLinkHref(href);
+    if (!nb || !link || link.kind === 'external') return;
+    if (link.kind === 'heading') {
+      this.revealHeading(link.fragment);
+      return;
+    }
+    const files = allFiles(nb.tree.peek()).map((n) => n.path);
+    const target = resolveNoteLink(from, link, files);
+    if (target.kind === 'missing') {
+      nb.notify('info', `There’s no “${target.name}” in this notebook.`);
+      return;
+    }
+    if (target.kind === 'ambiguous') {
+      nb.notify('info', `More than one file is called “${target.name}”.`);
+      return;
+    }
+    await this.openFile(target.path);
+    if (link.fragment && this.activeTab.peek()?.path.peek() === target.path)
+      this.revealHeading(link.fragment);
+  }
+
+  /** Put the caret on the heading `fragment` names in the note in front, if it has one. */
+  private revealHeading(fragment: string): void {
+    const state = this.activeState.peek();
+    if (!state) return;
+    const h = headingFor(outlineOf(state.document, state.model), fragment);
+    if (h) state.reveal(h.offset);
   }
 
   /** Close `tab`, asking about unsaved edits. Resolves false when the user cancelled. */

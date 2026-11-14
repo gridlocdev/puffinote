@@ -67,6 +67,7 @@ export function Document(props: { readonly model: ShellModel; readonly nb: Noteb
           sortTasks={nb.settings.value.sortCheckedTasks}
           onContextMenu={(at) => model.openEditorMenu(at)}
           onOpenPicture={(picture) => model.openPreview(picture)}
+          onFollowLink={(href) => void model.followLink(path, href)}
           findMatches={model.findMatches.value ?? undefined}
           onPictures={async (files) =>
             nb.addPictures(

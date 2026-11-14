@@ -248,7 +248,12 @@ A custom editing surface, not a `contenteditable`. Lines render as DOM. A hidden
 
 - **Status bar:** the latest notice (an error, "Saved"), Ln/Col, the word count (counted again once typing pauses for a third of a second, so a long note doesn't recount on every keystroke), the zoom when it isn't 100% (a click resets it), and the view switcher.
 - **Zoom.** Zoom In (⌘=), Zoom Out (⌘-) and Actual Size scale the note's text and spacing from 50% to 300% in 10% steps. The zoom is remembered per browser or desktop app, not per notebook.
-- **Links.** Hovering shows the destination. ⌘-click (Ctrl-click elsewhere) opens it. A plain click puts the caret in the link, so it stays editable. Only `http`, `https` and `mailto` links open. Other schemes, including `file:`, `javascript:` and `data:`, are never handed to the OS.
+- **Links.** Hovering shows the destination (`[[name]]` for a wiki link). ⌘-click (Ctrl-click elsewhere) opens it. A plain click puts the caret in the link, so it stays editable. Of links with a scheme, only `http`, `https` and `mailto` open, in the browser or the OS. Other schemes, including `file:`, `javascript:` and `data:`, are never handed to the OS, and neither is a `//host` link.
+- **Links between notes.** ⌘-click on a relative link (`[x](other.md)`, `[x](sub/other%20note.md)`, `<sub/other note.md>`) or a wiki link (`[[name]]`, `[[name|label]]`, `[[folder/name]]`) opens that file in a tab, as opening it from the tree does (a note or picture in a tab; another file in its default app; the library layout swaps the note in front).
+  - A relative link is URL-decoded and resolved against the note's folder; a leading `/` means the notebook's top level. Where no file has that exact path, a file whose path differs only in case or Unicode form is taken.
+  - A wiki link is tried as a path from the note's folder, then from the top level, with `.md` added unless it names an extension; exactly first, then ignoring case. Failing that, it takes the one file anywhere in the notebook whose name (or, for `[[folder/name]]`, whose trailing folders and name) matches, ignoring case, with or without `.md`.
+  - A `#fragment` (`other.md#next-steps`, `[[name#Next steps]]`) puts the caret on the heading it names in the opened note: the heading whose text matches, ignoring case, as written or as a GitHub-style anchor. A heading nobody matches is ignored. `#heading` alone, or `[[#heading]]`, goes to the heading in the same note.
+  - A link to a file that isn't there says "There's no “name” in this notebook." in the status bar, and one that matches more than one file says "More than one file is called “name”." Nothing is created.
 - **No spell check.** The editor draws each line itself and the text under it isn't editable text, so the browser's checker has nothing to underline.
 
 ### 10.4 The heading type scale
@@ -353,7 +358,7 @@ An edit re-tokenizes from the first changed line and stops once the block state 
 | Hard break       | trailing `\` or two spaces  | Line break                        |
 | Escape           | `\*`, `\_`, …               | The literal character             |
 | Front matter     | leading `---` … `---`       | A dimmed block                    |
-| Wiki link, embed | `[[target]]`, `![[target]]` | Tokenized; drawn as styled text   |
+| Wiki link, embed | `[[target]]`, `![[target]]` | Styled; ⌘-click opens (§10.3)     |
 
 An ATX heading's optional closing sequence (`# Done #`: blanks, then a run of `#` at the end of the line) is heading markup too: the editor hides it with the opening `#` and the export leaves it out. A setext heading carries a zero-length heading marker that holds its level, so consumers read the level from the line's first token whichever spelling made it. A lone `---` with no paragraph above it is a rule. A list item or task after a blockquote prefix (`> - [x] done`, `> 1. one`) is a list item inside the quote: it gets its bullet, number or checkbox in the editor, and the export renders it as a list inside the `<blockquote>`.
 
@@ -379,7 +384,7 @@ One character between the brackets, three states:
 
 ### 11.5 Links
 
-See §10.3 for how links behave in the editor. A relative link is resolved against the note's folder for pictures. A relative link is never opened from a ⌘-click.
+See §10.3 for how links behave in the editor. A relative link is resolved against the note's folder, for pictures and for ⌘-click, which opens the notebook file it names (§10.3). It is never handed to the OS as a URL.
 
 ### 11.6 Out of scope
 

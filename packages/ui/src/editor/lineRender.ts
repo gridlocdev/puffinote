@@ -392,6 +392,12 @@ function linkTextSpans(tokens: readonly Token[], lineStart: number, lineText: st
       spans.push({ start: uStart, end: uStart + u.length, url });
       continue;
     }
+    if (u.type === 'wikiLink') {
+      // A wiki link's href is `[[target]]`, so the shell can tell it from a path (PRD §10.3).
+      const target = u.meta ?? lineText.slice(uStart, uStart + u.length);
+      spans.push({ start: uStart, end: uStart + u.length, url: `[[${target}]]` });
+      continue;
+    }
     if (u.type !== 'linkUrl') continue;
     const url = u.meta ?? lineText.slice(uStart, uStart + u.length);
     let openStart = Number.MAX_SAFE_INTEGER;
