@@ -42,6 +42,12 @@ export interface StoreCapabilities {
   readonly reveal: boolean;
   /** "Open in default app"; without it, a file nobody here can open downloads instead. */
   readonly openExternal: boolean;
+  /**
+   * Whether file names that differ only in case name the same file (macOS and Windows disks). Absent when the
+   * store can't tell; Puffinote then compares picture names without case, so it never calls a picture unused
+   * because a link spells it differently.
+   */
+  readonly ignoresCase?: boolean;
 }
 
 export interface NotebookStore {

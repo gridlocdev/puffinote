@@ -37,6 +37,7 @@ import {
   joinPath,
   mimeOf,
   parentOf,
+  pathKey,
   rebase,
   resolveRelative,
   uniqueName,
@@ -646,8 +647,9 @@ export class Notebook {
       });
       this.flashSaved(tab);
       if (before.includes('](')) {
-        const now = imageTargets(text, path);
-        const dropped = [...imageTargets(before, path)].filter((p) => !now.has(p));
+        const key = (p: string) => pathKey(p, this.ignoresCase);
+        const now = new Set([...imageTargets(text, path)].map(key));
+        const dropped = [...imageTargets(before, path)].filter((p) => !now.has(key(p)));
         if (dropped.length > 0) void this.offerUnused(dropped);
       }
       return true;
@@ -1125,19 +1127,24 @@ export class Notebook {
     return text;
   }
 
+  /** Whether picture names compare without case: when the store says so, or can't tell. */
+  private get ignoresCase(): boolean {
+    return this.store.capabilities.ignoresCase !== false;
+  }
+
   /**
    * Every picture some note links to, by notebook path. Throws when a note can't be read, so a picture it
    * shows is never called unused.
    */
   private async linkedPictures(): Promise<PictureUsage> {
-    const out = new PictureUsage();
+    const out = new PictureUsage(this.ignoresCase);
     for (const path of await this.allNotes()) out.add(await this.readNote(path), path);
     return out;
   }
 
   /** Whether `text`, the note at `notePath`, shows the picture at `picture` in any of the ways that count. */
   showsPicture(text: string, notePath: string, picture: string): boolean {
-    const usage = new PictureUsage();
+    const usage = new PictureUsage(this.ignoresCase);
     usage.add(text, notePath);
     return usage.has(picture);
   }

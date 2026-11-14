@@ -16,7 +16,7 @@ import { baseName, isWithin, parentOf, rebase } from './paths.ts';
 export class MemoryStore implements NotebookStore {
   readonly kind = 'memory' as const;
   readonly name: string;
-  readonly capabilities = { watch: true, reveal: false, openExternal: false };
+  readonly capabilities = { watch: true, reveal: false, openExternal: false, ignoresCase: false };
   private readonly files = new Map<
     string,
     { bytes: Uint8Array; version: number; modified: number; created: number }

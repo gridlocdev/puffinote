@@ -227,3 +227,25 @@ describe('pictures shown by wiki embeds and <img>', () => {
     expect(nb.notice.value?.action).toBeUndefined();
   });
 });
+
+describe('picture names compared as the disk compares them', () => {
+  it('matches a link to a picture whatever its Unicode form', async () => {
+    const { nb } = await open({ 'one.md': '![](café.png)', 'café.png': '' });
+    expect(await nb.unusedPictures()).toEqual([]);
+  });
+
+  it('ignores case where the store says names do', async () => {
+    class Folded extends MemoryStore {
+      override readonly capabilities = { ...new MemoryStore().capabilities, ignoresCase: true };
+    }
+    const store = new Folded('N', { 'one.md': '![](Photo.PNG)', 'photo.png': '' });
+    const nb = await Notebook.open(store, { prefs: memoryPrefs({ autoSave: false }) });
+    expect(await nb.unusedPictures()).toEqual([]);
+    expect(await nb.notesShowing('photo.png', '')).toEqual(['one.md']);
+  });
+
+  it('keeps case apart where the store says names don’t ignore it', async () => {
+    const { nb } = await open({ 'one.md': '![](Photo.png)', 'photo.png': '' });
+    expect(await nb.unusedPictures()).toEqual(['photo.png']);
+  });
+});

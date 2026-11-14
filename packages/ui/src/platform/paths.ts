@@ -49,6 +49,15 @@ export function invalidNameReason(name: string): string | null {
   return null;
 }
 
+/**
+ * The key two spellings of one path share: Unicode NFC (macOS hands out decomposed names, links are usually
+ * composed), lower-cased when names ignore case.
+ */
+export function pathKey(path: string, ignoreCase: boolean): string {
+  const nfc = path.normalize('NFC');
+  return ignoreCase ? nfc.toLowerCase() : nfc;
+}
+
 /** Resolve a link or image reference written in the note at `from` to a notebook path, or null if outside. */
 export function resolveRelative(from: string, ref: string): string | null {
   const clean = decodeURIComponentSafe(ref.split(/[?#]/)[0] ?? '');

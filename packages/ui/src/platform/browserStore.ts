@@ -4,6 +4,7 @@ import {
   type Entry,
   type FileData,
   type NotebookStore,
+  type StoreCapabilities,
   type WriteOptions,
 } from './notebookStore.ts';
 import { baseName, parentOf } from './paths.ts';
@@ -66,7 +67,8 @@ export async function ensurePermission(handle: FileSystemHandle, ask: boolean): 
 export class BrowserStore implements NotebookStore {
   readonly kind = 'browser' as const;
   readonly name: string;
-  readonly capabilities = { watch: false, reveal: false, openExternal: false };
+  /** A picked folder's disk may or may not ignore case, so `ignoresCase` is left unknown for it. */
+  readonly capabilities: StoreCapabilities;
   readonly root: FileSystemDirectoryHandle;
   /** The private folder, which has no name the user chose. */
   readonly isPrivate: boolean;
@@ -75,6 +77,12 @@ export class BrowserStore implements NotebookStore {
     this.root = root;
     this.isPrivate = isPrivate;
     this.name = isPrivate ? 'Browser notebook' : root.name;
+    this.capabilities = {
+      watch: false,
+      reveal: false,
+      openExternal: false,
+      ...(isPrivate ? { ignoresCase: false } : {}),
+    };
   }
 
   async list(dir: string): Promise<Entry[]> {

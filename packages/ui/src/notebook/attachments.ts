@@ -6,6 +6,7 @@ import {
   isImagePath,
   joinPath,
   parentOf,
+  pathKey,
   resolveRelative,
   stemOf,
 } from '../platform/paths.ts';
@@ -86,25 +87,32 @@ export function htmlImageSources(text: string): string[] {
 export class PictureUsage {
   private readonly paths = new Set<string>();
   private readonly embeds = new Set<string>();
+  /** Paths are compared by `pathKey`: NFC, and without case when `ignoreCase`. */
+  private readonly key: (path: string) => string;
+
+  constructor(ignoreCase = false) {
+    this.key = (p) => pathKey(p, ignoreCase);
+  }
 
   /** Count what the note at `notePath`, whose text is `text`, shows. */
   add(text: string, notePath: string): void {
-    if (text.includes('](')) for (const p of imageTargets(text, notePath)) this.paths.add(p);
+    if (text.includes('](')) for (const p of imageTargets(text, notePath)) this.paths.add(this.key(p));
     for (const src of htmlImageSources(text)) {
       const p = resolveRelative(notePath, src);
-      if (p !== null && isImagePath(p)) this.paths.add(p);
+      if (p !== null && isImagePath(p)) this.paths.add(this.key(p));
     }
     for (const target of embedTargets(text)) {
       if (!isImagePath(target)) continue;
       const here = resolveRelative(notePath, target);
-      if (here !== null) this.paths.add(here);
+      if (here !== null) this.paths.add(this.key(here));
       const bare = resolveRelative('', target);
-      if (bare !== null) this.embeds.add(bare);
+      if (bare !== null) this.embeds.add(this.key(bare));
     }
   }
 
   /** Whether some note shows the picture at `path`. */
-  has(path: string): boolean {
+  has(picture: string): boolean {
+    const path = this.key(picture);
     if (this.paths.has(path) || this.embeds.has(path)) return true;
     for (let i = path.indexOf('/'); i >= 0; i = path.indexOf('/', i + 1)) {
       if (this.embeds.has(path.slice(i + 1))) return true;

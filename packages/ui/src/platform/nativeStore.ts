@@ -4,6 +4,7 @@ import {
   type Entry,
   type FileData,
   type NotebookStore,
+  type StoreCapabilities,
   type WriteOptions,
 } from './notebookStore.ts';
 import { baseName } from './paths.ts';
@@ -81,13 +82,16 @@ export function nativeBridge(): PuffinoteNative | null {
 export class NativeStore implements NotebookStore {
   readonly kind = 'native' as const;
   readonly name: string;
-  readonly capabilities = { watch: true, reveal: true, openExternal: true };
+  readonly capabilities: StoreCapabilities;
   readonly bridge: PuffinoteNative;
   /** The notebook folder's absolute path, with `/` separators. */
   readonly root: string;
 
   constructor(bridge: PuffinoteNative, root: string) {
     this.bridge = bridge;
+    // macOS and Windows disks ignore case by default; Linux ones don't.
+    const folds = bridge.platform === 'darwin' || bridge.platform === 'win32';
+    this.capabilities = { watch: true, reveal: true, openExternal: true, ignoresCase: folds };
     this.root = root.replace(/[\\/]+$/, '');
     this.name = baseName(this.root.replace(/\\/g, '/'));
   }
