@@ -1,4 +1,5 @@
 import type { TextDocument } from '@puffinote/text';
+import { listBase } from '../markdown/blockState.ts';
 import { isAsciiDigit } from '../markdown/chars.ts';
 import { MarkdownModel } from '../markdown/markdownModel.ts';
 import { taskLabel, taskStateFromMark, type TaskState } from '../markdown/taskState.ts';
@@ -77,6 +78,20 @@ function stripCr(s: string): string {
   return s.replace(/\r+$/, '');
 }
 
+/** `s` without up to `columns` columns of leading blanks; a tab that crosses the limit leaves its rest as spaces. */
+function stripColumns(s: string, columns: number): string {
+  let col = 0;
+  let k = 0;
+  while (k < s.length && col < columns) {
+    const c = s.charAt(k);
+    if (c === ' ') col++;
+    else if (c === '\t') col += 4 - (col % 4);
+    else break;
+    k++;
+  }
+  return ' '.repeat(Math.max(0, col - columns)) + s.slice(k);
+}
+
 class Renderer {
   out = '';
   private readonly doc: TextDocument;
@@ -100,6 +115,9 @@ class Renderer {
         return this.frontMatter(line);
       case 'codeFence':
         return this.codeBlock(line);
+      case 'codeText':
+        // Outside a fence, a code line is indented code (the fence's own lines are taken by codeBlock).
+        return this.indentedCode(line);
       case 'headingMarker': {
         const level = Number.parseInt(first.meta ?? '', 10) || 1;
         this.out += `<h${level}>`;
@@ -151,6 +169,31 @@ class Renderer {
     if (i < n && this.first(i)?.type === 'codeFence') i++;
     const cls = lang ? ` class="language-${escapeAttr(lang)}"` : '';
     this.out += `<pre><code${cls}>${code}</code></pre>\n`;
+    return i;
+  }
+
+  /**
+   * An indented code block: its code lines and the blank lines between them, each without the four columns
+   * of indent (counted past the list item it sits in) that made it code.
+   */
+  private indentedCode(line: number): number {
+    const n = this.doc.lineCount;
+    let code = '';
+    let blanks = '';
+    let i = line;
+    while (i < n) {
+      if (this.first(i)?.type === 'codeText') {
+        const strip = listBase(this.model.enteringState(i)) + 4;
+        code += blanks + escapeHtml(stripColumns(stripCr(this.doc.getLineText(i)), strip)) + '\n';
+        blanks = '';
+      } else if (this.isBlank(i) && this.model.enteringState(i).kind === 'indentedCode') {
+        blanks += '\n'; // kept only when another code line follows
+      } else {
+        break;
+      }
+      i++;
+    }
+    this.out += `<pre><code>${code}</code></pre>\n`;
     return i;
   }
 
@@ -475,6 +518,7 @@ class Renderer {
       case 'frontMatterFence':
       case 'tableDelimiter':
       case 'setextUnderline':
+      case 'codeText':
         return false;
       default:
         return !this.isTableStart(line);

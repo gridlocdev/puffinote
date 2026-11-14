@@ -165,6 +165,14 @@ describe('HTML renderer', () => {
     expect(html).toContain('<p>deep</p>');
   });
 
+  it('renders indented code as a code block, without its four columns of indent', () => {
+    expect(body('para\n\n    if (a < b)\n        x();\n\n    done\n\nafter')).toBe(
+      '<p>para</p>\n<pre><code>if (a &lt; b)\n    x();\n\ndone\n</code></pre>\n<p>after</p>\n',
+    );
+    expect(body('\tcode')).toBe('<pre><code>code\n</code></pre>\n');
+    expect(body('- a\n\n      code')).toContain('<pre><code>code\n</code></pre>');
+  });
+
   it('finishes on whitespace-only lines inside and after indented code', () => {
     expect(body('    code\n    \n    more')).toContain('more');
     expect(body('para\n   \nnext')).toBe('<p>para</p>\n<p>next</p>\n');
