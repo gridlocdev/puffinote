@@ -1,5 +1,6 @@
 import {
   formatShortcut,
+  isComposingKey,
   isMac,
   matchRank,
   parseShortcut,
@@ -94,6 +95,7 @@ export class CommandCatalog {
    * the whole catalog (an exact one before one by the physical key; see `matchRank`), then catalog order.
    */
   forEvent(e: ShortcutEvent, inText: boolean, mac = isMac): Command | undefined {
+    if (isComposingKey(e)) return undefined;
     let best: Command | undefined;
     let bestRank = Infinity;
     for (const c of this.all) {

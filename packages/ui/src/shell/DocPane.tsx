@@ -1,4 +1,5 @@
 import { useMemo } from 'preact/hooks';
+import { isComposingKey } from '../commands/shortcut.ts';
 import { MAX_MATCHES } from '../editor/find.ts';
 import { MarkdownEditor } from '../editor/MarkdownEditor.tsx';
 import { settleMs, useSettled } from '../editor/settled.ts';
@@ -99,6 +100,8 @@ function FindBar({ model }: { readonly model: ShellModel }) {
         autocomplete="off"
         onInput={(e) => model.setFindQuery((e.target as HTMLInputElement).value)}
         onKeyDown={(e) => {
+          // Enter or Escape that commits or cancels an IME composition stays with it.
+          if (isComposingKey(e)) return;
           if (e.key === 'Enter') model.findStep(e.shiftKey ? -1 : 1);
           else if (e.key === 'Escape') model.closeFind();
           else return;

@@ -2,6 +2,7 @@ import { PicturePreview } from './PicturePreview.tsx';
 import { useSignalEffect } from '@preact/signals';
 import type { ComponentChildren } from 'preact';
 import { useEffect } from 'preact/hooks';
+import { isComposingKey } from '../commands/shortcut.ts';
 import { allFiles } from '../notebook/tree.ts';
 import type { PrefsStorage } from '../notebook/settings.ts';
 import { ContextMenu } from './ContextMenu.tsx';
@@ -35,7 +36,8 @@ export function Shell(props: {
   // Shell keys: the reserved set wins over everything but an open overlay (PRD §8.2).
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.defaultPrevented || model.overlay.peek()) return;
+      // A key that belongs to an IME composition is the composition's (PRD §8.2).
+      if (e.defaultPrevented || model.overlay.peek() || isComposingKey(e)) return;
       const t = e.target as HTMLElement | null;
       const inText = !!t && (t.matches('input, textarea, select') || t.isContentEditable);
       const command = model.shellCatalog.forEvent(e, inText);

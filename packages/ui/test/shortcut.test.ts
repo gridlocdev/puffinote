@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { CommandCatalog, type CommandSpec } from '../src/commands/command.ts';
-import { matches, parseShortcut, type ShortcutEvent } from '../src/commands/shortcut.ts';
+import { isComposingKey, matches, parseShortcut, type ShortcutEvent } from '../src/commands/shortcut.ts';
 
 type Ev = Partial<ShortcutEvent> & { altGraph?: boolean };
 
@@ -90,5 +90,21 @@ describe('shortcuts on other keyboard layouts', () => {
     expect(
       matches(parseShortcut('mod+shift+z'), ev('z', 'KeyZ', { metaKey: true, shiftKey: true }), true),
     ).toBe(true);
+  });
+});
+
+describe('keys during IME composition', () => {
+  it('runs no shortcut for a key that belongs to a composition', () => {
+    const z = ev('z', 'KeyZ', { metaKey: true });
+    expect(mac(z)).toBe('undo');
+    expect(mac({ ...z, isComposing: true })).toBeUndefined();
+    expect(mac({ ...z, keyCode: 229 })).toBeUndefined();
+  });
+
+  it('tells a composing key from an ordinary one', () => {
+    expect(isComposingKey({ isComposing: true, keyCode: 13 })).toBe(true);
+    expect(isComposingKey({ isComposing: false, keyCode: 229 })).toBe(true);
+    expect(isComposingKey({ isComposing: false, keyCode: 13 })).toBe(false);
+    expect(isComposingKey({})).toBe(false);
   });
 });

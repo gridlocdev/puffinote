@@ -73,7 +73,20 @@ const NAMES: Record<string, string> = {
 export type ShortcutEvent = Pick<
   KeyboardEvent,
   'key' | 'code' | 'metaKey' | 'ctrlKey' | 'altKey' | 'shiftKey'
-> & { getModifierState?: (key: string) => boolean };
+> & {
+  getModifierState?: (key: string) => boolean;
+  readonly isComposing?: boolean;
+  readonly keyCode?: number;
+};
+
+/**
+ * True for a key that belongs to an IME composition: Enter that commits a Japanese conversion, an arrow
+ * that picks a candidate. Safari reports some of them only as keyCode 229. They run no shortcut and no
+ * key handler, so the composition keeps them.
+ */
+export function isComposingKey(e: { readonly isComposing?: boolean; readonly keyCode?: number }): boolean {
+  return !!e.isComposing || e.keyCode === 229;
+}
 
 /**
  * True when the event typed a character through AltGr rather than pressing a shortcut. Windows reports
