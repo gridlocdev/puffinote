@@ -362,19 +362,19 @@ Editing never rewrites untouched bytes. The document is the source of truth and 
 
 `puffinote` runs from source with Node (`just cli …` in the repo). Every command only reads, and a `-` file argument reads stdin.
 
-| Command                       | Output                                                           |
-| ----------------------------- | ---------------------------------------------------------------- |
-| `puffinote [<path>]`          | Opens the folder (or a file's folder) in the desktop app (macOS) |
-| `tree [<notebook>]`           | The file tree, folders first, dotfiles hidden                    |
-| `search <query> [<notebook>]` | `path\thits\tsnippet`, ranked by hits; `-n/--max` (default 200)  |
-| `info [<notebook>]`           | Notebook path, file, note and other counts, total bytes          |
-| `html <file>`                 | A self-contained HTML document; `--fragment`, `-o/--output`      |
-| `cat <file>`                  | The text, decoded the way the editor reads it                    |
-| `tokens <file>`               | The token stream (for debugging the tokenizer)                   |
-| `stats <file>`                | Words, characters, lines, reading minutes                        |
-| `outline <file>`              | The headings, indented by level                                  |
+| Command                       | Output                                                                 |
+| ----------------------------- | ---------------------------------------------------------------------- |
+| `puffinote [<path>]`          | Opens the folder (or a file's folder) in the desktop app (macOS)       |
+| `tree [<notebook>]`           | The file tree, folders first, dotfiles hidden                          |
+| `search <query> [<notebook>]` | `path\thits\tsnippet`, ranked by hits; `-n/--max` (default 200)        |
+| `info [<notebook>]`           | Notebook path, file, note and other counts, total bytes                |
+| `html <file>`                 | A self-contained HTML document; `--fragment`, `-o/--output`, `--force` |
+| `cat <file>`                  | The text, decoded the way the editor reads it                          |
+| `tokens <file>`               | The token stream (for debugging the tokenizer)                         |
+| `stats <file>`                | Words, characters, lines, reading minutes                              |
+| `outline <file>`              | The headings, indented by level                                        |
 
-A notebook argument defaults to the current folder. Errors print `puffinote: <message>` on stderr and exit 1. A usage error prints the message and then the command's help.
+`html -o` writes only a name ending in `.html` or `.htm` unless `--force` is given, and never the note it renders (the same file under any path, symlink or hard link, `--force` or not); either refusal is an error. A notebook argument defaults to the current folder. Errors print `puffinote: <message>` on stderr and exit 1. A usage error prints the message and then the command's help.
 
 ## 13. Non-functional requirements
 

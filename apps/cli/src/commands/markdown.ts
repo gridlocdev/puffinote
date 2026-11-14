@@ -1,6 +1,6 @@
 import { MarkdownModel, outlineOf, renderHtmlBody, renderHtmlDocument, tokenEnd } from '@puffinote/markdown';
 import { computeStats } from '@puffinote/text';
-import { loadDocument, saveText, titleFor } from '../infra/files.ts';
+import { checkHtmlOutput, loadDocument, saveText, titleFor } from '../infra/files.ts';
 import type { ArgumentSpec, CommandSpec } from '../spec.ts';
 
 /**
@@ -21,12 +21,19 @@ export const html: CommandSpec = {
       kind: 'flag',
       description: 'Only the <body> markup, without the document around it',
     },
+    {
+      name: '--force',
+      kind: 'flag',
+      description: 'Write the output even if its name does not end in .html or .htm',
+    },
   ],
   run(p, con) {
     const file = p.arg('file');
+    const output = p.str('--output') ?? '-';
+    checkHtmlOutput(file, output, p.flag('--force'));
     const doc = loadDocument(con, file);
     const out = p.flag('--fragment') ? renderHtmlBody(doc) : renderHtmlDocument(doc, titleFor(file));
-    saveText(con, out, p.str('--output') ?? '-');
+    saveText(con, out, output);
     return 0;
   },
 };

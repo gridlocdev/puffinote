@@ -217,6 +217,34 @@ describe('markdown commands', () => {
     rmSync(target);
   });
 
+  it('html -o never writes over the note it renders', () => {
+    const note = at('Sub', 'self.md');
+    writeFileSync(note, '# Self\n');
+    symlinkSync('self.md', at('Sub', 'self-link.md'));
+    for (const out of [note, at('Sub', 'self-link.md'), at('Sub', '..', 'Sub', 'self.md')]) {
+      const r = run(['html', note, '-o', out, '--force']);
+      expect(r.exit).toBe(1);
+      expect(r.err).toMatch(/^puffinote: .*same file/);
+    }
+    expect(readFileSync(note, 'utf8')).toBe('# Self\n');
+    rmSync(at('Sub', 'self-link.md'));
+    rmSync(note);
+  });
+
+  it('html -o writes only .html or .htm unless --force', () => {
+    const other = at('Sub', 'other.md');
+    writeFileSync(other, 'keep');
+    const r = run(['html', at('Welcome.md'), '-o', other]);
+    expect(r.exit).toBe(1);
+    expect(r.err).toMatch(/^puffinote: .*\.html.*--force/);
+    expect(readFileSync(other, 'utf8')).toBe('keep');
+    expect(run(['html', at('Welcome.md'), '-o', other, '--force']).exit).toBe(0);
+    expect(readFileSync(other, 'utf8')).toContain('<h2>Puffins</h2>');
+    expect(run(['html', at('Welcome.md'), '-o', at('Sub', 'page.HTM')]).exit).toBe(0);
+    rmSync(other);
+    rmSync(at('Sub', 'page.HTM'));
+  });
+
   it('reports a missing file', () => {
     const r = run(['stats', at('nope.md')]);
     expect(r.exit).toBe(1);

@@ -30,6 +30,27 @@ export function titleFor(file: string): string {
   return file === '-' ? 'stdin' : path.parse(file).name;
 }
 
+/** Do two paths name one file? Compared by device and inode, so symlinks, hard links and case don't hide it. */
+export function sameFile(a: string, b: string): boolean {
+  if (a === '-' || b === '-' || !existsSync(a) || !existsSync(b)) return false;
+  const x = statSync(a);
+  const y = statSync(b);
+  return x.dev === y.dev && x.ino === y.ino;
+}
+
+/**
+ * Refuse an `html -o` that would destroy a note: writing over the input itself (never, even with
+ * `--force`), or writing to a name that isn't `.html`/`.htm` (only with `--force`).
+ */
+export function checkHtmlOutput(input: string, output: string, force: boolean): void {
+  if (output === '-') return;
+  if (sameFile(input, output))
+    throw new CliError(`${output} is the same file as the note; choose another output.`);
+  const ext = path.extname(output).toLowerCase();
+  if (!force && ext !== '.html' && ext !== '.htm')
+    throw new CliError(`${output} doesn't end in .html or .htm; pass --force to write it anyway.`);
+}
+
 /**
  * Write `text` to `output`, or to stdout when it is `-`. A file is replaced in one step (a temp file
  * renamed over it, the same `.name.<hex>.tmp` shape the desktop app's watcher ignores), so a reader
