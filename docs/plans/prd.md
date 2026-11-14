@@ -331,7 +331,7 @@ An edit re-tokenizes from the first changed line and stops once the block state 
 | Front matter     | leading `---` … `---`       | A dimmed block                    |
 | Wiki link, embed | `[[target]]`, `![[target]]` | Tokenized; drawn as styled text   |
 
-An ATX heading's optional closing sequence (`# Done #`: blanks, then a run of `#` at the end of the line) is heading markup too: the editor hides it with the opening `#` and the export leaves it out. A setext heading carries a zero-length heading marker that holds its level, so consumers read the level from the line's first token whichever spelling made it. A lone `---` with no paragraph above it is a rule.
+An ATX heading's optional closing sequence (`# Done #`: blanks, then a run of `#` at the end of the line) is heading markup too: the editor hides it with the opening `#` and the export leaves it out. A setext heading carries a zero-length heading marker that holds its level, so consumers read the level from the line's first token whichever spelling made it. A lone `---` with no paragraph above it is a rule. A list item or task after a blockquote prefix (`> - [x] done`, `> 1. one`) is a list item inside the quote: it gets its bullet, number or checkbox in the editor, and the export renders it as a list inside the `<blockquote>`.
 
 Nothing flickers while a list item is typed under a line (§10.2). A `-` setext underline needs at least two dashes: a lone `-` under a paragraph is the start of a list item and stays text. A table needs a delimiter row with at least one `|`, cells of `-` with an optional `:` at either end, and as many cells as its header row, so a `-` typed under `name | price` doesn't make a table.
 

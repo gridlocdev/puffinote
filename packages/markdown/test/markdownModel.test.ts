@@ -35,6 +35,15 @@ describe('block constructs', () => {
     expect(textsOfType('1. a\n2. b', 'listMarker')).toEqual(['1. ', '2. ']);
   });
 
+  it('emits list and task markers after a blockquote prefix', () => {
+    const md = '> - [x] task\n> 1. one\n>> * deep';
+    expect(typesIn('> - [x] task')).toEqual(['blockquoteMarker', 'listMarker', 'taskMarker', 'text']);
+    expect(textsOfType(md, 'listMarker')).toEqual(['- ', '1. ', '* ']);
+    expect(textsOfType(md, 'taskMarker')).toEqual(['[x] ']);
+    expect(textsOfType(md, 'text')).toEqual(['task', 'one', 'deep']);
+    expect(hasType('> -not a list', 'listMarker')).toBe(false);
+  });
+
   it('emits task markers', () => {
     expect(textsOfType('- [ ] todo\n- [x] done', 'taskMarker')).toEqual(['[ ] ', '[x] ']);
   });

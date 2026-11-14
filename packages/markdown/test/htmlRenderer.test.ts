@@ -98,6 +98,14 @@ describe('HTML renderer', () => {
     expect(html.indexOf('inner')).toBeGreaterThan(inner);
   });
 
+  it('renders list and task items inside a blockquote as a list', () => {
+    const html = body('> - [x] task\n> - plain');
+    expect(html).toContain('<blockquote>\n<ul>\n<li class="task t-done">');
+    expect(html).toContain('<li>plain</li>');
+    expect(html).not.toContain('<p>- ');
+    expect(body('> 1. one\n> 2. two')).toContain('<ol>\n<li>one</li>\n<li>two</li>\n</ol>');
+  });
+
   it('escapes fenced code and keeps its language', () => {
     const html = body('```html\n<b>x</b>\n```');
     expect(html).toContain('class="language-html"');

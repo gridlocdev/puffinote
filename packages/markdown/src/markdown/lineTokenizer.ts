@@ -174,29 +174,18 @@ function normal(
         p++;
       }
       output.push(token(lineStart + indent, p - indent, 'blockquoteMarker', 'marker', String(depth)));
-      tokenizeInline(line, lineStart, p, len, output, true);
+      // A list item or task inside the quote (`> - [x] done`) gets its markers as it would outside one.
+      const quotedMarkerEnd = tryListMarker(line, p, len);
+      const contentStart =
+        quotedMarkerEnd > 0 ? listItemMarkers(line, lineStart, p, quotedMarkerEnd, len, output) : p;
+      tokenizeInline(line, lineStart, contentStart, len, output, true);
       return BlockStates.normalAfter(false, lists);
     }
   }
 
   const markerEnd = tryListMarker(line, indent, len);
   if (markerEnd > 0) {
-    output.push(token(lineStart + indent, markerEnd - indent, 'listMarker', 'marker'));
-    let contentStart = markerEnd;
-    const task = tryTaskMarker(line, contentStart, len);
-    if (task) {
-      // The marker carries the state it spells, so consumers read it off the token.
-      output.push(
-        token(
-          lineStart + contentStart,
-          task.end - contentStart,
-          'taskMarker',
-          'marker',
-          taskMark(task.state),
-        ),
-      );
-      contentStart = task.end;
-    }
+    const contentStart = listItemMarkers(line, lineStart, indent, markerEnd, len, output);
     tokenizeInline(line, lineStart, contentStart, len, output, true);
     // The item's content column (just past the marker) is where its nested lines count their indent from.
     return BlockStates.normalAfter(false, [...lists, indentCols + (markerEnd - indent)]);
@@ -206,6 +195,28 @@ function normal(
   // position, where an indented code block may open; it closes no list item.
   tokenizeInline(line, lineStart, 0, len, output, true);
   return BlockStates.normalAfter(blank, lists);
+}
+
+/**
+ * Emit a list item's marker (from `at` to `markerEnd`) and its task box, if any; returns where the item's text
+ * starts.
+ */
+function listItemMarkers(
+  line: string,
+  lineStart: number,
+  at: number,
+  markerEnd: number,
+  len: number,
+  output: Token[],
+): number {
+  output.push(token(lineStart + at, markerEnd - at, 'listMarker', 'marker'));
+  const task = tryTaskMarker(line, markerEnd, len);
+  if (!task) return markerEnd;
+  // The marker carries the state it spells, so consumers read it off the token.
+  output.push(
+    token(lineStart + markerEnd, task.end - markerEnd, 'taskMarker', 'marker', taskMark(task.state)),
+  );
+  return task.end;
 }
 
 /** `lists` without the items whose content column is right of `columns`. */

@@ -113,7 +113,7 @@ class Renderer {
       case 'blockquoteMarker':
         return this.quote(line);
       case 'listMarker':
-        return this.listLevel(line, this.listIndent(line));
+        return this.listLevel(line, this.listIndent(line), 0, 0);
     }
 
     if (this.isTableStart(line)) return this.table(line);
@@ -167,6 +167,10 @@ class Renderer {
       if (d < 1) break;
       for (; open < d; open++) this.out += '<blockquote>\n';
       for (; open > d; open--) this.out += '</blockquote>\n';
+      if (this.isListLine(i, d)) {
+        i = this.listLevel(i, this.listIndent(i), 0, d);
+        continue;
+      }
       this.out += '<p>';
       this.inline(this.model.lineTokens(i));
       this.out += '</p>\n';
@@ -185,8 +189,9 @@ class Renderer {
    * One list level: items at `levelIndent` are siblings, a deeper run nests inside the preceding item, and a
    * shallower item returns to the caller. Blank lines between items keep them in one list. A numbered list
    * `depth` levels in counts as the editor draws it: 1, 2, 3, then a, b, c, then i, ii, iii (PRD §10.2).
+   * `quote` is the blockquote depth the list sits at: only items at that depth belong to it.
    */
-  private listLevel(line: number, levelIndent: number, depth = 0): number {
+  private listLevel(line: number, levelIndent: number, depth: number, quote: number): number {
     const n = this.doc.lineCount;
     const ordered = this.isOrdered(line);
     const start = ordered ? this.startNumber(line) : 1;
@@ -195,21 +200,22 @@ class Renderer {
 
     let i = line;
     while (i < n) {
-      if (this.isBlank(i)) {
+      if (this.isBlankIn(i, quote)) {
         let j = i;
-        while (j < n && this.isBlank(j)) j++;
-        if (j < n && this.isListLine(j) && this.listIndent(j) >= levelIndent) {
+        while (j < n && this.isBlankIn(j, quote)) j++;
+        if (j < n && this.isListLine(j, quote) && this.listIndent(j) >= levelIndent) {
           i = j;
           continue;
         }
         break;
       }
-      if (!this.isListLine(i)) break;
+      if (!this.isListLine(i, quote)) break;
       const indent = this.listIndent(i);
       if (indent !== levelIndent) break; // shallower: an outer list's; deeper with no sibling: the caller's
 
       const tokens = this.model.lineTokens(i);
-      const box = tokens[1]?.type === 'taskMarker' ? tokens[1] : null;
+      const at = tokens.indexOf(this.listMarkerOf(i)!);
+      const box = tokens[at + 1]?.type === 'taskMarker' ? tokens[at + 1]! : null;
       if (box) {
         // Three states, not a bit: the export draws the same box the editor does (PRD §11.4). The text is
         // wrapped so a done item can be struck through without the rule crossing its box.
@@ -224,9 +230,9 @@ class Renderer {
       if (box) this.out += '</span>';
       i++;
 
-      if (i < n && this.isListLine(i) && this.listIndent(i) > levelIndent) {
+      if (i < n && this.isListLine(i, quote) && this.listIndent(i) > levelIndent) {
         this.out += '\n';
-        i = this.listLevel(i, this.listIndent(i), depth + 1);
+        i = this.listLevel(i, this.listIndent(i), depth + 1, quote);
       }
       this.out += '</li>\n';
     }
@@ -235,18 +241,43 @@ class Renderer {
     return i;
   }
 
-  private isListLine(line: number): boolean {
-    return this.first(line)?.type === 'listMarker';
+  /** The line's list marker: its first token, or the one right after its blockquote prefix. */
+  private listMarkerOf(line: number): Token | undefined {
+    const tokens = this.model.lineTokens(line);
+    const t = tokens[0]?.type === 'blockquoteMarker' ? tokens[1] : tokens[0];
+    return t?.type === 'listMarker' ? t : undefined;
   }
 
+  /** A list item at blockquote depth `quote`. */
+  private isListLine(line: number, quote: number): boolean {
+    return this.quoteDepth(line) === quote && this.listMarkerOf(line) !== undefined;
+  }
+
+  /** Blank at blockquote depth `quote`: whitespace only, or only the quote's own prefix (`>`). */
+  private isBlankIn(line: number, quote: number): boolean {
+    if (quote === 0) return this.isBlank(line);
+    const tokens = this.model.lineTokens(line);
+    return this.quoteDepth(line) === quote && tokens.length === 1;
+  }
+
+  /**
+   * The column of a list marker within its container: from the line start, or inside a quote from just past
+   * the last `>` and the one space after it, so `>   - b` sits two columns in under `> - a`.
+   */
   private listIndent(line: number): number {
-    const first = this.first(line);
-    return first ? first.start - this.doc.getLineStart(line) : 0;
+    const marker = this.listMarkerOf(line);
+    if (!marker) return 0;
+    const first = this.first(line)!;
+    if (first.type !== 'blockquoteMarker') return marker.start - this.doc.getLineStart(line);
+    const prefix = this.doc.getText(first.start, first.length);
+    let base = first.start + prefix.lastIndexOf('>') + 1;
+    if (base < marker.start && /[ \t]/.test(this.doc.getText(base, 1))) base++;
+    return marker.start - base;
   }
 
   private markerText(line: number): string {
-    const first = this.first(line);
-    return first ? this.doc.getText(first.start, first.length) : '';
+    const marker = this.listMarkerOf(line);
+    return marker ? this.doc.getText(marker.start, marker.length) : '';
   }
 
   private isOrdered(line: number): boolean {
