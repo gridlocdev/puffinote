@@ -176,7 +176,8 @@ export class FileApi {
    * Atomic save: write a temp file beside the target, fsync, rename over it. `ifMatch` is the etag the client
    * read (changed or gone → 412); `ifNoneMatch: '*'` refuses to overwrite (a new note). Writes to one path
    * run one at a time, so two saves from the same etag cannot both win. The replacement keeps the target's
-   * mode (and owner, where permitted); a hard-linked target is written in place so the link survives.
+   * mode (and owner, where permitted); a hard-linked target is written in place so the link survives
+   * (`overwriteInPlace`).
    */
   async write(
     rootId: string | null,
@@ -291,11 +292,9 @@ export class FileApi {
     try {
       if (target && target.nlink > 1) {
         // A rename would split the hard link; write through it instead (not atomic, but keeps the link).
-        // 'r+' then truncate: Windows refuses O_TRUNC passed as a number (EINVAL).
         const handle = await open(dest, 'r+');
         try {
-          await handle.truncate(0);
-          await handle.writeFile(bytes);
+          await overwriteInPlace(handle, bytes, (await handle.stat()).size);
           await handle.sync();
         } finally {
           await handle.close();
@@ -326,6 +325,44 @@ export class FileApi {
     }
     return { etag: etagOf(bytes) };
   }
+}
+
+/**
+ * Write `bytes` over a file in place, for a hard-linked file that a rename would split from its other names.
+ * It can't be atomic, but it never empties the file: the part past the old end is written first (and cut
+ * back off if the disk is full, leaving the old file as it was), then the old length is overwritten from
+ * offset 0, which needs no new space, and only then is a longer old tail cut off.
+ */
+export async function overwriteInPlace(
+  h: {
+    write(
+      buf: Uint8Array,
+      offset: number,
+      length: number,
+      position: number,
+    ): Promise<{ bytesWritten: number }>;
+    truncate(len: number): Promise<void>;
+  },
+  bytes: Uint8Array,
+  oldSize: number,
+): Promise<void> {
+  const writeRange = async (from: number, to: number): Promise<void> => {
+    for (let at = from; at < to;) {
+      const { bytesWritten } = await h.write(bytes, at, to - at, at);
+      if (bytesWritten <= 0) throw new Error('Short write');
+      at += bytesWritten;
+    }
+  };
+  if (bytes.length > oldSize) {
+    try {
+      await writeRange(oldSize, bytes.length);
+    } catch (e) {
+      await h.truncate(oldSize).catch(() => {});
+      throw e;
+    }
+  }
+  await writeRange(0, Math.min(oldSize, bytes.length));
+  if (bytes.length < oldSize) await h.truncate(bytes.length);
 }
 
 /**

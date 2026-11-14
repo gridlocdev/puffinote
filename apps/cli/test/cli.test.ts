@@ -1,5 +1,6 @@
 import {
   chmodSync,
+  linkSync,
   lstatSync,
   statSync,
   mkdirSync,
@@ -16,6 +17,7 @@ import path from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { runCli } from '../src/cli.ts';
 import { countOccurrences, snippet } from '../src/commands/notebook.ts';
+import { overwriteInPlaceSync } from '../src/infra/files.ts';
 
 interface Run {
   exit: number;
@@ -255,6 +257,37 @@ describe('markdown commands', () => {
     expect(readFileSync(out, 'utf8')).toBe('locked');
     chmodSync(out, 0o644);
     rmSync(out);
+  });
+
+  it('html -o writes through a hard link instead of splitting it', () => {
+    const out = at('Sub', 'hard.html');
+    writeFileSync(out, 'old');
+    linkSync(out, at('Sub', 'hard-too.html'));
+    expect(run(['html', at('Welcome.md'), '-o', out]).exit).toBe(0);
+    expect(readFileSync(at('Sub', 'hard-too.html'), 'utf8')).toContain('<h2>Puffins</h2>');
+    rmSync(out);
+    rmSync(at('Sub', 'hard-too.html'));
+  });
+
+  it('writes a hard-linked file in place without ever emptying it', () => {
+    let data = Buffer.from('old note');
+    const disk = {
+      write(buf: Uint8Array, offset: number, length: number, position: number) {
+        if (position + length > 10) throw Object.assign(new Error('ENOSPC'), { code: 'ENOSPC' });
+        const next = Buffer.alloc(Math.max(data.length, position + length));
+        data.copy(next);
+        next.set(buf.subarray(offset, offset + length), position);
+        data = next;
+        return length;
+      },
+      truncate(len: number) {
+        data = data.subarray(0, len);
+      },
+    };
+    expect(() => overwriteInPlaceSync(disk, Buffer.from('a longer note'), 8)).toThrow('ENOSPC');
+    expect(data.toString()).toBe('old note');
+    overwriteInPlaceSync(disk, Buffer.from('tiny'), 8);
+    expect(data.toString()).toBe('tiny');
   });
 
   it('reports a missing file', () => {

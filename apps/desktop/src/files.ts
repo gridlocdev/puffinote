@@ -41,7 +41,7 @@ export function folderArgs(argv: readonly string[], cwd: string): string[] {
 /**
  * Atomic save: a temp file beside the target, fsync, rename. A symlink is followed, so the link stays and its
  * target is replaced. The replacement keeps the target's mode (and owner, where permitted). A hard-linked
- * target is written in place instead, since a rename would split the link.
+ * target is written in place instead (`overwriteInPlace`), since a rename would split the link.
  */
 export async function writeAtomic(p: string, bytes: Uint8Array): Promise<void> {
   const real = await realTarget(path.resolve(p));
@@ -51,8 +51,7 @@ export async function writeAtomic(p: string, bytes: Uint8Array): Promise<void> {
   if (target && target.nlink > 1) {
     const h = await open(real, 'r+');
     try {
-      await h.truncate(0);
-      await h.writeFile(bytes);
+      await overwriteInPlace(h, bytes, (await h.stat()).size);
       await h.sync();
     } finally {
       await h.close();
@@ -79,6 +78,44 @@ export async function writeAtomic(p: string, bytes: Uint8Array): Promise<void> {
     throw e;
   }
   await syncDir(path.dirname(real));
+}
+
+/**
+ * Write `bytes` over a file in place, for a hard-linked file that a rename would split from its other names.
+ * It can't be atomic, but it never empties the file: the part past the old end is written first (and cut
+ * back off if the disk is full, leaving the old file as it was), then the old length is overwritten from
+ * offset 0, which needs no new space, and only then is a longer old tail cut off.
+ */
+export async function overwriteInPlace(
+  h: {
+    write(
+      buf: Uint8Array,
+      offset: number,
+      length: number,
+      position: number,
+    ): Promise<{ bytesWritten: number }>;
+    truncate(len: number): Promise<void>;
+  },
+  bytes: Uint8Array,
+  oldSize: number,
+): Promise<void> {
+  const writeRange = async (from: number, to: number): Promise<void> => {
+    for (let at = from; at < to;) {
+      const { bytesWritten } = await h.write(bytes, at, to - at, at);
+      if (bytesWritten <= 0) throw new Error('Short write');
+      at += bytesWritten;
+    }
+  };
+  if (bytes.length > oldSize) {
+    try {
+      await writeRange(oldSize, bytes.length);
+    } catch (e) {
+      await h.truncate(oldSize).catch(() => {});
+      throw e;
+    }
+  }
+  await writeRange(0, Math.min(oldSize, bytes.length));
+  if (bytes.length < oldSize) await h.truncate(bytes.length);
 }
 
 /** No write bit at all (root could still write it), or not writable by this process. */

@@ -20,12 +20,32 @@ import {
   folderArgs,
   isAppUrl,
   isOpenableDocument,
+  overwriteInPlace,
   readWithMtime,
   watchTree,
   withFileLock,
   withFileLocks,
   writeAtomic,
 } from '../src/files.ts';
+
+/** A file on a disk with room for `capacity` bytes: writes past it fail with ENOSPC, like a full volume. */
+function fullDisk(initial: string, capacity: number) {
+  let data = Buffer.from(initial);
+  return {
+    text: () => data.toString(),
+    async write(buf: Uint8Array, offset: number, length: number, position: number) {
+      if (position + length > capacity) throw Object.assign(new Error('ENOSPC'), { code: 'ENOSPC' });
+      const next = Buffer.alloc(Math.max(data.length, position + length));
+      data.copy(next);
+      next.set(buf.subarray(offset, offset + length), position);
+      data = next;
+      return { bytesWritten: length };
+    },
+    async truncate(len: number) {
+      data = data.subarray(0, len);
+    },
+  };
+}
 
 let dir: string;
 beforeAll(async () => {
@@ -58,6 +78,15 @@ describe('writeAtomic', () => {
     await expect(writeAtomic(p, bytes('x'))).rejects.toThrow(/read-only/);
     expect(await readFile(p, 'utf8')).toBe('locked');
     await chmod(p, 0o644);
+  });
+
+  it('writes a hard-linked file in place without ever emptying it', async () => {
+    const grow = fullDisk('old note', 10);
+    await expect(overwriteInPlace(grow, bytes('a longer note'), 8)).rejects.toThrow('ENOSPC');
+    expect(grow.text()).toBe('old note');
+    const shrink = fullDisk('a longer note', 13);
+    await overwriteInPlace(shrink, bytes('short'), 13);
+    expect(shrink.text()).toBe('short');
   });
 
   it('writes through a hard link instead of splitting it', async () => {

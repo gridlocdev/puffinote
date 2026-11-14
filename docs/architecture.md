@@ -84,7 +84,7 @@ Puffinote is one TypeScript code base with three hosts and a CLI. The browser, t
   - `PUFFINOTE_MAX_MB` caps an upload (default 64).
 - **Paths.** Every path is confined to its root, including `..`, absolute paths, NUL bytes and symlinks that point out.
 - **Writes.**
-  - Each save is atomic: a temp file beside the target, fsync, rename. The replacement keeps the file's mode and, where permitted, its owner. A read-only file (no write bit, or not writable by the server) is refused with 403 rather than renamed over.
+  - Each save is atomic: a temp file beside the target, fsync, rename. The replacement keeps the file's mode and, where permitted, its owner. A read-only file (no write bit, or not writable by the server) is refused with 403 rather than renamed over. A hard-linked file is written in place, never emptied first (PRD §4); the desktop app and the CLI do the same.
   - `If-Match` gives optimistic concurrency (412 if the file changed or is gone). `If-None-Match: *` stops a new note from overwriting a file.
   - Writes to one file are serialized under a key that is symlink-resolved and case-folded, so the check and the rename cannot interleave.
 - **Host check.** Without a token, a request whose `Host` is not an IP literal, `localhost`, or a name in `PUFFINOTE_HOSTS` gets 421. This blocks DNS rebinding.

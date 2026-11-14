@@ -15,8 +15,27 @@ import type { AddressInfo } from 'node:net';
 import os from 'node:os';
 import path from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { etagOf, FileApi, parseRoots } from '../src/fileApi.ts';
+import { etagOf, FileApi, overwriteInPlace, parseRoots } from '../src/fileApi.ts';
 import { createServer, hostAllowed, isLoopback, parseHosts, refuseWithoutToken } from '../src/server.ts';
+
+/** A file on a disk with room for `capacity` bytes: writes past it fail with ENOSPC, like a full volume. */
+function fullDisk(initial: string, capacity: number) {
+  let data = Buffer.from(initial);
+  return {
+    text: () => data.toString(),
+    async write(buf: Uint8Array, offset: number, length: number, position: number) {
+      if (position + length > capacity) throw Object.assign(new Error('ENOSPC'), { code: 'ENOSPC' });
+      const next = Buffer.alloc(Math.max(data.length, position + length));
+      data.copy(next);
+      next.set(buf.subarray(offset, offset + length), position);
+      data = next;
+      return { bytesWritten: length };
+    },
+    async truncate(len: number) {
+      data = data.subarray(0, len);
+    },
+  };
+}
 
 let dir: string;
 let outside: string;
@@ -144,6 +163,18 @@ describe('the file API', () => {
     expect(((await res.json()) as { error: string }).error).toContain('read-only');
     expect(await readFile(file, 'utf8')).toBe('locked');
     await chmod(file, 0o644);
+  });
+
+  it('writes a hard-linked file in place without ever emptying it', async () => {
+    const grow = fullDisk('old note', 10);
+    await expect(overwriteInPlace(grow, Buffer.from('a longer note'), 8)).rejects.toThrow('ENOSPC');
+    expect(grow.text()).toBe('old note');
+    const shrink = fullDisk('a longer note', 13);
+    await overwriteInPlace(shrink, Buffer.from('short'), 13);
+    expect(shrink.text()).toBe('short');
+    const fits = fullDisk('old', 100);
+    await overwriteInPlace(fits, Buffer.from('new and longer'), 3);
+    expect(fits.text()).toBe('new and longer');
   });
 
   it('keeps a hard link when saving through it', async () => {

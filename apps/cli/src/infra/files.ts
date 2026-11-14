@@ -5,6 +5,8 @@ import {
   constants as fsConstants,
   existsSync,
   fchmodSync,
+  fstatSync,
+  ftruncateSync,
   fsyncSync,
   openSync,
   readdirSync,
@@ -14,6 +16,7 @@ import {
   rmSync,
   statSync,
   writeFileSync,
+  writeSync,
 } from 'node:fs';
 import path from 'node:path';
 import { TextDocument, readText } from '@puffinote/text';
@@ -56,7 +59,7 @@ export function checkHtmlOutput(input: string, output: string, force: boolean): 
 /**
  * Write `text` to `output`, or to stdout when it is `-`. A file is replaced in one step (a temp file
  * renamed over it, the same `.name.<hex>.tmp` shape the desktop app's watcher ignores), so a reader
- * never sees half of it.
+ * never sees half of it. A hard-linked file is written in place instead (`overwriteInPlaceSync`).
  */
 export function saveText(con: Console, text: string, output: string): void {
   if (output === '-') {
@@ -68,6 +71,25 @@ export function saveText(con: Console, text: string, output: string): void {
   const existing = existsSync(target) ? statSync(target) : null;
   // A rename would replace a read-only file as long as its folder is writable: refuse instead.
   if (existing && isReadOnly(target, existing.mode)) throw new CliError(`${output} is read-only.`);
+  const bytes = Buffer.from(text);
+  if (existing && existing.nlink > 1) {
+    // A rename would split the hard link; write through it instead (not atomic, but keeps the link).
+    const fd = openSync(target, 'r+');
+    try {
+      overwriteInPlaceSync(
+        {
+          write: (b, o, l, p) => writeSync(fd, b, o, l, p),
+          truncate: (l) => ftruncateSync(fd, l),
+        },
+        bytes,
+        fstatSync(fd).size,
+      );
+      fsyncSync(fd);
+    } finally {
+      closeSync(fd);
+    }
+    return;
+  }
   const mode = existing ? existing.mode & 0o7777 : 0o644;
   const temp = path.join(
     path.dirname(target),
@@ -77,7 +99,7 @@ export function saveText(con: Console, text: string, output: string): void {
     const fd = openSync(temp, 'wx', mode);
     try {
       fchmodSync(fd, mode); // open() applies the umask; the replacement keeps the original bits
-      writeFileSync(fd, text);
+      writeFileSync(fd, bytes);
       fsyncSync(fd);
     } finally {
       closeSync(fd);
@@ -87,6 +109,43 @@ export function saveText(con: Console, text: string, output: string): void {
     rmSync(temp, { force: true });
     throw e;
   }
+}
+
+/**
+ * Write `bytes` over a file in place, for a hard-linked file that a rename would split from its other names.
+ * It can't be atomic, but it never empties the file: the part past the old end is written first (and cut
+ * back off if the disk is full, leaving the old file as it was), then the old length is overwritten from
+ * offset 0, which needs no new space, and only then is a longer old tail cut off.
+ */
+export function overwriteInPlaceSync(
+  h: {
+    write(buf: Uint8Array, offset: number, length: number, position: number): number;
+    truncate(len: number): void;
+  },
+  bytes: Uint8Array,
+  oldSize: number,
+): void {
+  const writeRange = (from: number, to: number): void => {
+    for (let at = from; at < to;) {
+      const written = h.write(bytes, at, to - at, at);
+      if (written <= 0) throw new Error('Short write');
+      at += written;
+    }
+  };
+  if (bytes.length > oldSize) {
+    try {
+      writeRange(oldSize, bytes.length);
+    } catch (e) {
+      try {
+        h.truncate(oldSize);
+      } catch {
+        // The error that matters is the write's.
+      }
+      throw e;
+    }
+  }
+  writeRange(0, Math.min(oldSize, bytes.length));
+  if (bytes.length < oldSize) h.truncate(bytes.length);
 }
 
 /** No write bit at all (root could still write it), or not writable by this process. */
