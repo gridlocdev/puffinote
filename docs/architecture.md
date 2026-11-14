@@ -113,4 +113,4 @@ Puffinote is one TypeScript code base with three hosts and a CLI. The browser, t
 - The editor's offset ↔ visual map and the incremental tokenizer have dedicated suites. The incremental tests compare against a full re-tokenization.
 - `just check` is the gate: Prettier, ESLint, `tsc -b`, Vitest, then the build.
 
-Setup, commands and workflows are in the [developer guide](Developer-Guide.md).
+Setup, commands and workflows are in the [development guide](development.md).

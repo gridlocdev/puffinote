@@ -1,6 +1,6 @@
 # Puffinote — agent guide
 
-A TypeScript notes app for folders of Markdown files. One UI runs in the browser, in the NAS server's client and in the Electron app; a CLI reads notebooks with the same engine. The spec is [docs/PRD.md](docs/PRD.md), the code layout is [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md), and the commands are in [docs/Developer-Guide.md](docs/Developer-Guide.md).
+A TypeScript notes app for folders of Markdown files. One UI runs in the browser, in the NAS server's client and in the Electron app; a CLI reads notebooks with the same engine. The spec is [docs/plans/prd.md](docs/plans/prd.md), the code layout is [docs/architecture.md](docs/architecture.md), and the commands are in [docs/development.md](docs/development.md).
 
 ## Gates
 

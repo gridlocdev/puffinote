@@ -1,6 +1,6 @@
-# Developer guide
+# Development
 
-Puffinote is TypeScript in a pnpm workspace: Preact and `@preact/signals` for the UI, Vite for the web build, Electron for the desktop app, and a dependency-free Node server and CLI that run straight from source with Node's type stripping. The rules in `AGENTS.md` at the repository root apply to everyone working on it. [ARCHITECTURE.md](ARCHITECTURE.md) explains how the code is laid out.
+Puffinote is TypeScript in a pnpm workspace: Preact and `@preact/signals` for the UI, Vite for the web build, Electron for the desktop app, and a dependency-free Node server and CLI that run straight from source with Node's type stripping. The rules in `AGENTS.md` at the repository root apply to everyone working on it, and the code layout and its layer rules are in [architecture.md](architecture.md).
 
 ## Getting set up
 
@@ -38,7 +38,33 @@ Check UI changes headlessly: run `just run-web` (or `just preview-web`) and driv
 
 ## The spec and its references
 
-The product spec is [PRD.md](PRD.md). The code cites it as `PRD §n` in comments next to the behaviour a section describes. When you change behaviour, change the spec in the same commit. If you renumber a section, find its references with `grep -rn 'PRD §' packages apps`.
+The product spec is [plans/prd.md](plans/prd.md). The code cites it as `PRD §n` in comments next to the behaviour a section describes. When you change behaviour, change the spec in the same commit. If you renumber a section, find its references with `grep -rn 'PRD §' packages apps`.
+
+Some questions the spec answers:
+
+- [Where does Puffinote keep its own files, and what happens when a note changes outside the app?](plans/prd.md#5-the-notebook)
+- [How does the live preview decide what to hide?](plans/prd.md#102-live-preview)
+- [Which settings are there, and how do notebook settings work?](plans/prd.md#9-settings)
+- [Where do pasted pictures go, and what happens when a note stops using one?](plans/prd.md#106-pasted-and-dropped-pictures)
+
+## The puffinote CLI
+
+`puffinote` reads notebooks and notes with the same engine as the app, for scripts and CI. It runs from source:
+
+```bash
+just cli --help                # every command and option
+just cli tree ~/Notes          # the notebook's file tree, folders first
+just cli search puffin ~/Notes # search every note; prints path, hit count and a snippet
+just cli info ~/Notes          # file counts and total size
+just cli html Note.md          # render a note to self-contained HTML
+just cli cat Note.md           # the Markdown source, decoded the way the editor reads it
+just cli stats Note.md         # word, character and line counts, and reading time
+just cli outline Note.md       # the note's headings as an indented outline
+just cli tokens Note.md        # the editor's token stream, for debugging the tokenizer
+just cli ~/Notes               # open the folder in the desktop app
+```
+
+`just cli` runs from the folder you are in, so relative paths work as they would with an installed `puffinote`. The commands are specified in PRD §12.
 
 ## Adding a command
 
@@ -61,7 +87,7 @@ just build-docker     # build the image (puffinote:latest)
 just run-docker       # run it against ./.nas-data on http://localhost:8790
 ```
 
-The server is configured only through environment variables, listed at the top of `apps/server/src/main.ts` and in [ARCHITECTURE.md](ARCHITECTURE.md#server-appsserver). `compose.example.yaml` is the starting point for a NAS.
+The server is configured only through environment variables, listed at the top of `apps/server/src/main.ts` and in [architecture.md](architecture.md#server-appsserver). `compose.example.yaml` is the starting point for a NAS.
 
 ## Building and packaging the desktop app
 
@@ -88,7 +114,7 @@ It needs Inkscape (`brew install --cask inkscape`) and, for the `.icns`, macOS. 
 
 ## Releasing
 
-Pushing a `vX.Y.Z` tag runs `.github/workflows/release.yml`. It packages the desktop app on macOS (Apple silicon and Intel), Windows and Linux, and publishes them on a GitHub release. The NAS image isn't published: people build it from the repository (README).
+Pushing a `vX.Y.Z` tag runs `.github/workflows/release.yml`. It packages the desktop app on macOS (Apple silicon and Intel), Windows and Linux, and publishes them on a GitHub release. The NAS image isn't published: people build it from the repository ([Getting started](getting-started.md#run-it-on-a-nas-docker)).
 
 1. Set the same version in every `package.json` (the root, `apps/*` and `packages/*`). The workflow stops if the tag doesn't match `apps/desktop/package.json`.
 2. Add a `## X.Y.Z` section to `CHANGELOG.md`. It becomes the release notes.
@@ -99,7 +125,7 @@ Pushing a `vX.Y.Z` tag runs `.github/workflows/release.yml`. It packages the des
    git push origin main vX.Y.Z
    ```
 
-- The apps aren't notarized or code-signed, so the README tells people how to open them the first time. The desktop app's update check (PRD §3.1) reads the latest release from GitHub's API, so a published release reaches existing installs within a day.
+- The apps aren't notarized or code-signed, so [Getting started](getting-started.md#download) tells people how to open them the first time. The desktop app's update check (PRD §3.1) reads the latest release from GitHub's API, so a published release reaches existing installs within a day.
 - `.github/workflows/check.yml` runs `pnpm check` on Linux, macOS and Windows for every pull request. It does not run on push: run it by hand from the repository's **Actions** tab, or with `gh workflow run check.yml`. `.github/workflows/docker.yml` builds the Docker image and checks that it starts; it also runs only by hand (`gh workflow run docker.yml`).
 
 ## Cleaning up

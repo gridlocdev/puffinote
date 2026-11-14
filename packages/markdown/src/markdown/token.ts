@@ -1,5 +1,5 @@
 /**
- * The semantic kinds the tokenizer emits (PRD §11.3; layering in ARCHITECTURE.md). The engine emits semantic tokens only — types,
+ * The semantic kinds the tokenizer emits (PRD §11.3; layering in docs/architecture.md). The engine emits semantic tokens only — types,
  * source ranges and roles — and knows nothing about styling or concealment; those are the editor's job.
  *
  * - `headingMarker` is the `#` run of an ATX heading, with the level (1–6) in `meta`. A setext heading has no
