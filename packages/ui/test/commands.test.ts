@@ -4,6 +4,10 @@ import { describe, expect, it } from 'vitest';
 import {
   applyEditTo,
   backspaceItemEdit,
+  codeBlockEdit,
+  deleteLinesEdit,
+  pictureLinesEdit,
+  ruleEdit,
   backspacePairEdit,
   deleteRangeEdit,
   duplicateLinesEdit,
@@ -417,6 +421,43 @@ describe('a CRLF note keeps CRLF', () => {
 
   it('breaks lines with CRLF on Shift+Enter', () => {
     expect(run(crlf('a\nb|c'), (d, s) => softBreakEdit(s, d))).toBe(crlf('a\nb\n|c'));
+  });
+
+  it('deletes the last line without leaving its \\r behind', () => {
+    expect(run(crlf('a\nb|'), deleteLinesEdit)).toBe('a|');
+    expect(run(crlf('a\nb|\nc'), deleteLinesEdit)).toBe(crlf('a\n|c'));
+    expect(run(crlf('a\n‹b\nc›'), deleteLinesEdit)).toBe('a|');
+  });
+
+  it('fences a code block with CRLF', () => {
+    expect(run(crlf('a\nb|\nc'), codeBlockEdit)).toBe(crlf('a\n```\n‹b›\n```\nc'));
+    expect(run(crlf('a\nb|'), codeBlockEdit)).toBe(crlf('a\n```\n‹b›\n```'));
+    expect(run(crlf('a\n‹b\nc›\nd'), codeBlockEdit)).toBe(crlf('a\n```\n‹b\nc›\n```\nd'));
+    expect(run(crlf('a\n|\nc'), codeBlockEdit)).toBe(crlf('a\n```\n|\n```\nc'));
+  });
+
+  it('inserts a horizontal rule with CRLF', () => {
+    expect(run(crlf('a\nb|\nc'), ruleEdit)).toBe(crlf('a\nb\n\n---\n\n|\nc'));
+    expect(run(crlf('a\nb|'), ruleEdit)).toBe(crlf('a\nb\n\n---\n\n|'));
+    expect(run(crlf('a\n|\nc'), ruleEdit)).toBe(crlf('a\n---\n|\nc'));
+  });
+
+  it('moves the last item of a list without mixing endings', () => {
+    const edge = (marked: string, dir: -1 | 1) => run(marked, (d, s) => moveItemsToEdgeEdit(d, s, dir));
+    expect(edge(crlf('- a\n- b\n- c|'), -1)).toBe(crlf('- c|\n- a\n- b'));
+    expect(edge(crlf('- a|\n- b\n- c'), 1)).toBe(crlf('- b\n- c\n- a|'));
+    expect(edge(crlf('1. a\n2. b\n3. c|'), -1)).toBe(crlf('1. c|\n2. a\n3. b'));
+  });
+
+  it('puts a picture on a line of its own with CRLF, even from between the \\r and the \\n', () => {
+    const { doc } = parse(crlf('a\nb'));
+    const afterCr = doc.getLineEnd(0);
+    expect(show(doc, pictureLinesEdit(doc, afterCr, afterCr, ['![](p.png)']))).toBe(
+      crlf('a\n![](p.png)|\nb'),
+    );
+    expect(show(doc, pictureLinesEdit(doc, 1, 1, ['![](p.png)', '![](q.png)']))).toBe(
+      crlf('a\n![](p.png)\n![](q.png)|\nb'),
+    );
   });
 
   it("pastes with the note's line ending", () => {

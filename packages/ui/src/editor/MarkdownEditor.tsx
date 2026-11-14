@@ -971,8 +971,7 @@ export function MarkdownEditor(props: MarkdownEditorProps) {
     // The picture goes after the line it lands on, never splitting the line's text.
     const at = offsetAt(e.clientX, e.clientY);
     if (at !== null) {
-      const line = doc.getPosition(at).line;
-      const end = doc.getLineStart(line) + doc.getLineText(line).length;
+      const end = lineContentEnd(doc, doc.getPosition(at).line);
       state.select(end, end);
     }
     void insertPictures(pictures);

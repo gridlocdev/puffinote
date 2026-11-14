@@ -104,6 +104,9 @@ export function pictureLinesEdit(
   to: number,
   links: readonly string[],
 ): Edit {
+  // Never split a CRLF: a spot between its `\r` and `\n` is taken as the end of the line's text.
+  from = beforeLineBreak(doc, from);
+  to = Math.max(from, beforeLineBreak(doc, to));
   const start = doc.getLineStart(doc.getPosition(from).line);
   const endLine = doc.getPosition(to).line;
   const end = doc.getLineStart(endLine) + doc.getLineText(endLine).length;
@@ -122,6 +125,11 @@ export function pasteText(doc: TextDocument, at: number, pasted: string): string
   const p = doc.getPosition(at);
   const lf = pasted.replace(/\r\n?/g, '\n');
   return withLineEnding(doc, stripDuplicateTaskMarker(lf, doc.getLineText(p.line), p.column));
+}
+
+/** `offset`, or the `\r` before it when it sits between the two halves of a CRLF. */
+function beforeLineBreak(doc: TextDocument, offset: number): number {
+  return offset > 0 && doc.getText(offset - 1, 2) === '\r\n' ? offset - 1 : offset;
 }
 
 function replaceSelection(sel: Selection, text: string, caretInText = text.length): Edit {
@@ -730,15 +738,22 @@ interface Reordered {
 /**
  * Rewrite the list `items` in the order `order` (the same items), each keeping its nested lines. In a
  * numbered list the numbers stay with the positions, so the list still counts up from where it started.
+ * Item text moves and line breaks stay with the positions, as in `moveLinesEdit`, so a CRLF note's last
+ * line (which has no break of its own) can move up without mixing endings.
  */
 function reorderItems(doc: TextDocument, items: readonly ListItem[], order: readonly ListItem[]): Reordered {
   const start = doc.getLineStart(items[0]!.first);
   const end = doc.getLineEnd(items[items.length - 1]!.last);
   const numbers = items.map((it) => parseLinePrefix(doc.getLineText(it.first)));
+  // The break after each position; the range ends before the last item's `\n`, so only its `\r` is in it.
+  const breaks = items.map((it, k) => {
+    const cr = doc.getLineText(it.last).endsWith('\r');
+    return k < items.length - 1 ? (cr ? '\r\n' : '\n') : cr ? '\r' : '';
+  });
   let at = start;
   const placed = order.map((it, k) => {
     const a = doc.getLineStart(it.first);
-    const b = doc.getLineEnd(it.last);
+    const b = doc.getLineStart(it.last) + contentOf(doc.getLineText(it.last)).length;
     let body = doc.getText(a, b - a);
     // Renumber: the item takes the number of the position it lands in.
     const p = parseLinePrefix(doc.getLineText(it.first));
@@ -752,13 +767,13 @@ function reorderItems(doc: TextDocument, items: readonly ListItem[], order: read
       body = body.slice(0, from) + digits + body.slice(numberEnd);
     }
     const to = at;
-    at += body.length + 1;
+    at += body.length + breaks[k]!.length;
     return { a, b, to, body, numberEnd, delta };
   });
   return {
     start,
     end,
-    text: placed.map((pl) => pl.body).join('\n'),
+    text: placed.map((pl, k) => pl.body + breaks[k]!).join(''),
     map: (o) => {
       const hit = placed.find((pl) => o >= pl.a && o <= pl.b);
       if (!hit) return o;
@@ -900,28 +915,36 @@ export function listEdit(doc: TextDocument, sel: Selection, kind: 'unordered' | 
   });
 }
 
-/** ⇧⌘E: fence the selected lines as a code block, or open an empty one on a blank line. */
+/**
+ * ⇧⌘E: fence the selected lines as a code block, or open an empty one on a blank line. The fences' line breaks
+ * are the note's, and the lines inside keep their bytes.
+ */
 export function codeBlockEdit(doc: TextDocument, sel: Selection): Edit {
   const [a, b] = selectedLines(doc, sel);
+  const eol = lineEnding(doc);
   const start = doc.getLineStart(a);
-  const end = doc.getLineEnd(b);
-  const body = doc.getText().slice(start, end);
+  const end = doc.getLineStart(b) + contentOf(doc.getLineText(b)).length;
+  const body = doc.getText(start, end - start);
+  const inside = start + 3 + eol.length;
   if (isCollapsed(sel) && body.trim().length === 0) {
-    return { start, length: end - start, text: '```\n\n```', anchor: start + 4, caret: start + 4 };
+    return { start, length: end - start, text: '```' + eol + eol + '```', anchor: inside, caret: inside };
   }
-  const text = '```\n' + body + '\n```';
-  return { start, length: end - start, text, anchor: start + 4, caret: start + 4 + body.length };
+  const text = '```' + eol + body + eol + '```';
+  return { start, length: end - start, text, anchor: inside, caret: inside + body.length };
 }
 
-/** Insert a horizontal rule below the caret's line, as its own paragraph. */
+/** Insert a horizontal rule below the caret's line, as its own paragraph, with the note's line breaks. */
 export function ruleEdit(doc: TextDocument, sel: Selection): Edit {
   const line = lineOf(doc, sel.caret);
-  const end = doc.getLineEnd(line);
-  if (contentOf(doc.getLineText(line)).trim().length === 0) {
-    const start = doc.getLineStart(line);
-    return { start, length: end - start, text: '---\n', anchor: start + 4, caret: start + 4 };
+  const eol = lineEnding(doc);
+  const start = doc.getLineStart(line);
+  const content = contentOf(doc.getLineText(line));
+  const end = start + content.length;
+  if (content.trim().length === 0) {
+    const text = '---' + eol;
+    return { start, length: end - start, text, anchor: start + text.length, caret: start + text.length };
   }
-  const text = '\n\n---\n\n';
+  const text = eol + eol + '---' + eol + eol;
   return { start: end, length: 0, text, anchor: end + text.length, caret: end + text.length };
 }
 
@@ -947,7 +970,8 @@ export function deleteLinesEdit(doc: TextDocument, sel: Selection): Edit {
   let start = doc.getLineStart(a);
   let end = doc.getLineEnd(b);
   if (b + 1 < doc.lineCount) end = doc.getLineStart(b + 1);
-  else if (a > 0) start = doc.getLineEnd(a - 1);
+  // The last line goes with the line break before it, both halves of a CRLF.
+  else if (a > 0) start = doc.getLineStart(a - 1) + contentOf(doc.getLineText(a - 1)).length;
   return { start, length: end - start, text: '', anchor: start, caret: start };
 }
 
