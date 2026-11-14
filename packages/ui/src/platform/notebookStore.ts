@@ -36,7 +36,7 @@ export interface WriteOptions {
 }
 
 export interface StoreCapabilities {
-  /** The store reports outside changes through `watch`; without it the shell re-reads on focus. */
+  /** The store reports outside changes through `watch` (the shell also re-reads on focus, in every store). */
   readonly watch: boolean;
   /** "Reveal in Finder" / the file manager. */
   readonly reveal: boolean;

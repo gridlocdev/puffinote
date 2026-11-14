@@ -417,8 +417,10 @@ export class Notebook {
           this.scheduleRefresh();
         }),
       );
-    else if (typeof window !== 'undefined') {
-      // No change notification (a browser folder, the NAS): look again whenever the window comes back.
+    if (typeof window !== 'undefined') {
+      // Look again whenever the window comes back. Stores without change events (a browser folder, the NAS)
+      // only learn of changes this way, and a watcher on a network folder (SMB, NFS) never hears of edits
+      // made on another machine.
       const onFocus = () => this.scheduleRefresh();
       window.addEventListener('focus', onFocus);
       this.disposers.push(() => window.removeEventListener('focus', onFocus));
