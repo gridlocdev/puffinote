@@ -89,11 +89,16 @@ describe('Enter (PRD §10.1)', () => {
     expect(enter('- a\n- |b')).toBe('- a\n- \n- |b');
   });
 
-  it('opens a blank line above the first item of a list instead of an empty item', () => {
+  it('opens a blank line above the first item of a top-level list instead of an empty item', () => {
     expect(enter('- [x] |a\n- [ ] b')).toBe('\n- [x] |a\n- [ ] b');
     expect(enter('Tasks\n- [ ] |a')).toBe('Tasks\n\n- [ ] |a');
-    expect(enter('- [ ] a\n  - [x] |c')).toBe('- [ ] a\n\n  - [x] |c');
     expect(enter('> - [ ] |a')).toBe('>\n> - [ ] |a');
+  });
+
+  it('opens an empty item above the first item of a nested list, and renumbers it', () => {
+    expect(enter('- [ ] a\n  - [x] |c')).toBe('- [ ] a\n  - [ ] \n  - [x] |c');
+    expect(enter('1. a\n    1. |b\n    2. c')).toBe('1. a\n    1. \n    2. |b\n    3. c');
+    expect(enter('1. a\n    |1. b')).toBe('1. a\n    1. \n    2. |b');
   });
 
   it('exits an empty item', () => {
@@ -135,6 +140,15 @@ describe('Tab and Shift+Tab', () => {
 
   it('renumbers an ordered list when an item moves into it', () => {
     expect(run('1. a\n    1. b|\n2. c', (d, s) => outdentEdit(d, s))).toBe('1. a\n2. b|\n3. c');
+  });
+
+  it('starts a nested numbered list at 1 when an item is indented under its parent', () => {
+    expect(run('1. a\n2. b|\n3. c', (d, s) => indentEdit(d, s))).toBe('1. a\n    1. b|\n2. c');
+    expect(run('1. a\n    1. b\n2. c|', (d, s) => indentEdit(d, s))).toBe('1. a\n    1. b\n    2. c|');
+  });
+
+  it('restarts the nested items left behind when the first one is outdented', () => {
+    expect(run('1. a\n    1. b|\n    2. c', (d, s) => outdentEdit(d, s))).toBe('1. a\n2. b|\n    1. c');
   });
 });
 

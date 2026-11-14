@@ -48,6 +48,13 @@ describe('HTML renderer', () => {
     expect(html).toContain('<li>d</li>');
   });
 
+  it('letters a nested numbered list and uses roman numerals a level further in', () => {
+    const html = body('1. a\n    1. b\n        1. c');
+    expect(html).toContain('<ol>');
+    expect(html).toContain('<ol type="a">');
+    expect(html).toContain('<ol type="i">');
+  });
+
   it('keeps a loose list as one list across a blank line', () => {
     expect(body('1. one\n\n2. two').match(/<ol/g)).toHaveLength(1);
   });

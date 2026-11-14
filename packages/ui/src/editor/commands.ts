@@ -1,6 +1,8 @@
 import {
   computeEnter,
+  nestedUnder,
   parseLinePrefix,
+  type LinePrefix,
   renumberOrderedList,
   taskMark,
   toggledTaskState,
@@ -81,9 +83,17 @@ export function enterEdit(doc: TextDocument, sel: Selection, mode: ViewMode, con
   if (r.kind === 'continue') return withRenumber(doc, replaceSelection(sel, r.text));
   if (r.kind === 'above' && isCollapsed(sel)) {
     // One new line above, with the caret at the start of the text of the item it pushed down: an empty item
-    // inside a list, or a blank line (kept in its quote) when the item is the first of its list.
+    // inside a list, or a blank line (kept in its quote) when the item is the first of a top-level list. The
+    // first item of a nested list gets an empty item too, numbered as itself, since a blank line would end the
+    // parent item and turn the nested lines into an indented code block.
     const p = parseLinePrefix(lineText);
-    const text = p.hasList && firstListItem(doc, line) ? p.quote.trimEnd() + '\n' : r.text;
+    const first = p.hasList ? firstListItem(doc, line) : null;
+    const text =
+      first === 'top'
+        ? p.quote.trimEnd() + '\n'
+        : first === 'nested'
+          ? itemPrefix(p, p.number) + '\n'
+          : r.text;
     const caret = lineStart + text.length + p.length;
     return withRenumber(doc, { start: lineStart, length: 0, text, anchor: caret, caret });
   }
@@ -91,19 +101,29 @@ export function enterEdit(doc: TextDocument, sel: Selection, mode: ViewMode, con
 }
 
 /**
- * Whether list item `line` is the first item of its list: no item at its level comes before it, past the lines
- * nested under earlier items. The first child of a nested list counts as first.
+ * Whether list item `line` is the first item of its list, past the lines nested under earlier items: 'top' for
+ * the first item of a top-level list, 'nested' for the first child of an item, null when an item at its level
+ * comes before it.
  */
-function firstListItem(doc: TextDocument, line: number): boolean {
+function firstListItem(doc: TextDocument, line: number): 'top' | 'nested' | null {
   const p = parseLinePrefix(doc.getLineText(line));
   for (let i = line - 1; i >= 0; i--) {
     const text = doc.getLineText(i);
     const q = parseLinePrefix(text);
-    if (q.quote !== p.quote || text.slice(q.markerStart).trim().length === 0) return true;
-    if (q.markerStart < p.markerStart) return true;
-    if (q.markerStart === p.markerStart) return !(q.hasList && q.list === p.list);
+    if (q.quote !== p.quote || text.slice(q.markerStart).trim().length === 0) return 'top';
+    if (q.markerStart < p.markerStart) return q.hasList ? 'nested' : 'top';
+    if (q.markerStart === p.markerStart) return q.hasList && q.list === p.list ? null : 'top';
   }
-  return true;
+  return 'top';
+}
+
+/** An empty item like `p`'s (same indent, quote and bullet, an open box for a task), numbered `n`. */
+function itemPrefix(p: LinePrefix, n: number): string {
+  let prefix = p.indentText + p.quote;
+  if (p.list === 'unordered') prefix += `${p.bullet} `;
+  else if (p.list === 'ordered') prefix += `${n}${p.delim} `;
+  if (p.hasTask) prefix += '[ ] ';
+  return prefix;
 }
 
 /**
@@ -209,7 +229,7 @@ export function indentEdit(doc: TextDocument, sel: Selection, indent = defaultIn
   const edit = spliceLines(doc, sel, a, b, (text) =>
     contentOf(text).length === 0 && a !== b ? null : { at: 0, remove: 0, insert: indent },
   );
-  return edit ? withRenumber(doc, edit, [a, b + 1]) : null;
+  return edit ? withRenumber(doc, edit, [a, b + 1], true) : null;
 }
 
 /** Shift+Tab: remove one indent step (a tab, or up to `indent.length` spaces) from each selected line. */
@@ -221,7 +241,7 @@ export function outdentEdit(doc: TextDocument, sel: Selection, indent = defaultI
     while (n < indent.length && text.charAt(n) === ' ') n++;
     return n > 0 ? { at: 0, remove: n, insert: '' } : null;
   });
-  return edit ? withRenumber(doc, edit, [a, b + 1]) : null;
+  return edit ? withRenumber(doc, edit, [a, b + 1], true) : null;
 }
 
 // ----- Ordered-list renumbering -----
@@ -229,9 +249,16 @@ export function outdentEdit(doc: TextDocument, sel: Selection, indent = defaultI
 /**
  * Fold ordered-list renumbering into `edit` (PRD §10.1), so typing an item or changing its depth leaves the
  * numbers right in the same undo step. `lines` are lines of the edited document whose lists to check; by
- * default the caret's line and the line after it.
+ * default the caret's line and the line after it. With `restartNested` (Tab and Shift+Tab), a nested list
+ * that one of those lines now starts counts from 1, so an item indented under its parent becomes its first
+ * child instead of keeping its old place in the outer count.
  */
-export function withRenumber(doc: TextDocument, edit: Edit, lines?: readonly number[]): Edit {
+export function withRenumber(
+  doc: TextDocument,
+  edit: Edit,
+  lines?: readonly number[],
+  restartNested = false,
+): Edit {
   const after = applyEditTo(doc, edit);
   const all: string[] = [];
   for (let i = 0; i < after.lineCount; i++) all.push(after.getLineText(i));
@@ -243,7 +270,8 @@ export function withRenumber(doc: TextDocument, edit: Edit, lines?: readonly num
     if (target < 0 || target >= all.length) continue;
     const start = listStart(all, target);
     if (start === null) continue;
-    const r = renumberOrderedList(all, start);
+    const restart = restartNested && start === target && nestedListStart(all, start);
+    const r = renumberOrderedList(all, start, restart ? 1 : undefined);
     if (!r) continue;
     all.splice(r.startLine, r.lines.length, ...r.lines);
     changed = true;
@@ -280,15 +308,27 @@ export function withRenumber(doc: TextDocument, edit: Edit, lines?: readonly num
   };
 }
 
+/**
+ * Whether the ordered item at `line`, which starts its list, directly follows another list item: a shallower
+ * one it is the first child of, or a bulleted one at its own level.
+ */
+function nestedListStart(lines: readonly string[], line: number): boolean {
+  if (line === 0) return false;
+  const p = parseLinePrefix(lines[line]!);
+  const q = parseLinePrefix(lines[line - 1]!);
+  return q.hasList && q.quote === p.quote && q.markerStart <= p.markerStart;
+}
+
 /** The first line of the ordered list containing `line`, or null when it is not an ordered item. */
 function listStart(lines: readonly string[], line: number): number | null {
   const p = parseLinePrefix(lines[line]!);
   if (p.list !== 'ordered') return null;
   let i = line;
-  while (i > 0) {
-    const q = parseLinePrefix(lines[i - 1]!);
+  for (let j = line - 1; j >= 0; j--) {
+    const q = parseLinePrefix(lines[j]!);
+    if (nestedUnder(q, p, lines[j]!)) continue; // nested under an earlier item of this list
     if (q.list !== 'ordered' || q.indent !== p.indent || q.quote !== p.quote) break;
-    i--;
+    i = j;
   }
   return i;
 }

@@ -4,6 +4,8 @@ import { describe, expect, it } from 'vitest';
 import {
   blockAtLine,
   findBlocks,
+  ListDepthTracker,
+  listOrdinal,
   isInsideConcealed,
   lineReveal,
   renderLine,
@@ -222,5 +224,36 @@ describe('blocks', () => {
     expect(findBlocks(doc, MarkdownModel.build(doc))).toEqual([
       { kind: 'fencedCode', startLine: 0, endLine: 2 },
     ]);
+  });
+});
+
+describe('nested numbered lists (PRD §10.2)', () => {
+  it('counts 1, 2, 3, then a, b, c, then i, ii, iii by depth', () => {
+    expect([1, 2, 10].map((n) => listOrdinal(n, 0))).toEqual(['1', '2', '10']);
+    expect([1, 3, 26, 27, 28].map((n) => listOrdinal(n, 1))).toEqual(['a', 'c', 'z', 'aa', 'ab']);
+    expect([1, 4, 9, 14, 40].map((n) => listOrdinal(n, 2))).toEqual(['i', 'iv', 'ix', 'xiv', 'xl']);
+    expect(listOrdinal(2, 3)).toBe('2');
+  });
+
+  it('draws a nested item number as a letter, keeping its delimiter', () => {
+    const doc = TextDocument.fromString('1. a\n    1. b\n    2) c');
+    const model = MarkdownModel.build(doc);
+    const deco = (line: number, depth: number) => {
+      const start = doc.getLineStart(line);
+      const tokens = model.lineTokens(line);
+      const reveal = lineReveal(tokens, start, doc.getLineEnd(line), elsewhere, null, null);
+      const r = renderLine(doc.getLineText(line), start, tokens, reveal, 'live', null, depth);
+      return r.segments.find((s) => s.deco?.kind === 'number')?.deco?.text;
+    };
+    expect(deco(0, 0)).toBe('1.');
+    expect(deco(1, 1)).toBe('a.');
+    expect(deco(2, 1)).toBe('b)');
+  });
+
+  it('tracks how deep each item sits', () => {
+    const lines = ['1. a', '    1. b', '        - c', '', '    2. d', '2. e', 'para', '    1. f'];
+    const t = new ListDepthTracker();
+    const depths = lines.map((l) => t.next(l, /^\s*(?:\d+\.|-) /.test(l)));
+    expect(depths).toEqual([0, 1, 2, 0, 1, 0, 0, 0]);
   });
 });

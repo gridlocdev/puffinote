@@ -18,7 +18,7 @@ import {
 import { markdownCommandSpecs } from './editorCommands.ts';
 import type { EditorState } from './editorState.ts';
 import { caretBox, firstRowEndingBelow, hitTest, lineSelectionRects, textRanges } from './geometry.ts';
-import { renderLine, snapOutOfConcealed } from './lineRender.ts';
+import { ListDepthTracker, renderLine, snapOutOfConcealed } from './lineRender.ts';
 import { BlockWidget, LineView } from './LineView.tsx';
 import {
   itemTextStart as listTextStart,
@@ -157,6 +157,7 @@ export function MarkdownEditor(props: MarkdownEditorProps) {
   let bi = 0;
   let blockRange: { start: number; end: number } | null = null;
   let rangeOf: Block | null = null;
+  const depths = new ListDepthTracker();
   for (let i = 0; i < doc.lineCount; i++) {
     while (bi < blocks.length && blocks[bi]!.endLine < i) bi++;
     const block = bi < blocks.length && blocks[bi]!.startLine <= i ? blocks[bi]! : null;
@@ -176,6 +177,7 @@ export function MarkdownEditor(props: MarkdownEditorProps) {
           />,
         );
         rowLines.push(i);
+        depths.reset();
         i = block.endLine;
         continue;
       }
@@ -183,6 +185,7 @@ export function MarkdownEditor(props: MarkdownEditorProps) {
     const start = (cache.starts[i] ??= doc.getLineStart(i));
     const text = (cache.texts[i] ??= doc.getLineText(i));
     const tokens = model.lineTokens(i);
+    const listDepth = depths.next(text, !block && tokens.some((t) => t.type === 'listMarker'));
     rows.push(
       <LineView
         key={state.lineKey(i)}
@@ -193,6 +196,7 @@ export function MarkdownEditor(props: MarkdownEditorProps) {
         reveal={lineReveal(tokens, start, start + text.length, sel, range, shownPicture)}
         mode={mode}
         block={block?.kind ?? null}
+        listDepth={listDepth}
         resolveImage={resolveImage}
       />,
     );

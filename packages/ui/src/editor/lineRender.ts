@@ -1,6 +1,7 @@
 import {
   findNestedDelimiters,
   innerStart,
+  parseLinePrefix,
   spanEnd,
   taskStateFromMark,
   type TaskState,
@@ -88,6 +89,7 @@ export function renderLine(
   reveal: LineReveal,
   mode: ViewMode,
   block: BlockKind | null,
+  listDepth = 0,
 ): LineRender {
   const len = lineText.endsWith('\r') ? lineText.length - 1 : lineText.length;
   if (mode === 'raw') {
@@ -189,7 +191,9 @@ export function renderLine(
       .join(' ');
 
     if (concealed) {
-      segments.push(seg(s, e, base, true, decorationFor(t, lineText.slice(s, e), task, imageNodes)));
+      segments.push(
+        seg(s, e, base, true, decorationFor(t, lineText.slice(s, e), task, imageNodes, listDepth)),
+      );
     } else if (t.role === 'content' && isEmphasisLike(t.type)) {
       addNestedContent(segments, lineText, s, e, base, live && !reveal.nodes.has(t.node));
     } else {
@@ -268,11 +272,13 @@ function decorationFor(
   text: string,
   task: TaskState | null,
   imageNodes: ReadonlySet<number>,
+  listDepth: number,
 ): Decoration | null {
   switch (t.type) {
     case 'listMarker': {
       const marker = text.trim();
-      if (/^\d/.test(marker)) return { kind: 'number', text: marker };
+      const m = /^(\d+)([.)])$/.exec(marker);
+      if (m) return { kind: 'number', text: listOrdinal(Number(m[1]), listDepth) + m[2]! };
       return task ? null : { kind: 'bullet', text: '•' };
     }
     case 'taskMarker':
@@ -283,6 +289,78 @@ function decorationFor(
       return imageNodes.has(t.node) ? { kind: 'image', text: '', url: t.meta ?? text } : null;
     default:
       return null;
+  }
+}
+
+/**
+ * How an ordered item's number is drawn at nesting depth `depth` (PRD §10.2): 1, 2, 3 at the top level, then
+ * a, b, c one level in, then i, ii, iii, and round again. The file keeps the digits.
+ */
+export function listOrdinal(n: number, depth: number): string {
+  const style = depth % 3;
+  if (style === 0 || n < 1) return String(n);
+  if (style === 1) {
+    let out = '';
+    for (let k = n; k > 0; k = Math.floor((k - 1) / 26)) out = String.fromCharCode(97 + ((k - 1) % 26)) + out;
+    return out;
+  }
+  if (n >= 4000) return String(n);
+  const numerals: [number, string][] = [
+    [1000, 'm'],
+    [900, 'cm'],
+    [500, 'd'],
+    [400, 'cd'],
+    [100, 'c'],
+    [90, 'xc'],
+    [50, 'l'],
+    [40, 'xl'],
+    [10, 'x'],
+    [9, 'ix'],
+    [5, 'v'],
+    [4, 'iv'],
+    [1, 'i'],
+  ];
+  let out = '';
+  let k = n;
+  for (const [value, glyph] of numerals) {
+    while (k >= value) {
+      out += glyph;
+      k -= value;
+    }
+  }
+  return out;
+}
+
+/**
+ * Tracks list nesting down a document, one line at a time in order, so each list item knows how deep it sits
+ * (for `listOrdinal`). An item nests under the open items whose marker starts left of its own; a non-blank
+ * line that isn't a list item, at the left edge, ends every open list.
+ */
+export class ListDepthTracker {
+  private readonly open: number[] = [];
+  private quote = '';
+
+  /** The depth of `lineText` (0 at the top level), or 0 for a line that isn't a list item. */
+  next(lineText: string, isListItem: boolean): number {
+    const p = parseLinePrefix(lineText);
+    const quote = p.quote.replace(/[^>]/g, ''); // the quote depth; its spacing belongs to the indent
+    if (quote !== this.quote) {
+      this.open.length = 0;
+      this.quote = quote;
+    }
+    if (!isListItem) {
+      if (p.indent === 0 && lineText.slice(p.markerStart).trim().length > 0) this.open.length = 0;
+      return 0;
+    }
+    while (this.open.length > 0 && this.open[this.open.length - 1]! >= p.markerStart) this.open.pop();
+    const depth = this.open.length;
+    this.open.push(p.markerStart);
+    return depth;
+  }
+
+  /** Forget every open list (after a block the caller skipped, such as a table). */
+  reset(): void {
+    this.open.length = 0;
   }
 }
 

@@ -182,13 +182,15 @@ class Renderer {
 
   /**
    * One list level: items at `levelIndent` are siblings, a deeper run nests inside the preceding item, and a
-   * shallower item returns to the caller. Blank lines between items keep them in one list.
+   * shallower item returns to the caller. Blank lines between items keep them in one list. A numbered list
+   * `depth` levels in counts as the editor draws it: 1, 2, 3, then a, b, c, then i, ii, iii (PRD §10.2).
    */
-  private listLevel(line: number, levelIndent: number): number {
+  private listLevel(line: number, levelIndent: number, depth = 0): number {
     const n = this.doc.lineCount;
     const ordered = this.isOrdered(line);
     const start = ordered ? this.startNumber(line) : 1;
-    this.out += ordered ? (start !== 1 ? `<ol start="${start}">\n` : '<ol>\n') : '<ul>\n';
+    const type = (['', ' type="a"', ' type="i"'] as const)[depth % 3];
+    this.out += ordered ? (start !== 1 ? `<ol${type} start="${start}">\n` : `<ol${type}>\n`) : '<ul>\n';
 
     let i = line;
     while (i < n) {
@@ -223,7 +225,7 @@ class Renderer {
 
       if (i < n && this.isListLine(i) && this.listIndent(i) > levelIndent) {
         this.out += '\n';
-        i = this.listLevel(i, this.listIndent(i));
+        i = this.listLevel(i, this.listIndent(i), depth + 1);
       }
       this.out += '</li>\n';
     }
