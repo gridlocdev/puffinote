@@ -1,4 +1,5 @@
 import {
+  chmod,
   link,
   lstat,
   mkdtemp,
@@ -128,6 +129,21 @@ describe('the file API', () => {
     const create = await fetch(url, { method: 'PUT', body: 'x', headers: { ...auth, 'If-None-Match': '*' } });
     expect(create.status).toBe(412);
     expect(((await create.json()) as { error: string }).error).toContain('exists');
+  });
+
+  it('refuses to save over a read-only file', async () => {
+    const file = path.join(dir, 'locked.md');
+    await writeFile(file, 'locked');
+    await chmod(file, 0o444);
+    const res = await fetch(`${base}/file?${q({ path: 'locked.md' })}`, {
+      method: 'PUT',
+      body: 'x',
+      headers: auth,
+    });
+    expect(res.status).toBe(403);
+    expect(((await res.json()) as { error: string }).error).toContain('read-only');
+    expect(await readFile(file, 'utf8')).toBe('locked');
+    await chmod(file, 0o644);
   });
 
   it('keeps a hard link when saving through it', async () => {

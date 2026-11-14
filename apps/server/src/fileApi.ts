@@ -1,6 +1,18 @@
 import { createHash, randomBytes, type Hash } from 'node:crypto';
 import { createReadStream, constants as fsConstants } from 'node:fs';
-import { chown, lstat, mkdir, open, readdir, realpath, rename, rm, stat, unlink } from 'node:fs/promises';
+import {
+  access,
+  chown,
+  lstat,
+  mkdir,
+  open,
+  readdir,
+  realpath,
+  rename,
+  rm,
+  stat,
+  unlink,
+} from 'node:fs/promises';
 import path from 'node:path';
 
 /** A named folder on the NAS that holds notebooks; the client browses it and opens a folder in it. */
@@ -272,6 +284,9 @@ export class FileApi {
       if (opts.ifMatch !== '*' && (await etagOfFile(dest)) !== opts.ifMatch)
         throw new ApiError(412, 'The file changed on the server since it was opened');
     }
+    // A rename would replace a read-only file as long as its folder is writable: refuse instead.
+    if (target && (await readOnly(dest, target.mode)))
+      throw new ApiError(403, `“${path.basename(full)}” is read-only`);
 
     try {
       if (target && target.nlink > 1) {
@@ -333,6 +348,18 @@ async function queueKey(full: string): Promise<string> {
     tail.unshift(path.basename(probe));
     probe = parent;
   }
+}
+
+/**
+ * Is this file read-only? No write bit at all (a server running as root could still write it), or not
+ * writable by this process.
+ */
+async function readOnly(file: string, mode: number): Promise<boolean> {
+  if ((mode & 0o222) === 0) return true;
+  return access(file, fsConstants.W_OK).then(
+    () => false,
+    () => true,
+  );
 }
 
 /**

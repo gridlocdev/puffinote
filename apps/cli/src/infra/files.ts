@@ -1,6 +1,8 @@
 import { randomBytes } from 'node:crypto';
 import {
+  accessSync,
   closeSync,
+  constants as fsConstants,
   existsSync,
   fchmodSync,
   fsyncSync,
@@ -64,6 +66,8 @@ export function saveText(con: Console, text: string, output: string): void {
   // Follow a symlink, so the link stays and the file it names is replaced.
   const target = existsSync(output) ? realpathSync(output) : path.resolve(output);
   const existing = existsSync(target) ? statSync(target) : null;
+  // A rename would replace a read-only file as long as its folder is writable: refuse instead.
+  if (existing && isReadOnly(target, existing.mode)) throw new CliError(`${output} is read-only.`);
   const mode = existing ? existing.mode & 0o7777 : 0o644;
   const temp = path.join(
     path.dirname(target),
@@ -82,6 +86,17 @@ export function saveText(con: Console, text: string, output: string): void {
   } catch (e) {
     rmSync(temp, { force: true });
     throw e;
+  }
+}
+
+/** No write bit at all (root could still write it), or not writable by this process. */
+function isReadOnly(file: string, mode: number): boolean {
+  if ((mode & 0o222) === 0) return true;
+  try {
+    accessSync(file, fsConstants.W_OK);
+    return false;
+  } catch {
+    return true;
   }
 }
 

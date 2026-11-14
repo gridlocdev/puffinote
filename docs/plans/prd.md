@@ -55,7 +55,7 @@ The desktop app checks GitHub for a newer release. It never downloads or install
 
 ## 4. Principles
 
-1. **Never lose text.** A save is atomic. A failed save keeps the buffer. Closing, switching notebooks and quitting all ask about unsaved tabs.
+1. **Never lose text.** A save is atomic. A failed save keeps the buffer. A read-only file is never replaced: the save fails with a "read-only" error (403 on the NAS), in the app and in `puffinote html -o`. Closing, switching notebooks and quitting all ask about unsaved tabs.
 2. **Never rewrite bytes the user didn't touch.** The editor edits the source minimally (§11.7).
 3. **Dim, don't hide.** A command that can't run right now stays in its menu, dimmed, so the menus don't change shape under the user.
 4. **No surprise network traffic.** Remote pictures and links load only on explicit action. The desktop app and the plain web page never contact a server.

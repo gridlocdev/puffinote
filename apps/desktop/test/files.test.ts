@@ -51,6 +51,15 @@ describe('writeAtomic', () => {
     expect(await readdir(sub)).toEqual(['a.md']);
   });
 
+  it('refuses to replace a read-only file', async () => {
+    const p = path.join(dir, 'locked.md');
+    await writeFile(p, 'locked');
+    await chmod(p, 0o444);
+    await expect(writeAtomic(p, bytes('x'))).rejects.toThrow(/read-only/);
+    expect(await readFile(p, 'utf8')).toBe('locked');
+    await chmod(p, 0o644);
+  });
+
   it('writes through a hard link instead of splitting it', async () => {
     const p = path.join(dir, 'linked.md');
     const other = path.join(dir, 'other.md');

@@ -245,6 +245,18 @@ describe('markdown commands', () => {
     rmSync(at('Sub', 'page.HTM'));
   });
 
+  it('html -o refuses to replace a read-only file', () => {
+    const out = at('Sub', 'locked.html');
+    writeFileSync(out, 'locked');
+    chmodSync(out, 0o444);
+    const r = run(['html', at('Welcome.md'), '-o', out]);
+    expect(r.exit).toBe(1);
+    expect(r.err).toMatch(/^puffinote: .*read-only/);
+    expect(readFileSync(out, 'utf8')).toBe('locked');
+    chmodSync(out, 0o644);
+    rmSync(out);
+  });
+
   it('reports a missing file', () => {
     const r = run(['stats', at('nope.md')]);
     expect(r.exit).toBe(1);

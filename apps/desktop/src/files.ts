@@ -1,7 +1,19 @@
 // File-system helpers for the main process. No Electron imports, so the tests can run them in Node.
 import { randomBytes } from 'node:crypto';
 import { statSync, watch, type FSWatcher } from 'node:fs';
-import { chown, mkdir, open, readFile, readlink, realpath, rename, stat, unlink } from 'node:fs/promises';
+import {
+  access,
+  chown,
+  constants as fsConstants,
+  mkdir,
+  open,
+  readFile,
+  readlink,
+  realpath,
+  rename,
+  stat,
+  unlink,
+} from 'node:fs/promises';
 import path from 'node:path';
 
 /** Only the app's own pages may use the bridge (not a navigated-away or injected frame). */
@@ -34,6 +46,8 @@ export function folderArgs(argv: readonly string[], cwd: string): string[] {
 export async function writeAtomic(p: string, bytes: Uint8Array): Promise<void> {
   const real = await realTarget(path.resolve(p));
   const target = await stat(real).catch(() => null);
+  // A rename would replace a read-only file as long as its folder is writable: refuse instead.
+  if (target && (await isReadOnly(real, target.mode))) throw new Error(`“${path.basename(p)}” is read-only`);
   if (target && target.nlink > 1) {
     const h = await open(real, 'r+');
     try {
@@ -65,6 +79,15 @@ export async function writeAtomic(p: string, bytes: Uint8Array): Promise<void> {
     throw e;
   }
   await syncDir(path.dirname(real));
+}
+
+/** No write bit at all (root could still write it), or not writable by this process. */
+async function isReadOnly(file: string, mode: number): Promise<boolean> {
+  if ((mode & 0o222) === 0) return true;
+  return access(file, fsConstants.W_OK).then(
+    () => false,
+    () => true,
+  );
 }
 
 /**
