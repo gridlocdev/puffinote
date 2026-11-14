@@ -225,7 +225,7 @@ A custom editing surface, not a `contenteditable`. Lines render as DOM. A hidden
 
 **Unfinished syntax is the common case while typing.** An unclosed marker is literal text until it closes. An unterminated fence runs to the end of the file as code. Nothing flickers.
 
-**Pictures.** A line that holds only `![alt](url)` shows the picture, scaled down to the text column (never up). The caret sits before or after it, never inside. Relative paths resolve against the note's folder.
+**Pictures.** A line that holds only `![alt](url)` shows the picture, scaled down to the text column (never up). The caret sits before or after it, never inside. Relative paths resolve against the note's folder. A picture that changes on disk is shown again as it is now, once Puffinote sees the change (a folder change, or the window coming back on the web and NAS). One that can't be read yet shows nothing, and is tried again the next time the note is drawn.
 
 ### 10.3 Status bar and links
 

@@ -261,6 +261,8 @@ export class Notebook {
 
   private readonly options: NotebookOptions;
   private readonly images = new Map<string, string | null>();
+  /** The read in flight for each picture being loaded; a read whose token was replaced is dropped. */
+  private readonly imageReads = new Map<string, object>();
   private readonly disposers: (() => void)[] = [];
   private persistTimer: ReturnType<typeof setTimeout> | null = null;
   private refreshTimer: ReturnType<typeof setTimeout> | null = null;
@@ -372,7 +374,13 @@ export class Notebook {
         void this.reloadTree().catch((e: unknown) => this.report(e));
       }),
     );
-    if (this.store.watch) this.disposers.push(this.store.watch(() => this.scheduleRefresh()));
+    if (this.store.watch)
+      this.disposers.push(
+        this.store.watch((paths) => {
+          this.forgetImages(paths);
+          this.scheduleRefresh();
+        }),
+      );
     else if (typeof window !== 'undefined') {
       // No change notification (a browser folder, the NAS): look again whenever the window comes back.
       const onFocus = () => this.scheduleRefresh();
@@ -410,6 +418,16 @@ export class Notebook {
   async reloadTree(): Promise<void> {
     const stats = new Map<string, FileStat>();
     const next = await loadTree(this.store, this.settings.peek().showHiddenFiles, stats);
+    // A picture whose size or time changed (or that went away) is read again when next drawn. Stores without
+    // change events (a browser folder, the NAS) only tell this way.
+    const before = this.stats.peek();
+    this.forgetImages(
+      [...this.images.keys()].filter((p) => {
+        const a = before.get(p);
+        const b = stats.get(p);
+        return a?.size !== b?.size || a?.modified !== b?.modified;
+      }),
+    );
     if (!sameTree(this.tree.peek(), next)) this.tree.value = next;
     if (!sameStats(this.stats.peek(), stats)) this.stats.value = stats;
   }
@@ -1093,17 +1111,42 @@ export class Notebook {
     const cached = this.images.get(path);
     if (cached !== undefined) return cached ?? '';
     this.images.set(path, null);
+    const token = {};
+    this.imageReads.set(path, token);
+    const current = () => this.imageReads.get(path) === token && !this.disposed;
     void this.store
       .read(path)
       .then(({ bytes }) => {
+        if (!current()) return;
+        this.imageReads.delete(path);
         this.images.set(
           path,
           URL.createObjectURL(new Blob([bytes as Uint8Array<ArrayBuffer>], { type: mimeOf(path) })),
         );
         this.imagesLoaded.value++;
       })
-      .catch(() => undefined);
+      .catch(() => {
+        // Not kept: the picture may turn up (a sync, a NAS back online), and the next redraw asks again.
+        if (!current()) return;
+        this.imageReads.delete(path);
+        this.images.delete(path);
+      });
     return '';
+  }
+
+  /** Drop what was read for pictures at or inside `paths`, so the editor reads them again. */
+  private forgetImages(paths: readonly string[]): void {
+    if (paths.length === 0) return;
+    let dropped = false;
+    for (const path of [...this.images.keys()]) {
+      if (!paths.some((p) => isWithin(path, p))) continue;
+      const url = this.images.get(path);
+      if (url?.startsWith('blob:')) URL.revokeObjectURL(url);
+      this.images.delete(path);
+      this.imageReads.delete(path);
+      dropped = true;
+    }
+    if (dropped) this.imagesLoaded.value++;
   }
 
   // ----- Pictures -----
@@ -1232,7 +1275,7 @@ export class Notebook {
       this.report(e);
       return;
     }
-    this.images.delete(path);
+    this.forgetImages([path]);
     this.imagesLoaded.value++;
     await this.reloadTree();
   }
