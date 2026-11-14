@@ -82,3 +82,39 @@ export async function fetchLatestRelease(fetcher: typeof fetch): Promise<Release
   if (!release) throw new Error('No release found');
   return release;
 }
+
+/**
+ * Runs update checks one at a time (PRD §3.1). Check for Updates… always answers: asked while the automatic
+ * check runs, it waits for that one and then checks itself; asked again while one is waiting or running, it
+ * shares that one. An automatic check asked for while any check runs is dropped.
+ */
+export class UpdateChecks {
+  readonly #run: (manual: boolean) => Promise<void>;
+  #current: { manual: boolean; done: Promise<void> } | null = null;
+  #queued: Promise<void> | null = null;
+
+  constructor(run: (manual: boolean) => Promise<void>) {
+    this.#run = run;
+  }
+
+  request(manual: boolean): Promise<void> {
+    const current = this.#current;
+    if (!current) return this.#start(manual);
+    if (!manual || current.manual) return current.done;
+    this.#queued ??= current.done.then(() => {
+      this.#queued = null;
+      return this.#start(true);
+    });
+    return this.#queued;
+  }
+
+  #start(manual: boolean): Promise<void> {
+    const done = this.#run(manual)
+      .catch(() => {})
+      .finally(() => {
+        if (this.#current?.done === done) this.#current = null;
+      });
+    this.#current = { manual, done };
+    return done;
+  }
+}

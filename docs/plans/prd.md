@@ -49,7 +49,7 @@ The code cites this document as `PRD §n`. If you renumber a section, update tho
 The desktop app checks GitHub for a newer release. It never downloads or installs anything itself: the builds aren't signed for automatic updates, and a notes app shouldn't replace itself unasked.
 
 - **Once a day, on start**, a packaged app asks GitHub's API for the latest release (not a draft or pre-release). If it's newer than the running version and the user hasn't skipped it, a dialog says so with **Download** (opens the release page in the browser), **Later**, and **Skip This Version**.
-- **Check for Updates…** (the app menu on macOS, Help elsewhere) checks at once and always answers: a newer version, "up to date", or why it couldn't check. It shows a skipped version too.
+- **Check for Updates…** (the app menu on macOS, Help elsewhere) checks at once (or, while the automatic check is running, right after it) and always answers: a newer version, "up to date", or why it couldn't check. It shows a skipped version too.
 - **Check for updates automatically** is a checkbox in the dialog. The choice, the skipped version and the time of the last check live in `updates.json` in the app's user data folder, not in the notebook settings.
 - A development build (`just desktop`) and a headless one never check on their own; `PUFFINOTE_NO_UPDATE_CHECK=1` turns the automatic check off too.
 

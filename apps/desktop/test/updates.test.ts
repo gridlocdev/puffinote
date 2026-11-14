@@ -12,6 +12,7 @@ import {
   parseRelease,
   RELEASES_PAGE,
   saveUpdatePrefs,
+  UpdateChecks,
 } from '../src/updates.ts';
 
 describe('update check', () => {
@@ -72,5 +73,44 @@ describe('update check', () => {
     expect(await loadUpdatePrefs(file)).toEqual({ auto: false, skipped: '1.1.0', lastCheck: 42 });
     await writeFile(file, '{ not json');
     expect(await loadUpdatePrefs(file)).toEqual(defaultUpdatePrefs);
+  });
+});
+
+describe('UpdateChecks', () => {
+  const deferred = () => {
+    let resolve = () => {};
+    const promise = new Promise<void>((r) => (resolve = r));
+    return { promise, resolve };
+  };
+
+  it('answers Check for Updates… after an automatic check that was running', async () => {
+    const runs: boolean[] = [];
+    const auto = deferred();
+    const checks = new UpdateChecks((manual) => {
+      runs.push(manual);
+      return manual ? Promise.resolve() : auto.promise;
+    });
+    const first = checks.request(false);
+    const asked = checks.request(true);
+    const again = checks.request(true);
+    expect(runs).toEqual([false]);
+    auto.resolve();
+    await Promise.all([first, asked, again]);
+    expect(runs).toEqual([false, true]);
+  });
+
+  it('runs one check at a time and drops an automatic one while another runs', async () => {
+    const runs: boolean[] = [];
+    const manual = deferred();
+    const checks = new UpdateChecks((m) => {
+      runs.push(m);
+      return manual.promise;
+    });
+    const a = checks.request(true);
+    const b = checks.request(true);
+    const c = checks.request(false);
+    manual.resolve();
+    await Promise.all([a, b, c]);
+    expect(runs).toEqual([true]);
   });
 });
