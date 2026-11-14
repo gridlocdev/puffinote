@@ -268,7 +268,7 @@ describe('platform keys (finding 5)', () => {
   it('goes to the document start and end with Ctrl+Home/End off macOS and Cmd+Up/Down on macOS', () => {
     expect(keyAction(key('Home', { ctrlKey: true }), false)).toEqual({ kind: 'move', unit: 'doc', dir: -1 });
     expect(keyAction(key('End', { ctrlKey: true }), false)).toEqual({ kind: 'move', unit: 'doc', dir: 1 });
-    expect(keyAction(key('Home'), false)).toEqual({ kind: 'move', unit: 'line', dir: -1 });
+    expect(keyAction(key('Home'), false)).toEqual({ kind: 'move', unit: 'row', dir: -1 });
     expect(keyAction(key('ArrowUp', { metaKey: true }), true)).toEqual({
       kind: 'move',
       unit: 'doc',
@@ -276,7 +276,7 @@ describe('platform keys (finding 5)', () => {
     });
     expect(keyAction(key('ArrowLeft', { metaKey: true }), true)).toEqual({
       kind: 'move',
-      unit: 'line',
+      unit: 'row',
       dir: -1,
     });
     expect(keyAction(key('ArrowLeft', { ctrlKey: true }), false)).toEqual({
@@ -284,6 +284,47 @@ describe('platform keys (finding 5)', () => {
       unit: 'word',
       dir: -1,
     });
+  });
+
+  it('goes to the visual row start and end with Home, End and ⌘←/→', () => {
+    expect(keyAction(key('End'), true)).toEqual({ kind: 'move', unit: 'row', dir: 1 });
+    expect(keyAction(key('ArrowRight', { metaKey: true }), true)).toEqual({
+      kind: 'move',
+      unit: 'row',
+      dir: 1,
+    });
+  });
+
+  it('moves by a screen with Page Up and Page Down', () => {
+    expect(keyAction(key('PageDown'), false)).toEqual({ kind: 'page', dir: 1 });
+    expect(keyAction(key('PageUp', { shiftKey: true }), true)).toEqual({ kind: 'page', dir: -1 });
+  });
+
+  it('takes the Emacs keys on macOS', () => {
+    const ctrl = (k: string) => keyAction(key(k, { ctrlKey: true }), true);
+    expect(ctrl('a')).toEqual({ kind: 'move', unit: 'line', dir: -1 });
+    expect(ctrl('e')).toEqual({ kind: 'move', unit: 'line', dir: 1 });
+    expect(ctrl('f')).toEqual({ kind: 'move', unit: 'char', dir: 1 });
+    expect(ctrl('b')).toEqual({ kind: 'move', unit: 'char', dir: -1 });
+    expect(ctrl('n')).toEqual({ kind: 'vertical', dir: 1 });
+    expect(ctrl('p')).toEqual({ kind: 'vertical', dir: -1 });
+    expect(ctrl('d')).toEqual({ kind: 'deleteForward', unit: 'char' });
+    expect(ctrl('h')).toEqual({ kind: 'deleteBack', unit: 'char' });
+    expect(ctrl('k')).toEqual({ kind: 'deleteForward', unit: 'line' });
+    // ⌃⇧A extends like ⇧Home; the key is the shifted letter.
+    expect(keyAction(key('A', { ctrlKey: true, shiftKey: true }), true)).toEqual({
+      kind: 'move',
+      unit: 'line',
+      dir: -1,
+    });
+  });
+
+  it('leaves Ctrl+letters alone off macOS and with other modifiers', () => {
+    expect(keyAction(key('a', { ctrlKey: true }), false)).toBeNull();
+    expect(keyAction(key('k', { ctrlKey: true }), false)).toBeNull();
+    expect(keyAction(key('a', { ctrlKey: true, metaKey: true }), true)).toBeNull();
+    expect(keyAction(key('a', { ctrlKey: true, altKey: true }), true)).toBeNull();
+    expect(keyAction(key('a'), true)).toBeNull();
   });
 
   it('leaves modified Enter and Tab to the shortcut catalog', () => {

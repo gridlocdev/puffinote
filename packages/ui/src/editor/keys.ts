@@ -11,27 +11,49 @@ export interface KeyLike {
 
 /** What a key the catalog doesn't bind does in the editor: caret motion, deletion, Enter and Tab. */
 export type KeyAction =
-  | { readonly kind: 'move'; readonly unit: 'char' | 'word' | 'line' | 'doc'; readonly dir: 1 | -1 }
+  | { readonly kind: 'move'; readonly unit: 'char' | 'word' | 'row' | 'line' | 'doc'; readonly dir: 1 | -1 }
   | { readonly kind: 'vertical'; readonly dir: 1 | -1 }
+  | { readonly kind: 'page'; readonly dir: 1 | -1 }
   | { readonly kind: 'deleteBack'; readonly unit: 'char' | 'word' | 'line' }
-  | { readonly kind: 'deleteForward'; readonly unit: 'char' | 'word' }
+  | { readonly kind: 'deleteForward'; readonly unit: 'char' | 'word' | 'line' }
   | { readonly kind: 'enter'; readonly soft: boolean }
   | { readonly kind: 'tab'; readonly outdent: boolean };
 
 /**
- * Map a key to its editing action, by platform convention. On macOS ⌘ works by line or document (⌘←, ⌘↑,
- * ⌘⌫) and ⌥ by word (⌥←, ⌥⌫). Elsewhere Ctrl works by word (Ctrl+←, Ctrl+Backspace) and Ctrl+Home/End by
- * document; there is no delete-to-line-start key. Shift extends a motion; the caller reads it. Null means the
- * editor leaves the key alone.
+ * The macOS Emacs keys (Control plus a letter), which every Cocoa text field takes: ⌃A and ⌃E go to the
+ * line's start and end, ⌃F, ⌃B, ⌃N and ⌃P move by character and row, ⌃D and ⌃H delete forward and back, and
+ * ⌃K deletes to the end of the line.
+ */
+const emacsKeys: Readonly<Record<string, KeyAction>> = {
+  a: { kind: 'move', unit: 'line', dir: -1 },
+  e: { kind: 'move', unit: 'line', dir: 1 },
+  f: { kind: 'move', unit: 'char', dir: 1 },
+  b: { kind: 'move', unit: 'char', dir: -1 },
+  n: { kind: 'vertical', dir: 1 },
+  p: { kind: 'vertical', dir: -1 },
+  d: { kind: 'deleteForward', unit: 'char' },
+  h: { kind: 'deleteBack', unit: 'char' },
+  k: { kind: 'deleteForward', unit: 'line' },
+};
+
+/**
+ * Map a key to its editing action, by platform convention. On macOS ⌘ works by row or document (⌘←, ⌘↑,
+ * ⌘⌫), ⌥ by word (⌥←, ⌥⌫), and Control takes the Emacs keys (`emacsKeys`). Elsewhere Ctrl works by word
+ * (Ctrl+←, Ctrl+Backspace) and Ctrl+Home/End by document; there is no delete-to-line-start key. Home, End
+ * and ⌘←/→ go by visual row; Page Up and Page Down by a screen. Shift extends a motion; the caller reads
+ * it. Null means the editor leaves the key alone.
  */
 export function keyAction(e: KeyLike, mac: boolean): KeyAction | null {
   const mod = mac ? e.metaKey : e.ctrlKey;
   const word = mac ? e.altKey : e.ctrlKey;
+  if (mac && e.ctrlKey && !e.metaKey && !e.altKey && e.key.length === 1) {
+    return emacsKeys[e.key.toLowerCase()] ?? null;
+  }
   switch (e.key) {
     case 'ArrowLeft':
     case 'ArrowRight': {
       const dir = e.key === 'ArrowRight' ? 1 : -1;
-      if (mac && e.metaKey) return { kind: 'move', unit: 'line', dir };
+      if (mac && e.metaKey) return { kind: 'move', unit: 'row', dir };
       return { kind: 'move', unit: word ? 'word' : 'char', dir };
     }
     case 'ArrowUp':
@@ -42,8 +64,11 @@ export function keyAction(e: KeyLike, mac: boolean): KeyAction | null {
     case 'Home':
     case 'End': {
       const dir = e.key === 'End' ? 1 : -1;
-      return { kind: 'move', unit: !mac && e.ctrlKey ? 'doc' : 'line', dir };
+      return { kind: 'move', unit: !mac && e.ctrlKey ? 'doc' : 'row', dir };
     }
+    case 'PageUp':
+    case 'PageDown':
+      return { kind: 'page', dir: e.key === 'PageDown' ? 1 : -1 };
     case 'Backspace':
       if (mac && e.metaKey) return { kind: 'deleteBack', unit: 'line' };
       return { kind: 'deleteBack', unit: word ? 'word' : 'char' };

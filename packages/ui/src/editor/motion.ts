@@ -90,3 +90,12 @@ export function graphemeColumn(text: string, col: number, dir: 1 | -1): number {
   if (start === col) return col;
   return dir === 1 ? nextBoundary(text, start) : start;
 }
+
+/**
+ * Home and ⌘← (PRD §10.1): on a wrapped line's later rows, the start of the caret's visual row (`rowStart`);
+ * on the first row, `lineStart` — where Home went before rows counted: a list item's text first, then the
+ * line start. `textStart` is where the item's text starts (the line start on other lines).
+ */
+export function rowStartTarget(rowStart: number, textStart: number, lineStart: number): number {
+  return rowStart > textStart ? rowStart : lineStart;
+}

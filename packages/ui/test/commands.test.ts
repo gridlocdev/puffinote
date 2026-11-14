@@ -26,6 +26,7 @@ import {
   itemTextStart,
   lineDeleteStart,
   graphemeColumn,
+  rowStartTarget,
   smartLineStart,
   typeCharEdit,
   wordLeft,
@@ -608,5 +609,17 @@ describe('a click inside a character', () => {
     expect(graphemeColumn(thumb, 5, -1)).toBe(5);
     expect(graphemeColumn(thumb, 6, 1)).toBe(6);
     expect(graphemeColumn('', 0, 1)).toBe(0);
+  });
+});
+
+describe('Home on a wrapped line', () => {
+  it("goes to the start of the caret's visual row on a later row", () => {
+    expect(rowStartTarget(40, 6, 6)).toBe(40);
+  });
+
+  it("goes where Home went before on the line's first row: the item's text, then the line start", () => {
+    expect(rowStartTarget(0, 6, 6)).toBe(6); // rows start at the line start; "- [ ] " is hidden
+    expect(rowStartTarget(6, 6, 0)).toBe(0); // the caret was already at the text start
+    expect(rowStartTarget(0, 0, 0)).toBe(0);
   });
 });

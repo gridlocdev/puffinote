@@ -29,6 +29,7 @@ import {
   itemTextStart as listTextStart,
   lineDeleteStart,
   lineContentEnd,
+  rowStartTarget,
   smartLineStart,
   wordLeft,
   wordRangeAt,
@@ -534,7 +535,7 @@ export function MarkdownEditor(props: MarkdownEditorProps) {
     state.select(extend ? sel.anchor : clamped, clamped);
   }
 
-  function horizontal(dir: 1 | -1, extend: boolean, unit: 'char' | 'word' | 'line'): void {
+  function horizontal(dir: 1 | -1, extend: boolean, unit: 'char' | 'word' | 'row' | 'line'): void {
     if (!extend && !isCollapsed(sel) && unit === 'char') {
       moveTo(dir > 0 ? selectionEnd(sel) : selectionStart(sel), false);
       return;
@@ -542,6 +543,7 @@ export function MarkdownEditor(props: MarkdownEditorProps) {
     const at = sel.caret;
     let to: number;
     if (unit === 'word') to = dir > 0 ? wordRight(doc, at) : wordLeft(doc, at);
+    else if (unit === 'row') to = dir > 0 ? rowEnd(at) : rowStart(at);
     else if (unit === 'line') {
       const line = doc.getPosition(at).line;
       to = dir > 0 ? lineContentEnd(doc, line) : startOf(line, at);
@@ -549,6 +551,57 @@ export function MarkdownEditor(props: MarkdownEditorProps) {
       to =
         listHop(at, dir) ?? snap(dir > 0 ? state.buffer.nextCaret(at) : state.buffer.previousCaret(at), dir);
     moveTo(to, extend);
+  }
+
+  /** Home, ⌘←: the start of the caret's visual row; on a line's first row, as `startOf` (PRD §10.1). */
+  function rowStart(at: number): number {
+    const line = doc.getPosition(at).line;
+    const row = visualRowEdge(at, -1) ?? doc.getLineStart(line);
+    return rowStartTarget(row, itemTextStart(line), startOf(line, at));
+  }
+
+  /**
+   * End, ⌘→: the end of the caret's visual row. Where a line wraps, the offset after the row's last character
+   * is drawn at the start of the next row, so the caret stops before that character (the space the line
+   * wrapped at) instead.
+   */
+  function rowEnd(at: number): number {
+    const end = lineContentEnd(doc, doc.getPosition(at).line);
+    const row = visualRowEdge(at, 1);
+    if (row === null || row >= end || row < at) return end;
+    const here = caretBoxAt(at);
+    const there = caretBoxAt(row);
+    if (here && there && there.top > here.top + here.height / 2) {
+      const before = state.buffer.previousCaret(row);
+      return before >= at ? before : row;
+    }
+    return row;
+  }
+
+  /**
+   * Page Up and Page Down: scroll a screen and move the caret by the same height, keeping its column. Past
+   * the first or last row it goes to the start or end of the note.
+   */
+  function page(dir: 1 | -1, extend: boolean): void {
+    const scroller = scrollerRef.current;
+    const content = contentRef.current;
+    const box = caretBoxAt(sel.caret);
+    if (!scroller || !content || !box) return;
+    const origin = content.getBoundingClientRect();
+    goalX.current ??= box.left - origin.left;
+    const step = scroller.clientHeight;
+    const y = box.top + box.height / 2 - origin.top + dir * step;
+    scroller.scrollTop += dir * step;
+    if (y < 0 || y > origin.height) {
+      moveTo(dir > 0 ? doc.length : sel.caret >= itemTextStart(0) ? itemTextStart(0) : 0, extend, true);
+      return;
+    }
+    const now = content.getBoundingClientRect();
+    const hit = hitTest(content, now.left + goalX.current, now.top + y, rowIndex.current.rows);
+    if (!hit) return;
+    const start = doc.getLineStart(hit.line);
+    const offset = start + Math.min(hit.col, lineContentEnd(doc, hit.line) - start);
+    moveTo(Math.max(offset, itemTextStart(hit.line)), extend, true);
   }
 
   /**
@@ -678,6 +731,9 @@ export function MarkdownEditor(props: MarkdownEditorProps) {
       case 'vertical':
         vertical(action.dir, shift);
         break;
+      case 'page':
+        page(action.dir, shift);
+        break;
       case 'deleteBack': {
         const lineFrom = isCollapsed(sel) && action.unit === 'line' ? lineDeleteFrom() : null;
         if (!isCollapsed(sel)) deleteSelection();
@@ -698,8 +754,12 @@ export function MarkdownEditor(props: MarkdownEditorProps) {
         revealCaret.current = true;
         break;
       }
-      case 'deleteForward':
+      case 'deleteForward': {
+        // ⌃K: to the end of the line, or the line break when the caret is already there.
+        const lineEnd =
+          action.unit === 'line' ? lineContentEnd(doc, doc.getPosition(sel.caret).line) : sel.caret;
         if (!isCollapsed(sel)) deleteSelection();
+        else if (lineEnd > sel.caret) apply(deleteRange(sel.caret, lineEnd), run);
         else if (action.unit === 'word') apply(deleteRange(sel.caret, wordRight(doc, sel.caret)), run);
         else if (
           !state.apply(joinLinesDeleteEdit(doc, sel.caret, state.buffer.nextCaret(sel.caret)), undefined, run)
@@ -708,6 +768,7 @@ export function MarkdownEditor(props: MarkdownEditorProps) {
         }
         revealCaret.current = true;
         break;
+      }
       case 'enter':
         apply(
           action.soft
@@ -727,7 +788,6 @@ export function MarkdownEditor(props: MarkdownEditorProps) {
     e.stopPropagation();
   }
 
-  /** Delete `[start, end)`, renumbering lists when that joins lines. */
   /** ⌘⌫: where deleting to the line start stops (the visual row's start, a list item's text), or null. */
   function lineDeleteFrom(): number | null {
     const line = doc.getPosition(sel.caret).line;
@@ -757,6 +817,7 @@ export function MarkdownEditor(props: MarkdownEditorProps) {
     return start + Math.min(hit.col, lineContentEnd(doc, p.line) - start);
   }
 
+  /** Delete `[start, end)`, renumbering lists when that joins lines. */
   function deleteRange(start: number, end: number) {
     return deleteRangeEdit(doc, start, end);
   }
