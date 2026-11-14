@@ -87,28 +87,57 @@ export function FilterPanel({ model, nb }: { readonly model: ShellModel; readonl
   );
 }
 
+/** What one search found, or why it failed, with the query it was for. */
+export type SearchResult =
+  | { readonly query: string; readonly hits: readonly SearchHit[] }
+  | { readonly query: string; readonly error: string };
+
+/**
+ * Run one search and hand `done` its hits or its error, so the panel never stays on "Searching…". Says
+ * nothing once `signal` is aborted: a newer query (or a changed tree) owns the panel by then.
+ */
+export async function runSearch(
+  search: (query: string, opts: { signal: AbortSignal }) => Promise<readonly SearchHit[]>,
+  query: string,
+  signal: AbortSignal,
+  done: (result: SearchResult) => void,
+): Promise<void> {
+  let result: SearchResult;
+  try {
+    result = { query, hits: await search(query, { signal }) };
+  } catch (e) {
+    result = { query, error: e instanceof Error ? e.message : String(e) };
+  }
+  if (!signal.aborted) done(result);
+}
+
 export function SearchPanel({ model, nb }: { readonly model: ShellModel; readonly nb: Notebook }) {
   const query = model.searchQuery.value;
-  const [hits, setHits] = useState<readonly SearchHit[] | null>(null);
-  const [busy, setBusy] = useState(false);
+  const [result, setResult] = useState<SearchResult | null>(null);
   const [index, setIndex] = useState(0);
   const list = useRef<HTMLUListElement>(null);
+  // Hits for an older query are stale: they go as soon as the query changes, and the panel says it is
+  // searching until this query's answer (or error) comes.
+  const fresh = result !== null && result.query === query ? result : null;
+  const hits = fresh && 'hits' in fresh ? fresh.hits : null;
+  const failed = fresh && 'error' in fresh ? fresh.error : null;
   useEffect(() => {
     if (!query.trim()) {
-      setHits(null);
-      setBusy(false);
+      setResult(null);
       return;
     }
     // A newer query (or a changed tree) stops this scan where it is, not just hides its answer.
     const abort = new AbortController();
-    setBusy(true);
     const t = setTimeout(() => {
-      void nb.search(query, { signal: abort.signal }).then((h) => {
-        if (abort.signal.aborted) return;
-        setHits(h);
-        setIndex(0);
-        setBusy(false);
-      });
+      void runSearch(
+        (q, opts) => nb.search(q, opts),
+        query,
+        abort.signal,
+        (r) => {
+          setResult(r);
+          setIndex(0);
+        },
+      );
     }, 200);
     return () => {
       abort.abort();
@@ -153,11 +182,13 @@ export function SearchPanel({ model, nb }: { readonly model: ShellModel; readonl
       />
       {query.trim() && (
         <p class="pn-panel-note" role="status">
-          {busy && !hits
-            ? 'Searching…'
-            : hits && hits.length > 0
-              ? `${hits.length}${hits.length >= 500 ? '+' : ''} results in ${files} ${files === 1 ? 'note' : 'notes'}`
-              : 'No results'}
+          {failed !== null
+            ? `Search failed: ${failed}`
+            : !fresh
+              ? 'Searching…'
+              : hits && hits.length > 0
+                ? `${hits.length}${hits.length >= 500 ? '+' : ''} results in ${files} ${files === 1 ? 'note' : 'notes'}`
+                : 'No results'}
         </p>
       )}
       <ul

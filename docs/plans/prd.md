@@ -123,7 +123,7 @@ The Layout setting (§9) picks one. Both share the note, the status bar, the com
 The rail's buttons change the panel. Filter and Search put the caret in their box; Files, Outline and Recent leave the focus where it was.
 
 - **Filter** narrows the tree to entries whose whole name (extension included) contains the text, case-insensitively. It keeps the folders above a match and everything inside a matching folder, opens the folders that lead to matches, and counts the matches (or says "No matches"). It is the same tree, with the same keys, menu and drag.
-- **Search** (⇧⌘F) finds note names and the text in every note, including the unsaved text of open tabs. Notes whose name matches come first, led by the name with the match marked. Each text hit shows its line with the match marked. Enter or a click opens the note, at the hit for a text hit.
+- **Search** (⇧⌘F) finds note names and the text in every note, including the unsaved text of open tabs. Notes whose name matches come first, led by the name with the match marked. Each text hit shows its line with the match marked. Enter or a click opens the note, at the hit for a text hit. When the query changes, the old hits go at once and the panel says Searching… until the new answer; a search that fails says "Search failed" with the reason.
 - **Outline** lists the headings of the active note, indented by level. A click moves the caret to the heading.
 - **Recent** lists this notebook's recently opened files.
 
