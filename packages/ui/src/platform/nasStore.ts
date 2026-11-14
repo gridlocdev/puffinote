@@ -55,7 +55,11 @@ export class NasClient {
   /** Null when no server answers (a static deployment, or file://). */
   async info(): Promise<NasInfo | null> {
     try {
-      const res = await this.fetchImpl(`${this.base}/info`, { headers: this.headers() });
+      // Nothing renders until this answers, so a server that doesn't must not hold the page up.
+      const res = await this.fetchImpl(`${this.base}/info`, {
+        headers: this.headers(),
+        signal: AbortSignal.timeout(5000),
+      });
       if (!res.ok || !res.headers.get('content-type')?.includes('json')) return null;
       return (await res.json()) as NasInfo;
     } catch {

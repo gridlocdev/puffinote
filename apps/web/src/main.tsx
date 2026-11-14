@@ -17,10 +17,9 @@ const model = new ShellModel({
 const launcher = new Launcher(model, localPrefs, host);
 document.documentElement.dataset.host = host.kind;
 
-render(
-  <Shell model={model} prefs={localPrefs} welcome={<Welcome launcher={launcher} />} />,
-  document.getElementById('app')!,
-);
+const app = document.getElementById('app')!;
+app.replaceChildren(); // index.html's "Starting Puffinote…", shown until the script got this far
+render(<Shell model={model} prefs={localPrefs} welcome={<Welcome launcher={launcher} />} />, app);
 await launcher.start();
 // Dev-only handle for poking at the app from the console.
 if (import.meta.env.DEV) Object.assign(globalThis, { puffinote: { model, launcher } });

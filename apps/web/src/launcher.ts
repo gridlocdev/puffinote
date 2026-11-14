@@ -172,6 +172,7 @@ export class Launcher {
   }
 
   async open(r: Recent): Promise<boolean> {
+    this.opening.value = r.name;
     try {
       const store = await this.storeFor(r);
       if (!store) return false;
@@ -179,6 +180,8 @@ export class Launcher {
     } catch (e) {
       this.reportError(e);
       return false;
+    } finally {
+      this.opening.value = null;
     }
   }
 

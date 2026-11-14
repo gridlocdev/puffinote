@@ -10,7 +10,11 @@ export function Welcome(props: { readonly launcher: Launcher }) {
   const opening = launcher.opening.value;
   // While start-up reopens a notebook, show only that, so the welcome screen doesn't flash past.
   if (launcher.starting.value) {
-    return <div class="pw-welcome">{opening && <p class="pw-opening">Opening “{opening}”…</p>}</div>;
+    return (
+      <div class="pw-welcome">
+        <p class="pw-opening">{opening ? `Opening “${opening}”…` : 'Starting…'}</p>
+      </div>
+    );
   }
   return (
     <div class="pw-welcome">

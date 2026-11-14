@@ -42,13 +42,14 @@ export async function pickFolder(): Promise<FileSystemDirectoryHandle | null> {
  * The browser's private notebook folder (the origin-private file system): every modern browser has one, so a
  * browser that can't open a folder from disk still gets a notebook that survives a reload.
  */
-export async function privateFolder(): Promise<FileSystemDirectoryHandle | null> {
-  try {
+export async function privateFolder(timeoutMs = 5000): Promise<FileSystemDirectoryHandle | null> {
+  // A browser with site storage blocked can leave this hanging rather than refuse; give up after a while.
+  const timeout = new Promise<null>((resolve) => setTimeout(() => resolve(null), timeoutMs));
+  const folder = (async () => {
     const root = await navigator.storage.getDirectory();
     return await root.getDirectoryHandle('notebook', { create: true });
-  } catch {
-    return null;
-  }
+  })().catch(() => null);
+  return Promise.race([folder, timeout]);
 }
 
 /** Make sure we may write to `handle`, asking only when `ask` (a prompt needs a user gesture). */
