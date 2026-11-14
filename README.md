@@ -1,11 +1,11 @@
 # Puffinote
 
-A notes app for a folder of Markdown files. You open a folder, and Puffinote shows it as a tree, opens notes in tabs, and formats them as you type. Your notes stay plain `.md` files that any other editor, sync tool or git can use, and the same app runs on the desktop, in the browser and on your NAS.
+Puffinote is a personal knowledge base that's just a folder of Markdown files. It has no database and nothing to import or export. Point it at a folder and you get a file tree, tabs, and an editor that hides the Markdown until your caret reaches it. Run it as a desktop app, in a browser, or on your NAS, all on the same notes.
 
 ![Puffinote on macOS in the dark theme, with a notebook named Notes open. The sidebar on the left shows the file tree: the folders attachments, Birds (with the note Puffins selected), Journal, Projects and Reading, and the notes Inbox and Welcome. Two tabs are open, Welcome and Puffins. The editor shows the Puffins note formatted in place: a large heading; a paragraph with a bold word, an italic genus name, a highlighted phrase, a blue link to the Wikipedia article and inline code; a photo of an Atlantic puffin standing on a grassy cliff edge above the sea; a quote with a bar about puffin chicks; a "Trip to Látrabjarg" checklist with one task done (ticked and struck through), one in progress and two open; and a table of the three puffin species with their scientific names in italics, lengths and conservation status. The status bar reads "Ln 6, Col 1", "248 words", and the view switcher Rich, Formatted and Raw.](docs/images/notebook.webp)
 
 - **Formats as you type.** Headings, emphasis, lists, quotes, tables and pictures show formatted, and the Markdown markers stay hidden until the caret reaches them.
-- **Your files stay yours.** There is no database: a note is a `.md` file, and changes made by other apps show up without overwriting your edits.
+- **Works alongside other apps.** Edit a note in another editor or pull it with git, and the change shows up in Puffinote without overwriting what you're typing.
 - **Works from the keyboard.** `⌘K` runs any command, `⌘O` opens any file by name, and the sidebar searches every note.
 
 ## Getting started
