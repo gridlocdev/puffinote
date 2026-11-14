@@ -298,6 +298,9 @@ export class Notebook {
   private readonly disposers: (() => void)[] = [];
   private persistTimer: ReturnType<typeof setTimeout> | null = null;
   private refreshTimer: ReturnType<typeof setTimeout> | null = null;
+  /** Tree reads started; only the newest one's answer is taken (see `reloadTree`). */
+  private treeReads = 0;
+  private latestTreeRead: Promise<void> = Promise.resolve();
   private loaded = false;
   /** Closed: a dialog or menu left over from it must not change files any more. */
   private disposed = false;
@@ -447,10 +450,26 @@ export class Notebook {
 
   // ----- Tree -----
 
-  /** Re-read the tree. The signal keeps its old value when nothing changed, so a refresh redraws nothing. */
-  async reloadTree(): Promise<void> {
+  /**
+   * Re-read the tree. The signal keeps its old value when nothing changed, so a refresh redraws nothing. A
+   * read that a newer one started after is dropped (a slow refresh landing after a rename would bring the old
+   * name back); its caller waits for the newest read instead.
+   */
+  reloadTree(): Promise<void> {
+    const run = this.readTree(++this.treeReads);
+    this.latestTreeRead = run;
+    return run;
+  }
+
+  private async readTree(ticket: number): Promise<void> {
     const stats = new Map<string, FileStat>();
-    const next = await loadTree(this.store, this.settings.peek().showHiddenFiles, stats);
+    let next: TreeNode | null = null;
+    try {
+      next = await loadTree(this.store, this.settings.peek().showHiddenFiles, stats);
+    } catch (e) {
+      if (ticket === this.treeReads) throw e; // a superseded read's failure (a folder renamed under it) is moot
+    }
+    if (next === null || ticket !== this.treeReads) return this.latestTreeRead.catch(() => {});
     // A picture whose size or time changed (or that went away) is read again when next drawn. Stores without
     // change events (a browser folder, the NAS) only tell this way.
     const before = this.stats.peek();

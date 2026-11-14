@@ -74,7 +74,7 @@ The desktop app checks GitHub for a newer release. It never downloads or install
   - A picture opens in a tab as a read-only view.
   - Anything else opens in its default app (desktop) or downloads (web, NAS). On the desktop Puffinote asks first, with **Open** focused so Enter opens it, unless Ask before opening other files (§9) is off.
 - **Encoding.** A file is read as UTF-8, with or without a BOM. If it is not valid UTF-8, the encoding is guessed and the tab is read-only, so that a save cannot write the guess back. A byte-order mark is trusted only while the bytes agree with it: invalid UTF-8 after a UTF-8 BOM, or an odd byte count after a UTF-16 BOM, also opens read-only, because a save would change bytes the user never touched.
-- **External changes.** The tree is re-read when the folder changes (desktop) or the window regains focus (web, NAS). Every open tab is then reconciled with the disk:
+- **External changes.** The tree is re-read when the folder changes (desktop) or the window regains focus (web, NAS). When reads of the tree overlap (a slow refresh and a rename, say), the one started last wins, so a slow read never brings back an old name. Every open tab is then reconciled with the disk:
   - A tab without unsaved edits reloads.
   - A tab with unsaved edits is left alone and flagged. Auto-save stops for it. Saving it asks whether to overwrite the file on disk or take the disk's version.
   - Taking the disk's version is **one undoable step**, so ⌘Z gives back what the tab held.

@@ -3,12 +3,19 @@ import { Notebook, sessionPath } from '../src/notebook/notebook.ts';
 import { memoryPrefs } from '../src/notebook/settings.ts';
 import { noteFileName } from '../src/notebook/tree.ts';
 import { MemoryStore } from '../src/platform/memoryStore.ts';
-import { ConflictError, type FileData, type WriteOptions } from '../src/platform/notebookStore.ts';
+import {
+  ConflictError,
+  type Entry,
+  type FileData,
+  type WriteOptions,
+} from '../src/platform/notebookStore.ts';
 
 /** A MemoryStore that can hold writes and reads back, to force the order async work lands in. */
 class GatedStore extends MemoryStore {
   holdWrites = false;
   holdReads = false;
+  holdLists = false;
+  readonly lists: (() => void)[] = [];
   readonly writes: { path: string; release: () => void }[] = [];
   readonly reads: (() => void)[] = [];
 
@@ -17,6 +24,13 @@ class GatedStore extends MemoryStore {
     return new Promise((resolve, reject) =>
       this.writes.push({ path, release: () => void super.write(path, bytes, opts).then(resolve, reject) }),
     );
+  }
+
+  override list(dir: string): Promise<Entry[]> {
+    if (!this.holdLists) return super.list(dir);
+    // The listing sees the disk as it is now; only its answer is held back.
+    const now = super.list(dir);
+    return new Promise((resolve, reject) => this.lists.push(() => void now.then(resolve, reject)));
   }
 
   override read(path: string): Promise<FileData> {
@@ -253,6 +267,20 @@ describe('Notebook moves, names, settings and session', () => {
     store.touch('c.md', '');
     await nb.refresh();
     expect(nb.tree.value).not.toBe(before);
+  });
+
+  it('drops a tree read that started before a newer one', async () => {
+    const store = new GatedStore('N', { 'a.md': '', 'f/b.md': '' });
+    const nb = await openWith(store);
+    store.holdLists = true;
+    const slow = nb.refresh();
+    await settle();
+    store.holdLists = false;
+    expect(await nb.rename('a.md', 'c.md')).toBe('c.md');
+    expect(nb.tree.value.children.map((c) => c.name)).toEqual(['f', 'c.md']);
+    for (const release of store.lists.splice(0)) release();
+    await slow;
+    expect(nb.tree.value.children.map((c) => c.name)).toEqual(['f', 'c.md']);
   });
 
   it('stops a search when its signal aborts', async () => {
