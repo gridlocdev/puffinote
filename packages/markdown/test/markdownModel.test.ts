@@ -141,6 +141,31 @@ describe('indented code (CommonMark §4.4)', () => {
     expect(tokenize(md).model.enteringState(4).kind).toBe('indentedCode');
   });
 
+  it('reads an item indented under a list item after a blank line as a nested item, not code', () => {
+    for (const md of ['- a\n\n    - b', '- a\n\n\t- b', '1. a\n\n    1. b']) {
+      expect(hasType(md, 'codeText')).toBe(false);
+      expect(tokenize(md).model.lineTokens(2)[0]!.type).toBe('listMarker');
+    }
+  });
+
+  it('opens indented code inside a list item only four columns past its content', () => {
+    expect(textsOfType('- a\n\n      code', 'codeText')).toEqual(['      code']);
+    expect(textsOfType('- a\n\n    still the item', 'codeText')).toEqual([]);
+    expect(textsOfType('- a\n  - b\n\n        code', 'codeText')).toEqual(['        code']);
+  });
+
+  it('ends the list context at a line left of the item after a blank line', () => {
+    expect(textsOfType('- a\n\nprose\n\n    code', 'codeText')).toEqual(['    code']);
+    expect(textsOfType('- a\n  - b\n\n  more of a\n\n      code', 'codeText')).toEqual(['      code']);
+  });
+
+  it('recognises a fence indented under a list item', () => {
+    const md = '1. a\n\n    ```\n    x\n    ```\nafter';
+    expect(textsOfType(md, 'codeFence')).toEqual(['    ```', '    ```']);
+    expect(textsOfType(md, 'codeText')).toEqual(['    x']);
+    expect(tokenize(md).model.enteringState(5).kind).toBe('normal');
+  });
+
   it('opens after a whitespace-only blank line', () => {
     expect(textsOfType('para\n  \n    code\n', 'codeText')).toEqual(['    code']);
   });

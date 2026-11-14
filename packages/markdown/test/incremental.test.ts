@@ -202,6 +202,51 @@ describe('incremental tokenizing', () => {
     }
   });
 
+  it('matches a full rebuild across random edits to nested lists and the code under them', () => {
+    let s = 0x115715 >>> 0;
+    const next = (n: number): number => {
+      s = (s * 1664525 + 1013904223) >>> 0;
+      return s % n;
+    };
+    const pieces = [
+      '- a',
+      '  - b',
+      '    - c',
+      '\t- d',
+      '1. e',
+      '   2. f',
+      '      code',
+      '    x',
+      '  ',
+      '\t',
+      '',
+      'p',
+      '```',
+      '    ```',
+      '> - q',
+      '\n',
+      '\n\n',
+      '- [ ] t',
+    ];
+    for (let run = 0; run < 150; run++) {
+      const lineCount = 1 + next(12);
+      let doc = TextDocument.fromString(
+        Array.from({ length: lineCount }, () => pieces[next(pieces.length)]!).join('\n'),
+      );
+      let model = MarkdownModel.build(doc);
+      for (let step = 0; step < 30; step++) {
+        const offset = next(doc.length + 1);
+        const span = next(Math.min(6, doc.length - offset) + 1);
+        let insert = next(4) === 0 ? '' : pieces[next(pieces.length)]!;
+        if (next(3) === 0) insert += '\n' + pieces[next(pieces.length)]!;
+        const line = doc.getPosition(offset).line;
+        doc = doc.replace(offset, span, insert);
+        model = model.update(doc, line).model;
+        expect(snapshot(doc, model)).toEqual(snapshot(doc, MarkdownModel.build(doc)));
+      }
+    }
+  });
+
   it('matches a full rebuild when the new document was not made from the old one by one edit', () => {
     const before = '# T\n\n```\ncode\n```\n\n| a | b |\n|-|-|\n| 1 | 2 |\n\nText\n===\n';
     const model = MarkdownModel.build(TextDocument.fromString(before));

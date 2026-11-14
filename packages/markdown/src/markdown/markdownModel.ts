@@ -1,5 +1,5 @@
 import type { TextDocument } from '@puffinote/text';
-import { BlockStates, type BlockState } from './blockState.ts';
+import { BlockStates, sameBlockState, type BlockState } from './blockState.ts';
 import { contentLength } from './chars.ts';
 import { tokenizeInline } from './inlineTokenizer.ts';
 import {
@@ -172,18 +172,7 @@ function converges(c: Convergence, i: number, state: BlockState): boolean {
   if (i <= c.afterLine) return false;
   const old = i - c.lineDelta;
   const entry = c.oldLines[old];
-  return entry !== undefined && entry.top && sameState(c.oldEntering[old]!, state);
-}
-
-function sameState(a: BlockState, b: BlockState): boolean {
-  return (
-    a === b ||
-    (a.kind === b.kind &&
-      a.fenceChar === b.fenceChar &&
-      a.fenceLength === b.fenceLength &&
-      a.language === b.language &&
-      a.afterBlank === b.afterBlank)
-  );
+  return entry !== undefined && entry.top && sameBlockState(c.oldEntering[old]!, state);
 }
 
 /** Front matter opens at line 0 only when a closing fence exists below it. */

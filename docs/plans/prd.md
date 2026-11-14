@@ -299,6 +299,8 @@ An incremental, line-based tokenizer with block state and a checkpoint cache. Th
 
 The tokenizer carries block state from line to line: normal, fenced code (fence character and length), indented code, blockquote, list, table, and front matter. Each line stores the state it starts in, so any line can be re-tokenized without starting from the top.
 
+The list part of the state is the content column of each open list item (just past its marker: column 2 for `- a`). Indentation inside an item counts from that column, so after a blank line `    - b` or a tab and `- b` under `- a` is a nested item, not indented code; indented code inside an item needs four columns past the item's text; and a fence indented under an item opens and closes there. A blank line keeps the items open. A non-blank line left of an item's text closes it, unless it is prose straight after a non-blank line (a lazy continuation).
+
 ### 11.2 Incremental re-tokenization
 
 An edit re-tokenizes from the first changed line and stops once the block state matches the previous run again. A common edit re-runs a short tail. The worst case is O(n): an opening fence at the top turns the rest of the file into code.

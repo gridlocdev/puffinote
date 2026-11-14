@@ -1,4 +1,4 @@
-import { BlockStates, type BlockState } from './blockState.ts';
+import { BlockStates, listBase, type BlockState } from './blockState.ts';
 import { contentLength, isAsciiDigit } from './chars.ts';
 import { tokenizeInline } from './inlineTokenizer.ts';
 import { isTaskMark, taskMark, taskStateFromMark, type TaskState } from './taskState.ts';
@@ -27,15 +27,25 @@ export function tokenizeLine(
     case 'fencedCode':
       return inFencedCode(line, lineStart, len, entering, output);
     case 'indentedCode':
-      return inIndentedCode(line, lineStart, len, lineIndex, allowFrontMatterOpen, output);
+      return inIndentedCode(line, lineStart, len, lineIndex, allowFrontMatterOpen, entering, output);
     default:
-      return normal(line, lineStart, len, lineIndex, allowFrontMatterOpen, entering.afterBlank, output);
+      return normal(
+        line,
+        lineStart,
+        len,
+        lineIndex,
+        allowFrontMatterOpen,
+        entering.afterBlank,
+        entering.listColumns,
+        output,
+      );
   }
 }
 
 /**
- * Inside an indented code block a line indented four columns or more, or any blank line, stays in the block.
- * The first non-blank line dedented below four ends it and is classified normally (CommonMark §4.4).
+ * Inside an indented code block a line indented four columns or more (past the content column of the list
+ * item it sits in), or any blank line, stays in the block. The first non-blank line dedented below that ends
+ * it and is classified normally (CommonMark §4.4).
  */
 function inIndentedCode(
   line: string,
@@ -43,15 +53,16 @@ function inIndentedCode(
   len: number,
   lineIndex: number,
   allowFrontMatterOpen: boolean,
+  entering: BlockState,
   output: Token[],
 ): BlockState {
   const [ws, columns] = leadingWhitespace(line, len);
-  if (ws === len) return BlockStates.indentedCode;
-  if (columns >= 4) {
+  if (ws === len) return entering;
+  if (columns >= listBase(entering) + 4) {
     output.push(token(lineStart, len, 'codeText', 'content'));
-    return BlockStates.indentedCode;
+    return entering;
   }
-  return normal(line, lineStart, len, lineIndex, allowFrontMatterOpen, false, output);
+  return normal(line, lineStart, len, lineIndex, allowFrontMatterOpen, false, entering.listColumns, output);
 }
 
 function inFrontMatter(line: string, lineStart: number, len: number, output: Token[]): BlockState {
@@ -70,9 +81,12 @@ function inFencedCode(
   entering: BlockState,
   output: Token[],
 ): BlockState {
-  if (isClosingFence(line, len, entering.fenceChar, entering.fenceLength)) {
+  const base = listBase(entering);
+  if (isClosingFence(line, len, entering.fenceChar, entering.fenceLength, base)) {
     output.push(token(lineStart, len, 'codeFence', 'marker'));
-    return BlockStates.normal;
+    // A closing fence left of the item the fence opened in closes that item too.
+    const columns = leadingWhitespace(line, len)[1];
+    return BlockStates.normalAfter(false, popListsLeftOf(entering.listColumns, columns));
   }
   if (len > 0) output.push(token(lineStart, len, 'codeText', 'content'));
   return entering; // an unterminated fence extends to the end of the file (PRD §10.2)
@@ -85,11 +99,24 @@ function normal(
   lineIndex: number,
   allowFrontMatterOpen: boolean,
   afterBlank: boolean,
+  enteringLists: readonly number[],
   output: Token[],
 ): BlockState {
   // `indent` is the char count of the leading spaces and tabs (for marker positions); `indentCols` its
-  // width in columns (for the CommonMark <=3 / >=4 rules).
+  // width in columns.
   const [indent, indentCols] = leadingWhitespace(line, len);
+  const blank = indent === len;
+
+  // The list items this line sits in. A non-blank line left of an item's content column closes that item,
+  // unless it is a lazy continuation: paragraph text straight after a non-blank line (CommonMark §5.2).
+  let lists = enteringLists;
+  if (!blank && lists.length > 0 && indentCols < lists[lists.length - 1]!) {
+    const popped = popListsLeftOf(lists, indentCols);
+    const rel = indentCols - (popped.length === 0 ? 0 : popped[popped.length - 1]!);
+    if (afterBlank || opensBlock(line, indent, len, rel)) lists = popped;
+  }
+  // The CommonMark <=3 / >=4 column rules count from the content column of the innermost item.
+  const relCols = indentCols - (lists.length === 0 ? 0 : lists[lists.length - 1]!);
 
   // Front matter opens only as the first line, and only when a closing fence exists (decided by the model).
   if (lineIndex === 0 && allowFrontMatterOpen && isFrontMatterFence(line, len)) {
@@ -98,21 +125,21 @@ function normal(
   }
 
   // An indented code block opens only at a fresh block position: it cannot interrupt a paragraph.
-  if (afterBlank && indentCols >= 4 && len > indent) {
+  if (afterBlank && relCols >= 4 && !blank) {
     output.push(token(lineStart, len, 'codeText', 'content'));
-    return BlockStates.indentedCode;
+    return BlockStates.indentedCodeIn(lists);
   }
 
-  if (indentCols <= 3) {
+  if (relCols <= 3) {
     const fence = tryFenceOpen(line, indent, len);
     if (fence) {
       output.push(token(lineStart, len, 'codeFence', 'marker', fence.language));
-      return BlockStates.fenced(fence.char, fence.length, fence.language);
+      return BlockStates.fenced(fence.char, fence.length, fence.language, lists);
     }
 
     if (isHorizontalRule(line, indent, len)) {
       output.push(token(lineStart, len, 'horizontalRule', 'marker'));
-      return BlockStates.normal;
+      return BlockStates.normalAfter(false, lists);
     }
 
     const heading = tryHeading(line, indent, len);
@@ -133,7 +160,7 @@ function normal(
       if (close < len) {
         output.push(token(lineStart + close, len - close, 'headingMarker', 'marker', String(heading.level)));
       }
-      return BlockStates.normal;
+      return BlockStates.normalAfter(false, lists);
     }
 
     // A blockquote's marker spans the whole `>` prefix and carries its depth (the number of `>`) in meta.
@@ -148,7 +175,7 @@ function normal(
       }
       output.push(token(lineStart + indent, p - indent, 'blockquoteMarker', 'marker', String(depth)));
       tokenizeInline(line, lineStart, p, len, output, true);
-      return BlockStates.normal;
+      return BlockStates.normalAfter(false, lists);
     }
   }
 
@@ -171,13 +198,33 @@ function normal(
       contentStart = task.end;
     }
     tokenizeInline(line, lineStart, contentStart, len, output, true);
-    return BlockStates.normal;
+    // The item's content column (just past the marker) is where its nested lines count their indent from.
+    return BlockStates.normalAfter(false, [...lists, indentCols + (markerEnd - indent)]);
   }
 
   // A plain paragraph line. A blank line (empty or whitespace only) marks the next line as a fresh block
-  // position, where an indented code block may open.
+  // position, where an indented code block may open; it closes no list item.
   tokenizeInline(line, lineStart, 0, len, output, true);
-  return BlockStates.normalAfter(indent === len);
+  return BlockStates.normalAfter(blank, lists);
+}
+
+/** `lists` without the items whose content column is right of `columns`. */
+function popListsLeftOf(lists: readonly number[], columns: number): readonly number[] {
+  let n = lists.length;
+  while (n > 0 && columns < lists[n - 1]!) n--;
+  return n === lists.length ? lists : lists.slice(0, n);
+}
+
+/** Whether a line opens a block of its own, at `rel` columns inside its container, rather than being prose. */
+function opensBlock(line: string, indent: number, len: number, rel: number): boolean {
+  if (tryListMarker(line, indent, len) > 0) return true;
+  return (
+    rel <= 3 &&
+    (!!tryFenceOpen(line, indent, len) ||
+      isHorizontalRule(line, indent, len) ||
+      !!tryHeading(line, indent, len) ||
+      isQuote(line, indent, len))
+  );
 }
 
 // ----- setext headings (driven from the model, which owns the one-line lookahead) -----
@@ -275,9 +322,15 @@ function tryFenceOpen(line: string, indent: number, len: number): FenceOpen | nu
   return { char: c, length: run, language: info.length === 0 ? null : info };
 }
 
-function isClosingFence(line: string, len: number, fenceChar: string, fenceLength: number): boolean {
+function isClosingFence(
+  line: string,
+  len: number,
+  fenceChar: string,
+  fenceLength: number,
+  base: number,
+): boolean {
   const [indent, columns] = leadingWhitespace(line, len);
-  if (columns > 3) return false;
+  if (columns - base > 3) return false;
   let run = 0;
   while (indent + run < len && line.charAt(indent + run) === fenceChar) run++;
   if (run < fenceLength) return false;
