@@ -135,6 +135,7 @@ Type part of a file name to open it. Ranking: names that start with the query, t
 ## 7. Tabs
 
 - One tab per open file. A click shows it, a middle-click or × closes it, and the context menu has Pin Tab, Close, Close Others and Close All. ⇧⌘] and ⇧⌘[ step through tabs.
+- A file opened again while it is still being read (a double click, a slow NAS) gets the same tab. When several opens are out at once, the file asked for last stays in front, unless a tab was picked after it.
 - **Pinned tabs** sit at the start of the strip in their own group, which stays in view while the other tabs scroll. A pinned tab shows a pin in place of its ×; clicking the pin unpins it. Close Others and Close All leave pinned tabs open; ⌘W, a middle-click or Close Tab still closes one. Pins are remembered with the open tabs.
 - A dirty tab shows a dot. Closing it asks Save, Don't Save or Cancel.
 - After a save, the status bar says "Saved" for a moment.

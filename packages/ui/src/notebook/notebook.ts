@@ -267,6 +267,10 @@ export class Notebook {
   private loaded = false;
   /** Closed: a dialog or menu left over from it must not change files any more. */
   private disposed = false;
+  /** Opens whose read is out, by path (see `pendingOpen`). */
+  private readonly opening = new Map<string, Promise<Tab>>();
+  /** Bumps on every open and activation; an open brings its tab to the front only if it is still the last. */
+  private frontTicket = 0;
   /** Each tab's saves run one at a time (see `save`). */
   private readonly saveSlots = new WeakMap<Tab, SaveSlot>();
   /** Tabs with a write to the store in flight. */
@@ -490,15 +494,28 @@ export class Notebook {
       await this.openElsewhere(path);
       return null;
     }
+    // A later open or a tab picked meanwhile wins: a slow read must not bring an older choice to the front.
+    const ticket = ++this.frontTicket;
     try {
-      const tab = this.tabs.value.find((t) => t.path.value === path) ?? (await this.openTab(path));
-      this.active.value = tab;
-      this.touchRecent(path);
+      const tab = this.tabs.value.find((t) => t.path.value === path) ?? (await this.pendingOpen(path));
+      if (ticket === this.frontTicket) {
+        this.active.value = tab;
+        this.touchRecent(path);
+      }
       return tab;
     } catch (e) {
       this.report(e);
       return null;
     }
+  }
+
+  /** The tab for `path`, sharing a read already out for it, so a double click opens one tab. */
+  private pendingOpen(path: string): Promise<Tab> {
+    const pending = this.opening.get(path);
+    if (pending) return pending;
+    const run = this.openTab(path).finally(() => this.opening.delete(path));
+    this.opening.set(path, run);
+    return run;
   }
 
   private async openTab(path: string): Promise<Tab> {
@@ -551,6 +568,7 @@ export class Notebook {
   }
 
   activate(tab: Tab | null): void {
+    this.frontTicket++;
     this.active.value = tab;
     if (tab) this.touchRecent(tab.path.value);
   }

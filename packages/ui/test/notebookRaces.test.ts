@@ -310,3 +310,47 @@ describe('Notebook moves, names, settings and session', () => {
     nb.dispose();
   });
 });
+
+describe('Notebook opens in flight', () => {
+  it('opens a note once when it is asked for twice while the read is out', async () => {
+    const store = new GatedStore('N', { 'a.md': 'a' });
+    const nb = await openWith(store);
+    store.holdReads = true;
+    const first = nb.openFile('a.md');
+    const second = nb.openFile('a.md');
+    await settle();
+    for (const r of store.reads.splice(0)) r();
+    expect(await first).toBe(await second);
+    expect(nb.tabs.value).toHaveLength(1);
+  });
+
+  it('keeps the last asked-for note in front when reads come back out of order', async () => {
+    const store = new GatedStore('N', { 'a.md': 'a', 'b.md': 'b' });
+    const nb = await openWith(store);
+    store.holdReads = true;
+    const a = nb.openFile('a.md');
+    await settle();
+    const b = nb.openFile('b.md');
+    await settle();
+    const [readA, readB] = store.reads.splice(0);
+    readB!();
+    await b;
+    readA!();
+    await a;
+    expect(nb.active.value?.path.value).toBe('b.md');
+  });
+
+  it('leaves a tab picked while the read was out in front', async () => {
+    const store = new GatedStore('N', { 'a.md': 'a', 'b.md': 'b' });
+    const nb = await openWith(store);
+    const tabA = (await nb.openFile('a.md'))!;
+    store.holdReads = true;
+    const b = nb.openFile('b.md');
+    await settle();
+    nb.activate(tabA);
+    for (const r of store.reads.splice(0)) r();
+    await b;
+    expect(nb.active.value).toBe(tabA);
+    expect(nb.tabs.value).toHaveLength(2);
+  });
+});
