@@ -25,6 +25,7 @@ import {
   withTaskSort,
   itemTextStart,
   lineDeleteStart,
+  graphemeColumn,
   smartLineStart,
   typeCharEdit,
   wordLeft,
@@ -591,5 +592,21 @@ describe('⌘⌫ deletes to the start of the row', () => {
   it('deletes as Backspace with nothing before the caret on the row', () => {
     expect(lineDeleteStart(6, 0, 6)).toBeNull();
     expect(lineDeleteStart(40, 40, 0)).toBeNull();
+  });
+});
+
+describe('a click inside a character', () => {
+  const thumb = 'a\u{1F44D}\u{1F3FD}b'; // a, a thumbs-up with a skin tone (4 code units), b
+  it('lands on the edge of the grapheme it hit, never between its code units', () => {
+    expect(graphemeColumn(thumb, 2, 1)).toBe(5);
+    expect(graphemeColumn(thumb, 3, -1)).toBe(1);
+    expect(graphemeColumn('e\u0301x', 1, 1)).toBe(2); // e and a combining accent
+  });
+
+  it('keeps a column already on a boundary', () => {
+    expect(graphemeColumn(thumb, 1, 1)).toBe(1);
+    expect(graphemeColumn(thumb, 5, -1)).toBe(5);
+    expect(graphemeColumn(thumb, 6, 1)).toBe(6);
+    expect(graphemeColumn('', 0, 1)).toBe(0);
   });
 });

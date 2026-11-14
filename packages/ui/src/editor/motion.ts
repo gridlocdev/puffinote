@@ -1,5 +1,5 @@
 import { parseLinePrefix } from '@puffinote/markdown';
-import type { TextDocument } from '@puffinote/text';
+import { nextBoundary, previousBoundary, type TextDocument } from '@puffinote/text';
 
 const words = new Intl.Segmenter(undefined, { granularity: 'word' });
 
@@ -77,4 +77,16 @@ export function smartLineStart(doc: TextDocument, from: number): number {
 export function lineDeleteStart(caret: number, rowStart: number, textStart: number): number | null {
   const start = Math.max(rowStart, textStart);
   return start < caret ? start : null;
+}
+
+/**
+ * `col` moved to a grapheme boundary of `text`: unchanged when it is on one, else the end (`dir` 1) or start
+ * (`dir` -1) of the grapheme it falls inside. The browser can place a click between the code units of an
+ * emoji or a combining sequence; a caret there would split the character on the next keystroke.
+ */
+export function graphemeColumn(text: string, col: number, dir: 1 | -1): number {
+  if (col <= 0 || col >= text.length) return col;
+  const start = previousBoundary(text, col + 1);
+  if (start === col) return col;
+  return dir === 1 ? nextBoundary(text, start) : start;
 }

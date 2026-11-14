@@ -25,6 +25,7 @@ import { caretBox, firstRowEndingBelow, hitTest, lineSelectionRects, textRanges 
 import { ListDepthTracker, renderLine, snapOutOfConcealed } from './lineRender.ts';
 import { BlockWidget, LineView } from './LineView.tsx';
 import {
+  graphemeColumn,
   itemTextStart as listTextStart,
   lineDeleteStart,
   lineContentEnd,
@@ -908,7 +909,8 @@ export function MarkdownEditor(props: MarkdownEditorProps) {
     const hit = hitTest(content, x, y, rowIndex.current.rows);
     if (!hit) return null;
     const start = doc.getLineStart(hit.line);
-    return snap(start + Math.min(hit.col, lineContentEnd(doc, hit.line) - start), dir);
+    const col = Math.min(hit.col, lineContentEnd(doc, hit.line) - start);
+    return snap(start + graphemeColumn(lineTextOf(cache, hit.line), col, dir), dir);
   }
 
   function onMouseDown(e: MouseEvent): void {
