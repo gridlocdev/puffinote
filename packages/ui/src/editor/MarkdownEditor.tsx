@@ -33,7 +33,7 @@ import {
   wordRangeAt,
   wordRight,
 } from './motion.ts';
-import type { TextRange } from './find.ts';
+import { matchesBetween, type TextRange } from './find.ts';
 import { keyAction, undoRunFor } from './keys.ts';
 import { carryLineCache, lineTextOf, type LineCache } from './lineCache.ts';
 import { keepReveal, lineReveal, type LineReveal } from './reveal.ts';
@@ -349,6 +349,7 @@ export function MarkdownEditor(props: MarkdownEditorProps) {
 
   const paintQueued = useRef(false);
   function onScrollerScroll(e: Event): void {
+    repaintFindSoon();
     props.onScroll?.((e.currentTarget as HTMLElement).scrollTop);
     if (isCollapsed(sel) || paintQueued.current) return;
     paintQueued.current = true;
@@ -383,9 +384,11 @@ export function MarkdownEditor(props: MarkdownEditorProps) {
   }, []);
 
   // Find in Note's marks, drawn with the CSS Custom Highlight API so the lines' DOM stays as it is. Every render
-  // can replace the lines' text nodes, so the ranges are made again each time.
+  // can replace the lines' text nodes, so the ranges are made again each time, and only for the rows in view
+  // and a screen above and below them; scrolling draws the rest.
   const findMatches = props.findMatches;
-  useLayoutEffect(() => {
+  const paintFindRef = useRef<() => void>(() => {});
+  paintFindRef.current = () => {
     const registry = globalThis.CSS?.highlights;
     if (!registry) return;
     if (!findMatches || findMatches.matches.length === 0) {
@@ -395,7 +398,14 @@ export function MarkdownEditor(props: MarkdownEditorProps) {
     }
     const all = new Highlight();
     const current = new Highlight();
-    findMatches.matches.forEach((m, i) => {
+    const [firstLine, lastLine] = linesNearView();
+    const [near, past] = matchesBetween(
+      findMatches.matches,
+      doc.getLineStart(firstLine),
+      doc.getLineEnd(lastLine),
+    );
+    for (let i = near; i < past; i++) {
+      const m = findMatches.matches[i]!;
       const a = doc.getPosition(m.start);
       const b = doc.getPosition(m.end);
       for (let line = a.line; line <= b.line; line++) {
@@ -405,14 +415,52 @@ export function MarkdownEditor(props: MarkdownEditorProps) {
         const to = line === b.line ? b.column : doc.getLineEnd(line) - doc.getLineStart(line);
         for (const r of textRanges(el, from, to)) (i === findMatches.current ? current : all).add(r);
       }
-    });
+    }
     registry.set('pn-find', all);
     registry.set('pn-find-current', current);
-  });
+  };
+  useLayoutEffect(() => paintFindRef.current());
+  const findFrame = useRef(0);
+  function repaintFindSoon(): void {
+    if (!findMatches || findFrame.current) return;
+    findFrame.current = requestAnimationFrame(() => {
+      findFrame.current = 0;
+      paintFindRef.current();
+    });
+  }
+
+  /** The first and last line of the rows in view, widened by a screen above and below. */
+  function linesNearView(): [number, number] {
+    const lastDocLine = doc.lineCount - 1;
+    const { rows, lines } = rowIndex.current;
+    const scroller = scrollerRef.current;
+    if (!scroller || rows.length === 0) return [0, lastDocLine];
+    const view = scroller.getBoundingClientRect();
+    const top = view.top - view.height;
+    const bottom = view.bottom + view.height;
+    // Rows go down the page in order: the first whose bottom is below `top`, the last whose top is above `bottom`.
+    let lo = 0;
+    let hi = rows.length - 1;
+    while (lo < hi) {
+      const mid = (lo + hi) >> 1;
+      if (rows[mid]!.getBoundingClientRect().bottom < top) lo = mid + 1;
+      else hi = mid;
+    }
+    const first = lo;
+    hi = rows.length - 1;
+    while (lo < hi) {
+      const mid = (lo + hi + 1) >> 1;
+      if (rows[mid]!.getBoundingClientRect().top > bottom) hi = mid - 1;
+      else lo = mid;
+    }
+    const next = lines[lo + 1];
+    return [lines[first] ?? 0, Math.min(lastDocLine, next === undefined ? lastDocLine : next - 1)];
+  }
   useLayoutEffect(
     () => () => {
       globalThis.CSS?.highlights?.delete('pn-find');
       globalThis.CSS?.highlights?.delete('pn-find-current');
+      cancelAnimationFrame(findFrame.current);
     },
     [],
   );

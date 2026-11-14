@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { Notebook } from '../src/notebook/notebook.ts';
 import { memoryPrefs } from '../src/notebook/settings.ts';
-import { findAll, matchAt, matchFrom } from '../src/editor/find.ts';
+import { findAll, matchAt, matchFrom, matchesBetween } from '../src/editor/find.ts';
 import { MemoryStore } from '../src/platform/memoryStore.ts';
 import { ShellModel } from '../src/shell/shellModel.ts';
 
@@ -94,6 +94,15 @@ describe('find in note', () => {
     expect(m.findMatches.value!.matches).toBe(first);
     state.insert('x');
     expect(m.findMatches.value!.matches).not.toBe(first);
+  });
+
+  it('picks out the matches that overlap a range, for drawing only the rows in view', () => {
+    const matches = findAll('ab ab ab ab', 'ab'); // 0, 3, 6, 9
+    expect(matchesBetween(matches, 0, 11)).toEqual([0, 4]);
+    expect(matchesBetween(matches, 4, 7)).toEqual([1, 3]);
+    expect(matchesBetween(matches, 5, 6)).toEqual([2, 2]);
+    expect(matchesBetween(matches, 11, 20)).toEqual([4, 4]);
+    expect(matchesBetween([], 0, 5)).toEqual([0, 0]);
   });
 
   it('opens the notebook search with ⇧⌘F', () => {

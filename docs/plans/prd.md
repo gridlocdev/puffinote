@@ -292,7 +292,7 @@ Exported HTML must be safe to open. Every attribute value is escaped, including 
 ### 10.7 Find in Note
 
 - **Find in Note… (⌘F)** opens a bar over the note's top right corner with the caret in its box. It starts with the selected text when that is on one line, and otherwise with the text it had when it was last closed.
-- Matching ignores case, and the text is matched as typed (no patterns). Every match in the note is marked, and the current one more strongly. The bar counts them ("3 of 12", or "No results").
+- Matching ignores case, and the text is matched as typed (no patterns). Every match in the note is marked, and the current one more strongly; the marks are drawn for the rows in view and a screen either side, and follow scrolling. The bar counts them ("3 of 12", or "No results").
 - Typing selects the first match from the selection onwards. Enter or ⌘G selects the next match, and ⇧Enter or ⇧⌘G the previous one, wrapping around the note. Matches follow edits while the bar is open.
 - Escape or the close button closes the bar and puts the caret back in the note, with the match selected.
 - Searching every note is the sidebar's Search panel (§6.3), opened with ⇧⌘F.

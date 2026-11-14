@@ -47,3 +47,20 @@ export function matchAt(matches: readonly TextRange[], start: number, end: numbe
   }
   return -1;
 }
+
+/**
+ * The matches that overlap `[start, end)`, as the index range `[from, to)` into `matches` (sorted and not
+ * overlapping, as `findAll` returns them), so the surface draws only the matches near the rows in view.
+ */
+export function matchesBetween(matches: readonly TextRange[], start: number, end: number): [number, number] {
+  let lo = 0;
+  let hi = matches.length;
+  while (lo < hi) {
+    const mid = (lo + hi) >> 1;
+    if (matches[mid]!.end <= start) lo = mid + 1;
+    else hi = mid;
+  }
+  let to = lo;
+  while (to < matches.length && matches[to]!.start < end) to++;
+  return [lo, to];
+}
