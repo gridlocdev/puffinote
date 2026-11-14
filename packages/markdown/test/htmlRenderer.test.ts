@@ -226,6 +226,18 @@ describe('HTML renderer', () => {
     expect(html).toContain('<td>1</td>');
   });
 
+  it('aligns table columns as the delimiter row says', () => {
+    const html = body('| L | C | R | N |\n|:--|:-:|--:|---|\n| 1 | 2 | 3 | 4 |');
+    expect(html).toContain(
+      '<tr><th style="text-align: left">L</th><th style="text-align: center">C</th>' +
+        '<th style="text-align: right">R</th><th>N</th></tr>',
+    );
+    expect(html).toContain(
+      '<tr><td style="text-align: left">1</td><td style="text-align: center">2</td>' +
+        '<td style="text-align: right">3</td><td>4</td></tr>',
+    );
+  });
+
   it('ends a table at the first line without a pipe, even one with inline markup', () => {
     const html = body('| A | B |\n| - | - |\n| 1 | 2 |\nafter **bold** and [l](u)');
     expect(html).toContain('</table>\n<p>after <strong>bold</strong> and <a href="u">l</a></p>');

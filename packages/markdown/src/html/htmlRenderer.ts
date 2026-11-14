@@ -78,6 +78,21 @@ function stripCr(s: string): string {
   return s.replace(/\r+$/, '');
 }
 
+/**
+ * Each column's alignment from a table's delimiter row (GFM): `:--` left, `:-:` center, `--:` right, and ''
+ * for none.
+ */
+function columnAligns(delimiterRow: string): string[] {
+  let cells = delimiterRow.split('|').map((c) => c.trim());
+  if (cells.length > 1 && cells[0] === '') cells = cells.slice(1);
+  if (cells.length > 1 && cells[cells.length - 1] === '') cells = cells.slice(0, -1);
+  return cells.map((c) => {
+    const left = c.startsWith(':');
+    const right = c.endsWith(':') && c.length > 1;
+    return left && right ? 'center' : right ? 'right' : left ? 'left' : '';
+  });
+}
+
 /** `s` without up to `columns` columns of leading blanks; a tab that crosses the limit leaves its rest as spaces. */
 function stripColumns(s: string, columns: number): string {
   let col = 0;
@@ -396,14 +411,15 @@ class Renderer {
 
   private table(line: number): number {
     const n = this.doc.lineCount;
+    const aligns = columnAligns(stripCr(this.doc.getLineText(line + 1)));
     this.out += '<table>\n<thead>\n';
-    this.tableRow(this.model.lineTokens(line), 'th');
+    this.tableRow(this.model.lineTokens(line), 'th', aligns);
     this.out += '</thead>\n';
     let i = line + 2; // past the header and delimiter rows
     if (i < n && this.isTableRow(i)) {
       this.out += '<tbody>\n';
       while (i < n && this.isTableRow(i)) {
-        this.tableRow(this.model.lineTokens(i), 'td');
+        this.tableRow(this.model.lineTokens(i), 'td', aligns);
         i++;
       }
       this.out += '</tbody>\n';
@@ -413,9 +429,10 @@ class Renderer {
   }
 
   /** Split a row's tokens into cells at the `|` markers, then render each cell's inline run. */
-  private tableRow(tokens: readonly Token[], tag: string): void {
+  private tableRow(tokens: readonly Token[], tag: string, aligns: readonly string[]): void {
     this.out += '<tr>';
     let cellStart = 0;
+    let column = 0;
     for (let i = 0; i <= tokens.length; i++) {
       const t = tokens[i];
       const isPipe = t !== undefined && this.isPipe(t);
@@ -427,7 +444,9 @@ class Renderer {
           const content = this.out.trim();
           this.out = outer;
           if (content.length > 0 || (i !== tokens.length && cellStart !== 0)) {
-            this.out += `<${tag}>${content}</${tag}>`;
+            const align = aligns[column++];
+            const style = align ? ` style="text-align: ${align}"` : '';
+            this.out += `<${tag}${style}>${content}</${tag}>`;
           }
         }
         cellStart = i + 1;
