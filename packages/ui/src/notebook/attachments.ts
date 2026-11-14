@@ -54,6 +54,65 @@ export function imageTargets(text: string, notePath: string): Set<string> {
   return out;
 }
 
+/** Every `![[…]]` embed target in `text`, without its `|size` or `#part` (code is skipped). */
+export function embedTargets(text: string): string[] {
+  if (!text.includes('![[')) return [];
+  const out: string[] = [];
+  for (const t of MarkdownModel.build(TextDocument.fromString(text)).allTokens()) {
+    if (t.type !== 'embed') continue;
+    const target = (t.meta ?? '').split(/[|#]/)[0]!.trim();
+    if (target) out.push(target);
+  }
+  return out;
+}
+
+/** The `src` of every `<img>` tag in `text` that names a notebook file. Code isn't skipped: it only keeps more. */
+export function htmlImageSources(text: string): string[] {
+  if (!/<img/i.test(text)) return [];
+  const out: string[] = [];
+  for (const m of text.matchAll(/<img\b[^>]*?\bsrc\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s>]+))/gi)) {
+    const url = (m[1] ?? m[2] ?? m[3] ?? '').trim();
+    if (!isExternal(url)) out.push(url);
+  }
+  return out;
+}
+
+/**
+ * The pictures a set of notes shows (PRD §10.6), to tell used pictures from unused ones: `![](…)` and
+ * `[…](…)` links, `<img src="…">` tags, and `![[name.png]]` wiki embeds. An embed has no folder of its own:
+ * it counts for the picture it names from the note's folder, from the top level, and for every picture whose
+ * path ends with it (`![[a.png]]` keeps every `a.png`), so a picture is never wrongly called unused.
+ */
+export class PictureUsage {
+  private readonly paths = new Set<string>();
+  private readonly embeds = new Set<string>();
+
+  /** Count what the note at `notePath`, whose text is `text`, shows. */
+  add(text: string, notePath: string): void {
+    if (text.includes('](')) for (const p of imageTargets(text, notePath)) this.paths.add(p);
+    for (const src of htmlImageSources(text)) {
+      const p = resolveRelative(notePath, src);
+      if (p !== null && isImagePath(p)) this.paths.add(p);
+    }
+    for (const target of embedTargets(text)) {
+      if (!isImagePath(target)) continue;
+      const here = resolveRelative(notePath, target);
+      if (here !== null) this.paths.add(here);
+      const bare = resolveRelative('', target);
+      if (bare !== null) this.embeds.add(bare);
+    }
+  }
+
+  /** Whether some note shows the picture at `path`. */
+  has(path: string): boolean {
+    if (this.paths.has(path) || this.embeds.has(path)) return true;
+    for (let i = path.indexOf('/'); i >= 0; i = path.indexOf('/', i + 1)) {
+      if (this.embeds.has(path.slice(i + 1))) return true;
+    }
+    return false;
+  }
+}
+
 /** `to` written relative to the folder of the note at `from`, `/`-separated (`../attachments/a.png`). */
 export function relativePath(from: string, to: string): string {
   const base = parentOf(from).split('/').filter(Boolean);

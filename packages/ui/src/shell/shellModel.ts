@@ -8,7 +8,6 @@ import type { EditorState } from '../editor/editorState.ts';
 import { findAll, matchAt, matchFrom, type TextRange } from '../editor/find.ts';
 import { sidebarPanels, type Notebook, type SidebarPanel, type Tab } from '../notebook/notebook.ts';
 import { allFolders, fileKind, findNode, hasFolders, noteFileName, type TreeNode } from '../notebook/tree.ts';
-import { imageTargets } from '../notebook/attachments.ts';
 import { baseName, invalidNameReason, mimeOf, parentOf, resolveRelative, stemOf } from '../platform/paths.ts';
 import type { ConfirmOptions, PromptOptions } from './Dialog.tsx';
 
@@ -575,7 +574,9 @@ export class ShellModel {
     let deleteFile = file !== null;
     if (file !== null) {
       const text = state.text;
-      const hereAgain = imageTargets(text.slice(0, picture.start) + text.slice(picture.end), notePath).has(
+      const hereAgain = nb.showsPicture(
+        text.slice(0, picture.start) + text.slice(picture.end),
+        notePath,
         file,
       );
       let others: string[];

@@ -16,6 +16,7 @@ import {
   imageMarkdown,
   imageTargets,
   isImageMime,
+  PictureUsage,
   relinkEdits,
   type RefEdit,
 } from './attachments.ts';
@@ -1128,13 +1129,17 @@ export class Notebook {
    * Every picture some note links to, by notebook path. Throws when a note can't be read, so a picture it
    * shows is never called unused.
    */
-  private async linkedPictures(): Promise<Set<string>> {
-    const out = new Set<string>();
-    for (const path of await this.allNotes()) {
-      const text = await this.readNote(path);
-      if (text.includes('](')) for (const t of imageTargets(text, path)) out.add(t);
-    }
+  private async linkedPictures(): Promise<PictureUsage> {
+    const out = new PictureUsage();
+    for (const path of await this.allNotes()) out.add(await this.readNote(path), path);
     return out;
+  }
+
+  /** Whether `text`, the note at `notePath`, shows the picture at `picture` in any of the ways that count. */
+  showsPicture(text: string, notePath: string, picture: string): boolean {
+    const usage = new PictureUsage();
+    usage.add(text, notePath);
+    return usage.has(picture);
   }
 
   /** The picture in `dir` (listed as `entries`) whose bytes are `bytes`, or null. */
@@ -1178,7 +1183,7 @@ export class Notebook {
     for (const note of await this.allNotes()) {
       if (note === except) continue;
       const text = await this.readNote(note);
-      if (text.includes('](') && imageTargets(text, note).has(path)) out.push(note);
+      if (this.showsPicture(text, note, path)) out.push(note);
     }
     return out;
   }
@@ -1202,7 +1207,7 @@ export class Notebook {
     if (this.settings.peek().unusedImages !== 'ask') return;
     const present = paths.filter((p) => findNode(this.tree.peek(), p)?.kind === 'file');
     if (present.length === 0) return;
-    let linked: Set<string>;
+    let linked: PictureUsage;
     try {
       linked = await this.linkedPictures();
     } catch {

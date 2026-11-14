@@ -204,3 +204,26 @@ describe('Find Unused Pictures safety', () => {
     expect(nb.notice.value?.action).toBeUndefined();
   });
 });
+
+describe('pictures shown by wiki embeds and <img>', () => {
+  it('counts ![[…]] embeds and <img src> as used', async () => {
+    const { nb } = await open({
+      'notes/one.md': 'x ![[a.png|300]] y\n\n<img src="../pics/b.png" width=50>',
+      'two.md': '![[deep/c.png]]\n\n```\n![[d.png]]\n```',
+      'attachments/a.png': '',
+      'pics/b.png': '',
+      'x/deep/c.png': '',
+      'd.png': '',
+      'e.png': '',
+    });
+    expect(await nb.unusedPictures()).toEqual(['d.png', 'e.png']);
+  });
+
+  it('keeps a picture an embed shows out of the no-longer-used offer and lists the note', async () => {
+    const { nb } = await open({ 'one.md': '![](a.png)', 'two.md': '![[a.png]]', 'a.png': '' });
+    expect(await nb.notesShowing('a.png', 'one.md')).toEqual(['two.md']);
+    await nb.remove('one.md');
+    await new Promise((r) => setTimeout(r, 10));
+    expect(nb.notice.value?.action).toBeUndefined();
+  });
+});
