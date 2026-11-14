@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { CommandCatalog, type CommandSpec } from '../src/commands/command.ts';
 import { matches, parseShortcut, type ShortcutEvent } from '../src/commands/shortcut.ts';
 
-type Ev = Partial<ShortcutEvent>;
+type Ev = Partial<ShortcutEvent> & { altGraph?: boolean };
 
 function ev(key: string, code: string, mods: Ev = {}): ShortcutEvent {
   return {
@@ -12,6 +12,7 @@ function ev(key: string, code: string, mods: Ev = {}): ShortcutEvent {
     ctrlKey: mods.ctrlKey ?? false,
     altKey: mods.altKey ?? false,
     shiftKey: mods.shiftKey ?? false,
+    getModifierState: (k: string) => k === 'AltGraph' && !!mods.altGraph,
   };
 }
 
@@ -43,6 +44,14 @@ const win = (e: ShortcutEvent) => catalog.forEvent(e, false, false)?.id;
 const mac = (e: ShortcutEvent) => catalog.forEvent(e, false, true)?.id;
 
 describe('shortcuts on other keyboard layouts', () => {
+  it('ignores characters typed with AltGr on Windows (Polish ś, €)', () => {
+    expect(win(ev('ś', 'KeyS', { ctrlKey: true, altKey: true, altGraph: true }))).toBeUndefined();
+    expect(win(ev('ę', 'KeyE', { ctrlKey: true, altKey: true }))).toBeUndefined();
+    expect(win(ev('€', 'KeyE', { ctrlKey: true, altKey: true, altGraph: true }))).toBeUndefined();
+    // Ctrl+Alt on a US layout still works.
+    expect(win(ev('s', 'KeyS', { ctrlKey: true, altKey: true }))).toBe('focusTree');
+  });
+
   it('matches punctuation by the character typed, not the key it is on', () => {
     // French AZERTY: "-" is on the 6 key.
     expect(win(ev('-', 'Digit6', { ctrlKey: true }))).toBe('zoomOut');

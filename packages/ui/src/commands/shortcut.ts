@@ -73,7 +73,17 @@ const NAMES: Record<string, string> = {
 export type ShortcutEvent = Pick<
   KeyboardEvent,
   'key' | 'code' | 'metaKey' | 'ctrlKey' | 'altKey' | 'shiftKey'
->;
+> & { getModifierState?: (key: string) => boolean };
+
+/**
+ * True when the event typed a character through AltGr rather than pressing a shortcut. Windows reports
+ * AltGr as Ctrl+Alt, so Polish AltGr+S (ś) would otherwise run Ctrl+Alt+S. macOS has no AltGr (⌥ is Alt).
+ */
+function isAltGraph(e: ShortcutEvent, mac: boolean): boolean {
+  if (mac) return false;
+  if (e.getModifierState?.('AltGraph')) return true;
+  return e.ctrlKey && e.altKey && [...e.key].length === 1 && !/^[\x20-\x7e]$/.test(e.key);
+}
 
 /**
  * How well a key event matches a shortcut: 0 when it doesn't, else a rank where lower is better, so a lookup
@@ -91,6 +101,7 @@ export function matchRank(s: Shortcut, e: ShortcutEvent, mac = isMac): number {
   const mod = mac ? e.metaKey : e.ctrlKey;
   const ctrl = mac ? e.ctrlKey : false;
   if (mod !== s.mod || e.altKey !== s.alt || ctrl !== s.ctrl) return 0;
+  if (isAltGraph(e, mac)) return 0;
   if (/^[\x21-\x7e]$/.test(e.key)) {
     const ch = e.key.toLowerCase();
     if (ch === s.key && e.shiftKey === s.shift) return 1;
