@@ -32,6 +32,7 @@ const BREAKS = new Set([
   'shell.find',
   'shell.openNotebook',
   'shell.save',
+  'shell.exportHtml',
   'shell.closeTab',
   'shell.rename',
   'shell.refresh',

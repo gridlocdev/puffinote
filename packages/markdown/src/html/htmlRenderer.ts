@@ -5,11 +5,24 @@ import { MarkdownModel } from '../markdown/markdownModel.ts';
 import { taskLabel, taskStateFromMark, type TaskState } from '../markdown/taskState.ts';
 import type { Token } from '../markdown/token.ts';
 
+/** Options for an exported document. */
+export interface HtmlOptions {
+  /**
+   * The `src` to write for an image whose Markdown destination is `src` (a picture read into a `data:` URL,
+   * say), or null/undefined to keep it. The result is checked like any other image URL (PRD §10.5).
+   */
+  readonly image?: (src: string) => string | null | undefined;
+}
+
 /**
  * Renders a document to self-contained HTML (PRD §10.5). Pure and dependency-free: it walks the same token
  * stream the editor uses, so what the CLI exports matches what the editor shows. No external CSS, no network.
  */
-export function renderHtmlDocument(document: TextDocument, title?: string | null): string {
+export function renderHtmlDocument(
+  document: TextDocument,
+  title?: string | null,
+  options: HtmlOptions = {},
+): string {
   return (
     '<!DOCTYPE html>\n<html lang="en">\n<head>\n' +
     '<meta charset="utf-8">\n' +
@@ -17,18 +30,27 @@ export function renderHtmlDocument(document: TextDocument, title?: string | null
     `<title>${escapeHtml(title ?? 'Document')}</title>\n` +
     `<style>\n${defaultCss}\n</style>\n` +
     '</head>\n<body>\n' +
-    renderHtmlBody(document) +
+    renderHtmlBody(document, options) +
     '</body>\n</html>\n'
   );
 }
 
 /** Just the body markup, without the `<html>` wrapper. */
-export function renderHtmlBody(document: TextDocument): string {
-  const r = new Renderer(document, MarkdownModel.build(document));
+export function renderHtmlBody(document: TextDocument, options: HtmlOptions = {}): string {
+  const r = new Renderer(document, MarkdownModel.build(document), options);
   let line = 0;
   // Every block consumes at least one line, so the walk always ends.
   while (line < document.lineCount) line = Math.max(line + 1, r.block(line));
   return r.out;
+}
+
+/** Every image destination in `document`, as written (code excluded), in order and without repeats. */
+export function imageSources(document: TextDocument): string[] {
+  const out = new Set<string>();
+  for (const t of MarkdownModel.build(document).allTokens()) {
+    if (t.type === 'imageUrl' && t.meta) out.add(t.meta);
+  }
+  return [...out];
 }
 
 /** Escape `&`, `<` and `>`. */
@@ -122,10 +144,12 @@ class Renderer {
   out = '';
   private readonly doc: TextDocument;
   private readonly model: MarkdownModel;
+  private readonly options: HtmlOptions;
 
-  constructor(doc: TextDocument, model: MarkdownModel) {
+  constructor(doc: TextDocument, model: MarkdownModel, options: HtmlOptions) {
     this.doc = doc;
     this.model = model;
+    this.options = options;
   }
 
   /** Render the block beginning at `line`; return the next unconsumed line. */
@@ -575,7 +599,7 @@ class Renderer {
       if (t.type === 'imageAlt') alt = t.meta ?? '';
       else if (t.type === 'imageUrl') src = t.meta ?? '';
     }
-    const safe = safeHref(src, 'image');
+    const safe = safeHref(this.options.image?.(src) ?? src, 'image');
     this.out += safe !== null ? `<img src="${escapeAttr(safe)}" alt="${escapeAttr(alt)}">` : escapeHtml(alt);
     return end;
   }
@@ -698,7 +722,13 @@ code { font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 0.9em;
 pre { background: rgba(127,127,127,0.12); padding: 1rem; border-radius: 8px; overflow:auto; }
 pre code { background: none; padding: 0; }
 blockquote { border-left: 3px solid rgba(127,127,127,0.5); margin: 0; padding: 0 1rem; color: #666; }
-mark { background: #fdf6b2; }
+mark { background: #fdf6b2; color: #1f1f1f; }
+a { color: #0b62d6; }
+@media (prefers-color-scheme: dark) {
+  blockquote { color: #a8a8a8; }
+  mark { background: #6b5a12; color: inherit; }
+  a { color: #6aa6ff; }
+}
 table { border-collapse: collapse; }
 th, td { border: 1px solid rgba(127,127,127,0.4); padding: 0.4em 0.7em; }
 .properties { color: #888; font-size: 0.85em; }

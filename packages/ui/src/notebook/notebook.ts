@@ -22,6 +22,7 @@ import {
   relinkEdits,
   type RefEdit,
 } from './attachments.ts';
+import { noteHtml } from './export.ts';
 import { NoteMetaCache } from './noteMeta.ts';
 import {
   ConflictError,
@@ -1370,6 +1371,35 @@ export class Notebook {
     else if (failed > 0) this.notify('error', `Nothing was imported.${lost}`);
     else this.notify('info', 'There was nothing to import.');
     return { imported, failed, roots };
+  }
+
+  // ----- Export -----
+
+  /**
+   * Export the note in `tab` as one standalone HTML file (PRD §10.5), its unsaved text included, handed to
+   * the user as a download.
+   */
+  async exportHtml(tab: Tab): Promise<void> {
+    if (!tab.state) return;
+    const download = this.options.download;
+    if (!download) return this.notify('info', 'Puffinote can’t save a file here.');
+    try {
+      const out = await noteHtml(this.store, tab.path.peek(), tab.state.text);
+      download(out.name, new TextEncoder().encode(out.html), 'text/html');
+      this.noteSkipped(out.skipped);
+    } catch (e) {
+      this.report(e);
+    }
+  }
+
+  /** Say which pictures an export left as links instead of embedding them. */
+  private noteSkipped(skipped: readonly string[]): void {
+    if (skipped.length === 0) return;
+    const which = skipped.length === 1 ? `“${skipped[0]}”` : `${skipped.length} pictures`;
+    this.notify(
+      'info',
+      `Exported without ${which}: missing, too large or not a PNG, JPEG, GIF, WebP, AVIF or BMP, so ${skipped.length === 1 ? 'it stays a link' : 'they stay links'}.`,
+    );
   }
 
   private checkName(name: string): boolean {

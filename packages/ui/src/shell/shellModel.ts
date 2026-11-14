@@ -1305,6 +1305,19 @@ function shellCommandSpecs(m: ShellModel): CommandSpec[] {
       },
     },
     {
+      id: 'shell.exportHtml',
+      title: 'Export as HTML…',
+      description: 'Save the note in front as one HTML file, its pictures included.',
+      group: 'File',
+      icon: 'file-text',
+      keywords: 'download web page share',
+      enabled: () => tab()?.state != null,
+      run: async () => {
+        const t = tab();
+        if (t) await nb()?.exportHtml(t);
+      },
+    },
+    {
       id: 'shell.closeTab',
       title: 'Close Tab',
       description: 'Close the tab in front.',

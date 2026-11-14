@@ -1,6 +1,6 @@
 import { TextDocument } from '@puffinote/text';
 import { describe, expect, it } from 'vitest';
-import { renderHtmlBody, renderHtmlDocument } from '../src/index.ts';
+import { imageSources, renderHtmlBody, renderHtmlDocument } from '../src/index.ts';
 
 const body = (md: string): string => renderHtmlBody(TextDocument.fromString(md));
 
@@ -273,6 +273,19 @@ describe('HTML renderer', () => {
     expect(html).toContain('<h2>Two</h2>');
     expect(html).not.toContain('<hr>');
     expect(html).not.toContain('<p></p>');
+  });
+
+  it('lists image sources once each, outside code, and maps them through the image option', () => {
+    const doc = TextDocument.fromString('![a](x.png) ![b](y.png)\n\n`![c](z.png)`\n\n![d](x.png)');
+    expect(imageSources(doc)).toEqual(['x.png', 'y.png']);
+    const html = renderHtmlBody(doc, {
+      image: (src) =>
+        src === 'x.png' ? 'data:image/png;base64,AA==' : src === 'y.png' ? 'javascript:1' : null,
+    });
+    expect(html).toContain('<img src="data:image/png;base64,AA==" alt="a">');
+    // A mapped URL is still checked (PRD §10.5).
+    expect(html).not.toContain('javascript');
+    expect(html).toContain('alt="a"> b</p>');
   });
 
   it('renders a self-contained document', () => {
