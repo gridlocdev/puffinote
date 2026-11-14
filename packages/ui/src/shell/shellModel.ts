@@ -112,13 +112,19 @@ export class ShellModel {
 
   readonly activeTab = computed(() => this.notebook.value?.active.value ?? null);
   readonly activeState = computed<EditorState | null>(() => this.activeTab.value?.state ?? null);
-  /** The matches of the find bar's text in the note in front, and the one the selection is on (or -1). */
-  readonly findMatches = computed<{ matches: readonly TextRange[]; current: number } | null>(() => {
+  /** The matches of the find bar's text in the note in front, searched again only when the text or query changes. */
+  private readonly findHits = computed<readonly TextRange[] | null>(() => {
     const query = this.findQuery.value;
     const state = this.activeState.value;
     if (!query || !state) return null;
     void state.version.value;
-    const matches = findAll(state.text, query);
+    return findAll(state.text, query);
+  });
+  /** The matches of the find bar's text in the note in front, and the one the selection is on (or -1). */
+  readonly findMatches = computed<{ matches: readonly TextRange[]; current: number } | null>(() => {
+    const matches = this.findHits.value;
+    const state = this.activeState.value;
+    if (!matches || !state) return null;
     const sel = state.selection.value;
     return {
       matches,

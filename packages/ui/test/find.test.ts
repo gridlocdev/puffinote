@@ -81,6 +81,21 @@ describe('find in note', () => {
     expect(m.findMatches.value?.matches).toHaveLength(3);
   });
 
+  it('searches the note again only when the text or the query changes, not when the selection moves', async () => {
+    const { m, state } = await setup('egg egg egg');
+    m.openFind();
+    m.setFindQuery('egg');
+    const first = m.findMatches.value!.matches;
+    state.select(4, 7);
+    expect(m.findMatches.value).toEqual({ matches: first, current: 1 });
+    expect(m.findMatches.value!.matches).toBe(first);
+    state.select(5);
+    expect(m.findMatches.value!.current).toBe(-1);
+    expect(m.findMatches.value!.matches).toBe(first);
+    state.insert('x');
+    expect(m.findMatches.value!.matches).not.toBe(first);
+  });
+
   it('opens the notebook search with ⇧⌘F', () => {
     const m = new ShellModel();
     expect(m.shellCatalog.get('view.sidebar.search')?.shortcut).toBe('mod+shift+f');
