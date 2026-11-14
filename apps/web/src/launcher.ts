@@ -246,13 +246,14 @@ export class Launcher {
   private async openStore(store: NotebookStore, r: Recent): Promise<boolean> {
     this.opening.value = r.name;
     this.error.value = null;
+    const ticket = this.model.beginNotebookOpen();
     try {
       const nb = await Notebook.open(store, {
         prefs: this.prefs,
         download,
         confirmOpenExternal: (name) => this.model.confirmOpenExternal(name),
       });
-      this.model.setNotebook(nb);
+      if (!(await this.model.adoptNotebook(nb, ticket))) return false;
       const key = recentKey(r);
       this.saveRecents([r, ...this.recents.value.filter((x) => recentKey(x) !== key)]);
       return true;
