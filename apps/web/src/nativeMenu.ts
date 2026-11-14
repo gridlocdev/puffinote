@@ -1,4 +1,10 @@
-import { toAccelerator, type CommandCatalog, type CommandGroup, type NativeMenuItem } from '@puffinote/ui';
+import {
+  isMac,
+  toAccelerator,
+  type CommandCatalog,
+  type CommandGroup,
+  type NativeMenuItem,
+} from '@puffinote/ui';
 
 const MENU_ORDER: readonly CommandGroup[] = ['File', 'Edit', 'Insert', 'Format', 'View', 'Go', 'Help'];
 
@@ -36,8 +42,11 @@ const BREAKS = new Set([
   'shell.focusTree',
 ]);
 
-/** The desktop app's menu bar, built from the same catalog as ⌘K. */
-export function nativeMenu(catalog: CommandCatalog): NativeMenuItem[] {
+/**
+ * The desktop app's menu bar, built from the same catalog as ⌘K. Roles bring their own accelerators, so none
+ * may use a catalog shortcut: off macOS Electron's `windowMenu` has Close on Ctrl+W, which is Close Tab.
+ */
+export function nativeMenu(catalog: CommandCatalog, mac = isMac): NativeMenuItem[] {
   const menus: NativeMenuItem[] = [];
   for (const group of MENU_ORDER) {
     const items: NativeMenuItem[] = [];
@@ -56,6 +65,6 @@ export function nativeMenu(catalog: CommandCatalog): NativeMenuItem[] {
     }
     if (items.length > 0) menus.push({ label: group, submenu: items });
   }
-  menus.push({ role: 'windowMenu' });
+  menus.push(mac ? { role: 'windowMenu' } : { label: 'Window', submenu: [{ role: 'minimize' }] });
   return menus;
 }

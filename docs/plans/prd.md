@@ -153,6 +153,7 @@ Type part of a file name to open it. Ranking: names that start with the query, t
 
 - Shortcuts are written once as `mod+shift+k` and shown in each platform's style (⌘⇧K, Ctrl+Shift+K).
 - **Resolution order:** an open overlay (a dialog, the command menu) gets keys first. Then the shell's reserved set: ⌘K, ⌘O, ⌘N, ⇧⌘N, ⌘S, ⌘W, ⌥⌘W, ⇧⌘], ⇧⌘[, ⌥⌘S, ⌥⌘E, ⌘\, ⌘, (Settings), ⇧⌘O, ⌘F, ⇧⌘F, ⌘G and ⇧⌘G. Then the editor.
+- The desktop menu bar's built-in items (clipboard, Window) never take a catalog shortcut. On Windows and Linux the Window menu has Minimize only, since Electron's own Close would take Ctrl+W from Close Tab.
 - While a question is up (Save changes?, a name to type), menu-bar commands do nothing. Quitting or opening another folder still works: its own question replaces the open one, which is answered Cancel.
 - In a text field other than the note (a dialog, the filter box), editing shortcuts keep the field's own behaviour. For example, ⌘A selects the field's text.
 
