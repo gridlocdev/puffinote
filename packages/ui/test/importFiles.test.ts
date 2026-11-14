@@ -4,6 +4,7 @@ import { Notebook } from '../src/notebook/notebook.ts';
 import { memoryPrefs } from '../src/notebook/settings.ts';
 import { ConflictError } from '../src/platform/notebookStore.ts';
 import { MemoryStore } from '../src/platform/memoryStore.ts';
+import { filesOfEntries } from '../src/shell/importPicker.ts';
 import { ShellModel } from '../src/shell/shellModel.ts';
 
 const text = (s: string) => new TextEncoder().encode(s);
@@ -157,6 +158,68 @@ describe('Import Notes…', () => {
     if (o?.kind === 'confirm') o.done('cancel');
     await run;
     expect(picked).toBe(false);
+    nb.dispose();
+  });
+});
+
+describe('dropped folders', () => {
+  /** A dropped entry as the browser's entries API hands it out (only the parts the walker reads). */
+  function fileEntry(fullPath: string, body: string): FileSystemEntry {
+    return {
+      isFile: true,
+      isDirectory: false,
+      name: fullPath.split('/').pop()!,
+      fullPath,
+      file: (ok: (f: File) => void) => ok(new File([body], fullPath.split('/').pop()!)),
+    } as unknown as FileSystemEntry;
+  }
+  function dirEntry(fullPath: string, children: FileSystemEntry[]): FileSystemEntry {
+    return {
+      isFile: false,
+      isDirectory: true,
+      name: fullPath.split('/').pop()!,
+      fullPath,
+      createReader: () => {
+        // Two at a time, then an empty batch, as Chromium pages large folders.
+        let at = 0;
+        return {
+          readEntries: (ok: (e: FileSystemEntry[]) => void) => {
+            ok(children.slice(at, at + 2));
+            at += 2;
+          },
+        };
+      },
+    } as unknown as FileSystemEntry;
+  }
+
+  it('walks a dropped folder in full, batch by batch, keeping paths under it', async () => {
+    const tree = dirEntry('/Trip', [
+      fileEntry('/Trip/a.md', 'A'),
+      fileEntry('/Trip/b.md', 'B'),
+      dirEntry('/Trip/sub', [fileEntry('/Trip/sub/c.md', 'C')]),
+    ]);
+    const files = await filesOfEntries([tree, fileEntry('/loose.md', 'L')]);
+    expect(files.map((f) => f.path)).toEqual(['Trip/a.md', 'Trip/b.md', 'Trip/sub/c.md', 'loose.md']);
+    expect(new TextDecoder().decode(await files[2]!.read())).toBe('C');
+  });
+
+  it('copies dropped files into the folder they were dropped on', async () => {
+    const m = new ShellModel();
+    const { store, nb } = await open({ 'Work/x.md': 'x' });
+    m.notebook.value = nb;
+    await m.importDropped('Work', Promise.resolve([file('Trip/a.md'), file('x.md', 'dropped')]));
+    expect(await read(store, 'Work/Trip/a.md')).toBe('Trip/a.md');
+    expect(await read(store, 'Work/x.md')).toBe('x');
+    expect(await read(store, 'Work/x 2.md')).toBe('dropped');
+    nb.dispose();
+  });
+
+  it('reports a drop that could not be read', async () => {
+    const m = new ShellModel();
+    const { nb } = await open();
+    m.notebook.value = nb;
+    await m.importDropped('', Promise.reject(new Error('The drop could not be read.')));
+    expect(nb.notice.value).toEqual({ kind: 'error', text: 'The drop could not be read.' });
     nb.dispose();
   });
 });

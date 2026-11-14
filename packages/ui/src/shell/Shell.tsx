@@ -7,6 +7,7 @@ import { allFiles } from '../notebook/tree.ts';
 import type { PrefsStorage } from '../notebook/settings.ts';
 import { ContextMenu } from './ContextMenu.tsx';
 import { ConfirmDialog, PromptDialog } from './Dialog.tsx';
+import { draggingFiles } from './importPicker.ts';
 import { LibraryLayout } from './LibraryLayout.tsx';
 import { CommandMenu, MoveToPopup, QuickOpen } from './ListPopup.tsx';
 import { baseName } from '../platform/paths.ts';
@@ -62,6 +63,22 @@ export function Shell(props: {
     };
     window.addEventListener('mousedown', onMouseDown, true);
     return () => window.removeEventListener('mousedown', onMouseDown, true);
+  }, []);
+
+  // Files dragged from the desktop and let go anywhere but a drop zone (the tree, the library, a note) are
+  // ignored, rather than the browser opening them in place of the app (PRD §6.1).
+  useEffect(() => {
+    const ignore = (e: DragEvent) => {
+      if (e.defaultPrevented || !draggingFiles(e)) return;
+      e.preventDefault();
+      e.dataTransfer!.dropEffect = 'none';
+    };
+    window.addEventListener('dragover', ignore);
+    window.addEventListener('drop', ignore);
+    return () => {
+      window.removeEventListener('dragover', ignore);
+      window.removeEventListener('drop', ignore);
+    };
   }, []);
 
   // Unsaved work is never lost to a closed page; the session is written on the way out.

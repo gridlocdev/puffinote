@@ -86,7 +86,7 @@ The desktop app checks GitHub for a newer release. It never downloads or install
   - **Nothing is overwritten.** A file or folder whose name is taken where it lands gets a number, as New Note's names do (`Trip 2`, `a 2.md`), comparing without case. A folder is never merged into one that's there.
   - **Skipped:** `.DS_Store`, `._` files, `__MACOSX`, `Thumbs.db`, `desktop.ini`, `.Spotlight-V100`, `.Trashes`, `.fseventsd` and `.git` folders. Characters a name can't hold in a notebook (`\ : * ? " < > |`) become `-`, and spaces at either end go.
   - Files are copied one at a time. One that can't be read or written is counted and the rest carry on. The status bar then says what happened ("Imported 12 files into “Trip”.", plus how many couldn't be copied), the folder that received them opens, and a single imported folder or file is selected.
-  - The desktop app has no Import Notes…: its menu bar can't open a page's file dialog, and Finder does the job.
+  - The desktop app has no Import Notes…: its menu bar can't open a page's file dialog, and Finder, or a drop on the tree (§6.1), does the job.
 - **Saving.** ⌘S saves the active tab; Save All saves every dirty tab. With auto-save on (the default), a note saves a second after the last edit. Revert to Saved discards the edits.
   - A tab without unsaved edits isn't written (except Save on a tab flagged deleted, which recreates it).
   - A tab's saves happen one at a time. A save asked for while one is in flight writes after it, with the text the tab has by then.
@@ -126,6 +126,8 @@ The Layout setting (§9) picks one. Both share the note, the status bar, the com
   - A drop on a folder means that folder. A drop on a file means the folder that holds it. A drop on the empty space means the top level.
   - A move that changes nothing, or a folder into itself, shows no indicator. A name that is already taken is refused. Escape cancels.
   - A move is a plain move. Links to the file are not rewritten, except links to pictures (§10.6). Open tabs and the recent list follow it. A save already under way on a moved note finishes before the move starts; a save asked for during it (auto-save included) waits and writes to the new place.
+
+- **Drop files from the desktop.** Files and folders dragged in from Finder, Explorer or the desktop and dropped on the tree are copied into the notebook, in every host. They land as Drag to move's drops do: in the folder dropped on, the folder that holds the file dropped on, or the top level on empty space; the outline shows where, and a closed folder held under the pointer for a second opens. In the Library layout a drop on a folder in the library goes into that folder, and a drop on the note list into the folder it shows (the top level for All notes, Pinned and Recent). The copy follows Import Notes…'s rules (§5): nothing is overwritten, a taken name gets a number, a dropped folder comes with everything in it, clutter is skipped, and the status bar says how many files came in. The originals are only read. Files let go anywhere else (other than pictures on a note, §10.6) are ignored, so the browser never opens one in place of the app.
 
 ### 6.2 Keyboard
 

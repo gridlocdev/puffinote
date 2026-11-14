@@ -3,6 +3,7 @@ import { isMac } from '../commands/shortcut.ts';
 import type { Notebook } from '../notebook/notebook.ts';
 import { fileKind, visibleRows, type TreeNode, type TreeRow } from '../notebook/tree.ts';
 import { baseName, parentOf } from '../platform/paths.ts';
+import { useFileDrop } from './fileDrop.ts';
 import { Icon } from './Icon.tsx';
 import type { ShellModel } from './shellModel.ts';
 
@@ -289,11 +290,30 @@ export function FileTree(props: {
   const expandedRef = useRef(expanded);
   expandedRef.current = expanded;
 
-  const dropTarget = drag?.target ?? null;
+  // ----- Files dropped from the desktop (PRD §6.1) -----
+  const rowAt = (t: EventTarget | null): TreeNode | null => {
+    const path = t instanceof Element ? t.closest<HTMLElement>('[data-path]')?.dataset.path : undefined;
+    return path === undefined ? null : (rows.find((r) => r.node.path === path)?.node ?? null);
+  };
+  const fileDrop = useFileDrop(
+    model,
+    (t) => {
+      const row = rowAt(t);
+      return row ? (row.kind === 'dir' ? row.path : parentOf(row.path)) : root.path;
+    },
+    (t) => {
+      const row = rowAt(t);
+      return row?.kind === 'dir' && !expandedRef.current.has(row.path) ? row.path : null;
+    },
+    (path) => props.onToggle(path, true),
+  );
+
+  const dropTarget = drag ? drag.target : fileDrop.target;
   return (
     <div
       ref={ref}
-      class={`pn-tree${dropTarget === root.path && drag ? ' pn-drop-root' : ''}${drag ? ' pn-dragging' : ''}`}
+      class={`pn-tree${dropTarget !== null && dropTarget === root.path ? ' pn-drop-root' : ''}${drag ? ' pn-dragging' : ''}`}
+      {...fileDrop.handlers}
       role="tree"
       tabIndex={0}
       aria-label={props.label}

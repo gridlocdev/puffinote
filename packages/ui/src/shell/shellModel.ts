@@ -1088,6 +1088,20 @@ export class ShellModel {
     await nb.importFiles(dir, files);
   }
 
+  /** Files dropped from the desktop onto folder `dir` (PRD §6.1): copied in as Import Notes… copies them. */
+  async importDropped(dir: string, files: Promise<readonly ImportFile[]>): Promise<void> {
+    const nb = this.notebook.peek();
+    if (!nb) return;
+    let list: readonly ImportFile[];
+    try {
+      list = await files;
+    } catch (e) {
+      nb.report(e);
+      return;
+    }
+    if (this.notebook.peek() === nb) await nb.importFiles(dir, list);
+  }
+
   async findUnusedPictures(): Promise<void> {
     const nb = this.notebook.peek();
     if (!nb) return;

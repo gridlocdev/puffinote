@@ -6,6 +6,7 @@ import { excerptOf, relativeDate } from '../notebook/noteMeta.ts';
 import { fileKind, findNode, type TreeNode } from '../notebook/tree.ts';
 import { parentOf, stemOf } from '../platform/paths.ts';
 import { Document, EmptyNotebook, StatusBar } from './DocPane.tsx';
+import { useFileDrop } from './fileDrop.ts';
 import { Icon } from './Icon.tsx';
 import { OutlinePanel, RecentPanel } from './panels.tsx';
 import { tip } from './RailLayout.tsx';
@@ -45,8 +46,24 @@ export function LibraryLayout({ model, nb }: { readonly model: ShellModel; reado
   );
 }
 
+/** The library folder a drag over `t` is on, by its row's `data-folder`. */
+function libraryFolderAt(t: EventTarget | null): string | null {
+  if (!(t instanceof Element)) return null;
+  return t.closest<HTMLElement>('[data-folder]')?.dataset.folder ?? null;
+}
+
 function LibraryNav({ model, nb }: { readonly model: ShellModel; readonly nb: Notebook }) {
   const scope = nb.scope.value;
+  // Files from the desktop dropped on a folder go into it (PRD §6.1).
+  const fileDrop = useFileDrop(
+    model,
+    libraryFolderAt,
+    (t) => {
+      const dir = libraryFolderAt(t);
+      return dir && !nb.expanded.peek().has(dir) ? dir : null;
+    },
+    (path) => nb.toggleFolder(path, true),
+  );
   const item = (s: LibraryScope, icon: string, label: string) => (
     <button
       key={s}
@@ -65,8 +82,8 @@ function LibraryNav({ model, nb }: { readonly model: ShellModel; readonly nb: No
       {item('pinned', 'pin', 'Pinned')}
       {item('recent', 'clock', 'Recent')}
       <h2 class="pn-lib-label pn-lib-folders">Folders</h2>
-      <div class="pn-lib-tree">
-        <FolderRow model={model} nb={nb} node={nb.tree.value} depth={0} />
+      <div class="pn-lib-tree" {...fileDrop.handlers}>
+        <FolderRow model={model} nb={nb} node={nb.tree.value} depth={0} dropTarget={fileDrop.target} />
       </div>
       <div class="pn-lib-foot">
         <button
@@ -97,8 +114,10 @@ function FolderRow(props: {
   readonly nb: Notebook;
   readonly node: TreeNode;
   readonly depth: number;
+  /** The folder files dragged in from the desktop would land in. */
+  readonly dropTarget: string | null;
 }) {
-  const { model, nb, node, depth } = props;
+  const { model, nb, node, depth, dropTarget } = props;
   const subs = node.children.filter((c) => c.kind === 'dir');
   const root = depth === 0;
   const open = root || nb.expanded.value.has(node.path);
@@ -106,7 +125,8 @@ function FolderRow(props: {
   return (
     <>
       <div
-        class="pn-lib-item pn-lib-folder"
+        class={`pn-lib-item pn-lib-folder${dropTarget === node.path ? ' pn-drop' : ''}`}
+        data-folder={node.path}
         role="button"
         tabIndex={0}
         aria-current={current ? 'true' : undefined}
@@ -141,7 +161,10 @@ function FolderRow(props: {
         <Icon name={open && subs.length > 0 && !root ? 'folder-open' : 'folder'} />
         <span class="pn-lib-name">{node.name}</span>
       </div>
-      {open && subs.map((s) => <FolderRow key={s.path} model={model} nb={nb} node={s} depth={depth + 1} />)}
+      {open &&
+        subs.map((s) => (
+          <FolderRow key={s.path} model={model} nb={nb} node={s} depth={depth + 1} dropTarget={dropTarget} />
+        ))}
     </>
   );
 }
@@ -204,12 +227,19 @@ function NoteList({ model, nb }: { readonly model: ShellModel; readonly nb: Note
     if (fileKind(next.path) !== 'other') void nb.openFile(next.path);
   };
 
+  // Files from the desktop dropped on the list go into the folder it shows, or the top level (PRD §6.1).
+  const fileDrop = useFileDrop(model, () => folderOf(scope));
+
   const subtitle =
     scope.startsWith('folder:') && folders > 0
       ? `${plural(files.length, 'note')} · ${plural(folders, 'folder')}`
       : plural(files.length, 'note');
   return (
-    <section class="pn-notes" aria-label="Notes">
+    <section
+      class={`pn-notes${fileDrop.target !== null ? ' pn-drop' : ''}`}
+      aria-label="Notes"
+      {...fileDrop.handlers}
+    >
       <header class="pn-notes-head">
         <div class="pn-notes-titles">
           <h2 class="pn-notes-title">{scopeTitle(nb, scope)}</h2>
