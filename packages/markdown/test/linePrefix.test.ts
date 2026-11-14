@@ -143,6 +143,31 @@ describe('renumberOrderedList', () => {
     expect(renumberOrderedList(['1. a', '2. b', 'text', '1. other'], 0)).toBeNull();
   });
 
+  it('carries on past blank lines between items, as the export does', () => {
+    expect(renumberOrderedList(['1. a', '', '3. b'], 0)).toEqual({
+      startLine: 0,
+      endLineExclusive: 3,
+      lines: ['1. a', '', '2. b'],
+    });
+    expect(renumberOrderedList(['> 1. a', '>', '> 3. b'], 0)?.lines).toEqual(['> 1. a', '>', '> 2. b']);
+    expect(renumberOrderedList(['1. a', '', '   - sub', '', '5. b'], 0)?.lines).toEqual([
+      '1. a',
+      '',
+      '   - sub',
+      '',
+      '2. b',
+    ]);
+  });
+
+  it('stops at blank lines that end the list', () => {
+    expect(renumberOrderedList(['1. a', '1. b', '', 'text', '1. c'], 0)).toEqual({
+      startLine: 0,
+      endLineExclusive: 2,
+      lines: ['1. a', '2. b'],
+    });
+    expect(renumberOrderedList(['1. a', '', '', '- b'], 0)).toBeNull();
+  });
+
   it('returns null when already sequential or not a list', () => {
     expect(renumberOrderedList(['1. a', '2. b', '3. c'], 0)).toBeNull();
     expect(renumberOrderedList(['text'], 0)).toBeNull();
