@@ -8,7 +8,15 @@ import type { EditorState } from '../editor/editorState.ts';
 import { findAll, matchAt, matchFrom, type TextRange } from '../editor/find.ts';
 import { sidebarPanels, type Notebook, type SidebarPanel, type Tab } from '../notebook/notebook.ts';
 import { allFolders, fileKind, findNode, hasFolders, noteFileName, type TreeNode } from '../notebook/tree.ts';
-import { baseName, invalidNameReason, mimeOf, parentOf, resolveRelative, stemOf } from '../platform/paths.ts';
+import {
+  baseName,
+  invalidNameReason,
+  isWithin,
+  mimeOf,
+  parentOf,
+  resolveRelative,
+  stemOf,
+} from '../platform/paths.ts';
 import type { ConfirmOptions, PromptOptions } from './Dialog.tsx';
 
 /** A row in a context menu; `null` draws a separator. */
@@ -812,11 +820,30 @@ export class ShellModel {
     const node = findNode(nb.tree.peek(), path);
     const trash = nb.store.kind === 'native';
     const what = node?.kind === 'dir' ? 'folder and everything in it' : 'file';
+    let message = trash
+      ? `The ${what} will be moved to the Trash.`
+      : `The ${what} will be deleted. This can’t be undone.`;
+    // Its tabs close without saving, so say what that loses.
+    const unsaved = nb.dirtyTabs.filter((t) => isWithin(t.path.peek(), path)).length;
+    if (unsaved > 0) {
+      message += ` ${unsaved} ${unsaved === 1 ? 'note has' : 'notes have'} unsaved changes that will be lost.`;
+    }
+    // Pictures in it that other notes show go missing from them (as Delete Picture says, PRD §10.6).
+    let showing: string[] = [];
+    try {
+      showing = await nb.notesShowingPicturesIn(path);
+    } catch {
+      message += ' Puffinote couldn’t check which notes show pictures in it.';
+    }
+    if (this.notebook.peek() !== nb) return;
+    if (showing.length > 0) {
+      const it = node?.kind === 'dir' ? 'pictures in it' : 'it';
+      message += ` ${showing.length === 1 ? 'This note shows' : 'These notes show'} ${it}:`;
+    }
     const answer = await this.confirm({
       title: `Delete “${baseName(path)}”?`,
-      message: trash
-        ? `The ${what} will be moved to the Trash.`
-        : `The ${what} will be deleted. This can’t be undone.`,
+      message,
+      list: showing.map((p) => p.replace(/\.[^./]+$/, '')),
       buttons: [
         { label: 'Cancel', value: 'cancel' },
         { label: trash ? 'Move to Trash' : 'Delete', value: 'delete', kind: 'danger' },

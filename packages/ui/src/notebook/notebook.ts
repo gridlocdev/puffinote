@@ -1207,6 +1207,26 @@ export class Notebook {
   }
 
   /**
+   * The notes outside `path` (a file or folder) that show a picture at or inside it, in tree order: what
+   * deleting `path` leaves with a missing picture. Throws when a note can't be read.
+   */
+  async notesShowingPicturesIn(path: string): Promise<string[]> {
+    const tree = await loadTree(this.store, true);
+    const node = findNode(tree, path);
+    const files = !node ? [] : node.kind === 'file' ? [node.path] : allFiles(node).map((f) => f.path);
+    const pictures = files.filter((p) => fileKind(p) === 'image');
+    if (pictures.length === 0) return [];
+    const out: string[] = [];
+    for (const f of allFiles(tree)) {
+      if (fileKind(f.path) !== 'note' || isWithin(f.path, path)) continue;
+      const usage = new PictureUsage(this.ignoresCase);
+      usage.add(await this.readNote(f.path), f.path);
+      if (pictures.some((p) => usage.has(p))) out.push(f.path);
+    }
+    return out;
+  }
+
+  /**
    * The notebook's pictures that no note links to (Find Unused Pictures…), in tree order. Throws when a note
    * can't be read.
    */

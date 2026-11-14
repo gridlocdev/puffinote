@@ -340,3 +340,36 @@ describe('ShellModel switching notebooks', () => {
     await one.read('a.md');
   });
 });
+
+describe('ShellModel Delete…', () => {
+  async function asked(files: Record<string, string>, path: string, dirty: string[] = []) {
+    const store = new MemoryStore('N', files);
+    const nb = await Notebook.open(store, { prefs: memoryPrefs({ autoSave: false }) });
+    const m = new ShellModel();
+    m.setNotebook(nb);
+    for (const p of dirty) (await nb.openFile(p))!.state!.insert('typed ');
+    const removing = m.remove(path);
+    await vi.waitFor(() => expect(m.overlay.value?.kind).toBe('confirm'));
+    const o = m.overlay.value;
+    if (o?.kind !== 'confirm') throw new Error('no confirm');
+    return { o, removing, nb, m };
+  }
+
+  it('says when notes inside have unsaved changes', async () => {
+    const { o, removing } = await asked({ 'f/a.md': '', 'f/b.md': '', 'c.md': '' }, 'f', ['f/a.md', 'c.md']);
+    expect(o.options.message).toContain('1 note has unsaved changes that will be lost.');
+    o.done('cancel');
+    await removing;
+  });
+
+  it('lists the notes outside that show pictures in it', async () => {
+    const { o, removing } = await asked(
+      { 'f/pic.png': '', 'f/in.md': '![](pic.png)', 'out.md': '![](f/pic.png)', 'other.md': '' },
+      'f',
+    );
+    expect(o.options.list).toEqual(['out']);
+    expect(o.options.message).toMatch(/This note shows pictures in it:/);
+    o.done('cancel');
+    await removing;
+  });
+});
