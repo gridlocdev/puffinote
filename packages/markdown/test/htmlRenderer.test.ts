@@ -8,6 +8,8 @@ describe('HTML renderer', () => {
   it('renders headings', () => {
     expect(body('# Title')).toContain('<h1>Title</h1>');
     expect(body('### Sub')).toContain('<h3>Sub</h3>');
+    expect(body('# Done #')).toContain('<h1>Done</h1>');
+    expect(body('## Two ##   ')).toContain('<h2>Two</h2>');
   });
 
   it('renders inline constructs in a paragraph', () => {

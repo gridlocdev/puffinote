@@ -2,7 +2,8 @@
  * The semantic kinds the tokenizer emits (PRD §11.3; layering in docs/architecture.md). The engine emits semantic tokens only — types,
  * source ranges and roles — and knows nothing about styling or concealment; those are the editor's job.
  *
- * - `headingMarker` is the `#` run of an ATX heading, with the level (1–6) in `meta`. A setext heading has no
+ * - `headingMarker` is the `#` run of an ATX heading, with the level (1–6) in `meta`. An ATX closing sequence
+ *   (` ##` at the end of `## Done ##`) is a second `headingMarker` with the same level. A setext heading has no
  *   marker punctuation on its text line, so it emits this token zero-length at the line's start: one
  *   representation of "this line is a heading of level N" for every consumer. Its underline is a separate
  *   `setextUnderline` on the next line.

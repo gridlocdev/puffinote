@@ -126,7 +126,13 @@ function normal(
           String(heading.level),
         ),
       );
-      tokenizeInline(line, lineStart, heading.afterMarker, len, output);
+      // An optional closing sequence (`# Done #`) is markup too: the same marker type, so the editor
+      // conceals it with the opening run and the export leaves it out.
+      const close = closingSequenceStart(line, heading.afterMarker, len);
+      tokenizeInline(line, lineStart, heading.afterMarker, close, output);
+      if (close < len) {
+        output.push(token(lineStart + close, len - close, 'headingMarker', 'marker', String(heading.level)));
+      }
       return BlockStates.normal;
     }
 
@@ -301,6 +307,24 @@ function tryHeading(
   if (k < len && line.charAt(k) !== ' ') return null;
   if (k < len) k++;
   return { level, afterMarker: k };
+}
+
+/**
+ * Where an ATX heading's closing sequence starts (the blanks before a trailing run of `#`, through the end of
+ * the line), or `len` when it has none. The run must follow a blank or the opening marker: `# C#` and
+ * `# D \#` keep their `#` (CommonMark §4.2).
+ */
+function closingSequenceStart(line: string, afterMarker: number, len: number): number {
+  const isBlank = (c: string): boolean => c === ' ' || c === '\t';
+  let end = len;
+  while (end > afterMarker && isBlank(line.charAt(end - 1))) end--;
+  let hashes = end;
+  while (hashes > afterMarker && line.charAt(hashes - 1) === '#') hashes--;
+  if (hashes === end) return len;
+  if (hashes === afterMarker) return afterMarker;
+  let blanks = hashes;
+  while (blanks > afterMarker && isBlank(line.charAt(blanks - 1))) blanks--;
+  return blanks < hashes ? blanks : len;
 }
 
 function isQuote(line: string, indent: number, len: number): boolean {

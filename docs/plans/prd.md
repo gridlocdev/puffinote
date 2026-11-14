@@ -329,7 +329,7 @@ An edit re-tokenizes from the first changed line and stops once the block state 
 | Front matter     | leading `---` … `---`       | A dimmed block                    |
 | Wiki link, embed | `[[target]]`, `![[target]]` | Tokenized; drawn as styled text   |
 
-A setext heading carries a zero-length heading marker that holds its level, so consumers read the level from the line's first token whichever spelling made it. A lone `---` with no paragraph above it is a rule.
+An ATX heading's optional closing sequence (`# Done #`: blanks, then a run of `#` at the end of the line) is heading markup too: the editor hides it with the opening `#` and the export leaves it out. A setext heading carries a zero-length heading marker that holds its level, so consumers read the level from the line's first token whichever spelling made it. A lone `---` with no paragraph above it is a rule.
 
 A bare URL starts with `http://` or `https://`, in any case, at a word boundary, and runs to whitespace or `<`. Trailing punctuation (`.` `,` `;` `:` `!` `?`) is left out. A trailing `)` stays only while it closes a `(` inside the URL (`…/wiki/Foo_(bar)`), as in GFM, so a URL in parentheses ends before the sentence's `)`.
 

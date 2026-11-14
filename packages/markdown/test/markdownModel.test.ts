@@ -15,6 +15,16 @@ describe('block constructs', () => {
     expect(markers[0]!.meta).toBe(level);
   });
 
+  it('marks an ATX closing sequence as heading markup', () => {
+    expect(textsOfType('# Done #', 'headingMarker')).toEqual(['# ', ' #']);
+    expect(textsOfType('## Done ###  ', 'headingMarker')).toEqual(['## ', ' ###  ']);
+    expect(textsOfType('# Done #', 'text')).toEqual(['Done']);
+    expect(textsOfType('# #', 'headingMarker')).toEqual(['# ', '#']);
+    expect(textsOfType('# C #not closing', 'headingMarker')).toEqual(['# ']);
+    expect(textsOfType('# C#', 'headingMarker')).toEqual(['# ']);
+    expect(textsOfType('# D \\#', 'headingMarker')).toEqual(['# ']);
+  });
+
   it('does not read seven hashes as a heading', () => {
     expect(hasType('####### too many', 'headingMarker')).toBe(false);
   });
