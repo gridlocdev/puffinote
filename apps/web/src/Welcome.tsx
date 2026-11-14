@@ -75,8 +75,8 @@ function RecentRow(props: { readonly launcher: Launcher; readonly recent: Recent
 }
 
 /**
- * Where a folder can be opened (the desktop app, Chromium), that is the one action. Elsewhere the browser
- * notebook opens on start, so this shows only after it was closed or couldn't open (PRD §3).
+ * Where a folder can be opened (the desktop app, Chromium), that is the one action. A browser shows this only
+ * when its last folder waits for a click to reopen, or its own notebook couldn't open (PRD §3).
  */
 function LocalActions(props: { readonly launcher: Launcher }) {
   const { launcher } = props;

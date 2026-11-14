@@ -71,6 +71,6 @@ In the browser, Puffinote opens a folder from your disk through the File System 
 
 ## First run
 
-The welcome screen lists your recent notebooks and the ways to open one in this host: a folder on disk in the desktop app, a folder from the server on a NAS, or a folder in Chrome and Edge. The last notebook reopens on start when it can do so without asking. Firefox, Safari and Brave can't open folders, so they skip the welcome screen and open a notebook kept in the browser's own storage. A NAS server with a single folder opens that folder on start.
+Puffinote opens straight into a notebook. The last one reopens when it can; otherwise a browser opens a notebook kept in its own storage, and a NAS server with a single folder opens that folder. In Chrome and Edge, Open Notebook… (⇧⌘O) opens a folder from your disk instead; Firefox, Safari and Brave can't open folders. The welcome screen shows only when there's a choice: the desktop app's first run, a folder the browser needs a click to reopen, or a NAS server with several folders.
 
 Each notebook keeps its own settings in a `.puffinote` folder inside it, so they travel with the folder. The desktop app's update settings live in `updates.json` in the app's user data folder.

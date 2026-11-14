@@ -2,6 +2,15 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { NasClient, NasRoot, PrefsStorage, ShellModel } from '@puffinote/ui';
 import { Launcher, type HostKind } from '../src/launcher.ts';
 
+const handles = vi.hoisted(() => ({ known: new Set<string>() }));
+vi.mock('../src/handles.ts', () => ({
+  getHandle: async (id: string) =>
+    handles.known.has(id) ? ({ name: id } as FileSystemDirectoryHandle) : undefined,
+  putHandle: async () => undefined,
+  deleteHandle: async () => undefined,
+  findHandle: async () => undefined,
+}));
+
 const g = globalThis as { showDirectoryPicker?: unknown };
 
 function launcher(kind: HostKind, roots: NasRoot[] = []): Launcher {
@@ -27,12 +36,24 @@ describe('Launcher.start', () => {
     expect(l.starting.value).toBe(false);
   });
 
-  it('leaves the choice to the welcome screen where a folder can be opened', async () => {
+  it('opens the browser notebook where a folder can be opened too, with no folder to go back to', async () => {
     g.showDirectoryPicker = () => undefined;
     const l = launcher('browser');
     const open = vi.spyOn(l, 'openPrivate').mockResolvedValue();
     await l.start();
+    expect(open).toHaveBeenCalledOnce();
+  });
+
+  it('leaves the last folder to the welcome screen when reopening it needs a click', async () => {
+    g.showDirectoryPicker = () => undefined;
+    handles.known.add('f1');
+    const l = launcher('browser');
+    l.recents.value = [{ kind: 'browser', id: 'f1', name: 'Notes' }];
+    vi.spyOn(l as unknown as { canReopen: () => Promise<boolean> }, 'canReopen').mockResolvedValue(false);
+    const open = vi.spyOn(l, 'openPrivate').mockResolvedValue();
+    await l.start();
     expect(open).not.toHaveBeenCalled();
+    handles.known.clear();
   });
 
   it('never opens the browser notebook on the NAS', async () => {

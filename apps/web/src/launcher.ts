@@ -125,20 +125,27 @@ export class Launcher {
   }
 
   /**
-   * Reopen the last notebook, if that needs no permission prompt. Otherwise, where there is nothing to choose,
-   * open the one choice: a browser that can't open folders (Firefox, Safari, Brave) opens the browser notebook,
-   * and a NAS server with one root opens that root.
+   * Reopen the last notebook, if that needs no permission prompt. Otherwise open the one obvious notebook: in a
+   * browser the browser notebook (Open Notebook… picks a folder from inside the app where the browser can), on
+   * a NAS server with one root that root. The welcome screen is left up only where there's a choice to make:
+   * the last folder, which the browser lets us ask about only after a click, or a server with several roots.
    */
   async start(): Promise<void> {
     this.starting.value = true;
     try {
-      const last = this.recents.value[0];
+      const last = this.available()[0];
       if (last && (await this.canReopen(last))) await this.open(last);
-      else if (this.kind === 'browser' && !canPickFolder()) await this.openPrivate();
+      else if (this.kind === 'browser' && !(last && (await this.waitsForClick(last))))
+        await this.openPrivate();
       else if (this.kind === 'nas') await this.openOnlyRoot();
     } finally {
       this.starting.value = false;
     }
+  }
+
+  /** A folder the browser can reopen, once a click lets us ask for permission again. */
+  private async waitsForClick(last: Recent): Promise<boolean> {
+    return last.kind === 'browser' && canPickFolder() && !!(await getHandle(last.id));
   }
 
   private async openOnlyRoot(): Promise<void> {
