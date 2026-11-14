@@ -438,6 +438,53 @@ describe('Notebook moves and saves in flight', () => {
   });
 });
 
+/** A MemoryStore that counts the folders it lists and the files it reads. */
+class CountingStore extends MemoryStore {
+  lists = 0;
+  readonly readPaths: string[] = [];
+
+  override list(dir: string): Promise<Entry[]> {
+    this.lists++;
+    return super.list(dir);
+  }
+
+  override read(path: string): Promise<FileData> {
+    this.readPaths.push(path);
+    return super.read(path);
+  }
+}
+
+describe('Notebook refreshes (PRD §5)', () => {
+  it('leaves changes inside .git/ alone', async () => {
+    const store = new CountingStore('N', { 'a.md': 'a', '.git/index': 'i' });
+    const nb = await openWith(store);
+    store.lists = 0;
+    store.touch('.git/index', 'i2');
+    store.touch('.git/objects/ab/cdef', 'o');
+    await new Promise((r) => setTimeout(r, 300));
+    expect(store.lists).toBe(0);
+    store.touch('b.md', 'b');
+    await vi.waitFor(() => expect(store.lists).toBeGreaterThan(0));
+    nb.dispose();
+  });
+
+  it('reads an open note again only when the listing says it changed', async () => {
+    const store = new CountingStore('N', { 'a.md': 'a', 'b.md': 'b' });
+    const nb = await openWith(store);
+    const a = (await nb.openFile('a.md'))!;
+    await nb.openFile('b.md');
+    await nb.refresh();
+    store.readPaths.length = 0;
+    await nb.refresh();
+    expect(store.readPaths.filter((p) => p.endsWith('.md'))).toEqual([]);
+    store.touch('a.md', 'a changed');
+    await nb.refresh();
+    expect(store.readPaths.filter((p) => p.endsWith('.md'))).toEqual(['a.md']);
+    expect(a.state!.text).toBe('a changed');
+    nb.dispose();
+  });
+});
+
 describe('Notebook after it closes (PRD §5)', () => {
   it('writes no queued save once disposed', async () => {
     const store = new GatedStore('N', { 'a.md': 'one' });

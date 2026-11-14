@@ -61,6 +61,7 @@ import {
   ancestorsOf,
   emptyTree,
   fileKind,
+  ignoredChange,
   findNode,
   loadTree,
   noteFileName,
@@ -298,6 +299,8 @@ export class Notebook {
   private readonly disposers: (() => void)[] = [];
   private persistTimer: ReturnType<typeof setTimeout> | null = null;
   private refreshTimer: ReturnType<typeof setTimeout> | null = null;
+  /** Each note tab's file as the listing showed it when a refresh last read it, to skip it while unchanged. */
+  private readonly checkedStats = new WeakMap<Tab, FileStat & { readonly path: string }>();
   /** Tree reads started; only the newest one's answer is taken (see `reloadTree`). */
   private treeReads = 0;
   private latestTreeRead: Promise<void> = Promise.resolve();
@@ -413,6 +416,8 @@ export class Notebook {
     if (this.store.watch)
       this.disposers.push(
         this.store.watch((paths) => {
+          // A git client touching `.git/index` says nothing about the notes. (An empty list means "look again".)
+          if (paths.length > 0 && paths.every(ignoredChange)) return;
           this.forgetImages(paths);
           this.scheduleRefresh();
         }),
@@ -513,11 +518,16 @@ export class Notebook {
       this.report(e);
       return;
     }
+    const stats = this.stats.peek();
     for (const tab of this.tabs.value) {
       if (tab.kind !== 'note') continue;
       // A save in flight is about to move the tab on: its answer, not this read, says what's on disk.
       if (this.writing.has(tab)) continue;
       const path = tab.path.value;
+      // The listing says the file is as it was when this tab was last checked: don't read it again.
+      const listed = stats.get(path);
+      const checked = this.checkedStats.get(tab);
+      if (tab.conflict.value === 'none' && listed && checked && sameListing(checked, path, listed)) continue;
       const generation = tab.generation;
       // While the read is out, a save, reload or move may land. Then this answer is stale: drop it, so a
       // clean tab never goes back to the text it had before the save.
@@ -534,6 +544,8 @@ export class Notebook {
         continue;
       }
       if (stale()) continue;
+      // The listing came before this read, so the tab is at least as new as it says (see the check above).
+      if (listed && listed.modified !== 0) this.checkedStats.set(tab, { path, ...listed });
       if (data.version !== null && data.version === tab.version) {
         if (tab.conflict.value === 'deleted') tab.conflict.value = 'none';
         continue;
@@ -2071,4 +2083,14 @@ export function clampWidth(w: number): number {
 
 function sameBytes(a: Uint8Array, b: Uint8Array): boolean {
   return a.length === b.length && a.every((x, i) => x === b[i]);
+}
+
+/** Is `listed` the same listing as `checked` for the file at `path`? A store that can't tell times never is. */
+function sameListing(checked: FileStat & { readonly path: string }, path: string, listed: FileStat): boolean {
+  return (
+    checked.path === path &&
+    listed.modified !== 0 &&
+    checked.modified === listed.modified &&
+    checked.size === listed.size
+  );
 }

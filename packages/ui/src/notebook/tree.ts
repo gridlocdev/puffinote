@@ -75,6 +75,14 @@ export async function loadTree(
   return walk('', store.name);
 }
 
+/**
+ * A change a watcher reported that can't change the tree or a note: anything inside `.git/`, which a git
+ * client or an IDE touches all the time and the tree never lists.
+ */
+export function ignoredChange(path: string): boolean {
+  return path.split('/').includes('.git');
+}
+
 function shown(e: Entry, hidden: boolean): boolean {
   if (e.name === stateDir || e.name === '.git') return false;
   return hidden || !e.name.startsWith('.');
