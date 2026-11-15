@@ -24,10 +24,8 @@ export type TokenType =
   | 'frontMatterFence'
   | 'codeFence'
   // Block content
-  | 'headingText'
   | 'codeText'
   | 'frontMatterText'
-  | 'tableCellText'
   // Inline constructs
   | 'emphasis'
   | 'strong'
@@ -35,7 +33,6 @@ export type TokenType =
   | 'strikethrough'
   | 'highlight'
   | 'inlineCode'
-  | 'linkText'
   | 'linkUrl'
   | 'autolink'
   | 'imageAlt'
