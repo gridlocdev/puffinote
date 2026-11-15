@@ -4,8 +4,7 @@ import type { AddressInfo } from 'node:net';
 import os from 'node:os';
 import path from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { FileApi, parseRoots } from '../../../apps/server/src/fileApi.ts';
-import { createServer } from '../../../apps/server/src/server.ts';
+import { createServer, FileApi, parseRoots } from '@puffinote/server';
 import { ConflictError, NasClient, NasStore, NotFoundError } from '../src/platform/index.ts';
 
 let dir: string;

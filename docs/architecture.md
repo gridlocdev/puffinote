@@ -100,6 +100,7 @@ The desktop app, the NAS server and the CLI handle notebook files on disk with o
   - `If-Match` gives optimistic concurrency (412 if the file changed or is gone). `If-None-Match: *` stops a new note from overwriting a file.
   - Writes to one file are serialized under a key that is symlink-resolved and case-folded, so the check and the rename cannot interleave. A save checks its path is inside the root again once it has its turn, and again after making its folders, so a folder swapped for a link out while it waited isn't written through.
 - **Host check.** Without a token, a request whose `Host` is not an IP literal, `localhost`, or a name in `PUFFINOTE_HOSTS` gets 421. This blocks DNS rebinding.
+- **Entry point.** `src/index.ts` exports `createServer`, `FileApi` and `parseRoots` for tests and other hosts; `main.ts` wires them from the environment.
 - **Files served raw.** Pictures a note shows are served with their type. Anything else is served as bytes with a sandboxing CSP, so an opened SVG runs nothing.
 
 ## Desktop (`apps/desktop`)

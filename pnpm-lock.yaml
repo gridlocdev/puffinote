@@ -113,6 +113,9 @@ importers:
       '@preact/preset-vite':
         specifier: 2.10.6
         version: 2.10.6(@babel/core@7.29.13)(preact@11.1.1)(vite@8.3.5(@types/node@24.19.2)(jiti@2.7.0))
+      '@puffinote/server':
+        specifier: workspace:*
+        version: link:../../apps/server
       vite:
         specifier: 8.3.5
         version: 8.3.5(@types/node@24.19.2)(jiti@2.7.0)

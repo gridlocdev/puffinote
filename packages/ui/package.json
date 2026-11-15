@@ -19,6 +19,7 @@
   },
   "devDependencies": {
     "@preact/preset-vite": "2.10.6",
+    "@puffinote/server": "workspace:*",
     "vite": "8.3.5"
   }
 }
