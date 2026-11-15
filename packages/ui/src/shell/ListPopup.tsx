@@ -4,6 +4,7 @@ import type { Command, CommandCatalog } from '../commands/command.ts';
 import { rankFiles } from '../notebook/quickOpen.ts';
 import { baseName, parentOf } from '../platform/paths.ts';
 import { Icon } from './Icon.tsx';
+import { listStep } from './listStep.ts';
 
 /** ⌘K: search and run any command (PRD §8.1). Recent commands come first while the query is empty. */
 export function CommandMenu(props: {
@@ -195,8 +196,9 @@ function ListPopup(props: {
       e.preventDefault();
       props.onIndex(Math.max(0, Math.min(props.count - 1, i)));
     };
-    if (e.key === 'ArrowDown') move(props.index + 1);
-    else if (e.key === 'ArrowUp') move(props.index - 1);
+    // ↑ ↓, Tab and Shift+Tab step; the field stays the popup's only Tab stop.
+    const step = listStep(e, props.index, props.count);
+    if (step !== undefined) move(step);
     else if (e.key === 'PageDown') move(props.index + page);
     else if (e.key === 'PageUp') move(props.index - page);
     else if (e.key === 'Enter') {
