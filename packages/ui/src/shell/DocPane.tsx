@@ -3,7 +3,8 @@ import { isComposingKey } from '../commands/shortcut.ts';
 import { MAX_MATCHES } from '../editor/find.ts';
 import { MarkdownEditor } from '../editor/MarkdownEditor.tsx';
 import { settleMs, useSettled } from '../editor/settled.ts';
-import type { Notebook, Tab } from '../notebook/notebook.ts';
+import type { Notebook } from '../notebook/notebook.ts';
+import type { Tab } from '../notebook/tab.ts';
 import { Icon } from './Icon.tsx';
 import type { ShellModel } from './shellModel.ts';
 
