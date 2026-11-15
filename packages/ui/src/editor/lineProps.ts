@@ -1,5 +1,5 @@
 import type { Token } from '@puffinote/markdown';
-import type { BlockKind } from './blocks.ts';
+import type { BlockKind } from '@puffinote/markdown';
 import type { LineReveal, ViewMode } from './reveal.ts';
 
 export interface LineViewProps {

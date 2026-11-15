@@ -1,5 +1,5 @@
 import { signal } from '@preact/signals';
-import { MarkdownModel } from '@puffinote/markdown';
+import { blocksOf, MarkdownModel, updateBlocks, type Block } from '@puffinote/markdown';
 import {
   DocumentBuffer,
   isCollapsed,
@@ -13,7 +13,6 @@ import {
   type UndoEffect,
   type UndoRun,
 } from '@puffinote/text';
-import { findBlocks, updateBlocks, type Block } from './blocks.ts';
 import {
   backspaceItemEdit,
   backspacePairEdit,
@@ -74,7 +73,7 @@ export class EditorState {
     this.buffer = new DocumentBuffer(text);
     this.modelDoc = this.buffer.document;
     this.modelValue = MarkdownModel.build(this.modelDoc);
-    this.blocksValue = findBlocks(this.modelDoc, this.modelValue);
+    this.blocksValue = blocksOf(this.modelValue);
     this.keys = freshKeys(this.modelDoc.lineCount);
     this.buffer.onChange(() => this.sync());
   }
@@ -301,11 +300,11 @@ export class EditorState {
       const first = Math.min(this.buffer.lastChangedLine, Math.max(0, this.modelValue.lineCount - 1));
       if (this.modelValue.lineCount === 0) {
         this.modelValue = MarkdownModel.build(doc);
-        this.blocksValue = findBlocks(doc, this.modelValue);
+        this.blocksValue = blocksOf(this.modelValue);
       } else {
         const u = this.modelValue.update(doc, first);
         this.modelValue = u.model;
-        this.blocksValue = updateBlocks(this.blocksValue, doc, this.modelValue, u.dirtyFromLine);
+        this.blocksValue = updateBlocks(this.blocksValue, this.modelValue, u.dirtyFromLine);
       }
       this.keys = shiftKeys(this.keys, this.buffer.lastChangedLine, doc.lineCount);
       this.modelDoc = doc;

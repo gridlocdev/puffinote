@@ -1,5 +1,6 @@
 import type { TextDocument } from '@puffinote/text';
 import { listBase } from '../markdown/blockState.ts';
+import { blockAtLine, blocksOf, type Block, type BlockKind } from '../markdown/blocks.ts';
 import { isAsciiDigit } from '../markdown/chars.ts';
 import { MarkdownModel } from '../markdown/markdownModel.ts';
 import { taskLabel, taskStateFromMark, type TaskState } from '../markdown/taskState.ts';
@@ -145,11 +146,20 @@ class Renderer {
   private readonly doc: TextDocument;
   private readonly model: MarkdownModel;
   private readonly options: HtmlOptions;
+  /** Front matter, fenced code and tables, found as the editor finds them, so both agree where each ends. */
+  private readonly blocks: readonly Block[];
 
   constructor(doc: TextDocument, model: MarkdownModel, options: HtmlOptions) {
     this.doc = doc;
     this.model = model;
     this.options = options;
+    this.blocks = blocksOf(model);
+  }
+
+  /** The last line of the `kind` block that starts at `line`, or null when none starts there. */
+  private blockEnd(line: number, kind: BlockKind): number | null {
+    const b = blockAtLine(this.blocks, line);
+    return b && b.kind === kind && b.startLine === line ? b.endLine : null;
   }
 
   /** Render the block beginning at `line`; return the next unconsumed line. */
@@ -190,36 +200,27 @@ class Renderer {
 
   /** Front matter renders as a collapsed "Properties" block (PRD §10.2). */
   private frontMatter(line: number): number {
-    const n = this.doc.lineCount;
-    let i = line + 1;
+    const end = this.blockEnd(line, 'frontMatter') ?? this.doc.lineCount - 1;
     let yaml = '';
-    while (i < n && this.first(i)?.type !== 'frontMatterFence') {
+    for (let i = line + 1; i <= end && this.first(i)?.type !== 'frontMatterFence'; i++) {
       yaml += escapeHtml(stripCr(this.doc.getLineText(i))) + '\n';
-      i++;
     }
-    if (i < n) i++;
     this.out += `<details class="properties"><summary>Properties</summary><pre>${yaml}</pre></details>\n`;
-    return i;
+    return end + 1;
   }
 
   private codeBlock(line: number): number {
     const lang = this.first(line)?.meta;
-    const n = this.doc.lineCount;
-    let i = line + 1;
+    const end = this.blockEnd(line, 'fencedCode') ?? this.doc.lineCount - 1;
     let code = '';
-    // The closing fence is entered in fenced-code state too; it is the line whose token is a fence.
-    while (
-      i < n &&
-      this.model.enteringState(i).kind === 'fencedCode' &&
-      this.first(i)?.type !== 'codeFence'
-    ) {
+    // The block ends at its closing fence, or at the end of the note when the fence is never closed.
+    for (let i = line + 1; i <= end; i++) {
+      if (i === end && this.first(i)?.type === 'codeFence') break;
       code += escapeHtml(stripCr(this.doc.getLineText(i))) + '\n';
-      i++;
     }
-    if (i < n && this.first(i)?.type === 'codeFence') i++;
     const cls = lang ? ` class="language-${escapeAttr(lang)}"` : '';
     this.out += `<pre><code${cls}>${code}</code></pre>\n`;
-    return i;
+    return end + 1;
   }
 
   /**

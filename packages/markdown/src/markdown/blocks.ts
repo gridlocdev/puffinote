@@ -1,5 +1,4 @@
-import type { MarkdownModel } from '@puffinote/markdown';
-import type { TextDocument } from '@puffinote/text';
+import type { MarkdownModel } from './markdownModel.ts';
 
 /** A multi-line construct that conceals or reveals as one unit (PRD §10.2). */
 export type BlockKind = 'fencedCode' | 'frontMatter' | 'table';
@@ -11,9 +10,12 @@ export interface Block {
   readonly endLine: number;
 }
 
-/** The document's multi-line blocks in order, found from the tokens the model already produced. */
-export function findBlocks(doc: TextDocument, model: MarkdownModel): Block[] {
-  return scanBlocks(doc, model, 0, []);
+/**
+ * The document's multi-line blocks in order, found from the tokens the model already produced. The editor
+ * conceals and reveals each as one unit; the one list keeps every reader of the model agreeing on them.
+ */
+export function blocksOf(model: MarkdownModel): Block[] {
+  return scanBlocks(model, 0, []);
 }
 
 /**
@@ -24,7 +26,6 @@ export function findBlocks(doc: TextDocument, model: MarkdownModel): Block[] {
  */
 export function updateBlocks(
   previous: readonly Block[],
-  doc: TextDocument,
   model: MarkdownModel,
   dirtyFromLine: number,
 ): Block[] {
@@ -32,11 +33,11 @@ export function updateBlocks(
   while (keep < previous.length && previous[keep]!.endLine + 1 < dirtyFromLine) keep++;
   const kept = previous.slice(0, keep);
   const from = keep > 0 ? kept[keep - 1]!.endLine + 1 : 0;
-  return scanBlocks(doc, model, from, kept);
+  return scanBlocks(model, from, kept);
 }
 
-function scanBlocks(doc: TextDocument, model: MarkdownModel, from: number, blocks: Block[]): Block[] {
-  const n = Math.min(model.lineCount, doc.lineCount);
+function scanBlocks(model: MarkdownModel, from: number, blocks: Block[]): Block[] {
+  const n = model.lineCount;
   let i = from;
   while (i < n) {
     const first = model.lineTokensRelative(i)[0];
@@ -56,7 +57,7 @@ function scanBlocks(doc: TextDocument, model: MarkdownModel, from: number, block
     }
     if (i + 1 < n && model.lineTokensRelative(i + 1)[0]?.type === 'tableDelimiter') {
       let end = i + 2;
-      while (end < n && isTableBodyRow(doc, model, end)) end++;
+      while (end < n && isTableBodyRow(model, end)) end++;
       blocks.push({ kind: 'table', startLine: i, endLine: end - 1 });
       i = end;
       continue;
@@ -70,8 +71,8 @@ function isFenceLine(model: MarkdownModel, line: number): boolean {
   return model.lineTokensRelative(line)[0]?.type === 'codeFence';
 }
 
-function isTableBodyRow(doc: TextDocument, model: MarkdownModel, line: number): boolean {
-  return model.enteringState(line).kind === 'normal' && /(^|[^\\])\|/.test(doc.getLineText(line));
+function isTableBodyRow(model: MarkdownModel, line: number): boolean {
+  return model.enteringState(line).kind === 'normal' && /(^|[^\\])\|/.test(model.document.getLineText(line));
 }
 
 /** The block covering `line`, if any. `blocks` is in document order. */

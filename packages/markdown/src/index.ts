@@ -2,6 +2,7 @@ export * from './editing/linePrefix.ts';
 export * from './editing/orderedListRenumber.ts';
 export * from './html/htmlRenderer.ts';
 export * from './markdown/blockState.ts';
+export { blockAtLine, blocksOf, updateBlocks, type Block, type BlockKind } from './markdown/blocks.ts';
 export * from './markdown/inlineDelimiters.ts';
 export * from './markdown/markdownFiles.ts';
 export * from './markdown/markdownModel.ts';

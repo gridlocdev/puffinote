@@ -8,7 +8,7 @@ import {
   type Token,
   type TokenType,
 } from '@puffinote/markdown';
-import type { BlockKind } from './blocks.ts';
+import type { BlockKind } from '@puffinote/markdown';
 import type { LineReveal, ViewMode } from './reveal.ts';
 
 /** A synthetic glyph drawn in place of a concealed marker; it owns the marker's columns atomically. */

@@ -70,6 +70,11 @@ export class MarkdownModel {
     this.allowFrontMatter = allowFrontMatter;
   }
 
+  /** The document this model tokenized. */
+  get document(): TextDocument {
+    return this.doc;
+  }
+
   /** Number of lines covered. */
   get lineCount(): number {
     return this.lines.length;

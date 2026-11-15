@@ -1,9 +1,7 @@
-import { MarkdownModel } from '@puffinote/markdown';
+import { blockAtLine, blocksOf, MarkdownModel } from '@puffinote/markdown';
 import { caretAt, TextDocument, type Selection } from '@puffinote/text';
 import { describe, expect, it } from 'vitest';
 import {
-  blockAtLine,
-  findBlocks,
   ListDepthTracker,
   listOrdinal,
   isInsideConcealed,
@@ -27,7 +25,7 @@ function render(
 ): LineRender {
   const doc = TextDocument.fromString(md);
   const model = MarkdownModel.build(doc);
-  const blocks = findBlocks(doc, model);
+  const blocks = blocksOf(model);
   const block = blockAtLine(blocks, line);
   const range = block
     ? { start: doc.getLineStart(block.startLine), end: doc.getLineEnd(block.endLine) }
@@ -212,7 +210,7 @@ describe('blocks', () => {
   it('finds fenced code, front matter and tables', () => {
     const md = '---\na: 1\n---\n```\nx\n```\n| A | B |\n| - | - |\n| 1 | 2 |\npara';
     const doc = TextDocument.fromString(md);
-    const blocks = findBlocks(doc, MarkdownModel.build(doc));
+    const blocks = blocksOf(MarkdownModel.build(doc));
     expect(blocks).toEqual([
       { kind: 'frontMatter', startLine: 0, endLine: 2 },
       { kind: 'fencedCode', startLine: 3, endLine: 5 },
@@ -224,9 +222,7 @@ describe('blocks', () => {
 
   it('runs an unterminated fence to the end', () => {
     const doc = TextDocument.fromString('```\na\nb');
-    expect(findBlocks(doc, MarkdownModel.build(doc))).toEqual([
-      { kind: 'fencedCode', startLine: 0, endLine: 2 },
-    ]);
+    expect(blocksOf(MarkdownModel.build(doc))).toEqual([{ kind: 'fencedCode', startLine: 0, endLine: 2 }]);
   });
 });
 

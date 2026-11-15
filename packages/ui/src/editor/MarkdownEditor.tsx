@@ -1,10 +1,9 @@
-import { toggledTaskState, parseLinePrefix, type Token } from '@puffinote/markdown';
+import { blockAtLine, toggledTaskState, parseLinePrefix, type Block, type Token } from '@puffinote/markdown';
 import { isCollapsed, selectionEnd, selectionStart } from '@puffinote/text';
 import { useLayoutEffect, useMemo, useRef } from 'preact/hooks';
 import type { JSX } from 'preact';
 import { CommandCatalog } from '../commands/command.ts';
 import { isMac } from '../commands/shortcut.ts';
-import { blockAtLine, type Block } from './blocks.ts';
 import { pasteText, setTaskStateEdit, withTaskSort, typeCharEdit, withLineEnding } from './commands.ts';
 import { markdownCommandSpecs } from './editorCommands.ts';
 import type { EditorState } from './editorState.ts';

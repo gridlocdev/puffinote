@@ -1,6 +1,6 @@
 import { token, type Token } from '@puffinote/markdown';
 import { describe, expect, it } from 'vitest';
-import { findBlocks } from '../src/editor/blocks.ts';
+import { blocksOf } from '@puffinote/markdown';
 import { EditorState, enterEdit } from '../src/index.ts';
 import { firstRowEndingBelow, nearestRowIndex, type RectSource } from '../src/editor/geometry.ts';
 import { keyAction, leavesEditor, primaryHeld, undoRunFor, type KeyLike } from '../src/editor/keys.ts';
@@ -166,9 +166,7 @@ describe('incremental blocks (finding 1)', () => {
         state.select(at);
         state.insert(snippets[rand(snippets.length)]!);
       }
-      expect(state.blocks, `step ${step}: ${JSON.stringify(state.text)}`).toEqual(
-        findBlocks(state.document, state.model),
-      );
+      expect(state.blocks, `step ${step}: ${JSON.stringify(state.text)}`).toEqual(blocksOf(state.model));
     }
   });
 });
