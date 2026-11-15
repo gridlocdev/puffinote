@@ -129,7 +129,7 @@ export function pasteText(doc: TextDocument, at: number, pasted: string): string
 
 /** `offset`, or the `\r` before it when it sits between the two halves of a CRLF. */
 function beforeLineBreak(doc: TextDocument, offset: number): number {
-  return offset > 0 && doc.getText(offset - 1, 2) === '\r\n' ? offset - 1 : offset;
+  return offset > 0 && offset < doc.length && doc.getText(offset - 1, 2) === '\r\n' ? offset - 1 : offset;
 }
 
 function replaceSelection(sel: Selection, text: string, caretInText = text.length): Edit {

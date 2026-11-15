@@ -460,6 +460,16 @@ describe('a CRLF note keeps CRLF', () => {
     );
   });
 
+  it('puts a picture at the very end of a note', () => {
+    for (const text of ['a\n', 'a', '']) {
+      const { doc } = parse(text);
+      const end = doc.length;
+      expect(show(doc, pictureLinesEdit(doc, end, end, ['![](p.png)']))).toBe(
+        `${text}${text.endsWith('\n') || !text ? '' : '\n'}![](p.png)|`,
+      );
+    }
+  });
+
   it("pastes with the note's line ending", () => {
     const { doc } = parse(crlf('a\nb'));
     expect(pasteText(doc, 1, 'x\ny\r\nz')).toBe('x\r\ny\r\nz');
