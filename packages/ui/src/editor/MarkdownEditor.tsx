@@ -1,4 +1,4 @@
-import { blockAtLine, toggledTaskState, parseLinePrefix, type Block, type Token } from '@puffinote/markdown';
+import { blockAtLine, toggledTaskState, parseLinePrefix, type Token } from '@puffinote/markdown';
 import { isCollapsed, selectionEnd, selectionStart } from '@puffinote/text';
 import { useLayoutEffect, useMemo, useRef } from 'preact/hooks';
 import type { JSX } from 'preact';
@@ -8,7 +8,8 @@ import { pasteText, setTaskStateEdit, withTaskSort, typeCharEdit, withLineEnding
 import { markdownCommandSpecs } from './editorCommands.ts';
 import type { EditorState } from './editorState.ts';
 import { caretBox, firstRowEndingBelow, hitTest, lineSelectionRects, textRanges } from './geometry.ts';
-import { lineAnnouncement, ListDepthTracker, renderLine, snapOutOfConcealed } from './lineRender.ts';
+import { lineAnnouncement, renderLine, snapOutOfConcealed } from './lineRender.ts';
+import { buildRows } from './rows.ts';
 import { settleMs, useSettled } from './settled.ts';
 import { BlockWidget, LineView } from './LineView.tsx';
 import {
@@ -174,44 +175,23 @@ export function MarkdownEditor(props: MarkdownEditorProps) {
   const rows: JSX.Element[] = [];
   /** The line each row draws (a widget row draws its block's first line). */
   const rowLines: number[] = [];
-  let bi = 0;
-  let blockRange: { start: number; end: number } | null = null;
-  let rangeOf: Block | null = null;
-  const depths = new ListDepthTracker();
-  for (let i = 0; i < doc.lineCount; i++) {
-    while (bi < blocks.length && blocks[bi]!.endLine < i) bi++;
-    const block = bi < blocks.length && blocks[bi]!.startLine <= i ? blocks[bi]! : null;
-    if (block && block !== rangeOf) {
-      rangeOf = block;
-      blockRange = { start: doc.getLineStart(block.startLine), end: doc.getLineEnd(block.endLine) };
-    }
-    const range = block ? blockRange : null;
-    if (block?.kind === 'table' && mode === 'live' && i === block.startLine) {
-      const touched = range !== null && selectionStart(sel) <= range.end && selectionEnd(sel) >= range.start;
-      if (!touched) {
-        rows.push(
-          <BlockWidget
-            key={`w${state.lineKey(i)}`}
-            line={i}
-            source={doc.getText(range!.start, range!.end - range!.start)}
-          />,
-        );
-        rowLines.push(i);
-        depths.skipBlock();
-        i = block.endLine;
-        continue;
-      }
+  const lineTokens = (i: number) => model.lineTokensRelative(i);
+  for (const row of buildRows(doc, blocks, mode, sel, (i) => lineTextOf(cache, i), lineTokens)) {
+    const i = row.line;
+    rowLines.push(i);
+    if (row.kind === 'widget') {
+      rows.push(<BlockWidget key={`w${state.lineKey(i)}`} line={i} source={row.source} />);
+      continue;
     }
     const start = doc.getLineStart(i);
     const text = lineTextOf(cache, i);
-    const tokens = model.lineTokensRelative(i);
+    const tokens = lineTokens(i);
     const key = state.lineKey(i);
-    let reveal = lineReveal(tokens, start, start + text.length, sel, range, shownPicture);
+    let reveal = lineReveal(tokens, start, start + text.length, sel, row.range, shownPicture);
     if (reveal.lineActive) {
       reveal = keepReveal(prevReveals.get(key), reveal);
       reveals.set(key, reveal);
     }
-    const listDepth = depths.next(text, tokens, block?.kind ?? null);
     rows.push(
       <LineView
         key={key}
@@ -220,12 +200,11 @@ export function MarkdownEditor(props: MarkdownEditorProps) {
         tokens={tokens}
         reveal={reveal}
         mode={mode}
-        block={block?.kind ?? null}
-        listDepth={listDepth}
+        block={row.block?.kind ?? null}
+        listDepth={row.listDepth}
         resolveImage={resolveImage}
       />,
     );
-    rowLines.push(i);
   }
   revealCache.current = reveals;
 
