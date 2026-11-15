@@ -5,6 +5,7 @@ import {
   attachmentName,
   cleanFolder,
   fileRefs,
+  findEmbed,
   imageTargets,
   relativePath,
   relinkEdits,
@@ -283,5 +284,42 @@ describe('the no-longer-used offer checks again before deleting', () => {
     await nb.pictures.removeUnused(['a.png', 'b.png']);
     await store.read('a.png');
     await expect(store.read('b.png')).rejects.toThrow();
+  });
+});
+
+describe('wiki embeds found by name (PRD §10.6)', () => {
+  const files = [
+    'notes/a.png',
+    '05 - Attachments/a.png',
+    'a.png',
+    'deep/er/b.png',
+    'other/b.png',
+    'x/Shot.PNG',
+  ];
+  it("takes the nearest match: the note's folder, the picture folder, the top level, then anywhere", () => {
+    expect(findEmbed('a.png', 'notes/n.md', '05 - Attachments', files)).toBe('notes/a.png');
+    expect(findEmbed('a.png', 'elsewhere/n.md', '05 - Attachments', files)).toBe('05 - Attachments/a.png');
+    expect(findEmbed('a.png', 'elsewhere/n.md', 'attachments', files)).toBe('a.png');
+    expect(findEmbed('b.png', 'n.md', 'attachments', files)).toBe('deep/er/b.png');
+    expect(findEmbed('er/b.png', 'n.md', 'attachments', files)).toBe('deep/er/b.png');
+    expect(findEmbed('c.png', 'n.md', 'attachments', files)).toBeNull();
+  });
+
+  it('ignores case only where the disk does', () => {
+    expect(findEmbed('shot.png', 'n.md', 'attachments', files)).toBeNull();
+    expect(findEmbed('shot.png', 'n.md', 'attachments', files, true)).toBe('x/Shot.PNG');
+  });
+
+  it('shows an embedded picture from another folder in the editor', async () => {
+    const nb = await Notebook.open(
+      new MemoryStore('N', {
+        'a/b/n.md': '![[p.png]]',
+        '05 - Attachments/p.png': new Uint8Array([1]),
+      }),
+      { prefs: memoryPrefs() },
+    );
+    expect(nb.pictures.pathOf('a/b/n.md', '[[p.png]]')).toBe('05 - Attachments/p.png');
+    expect(nb.pictures.pathOf('a/b/n.md', '../../05%20-%20Attachments/p.png')).toBe('05 - Attachments/p.png');
+    nb.dispose();
   });
 });

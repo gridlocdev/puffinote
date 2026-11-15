@@ -76,7 +76,12 @@ function SegmentView({
       case 'image':
         return (
           <span {...common} class="pn-deco pn-image">
-            <img src={resolveImage(d.url ?? '')} alt="" draggable={false} />
+            <img
+              src={resolveImage(d.url ?? '')}
+              alt=""
+              draggable={false}
+              style={d.width ? { width: `${d.width}px` } : undefined}
+            />
           </span>
         );
       case 'rule':

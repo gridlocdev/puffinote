@@ -18,6 +18,8 @@ export function Document(props: { readonly model: ShellModel; readonly nb: Noteb
     return <div class="pn-image-view">{tab.imageUrl && <img src={tab.imageUrl} alt={tab.name} />}</div>;
   }
   void nb.pictures.loaded.value;
+  // A wiki embed is looked up by name in the file tree, so its picture can change when the tree does.
+  void nb.tree.value;
   const conflict = tab.conflict.value;
   const recovered = tab.recovered.value;
   const path = tab.path.value;

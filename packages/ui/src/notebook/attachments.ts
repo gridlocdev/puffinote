@@ -122,6 +122,32 @@ export class PictureUsage {
   }
 }
 
+/**
+ * The notebook file a wiki embed `![[target]]` in the note at `notePath` shows (PRD §10.6), from `files` (every
+ * file's path, in tree order), or null. The embed has no folder of its own, so the nearest match wins: the
+ * note's folder, then the picture folder `pictureDir`, then the top level, then the first file anywhere whose
+ * path ends with `target`. Paths compare by `pathKey`.
+ */
+export function findEmbed(
+  target: string,
+  notePath: string,
+  pictureDir: string,
+  files: readonly string[],
+  ignoreCase = false,
+): string | null {
+  const bare = resolveRelative('', target);
+  if (!bare) return null;
+  const key = (p: string) => pathKey(p, ignoreCase);
+  const byKey = new Map<string, string>();
+  for (const f of files) if (!byKey.has(key(f))) byKey.set(key(f), f);
+  for (const near of [resolveRelative(notePath, target), joinPath(pictureDir, bare), bare]) {
+    const hit = near === null ? undefined : byKey.get(key(near));
+    if (hit !== undefined) return hit;
+  }
+  const tail = `/${key(bare)}`;
+  return files.find((f) => key(f).endsWith(tail)) ?? null;
+}
+
 /** `to` written relative to the folder of the note at `from`, `/`-separated (`../attachments/a.png`). */
 export function relativePath(from: string, to: string): string {
   const base = parentOf(from).split('/').filter(Boolean);

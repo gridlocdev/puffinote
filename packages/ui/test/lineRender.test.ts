@@ -374,3 +374,25 @@ describe('pictures in the source', () => {
     expect(pictureExtent(tokens, doc.getLineStart(1))).toBeNull();
   });
 });
+
+describe('wiki embeds of pictures (PRD §10.6)', () => {
+  const far = { anchor: 99, caret: 99 };
+  it('draws a picture embed as a picture, with the width it asks for', () => {
+    const md = 'x\n![[Pasted image 1.png|300]]';
+    const deco = render(md, { anchor: 0, caret: 0 }, 1).segments.find((s) => s.deco?.kind === 'image')?.deco;
+    expect(deco).toEqual({ kind: 'image', text: '', url: '[[Pasted image 1.png]]', width: 300 });
+  });
+
+  it('leaves an embed of a note as styled text', () => {
+    const r = render('![[Other note]]', far);
+    expect(r.segments.some((s) => s.deco?.kind === 'image')).toBe(false);
+  });
+
+  it('finds the embed under the caret like any picture', () => {
+    const md = '![[a.png]]';
+    const doc = TextDocument.fromString(md);
+    const tokens = MarkdownModel.build(doc).lineTokens(0);
+    expect(pictureExtent(tokens, 4)).toEqual({ start: 0, end: md.length });
+    expect(pictureWithUrlAt(tokens, 3, doc)).toEqual({ start: 0, end: md.length, url: '[[a.png]]' });
+  });
+});

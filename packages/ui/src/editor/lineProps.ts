@@ -1,6 +1,6 @@
 import type { Token } from '@puffinote/markdown';
 import type { BlockKind } from '@puffinote/markdown';
-import type { LineReveal, ViewMode } from './reveal.ts';
+import { isPictureToken, type LineReveal, type ViewMode } from './reveal.ts';
 
 export interface LineViewProps {
   /** The line number. Not compared: the surface renumbers shifted rows' `data-line` itself. */
@@ -27,7 +27,7 @@ export function lineViewPropsEqual(a: LineViewProps, b: LineViewProps): boolean 
   }
   if (!revealEqual(a.reveal, b.reveal)) return false;
   if (a.tokens !== b.tokens && !tokensEqual(a.tokens, b.tokens)) return false;
-  return a.resolveImage === b.resolveImage || !b.tokens.some((t) => t.type === 'imageUrl');
+  return a.resolveImage === b.resolveImage || !b.tokens.some(isPictureToken);
 }
 
 function revealEqual(a: LineReveal, b: LineReveal): boolean {

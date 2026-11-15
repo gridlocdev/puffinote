@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+### What's new
+
+- **Pictures embedded as `![[name.png]]`** (as other Markdown apps paste them) are drawn as pictures, found by name wherever they are in the notebook. `![[name.png|300]]` draws one 300 px wide.
+
 ### Bugs fixed
 
 - Pasting or dropping a picture with the caret at the very end of a note saves the picture and links it. Before, the file was saved but no link went into the note.

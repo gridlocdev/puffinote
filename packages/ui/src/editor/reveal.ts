@@ -1,5 +1,6 @@
 import type { Token } from '@puffinote/markdown';
 import { isCollapsed, selectionIntersects, type Selection, type TextDocument } from '@puffinote/text';
+import { isImagePath } from '../platform/paths.ts';
 
 /**
  * How the editor draws Markdown:
@@ -63,7 +64,7 @@ export function lineReveal(
     }
   }
   const pictures = new Set<number>();
-  for (const t of tokens) if (t.type === 'imageUrl' && t.node !== 0) pictures.add(t.node);
+  for (const t of tokens) if (isPictureToken(t)) pictures.add(t.node);
   const nodes = new Set<number>();
   for (const [node, e] of extents) {
     if (!selectionIntersects(selection, e.start, e.end - e.start)) continue;
@@ -120,7 +121,41 @@ function listPrefixTouched(
 export interface PictureAt {
   readonly start: number;
   readonly end: number;
+  /** The link as written, or `[[name]]` for a wiki embed (`pictureRef`). */
   readonly url: string;
+}
+
+/**
+ * The target of a `![[target|size]]` embed, without its size or `#part`. Empty when it names nothing.
+ */
+export function embedTarget(meta: string | null | undefined): string {
+  return (meta ?? '').split(/[|#]/)[0]!.trim();
+}
+
+/** The width an embed asks for (`![[a.png|300]]`, `![[a.png|300x200]]`), or null. */
+export function embedWidth(meta: string | null | undefined): number | null {
+  const m = /\|\s*(\d+)\s*(?:x\s*\d+\s*)?$/.exec(meta ?? '');
+  return m ? Number(m[1]) : null;
+}
+
+/** Whether `t` is the token a picture is drawn from: an image's link, or a wiki embed of a picture file. */
+export function isPictureToken(t: Token): boolean {
+  if (t.node === 0) return false;
+  return t.type === 'imageUrl' || (t.type === 'embed' && isImagePath(embedTarget(t.meta)));
+}
+
+/**
+ * The reference a picture token stands for: its link as written, or `[[name]]` for a wiki embed, which has no
+ * folder and is looked up by name (PRD §10.6).
+ */
+export function pictureRef(t: Token, doc: TextDocument): string {
+  if (t.type === 'embed') return `[[${embedTarget(t.meta)}]]`;
+  return t.meta ?? doc.getText(t.start, t.length);
+}
+
+/** The name in a `[[name]]` picture reference, or null for an ordinary link. */
+export function embedRefName(ref: string): string | null {
+  return ref.startsWith('[[') && ref.endsWith(']]') ? ref.slice(2, -2) : null;
 }
 
 /** The source range of the picture on this line that covers `offset`, or `null` when none does. */
@@ -128,7 +163,7 @@ export function pictureExtent(
   tokens: readonly Token[],
   offset: number,
 ): { start: number; end: number } | null {
-  const url = tokens.find((t) => t.type === 'imageUrl' && t.node !== 0 && inNode(tokens, t.node, offset));
+  const url = tokens.find((t) => isPictureToken(t) && inNode(tokens, t.node, offset));
   return url ? nodeExtent(tokens, url.node) : null;
 }
 
@@ -141,9 +176,9 @@ export function pictureWithUrlAt(
   urlStart: number,
   doc: TextDocument,
 ): PictureAt | null {
-  const url = tokens.find((t) => t.type === 'imageUrl' && t.node !== 0 && t.start === urlStart);
+  const url = tokens.find((t) => isPictureToken(t) && t.start === urlStart);
   if (!url) return null;
-  return { ...nodeExtent(tokens, url.node), url: url.meta ?? doc.getText(url.start, url.length) };
+  return { ...nodeExtent(tokens, url.node), url: pictureRef(url, doc) };
 }
 
 function nodeExtent(tokens: readonly Token[], node: number): { start: number; end: number } {

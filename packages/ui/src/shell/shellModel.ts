@@ -6,7 +6,7 @@ import { removeRangeEdit } from '../editor/commands.ts';
 import { markdownCommandSpecs } from '../editor/editorCommands.ts';
 import type { EditorMenuPoint } from '../editor/MarkdownEditor.tsx';
 import type { EditorState } from '../editor/editorState.ts';
-import { pictureWithUrlAt, type PictureAt } from '../editor/reveal.ts';
+import { embedRefName, isPictureToken, pictureWithUrlAt, type PictureAt } from '../editor/reveal.ts';
 import { findAll, matchAt, matchFrom, replaceAllEdit, type TextRange } from '../editor/find.ts';
 import { sidebarPanels, type Notebook, type SidebarPanel } from '../notebook/notebook.ts';
 import type { Tab } from '../notebook/tab.ts';
@@ -642,13 +642,16 @@ export class ShellModel {
         'Edit Description…',
         'Change the text that describes the picture.',
         (p) => this.editPictureDescription(p.picture),
+        // A wiki embed has no description to edit.
+        (p) => embedRefName(p.picture.url) === null,
       ),
       spec(
         'picture.rename',
         'Rename Picture…',
         'Rename the picture’s file, keeping the links to it.',
         (p) => this.renamePicture(p.file!),
-        (p) => p.file !== null,
+        // A rename keeps `![](…)` links, not wiki embeds, which name the file: renaming from one would break it.
+        (p) => p.file !== null && embedRefName(p.picture.url) === null,
       ),
       spec('picture.viewLinkText', 'View Link Text', 'Show the picture’s Markdown in the note.', (p) => {
         this.closePreview(false);
@@ -738,8 +741,8 @@ export class ShellModel {
   /** The notebook file a picture link written in note `notePath` points at, or null (a web picture, missing). */
   private pictureFile(url: string, notePath: string): string | null {
     if (hasScheme(url)) return null;
-    const path = resolveRelative(notePath, url);
     const nb = this.notebook.peek();
+    const path = nb ? nb.pictures.pathOf(notePath, url) : resolveRelative(notePath, url);
     return path !== null && nb && findNode(nb.tree.peek(), path)?.kind === 'file' ? path : null;
   }
 
@@ -1783,7 +1786,7 @@ function pictureStillAt(state: EditorState, picture: PictureAt): boolean {
   const doc = state.document;
   if (picture.end > doc.length || picture.start >= picture.end) return false;
   const tokens = state.model.lineTokens(doc.getPosition(picture.start).line);
-  const url = tokens.find((t) => t.type === 'imageUrl' && t.start >= picture.start && t.start < picture.end);
+  const url = tokens.find((t) => isPictureToken(t) && t.start >= picture.start && t.start < picture.end);
   if (!url) return false;
   const found = pictureWithUrlAt(tokens, url.start, doc);
   return found?.start === picture.start && found.end === picture.end && found.url === picture.url;

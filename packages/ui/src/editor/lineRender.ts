@@ -10,7 +10,7 @@ import {
   type Token,
   type TokenType,
 } from '@puffinote/markdown';
-import type { LineReveal, ViewMode } from './reveal.ts';
+import { embedTarget, embedWidth, isPictureToken, type LineReveal, type ViewMode } from './reveal.ts';
 
 /** A synthetic glyph drawn in place of a concealed marker; it owns the marker's columns atomically. */
 export type DecorationKind = 'bullet' | 'number' | 'checkbox' | 'indent' | 'image' | 'rule';
@@ -20,8 +20,10 @@ export interface Decoration {
   /** The bullet, number or rule text. */
   readonly text: string;
   readonly task?: TaskState;
-  /** An image's source URL, as written. */
+  /** An image's source URL, as written, or `[[name]]` for a wiki embed. */
   readonly url?: string;
+  /** The width in CSS pixels a wiki embed asks for (`![[a.png|300]]`). */
+  readonly width?: number;
   /** An indent's width in columns (a tab advances to the next tab stop, every 4 columns). */
   readonly columns?: number;
 }
@@ -143,7 +145,7 @@ export function renderLine(
 
   // Nodes drawn as an image: all their tokens hide behind one picture until revealed.
   const imageNodes = new Set<number>();
-  for (const t of tokens) if (t.type === 'imageUrl' && t.node !== 0) imageNodes.add(t.node);
+  for (const t of tokens) if (isPictureToken(t)) imageNodes.add(t.node);
   const linkSpans = linkTextSpans(tokens, lineText);
 
   const isConcealed = (t: Token): boolean => {
@@ -294,6 +296,11 @@ function decorationFor(
       return { kind: 'rule', text: '' };
     case 'imageUrl':
       return imageNodes.has(t.node) ? { kind: 'image', text: '', url: t.meta ?? text } : null;
+    case 'embed': {
+      if (!imageNodes.has(t.node)) return null;
+      const width = embedWidth(t.meta);
+      return { kind: 'image', text: '', url: `[[${embedTarget(t.meta)}]]`, ...(width ? { width } : {}) };
+    }
     default:
       return null;
   }

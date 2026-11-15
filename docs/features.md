@@ -14,7 +14,7 @@ A task is `[ ]` open, `[/]` in progress or `[x]` done. A click on the box comple
 
 ## Pictures in your notes
 
-Paste or drop a picture and Puffinote saves it in the notebook and links it. Click a picture to see it full size with zoom and pan, or right-click it to rename, copy or delete it. Puffinote offers to delete pictures that no note uses any more.
+Paste or drop a picture and Puffinote saves it in the notebook and links it. Click a picture to see it full size with zoom and pan, or right-click it to rename, copy or delete it. Puffinote offers to delete pictures that no note uses any more. Pictures embedded as `![[name.png]]`, as other Markdown apps paste them, are drawn too, wherever the file is in the notebook.
 
 ## Two layouts
 

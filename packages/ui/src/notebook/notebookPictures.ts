@@ -10,9 +10,11 @@ import {
   resolveRelative,
   uniqueName,
 } from '../platform/paths.ts';
+import { embedRefName } from '../editor/reveal.ts';
 import {
   attachmentDir,
   attachmentName,
+  findEmbed,
   imageMarkdown,
   imageTargets,
   isImageMime,
@@ -99,7 +101,7 @@ export class NotebookPictures {
    */
   resolve(notePath: string, ref: string): string {
     if (/^(https?:|data:|blob:)/i.test(ref)) return ref;
-    const path = resolveRelative(notePath, ref);
+    const path = this.pathOf(notePath, ref);
     if (path === null) return '';
     const direct = this.#host.store.fileUrl(path);
     if (direct) return direct;
@@ -127,6 +129,23 @@ export class NotebookPictures {
         this.#images.delete(path);
       });
     return '';
+  }
+
+  /**
+   * The notebook path a picture reference in the note at `notePath` names: a link resolved from the note's
+   * folder, or a `[[name]]` wiki embed looked up by name (`findEmbed`; null when no file has that name).
+   */
+  pathOf(notePath: string, ref: string): string | null {
+    const name = embedRefName(ref);
+    if (name === null) return resolveRelative(notePath, ref);
+    const files = allFiles(this.#host.tree()).map((f) => f.path);
+    return findEmbed(
+      name,
+      notePath,
+      attachmentDir(this.#host.settings(), notePath),
+      files,
+      this.#ignoresCase,
+    );
   }
 
   /** Drop what was read for pictures at or inside `paths`, so the editor reads them again. */
