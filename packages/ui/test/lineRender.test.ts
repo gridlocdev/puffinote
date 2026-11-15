@@ -131,6 +131,15 @@ describe('concealment (PRD §10.2)', () => {
     expect(r.segments[0]).toMatchObject({ concealed: true, deco: { kind: 'indent', columns: 4 } });
   });
 
+  it('counts a tab in a nested item’s indent to the next tab stop, as the tokenizer does', () => {
+    const indent = (md: string) => render(md, elsewhere, 1).segments[0]?.deco;
+    expect(indent('- a\n\t- b\nx')).toMatchObject({ kind: 'indent', columns: 4 });
+    expect(indent('- a\n \t- b\nx')).toMatchObject({ kind: 'indent', columns: 4 });
+    expect(indent('- a\n  \t- b\nx')).toMatchObject({ kind: 'indent', columns: 4 });
+    expect(indent('- a\n\t  - b\nx')).toMatchObject({ kind: 'indent', columns: 6 });
+    expect(indent('- a\n    \t- b\nx')).toMatchObject({ kind: 'indent', columns: 8 });
+  });
+
   it('collapses fences until the selection enters the block', () => {
     const md = 'x\n```js\ncode\n```\nafter';
     expect(render(md, caretAt(0), 1).collapsed).toBe(true);
@@ -265,6 +274,15 @@ describe('nested numbered lists (PRD §10.2)', () => {
     const t = new ListDepthTracker();
     const depths = lines.map((l) => t.next(l, /^\s*(?:\d+\.|-) /.test(l)));
     expect(depths).toEqual([0, 1, 2, 0, 1, 0, 0, 0]);
+  });
+
+  it('measures depth in columns, so a tab and four spaces nest alike', () => {
+    const depths = (lines: string[]) => {
+      const t = new ListDepthTracker();
+      return lines.map((l) => t.next(l, true));
+    };
+    expect(depths(['- a', '\t- b', '    - c', '\t\t- d', ' \t- e'])).toEqual([0, 1, 1, 2, 1]);
+    expect(depths(['- a', '\t- b', '  - c'])).toEqual([0, 1, 1]);
   });
 });
 

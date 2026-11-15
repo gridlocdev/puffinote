@@ -1,5 +1,5 @@
 import { BlockStates, listBase, type BlockState } from './blockState.ts';
-import { contentLength } from './chars.ts';
+import { contentLength, TAB_WIDTH } from './chars.ts';
 import { tokenizeInline } from './inlineTokenizer.ts';
 import { taskMark } from './taskState.ts';
 import { token, type Token } from './token.ts';
@@ -302,7 +302,7 @@ function leadingWhitespace(line: string, len: number): [chars: number, columns: 
   let columns = 0;
   while (n < len) {
     const c = line.charAt(n);
-    if (c === '\t') columns += 4 - (columns % 4);
+    if (c === '\t') columns += TAB_WIDTH - (columns % TAB_WIDTH);
     else if (c === ' ') columns++;
     else break;
     n++;

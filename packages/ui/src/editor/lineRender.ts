@@ -1,14 +1,15 @@
 import {
+  columnAt,
   findNestedDelimiters,
   innerStart,
   parseLinePrefix,
   spanEnd,
   taskStateFromMark,
+  type BlockKind,
   type TaskState,
   type Token,
   type TokenType,
 } from '@puffinote/markdown';
-import type { BlockKind } from '@puffinote/markdown';
 import type { LineReveal, ViewMode } from './reveal.ts';
 
 /** A synthetic glyph drawn in place of a concealed marker; it owns the marker's columns atomically. */
@@ -21,7 +22,7 @@ export interface Decoration {
   readonly task?: TaskState;
   /** An image's source URL, as written. */
   readonly url?: string;
-  /** An indent's width in columns (a tab counts 4). */
+  /** An indent's width in columns (a tab advances to the next tab stop, every 4 columns). */
   readonly columns?: number;
 }
 
@@ -178,7 +179,11 @@ export function renderLine(
       /^[ \t]+$/.test(lineText.slice(pos, s))
     ) {
       segments.push(
-        seg(pos, s, '', true, { kind: 'indent', text: '', columns: columnsOf(lineText.slice(pos, s)) }),
+        seg(pos, s, '', true, {
+          kind: 'indent',
+          text: '',
+          columns: columnAt(lineText, s) - columnAt(lineText, pos),
+        }),
       );
       pos = s;
     }
@@ -355,9 +360,11 @@ export class ListDepthTracker {
       if (p.indent === 0 && lineText.slice(p.markerStart).trim().length > 0) this.open.length = 0;
       return 0;
     }
-    while (this.open.length > 0 && this.open[this.open.length - 1]! >= p.markerStart) this.open.pop();
+    // Columns, not characters: a tab reaches the next tab stop, as the tokenizer nests items.
+    const column = columnAt(lineText, p.markerStart);
+    while (this.open.length > 0 && this.open[this.open.length - 1]! >= column) this.open.pop();
     const depth = this.open.length;
-    this.open.push(p.markerStart);
+    this.open.push(column);
     return depth;
   }
 
@@ -365,12 +372,6 @@ export class ListDepthTracker {
   reset(): void {
     this.open.length = 0;
   }
-}
-
-function columnsOf(ws: string): number {
-  let c = 0;
-  for (const ch of ws) c += ch === '\t' ? 4 : 1;
-  return c;
 }
 
 interface LinkSpan {

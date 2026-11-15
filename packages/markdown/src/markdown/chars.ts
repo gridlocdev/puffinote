@@ -23,6 +23,18 @@ export function isLetterOrDigit(c: string): boolean {
   return c.length > 0 && letterOrDigit.test(c);
 }
 
+/** Columns between tab stops; the tokenizer and the editor's list indents count tabs alike. */
+export const TAB_WIDTH = 4;
+
+/** The column `offset` in `text` is drawn at, with each tab advancing to the next tab stop. */
+export function columnAt(text: string, offset: number): number {
+  let columns = 0;
+  for (let i = 0; i < offset && i < text.length; i++) {
+    columns = text.charAt(i) === '\t' ? columns + TAB_WIDTH - (columns % TAB_WIDTH) : columns + 1;
+  }
+  return columns;
+}
+
 export function isAsciiDigit(c: string): boolean {
   return c >= '0' && c <= '9' && c.length === 1;
 }
