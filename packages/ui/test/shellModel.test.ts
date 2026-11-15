@@ -309,6 +309,27 @@ describe('ShellModel picture preview and menu (PRD §10.6)', () => {
     expect(labels(m.pictureMenuItems(picture))?.[0]).toBe('Open in Tab');
   });
 
+  it('runs the menu’s items as catalog commands on the picture they name', async () => {
+    const { m, tab, picture } = await setup({ 'a.md': 'x ![](pic.png) ![](web:pic)', 'pic.png': '' });
+    const ran: string[] = [];
+    const run = m.menuCatalog.run.bind(m.menuCatalog);
+    m.menuCatalog.run = (id, target) => (ran.push(`${id} ${target?.picture?.url}`), run(id, target));
+    m.pictureMenuItems(picture)!
+      .find((it) => it?.label === 'View Link Text')!
+      .run();
+    expect(ran).toEqual(['picture.viewLinkText pic.png']);
+    expect(tab.state!.shownPicture.value).toBe(picture.start);
+
+    // A web picture has no file to open or rename; without a picture to act on, nothing is enabled.
+    const web = { start: tab.state!.text.lastIndexOf('!['), end: tab.state!.text.length, url: 'web:pic' };
+    const disabled = (p: typeof picture) =>
+      m.pictureMenuItems(p)!.flatMap((it) => (it?.disabled ? [it.label] : []));
+    expect(disabled(picture)).toEqual([]);
+    expect(disabled(web)).toEqual(['Open in Tab', 'Rename Picture…']);
+    expect(m.menuCatalog.isEnabled(m.menuCatalog.get('picture.copyMarkdown')!)).toBe(false);
+    expect(m.menuCatalog.isEnabled(m.menuCatalog.get('picture.copyMarkdown')!, { picture })).toBe(true);
+  });
+
   it('View Link Text closes the preview and shows the picture’s Markdown, selected', async () => {
     const { m, tab, picture } = await setup({ 'a.md': 'x ![](pic.png)', 'pic.png': '' });
     m.openPreview(picture);

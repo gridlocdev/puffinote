@@ -22,6 +22,8 @@ export interface CommandTarget {
   readonly dir?: string;
   /** An open tab, by its id. */
   readonly tabId?: number;
+  /** A picture in the note in front: its Markdown's range and its link as written. */
+  readonly picture?: { readonly start: number; readonly end: number; readonly url: string };
 }
 
 export interface CommandSpec {

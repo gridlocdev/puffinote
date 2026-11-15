@@ -199,7 +199,7 @@ export class ShellModel {
 
   constructor(host: ShellHost = {}) {
     this.host = host;
-    const shell = shellCommandSpecs(this);
+    const shell = [...shellCommandSpecs(this), ...this.pictureCommandSpecs()];
     this.shellIds = new Set(shell.map((s) => s.id));
     this.shellCatalog = new CommandCatalog(shell);
     const editor = markdownCommandSpecs({
@@ -549,53 +549,119 @@ export class ShellModel {
    */
   pictureMenuItems(picture: PictureAt): (MenuItem | null)[] | null {
     const nb = this.notebook.peek();
-    const tab = this.activeTab.peek();
-    const state = tab?.state;
-    if (!nb || !tab || !state) return null;
-    const file = this.pictureFile(picture.url, tab.path.peek());
-    const source = state.document.getText(picture.start, picture.end - picture.start);
-    const inPreview = this.preview.peek() !== null;
-    const store = nb.store;
+    if (!nb || !this.activeTab.peek()?.state) return null;
+    const target = { picture };
+    const item = (id: string) => this.commandItem(id, target);
     const items: (MenuItem | null)[] = [];
-    if (!inPreview) items.push({ label: 'Preview Picture', run: () => this.openPreview(picture) });
-    items.push({
-      label: 'Open in Tab',
-      disabled: file === null,
-      run: () => void this.openPictureFile(file!),
-    });
-    if (store.openExternal) {
-      items.push({
-        label: 'Open in Default App',
-        disabled: file === null,
-        run: () => void store.openExternal!(file!),
-      });
-    }
-    if (store.reveal) {
-      items.push({ label: revealLabel(), disabled: file === null, run: () => void store.reveal!(file!) });
-    }
+    if (!this.preview.peek()) items.push(item('picture.preview'));
+    items.push(item('picture.openInTab'));
+    if (nb.store.openExternal) items.push(item('picture.openExternal'));
+    if (nb.store.reveal) items.push(item('picture.reveal'));
     items.push(
       null,
-      {
-        label: 'Copy Picture',
-        run: () =>
-          void this.copyPicture(file ?? nb.pictures.resolve(tab.path.peek(), picture.url), file !== null),
-      },
-      { label: 'Copy Markdown', run: () => void this.copyText(source) },
+      item('picture.copy'),
+      item('picture.copyMarkdown'),
       null,
-      { label: 'Edit Description…', run: () => void this.editPictureDescription(picture) },
-      { label: 'Rename Picture…', disabled: file === null, run: () => void this.renamePicture(file!) },
-      {
-        label: 'View Link Text',
-        run: () => {
-          this.closePreview(false);
-          state.showLinkText(picture.start, picture.end);
-          this.focusEditor();
-        },
-      },
+      item('picture.editDescription'),
+      item('picture.rename'),
+      item('picture.viewLinkText'),
       null,
-      { label: 'Delete Picture', danger: true, run: () => void this.deletePicture(picture) },
+      { ...item('picture.delete'), danger: true },
     );
     return items;
+  }
+
+  /**
+   * The picture menu's commands. Each acts on the picture its target names, in the note in front; they are
+   * hidden from the palette, which has no picture to act on.
+   */
+  private pictureCommandSpecs(): CommandSpec[] {
+    /** The picture a target names, with the note it is in and the notebook file it shows (null if none). */
+    const at = (t?: CommandTarget) => {
+      const nb = this.notebook.peek();
+      const tab = this.activeTab.peek();
+      const state = tab?.state;
+      if (!t?.picture || !nb || !tab || !state) return null;
+      const picture = t.picture;
+      return { nb, tab, state, picture, file: this.pictureFile(picture.url, tab.path.peek()) };
+    };
+    const spec = (
+      id: string,
+      title: string,
+      description: string,
+      run: (p: NonNullable<ReturnType<typeof at>>) => void | Promise<void>,
+      enabled: (p: NonNullable<ReturnType<typeof at>>) => boolean = () => true,
+    ): CommandSpec => ({
+      id,
+      title,
+      description,
+      group: 'Edit',
+      hidden: true,
+      enabled: (t) => {
+        const p = at(t);
+        return p !== null && enabled(p);
+      },
+      run: (t) => {
+        const p = at(t);
+        if (p && enabled(p)) return run(p);
+      },
+    });
+    return [
+      spec('picture.preview', 'Preview Picture', 'Show the picture on its own, over the note.', (p) =>
+        this.openPreview(p.picture),
+      ),
+      spec(
+        'picture.openInTab',
+        'Open in Tab',
+        'Open the picture’s file in a tab.',
+        (p) => this.openPictureFile(p.file!),
+        (p) => p.file !== null,
+      ),
+      spec(
+        'picture.openExternal',
+        'Open in Default App',
+        'Open the picture’s file in the app the system opens it with.',
+        (p) => p.nb.store.openExternal!(p.file!),
+        (p) => p.file !== null && !!p.nb.store.openExternal,
+      ),
+      spec(
+        'picture.reveal',
+        revealLabel(),
+        'Show the picture’s file in the system’s file manager.',
+        (p) => p.nb.store.reveal!(p.file!),
+        (p) => p.file !== null && !!p.nb.store.reveal,
+      ),
+      spec('picture.copy', 'Copy Picture', 'Put the picture on the clipboard.', (p) =>
+        this.copyPicture(p.file ?? p.nb.pictures.resolve(p.tab.path.peek(), p.picture.url), p.file !== null),
+      ),
+      spec('picture.copyMarkdown', 'Copy Markdown', 'Put the picture’s Markdown on the clipboard.', (p) =>
+        this.copyText(p.state.document.getText(p.picture.start, p.picture.end - p.picture.start)),
+      ),
+      spec(
+        'picture.editDescription',
+        'Edit Description…',
+        'Change the text that describes the picture.',
+        (p) => this.editPictureDescription(p.picture),
+      ),
+      spec(
+        'picture.rename',
+        'Rename Picture…',
+        'Rename the picture’s file, keeping the links to it.',
+        (p) => this.renamePicture(p.file!),
+        (p) => p.file !== null,
+      ),
+      spec('picture.viewLinkText', 'View Link Text', 'Show the picture’s Markdown in the note.', (p) => {
+        this.closePreview(false);
+        p.state.showLinkText(p.picture.start, p.picture.end);
+        this.focusEditor();
+      }),
+      spec(
+        'picture.delete',
+        'Delete Picture',
+        'Take the picture out of the note, and offer to delete its file.',
+        (p) => this.deletePicture(p.picture),
+      ),
+    ];
   }
 
   /** Show a picture of the note in front in the picture preview (PRD §10.6). */
