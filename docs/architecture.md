@@ -58,6 +58,8 @@ Puffinote is one TypeScript code base with three hosts and a CLI. The browser, t
 
 - **Editor (`editor/`).**
   - `EditorState` holds the buffer, history, selection, view mode and a version signal for one note.
+  - The editing keys decide on `EditorState` (`deleteBackward`, `deleteForward`, `enter`, `indent`), so they are tested without a DOM. The component passes in only what the layout knows, such as where ⌘⌫ stops on a wrapped row.
+  - `motion.ts` holds the caret's moves. `caretMotion` decides ← and → by character, word, row and line, and reads the drawn note through a `CaretLayout` port (row edges, concealed markers, caret stops), which the editor answers from the DOM and tests answer from a model.
   - `MarkdownEditor` renders each line as DOM from its tokens (`lineRender.ts`), with concealed markers collapsed and decorations (bullets, checkboxes, quote bars, pictures) drawn in their place.
   - A hidden `<textarea>` at the caret takes keyboard, IME and clipboard input.
   - `geometry.ts` maps offsets to positions and back, from the DOM the surface rendered. Clicks, arrows, selection painting and the caret all go through it.

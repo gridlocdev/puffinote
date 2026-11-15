@@ -1,5 +1,14 @@
 import { parseLinePrefix } from '@puffinote/markdown';
-import { nextBoundary, previousBoundary, type TextDocument } from '@puffinote/text';
+import {
+  isCollapsed,
+  nextBoundary,
+  previousBoundary,
+  selectionEnd,
+  selectionStart,
+  type Selection,
+  type TextDocument,
+} from '@puffinote/text';
+import type { ViewMode } from './reveal.ts';
 
 const words = new Intl.Segmenter(undefined, { granularity: 'word' });
 
@@ -98,4 +107,105 @@ export function graphemeColumn(text: string, col: number, dir: 1 | -1): number {
  */
 export function rowStartTarget(rowStart: number, textStart: number, lineStart: number): number {
   return rowStart > textStart ? rowStart : lineStart;
+}
+
+/** Where a line's text starts in `mode`: past a list item's marker in Rich view, else the line start. */
+export function textStartIn(doc: TextDocument, mode: ViewMode, line: number): number {
+  return mode === 'live' ? itemTextStart(doc, line) : doc.getLineStart(line);
+}
+
+/** Home, ⌘↑: the start of a list item's text first in Rich view (PRD §10.2). */
+export function lineStartFor(doc: TextDocument, mode: ViewMode, line: number, from: number): number {
+  if (mode !== 'live') return doc.getLineStart(line);
+  return doc.getPosition(from).line === line ? smartLineStart(doc, from) : itemTextStart(doc, line);
+}
+
+/**
+ * ← and → across a list item's hidden marker in Rich view (PRD §10.2): ← from the start of an item's text
+ * goes to the end of the line above, and → from the end of a line goes to the start of the next item's
+ * text, so the bullet or number is one step, not one per character. Null for an ordinary step.
+ */
+export function listHop(doc: TextDocument, mode: ViewMode, at: number, dir: 1 | -1): number | null {
+  if (mode !== 'live') return null;
+  const line = doc.getPosition(at).line;
+  if (dir < 0) {
+    const text = itemTextStart(doc, line);
+    return line > 0 && at === text && text > doc.getLineStart(line) ? lineContentEnd(doc, line - 1) : null;
+  }
+  if (line + 1 >= doc.lineCount || at !== lineContentEnd(doc, line)) return null;
+  const next = itemTextStart(doc, line + 1);
+  return next > doc.getLineStart(line + 1) ? next : null;
+}
+
+export type CaretUnit = 'char' | 'word' | 'row' | 'line';
+
+/**
+ * What `caretMotion` needs from the drawn note: how its lines wrap into rows, which markers are concealed, and
+ * where the caret may stop between characters. The editor answers from the DOM; tests answer from a model.
+ */
+export interface CaretLayout {
+  /** The offset at the start (`dir` -1) or end (1) of the visual row `offset` is drawn on; null if not drawn as text. */
+  rowEdge(offset: number, dir: 1 | -1): number | null;
+  /** Whether a caret at `offset` is drawn on a lower row than one at `from`. */
+  drawnBelow(offset: number, from: number): boolean;
+  /** `offset` stepped out of a concealed marker toward `dir` (concealed runs are atomic). */
+  snap(offset: number, dir: 1 | -1): number;
+  /** The next and previous caret stops (grapheme boundaries, a line break as one). */
+  nextCaret(offset: number): number;
+  previousCaret(offset: number): number;
+}
+
+/**
+ * Where ← or → (by character, word, visual row or line; PRD §10.1) takes the caret from `sel`. A collapsing
+ * step without Shift goes to the selection's edge.
+ */
+export function caretMotion(
+  doc: TextDocument,
+  mode: ViewMode,
+  sel: Selection,
+  dir: 1 | -1,
+  extend: boolean,
+  unit: CaretUnit,
+  layout: CaretLayout,
+): number {
+  if (!extend && !isCollapsed(sel) && unit === 'char')
+    return dir > 0 ? selectionEnd(sel) : selectionStart(sel);
+  const at = sel.caret;
+  const line = doc.getPosition(at).line;
+  switch (unit) {
+    case 'word':
+      return dir > 0 ? wordRight(doc, at) : wordLeft(doc, at);
+    case 'line':
+      return dir > 0 ? lineContentEnd(doc, line) : lineStartFor(doc, mode, line, at);
+    case 'row':
+      return dir > 0 ? rowEnd(doc, at, layout) : rowStart(doc, mode, at, layout);
+    case 'char':
+      return (
+        listHop(doc, mode, at, dir) ??
+        layout.snap(dir > 0 ? layout.nextCaret(at) : layout.previousCaret(at), dir)
+      );
+  }
+}
+
+/** Home, ⌘←: the start of the caret's visual row; on a line's first row, as `lineStartFor` (PRD §10.1). */
+function rowStart(doc: TextDocument, mode: ViewMode, at: number, layout: CaretLayout): number {
+  const line = doc.getPosition(at).line;
+  const row = layout.rowEdge(at, -1) ?? doc.getLineStart(line);
+  return rowStartTarget(row, textStartIn(doc, mode, line), lineStartFor(doc, mode, line, at));
+}
+
+/**
+ * End, ⌘→: the end of the caret's visual row. Where a line wraps, the offset after the row's last character
+ * is drawn at the start of the next row, so the caret stops before that character (the space the line
+ * wrapped at) instead.
+ */
+function rowEnd(doc: TextDocument, at: number, layout: CaretLayout): number {
+  const end = lineContentEnd(doc, doc.getPosition(at).line);
+  const row = layout.rowEdge(at, 1);
+  if (row === null || row >= end || row < at) return end;
+  if (layout.drawnBelow(row, at)) {
+    const before = layout.previousCaret(row);
+    return before >= at ? before : row;
+  }
+  return row;
 }

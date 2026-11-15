@@ -1,24 +1,11 @@
 import { toggledTaskState, parseLinePrefix, type Token } from '@puffinote/markdown';
-import { isCollapsed, selectionEnd, selectionStart, type UndoRun } from '@puffinote/text';
+import { isCollapsed, selectionEnd, selectionStart } from '@puffinote/text';
 import { useLayoutEffect, useMemo, useRef } from 'preact/hooks';
 import type { JSX } from 'preact';
 import { CommandCatalog } from '../commands/command.ts';
 import { isMac } from '../commands/shortcut.ts';
 import { blockAtLine, type Block } from './blocks.ts';
-import {
-  backspaceItemEdit,
-  deleteRangeEdit,
-  enterEdit,
-  joinLinesDeleteEdit,
-  indentEdit,
-  outdentEdit,
-  pasteText,
-  setTaskStateEdit,
-  withTaskSort,
-  softBreakEdit,
-  typeCharEdit,
-  withLineEnding,
-} from './commands.ts';
+import { pasteText, setTaskStateEdit, withTaskSort, typeCharEdit, withLineEnding } from './commands.ts';
 import { markdownCommandSpecs } from './editorCommands.ts';
 import type { EditorState } from './editorState.ts';
 import { caretBox, firstRowEndingBelow, hitTest, lineSelectionRects, textRanges } from './geometry.ts';
@@ -27,14 +14,14 @@ import { settleMs, useSettled } from './settled.ts';
 import { BlockWidget, LineView } from './LineView.tsx';
 import {
   graphemeColumn,
-  itemTextStart as listTextStart,
+  caretMotion,
+  lineStartFor,
+  textStartIn,
+  type CaretLayout,
+  type CaretUnit,
   lineDeleteStart,
   lineContentEnd,
-  rowStartTarget,
-  smartLineStart,
-  wordLeft,
   wordRangeAt,
-  wordRight,
 } from './motion.ts';
 import { matchesBetween, type TextRange } from './find.ts';
 import { emptyMirror, mirrorFor, readInput, type InputMirror } from './hiddenInput.ts';
@@ -567,47 +554,21 @@ export function MarkdownEditor(props: MarkdownEditorProps) {
     state.select(extend ? sel.anchor : clamped, clamped);
   }
 
-  function horizontal(dir: 1 | -1, extend: boolean, unit: 'char' | 'word' | 'row' | 'line'): void {
-    if (!extend && !isCollapsed(sel) && unit === 'char') {
-      moveTo(dir > 0 ? selectionEnd(sel) : selectionStart(sel), false);
-      return;
-    }
-    const at = sel.caret;
-    let to: number;
-    if (unit === 'word') to = dir > 0 ? wordRight(doc, at) : wordLeft(doc, at);
-    else if (unit === 'row') to = dir > 0 ? rowEnd(at) : rowStart(at);
-    else if (unit === 'line') {
-      const line = doc.getPosition(at).line;
-      to = dir > 0 ? lineContentEnd(doc, line) : startOf(line, at);
-    } else
-      to =
-        listHop(at, dir) ?? snap(dir > 0 ? state.buffer.nextCaret(at) : state.buffer.previousCaret(at), dir);
-    moveTo(to, extend);
-  }
+  /** The drawn note, as `caretMotion` reads it. */
+  const caretLayout: CaretLayout = {
+    rowEdge: (offset, dir) => visualRowEdge(offset, dir),
+    drawnBelow: (offset, from) => {
+      const here = caretBoxAt(from);
+      const there = caretBoxAt(offset);
+      return !!here && !!there && there.top > here.top + here.height / 2;
+    },
+    snap: (offset, dir) => snap(offset, dir),
+    nextCaret: (offset) => state.buffer.nextCaret(offset),
+    previousCaret: (offset) => state.buffer.previousCaret(offset),
+  };
 
-  /** Home, ⌘←: the start of the caret's visual row; on a line's first row, as `startOf` (PRD §10.1). */
-  function rowStart(at: number): number {
-    const line = doc.getPosition(at).line;
-    const row = visualRowEdge(at, -1) ?? doc.getLineStart(line);
-    return rowStartTarget(row, itemTextStart(line), startOf(line, at));
-  }
-
-  /**
-   * End, ⌘→: the end of the caret's visual row. Where a line wraps, the offset after the row's last character
-   * is drawn at the start of the next row, so the caret stops before that character (the space the line
-   * wrapped at) instead.
-   */
-  function rowEnd(at: number): number {
-    const end = lineContentEnd(doc, doc.getPosition(at).line);
-    const row = visualRowEdge(at, 1);
-    if (row === null || row >= end || row < at) return end;
-    const here = caretBoxAt(at);
-    const there = caretBoxAt(row);
-    if (here && there && there.top > here.top + here.height / 2) {
-      const before = state.buffer.previousCaret(row);
-      return before >= at ? before : row;
-    }
-    return row;
+  function horizontal(dir: 1 | -1, extend: boolean, unit: CaretUnit): void {
+    moveTo(caretMotion(doc, mode, sel, dir, extend, unit, caretLayout), extend);
   }
 
   /**
@@ -636,32 +597,9 @@ export function MarkdownEditor(props: MarkdownEditorProps) {
     moveTo(Math.max(offset, itemTextStart(hit.line)), extend, true);
   }
 
-  /**
-   * ← and → across a list item's hidden marker in Rich view (PRD §10.2): ← from the start of an item's text
-   * goes to the end of the line above, and → from the end of a line goes to the start of the next item's
-   * text, so the bullet or number is one step, not one per character. Null for an ordinary step.
-   */
-  function listHop(at: number, dir: 1 | -1): number | null {
-    if (mode !== 'live') return null;
-    const line = doc.getPosition(at).line;
-    if (dir < 0) {
-      const text = listTextStart(doc, line);
-      return line > 0 && at === text && text > doc.getLineStart(line) ? lineContentEnd(doc, line - 1) : null;
-    }
-    if (line + 1 >= doc.lineCount || at !== lineContentEnd(doc, line)) return null;
-    const next = listTextStart(doc, line + 1);
-    return next > doc.getLineStart(line + 1) ? next : null;
-  }
-
   /** Where a list item's text starts on `line` in Rich view; the line start in the views that show markers. */
   function itemTextStart(line: number): number {
-    return mode === 'live' ? listTextStart(doc, line) : doc.getLineStart(line);
-  }
-
-  /** Home, ⌘↑: the start of a list item's text first in Rich view (PRD §10.2). */
-  function startOf(line: number, from: number): number {
-    if (mode !== 'live') return doc.getLineStart(line);
-    return doc.getPosition(from).line === line ? smartLineStart(doc, from) : listTextStart(doc, line);
+    return textStartIn(doc, mode, line);
   }
 
   function vertical(dir: 1 | -1, extend: boolean): void {
@@ -718,12 +656,6 @@ export function MarkdownEditor(props: MarkdownEditorProps) {
 
   verticalRef.current = vertical;
 
-  function apply(edit: Parameters<EditorState['apply']>[0], run?: UndoRun): void {
-    goalX.current = null;
-    revealCaret.current = true;
-    state.apply(edit, undefined, run);
-  }
-
   function insertText(text: string): void {
     goalX.current = null;
     revealCaret.current = true;
@@ -773,7 +705,8 @@ export function MarkdownEditor(props: MarkdownEditorProps) {
     const run = undoRunFor(action, e.key, e.repeat);
     switch (action.kind) {
       case 'move':
-        if (action.unit === 'doc') moveTo(action.dir > 0 ? doc.length : startOf(0, sel.caret), shift);
+        if (action.unit === 'doc')
+          moveTo(action.dir > 0 ? doc.length : lineStartFor(doc, mode, 0, sel.caret), shift);
         else horizontal(action.dir, shift, action.unit);
         break;
       case 'vertical':
@@ -782,66 +715,42 @@ export function MarkdownEditor(props: MarkdownEditorProps) {
       case 'page':
         page(action.dir, shift);
         break;
-      case 'deleteBack': {
-        const lineFrom = isCollapsed(sel) && action.unit === 'line' ? lineDeleteFrom() : null;
-        if (!isCollapsed(sel)) deleteSelection();
-        else if (lineFrom !== null) apply(deleteRange(lineFrom, sel.caret), run);
-        else if (action.unit === 'word') apply(deleteRange(wordLeft(doc, sel.caret), sel.caret), run);
-        else if (mode !== 'raw' && state.apply(backspaceItemEdit(doc, sel), undefined, run))
-          goalX.current = null;
-        else if (state.backspacePair(run)) goalX.current = null;
-        else if (
-          !state.apply(
-            joinLinesDeleteEdit(doc, state.buffer.previousCaret(sel.caret), sel.caret),
-            undefined,
-            run,
-          )
-        ) {
-          state.buffer.backspace();
-        }
-        revealCaret.current = true;
+      case 'deleteBack':
+        edited();
+        state.deleteBackward(
+          action.unit,
+          run,
+          isCollapsed(sel) && action.unit === 'line' ? lineDeleteFrom() : null,
+        );
         break;
-      }
       case 'deleteForward':
-        deleteForward(action.unit, run);
+        edited();
+        state.deleteForward(action.unit, run);
         break;
       case 'cut':
         // Shift+Delete off macOS (PRD §10.1): a real cut, so the editor's cut handler writes the clipboard
         // before it deletes, as the Cut command does. With nothing selected it is Delete.
-        if (isCollapsed(sel)) deleteForward('char', run);
-        else document.execCommand('cut');
+        if (isCollapsed(sel)) {
+          edited();
+          state.deleteForward('char', run);
+        } else document.execCommand('cut');
         break;
       case 'enter':
-        apply(
-          action.soft
-            ? softBreakEdit(sel, doc)
-            : enterEdit(doc, sel, mode, state.contextAt(sel.caret), state.indentUnit),
-          run,
-        );
+        edited();
+        state.enter(action.soft, run);
         break;
       case 'tab':
-        apply(
-          action.outdent ? outdentEdit(doc, sel, state.indentUnit) : indentEdit(doc, sel, state.indentUnit),
-          run,
-        );
+        edited();
+        state.indent(action.outdent, run);
         break;
     }
     e.preventDefault();
     e.stopPropagation();
   }
 
-  /** Delete, ⌃K and Ctrl+Delete: delete the selection, or forward from the caret by `unit`. */
-  function deleteForward(unit: 'char' | 'word' | 'line', run: UndoRun | undefined): void {
-    // ⌃K: to the end of the line, or the line break when the caret is already there.
-    const lineEnd = unit === 'line' ? lineContentEnd(doc, doc.getPosition(sel.caret).line) : sel.caret;
-    if (!isCollapsed(sel)) deleteSelection();
-    else if (lineEnd > sel.caret) apply(deleteRange(sel.caret, lineEnd), run);
-    else if (unit === 'word') apply(deleteRange(sel.caret, wordRight(doc, sel.caret)), run);
-    else if (
-      !state.apply(joinLinesDeleteEdit(doc, sel.caret, state.buffer.nextCaret(sel.caret)), undefined, run)
-    ) {
-      state.buffer.deleteForward();
-    }
+  /** A key is about to edit the note: the caret's goal column goes, and the caret is kept in view. */
+  function edited(): void {
+    goalX.current = null;
     revealCaret.current = true;
   }
 
@@ -872,16 +781,6 @@ export function MarkdownEditor(props: MarkdownEditorProps) {
     if (!hit || hit.line !== p.line) return null;
     const start = doc.getLineStart(p.line);
     return start + Math.min(hit.col, lineContentEnd(doc, p.line) - start);
-  }
-
-  /** Delete `[start, end)`, renumbering lists when that joins lines. */
-  function deleteRange(start: number, end: number) {
-    return deleteRangeEdit(doc, start, end);
-  }
-
-  /** Delete the selection as one undo step; across lines it renumbers lists in the same step. */
-  function deleteSelection(): void {
-    state.apply(deleteRange(selectionStart(sel), selectionEnd(sel)));
   }
 
   // ----- Text input, IME and clipboard -----
@@ -935,7 +834,7 @@ export function MarkdownEditor(props: MarkdownEditorProps) {
     if (cut) {
       // As Delete does: one undo step, and numbered lists renumber when the cut joins lines.
       revealCaret.current = true;
-      deleteSelection();
+      state.deleteSelection();
     }
   }
 

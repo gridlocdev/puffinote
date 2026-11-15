@@ -2,6 +2,7 @@ import { signal } from '@preact/signals';
 import { MarkdownModel } from '@puffinote/markdown';
 import {
   DocumentBuffer,
+  isCollapsed,
   selectionEnd,
   selectionIntersects,
   selectionsEqual,
@@ -14,13 +15,21 @@ import {
 } from '@puffinote/text';
 import { findBlocks, updateBlocks, type Block } from './blocks.ts';
 import {
+  backspaceItemEdit,
   backspacePairEdit,
+  deleteRangeEdit,
+  enterEdit,
+  indentEdit,
+  joinLinesDeleteEdit,
   mapRange,
   offsetAfterEdit,
+  outdentEdit,
   pictureLinesEdit,
+  softBreakEdit,
   type Edit,
   type EditContext,
 } from './commands.ts';
+import { lineContentEnd, wordLeft, wordRight } from './motion.ts';
 import { pictureExtent, type ViewMode } from './reveal.ts';
 
 /** Where pasted or dropped pictures go: the document and selection when they were pasted. */
@@ -140,6 +149,75 @@ export class EditorState {
     this.apply(edit, undefined, run);
     this.autoPairs = rest;
     return true;
+  }
+
+  /** Delete the selection as one undo step; across lines it renumbers lists in the same step. */
+  deleteSelection(): void {
+    const sel = this.buffer.selection;
+    this.apply(deleteRangeEdit(this.document, selectionStart(sel), selectionEnd(sel)));
+  }
+
+  /**
+   * Backspace, ⌥⌫ (`word`) and ⌘⌫ (`line`; PRD §10.1): the selection if there is one; else back to `lineFrom`
+   * for ⌘⌫ (where the caret's visual row or a list item's text starts, which only the layout knows; null
+   * deletes as Backspace does), or the word before. A plain Backspace first takes a list item's marker in
+   * Rich view, then an empty pair the editor auto-inserted, then joins lines (renumbering lists), and
+   * otherwise deletes one character.
+   */
+  deleteBackward(unit: 'char' | 'word' | 'line', run?: UndoRun, lineFrom: number | null = null): void {
+    const doc = this.document;
+    const sel = this.buffer.selection;
+    const caret = sel.caret;
+    if (!isCollapsed(sel)) this.deleteSelection();
+    else if (unit === 'line' && lineFrom !== null)
+      this.apply(deleteRangeEdit(doc, lineFrom, caret), undefined, run);
+    else if (unit === 'word') this.apply(deleteRangeEdit(doc, wordLeft(doc, caret), caret), undefined, run);
+    else if (this.mode.peek() !== 'raw' && this.apply(backspaceItemEdit(doc, sel), undefined, run)) return;
+    else if (this.backspacePair(run)) return;
+    else if (!this.apply(joinLinesDeleteEdit(doc, this.buffer.previousCaret(caret), caret), undefined, run)) {
+      this.buffer.backspace();
+    }
+  }
+
+  /**
+   * Delete, ⌥⌦ (`word`) and ⌃K (`line`): the selection if there is one; else ⌃K deletes to the line's end, or
+   * the line break when the caret is already there. Joining lines renumbers lists.
+   */
+  deleteForward(unit: 'char' | 'word' | 'line', run?: UndoRun): void {
+    const doc = this.document;
+    const sel = this.buffer.selection;
+    const caret = sel.caret;
+    const lineEnd = unit === 'line' ? lineContentEnd(doc, doc.getPosition(caret).line) : caret;
+    if (!isCollapsed(sel)) this.deleteSelection();
+    else if (lineEnd > caret) this.apply(deleteRangeEdit(doc, caret, lineEnd), undefined, run);
+    else if (unit === 'word') this.apply(deleteRangeEdit(doc, caret, wordRight(doc, caret)), undefined, run);
+    else if (!this.apply(joinLinesDeleteEdit(doc, caret, this.buffer.nextCaret(caret)), undefined, run)) {
+      this.buffer.deleteForward();
+    }
+  }
+
+  /** Enter, or Shift+Enter (`soft`): continues lists, quotes and code as the caret's context asks (PRD §10.1). */
+  enter(soft: boolean, run?: UndoRun): void {
+    const sel = this.buffer.selection;
+    const doc = this.document;
+    this.apply(
+      soft
+        ? softBreakEdit(sel, doc)
+        : enterEdit(doc, sel, this.mode.peek(), this.contextAt(sel.caret), this.indentUnit),
+      undefined,
+      run,
+    );
+  }
+
+  /** Tab and Shift+Tab (`outdent`): indent or outdent the selected lines by the indent unit. */
+  indent(outdent: boolean, run?: UndoRun): void {
+    const sel = this.buffer.selection;
+    const doc = this.document;
+    this.apply(
+      outdent ? outdentEdit(doc, sel, this.indentUnit) : indentEdit(doc, sel, this.indentUnit),
+      undefined,
+      run,
+    );
   }
 
   /** Insert text over the selection, as typing does. */
