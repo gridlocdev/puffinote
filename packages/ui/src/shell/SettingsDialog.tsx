@@ -28,15 +28,15 @@ export function SettingsDialog(props: {
   // What the dialog showed when it opened. Done writes only what differs from it, so a setting that changed
   // meanwhile (a refresh after git pull, another window) is kept (PRD §9).
   const [atOpen] = useState(() => ({
-    user: nb ? nb.userPrefs.peek() : props.prefs.load(),
-    book: nb ? nb.overrides.peek() : {},
+    user: nb ? nb.config.userPrefs.peek() : props.prefs.load(),
+    book: nb ? nb.config.overrides.peek() : {},
   }));
   const [user, setUser] = useState<PartialSettings>({ ...atOpen.user });
   const [book, setBook] = useState<PartialSettings>({ ...atOpen.book });
   const apply = () => {
     if (nb) {
-      nb.setPreferences(user, atOpen.user);
-      void nb.setOverrides(book, atOpen.book);
+      nb.config.setPreferences(user, atOpen.user);
+      void nb.config.setOverrides(book, atOpen.book);
     } else props.prefs.save(withChanges(props.prefs.load(), user, changedSettings(atOpen.user, user)));
     props.onClose();
   };

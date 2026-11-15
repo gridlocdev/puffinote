@@ -1,4 +1,4 @@
-import { computed, effect, signal, type Signal } from '@preact/signals';
+import { effect, signal } from '@preact/signals';
 import { encodeText, isReadOnlyDecode, readText } from '@puffinote/text';
 import {
   applyRefEdits,
@@ -35,17 +35,9 @@ import {
   resolveRelative,
   uniqueName,
 } from '../platform/paths.ts';
-import {
-  indentUnit,
-  resolveSettings,
-  changedSettings,
-  sanitize,
-  withChanges,
-  unrecognized,
-  type PartialSettings,
-  type PrefsStorage,
-  type Settings,
-} from './settings.ts';
+import { indentUnit, type PrefsStorage } from './settings.ts';
+import { NotebookSettings } from './notebookSettings.ts';
+import { encodeJson, ensureStateDir, sameBytes, writeOver } from './storeWrites.ts';
 import {
   allFiles,
   ancestorsOf,
@@ -121,9 +113,6 @@ export interface Session {
 }
 
 export const sessionPath = `${stateDir}/session.json`;
-export const overridesPath = `${stateDir}/settings.json`;
-/** Volatile state stays out of git; the notebook's settings travel with it (PRD §5). */
-const gitignore = '# Puffinote: machine-local state\nsession.json\n';
 
 export interface NotebookOptions {
   readonly prefs: PrefsStorage;
@@ -162,11 +151,8 @@ export class Notebook {
   readonly pinned = signal<readonly string[]>([]);
   readonly sort = signal<NoteSort>('edited');
   readonly scope = signal<LibraryScope>('folder:');
-  readonly userPrefs: Signal<PartialSettings>;
-  readonly overrides = signal<PartialSettings>({});
-  /** Writes of `.puffinote/settings.json` in flight; a refresh doesn't read it meanwhile. */
-  private settingsWrites = 0;
-  readonly settings = computed<Settings>(() => resolveSettings(this.userPrefs.value, this.overrides.value));
+  /** The user's preferences, this notebook's overrides, and the settings they resolve to (PRD §9). */
+  readonly config: NotebookSettings;
   readonly notice = signal<Notice | null>(null);
   /** Bumps when an image a note shows has loaded, so the editor redraws it. */
   readonly imagesLoaded = signal(0);
@@ -213,7 +199,12 @@ export class Notebook {
   private constructor(store: NotebookStore, options: NotebookOptions) {
     this.store = store;
     this.options = options;
-    this.userPrefs = signal(options.prefs.load());
+    this.config = new NotebookSettings({
+      store,
+      prefs: options.prefs,
+      closed: () => this.disposed,
+      report: (e) => this.report(e),
+    });
     this.meta = new NoteMetaCache(store);
     this.transfer = new NotebookTransfer({
       store,
@@ -246,7 +237,7 @@ export class Notebook {
   }
 
   private async load(): Promise<void> {
-    this.overrides.value = sanitize(await this.readJson(overridesPath));
+    await this.config.load();
     const session = (await this.readJson(sessionPath)) as Partial<Session> | null;
     await this.reloadTree();
     if (session) {
@@ -305,15 +296,15 @@ export class Notebook {
     // Settings reach the open tabs live (PRD §9).
     this.disposers.push(
       effect(() => {
-        const unit = indentUnit(this.settings.value);
+        const unit = indentUnit(this.config.settings.value);
         for (const t of this.tabs.value) if (t.state) t.state.indentUnit = unit;
       }),
     );
     // Show Hidden Files changes the tree, from whichever layer it comes (PRD §6, §9).
-    let hidden = this.settings.peek().showHiddenFiles;
+    let hidden = this.config.settings.peek().showHiddenFiles;
     this.disposers.push(
       effect(() => {
-        const now = this.settings.value.showHiddenFiles;
+        const now = this.config.settings.value.showHiddenFiles;
         if (now === hidden) return;
         hidden = now;
         void this.reloadTree().catch((e: unknown) => this.report(e));
@@ -378,7 +369,7 @@ export class Notebook {
     const stats = new Map<string, FileStat>();
     let next: TreeNode | null = null;
     try {
-      next = await loadTree(this.store, this.settings.peek().showHiddenFiles, stats);
+      next = await loadTree(this.store, this.config.settings.peek().showHiddenFiles, stats);
     } catch (e) {
       if (ticket === this.treeReads) throw e; // a superseded read's failure (a folder renamed under it) is moot
     }
@@ -466,7 +457,7 @@ export class Notebook {
       if (tab.dirty.value) tab.conflict.value = 'changed';
       else this.replaceText(tab, text, data.version);
     }
-    await this.reloadOverrides();
+    await this.config.reload();
   }
 
   scheduleRefresh(): void {
@@ -533,8 +524,8 @@ export class Notebook {
         version: data.version,
         readOnly: isReadOnlyDecode(decoded),
       });
-      tab.state!.mode.value = this.settings.peek().defaultView;
-      tab.state!.indentUnit = indentUnit(this.settings.peek());
+      tab.state!.mode.value = this.config.settings.peek().defaultView;
+      tab.state!.indentUnit = indentUnit(this.config.settings.peek());
       this.watchAutosave(tab);
       this.watchRecovery(tab);
     }
@@ -548,7 +539,10 @@ export class Notebook {
       effect(() => {
         void tab.state!.version.value;
         const go =
-          tab.dirty.value && tab.conflict.value === 'none' && this.settings.value.autoSave && !tab.readOnly;
+          tab.dirty.value &&
+          tab.conflict.value === 'none' &&
+          this.config.settings.value.autoSave &&
+          !tab.readOnly;
         if (timer) clearTimeout(timer);
         timer = go
           ? setTimeout(() => {
@@ -759,7 +753,14 @@ export class Notebook {
       const bytes = encodeText(text, tab.format);
       const version = force
         ? await this.store.write(path, bytes, { force })
-        : await this.writeOver(path, bytes, tab.version, (now) => readText(now).text === before);
+        : await writeOver(
+            this.store,
+            path,
+            bytes,
+            tab.version,
+            (now) => readText(now).text === before,
+            () => this.disposed,
+          );
       // Edits made while the write was in flight stay unsaved.
       tab.savedAs(version, text);
       const stat = this.stats.peek().get(path);
@@ -800,31 +801,6 @@ export class Notebook {
     } catch (e) {
       return e instanceof NotFoundError ? 'deleted' : 'changed';
     }
-  }
-
-  /**
-   * Write `bytes` over a file last read at version `expected`. A store that gave no version (a server without
-   * ETags) can't refuse a stale write itself, so the file is read again first and must still hold what was
-   * read (`unchanged`); otherwise this throws the ConflictError a versioned store would (PRD §5).
-   */
-  private async writeOver(
-    path: string,
-    bytes: Uint8Array,
-    expected: string | null,
-    unchanged: (now: Uint8Array) => boolean,
-  ): Promise<string | null> {
-    if (expected != null) return this.store.write(path, bytes, { expected });
-    let now: FileData;
-    try {
-      now = await this.store.read(path);
-    } catch (e) {
-      if (e instanceof NotFoundError)
-        throw new ConflictError('deleted', 'The file was deleted since it was opened.');
-      throw e;
-    }
-    if (!unchanged(now.bytes)) throw new ConflictError('changed', 'The file changed since it was opened.');
-    if (this.disposed) throw new Error('The notebook was closed.');
-    return this.store.write(path, bytes, { expected: now.version });
   }
 
   async saveAll(): Promise<boolean> {
@@ -1045,11 +1021,13 @@ export class Notebook {
       if (isReadOnlyDecode(decoded)) return false;
       const list = edits(decoded.text);
       if (list.length === 0 || this.disposed) return false;
-      await this.writeOver(
+      await writeOver(
+        this.store,
         path,
         encodeText(applyRefEdits(decoded.text, list), decoded.format),
         data.version,
         (now) => sameBytes(now, data.bytes),
+        () => this.disposed,
       );
       return true;
     } catch (e) {
@@ -1162,7 +1140,7 @@ export class Notebook {
       (p) => fileKind(p) === 'note',
     );
     const linked = new Set<string>();
-    if (this.settings.peek().unusedImages === 'ask') {
+    if (this.config.settings.peek().unusedImages === 'ask') {
       for (const p of notes) {
         const text = await this.noteText(p);
         if (text !== null) for (const t of imageTargets(text, p)) if (!isWithin(t, path)) linked.add(t);
@@ -1195,7 +1173,7 @@ export class Notebook {
     try {
       if (this.store.openExternal) {
         const ask = this.options.confirmOpenExternal;
-        if (ask && this.settings.peek().confirmOpenExternal && !(await ask(baseName(path)))) return;
+        if (ask && this.config.settings.peek().confirmOpenExternal && !(await ask(baseName(path)))) return;
         await this.store.openExternal(path);
         return;
       }
@@ -1287,7 +1265,7 @@ export class Notebook {
     notePath: string,
     files: readonly { name: string; type: string; bytes: Uint8Array }[],
   ): Promise<string[]> {
-    const dir = attachmentDir(this.settings.peek(), notePath);
+    const dir = attachmentDir(this.config.settings.peek(), notePath);
     let entries: Entry[];
     try {
       entries = await this.store.list(dir);
@@ -1458,7 +1436,7 @@ export class Notebook {
    * picture is no longer used" setting).
    */
   private async offerUnused(paths: readonly string[]): Promise<void> {
-    if (this.settings.peek().unusedImages !== 'ask') return;
+    if (this.config.settings.peek().unusedImages !== 'ask') return;
     const present = paths.filter((p) => findNode(this.tree.peek(), p)?.kind === 'file');
     if (present.length === 0) return;
     let linked: PictureUsage;
@@ -1550,100 +1528,6 @@ export class Notebook {
     else this.notify('info', `Moved ${what} to the Trash.`);
   }
 
-  // ----- Settings -----
-
-  /** Change the user's preferences (every notebook). */
-  /**
-   * Change the user's preferences. With `base` (what the Settings dialog showed when it opened), only the
-   * preferences that differ from it are changed, over what is saved by now: another window's changes stay.
-   */
-  setPreferences(prefs: PartialSettings, base?: PartialSettings): void {
-    const clean = sanitize(
-      base ? withChanges(this.options.prefs.load(), prefs, changedSettings(base, sanitize(prefs))) : prefs,
-    );
-    this.options.prefs.save(clean);
-    this.userPrefs.value = clean;
-  }
-
-  /**
-   * Change this notebook's overrides, saved in `.puffinote/settings.json`. Written only when they changed.
-   * Another program (a sync, git, another window) may have changed the file since it was read, so the
-   * settings that changed here are applied over what the file holds now, and written against its version;
-   * the rest of the file, settings this version doesn't know included, stays as it is (PRD §9). `base` is what
-   * the overrides were when the change began (the Settings dialog opening); only settings that differ from it
-   * count as changed, so one a refresh brought in meanwhile isn't undone.
-   */
-  async setOverrides(
-    overrides: PartialSettings,
-    base: PartialSettings = this.overrides.peek(),
-  ): Promise<void> {
-    const after = sanitize(overrides);
-    const changed = changedSettings(base, after);
-    if (changed.length === 0) return;
-    // The tree follows Show Hidden Files by itself (see `load`).
-    this.overrides.value = sanitize(withChanges(this.overrides.peek(), after, changed));
-    this.settingsWrites++;
-    try {
-      await this.ensureStateDir();
-      for (let attempt = 0; ; attempt++) {
-        const disk = await this.readOverrides();
-        const merged = withChanges(disk.known, after, changed);
-        try {
-          const bytes = encodeJson({ ...disk.rest, ...merged });
-          if (disk.version === undefined) await this.store.write(overridesPath, bytes, { create: true });
-          else await this.writeOver(overridesPath, bytes, disk.version, (now) => sameBytes(now, disk.bytes));
-          this.overrides.value = sanitize(merged);
-          return;
-        } catch (e) {
-          // Changed again between the read and the write: read it again.
-          if (!(e instanceof ConflictError) || e.reason === 'locked' || attempt >= 3) throw e;
-        }
-      }
-    } catch (e) {
-      this.report(e);
-    } finally {
-      this.settingsWrites--;
-    }
-  }
-
-  /** `.puffinote/settings.json` as it is now: what this version uses, the rest, and its version (undefined: no file). */
-  private async readOverrides(): Promise<{
-    known: PartialSettings;
-    rest: Record<string, unknown>;
-    version: string | null | undefined;
-    bytes: Uint8Array;
-  }> {
-    let data: FileData;
-    try {
-      data = await this.store.read(overridesPath);
-    } catch (e) {
-      if (e instanceof NotFoundError)
-        return { known: {}, rest: {}, version: undefined, bytes: new Uint8Array() };
-      throw e;
-    }
-    let raw: unknown = null;
-    try {
-      raw = JSON.parse(readText(data.bytes).text) as unknown;
-    } catch {
-      // Not JSON: nothing in it can be kept.
-    }
-    return { known: sanitize(raw), rest: unrecognized(raw), version: data.version, bytes: data.bytes };
-  }
-
-  /** Take changes another program made to `.puffinote/settings.json` (on refresh). */
-  private async reloadOverrides(): Promise<void> {
-    if (this.settingsWrites > 0) return;
-    let disk: Awaited<ReturnType<Notebook['readOverrides']>>;
-    try {
-      disk = await this.readOverrides();
-    } catch {
-      return;
-    }
-    if (this.settingsWrites > 0) return;
-    if (JSON.stringify(disk.known) !== JSON.stringify(this.overrides.peek()))
-      this.overrides.value = disk.known;
-  }
-
   // ----- Session -----
 
   session(): Session {
@@ -1683,7 +1567,7 @@ export class Notebook {
     const bytes = encodeJson(this.session());
     const run = this.persistChain.then(async () => {
       try {
-        await this.ensureStateDir();
+        await ensureStateDir(this.store);
         await this.store.write(sessionPath, bytes, { force: true });
       } catch {
         // A read-only notebook just doesn't remember its tabs.
@@ -1691,14 +1575,6 @@ export class Notebook {
     });
     this.persistChain = run;
     return run;
-  }
-
-  private async ensureStateDir(): Promise<void> {
-    try {
-      await this.store.write(`${stateDir}/.gitignore`, new TextEncoder().encode(gitignore), { create: true });
-    } catch (e) {
-      if (!(e instanceof ConflictError)) throw e;
-    }
   }
 
   private async readJson(path: string): Promise<unknown> {
@@ -1746,20 +1622,12 @@ function sameTree(a: TreeNode, b: TreeNode): boolean {
   return a.children.every((c, i) => sameTree(c, b.children[i]!));
 }
 
-function encodeJson(value: unknown): Uint8Array {
-  return new TextEncoder().encode(JSON.stringify(value, null, 2) + '\n');
-}
-
 function isString(v: unknown): v is string {
   return typeof v === 'string';
 }
 
 export function clampWidth(w: number): number {
   return Math.max(180, Math.min(560, Math.round(w)));
-}
-
-function sameBytes(a: Uint8Array, b: Uint8Array): boolean {
-  return a.length === b.length && a.every((x, i) => x === b[i]);
 }
 
 /** Is `listed` the same listing as `checked` for the file at `path`? A store that can't tell times never is. */

@@ -18,11 +18,11 @@ export class LayoutPolicy {
   readonly #stop: () => void;
 
   constructor(notebook: ReadonlySignal<Notebook | null>) {
-    this.layout = computed(() => notebook.value?.settings.value.layout ?? 'rail');
+    this.layout = computed(() => notebook.value?.config.settings.value.layout ?? 'rail');
     this.showTabBar = computed(() => {
       const nb = notebook.value;
       if (!nb || nb.tabs.value.length === 0 || this.layout.value === 'library') return false;
-      return this.tabBarOverride.value ?? nb.settings.value.showTabBar;
+      return this.tabBarOverride.value ?? nb.config.settings.value.showTabBar;
     });
     // The Library layout shows one note at a time: opening another lets go of the last, unless it still has
     // unsaved edits.
@@ -37,7 +37,7 @@ export class LayoutPolicy {
 
   /** Whether Toggle Tab Bar would show the strip now, before the override flips it. */
   tabBarShown(nb: Notebook | null): boolean {
-    return this.tabBarOverride.peek() ?? nb?.settings.peek().showTabBar ?? true;
+    return this.tabBarOverride.peek() ?? nb?.config.settings.peek().showTabBar ?? true;
   }
 
   dispose(): void {

@@ -258,13 +258,13 @@ describe('Notebook session and settings', () => {
 
   it('layers notebook overrides over user preferences', async () => {
     const { store, nb } = await open({ '.puffinote/settings.json': '{"indent":"tab","bogus":1}' });
-    expect(nb.settings.value.indent).toBe('tab');
-    expect(nb.settings.value.autoSave).toBe(false);
-    nb.setPreferences({ indent: 'spaces2', autoSave: true });
-    expect(nb.settings.value.indent).toBe('tab');
-    expect(nb.settings.value.autoSave).toBe(true);
-    await nb.setOverrides({});
-    expect(nb.settings.value.indent).toBe('spaces2');
+    expect(nb.config.settings.value.indent).toBe('tab');
+    expect(nb.config.settings.value.autoSave).toBe(false);
+    nb.config.setPreferences({ indent: 'spaces2', autoSave: true });
+    expect(nb.config.settings.value.indent).toBe('tab');
+    expect(nb.config.settings.value.autoSave).toBe(true);
+    await nb.config.setOverrides({});
+    expect(nb.config.settings.value.indent).toBe('spaces2');
     // A key this version doesn't know (from a newer Puffinote, say) is kept, not dropped.
     expect(JSON.parse(await text(store, '.puffinote/settings.json'))).toEqual({ bogus: 1 });
   });
@@ -301,7 +301,7 @@ describe('opening other files', () => {
     answer = true;
     await nb.openFile('a.pdf');
     expect(opened).toEqual(['a.pdf']);
-    nb.setPreferences({ confirmOpenExternal: false });
+    nb.config.setPreferences({ confirmOpenExternal: false });
     await nb.openFile('a.pdf');
     expect([asked.length, opened.length]).toEqual([2, 2]);
   });
@@ -315,30 +315,30 @@ describe('Notebook settings written by someone else too', () => {
     const store = new MemoryStore('N', { '.puffinote/settings.json': '{"accent":"teal"}' });
     const nb = await Notebook.open(store, { prefs: memoryPrefs() });
     store.touch('.puffinote/settings.json', '{"accent":"purple","futureThing":1}');
-    await nb.setOverrides({ ...nb.overrides.value, layout: 'library' });
+    await nb.config.setOverrides({ ...nb.config.overrides.value, layout: 'library' });
     expect(await read(store)).toEqual({ accent: 'purple', futureThing: 1, layout: 'library' });
-    expect(nb.overrides.value).toEqual({ accent: 'purple', layout: 'library' });
+    expect(nb.config.overrides.value).toEqual({ accent: 'purple', layout: 'library' });
   });
 
   it('a dialog opened before a refresh writes only what it changed, keeping what the refresh brought', async () => {
     const store = new MemoryStore('N', {});
     const nb = await Notebook.open(store, { prefs: memoryPrefs() });
-    const atOpen = nb.overrides.value; // the Settings dialog opens
+    const atOpen = nb.config.overrides.value; // the Settings dialog opens
     store.touch('.puffinote/settings.json', '{"accent":"teal"}'); // git pull
     await nb.refresh();
-    await nb.setOverrides({ ...atOpen, layout: 'library' }, atOpen); // Done
+    await nb.config.setOverrides({ ...atOpen, layout: 'library' }, atOpen); // Done
     expect(await read(store)).toEqual({ accent: 'teal', layout: 'library' });
-    expect(nb.overrides.value).toEqual({ accent: 'teal', layout: 'library' });
+    expect(nb.config.overrides.value).toEqual({ accent: 'teal', layout: 'library' });
   });
 
   it('a dialog writes only the preferences it changed, keeping another window’s', async () => {
     const prefs = memoryPrefs({ indent: 'tab' });
     const nb = await Notebook.open(new MemoryStore('N', {}), { prefs });
-    const atOpen = nb.userPrefs.value;
+    const atOpen = nb.config.userPrefs.value;
     prefs.save({ ...prefs.load(), accent: 'purple' }); // another window
-    nb.setPreferences({ ...atOpen, autoSave: false }, atOpen);
+    nb.config.setPreferences({ ...atOpen, autoSave: false }, atOpen);
     expect(prefs.load()).toEqual({ indent: 'tab', accent: 'purple', autoSave: false });
-    expect(nb.userPrefs.value).toEqual({ indent: 'tab', accent: 'purple', autoSave: false });
+    expect(nb.config.userPrefs.value).toEqual({ indent: 'tab', accent: 'purple', autoSave: false });
   });
 
   it('takes the file’s changes on refresh', async () => {
@@ -346,7 +346,7 @@ describe('Notebook settings written by someone else too', () => {
     const nb = await Notebook.open(store, { prefs: memoryPrefs() });
     store.touch('.puffinote/settings.json', '{"layout":"library"}');
     await nb.refresh();
-    expect(nb.settings.value.layout).toBe('library');
+    expect(nb.config.settings.value.layout).toBe('library');
   });
 });
 

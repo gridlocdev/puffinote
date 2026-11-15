@@ -107,7 +107,7 @@ export function Shell(props: {
 
   // Theme, accent and layout live on the root element, where the colour tokens are (styles.css, shell.css).
   useSignalEffect(() => {
-    const settings = model.notebook.value?.settings.value;
+    const settings = model.notebook.value?.config.settings.value;
     const prefs = props.prefs.load();
     const root = document.documentElement;
     const theme = settings?.theme ?? prefs.theme ?? 'system';
@@ -127,7 +127,7 @@ export function Shell(props: {
     return () => clearTimeout(t);
   });
 
-  const layout = nb?.settings.value.layout ?? props.prefs.load().layout ?? 'rail';
+  const layout = nb?.config.settings.value.layout ?? props.prefs.load().layout ?? 'rail';
   const shell = (
     <div class={`pn-shell pn-layout-${layout}`}>
       {nb && layout === 'library' && <LibraryLayout model={model} nb={nb} />}
@@ -172,7 +172,7 @@ function Overlays({ model, prefs }: { readonly model: ShellModel; readonly prefs
         <QuickOpen
           files={allFiles(nb.tree.value).map((f) => f.path)}
           recent={nb.recent.value}
-          showExtensions={nb.settings.value.showFileExtensions}
+          showExtensions={nb.config.settings.value.showFileExtensions}
           onOpen={(p) => void model.openFile(p)}
           onClose={close}
         />

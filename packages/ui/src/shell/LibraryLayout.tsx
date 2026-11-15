@@ -374,7 +374,7 @@ function NoteCard(props: {
   const [measured, setMeasured] = useState<ImageInfo | null>(null);
   const image = meta?.image ?? measured;
   const pinned = nb.pinned.value.includes(file.path);
-  const showExt = nb.settings.value.showFileExtensions;
+  const showExt = nb.config.settings.value.showFileExtensions;
   const name = showExt ? file.name : stemOf(file.name) || file.name;
   // An open note's excerpt follows its unsaved text.
   const tab = nb.tabs.value.find((t) => t.path.value === file.path);
@@ -448,7 +448,7 @@ function PathBar({ model, nb }: { readonly model: ShellModel; readonly nb: Noteb
   const path = tab?.path.value ?? '';
   const parts = path ? path.split('/') : [];
   const popover = model.popover.value;
-  const showExt = nb.settings.value.showFileExtensions;
+  const showExt = nb.config.settings.value.showFileExtensions;
   const crumbs: { label: string; dir: string }[] = [{ label: nb.name, dir: '' }];
   for (let i = 0; i < parts.length - 1; i++)
     crumbs.push({ label: parts[i]!, dir: parts.slice(0, i + 1).join('/') });

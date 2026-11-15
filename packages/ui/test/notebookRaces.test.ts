@@ -252,9 +252,9 @@ describe('Notebook moves, names, settings and session', () => {
     const nb = await openWith(store);
     const names = () => nb.tree.value.children.map((c) => c.name);
     expect(names()).toEqual(['a.md']);
-    nb.setPreferences({ showHiddenFiles: true });
+    nb.config.setPreferences({ showHiddenFiles: true });
     await vi.waitFor(() => expect(names()).toEqual(['.hidden.md', 'a.md']));
-    await nb.setOverrides({ showHiddenFiles: false });
+    await nb.config.setOverrides({ showHiddenFiles: false });
     await vi.waitFor(() => expect(names()).toEqual(['a.md']));
   });
 

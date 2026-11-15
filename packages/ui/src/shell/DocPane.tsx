@@ -65,7 +65,7 @@ export function Document(props: { readonly model: ShellModel; readonly nb: Noteb
           onScroll={(top) => (tab.scrollTop = top)}
           placeholder="Start writing…"
           zoom={model.zoom.value}
-          sortTasks={nb.settings.value.sortCheckedTasks}
+          sortTasks={nb.config.settings.value.sortCheckedTasks}
           onContextMenu={(at) => model.openEditorMenu(at)}
           onOpenPicture={(picture) => model.openPreview(picture)}
           onFollowLink={(href) => void model.followLink(path, href)}

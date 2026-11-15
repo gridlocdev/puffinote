@@ -12,7 +12,7 @@ export function TabStrip({ model, nb }: { readonly model: ShellModel; readonly n
   const tabs = nb.tabs.value;
   const active = nb.active.value;
   const ref = useRef<HTMLDivElement>(null);
-  const showExt = nb.settings.value.showFileExtensions;
+  const showExt = nb.config.settings.value.showFileExtensions;
 
   // The shortest scroll that brings the active tab into view; a tab already on screen doesn't move.
   useLayoutEffect(() => {

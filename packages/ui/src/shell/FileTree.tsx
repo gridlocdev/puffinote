@@ -40,8 +40,8 @@ export function FileTree(props: {
   const rows = visibleRows(root, expanded);
   const selected = nb.selected.value;
   const activePath = nb.active.value?.path.value ?? null;
-  const showExt = nb.settings.value.showFileExtensions;
-  const doubleClick = nb.settings.value.treeClick === 'double';
+  const showExt = nb.config.settings.value.showFileExtensions;
+  const doubleClick = nb.config.settings.value.treeClick === 'double';
   const selIndex = rows.findIndex((r) => r.node.path === selected);
   const ref = useRef<HTMLDivElement>(null);
   const [drag, setDrag] = useState<DragState | null>(null);

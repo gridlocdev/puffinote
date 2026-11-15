@@ -199,7 +199,7 @@ export class ShellModel {
       state: () => this.activeState.peek(),
       focus: () => this.focusEditor(),
       input: () => document.querySelector<HTMLElement>('.pn-shell-main .pn-input'),
-      sortTasks: () => this.notebook.peek()?.settings.peek().sortCheckedTasks ?? false,
+      sortTasks: () => this.notebook.peek()?.config.settings.peek().sortCheckedTasks ?? false,
     });
     this.menuCatalog = new CommandCatalog([...shell, ...editor]);
     // A question someone waits on (Save changes?, a name) takes no commands, from keys, menus or the palette:

@@ -28,9 +28,9 @@ describe('settings from a newer Puffinote', () => {
       'a.md': 'x',
     });
     const nb = await Notebook.open(store, { prefs: memoryPrefs() });
-    expect(nb.settings.value.accent).toBe('blue');
-    expect(nb.settings.value.theme).toBe('dark');
-    await nb.setOverrides({ theme: 'light' });
+    expect(nb.config.settings.value.accent).toBe('blue');
+    expect(nb.config.settings.value.theme).toBe('dark');
+    await nb.config.setOverrides({ theme: 'light' });
     const saved = JSON.parse(new TextDecoder().decode((await store.read('.puffinote/settings.json')).bytes));
     expect(saved).toEqual({ accent: 'green', future: { on: true }, theme: 'light' });
   });
