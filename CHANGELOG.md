@@ -1,5 +1,22 @@
 # Changelog
 
+## 0.2.2
+
+### Improvements
+
+- **Typing is faster in long notes.** Near the top of a 20,000-line note, a keystroke takes about half a millisecond instead of six.
+- **The desktop app picks up changes made on other machines.** It reads the notebook again when its window comes back to the front, so edits to a network folder from another computer show up.
+- **Git no longer makes Puffinote re-read everything.** Changes inside `.git/` are ignored, and an open note is read again only when its file changed.
+- **The Library layout fills in smoothly with thousands of notes.** Each card redraws only when its own details arrive, and pictures are no longer downloaded in full just to get their size.
+
+### Bugs fixed
+
+- Notes with Windows line endings keep them when you use **Code Block**, **Horizontal Rule**, **Delete Line**, move list items, or drop a picture.
+- Shift+Delete cuts the selection on Windows and Linux, so it reaches the clipboard instead of being deleted.
+- The Library filter shows every matching note, not just the first 500.
+- A rename or move no longer gets undone by a slower refresh that finished after it.
+- On the NAS server, a save that lost a conflict no longer brings back a folder someone deleted, and a save checks again that it stays inside the notebook folder just before it writes.
+
 ## 0.2.1
 
 ### Bugs fixed
