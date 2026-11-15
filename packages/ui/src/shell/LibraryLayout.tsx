@@ -1,4 +1,3 @@
-import { useSignalEffect } from '@preact/signals';
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'preact/hooks';
 import { folderOf, scopeList } from '../notebook/library.ts';
 import type { LibraryScope, Notebook, NoteSort } from '../notebook/notebook.ts';
@@ -20,12 +19,6 @@ const sortLabels: Record<NoteSort, string> = { edited: 'Last Edited', title: 'Ti
  */
 export function LibraryLayout({ model, nb }: { readonly model: ShellModel; readonly nb: Notebook }) {
   const tab = nb.active.value;
-  // One note at a time: opening another lets go of the last, unless it still has unsaved edits.
-  useSignalEffect(() => {
-    const active = nb.active.value;
-    if (!active) return;
-    for (const t of nb.tabs.peek()) if (t !== active && !t.dirty.peek()) nb.closeTab(t);
-  });
   return (
     <>
       {!nb.sidebarCollapsed.value && (

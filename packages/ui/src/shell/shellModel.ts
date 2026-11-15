@@ -33,6 +33,7 @@ import {
 } from '../platform/paths.ts';
 import type { ImportFile } from '../notebook/importFiles.ts';
 import type { ConfirmOptions, PromptOptions } from './Dialog.tsx';
+import { LayoutPolicy } from './layoutPolicy.ts';
 
 /** A row in a context menu; `null` draws a separator. */
 export interface MenuItem {
@@ -113,8 +114,6 @@ export class ShellModel {
   readonly overlay = signal<Overlay | null>(null);
   /** The picture preview (PRD §10.6): under any menu or dialog, over everything else. */
   readonly preview = signal<PicturePreview | null>(null);
-  /** Toggle Tab Bar's session-only answer; null follows the setting (PRD §9). */
-  readonly tabBarOverride = signal<boolean | null>(null);
   /** The Filter and Search panels' boxes, kept while the user looks elsewhere. */
   readonly filterQuery = signal('');
   readonly searchQuery = signal('');
@@ -158,13 +157,10 @@ export class ShellModel {
       current: matchAt(matches, Math.min(sel.anchor, sel.caret), Math.max(sel.anchor, sel.caret)),
     };
   });
-  /** The window's layout (PRD §6): the icon rail with tabs, or the library with one note at a time. */
-  readonly layout = computed(() => this.notebook.value?.settings.value.layout ?? 'rail');
-  readonly showTabBar = computed(() => {
-    const nb = this.notebook.value;
-    if (!nb || nb.tabs.value.length === 0 || this.layout.value === 'library') return false;
-    return this.tabBarOverride.value ?? nb.settings.value.showTabBar;
-  });
+  /** The window's layout (PRD §6), its tab strip, and the Library layout's one note at a time. */
+  readonly layoutPolicy = new LayoutPolicy(this.notebook);
+  readonly layout = this.layoutPolicy.layout;
+  readonly showTabBar = this.layoutPolicy.showTabBar;
 
   constructor(host: ShellHost = {}) {
     this.host = host;
@@ -201,7 +197,7 @@ export class ShellModel {
       this.replaceOpen.value = false;
     }
     if (old && old !== nb) old.dispose();
-    this.tabBarOverride.value = null;
+    this.layoutPolicy.tabBarOverride.value = null;
     this.filterQuery.value = '';
     this.searchQuery.value = '';
     this.popover.value = null;
@@ -1542,10 +1538,9 @@ function shellCommandSpecs(m: ShellModel): CommandSpec[] {
       description: 'Hide or show the tab strip for this session.',
       group: 'View',
       enabled: () => m.layout.peek() === 'rail',
-      active: () => m.tabBarOverride.peek() ?? nb()?.settings.peek().showTabBar ?? true,
+      active: () => m.layoutPolicy.tabBarShown(nb()),
       run: () => {
-        const shown = m.tabBarOverride.peek() ?? nb()?.settings.peek().showTabBar ?? true;
-        m.tabBarOverride.value = !shown;
+        m.layoutPolicy.tabBarOverride.value = !m.layoutPolicy.tabBarShown(nb());
       },
     },
     {
