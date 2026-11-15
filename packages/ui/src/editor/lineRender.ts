@@ -344,14 +344,19 @@ export function listOrdinal(n: number, depth: number): string {
 /**
  * Tracks list nesting down a document, one line at a time in order, so each list item knows how deep it sits
  * (for `listOrdinal`). An item nests under the open items whose marker starts left of its own; a non-blank
- * line that isn't a list item, at the left edge, ends every open list.
+ * line that isn't a list item, at the left edge, ends every open list. A line inside a multi-line block
+ * (`blocksOf`) is never a list item, and a block drawn whole in place of its lines ends every open list.
  */
 export class ListDepthTracker {
   private readonly open: number[] = [];
   private quote = '';
 
-  /** The depth of `lineText` (0 at the top level), or 0 for a line that isn't a list item. */
-  next(lineText: string, isListItem: boolean): number {
+  /**
+   * The depth of `lineText` (0 at the top level), or 0 for a line that isn't a list item. `tokens` are the
+   * line's; `block` is the kind of block the line is in, if any.
+   */
+  next(lineText: string, tokens: readonly Token[], block: BlockKind | null): number {
+    const isListItem = block === null && tokens.some((t) => t.type === 'listMarker');
     const p = parseLinePrefix(lineText);
     const quote = p.quote.replace(/[^>]/g, ''); // the quote depth; its spacing belongs to the indent
     if (quote !== this.quote) {
@@ -370,8 +375,8 @@ export class ListDepthTracker {
     return depth;
   }
 
-  /** Forget every open list (after a block the caller skipped, such as a table). */
-  reset(): void {
+  /** A block was drawn whole in place of its lines (a table): it ends every open list. */
+  skipBlock(): void {
     this.open.length = 0;
   }
 }

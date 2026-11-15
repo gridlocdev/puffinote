@@ -197,7 +197,7 @@ export function MarkdownEditor(props: MarkdownEditorProps) {
           />,
         );
         rowLines.push(i);
-        depths.reset();
+        depths.skipBlock();
         i = block.endLine;
         continue;
       }
@@ -211,7 +211,7 @@ export function MarkdownEditor(props: MarkdownEditorProps) {
       reveal = keepReveal(prevReveals.get(key), reveal);
       reveals.set(key, reveal);
     }
-    const listDepth = depths.next(text, !block && tokens.some((t) => t.type === 'listMarker'));
+    const listDepth = depths.next(text, tokens, block?.kind ?? null);
     rows.push(
       <LineView
         key={key}

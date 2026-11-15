@@ -282,18 +282,36 @@ describe('nested numbered lists (PRD §10.2)', () => {
     expect([0, 1, 2, 3].map(glyph)).toEqual(['•', '◦', '▪', '•']);
   });
 
+  /** Each line's depth, as the editor walks the note: a table drawn whole is skipped. */
+  const depths = (lines: string[], skipTables = false) => {
+    const doc = TextDocument.fromString(lines.join('\n'));
+    const model = MarkdownModel.build(doc);
+    const blocks = blocksOf(model);
+    const t = new ListDepthTracker();
+    const out: number[] = [];
+    for (let i = 0; i < doc.lineCount; i++) {
+      const block = blockAtLine(blocks, i);
+      if (skipTables && block?.kind === 'table') {
+        t.skipBlock();
+        out.push(-1);
+        continue;
+      }
+      out.push(t.next(doc.getLineText(i), model.lineTokensRelative(i), block?.kind ?? null));
+    }
+    return out;
+  };
+
   it('tracks how deep each item sits', () => {
     const lines = ['1. a', '    1. b', '        - c', '', '    2. d', '2. e', 'para', '    1. f'];
-    const t = new ListDepthTracker();
-    const depths = lines.map((l) => t.next(l, /^\s*(?:\d+\.|-) /.test(l)));
-    expect(depths).toEqual([0, 1, 2, 0, 1, 0, 0, 0]);
+    expect(depths(lines)).toEqual([0, 1, 2, 0, 1, 0, 0, 0]);
+  });
+
+  it('counts no line inside a block as an item, and ends lists at a block drawn whole', () => {
+    expect(depths(['- a', '  - b', '```', '- x', '```', '  - c'])).toEqual([0, 1, 0, 0, 0, 0]);
+    expect(depths(['- a', '| h |', '| - |', '  - b'], true)).toEqual([0, -1, -1, 0]);
   });
 
   it('measures depth in columns, so a tab and four spaces nest alike', () => {
-    const depths = (lines: string[]) => {
-      const t = new ListDepthTracker();
-      return lines.map((l) => t.next(l, true));
-    };
     expect(depths(['- a', '\t- b', '    - c', '\t\t- d', ' \t- e'])).toEqual([0, 1, 1, 2, 1]);
     expect(depths(['- a', '\t- b', '  - c'])).toEqual([0, 1, 1]);
   });
