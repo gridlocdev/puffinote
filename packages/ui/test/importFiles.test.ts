@@ -42,7 +42,7 @@ describe('import rules', () => {
 describe('Notebook.importFiles', () => {
   it('copies a folder under its own name, skipping clutter', async () => {
     const { store, nb } = await open();
-    const r = await nb.importFiles('', [
+    const r = await nb.transfer.importFiles('', [
       file('Trip/a.md'),
       file('Trip/photos/p.png'),
       file('Trip/.DS_Store'),
@@ -59,7 +59,7 @@ describe('Notebook.importFiles', () => {
 
   it('never overwrites: a taken folder or file name gets a number, compared without case', async () => {
     const { store, nb } = await open({ 'trip/a.md': 'mine', 'b.md': 'mine', 'b 2.md': 'mine too' });
-    const r = await nb.importFiles('', [file('Trip/a.md', 'new'), file('B.md', 'new')]);
+    const r = await nb.transfer.importFiles('', [file('Trip/a.md', 'new'), file('B.md', 'new')]);
     expect(r.imported).toBe(2);
     expect(r.roots).toEqual(['Trip 2', 'B 3.md']);
     expect(await read(store, 'trip/a.md')).toBe('mine');
@@ -72,7 +72,7 @@ describe('Notebook.importFiles', () => {
 
   it('copies into the given folder and opens it', async () => {
     const { store, nb } = await open({ 'Work/x.md': 'x' });
-    await nb.importFiles('Work', [file('x.md', 'other'), file('y.md')]);
+    await nb.transfer.importFiles('Work', [file('x.md', 'other'), file('y.md')]);
     expect(await read(store, 'Work/x.md')).toBe('x');
     expect(await read(store, 'Work/x 2.md')).toBe('other');
     expect(await read(store, 'Work/y.md')).toBe('y.md');
@@ -92,14 +92,14 @@ describe('Notebook.importFiles', () => {
       }
       return write(path, bytes, opts);
     };
-    const r = await nb.importFiles('', [file('a.md')]);
+    const r = await nb.transfer.importFiles('', [file('a.md')]);
     expect(r.roots).toEqual(['a 2.md']);
     nb.dispose();
   });
 
   it('counts files it could not read and goes on', async () => {
     const { store, nb } = await open();
-    const r = await nb.importFiles('', [
+    const r = await nb.transfer.importFiles('', [
       { path: 'Trip/bad.md', read: () => Promise.reject(new Error('gone')) },
       file('Trip/good.md'),
     ]);
@@ -114,7 +114,7 @@ describe('Notebook.importFiles', () => {
 
   it('says so when there was nothing to import', async () => {
     const { nb } = await open();
-    expect((await nb.importFiles('', [file('.DS_Store')])).imported).toBe(0);
+    expect((await nb.transfer.importFiles('', [file('.DS_Store')])).imported).toBe(0);
     expect(nb.notice.value?.text).toBe('There was nothing to import.');
     nb.dispose();
   });

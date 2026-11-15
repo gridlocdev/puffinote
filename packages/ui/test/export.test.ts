@@ -47,7 +47,7 @@ describe('Export as HTML', () => {
     const tab = (await nb.openFile('n.md'))!;
     tab.state!.select(5);
     tab.state!.insert(' **unsaved** ![p](p.png) ![x](x.png)');
-    await nb.exportHtml(tab);
+    await nb.transfer.exportHtml(tab);
     expect(download).toHaveBeenCalledTimes(1);
     const [name, bytes, mime] = download.mock.calls[0]!;
     expect(name).toBe('n.html');
@@ -64,11 +64,11 @@ describe('Export as PDF', () => {
     const store = new MemoryStore('N', { 'a/n.md': '# Hi', 'a/p.png': png });
     const print = vi.fn(async () => {});
     const nb = await Notebook.open(store, { prefs: memoryPrefs({ autoSave: false }), print });
-    expect(nb.canPrint).toBe(true);
+    expect(nb.transfer.canPrint).toBe(true);
     const tab = (await nb.openFile('a/n.md'))!;
     tab.state!.select(4);
     tab.state!.insert('\n\n![p](p.png)');
-    await nb.exportPdf(tab);
+    await nb.transfer.exportPdf(tab);
     expect(print).toHaveBeenCalledTimes(1);
     const [html, name] = print.mock.calls[0]! as unknown as [string, string];
     expect(name).toBe('n.pdf');
@@ -79,7 +79,7 @@ describe('Export as PDF', () => {
 
   it('is off where the host can’t print', async () => {
     const nb = await Notebook.open(new MemoryStore('N', { 'n.md': '' }), { prefs: memoryPrefs() });
-    expect(nb.canPrint).toBe(false);
+    expect(nb.transfer.canPrint).toBe(false);
   });
 
   it('prints from a hidden, sandboxed frame and removes it after the dialog', async () => {

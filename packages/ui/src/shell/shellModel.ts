@@ -1111,7 +1111,7 @@ export class ShellModel {
     if (choice === 'cancel') return;
     const files = await pick(choice === 'folder');
     if (!files || this.notebook.peek() !== nb) return;
-    await nb.importFiles(dir, files);
+    await nb.transfer.importFiles(dir, files);
   }
 
   /** Files dropped from the desktop onto folder `dir` (PRD §6.1): copied in as Import Notes… copies them. */
@@ -1125,7 +1125,7 @@ export class ShellModel {
       nb.report(e);
       return;
     }
-    if (this.notebook.peek() === nb) await nb.importFiles(dir, list);
+    if (this.notebook.peek() === nb) await nb.transfer.importFiles(dir, list);
   }
 
   async findUnusedPictures(): Promise<void> {
@@ -1340,7 +1340,7 @@ function shellCommandSpecs(m: ShellModel): CommandSpec[] {
       enabled: () => tab()?.state != null,
       run: async () => {
         const t = tab();
-        if (t) await nb()?.exportHtml(t);
+        if (t) await nb()?.transfer.exportHtml(t);
       },
     },
     {
@@ -1351,10 +1351,10 @@ function shellCommandSpecs(m: ShellModel): CommandSpec[] {
       shortcut: 'mod+p',
       global: true,
       keywords: 'print',
-      enabled: () => tab()?.state != null && !!nb()?.canPrint,
+      enabled: () => tab()?.state != null && !!nb()?.transfer.canPrint,
       run: async () => {
         const t = tab();
-        if (t) await nb()?.exportPdf(t);
+        if (t) await nb()?.transfer.exportPdf(t);
       },
     },
     {
@@ -1455,8 +1455,8 @@ function shellCommandSpecs(m: ShellModel): CommandSpec[] {
       group: 'File',
       icon: 'save',
       keywords: 'export backup archive zip',
-      enabled: () => nb()?.canDownload ?? false,
-      run: async () => void (await nb()?.downloadArchive()),
+      enabled: () => nb()?.transfer.canDownload ?? false,
+      run: async () => void (await nb()?.transfer.downloadArchive()),
     },
     {
       id: 'shell.revealActive',

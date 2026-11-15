@@ -194,7 +194,7 @@ describe('Notebook files', () => {
     const { nb } = await open({ 'a.md': 'alpha\nBeta gamma', 'b.md': 'beta', 'c.pdf': 'beta' });
     const tab = (await nb.openFile('b.md'))!;
     tab.state!.insert('xx ');
-    const hits = await nb.search('beta');
+    const hits = await nb.textSearch.find('beta');
     expect(hits.map((h) => [h.path, h.line, h.preview.slice(h.matchStart, h.matchStart + h.length)])).toEqual(
       [
         ['a.md', 1, 'Beta'],
@@ -206,7 +206,7 @@ describe('Notebook files', () => {
 
   it('finds note names first, then text', async () => {
     const { nb } = await open({ 'a.md': 'about plans', 'f/Plans.md': 'nothing here', 'plans.pdf': '' });
-    const hits = await nb.search('plan');
+    const hits = await nb.textSearch.find('plan');
     expect(
       hits.map((h) => [h.path, !!h.inTitle, h.preview.slice(h.matchStart, h.matchStart + h.length)]),
     ).toEqual([
@@ -214,7 +214,7 @@ describe('Notebook files', () => {
       ['a.md', false, 'plan'],
     ]);
     // The extension isn't part of the name a search sees.
-    expect(await nb.search('md')).toEqual([]);
+    expect(await nb.textSearch.find('md')).toEqual([]);
   });
 
   it('finds every note whose text has the filter words, however many there are', async () => {
@@ -224,12 +224,14 @@ describe('Notebook files', () => {
     const tab = (await nb.openFile('none.md'))!;
     tab.state!.insert('THE ');
     const paths = [...Object.keys(files)];
-    const found = await nb.notesContaining('the', paths);
+    const found = await nb.textSearch.notesContaining('the', paths);
     expect(found.size).toBe(601);
     expect(found.has('none.md')).toBe(true);
     expect(found.has('pic.png')).toBe(false);
     // Only the paths asked about are read.
-    expect(await nb.notesContaining('the', ['n1.md', 'none.md'])).toEqual(new Set(['n1.md', 'none.md']));
+    expect(await nb.textSearch.notesContaining('the', ['n1.md', 'none.md'])).toEqual(
+      new Set(['n1.md', 'none.md']),
+    );
   });
 });
 

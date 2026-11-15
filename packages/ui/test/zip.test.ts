@@ -111,7 +111,7 @@ describe('Notebook.downloadArchive', () => {
     const nb = await Notebook.open(store, { prefs: memoryPrefs(), download });
     const tab = (await nb.openFile('a.md'))!;
     tab.state!.insert('new ');
-    expect(await nb.downloadArchive()).toBe(true);
+    expect(await nb.transfer.downloadArchive()).toBe(true);
     expect(download).toHaveBeenCalledOnce();
     const [name, bytes, mime] = download.mock.calls[0]! as [string, Uint8Array, string];
     expect(name).toBe('Notes.zip');
@@ -122,8 +122,8 @@ describe('Notebook.downloadArchive', () => {
 
   it('is off without a way to download', async () => {
     const nb = await Notebook.open(new MemoryStore(), { prefs: memoryPrefs() });
-    expect(nb.canDownload).toBe(false);
-    expect(await nb.downloadArchive()).toBe(false);
+    expect(nb.transfer.canDownload).toBe(false);
+    expect(await nb.transfer.downloadArchive()).toBe(false);
     nb.dispose();
   });
 });

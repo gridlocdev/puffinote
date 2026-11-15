@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type { SearchHit } from '../src/notebook/notebook.ts';
+import type { SearchHit } from '../src/notebook/search.ts';
 import { runSearch, type SearchResult } from '../src/shell/panels.tsx';
 
 const hit: SearchHit = { path: 'a.md', line: 0, offset: 0, length: 1, preview: 'a', matchStart: 0 };

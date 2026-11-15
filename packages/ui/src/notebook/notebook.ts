@@ -1,7 +1,5 @@
 import { computed, effect, signal, type Signal } from '@preact/signals';
-import { encodeText, findAll, isReadOnlyDecode, readText, TextDocument } from '@puffinote/text';
-import { archiveName, notebookArchive } from './archive.ts';
-import { fileCount, importName, isImportJunk, type ImportFile, type ImportResult } from './importFiles.ts';
+import { encodeText, isReadOnlyDecode, readText } from '@puffinote/text';
 import {
   applyRefEdits,
   attachmentDir,
@@ -13,8 +11,9 @@ import {
   relinkEdits,
   type RefEdit,
 } from './attachments.ts';
-import { noteHtml } from './export.ts';
 import { NoteMetaCache } from './noteMeta.ts';
+import { NotebookSearch } from './search.ts';
+import { NotebookTransfer } from './transfer.ts';
 import { Tab, type TabConflict } from './tab.ts';
 import {
   ConflictError,
@@ -25,7 +24,6 @@ import {
 } from '../platform/notebookStore.ts';
 import {
   baseName,
-  stemOf,
   invalidNameReason,
   isImagePath,
   isWithin,
@@ -105,19 +103,6 @@ export interface Notice {
   readonly action?: { readonly label: string; readonly run: () => void };
 }
 
-export interface SearchHit {
-  readonly path: string;
-  readonly line: number;
-  /** Offset of the match in the file. */
-  readonly offset: number;
-  readonly length: number;
-  /** The line, trimmed, with the match at `[matchStart, matchStart + length)`. */
-  readonly preview: string;
-  readonly matchStart: number;
-  /** The match is in the note's name (`preview` is the file name); opening it doesn't select anything. */
-  readonly inTitle?: boolean;
-}
-
 /** `tabs` with the pinned ones moved to the front, each group keeping its order. */
 function pinnedFirst(tabs: readonly Tab[]): Tab[] {
   return [...tabs.filter((t) => t.pinned.peek()), ...tabs.filter((t) => !t.pinned.peek())];
@@ -187,6 +172,10 @@ export class Notebook {
   readonly imagesLoaded = signal(0);
   /** Excerpts and picture sizes for the note list, read as it asks. */
   readonly meta: NoteMetaCache;
+  /** Import, download and export. */
+  readonly transfer: NotebookTransfer;
+  /** Searching the notes' text (the Search panel, the Library's Filter box). */
+  readonly textSearch: NotebookSearch;
 
   private readonly options: NotebookOptions;
   private readonly images = new Map<string, string | null>();
@@ -226,6 +215,27 @@ export class Notebook {
     this.options = options;
     this.userPrefs = signal(options.prefs.load());
     this.meta = new NoteMetaCache(store);
+    this.transfer = new NotebookTransfer({
+      store,
+      ...(options.download ? { download: options.download } : {}),
+      ...(options.print ? { print: options.print } : {}),
+      name: () => this.name,
+      disposed: () => this.disposed,
+      saveAll: () => this.saveAll(),
+      imported: async (dir, roots) => {
+        if (dir) this.toggleFolder(dir, true);
+        await this.reloadTree().catch((e: unknown) => this.report(e));
+        if (roots.length === 1) this.selected.value = roots[0]!;
+      },
+      notify: (kind, text) => this.notify(kind, text),
+      report: (e) => this.report(e),
+    });
+    this.textSearch = new NotebookSearch({
+      files: () => allFiles(this.tree.value),
+      read: (path) => this.store.read(path),
+      openTexts: () =>
+        new Map(this.tabs.value.filter((t) => t.state).map((t) => [t.path.value, t.state!.text])),
+    });
   }
 
   /** Open `store` as the notebook: read its settings, session and tree, and reopen its tabs. */
@@ -1197,168 +1207,6 @@ export class Notebook {
     }
   }
 
-  /** Whether this notebook can hand files to the user as downloads (Download Notebook, PRD §5). */
-  get canDownload(): boolean {
-    return !!this.options.download;
-  }
-
-  /**
-   * Download Notebook (PRD §5): save the notes with unsaved changes, then hand the whole notebook to the user
-   * as one zip named after it. A note that can't be saved stops it, so the archive never misses an edit.
-   */
-  async downloadArchive(): Promise<boolean> {
-    const download = this.options.download;
-    if (!download || this.disposed) return false;
-    if (!(await this.saveAll())) {
-      this.notify(
-        'error',
-        'Save or revert the notes with unsaved changes, then download the notebook again.',
-      );
-      return false;
-    }
-    try {
-      download(`${archiveName(this.name)}.zip`, await notebookArchive(this.store), 'application/zip');
-      return true;
-    } catch (e) {
-      this.report(e);
-      return false;
-    }
-  }
-
-  /**
-   * Copy files from outside into folder `dir` (Import Notes… and drops from the desktop, PRD §5). Nothing is
-   * overwritten: a top-level file or folder whose name is taken there gets a number ("Trip 2", "a 2.md"), and
-   * a folder is never merged into one that exists. OS clutter and `.git` are skipped. Files are read and
-   * written one at a time; one that fails is counted and the rest go on. The status bar says what happened.
-   */
-  async importFiles(dir: string, files: readonly ImportFile[]): Promise<ImportResult> {
-    let imported = 0;
-    let failed = 0;
-    const roots: string[] = [];
-    const folders = new Set<string>();
-    if (this.disposed) return { imported, failed, roots };
-    // Names in use per folder, without case: a disk that ignores case would refuse "A.md" beside "a.md".
-    const takenIn = new Map<string, Set<string>>();
-    const taken = async (d: string): Promise<Set<string>> => {
-      let set = takenIn.get(d);
-      if (!set) {
-        const entries = await this.store.list(d).catch(() => [] as Entry[]);
-        set = new Set(entries.map((e) => e.name.toLowerCase()));
-        takenIn.set(d, set);
-      }
-      return set;
-    };
-    const free = (name: string, set: Set<string>): string => {
-      const n = uniqueName(name, { has: (x: string) => set.has(x.toLowerCase()) } as ReadonlySet<string>);
-      set.add(n.toLowerCase());
-      return n;
-    };
-    // Each top-level item's name in the notebook, decided by its first file.
-    const tops = new Map<string, string>();
-    for (const f of files) {
-      if (this.disposed) break;
-      if (isImportJunk(f.path)) continue;
-      const raw = f.path.split('/').filter(Boolean);
-      if (raw.length === 0) continue;
-      const parts = raw.map(importName);
-      if (!parts.every((p): p is string => p !== null)) {
-        failed++;
-        continue;
-      }
-      let topName = tops.get(raw[0]!);
-      if (topName === undefined) {
-        topName = free(parts[0]!, await taken(dir));
-        tops.set(raw[0]!, topName);
-      }
-      const folder = joinPath(dir, [topName, ...parts.slice(1, -1)].join('/'));
-      const into = parts.length === 1 ? dir : folder;
-      try {
-        const bytes = await f.read();
-        const set = await taken(into);
-        let name = parts.length === 1 ? topName : free(parts[parts.length - 1]!, set);
-        for (;;) {
-          try {
-            await this.store.write(joinPath(into, name), bytes, { create: true });
-            break;
-          } catch (e) {
-            // Taken after all (the listing was stale): the next free name.
-            if (!(e instanceof ConflictError && e.reason === 'exists')) throw e;
-            name = free(name, set);
-          }
-        }
-        imported++;
-        const root = joinPath(dir, parts.length === 1 ? name : topName);
-        if (!roots.includes(root)) roots.push(root);
-        if (parts.length > 1) folders.add(root);
-      } catch {
-        failed++;
-      }
-    }
-    if (imported > 0) {
-      if (dir) this.toggleFolder(dir, true);
-      await this.reloadTree().catch((e: unknown) => this.report(e));
-      if (roots.length === 1) this.selected.value = roots[0]!;
-    }
-    const only = roots.length === 1 && folders.has(roots[0]!) ? roots[0]! : null;
-    const into = only ? ` into “${baseName(only)}”` : dir ? ` into “${baseName(dir)}”` : '';
-    const lost = failed > 0 ? ` ${fileCount(failed)} couldn’t be copied.` : '';
-    if (imported > 0)
-      this.notify(failed > 0 ? 'error' : 'info', `Imported ${fileCount(imported)}${into}.${lost}`);
-    else if (failed > 0) this.notify('error', `Nothing was imported.${lost}`);
-    else this.notify('info', 'There was nothing to import.');
-    return { imported, failed, roots };
-  }
-
-  // ----- Export -----
-
-  /**
-   * Export the note in `tab` as one standalone HTML file (PRD §10.5), its unsaved text included, handed to
-   * the user as a download.
-   */
-  async exportHtml(tab: Tab): Promise<void> {
-    if (!tab.state) return;
-    const download = this.options.download;
-    if (!download) return this.notify('info', 'Puffinote can’t save a file here.');
-    try {
-      const out = await noteHtml(this.store, tab.path.peek(), tab.state.text);
-      download(out.name, new TextEncoder().encode(out.html), 'text/html');
-      this.noteSkipped(out.skipped);
-    } catch (e) {
-      this.report(e);
-    }
-  }
-
-  /** Whether this host can print a note or save it as a PDF. */
-  get canPrint(): boolean {
-    return this.options.print !== undefined;
-  }
-
-  /**
-   * Print the note in `tab`, or save it as a PDF (PRD §10.5): the same standalone HTML as Export as HTML,
-   * laid out for paper by its print stylesheet.
-   */
-  async exportPdf(tab: Tab): Promise<void> {
-    const print = this.options.print;
-    if (!tab.state || !print) return;
-    try {
-      const out = await noteHtml(this.store, tab.path.peek(), tab.state.text);
-      await print(out.html, `${stemOf(tab.path.peek())}.pdf`);
-      this.noteSkipped(out.skipped);
-    } catch (e) {
-      this.report(e);
-    }
-  }
-
-  /** Say which pictures an export left as links instead of embedding them. */
-  private noteSkipped(skipped: readonly string[]): void {
-    if (skipped.length === 0) return;
-    const which = skipped.length === 1 ? `“${skipped[0]}”` : `${skipped.length} pictures`;
-    this.notify(
-      'info',
-      `Exported without ${which}: missing, too large or not a PNG, JPEG, GIF, WebP, AVIF or BMP, so ${skipped.length === 1 ? 'it stays a link' : 'they stay links'}.`,
-    );
-  }
-
   private checkName(name: string): boolean {
     const reason = invalidNameReason(name);
     if (reason) this.notify('error', reason);
@@ -1376,94 +1224,6 @@ export class Notebook {
   private touchRecent(path: string): void {
     const next = [path, ...this.recent.value.filter((p) => p !== path)].slice(0, RECENT_LIMIT);
     if (next.join('\n') !== this.recent.value.join('\n')) this.recent.value = next;
-  }
-
-  /**
-   * Search across the notebook's notes (PRD §6.3): their names, then their text, open tabs' unsaved text
-   * included. An aborted
-   * `signal` stops the scan between files and resolves with no hits.
-   */
-  async search(
-    query: string,
-    opts: { caseSensitive?: boolean; regex?: boolean; signal?: AbortSignal } = {},
-  ): Promise<SearchHit[]> {
-    if (!query.trim()) return [];
-    const find = { caseSensitive: opts.caseSensitive ?? false, regex: opts.regex ?? false };
-    // Notes whose name matches come first, each led by its name; the rest follow in tree order.
-    const titled: SearchHit[] = [];
-    const rest: SearchHit[] = [];
-    const done = () => titled.concat(rest).slice(0, 500);
-    const open = new Map(this.tabs.value.filter((t) => t.state).map((t) => [t.path.value, t.state!]));
-    for (const file of allFiles(this.tree.value)) {
-      if (opts.signal?.aborted) return [];
-      if (fileKind(file.path) !== 'note') continue;
-      const name = findAll(stemOf(file.path), query, find)[0];
-      const hits = name ? titled : rest;
-      if (name)
-        hits.push({
-          path: file.path,
-          line: 0,
-          offset: 0,
-          length: name.length,
-          preview: baseName(file.path),
-          matchStart: name.start,
-          inTitle: true,
-        });
-      let text: string;
-      try {
-        text = open.get(file.path)?.text ?? readText((await this.store.read(file.path)).bytes).text;
-      } catch {
-        continue;
-      }
-      if (opts.signal?.aborted) return [];
-      const matches = findAll(text, query, find);
-      if (matches.length === 0) continue;
-      const doc = TextDocument.fromString(text);
-      for (const m of matches.slice(0, 50)) {
-        const pos = doc.getPosition(m.start);
-        const raw = doc.getLineText(pos.line);
-        const lead = raw.length - raw.trimStart().length;
-        const cut = Math.max(lead, pos.column - 40);
-        const preview = (cut > lead ? '…' : '') + raw.slice(cut).trimEnd();
-        hits.push({
-          path: file.path,
-          line: pos.line,
-          offset: m.start,
-          length: m.length,
-          preview,
-          matchStart: pos.column - cut + (cut > lead ? 1 : 0),
-        });
-        if (titled.length + rest.length >= 500) return done();
-      }
-    }
-    return done();
-  }
-
-  /**
-   * Which of the notes at `paths` have `query` in their text, ignoring case, open tabs' unsaved text included:
-   * the Library's Filter box (PRD §6). Unlike `search`, it has no cap, so a common word keeps every note that
-   * has it. An aborted `signal` stops the scan between files and resolves with nothing.
-   */
-  async notesContaining(
-    query: string,
-    paths: readonly string[],
-    opts: { signal?: AbortSignal } = {},
-  ): Promise<Set<string>> {
-    const found = new Set<string>();
-    if (!query.trim()) return found;
-    const open = new Map(this.tabs.value.filter((t) => t.state).map((t) => [t.path.value, t.state!]));
-    for (const path of paths) {
-      if (opts.signal?.aborted) return new Set();
-      if (fileKind(path) !== 'note') continue;
-      let text: string;
-      try {
-        text = open.get(path)?.text ?? readText((await this.store.read(path)).bytes).text;
-      } catch {
-        continue;
-      }
-      if (containsText(text, query)) found.add(path);
-    }
-    return opts.signal?.aborted ? new Set() : found;
   }
 
   /**
@@ -2013,6 +1773,3 @@ function sameListing(checked: FileStat & { readonly path: string }, path: string
 }
 
 /** Does `text` contain `query`, ignoring case, as `search` matches it? */
-function containsText(text: string, query: string): boolean {
-  return findAll(text, query, { caseSensitive: false, regex: false }).length > 0;
-}

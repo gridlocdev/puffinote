@@ -56,7 +56,7 @@ describe('the notebook’s Trash (PRD §6.1)', () => {
     const { nb } = await open({ 'gone.md': 'needle ![](x.png)', 'x.png': '', 'kept.md': 'hay' });
     await nb.remove('gone.md');
     await nb.remove('x.png');
-    expect(await nb.search('needle')).toEqual([]);
+    expect(await nb.textSearch.find('needle')).toEqual([]);
     expect(await nb.unusedPictures()).toEqual([]);
   });
 

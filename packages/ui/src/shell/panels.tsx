@@ -1,7 +1,8 @@
 /* The panels the Icon rail layout shows (PRD §6.3); the Library layout borrows Outline and Recent. */
 
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'preact/hooks';
-import type { Notebook, SearchHit } from '../notebook/notebook.ts';
+import type { Notebook } from '../notebook/notebook.ts';
+import type { SearchHit } from '../notebook/search.ts';
 import { outlineOf } from '@puffinote/markdown';
 import { settleMs, useSettled } from '../editor/settled.ts';
 import { filterTree, findNode } from '../notebook/tree.ts';
@@ -131,7 +132,7 @@ export function SearchPanel({ model, nb }: { readonly model: ShellModel; readonl
     const abort = new AbortController();
     const t = setTimeout(() => {
       void runSearch(
-        (q, opts) => nb.search(q, opts),
+        (q, opts) => nb.textSearch.find(q, opts),
         query,
         abort.signal,
         (r) => {

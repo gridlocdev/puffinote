@@ -353,7 +353,7 @@ function useTextHits(nb: Notebook, query: string, files: readonly TreeNode[]): R
     }
     const abort = new AbortController();
     const t = setTimeout(() => {
-      void nb.notesContaining(query, paths, { signal: abort.signal }).then((found) => {
+      void nb.textSearch.notesContaining(query, paths, { signal: abort.signal }).then((found) => {
         if (!abort.signal.aborted) setHits(found);
       });
     }, 200);

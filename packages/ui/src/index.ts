@@ -12,6 +12,7 @@ export * from './notebook/notebook.ts';
 export * from './notebook/tab.ts';
 export * from './notebook/quickOpen.ts';
 export * from './notebook/recovery.ts';
+export * from './notebook/search.ts';
 export * from './notebook/settings.ts';
 export * from './notebook/tree.ts';
 export * from './platform/index.ts';

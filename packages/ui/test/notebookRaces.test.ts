@@ -288,7 +288,7 @@ describe('Notebook moves, names, settings and session', () => {
     const nb = await openWith(store);
     store.holdReads = true;
     const abort = new AbortController();
-    const searching = nb.search('x', { signal: abort.signal });
+    const searching = nb.textSearch.find('x', { signal: abort.signal });
     await settle();
     expect(store.reads).toHaveLength(1);
     abort.abort();
