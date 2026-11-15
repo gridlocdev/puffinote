@@ -1,5 +1,5 @@
 import type { Token } from '@puffinote/markdown';
-import { isCollapsed, selectionIntersects, type Selection } from '@puffinote/text';
+import { isCollapsed, selectionIntersects, type Selection, type TextDocument } from '@puffinote/text';
 
 /**
  * How the editor draws Markdown:
@@ -116,17 +116,41 @@ function listPrefixTouched(
   return inside(selection.anchor) || inside(selection.caret);
 }
 
+/** A picture drawn in the note: its Markdown's range in the document, and its link as written. */
+export interface PictureAt {
+  readonly start: number;
+  readonly end: number;
+  readonly url: string;
+}
+
 /** The source range of the picture on this line that covers `offset`, or `null` when none does. */
 export function pictureExtent(
   tokens: readonly Token[],
   offset: number,
 ): { start: number; end: number } | null {
   const url = tokens.find((t) => t.type === 'imageUrl' && t.node !== 0 && inNode(tokens, t.node, offset));
+  return url ? nodeExtent(tokens, url.node) : null;
+}
+
+/**
+ * The picture whose link starts at `urlStart` on this line: the whole `![alt](url)` and its link, or `null`
+ * when no picture's link starts there.
+ */
+export function pictureWithUrlAt(
+  tokens: readonly Token[],
+  urlStart: number,
+  doc: TextDocument,
+): PictureAt | null {
+  const url = tokens.find((t) => t.type === 'imageUrl' && t.node !== 0 && t.start === urlStart);
   if (!url) return null;
+  return { ...nodeExtent(tokens, url.node), url: url.meta ?? doc.getText(url.start, url.length) };
+}
+
+function nodeExtent(tokens: readonly Token[], node: number): { start: number; end: number } {
   let start = Infinity;
   let end = -Infinity;
   for (const t of tokens) {
-    if (t.node !== url.node) continue;
+    if (t.node !== node) continue;
     start = Math.min(start, t.start);
     end = Math.max(end, t.start + t.length);
   }

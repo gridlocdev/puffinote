@@ -26,7 +26,7 @@ import { matchesBetween, type TextRange } from './find.ts';
 import { emptyMirror, mirrorFor, readInput, type InputMirror } from './hiddenInput.ts';
 import { keyAction, leavesEditor, primaryHeld, undoRunFor } from './keys.ts';
 import { carryLineCache, lineTextOf, type LineCache } from './lineCache.ts';
-import { keepReveal, lineReveal, type LineReveal } from './reveal.ts';
+import { keepReveal, lineReveal, pictureWithUrlAt, type LineReveal, type PictureAt } from './reveal.ts';
 
 export interface MarkdownEditorProps {
   readonly state: EditorState;
@@ -66,13 +66,6 @@ export interface EditorMenuPoint {
   readonly x: number;
   readonly y: number;
   readonly picture?: PictureAt;
-}
-
-/** A picture drawn in the note: its Markdown's range in the document, and its link as written. */
-export interface PictureAt {
-  readonly start: number;
-  readonly end: number;
-  readonly url: string;
 }
 
 const identity = (url: string): string => url;
@@ -920,17 +913,8 @@ export function MarkdownEditor(props: MarkdownEditorProps) {
     const lineAttr = img?.closest('[data-line]')?.getAttribute('data-line');
     if (!img || lineAttr == null) return undefined;
     const line = Number(lineAttr);
-    const lineStart = doc.getLineStart(line);
-    const tokens = state.model.lineTokens(line);
-    const at = lineStart + Number(img.dataset.from);
-    const urlToken = tokens.find((t) => t.type === 'imageUrl' && t.start === at);
-    if (!urlToken || urlToken.node === 0) return undefined;
-    const parts = tokens.filter((t) => t.node === urlToken.node);
-    return {
-      start: Math.min(...parts.map((t) => t.start)),
-      end: Math.max(...parts.map((t) => t.start + t.length)),
-      url: urlToken.meta ?? doc.getText(urlToken.start, urlToken.length),
-    };
+    const at = doc.getLineStart(line) + Number(img.dataset.from);
+    return pictureWithUrlAt(state.model.lineTokens(line), at, doc) ?? undefined;
   }
 
   function offsetAt(x: number, y: number, dir: 1 | -1 = 1): number | null {

@@ -4,6 +4,8 @@ import { describe, expect, it } from 'vitest';
 import {
   ListDepthTracker,
   listOrdinal,
+  pictureExtent,
+  pictureWithUrlAt,
   isInsideConcealed,
   lineReveal,
   keepReveal,
@@ -319,5 +321,27 @@ describe('screen reader text', () => {
   it('announces a line by its text, and a blank line as blank', () => {
     expect(lineAnnouncement('## Plans', 3)).toBe('Line 4: ## Plans');
     expect(lineAnnouncement('   ', 0)).toBe('Line 1: blank');
+  });
+});
+
+describe('pictures in the source', () => {
+  const md = 'intro\nsee ![a puffin](birds/puffin.png "Puffin") and ![b](<odd name.png>) done';
+  const doc = TextDocument.fromString(md);
+  const tokens = MarkdownModel.build(doc).lineTokens(1);
+  const url = (n: number) => tokens.filter((t) => t.type === 'imageUrl')[n]!.start;
+
+  it('finds the whole picture from where its link starts', () => {
+    const first = pictureWithUrlAt(tokens, url(0), doc)!;
+    expect(md.slice(first.start, first.end)).toBe('![a puffin](birds/puffin.png "Puffin")');
+    expect(first.url).toBe('birds/puffin.png');
+    const second = pictureWithUrlAt(tokens, url(1), doc)!;
+    expect(md.slice(second.start, second.end)).toBe('![b](<odd name.png>)');
+    expect(pictureWithUrlAt(tokens, url(0) + 1, doc)).toBeNull();
+  });
+
+  it('gives the same range as the picture covering an offset', () => {
+    const first = pictureWithUrlAt(tokens, url(0), doc)!;
+    expect(pictureExtent(tokens, first.start + 3)).toEqual({ start: first.start, end: first.end });
+    expect(pictureExtent(tokens, doc.getLineStart(1))).toBeNull();
   });
 });

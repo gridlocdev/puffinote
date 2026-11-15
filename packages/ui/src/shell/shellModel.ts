@@ -4,9 +4,9 @@ import { formatShortcut, isMac, parseShortcut } from '../commands/shortcut.ts';
 import { outlineOf } from '@puffinote/markdown';
 import { removeRangeEdit } from '../editor/commands.ts';
 import { markdownCommandSpecs } from '../editor/editorCommands.ts';
-import type { EditorMenuPoint, PictureAt } from '../editor/MarkdownEditor.tsx';
+import type { EditorMenuPoint } from '../editor/MarkdownEditor.tsx';
 import type { EditorState } from '../editor/editorState.ts';
-import { pictureExtent } from '../editor/reveal.ts';
+import { pictureWithUrlAt, type PictureAt } from '../editor/reveal.ts';
 import { findAll, matchAt, matchFrom, replaceAllEdit, type TextRange } from '../editor/find.ts';
 import { sidebarPanels, type Notebook, type SidebarPanel } from '../notebook/notebook.ts';
 import type { Tab } from '../notebook/tab.ts';
@@ -1753,10 +1753,6 @@ function pictureStillAt(state: EditorState, picture: PictureAt): boolean {
   const tokens = state.model.lineTokens(doc.getPosition(picture.start).line);
   const url = tokens.find((t) => t.type === 'imageUrl' && t.start >= picture.start && t.start < picture.end);
   if (!url) return false;
-  const extent = pictureExtent(tokens, url.start);
-  return (
-    extent?.start === picture.start &&
-    extent.end === picture.end &&
-    (url.meta ?? doc.getText(url.start, url.length)) === picture.url
-  );
+  const found = pictureWithUrlAt(tokens, url.start, doc);
+  return found?.start === picture.start && found.end === picture.end && found.url === picture.url;
 }
