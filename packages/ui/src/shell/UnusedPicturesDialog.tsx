@@ -44,7 +44,7 @@ export function UnusedPicturesDialog(props: {
     >
       <p>
         No note links to {paths.length === 1 ? 'this picture' : `these ${paths.length} pictures`}.
-        {nb.notebookTrash ? ' Ticked ones go to the notebook’s Trash.' : ' Ticked ones go to the Trash.'}
+        {nb.trash.available ? ' Ticked ones go to the notebook’s Trash.' : ' Ticked ones go to the Trash.'}
       </p>
       <ul class="pn-unused-list">
         {paths.map((p) => (

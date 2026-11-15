@@ -774,7 +774,7 @@ export class ShellModel {
       if (hereAgain || others.length > 0) {
         const names = others.map((p) => p.replace(/\.[^./]+$/, ''));
         if (hereAgain) names.unshift(`${stemOf(notePath)} (this note, elsewhere)`);
-        const trash = nb.notebookTrash ? 'the notebook’s Trash' : 'the Trash';
+        const trash = nb.trash.available ? 'the notebook’s Trash' : 'the Trash';
         const answer = await this.confirm({
           title: `“${baseName(file)}” is in other notes`,
           message:
@@ -1063,7 +1063,7 @@ export class ShellModel {
     if (!nb || !path) return;
     const node = findNode(nb.tree.peek(), path);
     const what = node?.kind === 'dir' ? 'folder and everything in it' : 'file';
-    let message = nb.notebookTrash
+    let message = nb.trash.available
       ? `The ${what} will be moved to the notebook’s Trash, where Show Trash… can restore it.`
       : `The ${what} will be moved to the Trash.`;
     // Its tabs close without saving, so say what that loses.
@@ -1098,10 +1098,10 @@ export class ShellModel {
   /** Show Trash… (PRD §6.1): what the notebook's Trash holds, to restore, or say it is empty. */
   async showTrash(): Promise<void> {
     const nb = this.notebook.peek();
-    if (!nb?.notebookTrash) return;
+    if (!nb?.trash.available) return;
     let items: TrashItem[];
     try {
-      items = await nb.trashItems();
+      items = await nb.trash.items();
     } catch (e) {
       nb.report(e);
       return;
@@ -1114,10 +1114,10 @@ export class ShellModel {
   /** Empty Trash… (PRD §6.1): asks first; the only delete that can't be undone. */
   async emptyTrash(): Promise<boolean> {
     const nb = this.notebook.peek();
-    if (!nb?.notebookTrash) return false;
+    if (!nb?.trash.available) return false;
     let count: number;
     try {
-      count = (await nb.trashItems()).length;
+      count = (await nb.trash.items()).length;
     } catch (e) {
       nb.report(e);
       return false;
@@ -1137,7 +1137,7 @@ export class ShellModel {
       ],
     });
     if (answer !== 'empty' || this.notebook.peek() !== nb) return false;
-    return nb.emptyTrash();
+    return nb.trash.empty();
   }
 
   /** Find Unused Pictures… (PRD §10.6): list them, or say there are none. */
@@ -1531,7 +1531,7 @@ function shellCommandSpecs(m: ShellModel): CommandSpec[] {
         'List what was deleted in this notebook, and restore it. (The desktop app uses the system Trash.)',
       group: 'File',
       icon: 'trash-2',
-      enabled: () => !!nb()?.notebookTrash,
+      enabled: () => !!nb()?.trash.available,
       run: () => m.showTrash(),
     },
     {
@@ -1540,7 +1540,7 @@ function shellCommandSpecs(m: ShellModel): CommandSpec[] {
       description: 'Delete everything in this notebook’s Trash for good.',
       group: 'File',
       icon: 'trash-2',
-      enabled: () => !!nb()?.notebookTrash,
+      enabled: () => !!nb()?.trash.available,
       run: () => void m.emptyTrash(),
     },
     {

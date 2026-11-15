@@ -17,7 +17,7 @@ describe('NotebookSettings', () => {
   it('resolves the notebook’s overrides over the user’s preferences', async () => {
     const { config } = setup(
       { [overridesPath]: JSON.stringify({ layout: 'library' }) },
-      memoryPrefs({ layout: 'tabs', autoSave: false }),
+      memoryPrefs({ layout: 'rail', autoSave: false }),
     );
     await config.load();
     expect(config.settings.value.layout).toBe('library');

@@ -51,14 +51,8 @@ import {
   type FileStat,
   type TreeNode,
 } from './tree.ts';
-import {
-  emptyTrash,
-  hasNotebookTrash,
-  listTrash,
-  moveToTrash,
-  restoreFromTrash,
-  type TrashItem,
-} from './trash.ts';
+import type { TrashItem } from './trash.ts';
+import { NotebookTrash } from './notebookTrash.ts';
 import type { RecoveryStorage } from './recovery.ts';
 
 export type SidebarPanel = 'files' | 'filter' | 'search' | 'outline' | 'recent';
@@ -153,6 +147,8 @@ export class Notebook {
   readonly scope = signal<LibraryScope>('folder:');
   /** The user's preferences, this notebook's overrides, and the settings they resolve to (PRD §9). */
   readonly config: NotebookSettings;
+  /** Where deleted files go, and getting them back. */
+  readonly trash: NotebookTrash;
   readonly notice = signal<Notice | null>(null);
   /** Bumps when an image a note shows has loaded, so the editor redraws it. */
   readonly imagesLoaded = signal(0);
@@ -206,6 +202,21 @@ export class Notebook {
       report: (e) => this.report(e),
     });
     this.meta = new NoteMetaCache(store);
+    this.trash = new NotebookTrash({
+      store,
+      closed: () => this.disposed,
+      restored: async (paths) => {
+        // A note showing a restored picture drew it as missing.
+        this.forgetImages(paths);
+        await this.reloadTree();
+      },
+      offer: (text, label, run) => {
+        this.offer = null;
+        this.notice.value = { kind: 'info', text, action: { label, run } };
+      },
+      notify: (kind, text) => this.notify(kind, text),
+      report: (e) => this.report(e),
+    });
     this.transfer = new NotebookTransfer({
       store,
       ...(options.download ? { download: options.download } : {}),
@@ -1054,11 +1065,6 @@ export class Notebook {
     }
   }
 
-  /** Deleted files go to the notebook's own Trash (browser, NAS), not the system's (desktop). PRD §6.1. */
-  get notebookTrash(): boolean {
-    return hasNotebookTrash(this.store);
-  }
-
   /**
    * Delete a file or folder (the shell confirms first). Its tabs close without saving. Where the notebook keeps
    * its own Trash, the status bar says so with an Undo button.
@@ -1066,66 +1072,7 @@ export class Notebook {
   async remove(path: string): Promise<boolean> {
     const result = await this.deleteEntry(path);
     if (result === false) return false;
-    if (result) this.offerUndo([result], `Moved “${baseName(path)}” to the notebook’s Trash.`);
-    return true;
-  }
-
-  /** The status bar says what went to the Trash, with Undo. */
-  private offerUndo(items: readonly TrashItem[], text: string): void {
-    this.offer = null;
-    this.notice.value = {
-      kind: 'info',
-      text,
-      action: { label: 'Undo', run: () => void this.restore(items) },
-    };
-  }
-
-  /** What is in the notebook's Trash, newest first (none on the desktop, whose files go to the system Trash). */
-  async trashItems(): Promise<TrashItem[]> {
-    if (!this.notebookTrash) return [];
-    return listTrash(this.store);
-  }
-
-  /**
-   * Put trashed items back where they were, under a free name when the old one is taken (never overwriting).
-   * Returns the paths they went to.
-   */
-  async restore(items: readonly TrashItem[]): Promise<string[]> {
-    if (this.disposed) return [];
-    const out: string[] = [];
-    for (const item of items) {
-      try {
-        out.push(await restoreFromTrash(this.store, item));
-      } catch (e) {
-        this.report(e);
-      }
-    }
-    if (out.length === 0) return out;
-    // A note showing a restored picture drew it as missing.
-    this.forgetImages(out);
-    await this.reloadTree();
-    const renamed = items.length === 1 && out[0] !== items[0]!.path;
-    if (out.length === 1) {
-      this.notify(
-        'info',
-        renamed
-          ? `Restored “${baseName(items[0]!.path)}” as “${baseName(out[0]!)}”: the name was taken.`
-          : `Restored “${baseName(out[0]!)}”.`,
-      );
-    } else this.notify('info', `Restored ${out.length} items.`);
-    return out;
-  }
-
-  /** Delete everything in the notebook's Trash for good (the shell confirms first). */
-  async emptyTrash(): Promise<boolean> {
-    if (this.disposed || !this.notebookTrash) return false;
-    try {
-      await emptyTrash(this.store);
-    } catch (e) {
-      this.report(e);
-      return false;
-    }
-    this.notify('info', 'The notebook’s Trash is empty.');
+    if (result) this.trash.offerUndo([result], `Moved “${baseName(path)}” to the notebook’s Trash.`);
     return true;
   }
 
@@ -1146,10 +1093,9 @@ export class Notebook {
         if (text !== null) for (const t of imageTargets(text, p)) if (!isWithin(t, path)) linked.add(t);
       }
     }
-    let item: TrashItem | null = null;
+    let item: TrashItem | null;
     try {
-      if (this.notebookTrash) item = await moveToTrash(this.store, path, node?.kind ?? 'file');
-      else await this.store.remove(path);
+      item = await this.trash.take(path, node?.kind ?? 'file');
     } catch (e) {
       this.report(e);
       return false;
@@ -1524,7 +1470,7 @@ export class Notebook {
   private sayPicturesDeleted(done: number, items: readonly TrashItem[]): void {
     if (done === 0) return;
     const what = `${done} ${done === 1 ? 'picture' : 'pictures'}`;
-    if (items.length > 0) this.offerUndo(items, `Moved ${what} to the notebook’s Trash.`);
+    if (items.length > 0) this.trash.offerUndo(items, `Moved ${what} to the notebook’s Trash.`);
     else this.notify('info', `Moved ${what} to the Trash.`);
   }
 

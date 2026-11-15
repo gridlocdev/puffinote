@@ -21,7 +21,7 @@ export function TrashDialog(props: {
   const [busy, setBusy] = useState(false);
   const restore = async (picked: readonly TrashItem[]) => {
     setBusy(true);
-    const done = await nb.restore(picked);
+    const done = await nb.trash.restore(picked);
     setBusy(false);
     // Whatever didn't come back (an error was shown) stays listed.
     const left = done.length === picked.length ? items.filter((i) => !picked.includes(i)) : items;
