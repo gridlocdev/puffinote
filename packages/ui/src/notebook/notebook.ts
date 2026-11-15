@@ -1,16 +1,6 @@
 import { effect, signal } from '@preact/signals';
 import { encodeText, isReadOnlyDecode, readText } from '@puffinote/text';
-import {
-  applyRefEdits,
-  attachmentDir,
-  attachmentName,
-  imageMarkdown,
-  imageTargets,
-  isImageMime,
-  PictureUsage,
-  relinkEdits,
-  type RefEdit,
-} from './attachments.ts';
+import { applyRefEdits, imageTargets, relinkEdits, type RefEdit } from './attachments.ts';
 import { NoteMetaCache } from './noteMeta.ts';
 import { NotebookSearch } from './search.ts';
 import { NotebookTransfer } from './transfer.ts';
@@ -18,7 +8,6 @@ import { Tab, type TabConflict } from './tab.ts';
 import {
   ConflictError,
   NotFoundError,
-  type Entry,
   type FileData,
   type NotebookStore,
 } from '../platform/notebookStore.ts';
@@ -30,10 +19,7 @@ import {
   joinPath,
   mimeOf,
   parentOf,
-  pathKey,
   rebase,
-  resolveRelative,
-  uniqueName,
 } from '../platform/paths.ts';
 import { indentUnit, type PrefsStorage } from './settings.ts';
 import { NotebookSettings } from './notebookSettings.ts';
@@ -53,6 +39,7 @@ import {
 } from './tree.ts';
 import type { TrashItem } from './trash.ts';
 import { NotebookTrash } from './notebookTrash.ts';
+import { NotebookPictures } from './notebookPictures.ts';
 import type { RecoveryStorage } from './recovery.ts';
 
 export type SidebarPanel = 'files' | 'filter' | 'search' | 'outline' | 'recent';
@@ -150,8 +137,8 @@ export class Notebook {
   /** Where deleted files go, and getting them back. */
   readonly trash: NotebookTrash;
   readonly notice = signal<Notice | null>(null);
-  /** Bumps when an image a note shows has loaded, so the editor redraws it. */
-  readonly imagesLoaded = signal(0);
+  /** Reading, saving and cleaning up the notebook's pictures. */
+  readonly pictures: NotebookPictures;
   /** Excerpts and picture sizes for the note list, read as it asks. */
   readonly meta: NoteMetaCache;
   /** Import, download and export. */
@@ -160,9 +147,6 @@ export class Notebook {
   readonly textSearch: NotebookSearch;
 
   private readonly options: NotebookOptions;
-  private readonly images = new Map<string, string | null>();
-  /** The read in flight for each picture being loaded; a read whose token was replaced is dropped. */
-  private readonly imageReads = new Map<string, object>();
   private readonly disposers: (() => void)[] = [];
   private persistTimer: ReturnType<typeof setTimeout> | null = null;
   private refreshTimer: ReturnType<typeof setTimeout> | null = null;
@@ -207,11 +191,10 @@ export class Notebook {
       closed: () => this.disposed,
       restored: async (paths) => {
         // A note showing a restored picture drew it as missing.
-        this.forgetImages(paths);
+        this.pictures.forget(paths);
         await this.reloadTree();
       },
       offer: (text, label, run) => {
-        this.offer = null;
         this.notice.value = { kind: 'info', text, action: { label, run } };
       },
       notify: (kind, text) => this.notify(kind, text),
@@ -229,6 +212,19 @@ export class Notebook {
         await this.reloadTree().catch((e: unknown) => this.report(e));
         if (roots.length === 1) this.selected.value = roots[0]!;
       },
+      notify: (kind, text) => this.notify(kind, text),
+      report: (e) => this.report(e),
+    });
+    this.pictures = new NotebookPictures({
+      store,
+      notice: this.notice,
+      trash: this.trash,
+      settings: () => this.config.settings.peek(),
+      tree: () => this.tree.peek(),
+      closed: () => this.disposed,
+      noteText: (path) => this.noteText(path),
+      reloadTree: () => this.reloadTree(),
+      deleteEntry: (path) => this.deleteEntry(path),
       notify: (kind, text) => this.notify(kind, text),
       report: (e) => this.report(e),
     });
@@ -326,7 +322,7 @@ export class Notebook {
         this.store.watch((paths) => {
           // A git client touching `.git/index` says nothing about the notes. (An empty list means "look again".)
           if (paths.length > 0 && paths.every(ignoredChange)) return;
-          this.forgetImages(paths);
+          this.pictures.forget(paths);
           this.scheduleRefresh();
         }),
       );
@@ -352,7 +348,7 @@ export class Notebook {
     this.meta.dispose();
     for (const t of this.tabs.value) t.dispose();
     if (this.refreshTimer) clearTimeout(this.refreshTimer);
-    for (const url of this.images.values()) if (url?.startsWith('blob:')) URL.revokeObjectURL(url);
+    this.pictures.dispose();
   }
 
   get name(): string {
@@ -388,13 +384,7 @@ export class Notebook {
     // A picture whose size or time changed (or that went away) is read again when next drawn. Stores without
     // change events (a browser folder, the NAS) only tell this way.
     const before = this.stats.peek();
-    this.forgetImages(
-      [...this.images.keys()].filter((p) => {
-        const a = before.get(p);
-        const b = stats.get(p);
-        return a?.size !== b?.size || a?.modified !== b?.modified;
-      }),
-    );
+    this.pictures.forgetChanged(before, stats);
     if (!sameTree(this.tree.peek(), next)) this.tree.value = next;
     if (!sameStats(this.stats.peek(), stats)) this.stats.value = stats;
   }
@@ -782,13 +772,7 @@ export class Notebook {
         created: stat?.created || now,
       });
       this.flashSaved(tab);
-      this.withdrawOfferShownBy(text, path);
-      if (before.includes('](')) {
-        const key = (p: string) => pathKey(p, this.ignoresCase);
-        const now = new Set([...imageTargets(text, path)].map(key));
-        const dropped = [...imageTargets(before, path)].filter((p) => !now.has(key(p)));
-        if (dropped.length > 0) void this.offerUnused(dropped);
-      }
+      this.pictures.saved(path, before, text);
       return true;
     } catch (e) {
       if (e instanceof ConflictError && (e.reason === 'changed' || e.reason === 'deleted')) {
@@ -1111,7 +1095,7 @@ export class Notebook {
     }
     if (this.selected.value && isWithin(this.selected.value, path)) this.selected.value = null;
     await this.reloadTree();
-    if (linked.size > 0) void this.offerUnused([...linked]);
+    if (linked.size > 0) void this.pictures.offerUnused([...linked]);
     return item;
   }
 
@@ -1150,101 +1134,6 @@ export class Notebook {
     if (next.join('\n') !== this.recent.value.join('\n')) this.recent.value = next;
   }
 
-  /**
-   * The URL for an image a note at `notePath` refers to: web and data URLs as they are, notebook files
-   * straight from the store, or read once into a blob URL (the editor redraws when it arrives).
-   */
-  resolveImage(notePath: string, ref: string): string {
-    if (/^(https?:|data:|blob:)/i.test(ref)) return ref;
-    const path = resolveRelative(notePath, ref);
-    if (path === null) return '';
-    const direct = this.store.fileUrl(path);
-    if (direct) return direct;
-    const cached = this.images.get(path);
-    if (cached !== undefined) return cached ?? '';
-    this.images.set(path, null);
-    const token = {};
-    this.imageReads.set(path, token);
-    const current = () => this.imageReads.get(path) === token && !this.disposed;
-    void this.store
-      .read(path)
-      .then(({ bytes }) => {
-        if (!current()) return;
-        this.imageReads.delete(path);
-        this.images.set(
-          path,
-          URL.createObjectURL(new Blob([bytes as Uint8Array<ArrayBuffer>], { type: mimeOf(path) })),
-        );
-        this.imagesLoaded.value++;
-      })
-      .catch(() => {
-        // Not kept: the picture may turn up (a sync, a NAS back online), and the next redraw asks again.
-        if (!current()) return;
-        this.imageReads.delete(path);
-        this.images.delete(path);
-      });
-    return '';
-  }
-
-  /** Drop what was read for pictures at or inside `paths`, so the editor reads them again. */
-  private forgetImages(paths: readonly string[]): void {
-    if (paths.length === 0) return;
-    let dropped = false;
-    for (const path of [...this.images.keys()]) {
-      if (!paths.some((p) => isWithin(path, p))) continue;
-      const url = this.images.get(path);
-      if (url?.startsWith('blob:')) URL.revokeObjectURL(url);
-      this.images.delete(path);
-      this.imageReads.delete(path);
-      dropped = true;
-    }
-    if (dropped) this.imagesLoaded.value++;
-  }
-
-  // ----- Pictures -----
-
-  /**
-   * Save pasted or dropped pictures for the note at `notePath` in its picture folder (PRD §10.6) and return
-   * the Markdown that shows each. Files that aren't pictures are skipped.
-   */
-  async addPictures(
-    notePath: string,
-    files: readonly { name: string; type: string; bytes: Uint8Array }[],
-  ): Promise<string[]> {
-    const dir = attachmentDir(this.config.settings.peek(), notePath);
-    let entries: Entry[];
-    try {
-      entries = await this.store.list(dir);
-    } catch {
-      entries = [];
-    }
-    const taken = new Set(entries.map((e) => e.name.toLowerCase()));
-    const links: string[] = [];
-    for (const f of files) {
-      if (!isImageMime(f.type)) continue;
-      // The same picture pasted again (Copy Picture from another note) links to the file that's already there.
-      const same = await this.samePicture(dir, entries, f.bytes);
-      if (same !== null) {
-        links.push(imageMarkdown(notePath, same));
-        continue;
-      }
-      let name = attachmentName(f.name, f.type, new Date());
-      // Disks that ignore case would refuse "Photo.png" beside "photo.png".
-      name = uniqueName(name, { has: (n: string) => taken.has(n.toLowerCase()) } as ReadonlySet<string>);
-      taken.add(name.toLowerCase());
-      const path = joinPath(dir, name);
-      try {
-        await this.store.write(path, f.bytes, { create: true });
-      } catch (e) {
-        this.report(e);
-        continue;
-      }
-      links.push(imageMarkdown(notePath, path));
-    }
-    if (links.length > 0) await this.reloadTree();
-    return links;
-  }
-
   /** A note's text: its tab's, unsaved edits included, or what's on disk. Null when it can't be read. */
   private async noteText(path: string): Promise<string | null> {
     const tab = this.tabs.peek().find((t) => t.state && t.path.peek() === path);
@@ -1254,224 +1143,6 @@ export class Notebook {
     } catch {
       return null;
     }
-  }
-
-  /**
-   * Every note in the notebook, hidden folders included whatever Show Hidden Files says: a picture a hidden
-   * note shows is still used.
-   */
-  private async allNotes(): Promise<string[]> {
-    const tree = await loadTree(this.store, true);
-    return allFiles(tree)
-      .map((f) => f.path)
-      .filter((p) => fileKind(p) === 'note');
-  }
-
-  /** A note's text, like `noteText`, but a note that can't be read is an error: nothing can be said about it. */
-  private async readNote(path: string): Promise<string> {
-    const text = await this.noteText(path);
-    if (text === null)
-      throw new Error(`Puffinote couldn’t read “${path}”, so it can’t tell which pictures are used.`);
-    return text;
-  }
-
-  /** Whether picture names compare without case: when the store says so, or can't tell. */
-  private get ignoresCase(): boolean {
-    return this.store.capabilities.ignoresCase !== false;
-  }
-
-  /**
-   * Every picture some note (other than those in `except`) links to, by notebook path. Throws when a note can't be read, so a picture it
-   * shows is never called unused.
-   */
-  private async linkedPictures(except: ReadonlySet<string> = new Set()): Promise<PictureUsage> {
-    const out = new PictureUsage(this.ignoresCase);
-    for (const path of await this.allNotes()) {
-      if (!except.has(path)) out.add(await this.readNote(path), path);
-    }
-    return out;
-  }
-
-  /** Whether `text`, the note at `notePath`, shows the picture at `picture` in any of the ways that count. */
-  showsPicture(text: string, notePath: string, picture: string): boolean {
-    const usage = new PictureUsage(this.ignoresCase);
-    usage.add(text, notePath);
-    return usage.has(picture);
-  }
-
-  /** The picture in `dir` (listed as `entries`) whose bytes are `bytes`, or null. */
-  private async samePicture(
-    dir: string,
-    entries: readonly Entry[],
-    bytes: Uint8Array,
-  ): Promise<string | null> {
-    for (const e of entries) {
-      if (e.kind !== 'file' || e.size !== bytes.length || !isImagePath(e.name)) continue;
-      const path = e.path;
-      try {
-        const other = (await this.store.read(path)).bytes;
-        if (other.length === bytes.length && other.every((b, i) => b === bytes[i])) return path;
-      } catch {
-        // Unreadable: not a match.
-      }
-    }
-    return null;
-  }
-
-  /** Put a deleted picture's file back (undoing Delete Picture), and redraw the notes that show it. */
-  async restorePicture(path: string, bytes: Uint8Array): Promise<void> {
-    if (this.disposed) return;
-    try {
-      await this.store.write(path, bytes, { create: true });
-    } catch (e) {
-      this.report(e);
-      return;
-    }
-    this.forgetImages([path]);
-    this.imagesLoaded.value++;
-    await this.reloadTree();
-  }
-
-  /**
-   * The notes other than `except` that link to the picture at `path`, in tree order, hidden ones included.
-   * Throws when a note can't be read.
-   */
-  async notesShowing(path: string, except: string): Promise<string[]> {
-    const out: string[] = [];
-    for (const note of await this.allNotes()) {
-      if (note === except) continue;
-      const text = await this.readNote(note);
-      if (this.showsPicture(text, note, path)) out.push(note);
-    }
-    return out;
-  }
-
-  /**
-   * The notes outside `path` (a file or folder) that show a picture at or inside it, in tree order: what
-   * deleting `path` leaves with a missing picture. Throws when a note can't be read.
-   */
-  async notesShowingPicturesIn(path: string): Promise<string[]> {
-    const tree = await loadTree(this.store, true);
-    const node = findNode(tree, path);
-    const files = !node ? [] : node.kind === 'file' ? [node.path] : allFiles(node).map((f) => f.path);
-    const pictures = files.filter((p) => fileKind(p) === 'image');
-    if (pictures.length === 0) return [];
-    const out: string[] = [];
-    for (const f of allFiles(tree)) {
-      if (fileKind(f.path) !== 'note' || isWithin(f.path, path)) continue;
-      const usage = new PictureUsage(this.ignoresCase);
-      usage.add(await this.readNote(f.path), f.path);
-      if (pictures.some((p) => usage.has(p))) out.push(f.path);
-    }
-    return out;
-  }
-
-  /**
-   * The notebook's pictures that no note links to (Find Unused Pictures…), in tree order. Throws when a note
-   * can't be read.
-   */
-  async unusedPictures(): Promise<string[]> {
-    const linked = await this.linkedPictures();
-    return allFiles(this.tree.peek())
-      .map((f) => f.path)
-      .filter((p) => fileKind(p) === 'image' && !isWithin(p, stateDir) && !linked.has(p));
-  }
-
-  /**
-   * After the links to `paths` went away, offer to delete those no note links to any more (the "When a
-   * picture is no longer used" setting).
-   */
-  private async offerUnused(paths: readonly string[]): Promise<void> {
-    if (this.config.settings.peek().unusedImages !== 'ask') return;
-    const present = paths.filter((p) => findNode(this.tree.peek(), p)?.kind === 'file');
-    if (present.length === 0) return;
-    let linked: PictureUsage;
-    try {
-      linked = await this.linkedPictures();
-    } catch {
-      // A note that can't be read may show them: say nothing rather than offer to delete a used picture.
-      return;
-    }
-    const unused = present.filter((p) => !linked.has(p));
-    if (unused.length === 0) return;
-    const notice: Notice = {
-      kind: 'info',
-      text:
-        unused.length === 1
-          ? `No note shows “${baseName(unused[0]!)}” any more.`
-          : `No note shows ${unused.length} of these pictures any more.`,
-      action: {
-        label: 'Move to Trash',
-        run: () => void this.removeUnused(unused),
-      },
-    };
-    this.offer = { notice, paths: unused };
-    this.notice.value = notice;
-  }
-
-  /** The no-longer-used offer, while it is the notice, taken down when a save shows one of its pictures again. */
-  private offer: { readonly notice: Notice; readonly paths: readonly string[] } | null = null;
-
-  private withdrawOfferShownBy(text: string, notePath: string): void {
-    const offer = this.offer;
-    if (!offer) return;
-    if (this.notice.peek() !== offer.notice) {
-      this.offer = null;
-      return;
-    }
-    if (offer.paths.some((p) => this.showsPicture(text, notePath, p))) {
-      this.offer = null;
-      this.notice.value = null;
-    }
-  }
-
-  /**
-   * Delete those of `paths` no note shows now, leaving out the notes in `ignoring` (the no-longer-used offer,
-   * Find Unused Pictures, Delete Picture's Redo). A picture a note shows again by now is kept, and so is every
-   * one when a note can't be read.
-   */
-  async removeUnused(paths: readonly string[], ignoring: ReadonlySet<string> = new Set()): Promise<void> {
-    if (this.disposed) return;
-    let linked: PictureUsage;
-    try {
-      linked = await this.linkedPictures(ignoring);
-    } catch (e) {
-      this.report(e);
-      return;
-    }
-    const unused = paths.filter((p) => !linked.has(p));
-    const kept = paths.length - unused.length;
-    const { done, items } = await this.deleteEach(unused);
-    if (kept > 0) {
-      const which = kept === 1 ? `“${baseName(paths.find((p) => linked.has(p))!)}”` : `${kept} pictures`;
-      this.notify('info', `Kept ${which}: a note shows ${kept === 1 ? 'it' : 'them'} again.`);
-    } else this.sayPicturesDeleted(done, items);
-  }
-
-  /** Delete each of `paths`, whoever shows them (Delete Picture's Delete File). */
-  async removeAll(paths: readonly string[]): Promise<void> {
-    if (this.disposed) return;
-    const { done, items } = await this.deleteEach(paths);
-    this.sayPicturesDeleted(done, items);
-  }
-
-  private async deleteEach(paths: readonly string[]): Promise<{ done: number; items: TrashItem[] }> {
-    let done = 0;
-    const items: TrashItem[] = [];
-    for (const p of paths) {
-      const result = await this.deleteEntry(p);
-      if (result === false) continue;
-      done++;
-      if (result) items.push(result);
-    }
-    return { done, items };
-  }
-
-  private sayPicturesDeleted(done: number, items: readonly TrashItem[]): void {
-    if (done === 0) return;
-    const what = `${done} ${done === 1 ? 'picture' : 'pictures'}`;
-    if (items.length > 0) this.trash.offerUndo(items, `Moved ${what} to the notebook’s Trash.`);
-    else this.notify('info', `Moved ${what} to the Trash.`);
   }
 
   // ----- Session -----

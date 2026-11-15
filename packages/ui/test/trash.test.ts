@@ -57,7 +57,7 @@ describe('the notebook’s Trash (PRD §6.1)', () => {
     await nb.remove('gone.md');
     await nb.remove('x.png');
     expect(await nb.textSearch.find('needle')).toEqual([]);
-    expect(await nb.unusedPictures()).toEqual([]);
+    expect(await nb.pictures.unused()).toEqual([]);
   });
 
   it('empties the Trash for good', async () => {
@@ -72,7 +72,7 @@ describe('the notebook’s Trash (PRD §6.1)', () => {
 
   it('offers Undo for pictures moved to the Trash from Find Unused Pictures', async () => {
     const { store, nb } = await open({ 'a.png': 'A', 'b.png': 'B' });
-    await nb.removeUnused(['a.png', 'b.png']);
+    await nb.pictures.removeUnused(['a.png', 'b.png']);
     expect(nb.notice.value?.text).toBe('Moved 2 pictures to the notebook’s Trash.');
     nb.notice.value!.action!.run();
     await vi.waitFor(async () => expect(await text(store, 'b.png')).toBe('B'));

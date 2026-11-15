@@ -355,7 +355,7 @@ describe('Notebook pictures read into the editor', () => {
   const loaded = async (nb: Notebook, ref: string) => {
     let url = '';
     await vi.waitFor(() => {
-      url = nb.resolveImage('a.md', ref);
+      url = nb.pictures.resolve('a.md', ref);
       expect(url).toMatch(/^blob:/);
     });
     return url;
@@ -363,7 +363,7 @@ describe('Notebook pictures read into the editor', () => {
 
   it('tries again for a picture that couldn’t be read', async () => {
     const { store, nb } = await open({ 'a.md': '![](p.png)' });
-    expect(nb.resolveImage('a.md', 'p.png')).toBe('');
+    expect(nb.pictures.resolve('a.md', 'p.png')).toBe('');
     await new Promise((r) => setTimeout(r, 10));
     await store.write('p.png', new TextEncoder().encode('png'), { create: true });
     expect(await blobText(await loaded(nb, 'p.png'))).toBe('png');
@@ -374,7 +374,7 @@ describe('Notebook pictures read into the editor', () => {
     const first = await loaded(nb, 'p.png');
     store.touch('p.png', 'new');
     await vi.waitFor(async () => {
-      const url = nb.resolveImage('a.md', 'p.png');
+      const url = nb.pictures.resolve('a.md', 'p.png');
       expect(url).not.toBe(first);
       expect(url && (await blobText(url))).toBe('new');
     });
@@ -386,7 +386,7 @@ describe('Notebook pictures read into the editor', () => {
     await store.write('p.png', new TextEncoder().encode('newer'), { force: true });
     await nb.refresh();
     await vi.waitFor(async () => {
-      const url = nb.resolveImage('a.md', 'p.png');
+      const url = nb.pictures.resolve('a.md', 'p.png');
       expect(url).not.toBe(first);
       expect(url && (await blobText(url))).toBe('newer');
     });

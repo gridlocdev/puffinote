@@ -82,7 +82,7 @@ describe('picture folder and names', () => {
 describe('Notebook pictures', () => {
   it('saves pasted pictures in the folder and returns their links', async () => {
     const { store, nb } = await open({ 'a/note.md': '', 'attachments/Holiday.png': '' });
-    const links = await nb.addPictures('a/note.md', [
+    const links = await nb.pictures.add('a/note.md', [
       png('Holiday.png'),
       { name: 'x.txt', type: 'text/plain', bytes: new Uint8Array() },
     ]);
@@ -92,17 +92,17 @@ describe('Notebook pictures', () => {
 
   it('links the same picture pasted again to the file already there', async () => {
     const { store, nb } = await open({ 'a.md': '', 'b.md': '' });
-    const [first] = await nb.addPictures('a.md', [png('Photo.png')]);
-    const [again] = await nb.addPictures('b.md', [png('image.png')]);
+    const [first] = await nb.pictures.add('a.md', [png('Photo.png')]);
+    const [again] = await nb.pictures.add('b.md', [png('image.png')]);
     expect(again).toBe(first);
     expect((await store.list('attachments')).map((e) => e.name)).toEqual(['Photo.png']);
     const other = { ...png('Photo.png'), bytes: new Uint8Array([1, 2, 3, 4]) };
-    expect(await nb.addPictures('b.md', [other])).toEqual(['![](attachments/Photo%202.png)']);
+    expect(await nb.pictures.add('b.md', [other])).toEqual(['![](attachments/Photo%202.png)']);
   });
 
   it('saves beside the note when set to', async () => {
     const { nb } = await open({ 'note.md': '' }, { attachmentLocation: 'note' });
-    const [link] = await nb.addPictures('note.md', [png('p.png')]);
+    const [link] = await nb.pictures.add('note.md', [png('p.png')]);
     expect(link).toBe('![](note.assets/p.png)');
   });
 
@@ -176,14 +176,14 @@ describe('Notebook pictures', () => {
       'docs/c.png': '',
       'z.jpg': '',
     });
-    expect(await nb.unusedPictures()).toEqual(['docs/c.png', 'z.jpg']);
+    expect(await nb.pictures.unused()).toEqual(['docs/c.png', 'z.jpg']);
   });
 });
 
 describe('Find Unused Pictures safety', () => {
   it('counts links in hidden folders, whatever Show Hidden Files says', async () => {
     const { nb } = await open({ '.drafts/one.md': '![](../a.png)', 'a.png': '', 'b.png': '' });
-    expect(await nb.unusedPictures()).toEqual(['b.png']);
+    expect(await nb.pictures.unused()).toEqual(['b.png']);
   });
 
   it('stops with an error when a note can’t be read', async () => {
@@ -191,7 +191,7 @@ describe('Find Unused Pictures safety', () => {
     const nb = await Notebook.open(store, { prefs: memoryPrefs({ autoSave: false }) });
     const read = store.read.bind(store);
     store.read = (p: string) => (p === 'one.md' ? Promise.reject(new Error('offline')) : read(p));
-    await expect(nb.unusedPictures()).rejects.toThrow(/one\.md/);
+    await expect(nb.pictures.unused()).rejects.toThrow(/one\.md/);
   });
 
   it('makes no offer when a note can’t be read', async () => {
@@ -216,12 +216,12 @@ describe('pictures shown by wiki embeds and <img>', () => {
       'd.png': '',
       'e.png': '',
     });
-    expect(await nb.unusedPictures()).toEqual(['d.png', 'e.png']);
+    expect(await nb.pictures.unused()).toEqual(['d.png', 'e.png']);
   });
 
   it('keeps a picture an embed shows out of the no-longer-used offer and lists the note', async () => {
     const { nb } = await open({ 'one.md': '![](a.png)', 'two.md': '![[a.png]]', 'a.png': '' });
-    expect(await nb.notesShowing('a.png', 'one.md')).toEqual(['two.md']);
+    expect(await nb.pictures.notesShowing('a.png', 'one.md')).toEqual(['two.md']);
     await nb.remove('one.md');
     await new Promise((r) => setTimeout(r, 10));
     expect(nb.notice.value?.action?.label).not.toBe('Move to Trash');
@@ -231,7 +231,7 @@ describe('pictures shown by wiki embeds and <img>', () => {
 describe('picture names compared as the disk compares them', () => {
   it('matches a link to a picture whatever its Unicode form', async () => {
     const { nb } = await open({ 'one.md': '![](café.png)', 'café.png': '' });
-    expect(await nb.unusedPictures()).toEqual([]);
+    expect(await nb.pictures.unused()).toEqual([]);
   });
 
   it('ignores case where the store says names do', async () => {
@@ -240,13 +240,13 @@ describe('picture names compared as the disk compares them', () => {
     }
     const store = new Folded('N', { 'one.md': '![](Photo.PNG)', 'photo.png': '' });
     const nb = await Notebook.open(store, { prefs: memoryPrefs({ autoSave: false }) });
-    expect(await nb.unusedPictures()).toEqual([]);
-    expect(await nb.notesShowing('photo.png', '')).toEqual(['one.md']);
+    expect(await nb.pictures.unused()).toEqual([]);
+    expect(await nb.pictures.notesShowing('photo.png', '')).toEqual(['one.md']);
   });
 
   it('keeps case apart where the store says names don’t ignore it', async () => {
     const { nb } = await open({ 'one.md': '![](Photo.png)', 'photo.png': '' });
-    expect(await nb.unusedPictures()).toEqual(['photo.png']);
+    expect(await nb.pictures.unused()).toEqual(['photo.png']);
   });
 });
 
@@ -280,7 +280,7 @@ describe('the no-longer-used offer checks again before deleting', () => {
 
   it('deletes only the pictures still unused', async () => {
     const { store, nb } = await open({ 'one.md': '![](a.png)', 'a.png': '', 'b.png': '' });
-    await nb.removeUnused(['a.png', 'b.png']);
+    await nb.pictures.removeUnused(['a.png', 'b.png']);
     await store.read('a.png');
     await expect(store.read('b.png')).rejects.toThrow();
   });

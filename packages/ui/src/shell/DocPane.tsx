@@ -17,7 +17,7 @@ export function Document(props: { readonly model: ShellModel; readonly nb: Noteb
   if (!tab.state) {
     return <div class="pn-image-view">{tab.imageUrl && <img src={tab.imageUrl} alt={tab.name} />}</div>;
   }
-  void nb.imagesLoaded.value;
+  void nb.pictures.loaded.value;
   const conflict = tab.conflict.value;
   const recovered = tab.recovered.value;
   const path = tab.path.value;
@@ -60,7 +60,7 @@ export function Document(props: { readonly model: ShellModel; readonly nb: Noteb
         <FindBar model={model} />
         <MarkdownEditor
           state={tab.state}
-          resolveImage={(url) => nb.resolveImage(path, url)}
+          resolveImage={(url) => nb.pictures.resolve(path, url)}
           initialScrollTop={tab.scrollTop}
           onScroll={(top) => (tab.scrollTop = top)}
           placeholder="Start writing…"
@@ -73,7 +73,7 @@ export function Document(props: { readonly model: ShellModel; readonly nb: Noteb
           onPictures={async (files) => {
             // A picture that can't be read or saved is said in the status bar, and nothing is inserted.
             try {
-              return await nb.addPictures(
+              return await nb.pictures.add(
                 path,
                 await Promise.all(
                   files.map(async (f) => ({

@@ -612,7 +612,7 @@ export class ShellModel {
       {
         label: 'Copy Picture',
         run: () =>
-          void this.copyPicture(file ?? nb.resolveImage(tab.path.peek(), picture.url), file !== null),
+          void this.copyPicture(file ?? nb.pictures.resolve(tab.path.peek(), picture.url), file !== null),
       },
       { label: 'Copy Markdown', run: () => void this.copyText(source) },
       null,
@@ -641,7 +641,7 @@ export class ShellModel {
     this.preview.value = {
       picture,
       tab,
-      src: nb.resolveImage(tab.path.peek(), picture.url),
+      src: nb.pictures.resolve(tab.path.peek(), picture.url),
       name: file ? baseName(file) : picture.url,
     };
   }
@@ -759,14 +759,14 @@ export class ShellModel {
     const agreed = new Set<string>();
     if (file !== null) {
       const text = state.text;
-      const hereAgain = nb.showsPicture(
+      const hereAgain = nb.pictures.shows(
         text.slice(0, picture.start) + text.slice(picture.end),
         notePath,
         file,
       );
       let others: string[];
       try {
-        others = await nb.notesShowing(file, notePath);
+        others = await nb.pictures.notesShowing(file, notePath);
       } catch (e) {
         nb.report(e);
         return;
@@ -811,15 +811,15 @@ export class ShellModel {
     const effect =
       file !== null && bytes !== null
         ? {
-            undo: () => void nb.restorePicture(file, bytes),
+            undo: () => void nb.pictures.restore(file, bytes),
             // Only if no note shows it by then, apart from those the user agreed to take it from.
-            redo: () => void nb.removeUnused([file], agreed),
+            redo: () => void nb.pictures.removeUnused([file], agreed),
           }
         : undefined;
     state.apply(removeRangeEdit(state.document, picture.start, picture.end), effect);
     this.closePreview(false);
     this.focusEditor();
-    if (deleteFile && file !== null) await nb.removeAll([file]);
+    if (deleteFile && file !== null) await nb.pictures.removeAll([file]);
   }
 
   /** Set the zoom, clamped and rounded to whole percents, and remember it. */
@@ -1074,7 +1074,7 @@ export class ShellModel {
     // Pictures in it that other notes show go missing from them (as Delete Picture says, PRD §10.6).
     let showing: string[] = [];
     try {
-      showing = await nb.notesShowingPicturesIn(path);
+      showing = await nb.pictures.notesShowingPicturesIn(path);
     } catch {
       message += ' Puffinote couldn’t check which notes show pictures in it.';
     }
@@ -1183,7 +1183,7 @@ export class ShellModel {
     if (!nb) return;
     let paths: string[];
     try {
-      paths = await nb.unusedPictures();
+      paths = await nb.pictures.unused();
     } catch (e) {
       nb.report(e);
       return;

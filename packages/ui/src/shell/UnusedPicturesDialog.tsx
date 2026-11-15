@@ -28,7 +28,7 @@ export function UnusedPicturesDialog(props: {
       onSubmit={() => {
         const chosen = paths.filter((p) => picked.has(p));
         props.onClose();
-        void nb.removeUnused(chosen);
+        void nb.pictures.removeUnused(chosen);
       }}
       actions={
         <>
@@ -51,7 +51,7 @@ export function UnusedPicturesDialog(props: {
           <li key={p}>
             <label>
               <input type="checkbox" checked={picked.has(p)} onChange={() => toggle(p)} />
-              <img src={nb.resolveImage('', p)} alt="" />
+              <img src={nb.pictures.resolve('', p)} alt="" />
               <span class="pn-unused-name">{baseName(p)}</span>
               <span class="pn-unused-dir">{parentOf(p) || nb.name}</span>
             </label>

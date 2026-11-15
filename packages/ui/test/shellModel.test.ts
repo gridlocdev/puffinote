@@ -420,8 +420,8 @@ describe('ShellModel switching notebooks', () => {
     m.open({ kind: 'unusedPictures', paths: ['pic.png'] });
     m.setNotebook(null);
     expect(m.overlay.value).toBeNull();
-    await nb1.removeUnused(['pic.png']);
-    await nb1.removeAll(['pic.png']);
+    await nb1.pictures.removeUnused(['pic.png']);
+    await nb1.pictures.removeAll(['pic.png']);
     await nb1.move('a.md', 'x');
     await one.read('pic.png');
     await one.read('a.md');
