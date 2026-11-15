@@ -46,6 +46,18 @@ export interface MenuItem {
   readonly danger?: boolean;
   /** A choice that's on: drawn with a tick, and announced as a checked radio item. */
   readonly checked?: boolean;
+  /** More about the row, shown as its tooltip (where a recent notebook is). */
+  readonly hint?: string;
+}
+
+/** A notebook opened before, for the notebook menu (PRD §6). */
+export interface RecentNotebook {
+  readonly key: string;
+  readonly name: string;
+  /** Where it is, shown as the row's tooltip. */
+  readonly place: string;
+  /** The notebook open now. */
+  readonly current: boolean;
 }
 
 export type Overlay =
@@ -61,6 +73,8 @@ export type Overlay =
       readonly kind: 'menu';
       readonly x: number;
       readonly y: number;
+      /** A heading over the rows. */
+      readonly title?: string;
       readonly items: readonly (MenuItem | null)[];
     };
 
@@ -84,6 +98,12 @@ export interface ShellHost {
    * hidden (the desktop app, whose menu bar can't bring up a page's file dialog).
    */
   readonly pickFiles?: (folder: boolean) => Promise<readonly ImportFile[] | null>;
+  /**
+   * The notebooks opened before, newest first, for the notebook menu (PRD §6). Absent: the menu lists none.
+   */
+  readonly recentNotebooks?: () => readonly RecentNotebook[];
+  /** Open one of `recentNotebooks` by its key. The host asks about unsaved notes first. */
+  readonly openRecent?: (key: string) => void;
   /** Show the window title somewhere besides `document.title` (the desktop window). */
   readonly setTitle?: (title: string) => void;
   /** Draw a title bar at the top of the page (the macOS desktop window, whose own bar is hidden). */
@@ -962,6 +982,39 @@ export class ShellModel {
   }
 
   /** Ask about every unsaved tab before the notebook goes away. Resolves false on Cancel. */
+  /**
+   * The notebook menu under the rail's notebook button (PRD §6): the recent notebooks, the open one ticked,
+   * then the open notebook's folder in the file manager and Open Notebook….
+   */
+  notebookMenu(nb: Notebook): (MenuItem | null)[] {
+    const items: (MenuItem | null)[] = [];
+    const openRecent = this.host.openRecent;
+    for (const r of this.host.recentNotebooks?.() ?? []) {
+      items.push({
+        label: r.name,
+        hint: r.place,
+        checked: r.current,
+        run: () => {
+          if (!r.current) openRecent?.(r.key);
+        },
+      });
+    }
+    const after: MenuItem[] = [];
+    const reveal = nb.store.reveal?.bind(nb.store);
+    if (reveal)
+      after.push({ label: revealLabel(), run: () => void reveal('').catch((e: unknown) => nb.report(e)) });
+    const open = this.menuCatalog.get('shell.openNotebook');
+    if (open) {
+      after.push({
+        label: open.title,
+        ...(open.shortcutText ? { shortcut: open.shortcutText } : {}),
+        run: () => void this.menuCatalog.run(open.id),
+      });
+    }
+    if (items.length && after.length) items.push(null);
+    return [...items, ...after];
+  }
+
   async confirmDiscardAll(): Promise<boolean> {
     const nb = this.notebook.peek();
     if (!nb) return true;

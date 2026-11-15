@@ -23,6 +23,7 @@ export function fakeNativeBridge(platform = 'linux'): PuffinoteNative {
   const bridge: Partial<PuffinoteNative> = {
     platform,
     pickFolder: () => Promise.resolve(null),
+    folderGone: () => Promise.resolve(false),
     list: (dir) => listFolder(dir, async () => true).catch((e: unknown) => notFound(e, dir)),
     read: async (file) => {
       const h = await open(file, 'r').catch((e: unknown) => notFound(e, file));

@@ -4,7 +4,7 @@ import { Document, EmptyNotebook, StatusBar } from './DocPane.tsx';
 import { FileTree } from './FileTree.tsx';
 import { Icon } from './Icon.tsx';
 import { FilterPanel, OutlinePanel, RecentPanel, Resizer, SearchPanel } from './panels.tsx';
-import { revealLabel, type ShellModel } from './shellModel.ts';
+import type { ShellModel } from './shellModel.ts';
 import { TabStrip } from './TabStrip.tsx';
 
 /**
@@ -41,22 +41,30 @@ export function initials(name: string): string {
   return (words[0] ?? '?').slice(0, 2);
 }
 
+const RECENT_TITLE = 'Recent Notebooks';
+
 function RailNav({ model, nb }: { readonly model: ShellModel; readonly nb: Notebook }) {
   const panel = nb.panel.value;
   const collapsed = nb.sidebarCollapsed.value;
-  const open = model.menuCatalog.get('shell.openNotebook');
-  // The notebook's own folder in the file manager where there is one; otherwise, another notebook.
-  const reveal = nb.store.reveal?.bind(nb.store);
-  const label = reveal ? `${nb.name}: ${revealLabel()}` : open ? `${nb.name}: Open Notebook` : nb.name;
+  const menuOpen = model.overlay.value?.kind === 'menu' && model.overlay.value.title === RECENT_TITLE;
   return (
     <nav class="pn-rail" aria-label="Panels">
       <button
         class="pn-rail-notebook"
-        title={reveal ? label : open ? `${nb.name}: ${tip(model, 'shell.openNotebook')}` : nb.name}
-        aria-label={label}
-        onClick={() => {
-          if (reveal) void reveal('').catch((e: unknown) => nb.report(e));
-          else if (open) model.menuCatalog.run(open.id);
+        title={`${nb.name}: Recent Notebooks`}
+        aria-label={`${nb.name}: Recent Notebooks`}
+        aria-haspopup="menu"
+        aria-expanded={menuOpen}
+        onClick={(e) => {
+          // The menu grows out of the button's right side, level with its top.
+          const r = (e.currentTarget as HTMLElement).getBoundingClientRect();
+          model.open({
+            kind: 'menu',
+            x: r.right + 6,
+            y: r.top,
+            title: RECENT_TITLE,
+            items: model.notebookMenu(nb),
+          });
         }}
       >
         {initials(nb.name)}

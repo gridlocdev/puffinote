@@ -1,8 +1,8 @@
 import { effect } from '@preact/signals';
 import { render } from 'preact';
-import { localPrefs, pickImportFiles, Shell, ShellModel } from '@puffinote/ui';
+import { localPrefs, pickImportFiles, Shell, ShellModel, type RecentNotebook } from '@puffinote/ui';
 import '@puffinote/ui/styles.css';
-import { Launcher } from './launcher.ts';
+import { Launcher, recentKey, recentPlace } from './launcher.ts';
 import { nativeMenu } from './nativeMenu.ts';
 import { Welcome } from './Welcome.tsx';
 import './welcome.css';
@@ -18,6 +18,12 @@ const model = new ShellModel({
       : undefined,
   // The file dialog needs a click in the page; the desktop menu bar can't give it one, and Finder is there.
   pickFiles: host.native ? undefined : pickImportFiles,
+  recentNotebooks: (): RecentNotebook[] =>
+    launcher.available().map((r) => {
+      const key = recentKey(r);
+      return { key, name: r.name, place: recentPlace(r), current: key === launcher.current.value };
+    }),
+  openRecent: (key) => void launcher.openRecent(key),
   titleBar: host.native?.platform === 'darwin',
   setTitleBarHeight: (h) => host.native?.setTitleBarHeight(h),
 });

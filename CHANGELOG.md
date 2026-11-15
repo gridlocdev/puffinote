@@ -4,6 +4,7 @@
 
 ### What's new
 
+- **Recent Notebooks menu.** Click the notebook's initials at the top of the rail to switch to a notebook you opened before, reveal the notebook’s folder in Finder or Explorer, or open another one. Notebooks whose folder you deleted drop off the list when Puffinote starts; ones on an unplugged drive or a server that's off stay.
 - **Pictures embedded as `![[name.png]]`** (as other Markdown apps paste them) are drawn as pictures, found by name wherever they are in the notebook. `![[name.png|300]]` draws one 300 px wide.
 
 ### Bugs fixed

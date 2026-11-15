@@ -7,6 +7,7 @@ import {
   nativeBridge,
   NativeStore,
   Notebook,
+  NotFoundError,
   persistStorage,
   printHtml,
   privateFolder,
@@ -97,6 +98,8 @@ export class Launcher {
   readonly needsToken = signal(false);
   /** `start` is reopening the last notebook (or the browser notebook). */
   readonly starting = signal(false);
+  /** The recent notebook open now, by `recentKey`. */
+  readonly current = signal<string | null>(null);
 
   constructor(
     model: ShellModel,
@@ -128,6 +131,7 @@ export class Launcher {
   async start(): Promise<void> {
     this.starting.value = true;
     try {
+      await this.prune();
       const last = this.available()[0];
       if (last) await this.open(last);
       else if (this.kind === 'browser') await this.openPrivate();
@@ -156,6 +160,57 @@ export class Launcher {
           ? r.kind === 'nas'
           : r.kind === 'private',
     );
+  }
+
+  /**
+   * Forget recents whose folder was deleted: its parent folder is there and it isn't (PRD §6). One that can't
+   * be reached (an unplugged drive, a server that's off) stays. The notebook open now is never dropped.
+   */
+  async prune(): Promise<void> {
+    const gone = new Set<string>();
+    await Promise.all(
+      this.available().map(async (r) => {
+        if (recentKey(r) !== this.current.peek() && (await this.isGone(r))) gone.add(recentKey(r));
+      }),
+    );
+    if (gone.size) this.saveRecents(this.recents.value.filter((r) => !gone.has(recentKey(r))));
+  }
+
+  /** Is this recent's folder clearly deleted? False when it's there or when it can't be told. */
+  async isGone(r: Recent): Promise<boolean> {
+    try {
+      if (r.kind === 'native') return (await this.native?.folderGone(r.path)) ?? false;
+      if (r.kind === 'nas' && this.nas) {
+        if (!r.base) return !(await this.nas.roots()).some((x) => x.id === r.root);
+        // The parent answering is what tells "deleted" from "unreachable".
+        await this.nas.list(r.root, r.base.split('/').slice(0, -1).join('/'));
+        return await this.nas.list(r.root, r.base).then(
+          () => false,
+          (e: unknown) => e instanceof NotFoundError,
+        );
+      }
+    } catch {
+      // Can't tell: keep it.
+    }
+    return false;
+  }
+
+  /**
+   * Open a recent notebook from the notebook menu, once unsaved notes are dealt with. A failure shows in the
+   * notebook still open, and a deleted folder leaves the list.
+   */
+  async openRecent(key: string): Promise<void> {
+    const r = this.available().find((x) => recentKey(x) === key);
+    if (!r || key === this.current.peek()) return;
+    if (!(await this.model.confirmDiscardAll())) return;
+    if (await this.open(r)) return;
+    if (await this.isGone(r)) this.forget(r);
+    const message = this.error.peek();
+    const nb = this.model.notebook.peek();
+    if (message && nb) {
+      nb.notify('error', message);
+      this.error.value = null;
+    }
   }
 
   async open(r: Recent): Promise<boolean> {
@@ -221,6 +276,7 @@ export class Launcher {
   /** Back to the welcome screen. The caller has already dealt with unsaved notes. */
   close(): void {
     this.model.session.set(null);
+    this.current.value = null;
     this.error.value = null;
   }
 
@@ -265,6 +321,7 @@ export class Launcher {
       });
       if (!(await this.model.session.adopt(nb, ticket))) return false;
       const key = recentKey(r);
+      this.current.value = key;
       this.saveRecents([r, ...this.recents.value.filter((x) => recentKey(x) !== key)]);
       return true;
     } catch (e) {

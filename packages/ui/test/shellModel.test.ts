@@ -636,3 +636,38 @@ describe('ShellModel menu inputs', () => {
     m.session.set(null);
   });
 });
+
+describe('ShellModel notebook menu (PRD §6)', () => {
+  it('lists the recent notebooks with the open one ticked, then Open Notebook…', async () => {
+    const nb = await Notebook.open(new MemoryStore('N', {}), { prefs: memoryPrefs({ autoSave: false }) });
+    const openRecent = vi.fn();
+    const m = new ShellModel({
+      openNotebook: () => undefined,
+      openRecent,
+      recentNotebooks: () => [
+        { key: 'a', name: 'Work', place: '/x', current: true },
+        { key: 'b', name: 'Home', place: '/y', current: false },
+      ],
+    });
+    m.session.set(nb);
+    const items = m.notebookMenu(nb);
+    expect(items.map((i) => i && [i.label, i.checked ?? null])).toEqual([
+      ['Work', true],
+      ['Home', false],
+      null,
+      ['Open Notebook…', null],
+    ]);
+    items[0]!.run();
+    expect(openRecent).not.toHaveBeenCalled();
+    items[1]!.run();
+    expect(openRecent).toHaveBeenCalledWith('b');
+    nb.dispose();
+  });
+
+  it('has no divider when there are no recents', async () => {
+    const nb = await Notebook.open(new MemoryStore('N', {}), { prefs: memoryPrefs({ autoSave: false }) });
+    const m = new ShellModel({ openNotebook: () => undefined });
+    expect(m.notebookMenu(nb).map((i) => i?.label ?? null)).toEqual(['Open Notebook…']);
+    nb.dispose();
+  });
+});

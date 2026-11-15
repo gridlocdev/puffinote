@@ -37,6 +37,11 @@ export interface NativeMenuItem {
 export interface PuffinoteNative {
   readonly platform: string;
   pickFolder(): Promise<string | null>;
+  /**
+   * True when a notebook folder opened before is clearly deleted: its parent folder is there and it isn't.
+   * False when it's there, or when it can't be told (an unplugged drive, a server that's off).
+   */
+  folderGone(path: string): Promise<boolean>;
   list(dir: string): Promise<NativeEntry[]>;
   /** The bytes, their mtime, and their version: the mtime, size and inode, compared whole on save. */
   read(path: string): Promise<{ bytes: Uint8Array; modified: number; version: string }>;

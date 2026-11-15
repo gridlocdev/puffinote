@@ -382,6 +382,15 @@ function registerIpc(): void {
     app.addRecentDocument(p);
     return p;
   });
+  ipcMain.handle(Channels.folderGone, async (e, p: unknown) => {
+    if (!trusted(e)) forbidden();
+    // Only folders opened before: the page learns nothing about other paths.
+    if (!grants.isRoot(p)) return false;
+    const folder = path.resolve(p);
+    const parent = await stat(path.dirname(folder)).catch(() => null);
+    if (!parent?.isDirectory()) return false; // the drive or share isn't there: keep it
+    return !(await exists(folder));
+  });
   ipcMain.handle(Channels.list, async (e, dir: unknown) => {
     if (!trusted(e)) forbidden();
     // Listing a notebook's own folder is how one opens: a folder not granted yet gets asked about.

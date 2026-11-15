@@ -15,6 +15,7 @@ function on(channel: string, cb: (...args: never[]) => void): () => void {
 contextBridge.exposeInMainWorld('puffinoteNative', {
   platform: process.platform,
   pickFolder: (): Promise<string | null> => ipcRenderer.invoke('puffinote:pick-folder'),
+  folderGone: (path: string): Promise<boolean> => ipcRenderer.invoke('puffinote:folder-gone', path),
   list: (dir: string): Promise<NativeEntry[]> => ipcRenderer.invoke('puffinote:list', dir),
   read: (path: string): Promise<{ bytes: Uint8Array; modified: number; version: string }> =>
     ipcRenderer.invoke('puffinote:read', path),

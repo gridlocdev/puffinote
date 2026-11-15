@@ -5,6 +5,7 @@ import type { MenuItem } from './shellModel.ts';
 export function ContextMenu(props: {
   readonly x: number;
   readonly y: number;
+  readonly title?: string | undefined;
   readonly items: readonly (MenuItem | null)[];
   readonly onClose: () => void;
 }) {
@@ -51,6 +52,7 @@ export function ContextMenu(props: {
         ref={ref}
         class="pn-menu"
         role="menu"
+        aria-label={props.title}
         tabIndex={-1}
         style={{ left: `${pos.x}px`, top: `${pos.y}px` }}
         onKeyDown={(e) => {
@@ -63,6 +65,11 @@ export function ContextMenu(props: {
           e.preventDefault();
         }}
       >
+        {props.title && (
+          <li role="presentation" class="pn-menu-title">
+            {props.title}
+          </li>
+        )}
         {props.items.map((item, i) =>
           item === null ? (
             <li key={i} role="separator" class="pn-menu-sep" />
@@ -73,6 +80,7 @@ export function ContextMenu(props: {
               aria-checked={item.checked}
               class={`${i === index ? 'pn-menu-current' : ''}${item.danger ? ' pn-menu-danger' : ''}${item.checked === undefined ? '' : ' pn-menu-check'}`}
               aria-disabled={item.disabled ? true : undefined}
+              title={item.hint}
               onPointerMove={() => !item.disabled && setIndex(i)}
               onClick={() => run(item)}
             >

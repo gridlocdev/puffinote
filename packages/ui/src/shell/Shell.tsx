@@ -208,6 +208,6 @@ function Overlays({ model, prefs }: { readonly model: ShellModel; readonly prefs
     case 'confirm':
       return <ConfirmDialog {...o.options} onDone={o.done} />;
     case 'menu':
-      return <ContextMenu x={o.x} y={o.y} items={o.items} onClose={close} />;
+      return <ContextMenu x={o.x} y={o.y} title={o.title} items={o.items} onClose={close} />;
   }
 }

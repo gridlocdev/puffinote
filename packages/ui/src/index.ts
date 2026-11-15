@@ -107,6 +107,7 @@ export {
   type NativeMenuItem,
   NativeStore,
   type NotebookStore,
+  NotFoundError,
   persistStorage,
   printHtml,
   privateFolder,
@@ -121,6 +122,7 @@ export {
   type MenuItem,
   type Overlay,
   type PicturePreview,
+  type RecentNotebook,
   type ShellHost,
   ShellModel,
 } from './shell/shellModel.ts';

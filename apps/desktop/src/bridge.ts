@@ -27,6 +27,8 @@ export interface NativeEntry {
 
 export const Channels = {
   pickFolder: 'puffinote:pick-folder',
+  /** Was this notebook folder deleted (its parent still there)? For pruning Recent Notebooks. */
+  folderGone: 'puffinote:folder-gone',
   list: 'puffinote:list',
   read: 'puffinote:read',
   write: 'puffinote:write',
