@@ -385,6 +385,10 @@ describe('withFileLocks and readWithMtime', () => {
   });
 });
 
+const anywhere = () => Promise.resolve(true);
+const fresh = { expected: null, force: false, create: true, allows: anywhere };
+const over = (expected: string) => ({ expected, force: false, create: false, allows: anywhere });
+
 describe('file versions', () => {
   it('compare the mtime, the size and the inode', () => {
     expect(sameVersion('1000:5:7', '1000:5:7')).toBe(true);
@@ -396,23 +400,46 @@ describe('file versions', () => {
 
   it('save returns the version of exactly what it wrote', async () => {
     const p = path.join(dir, 'version.md');
-    const v = await saveFile(p, bytes('first'), null, false, true);
+    const v = await saveFile(p, bytes('first'), fresh);
     expect(sameVersion(v, fileVersion(await stat(p)))).toBe(true);
-    const next = await saveFile(p, bytes('second'), v, false, false);
+    const next = await saveFile(p, bytes('second'), over(v));
     expect(sameVersion(next, fileVersion(await stat(p)))).toBe(true);
     expect((await readWithMtime(p)).version).toBe(next);
   });
 
   it('a save refuses a file written outside within the same mtime', async () => {
     const p = path.join(dir, 'coarse.md');
-    const v = await saveFile(p, bytes('ours'), null, false, true);
+    const v = await saveFile(p, bytes('ours'), fresh);
     const before = await stat(p);
     // Another app saves within the same second on a disk with coarse times: the mtime doesn't move.
     await writeFile(p + '.other', 'theirs, longer');
     await rename(p + '.other', p);
     await utimes(p, before.atime, before.mtime);
-    await expect(saveFile(p, bytes('mine'), v, false, false)).rejects.toThrow(CONFLICT_CHANGED);
+    await expect(saveFile(p, bytes('mine'), over(v))).rejects.toThrow(CONFLICT_CHANGED);
     expect(await readFile(p, 'utf8')).toBe('theirs, longer');
+  });
+});
+
+describe('saveFile', () => {
+  it('checks the grant again once it holds the lock, so a folder swapped for a link out is not written through', async () => {
+    const outside = await realpath(await mkdtemp(path.join(os.tmpdir(), 'puffinote-outside-')));
+    const nb = path.join(dir, 'swap-nb');
+    await mkdir(path.join(nb, 'sub'), { recursive: true });
+    const grants = new FolderGrants(null);
+    grants.grant(nb);
+    const target = path.join(nb, 'sub', 'note.md');
+    let release = () => {};
+    const held = withFileLock(target, () => new Promise<void>((r) => (release = r)));
+    const save = saveFile(target, bytes('secret'), { ...fresh, allows: (p) => grants.allows(p) });
+    await wait(20);
+    // While the save waits its turn, the folder becomes a link out of the notebook.
+    await rm(path.join(nb, 'sub'), { recursive: true });
+    await symlink(outside, path.join(nb, 'sub'));
+    release();
+    await held;
+    await expect(save).rejects.toThrow('Forbidden');
+    expect(await readdir(outside)).toEqual([]);
+    await rm(outside, { recursive: true, force: true });
   });
 });
 

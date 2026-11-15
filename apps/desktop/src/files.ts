@@ -57,23 +57,33 @@ export function sameVersion(a: string, b: string): boolean {
   return as === bs && ai === bi && Math.abs(Number(am) - Number(bm)) <= 1;
 }
 
+/** What a save expects of the file it replaces, and which paths it may write. */
+export interface SaveOptions {
+  /** The version the renderer read; the save is refused if the file isn't at it any more (unless `force`). */
+  readonly expected: string | null;
+  readonly force: boolean;
+  /** A new note: refused if the file exists. */
+  readonly create: boolean;
+  /** Is the path still inside a granted folder? Asked again once the save has its turn. */
+  readonly allows: (p: string) => Promise<boolean>;
+}
+
 /**
  * Save a notebook file atomically, one save per file at a time, and return the version of what it wrote.
  * Refuses if the file isn't at version `expected` any more (unless `force`), or exists when `create` is set.
+ * The grant is checked again once the save holds the file's lock, and again after making its folders: while
+ * it waited, a folder on the path may have been swapped for a link out of the notebook.
  */
-export function saveFile(
-  p: string,
-  bytes: Uint8Array,
-  expected: string | null,
-  force: boolean,
-  create: boolean,
-): Promise<string> {
+export function saveFile(p: string, bytes: Uint8Array, opts: SaveOptions): Promise<string> {
+  const { expected, force, create, allows } = opts;
   return withFileLock(p, async () => {
+    if (!(await allows(p))) throw new Error('Forbidden');
     const s = await stat(p).catch(() => null);
     if (create && s) throw new Error(`${CONFLICT_EXISTS}: ${path.basename(p)}`);
     if (!force && expected !== null && (!s || !sameVersion(fileVersion(s), expected)))
       throw new Error(`${CONFLICT_CHANGED}: the file changed on disk`);
     await mkdir(path.dirname(p), { recursive: true });
+    if (!(await allows(p))) throw new Error('Forbidden');
     return fileVersion(await writeAtomic(p, bytes));
   });
 }

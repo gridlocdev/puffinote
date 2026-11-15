@@ -340,7 +340,7 @@ async function writeNative(
   force: boolean,
   create: boolean,
 ): Promise<string> {
-  const version = await saveFile(p, bytes, expected, force, create);
+  const version = await saveFile(p, bytes, { expected, force, create, allows: (q) => grants.allows(q) });
   knownVersion.set(p, version);
   return version;
 }
