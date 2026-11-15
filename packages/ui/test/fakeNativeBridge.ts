@@ -20,7 +20,7 @@ function notFound(e: unknown, p: string): never {
 export function fakeNativeBridge(platform = 'linux'): PuffinoteNative {
   const locks = new FileLocks();
   const unused = () => Promise.reject(new Error('Not in the fake bridge'));
-  return {
+  const bridge: Partial<PuffinoteNative> = {
     platform,
     pickFolder: () => Promise.resolve(null),
     list: (dir) => listFolder(dir, async () => true).catch((e: unknown) => notFound(e, dir)),
@@ -62,8 +62,9 @@ export function fakeNativeBridge(platform = 'linux'): PuffinoteNative {
     reveal: unused,
     openExternal: unused,
     savePdf: unused,
-    fileUrl: () => null,
+    fileUrl: () => '',
     watch: () => undefined,
     onChanged: () => () => undefined,
-  } as unknown as PuffinoteNative;
+  };
+  return bridge as PuffinoteNative;
 }
