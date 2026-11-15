@@ -1,5 +1,5 @@
 // One contract for every NotebookStore: the shell relies on these answers whatever the folder is backed by.
-// The desktop store needs Electron's bridge, so its half is covered by the desktop app's own file tests.
+// The desktop store runs over a stand-in for Electron's bridge (`fakeNativeBridge.ts`).
 import { mkdir, mkdtemp, rm } from 'node:fs/promises';
 import type { AddressInfo } from 'node:net';
 import os from 'node:os';
@@ -12,10 +12,12 @@ import {
   MemoryStore,
   NasClient,
   NasStore,
+  NativeStore,
   NotFoundError,
   type NotebookStore,
 } from '../src/platform/index.ts';
 import { fakeFolder } from './fakeFileSystem.ts';
+import { fakeNativeBridge } from './fakeNativeBridge.ts';
 
 const enc = (s: string) => new TextEncoder().encode(s);
 const dec = (b: Uint8Array) => new TextDecoder().decode(b);
@@ -55,6 +57,14 @@ const stores: [string, () => Promise<NotebookStore>][] = [
       const base = `nb${++nasCount}`;
       await mkdir(path.join(nasDir, base));
       return new NasStore(nasClient, 'notes', base);
+    },
+  ],
+  [
+    'NativeStore',
+    async () => {
+      const root = path.join(nasDir, `native${++nasCount}`);
+      await mkdir(root);
+      return new NativeStore(fakeNativeBridge(), root);
     },
   ],
 ];

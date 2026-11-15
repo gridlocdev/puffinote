@@ -34,7 +34,7 @@ just fmt              # format every file
 just fmt-check        # check the formatting
 ```
 
-`just check` must pass before every commit. When you change behaviour, add or update a test in that package's `test/` folder. A change to how a notebook store reads, writes, moves or removes files must keep `packages/ui/test/storeContract.test.ts` passing; it runs the same cases against the memory, browser and NAS stores.
+`just check` must pass before every commit. When you change behaviour, add or update a test in that package's `test/` folder. A change to how a notebook store reads, writes, moves or removes files must keep `packages/ui/test/storeContract.test.ts` passing; it runs the same cases against the memory, browser, NAS and desktop stores (the desktop one through a stand-in for the Electron bridge, `fakeNativeBridge.ts`). Keep that stand-in in step with the desktop main process when the bridge changes.
 
 Check UI changes headlessly: run `just run-web` or `just run-nas` (or a `preview-` recipe) and drive it in a browser that isn't in your way. The desktop app renders offscreen with `PUFFINOTE_HEADLESS=1`.
 
