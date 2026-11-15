@@ -11,6 +11,7 @@ import {
   shell,
 } from 'electron';
 import type { MenuItemConstructorOptions } from 'electron';
+import { writeAtomic } from '@puffinote/node-files';
 import { mkdir, stat } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
@@ -28,7 +29,6 @@ import {
   sameVersion,
   saveFile,
   watchTree,
-  writeAtomic,
 } from './files.ts';
 import { htmlToPdf } from './pdf.ts';
 import { afterRendererGone } from './recovery.ts';

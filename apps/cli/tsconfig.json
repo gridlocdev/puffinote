@@ -8,5 +8,15 @@
     "moduleResolution": "NodeNext"
   },
   "include": ["src", "test"],
-  "references": [{ "path": "../../packages/markdown" }, { "path": "../../packages/text" }]
+  "references": [
+    {
+      "path": "../../packages/markdown"
+    },
+    {
+      "path": "../../packages/text"
+    },
+    {
+      "path": "../../packages/node-files"
+    }
+  ]
 }

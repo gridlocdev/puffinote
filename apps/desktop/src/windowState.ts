@@ -1,7 +1,7 @@
 // Where the window opens (PRD §3): the size and place it had when it last closed, kept on a screen that is
 // still there. No Electron imports, so the tests can run it in Node.
 import { readFile } from 'node:fs/promises';
-import { writeAtomic } from './files.ts';
+import { writeAtomic } from '@puffinote/node-files';
 
 export interface Rect {
   readonly x: number;

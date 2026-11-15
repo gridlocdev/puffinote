@@ -1,5 +1,5 @@
 import { readFile } from 'node:fs/promises';
-import { writeAtomic } from './files.ts';
+import { writeAtomic } from '@puffinote/node-files';
 
 /** Where releases are published. The update check only reads this; it never downloads anything. */
 export const RELEASES_API = 'https://api.github.com/repos/gridlocdev/puffinote/releases/latest';

@@ -8,13 +8,15 @@
   "description": "Puffinote desktop app (Electron).",
   "main": "out/main.js",
   "scripts": {
-    "build": "tsc -p tsconfig.build.json && node scripts/copy-web.mjs",
+    "build": "vite build && tsc -p tsconfig.build.json && node scripts/copy-web.mjs",
     "start": "pnpm build && node scripts/start.mjs",
     "package": "pnpm build && electron-builder --config electron-builder.yml"
   },
   "devDependencies": {
+    "@puffinote/node-files": "workspace:*",
     "@puffinote/web": "workspace:*",
     "electron": "45.2.3",
-    "electron-builder": "26.18.0"
+    "electron-builder": "26.18.0",
+    "vite": "8.3.5"
   }
 }

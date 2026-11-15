@@ -20,6 +20,12 @@ ENV NODE_ENV=production PORT=8790 PUFFINOTE_STATIC=/app/web PUFFINOTE_ROOTS="Not
 WORKDIR /app
 COPY apps/server/package.json server/
 COPY apps/server/src server/src
+# The shared file code runs from source too. Linked from outside node_modules, as pnpm does, since Node strips
+# types only from files outside node_modules.
+COPY packages/node-files/package.json packages/node-files/
+COPY packages/node-files/src packages/node-files/src
+RUN mkdir -p server/node_modules/@puffinote \
+  && ln -s ../../../packages/node-files server/node_modules/@puffinote/node-files
 COPY --from=build /src/apps/web/dist web
 USER node
 EXPOSE 8790

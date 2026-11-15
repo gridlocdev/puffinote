@@ -23,6 +23,7 @@ Puffinote is one TypeScript code base with three hosts and a CLI. The browser, t
      │  DocumentBuffer · EditHistory (undo) · search · stats│
      └──────────────────────────────────────────────────────┘
 
+ packages/node-files  Node only: atomic saves, per-file locks, listings and moves for desktop, server and CLI
  apps/web      Vite entry; one static build with relative URLs (base './') for every host
  apps/server   node:http: the static client + /api/{info,roots,list,file,mkdir,move}
  apps/desktop  Electron main + sandboxed preload; loads the apps/web build via app://puffinote/
@@ -67,6 +68,17 @@ Puffinote is one TypeScript code base with three hosts and a CLI. The browser, t
 - **Shell (`shell/`).** `ShellModel` holds the open notebook, the overlays (dialogs, ⌘K, ⌘O) and the shell commands. `Shell` and its components draw it.
 - **Stores (`platform/`).** `NotebookStore` is the only way the UI reaches files. Paths are notebook-relative and `/`-separated. Each store has its own version token for conflict detection: the mtime, size and inode (native), an mtime (browser), an ETag (NAS) or a counter (memory). A write with a stale version fails with a `ConflictError`.
 
+## Node files (`packages/node-files`)
+
+The desktop app, the NAS server and the CLI handle notebook files on disk with one module, so a save behaves the same in each.
+
+- **`writeAtomic` / `replaceFile`** save through a temp file beside the target (`.<name>.<16 hex>.tmp`, matched by `TEMP_FILE`), fsync and rename, then fsync the folder. The replacement keeps the mode and, where permitted, the owner. A read-only file is refused; a hard-linked file is written in place (`overwriteInPlace`), never emptied first. `writeAtomic` follows a symlink to the file it names; `replaceFile` writes the path as given. `replaceFileSync` is the CLI's.
+- **`FileLocks`** runs one save, move or delete per file at a time. A path is keyed symlink-resolved and case-folded, so every spelling of one file shares a lock; `runAll` takes several in one order.
+- **`listFolder`** lists a folder, a few dozen stats at a time. It leaves out temp files, dangling links, links the caller won't follow, and folder links that loop back up.
+- **`moveEntry`** renames under both paths' locks and refuses a taken name or a folder into itself.
+- Refusals are a `FileError` with a code (`not-found`, `exists`, `read-only`, `into-itself`, `not-a-file`). The server turns them into statuses, the desktop app into the bridge's markers, the CLI into messages.
+- Each host keeps its own path policy: the server confines paths to a root, the desktop app to granted folders.
+
 ## Web (`apps/web`)
 
 - `Launcher.detect()` finds out where the page runs: inside Electron (`window.puffinoteNative`), served by the NAS server (`/api/info` answers), or a plain page.
@@ -99,6 +111,7 @@ Puffinote is one TypeScript code base with three hosts and a CLI. The browser, t
 - **Files.** Saves are atomic with a conflict check on the file's mtime, size and inode (the mtime alone misses a write within the same second on a disk with coarse times), and one save per file at a time. A save checks the grant again once it has its turn and after making its folders, so a folder swapped for a link out while it waited isn't written through. The version a save records comes from the written file's own handle, before the rename. A read-only file is refused, not replaced. Deletes go to the Trash. A folder watcher reports changes, debounced, and leaves out the app's own temp files and saves.
 - **PDF export.** `savePdf` asks where to save, then `pdf.ts` lays the note's exported HTML out in a hidden window (scripts off, its own in-memory session that loads only the document and `data:` pictures) and `printToPDF` writes it. The browser prints the same HTML from a hidden sandboxed frame instead (`packages/ui/src/platform/print.ts`).
 - **Menu and window.** The native menu is built from the renderer's catalog. The close guard asks the renderer about unsaved tabs; if it doesn't answer within 3 s, the user may force the close. If the page crashes while the window stays open, a dialog says so and Reload loads it again (`recovery.ts`); a headless run reloads without asking.
+- **Build.** Vite bundles the main process into `out/main.js`, `@puffinote/node-files` included, so the packaged app needs no `node_modules`. tsc compiles the sandboxed preload on its own (`tsconfig.build.json`).
 - **`PUFFINOTE_HEADLESS=1`** renders offscreen with no window or Dock icon, for automated checks.
 
 ## CLI (`apps/cli`)

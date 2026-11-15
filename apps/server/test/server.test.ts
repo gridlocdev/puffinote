@@ -6,7 +6,6 @@ import {
   mkdir,
   readdir,
   readFile,
-  realpath,
   rename,
   rm,
   stat,
@@ -17,27 +16,9 @@ import type { AddressInfo } from 'node:net';
 import os from 'node:os';
 import path from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { etagOf, FileApi, mapLimit, overwriteInPlace, parseRoots } from '../src/fileApi.ts';
+import { FileLocks } from '@puffinote/node-files';
+import { etagOf, FileApi, parseRoots } from '../src/fileApi.ts';
 import { createServer, hostAllowed, isLoopback, parseHosts, refuseWithoutToken } from '../src/server.ts';
-
-/** A file on a disk with room for `capacity` bytes: writes past it fail with ENOSPC, like a full volume. */
-function fullDisk(initial: string, capacity: number) {
-  let data = Buffer.from(initial);
-  return {
-    text: () => data.toString(),
-    async write(buf: Uint8Array, offset: number, length: number, position: number) {
-      if (position + length > capacity) throw Object.assign(new Error('ENOSPC'), { code: 'ENOSPC' });
-      const next = Buffer.alloc(Math.max(data.length, position + length));
-      data.copy(next);
-      next.set(buf.subarray(offset, offset + length), position);
-      data = next;
-      return { bytesWritten: length };
-    },
-    async truncate(len: number) {
-      data = data.subarray(0, len);
-    },
-  };
-}
 
 let dir: string;
 let outside: string;
@@ -159,19 +140,6 @@ describe('the file API', () => {
     expect(entries.find((e) => e.name === 'n12.md')).toMatchObject({ kind: 'file', size: 2 });
   });
 
-  it('maps with at most so many calls in flight, keeping the order', async () => {
-    let inFlight = 0;
-    let most = 0;
-    const out = await mapLimit([1, 2, 3, 4, 5, 6, 7], 3, async (n) => {
-      most = Math.max(most, ++inFlight);
-      await new Promise((r) => setTimeout(r, 5 * (8 - n)));
-      inFlight--;
-      return n * 10;
-    });
-    expect(out).toEqual([10, 20, 30, 40, 50, 60, 70]);
-    expect(most).toBe(3);
-  });
-
   it('refuses paths that leave the root', async () => {
     // `..` is clamped to the root, so it names a file that isn't there.
     const up = await fetch(`${base}/file?${q({ path: `../${path.basename(outside)}/secret.md` })}`, {
@@ -221,22 +189,24 @@ describe('the file API', () => {
     await mkdir(path.join(dir, 'Swap'));
     await writeFile(path.join(dir, 'Swap', 'n.md'), 'n');
     await mkdir(path.join(outside, 'swapped'));
-    const api = new FileApi(parseRoots(`My Notes=${dir}`, '/'));
-    const queue = (api as unknown as { writeQueue: Map<string, Promise<unknown>> }).writeQueue;
-    const key = path
-      .join(await realpath(dir), 'Swap', 'n.md')
-      .normalize('NFC')
-      .toLowerCase();
+    const locks = new FileLocks();
+    const api = new FileApi(parseRoots(`My Notes=${dir}`, '/'), locks);
     let release = () => {};
-    const gate = new Promise<void>((r) => (release = r));
-    queue.set(key, gate);
+    let held = () => {};
+    const holding = new Promise<void>((r) => (held = r));
+    const gate = locks.run(path.join(dir, 'Swap', 'n.md'), () => {
+      held();
+      return new Promise<void>((r) => (release = r));
+    });
+    await holding;
     const save = api.write('my-notes', 'Swap/n.md', Buffer.from('leaked'), {});
     save.catch(() => {});
-    while (queue.get(key) === gate) await new Promise((r) => setTimeout(r, 1));
+    await new Promise((r) => setTimeout(r, 20));
     // While the save waits its turn, the folder is swapped for a link out of the root.
     await rename(path.join(dir, 'Swap'), path.join(dir, 'Swap-old'));
     await symlink(path.join(outside, 'swapped'), path.join(dir, 'Swap'));
     release();
+    await gate;
     await expect(save).rejects.toMatchObject({ status: 403 });
     expect(await readdir(path.join(outside, 'swapped'))).toEqual([]);
   });
@@ -254,18 +224,6 @@ describe('the file API', () => {
     expect(((await res.json()) as { error: string }).error).toContain('read-only');
     expect(await readFile(file, 'utf8')).toBe('locked');
     await chmod(file, 0o644);
-  });
-
-  it('writes a hard-linked file in place without ever emptying it', async () => {
-    const grow = fullDisk('old note', 10);
-    await expect(overwriteInPlace(grow, Buffer.from('a longer note'), 8)).rejects.toThrow('ENOSPC');
-    expect(grow.text()).toBe('old note');
-    const shrink = fullDisk('a longer note', 13);
-    await overwriteInPlace(shrink, Buffer.from('short'), 13);
-    expect(shrink.text()).toBe('short');
-    const fits = fullDisk('old', 100);
-    await overwriteInPlace(fits, Buffer.from('new and longer'), 3);
-    expect(fits.text()).toBe('new and longer');
   });
 
   it('keeps a hard link when saving through it', async () => {

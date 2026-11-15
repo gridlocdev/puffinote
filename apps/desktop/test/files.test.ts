@@ -1,7 +1,4 @@
 import {
-  chmod,
-  link,
-  lstat,
   mkdir,
   mkdtemp,
   readdir,
@@ -25,37 +22,14 @@ import {
   isAppUrl,
   isOpenableDocument,
   listDir,
-  mapLimit,
   moveEntry,
-  overwriteInPlace,
   pdfFileName,
   readWithMtime,
   sameVersion,
   saveFile,
   watchTree,
   withFileLock,
-  withFileLocks,
-  writeAtomic,
 } from '../src/files.ts';
-
-/** A file on a disk with room for `capacity` bytes: writes past it fail with ENOSPC, like a full volume. */
-function fullDisk(initial: string, capacity: number) {
-  let data = Buffer.from(initial);
-  return {
-    text: () => data.toString(),
-    async write(buf: Uint8Array, offset: number, length: number, position: number) {
-      if (position + length > capacity) throw Object.assign(new Error('ENOSPC'), { code: 'ENOSPC' });
-      const next = Buffer.alloc(Math.max(data.length, position + length));
-      data.copy(next);
-      next.set(buf.subarray(offset, offset + length), position);
-      data = next;
-      return { bytesWritten: length };
-    },
-    async truncate(len: number) {
-      data = data.subarray(0, len);
-    },
-  };
-}
 
 let dir: string;
 beforeAll(async () => {
@@ -66,108 +40,6 @@ afterAll(async () => {
 });
 const wait = (ms: number) => new Promise((r) => setTimeout(r, ms));
 const bytes = (s: string) => new TextEncoder().encode(s);
-
-describe('writeAtomic', () => {
-  it('keeps the file mode and leaves no temp file', async () => {
-    const sub = path.join(dir, 'mode');
-    await mkdir(sub);
-    const p = path.join(sub, 'a.md');
-    await writeFile(p, 'a');
-    await chmod(p, 0o600);
-    await writeAtomic(p, bytes('b'));
-    // Windows has no POSIX permission bits.
-    if (process.platform !== 'win32') expect((await stat(p)).mode & 0o777).toBe(0o600);
-    expect(await readFile(p, 'utf8')).toBe('b');
-    expect(await readdir(sub)).toEqual(['a.md']);
-  });
-
-  it('refuses to replace a read-only file', async () => {
-    const p = path.join(dir, 'locked.md');
-    await writeFile(p, 'locked');
-    await chmod(p, 0o444);
-    await expect(writeAtomic(p, bytes('x'))).rejects.toThrow(/read-only/);
-    expect(await readFile(p, 'utf8')).toBe('locked');
-    await chmod(p, 0o644);
-  });
-
-  it('writes a hard-linked file in place without ever emptying it', async () => {
-    const grow = fullDisk('old note', 10);
-    await expect(overwriteInPlace(grow, bytes('a longer note'), 8)).rejects.toThrow('ENOSPC');
-    expect(grow.text()).toBe('old note');
-    const shrink = fullDisk('a longer note', 13);
-    await overwriteInPlace(shrink, bytes('short'), 13);
-    expect(shrink.text()).toBe('short');
-  });
-
-  it('writes through a hard link instead of splitting it', async () => {
-    const p = path.join(dir, 'linked.md');
-    const other = path.join(dir, 'other.md');
-    await writeFile(p, 'one-longer');
-    await link(p, other);
-    await writeAtomic(p, bytes('two'));
-    expect(await readFile(other, 'utf8')).toBe('two');
-  });
-
-  it('replaces the target of a symlink and keeps the link', async () => {
-    const real = path.join(dir, 'real.md');
-    const alias = path.join(dir, 'alias.md');
-    await writeFile(real, 'a');
-    await symlink(real, alias);
-    await writeAtomic(alias, bytes('b'));
-    expect((await lstat(alias)).isSymbolicLink()).toBe(true);
-    expect(await readFile(real, 'utf8')).toBe('b');
-  });
-});
-
-describe('withFileLock', () => {
-  it('runs calls for one file one after another', async () => {
-    const order: string[] = [];
-    const p = path.join(dir, 'lock.md');
-    await Promise.all([
-      withFileLock(p, async () => {
-        order.push('a1');
-        await wait(20);
-        order.push('a2');
-      }),
-      withFileLock(p, async () => {
-        order.push('b');
-      }),
-    ]);
-    expect(order).toEqual(['a1', 'a2', 'b']);
-  });
-
-  it('treats a file and a symlink to it, or to its folder, as one file', async () => {
-    const real = path.join(dir, 'lock-real.md');
-    await writeFile(real, '');
-    await symlink(real, path.join(dir, 'lock-alias.md'));
-    await mkdir(path.join(dir, 'lock-dir'));
-    await symlink(path.join(dir, 'lock-dir'), path.join(dir, 'lock-dir-link'));
-    const pairs = [
-      [real, path.join(dir, 'lock-alias.md')],
-      [path.join(dir, 'lock-dir', 'new.md'), path.join(dir, 'lock-dir-link', 'new.md')],
-    ] as const;
-    for (const [a, b] of pairs) {
-      const order: string[] = [];
-      await Promise.all([
-        withFileLock(a, async () => {
-          order.push('a1');
-          await wait(20);
-          order.push('a2');
-        }),
-        withFileLock(b, async () => {
-          order.push('b');
-        }),
-      ]);
-      expect(order).toEqual(['a1', 'a2', 'b']);
-    }
-  });
-
-  it('keeps going after a failed call', async () => {
-    const p = path.join(dir, 'lock2.md');
-    await expect(withFileLock(p, () => Promise.reject(new Error('x')))).rejects.toThrow('x');
-    await expect(withFileLock(p, () => Promise.resolve(1))).resolves.toBe(1);
-  });
-});
 
 describe('FolderGrants', () => {
   it('allows paths inside a granted folder and nothing outside', async () => {
@@ -253,20 +125,7 @@ describe('listDir', () => {
   });
 });
 
-describe('mapLimit', () => {
-  it('maps with at most so many calls in flight, keeping the order', async () => {
-    let inFlight = 0;
-    let most = 0;
-    const out = await mapLimit([1, 2, 3, 4, 5, 6, 7], 3, async (n) => {
-      most = Math.max(most, ++inFlight);
-      await wait(5 * (8 - n));
-      inFlight--;
-      return n * 10;
-    });
-    expect(out).toEqual([10, 20, 30, 40, 50, 60, 70]);
-    expect(most).toBe(3);
-  });
-
+describe('listDir in a large folder', () => {
   it('lists a large folder, following only links that stay inside the notebook', async () => {
     const nb = path.join(dir, 'big-nb');
     const outside = await mkdtemp(path.join(os.tmpdir(), 'puffinote-outside-'));
@@ -360,22 +219,7 @@ describe('watchTree', () => {
   });
 });
 
-describe('withFileLocks and readWithMtime', () => {
-  it('runs after every earlier lock on any of its files', async () => {
-    const order: string[] = [];
-    const a = path.join(dir, 'A.md');
-    const b = path.join(dir, 'b.md');
-    const first = withFileLock(b, async () => {
-      await wait(30);
-      order.push('save b');
-    });
-    const move = withFileLocks([a, b], async () => {
-      order.push('move');
-    });
-    await Promise.all([first, move]);
-    expect(order).toEqual(['save b', 'move']);
-  });
-
+describe('readWithMtime', () => {
   it('reads the bytes with their mtime', async () => {
     const f = path.join(dir, 'read.md');
     await writeFile(f, 'hello');

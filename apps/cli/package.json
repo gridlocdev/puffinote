@@ -14,6 +14,7 @@
   },
   "dependencies": {
     "@puffinote/markdown": "workspace:*",
+    "@puffinote/node-files": "workspace:*",
     "@puffinote/text": "workspace:*"
   }
 }

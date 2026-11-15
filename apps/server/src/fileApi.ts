@@ -1,18 +1,14 @@
-import { createHash, randomBytes, type Hash } from 'node:crypto';
-import { createReadStream, constants as fsConstants } from 'node:fs';
 import {
-  access,
-  chown,
-  lstat,
-  mkdir,
-  open,
-  readdir,
-  realpath,
-  rename,
-  rm,
-  stat,
-  unlink,
-} from 'node:fs/promises';
+  FileError,
+  FileLocks,
+  listFolder,
+  moveEntry,
+  replaceFile,
+  type FolderEntry,
+} from '@puffinote/node-files';
+import { createHash, type Hash } from 'node:crypto';
+import { createReadStream } from 'node:fs';
+import { mkdir, realpath, rm, lstat, stat } from 'node:fs/promises';
 import path from 'node:path';
 
 /** A named folder on the NAS that holds notebooks; the client browses it and opens a folder in it. */
@@ -67,30 +63,6 @@ export function parseRoots(spec: string, baseDir: string): Root[] {
   return roots;
 }
 
-/** How many entries a listing stats at once: enough to hide latency on a NAS disk, few enough not to hog it. */
-const LIST_CONCURRENCY = 32;
-
-/** `items.map(fn)`, with at most `limit` calls in flight at once; the results keep the items' order. */
-export async function mapLimit<T, R>(
-  items: readonly T[],
-  limit: number,
-  fn: (item: T) => Promise<R>,
-): Promise<R[]> {
-  const out = new Array<R>(items.length);
-  let next = 0;
-  const worker = async (): Promise<void> => {
-    while (next < items.length) {
-      const i = next++;
-      out[i] = await fn(items[i]!);
-    }
-  };
-  await Promise.all(Array.from({ length: Math.min(limit, items.length) }, worker));
-  return out;
-}
-
-/** Our own in-flight save files (`.<name>.<hex>.tmp`): never listed. */
-const TEMP = /^\..+\.[0-9a-f]{12}\.tmp$/;
-
 /**
  * Notebook folders on the NAS. Every path is root-relative; anything that escapes its root (`..`, an absolute
  * path, a symlink pointing out) is refused. Dot-named files are served: a notebook keeps its session in
@@ -98,11 +70,13 @@ const TEMP = /^\..+\.[0-9a-f]{12}\.tmp$/;
  */
 export class FileApi {
   readonly roots: readonly Root[];
-  /** Tail of the write queue per resolved path: check-then-write runs one at a time per file. */
-  private readonly writeQueue = new Map<string, Promise<unknown>>();
+  /** Check-then-write runs one at a time per file. */
+  private readonly locks: FileLocks;
 
-  constructor(roots: readonly Root[]) {
+  /** `locks` is shared with whatever else writes these folders (a test holds one to make a save wait). */
+  constructor(roots: readonly Root[], locks = new FileLocks()) {
     this.roots = roots;
+    this.locks = locks;
   }
 
   root(id: string | null): Root {
@@ -156,40 +130,25 @@ export class FileApi {
   async list(rootId: string | null, rel: string | null): Promise<Entry[]> {
     const root = this.root(rootId);
     const dir = await this.resolveReal(root, rel);
-    let dirents;
+    let found: FolderEntry[];
     try {
-      dirents = await readdir(dir, { withFileTypes: true });
+      // A symlink is followed for its kind only when it stays inside the root.
+      found = await listFolder(dir, (full) =>
+        this.resolveReal(root, path.relative(root.dir, full)).then(
+          () => true,
+          () => false,
+        ),
+      );
     } catch (e) {
       throw fsError(e);
     }
-    const above = await realAncestors(dir);
-    const found = await mapLimit(dirents, LIST_CONCURRENCY, async (d): Promise<Entry | null> => {
-      if (TEMP.test(d.name)) return null;
-      const full = path.join(dir, d.name);
-      // lstat, not the dirent's type: an entry swapped for a symlink since readdir still gets checked. A
-      // plain entry of a folder inside the root is inside it too; a symlink is followed for its kind only
-      // when it stays inside the root, and a folder link that loops back up is left out.
-      let s = await lstat(full).catch(() => null);
-      if (s?.isSymbolicLink()) {
-        s = await this.resolveReal(root, path.relative(root.dir, full))
-          .then(() => stat(full))
-          .catch(() => null);
-        if (s?.isDirectory() && (await closesLoop(full, above))) return null;
-      }
-      if (!s || (!s.isDirectory() && !s.isFile())) return null;
-      return {
-        name: d.name,
-        path: path.relative(root.dir, full).split(path.sep).join('/'),
-        kind: s.isDirectory() ? 'dir' : 'file',
-        size: s.isDirectory() ? 0 : s.size,
-        modified: s.mtimeMs,
-        created: s.birthtimeMs,
-      };
-    });
     // The plain entries trust that the folder is inside the root: check it again now they are read, in case
     // it was swapped for a link out meanwhile.
     await this.resolveReal(root, rel);
-    const entries = found.filter((e): e is Entry => e !== null);
+    const entries = found.map((e): Entry => ({
+      ...e,
+      path: path.relative(root.dir, e.path).split(path.sep).join('/'),
+    }));
     entries.sort((a, b) => (a.kind === b.kind ? a.name.localeCompare(b.name) : a.kind === 'dir' ? -1 : 1));
     return entries;
   }
@@ -225,7 +184,7 @@ export class FileApi {
   ): Promise<{ etag: string }> {
     const root = this.root(rootId);
     const full = await this.resolveEntry(root, rel);
-    return this.serialized(await queueKey(full), async () => {
+    return this.locks.run(full, async () => {
       // Check again now the save has its turn: while it waited, a folder on the path may have been swapped
       // for a link out of the root.
       await this.resolveReal(root, rel);
@@ -248,36 +207,18 @@ export class FileApi {
     const root = this.root(rootId);
     const src = await this.resolveEntry(root, from);
     const dest = await this.resolveEntry(root, to);
-    if (src === dest) return;
-    // Hold the write lock of both paths, so an in-flight save can't land on the old path after the move, and
-    // a new file can't appear at the destination between the check and the rename.
-    const keys = [...new Set([await queueKey(src), await queueKey(dest)])].sort();
-    return this.serializedAll(keys, () => this.moveLocked(src, dest));
-  }
-
-  private async moveLocked(src: string, dest: string): Promise<void> {
-    const s = await lstat(src).catch(() => null);
-    if (!s) throw new ApiError(404, 'Not found');
-    if (s.isDirectory() && (dest + path.sep).startsWith(src + path.sep))
-      throw new ApiError(400, 'A folder can’t move into itself');
-    const there = await realpath(dest).catch(() => null);
-    if (there !== null && there !== (await realpath(src)))
-      throw new ApiError(409, `“${path.basename(dest)}” already exists there`);
-    try {
-      await mkdir(path.dirname(dest), { recursive: true });
-      await rename(src, dest);
-      await syncDir(path.dirname(dest));
-      if (path.dirname(src) !== path.dirname(dest)) await syncDir(path.dirname(src));
-    } catch (e) {
+    // Under both paths' locks, so an in-flight save can't land on the old path after the move, and a new file
+    // can't appear at the destination between the check and the rename.
+    await moveEntry(src, dest, this.locks).catch((e: unknown) => {
       throw fsError(e);
-    }
+    });
   }
 
   /** Delete a file, or a folder with everything in it. */
   async remove(rootId: string | null, rel: string | null): Promise<void> {
     const root = this.root(rootId);
     const full = await this.resolveEntry(root, rel);
-    return this.serialized(await queueKey(full), () => this.removeLocked(full));
+    return this.locks.run(full, () => this.removeLocked(full));
   }
 
   private async removeLocked(full: string): Promise<void> {
@@ -285,26 +226,6 @@ export class FileApi {
     await rm(full, { recursive: true, force: true }).catch((e: unknown) => {
       throw fsError(e);
     });
-  }
-
-  /** Run `fn` after every earlier write to `key` has settled, so the If-Match check and the rename are atomic. */
-  private async serialized<T>(key: string, fn: () => Promise<T>): Promise<T> {
-    const prev = this.writeQueue.get(key) ?? Promise.resolve();
-    const run = prev.then(fn, fn);
-    const tail = run.catch(() => {});
-    this.writeQueue.set(key, tail);
-    try {
-      return await run;
-    } finally {
-      if (this.writeQueue.get(key) === tail) this.writeQueue.delete(key);
-    }
-  }
-
-  /** `serialized` over several keys, taken in sorted order so two callers can't wait on each other. */
-  private serializedAll<T>(keys: readonly string[], fn: () => Promise<T>): Promise<T> {
-    const [first, ...rest] = keys;
-    if (first === undefined) return fn();
-    return this.serialized(first, () => this.serializedAll(rest, fn));
   }
 
   private async writeLocked(
@@ -319,163 +240,23 @@ export class FileApi {
     const dest = target ? await realpath(full) : full;
     if (target) await this.assertInside(root, dest);
     const dir = path.dirname(dest);
-    const base = path.basename(dest);
     if (opts.ifNoneMatch === '*' && target) throw new ApiError(412, 'A file with that name already exists');
     if (opts.ifMatch) {
       if (!target) throw new ApiError(412, 'The file was moved or deleted since it was opened');
       if (opts.ifMatch !== '*' && (await etagOfFile(dest)) !== opts.ifMatch)
         throw new ApiError(412, 'The file changed on the server since it was opened');
     }
-    // A rename would replace a read-only file as long as its folder is writable: refuse instead.
-    if (target && (await readOnly(dest, target.mode)))
-      throw new ApiError(403, `“${path.basename(full)}” is read-only`);
-
-    try {
-      if (target && target.nlink > 1) {
-        // A rename would split the hard link; write through it instead (not atomic, but keeps the link).
-        const handle = await open(dest, 'r+');
-        try {
-          await overwriteInPlace(handle, bytes, (await handle.stat()).size);
-          await handle.sync();
-        } finally {
-          await handle.close();
-        }
-        return { etag: etagOf(bytes) };
-      }
-    } catch (e) {
-      throw fsError(e);
-    }
-
-    const mode = target ? target.mode & 0o7777 : 0o644;
-    const tmp = path.join(dir, `.${base}.${randomBytes(6).toString('hex')}.tmp`);
     try {
       // Only now, past the checks above: a refused save must not bring back a folder deleted since it read.
       if (!target) await mkdir(dir, { recursive: true });
       await this.assertInside(root, await realpath(dir));
-      const handle = await open(tmp, fsConstants.O_CREAT | fsConstants.O_EXCL | fsConstants.O_WRONLY, mode);
-      try {
-        await handle.chmod(mode); // open() applies the umask; the replacement keeps the original bits
-        await handle.writeFile(bytes);
-        await handle.sync();
-      } finally {
-        await handle.close();
-      }
-      if (target) await chown(tmp, target.uid, target.gid).catch(() => {}); // only root may give files away
-      await rename(tmp, dest);
-      await syncDir(dir);
+      // Atomic, keeping the mode and owner; a read-only file is refused, a hard-linked one written in place.
+      await replaceFile(dest, bytes);
     } catch (e) {
-      await unlink(tmp).catch(() => {});
       throw fsError(e);
     }
     return { etag: etagOf(bytes) };
   }
-}
-
-/**
- * Write `bytes` over a file in place, for a hard-linked file that a rename would split from its other names.
- * It can't be atomic, but it never empties the file: the part past the old end is written first (and cut
- * back off if the disk is full, leaving the old file as it was), then the old length is overwritten from
- * offset 0, which needs no new space, and only then is a longer old tail cut off.
- */
-export async function overwriteInPlace(
-  h: {
-    write(
-      buf: Uint8Array,
-      offset: number,
-      length: number,
-      position: number,
-    ): Promise<{ bytesWritten: number }>;
-    truncate(len: number): Promise<void>;
-  },
-  bytes: Uint8Array,
-  oldSize: number,
-): Promise<void> {
-  const writeRange = async (from: number, to: number): Promise<void> => {
-    for (let at = from; at < to;) {
-      const { bytesWritten } = await h.write(bytes, at, to - at, at);
-      if (bytesWritten <= 0) throw new Error('Short write');
-      at += bytesWritten;
-    }
-  };
-  if (bytes.length > oldSize) {
-    try {
-      await writeRange(oldSize, bytes.length);
-    } catch (e) {
-      await h.truncate(oldSize).catch(() => {});
-      throw e;
-    }
-  }
-  await writeRange(0, Math.min(oldSize, bytes.length));
-  if (bytes.length < oldSize) await h.truncate(bytes.length);
-}
-
-/**
- * The write-queue key for a path: the same file under any spelling gets the same key. Symlinks are resolved
- * (for a new file, through its nearest existing folder), and the key is case- and normalization-folded, since
- * `Note.md` and `note.md` are one file on a case-insensitive volume.
- */
-async function queueKey(full: string): Promise<string> {
-  let probe = full;
-  const tail: string[] = [];
-  for (;;) {
-    const real = await realpath(probe).catch(() => null);
-    if (real !== null)
-      return path
-        .join(real, ...tail)
-        .normalize('NFC')
-        .toLowerCase();
-    const parent = path.dirname(probe);
-    if (parent === probe) return full.normalize('NFC').toLowerCase();
-    tail.unshift(path.basename(probe));
-    probe = parent;
-  }
-}
-
-/**
- * The real paths of `dir` and every folder above it. A folder link to any of them, or to a folder holding
- * one, leads back up the path being listed, so following it never ends (the client loads the tree
- * recursively): `list` leaves such a link out, like the CLI's walk does.
- */
-async function realAncestors(dir: string): Promise<string[]> {
-  const out: string[] = [];
-  for (let p = dir; ; p = path.dirname(p)) {
-    const real = await realpath(p).catch(() => null);
-    if (real !== null) out.push(real);
-    if (path.dirname(p) === p) return out;
-  }
-}
-
-/** Does the folder link at `full` lead to one of `above` or a folder holding it? (Dangling counts as yes.) */
-async function closesLoop(full: string, above: readonly string[]): Promise<boolean> {
-  const real = await realpath(full).catch(() => null);
-  if (real === null) return true;
-  return above.some((a) => {
-    const rel = path.relative(real, a);
-    return rel === '' || (!rel.startsWith('..') && !path.isAbsolute(rel));
-  });
-}
-
-/**
- * Is this file read-only? No write bit at all (a server running as root could still write it), or not
- * writable by this process.
- */
-async function readOnly(file: string, mode: number): Promise<boolean> {
-  if ((mode & 0o222) === 0) return true;
-  return access(file, fsConstants.W_OK).then(
-    () => false,
-    () => true,
-  );
-}
-
-/**
- * Make a rename in `dir` durable: without this, a power cut soon after a save can bring the old file back.
- * Windows can't open a folder, so this is best effort.
- */
-async function syncDir(dir: string): Promise<void> {
-  const handle = await open(dir, fsConstants.O_RDONLY).catch(() => null);
-  if (!handle) return;
-  await handle.sync().catch(() => {});
-  await handle.close();
 }
 
 export function etagOf(bytes: Uint8Array): string {
@@ -493,8 +274,18 @@ function etagOfHash(hash: Hash): string {
   return '"' + hash.digest('base64url').slice(0, 27) + '"';
 }
 
+/** The status for each refusal of the shared file code. */
+const FILE_ERROR_STATUS = {
+  'not-found': 404,
+  exists: 409,
+  'read-only': 403,
+  'into-itself': 400,
+  'not-a-file': 400,
+} as const satisfies Record<FileError['code'], number>;
+
 function fsError(e: unknown): Error {
   if (e instanceof ApiError) return e;
+  if (e instanceof FileError) return new ApiError(FILE_ERROR_STATUS[e.code], e.message);
   const code = (e as NodeJS.ErrnoException | null)?.code;
   if (code === 'ENOENT') return new ApiError(404, 'Not found');
   if (code === 'EACCES' || code === 'EPERM') return new ApiError(403, 'Permission denied');

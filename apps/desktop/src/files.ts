@@ -1,21 +1,15 @@
 // File-system helpers for the main process. No Electron imports, so the tests can run them in Node.
-import { randomBytes } from 'node:crypto';
-import { statSync, watch, type FSWatcher, type Stats } from 'node:fs';
 import {
-  access,
-  chown,
-  constants as fsConstants,
-  lstat,
-  mkdir,
-  open,
-  readdir,
-  readFile,
-  readlink,
-  realpath,
-  rename,
-  stat,
-  unlink,
-} from 'node:fs/promises';
+  FileError,
+  FileLocks,
+  isInside,
+  listFolder,
+  moveEntry as moveShared,
+  TEMP_FILE,
+  writeAtomic,
+} from '@puffinote/node-files';
+import { statSync, watch, type FSWatcher } from 'node:fs';
+import { mkdir, open, readFile, readlink, realpath, stat } from 'node:fs/promises';
 import path from 'node:path';
 import { CONFLICT_CHANGED, CONFLICT_EXISTS, NOT_FOUND, type NativeEntry } from './bridge.ts';
 
@@ -23,9 +17,6 @@ import { CONFLICT_CHANGED, CONFLICT_EXISTS, NOT_FOUND, type NativeEntry } from '
 export function isAppUrl(url: string | undefined | null): boolean {
   return typeof url === 'string' && url.startsWith('app://puffinote/');
 }
-
-/** Our own in-flight save files (`.<name>.<hex>.tmp`): never listed, never reported as changes. */
-export const TEMP_FILE = /^\..+\.[0-9a-f]{16}\.tmp$/;
 
 /** Folders named on a command line (`puffinote ~/Notes`), made absolute against the directory it ran in. */
 export function folderArgs(argv: readonly string[], cwd: string): string[] {
@@ -57,6 +48,14 @@ export function sameVersion(a: string, b: string): boolean {
   return as === bs && ai === bi && Math.abs(Number(am) - Number(bm)) <= 1;
 }
 
+/** One save, move or other change per file at a time (`FileLocks`). */
+const locks = new FileLocks();
+
+/** Run `fn` once every earlier save or move of the same file has settled. */
+export function withFileLock<T>(p: string, fn: () => Promise<T>): Promise<T> {
+  return locks.run(p, fn);
+}
+
 /** What a save expects of the file it replaces, and which paths it may write. */
 export interface SaveOptions {
   /** The version the renderer read; the save is refused if the file isn't at it any more (unless `force`). */
@@ -76,7 +75,7 @@ export interface SaveOptions {
  */
 export function saveFile(p: string, bytes: Uint8Array, opts: SaveOptions): Promise<string> {
   const { expected, force, create, allows } = opts;
-  return withFileLock(p, async () => {
+  return locks.run(p, async () => {
     if (!(await allows(p))) throw new Error('Forbidden');
     const s = await stat(p).catch(() => null);
     if (create && s) throw new Error(`${CONFLICT_EXISTS}: ${path.basename(p)}`);
@@ -86,179 +85,6 @@ export function saveFile(p: string, bytes: Uint8Array, opts: SaveOptions): Promi
     if (!(await allows(p))) throw new Error('Forbidden');
     return fileVersion(await writeAtomic(p, bytes));
   });
-}
-
-/**
- * Atomic save: a temp file beside the target, fsync, rename. A symlink is followed, so the link stays and its
- * target is replaced. The replacement keeps the target's mode (and owner, where permitted). A hard-linked
- * target is written in place instead (`overwriteInPlace`), since a rename would split the link. Resolves to the
- * written file's stat, taken from its own handle, so a write by another app after the rename can't pass for it.
- */
-export async function writeAtomic(p: string, bytes: Uint8Array): Promise<Stats> {
-  const real = await realTarget(path.resolve(p));
-  const target = await stat(real).catch(() => null);
-  // A rename would replace a read-only file as long as its folder is writable: refuse instead.
-  if (target && (await isReadOnly(real, target.mode))) throw new Error(`“${path.basename(p)}” is read-only`);
-  if (target && target.nlink > 1) {
-    const h = await open(real, 'r+');
-    try {
-      await overwriteInPlace(h, bytes, (await h.stat()).size);
-      await h.sync();
-      return await h.stat();
-    } finally {
-      await h.close();
-    }
-  }
-  const mode = target ? target.mode & 0o7777 : 0o644;
-  const tmp = path.join(path.dirname(real), `.${path.basename(real)}.${randomBytes(8).toString('hex')}.tmp`);
-  let created = false;
-  let written: Stats;
-  try {
-    const h = await open(tmp, 'wx', mode);
-    created = true;
-    try {
-      await h.chmod(mode); // open() applies the umask
-      await h.writeFile(bytes);
-      await h.sync();
-      // The rename keeps the inode, size and mtime, so this is the saved file's version.
-      written = await h.stat();
-    } finally {
-      await h.close();
-    }
-    if (target) await chown(tmp, target.uid, target.gid).catch(() => {});
-    await rename(tmp, real);
-  } catch (e) {
-    if (created) await unlink(tmp).catch(() => {});
-    throw e;
-  }
-  await syncDir(path.dirname(real));
-  return written;
-}
-
-/**
- * Write `bytes` over a file in place, for a hard-linked file that a rename would split from its other names.
- * It can't be atomic, but it never empties the file: the part past the old end is written first (and cut
- * back off if the disk is full, leaving the old file as it was), then the old length is overwritten from
- * offset 0, which needs no new space, and only then is a longer old tail cut off.
- */
-export async function overwriteInPlace(
-  h: {
-    write(
-      buf: Uint8Array,
-      offset: number,
-      length: number,
-      position: number,
-    ): Promise<{ bytesWritten: number }>;
-    truncate(len: number): Promise<void>;
-  },
-  bytes: Uint8Array,
-  oldSize: number,
-): Promise<void> {
-  const writeRange = async (from: number, to: number): Promise<void> => {
-    for (let at = from; at < to;) {
-      const { bytesWritten } = await h.write(bytes, at, to - at, at);
-      if (bytesWritten <= 0) throw new Error('Short write');
-      at += bytesWritten;
-    }
-  };
-  if (bytes.length > oldSize) {
-    try {
-      await writeRange(oldSize, bytes.length);
-    } catch (e) {
-      await h.truncate(oldSize).catch(() => {});
-      throw e;
-    }
-  }
-  await writeRange(0, Math.min(oldSize, bytes.length));
-  if (bytes.length < oldSize) await h.truncate(bytes.length);
-}
-
-/** No write bit at all (root could still write it), or not writable by this process. */
-async function isReadOnly(file: string, mode: number): Promise<boolean> {
-  if ((mode & 0o222) === 0) return true;
-  return access(file, fsConstants.W_OK).then(
-    () => false,
-    () => true,
-  );
-}
-
-/**
- * Make a rename in `dir` durable: without this, a power cut soon after a save can bring the old file back.
- * Windows can't open a folder, so this is best effort.
- */
-export async function syncDir(dir: string): Promise<void> {
-  const h = await open(dir, 'r').catch(() => null);
-  if (!h) return;
-  await h.sync().catch(() => {});
-  await h.close();
-}
-
-/** The file a path names after following symlinks; a path that doesn't exist yet is its own target. */
-async function realTarget(abs: string): Promise<string> {
-  const real = await realpath(abs).catch(() => null);
-  if (real !== null) return real;
-  const link = await readlink(abs).catch(() => null); // dangling: write where it points
-  return link === null ? abs : path.resolve(path.dirname(abs), link);
-}
-
-const fileLocks = new Map<string, Promise<unknown>>();
-/** Keys are worked out one call at a time, so calls take a lock in the order they were made. */
-let keying: Promise<unknown> = Promise.resolve();
-
-/**
- * Run `fn` after every earlier `withFileLock` call for the same file has settled, so a save's check-then-write
- * cannot interleave with another save of that file. Paths are compared resolved, and case-folded where the
- * volume usually is case-insensitive (macOS, Windows).
- */
-export async function withFileLock<T>(p: string, fn: () => Promise<T>): Promise<T> {
-  const keyed = keying.then(() => lockKey(p));
-  keying = keyed.catch(() => {});
-  const key = await keyed;
-  const prev = fileLocks.get(key) ?? Promise.resolve();
-  const run = prev.then(fn, fn);
-  const tail = run.catch(() => {});
-  fileLocks.set(key, tail);
-  try {
-    return await run;
-  } finally {
-    if (fileLocks.get(key) === tail) fileLocks.delete(key);
-  }
-}
-
-/**
- * The lock key for a path: the same file under any spelling gets the same key. Symlinks are resolved (for a
- * new file, through its nearest existing folder), then the key is case-folded except on Linux.
- */
-async function lockKey(p: string): Promise<string> {
-  let probe = path.resolve(p);
-  const tail: string[] = [];
-  let key: string;
-  for (;;) {
-    const real = await realpath(probe).catch(() => null);
-    if (real !== null) {
-      key = path.join(real, ...tail);
-      break;
-    }
-    const parent = path.dirname(probe);
-    if (parent === probe) {
-      key = path.resolve(p);
-      break;
-    }
-    tail.unshift(path.basename(probe));
-    probe = parent;
-  }
-  return process.platform === 'linux' ? key : key.normalize('NFC').toLowerCase();
-}
-
-/** `withFileLock` over several files, taken in one order so two callers can't wait on each other. */
-export async function withFileLocks<T>(paths: readonly string[], fn: () => Promise<T>): Promise<T> {
-  const byKey = new Map(await Promise.all(paths.map(async (p) => [await lockKey(p), p] as const)));
-  const sorted = [...byKey.keys()].sort().map((k) => byKey.get(k));
-  const run = (i: number): Promise<T> => {
-    const p = sorted[i];
-    return p === undefined ? fn() : withFileLock(p, () => run(i + 1));
-  };
-  return run(0);
 }
 
 /**
@@ -289,110 +115,32 @@ export async function isOpenableDocument(p: string): Promise<boolean> {
 }
 
 /**
- * The entries of a notebook folder for the renderer, `dir` itself being one `allows` accepts. Entries are
- * stat'ed a few dozen at a time. A symlink is followed for its kind; one that leaves the notebook (`allows`
- * says no) or dangles is left out, and so is our own temp file. A folder link back to
- * the listed folder, a folder above it, or a folder holding one is left out too: the renderer loads the tree
- * recursively, and following it would never end.
+ * The entries of a notebook folder for the renderer, `dir` itself being one `allows` accepts. A symlink is
+ * followed only while it stays in the notebook (`listFolder` has the rest).
  */
 export async function listDir(dir: string, allows: (p: string) => Promise<boolean>): Promise<NativeEntry[]> {
   if (!(await allows(dir))) throw new Error('Forbidden');
-  const dirents = await readdir(dir, { withFileTypes: true });
-  const above = await realAncestors(dir);
-  const found = await mapLimit(dirents, LIST_CONCURRENCY, async (d): Promise<NativeEntry | null> => {
-    if (TEMP_FILE.test(d.name)) return null;
-    const p = path.join(dir, d.name);
-    // lstat, not the dirent's type: an entry swapped for a symlink since readdir still gets checked. A plain
-    // entry of an allowed folder is allowed; only a symlink needs the full check.
-    let s = await lstat(p).catch(() => null);
-    if (s?.isSymbolicLink()) {
-      s = (await allows(p)) ? await stat(p).catch(() => null) : null;
-      if (s?.isDirectory() && (await closesLoop(p, above))) return null;
-    }
-    if (!s || !(s.isFile() || s.isDirectory())) return null;
-    return {
-      path: p,
-      name: d.name,
-      kind: s.isDirectory() ? 'dir' : 'file',
-      size: s.isDirectory() ? 0 : s.size,
-      modified: s.mtimeMs,
-      created: s.birthtimeMs,
-    };
-  });
+  const found = await listFolder(dir, allows);
   // The plain entries trust that the folder is allowed: check it again now they are read, in case it was
   // swapped for a link out meanwhile.
   if (!(await allows(dir))) throw new Error('Forbidden');
-  return found.filter((e): e is NativeEntry => e !== null);
-}
-
-/** How many entries a listing stats at once: enough to hide disk latency, few enough not to hog it. */
-const LIST_CONCURRENCY = 32;
-
-/** `items.map(fn)`, with at most `limit` calls in flight at once; the results keep the items' order. */
-export async function mapLimit<T, R>(
-  items: readonly T[],
-  limit: number,
-  fn: (item: T) => Promise<R>,
-): Promise<R[]> {
-  const out = new Array<R>(items.length);
-  let next = 0;
-  const worker = async (): Promise<void> => {
-    while (next < items.length) {
-      const i = next++;
-      out[i] = await fn(items[i]!);
-    }
-  };
-  await Promise.all(Array.from({ length: Math.min(limit, items.length) }, worker));
-  return out;
-}
-
-/** The real paths of `dir` and every folder above it. */
-async function realAncestors(dir: string): Promise<string[]> {
-  const out: string[] = [];
-  for (let p = dir; ; p = path.dirname(p)) {
-    const real = await realpath(p).catch(() => null);
-    if (real !== null) out.push(real);
-    if (path.dirname(p) === p) return out;
-  }
-}
-
-/** Does the folder link at `p` lead to one of `above` or a folder holding it? (Dangling counts as yes.) */
-async function closesLoop(p: string, above: readonly string[]): Promise<boolean> {
-  const real = await realpath(p).catch(() => null);
-  return real === null || above.some((a) => inside(real, a));
+  return found;
 }
 
 /**
  * Rename or move a file or folder inside a notebook. A notebook folder itself (`isRoot`) never moves: the
- * renderer only moves things within one. A taken name is refused, except a change of case on one file. Runs
- * under both paths' save locks, so a save in flight can't land on the old path after the move, and a new file
- * can't appear at the destination between the check and the rename.
+ * renderer only moves things within one. The refusals become the markers the renderer understands.
  */
 export async function moveEntry(src: string, dest: string, isRoot: (p: string) => boolean): Promise<void> {
   if (isRoot(src) || isRoot(dest)) throw new Error('Forbidden');
-  if (!(await exists(src))) throw new Error(`${NOT_FOUND}: ${path.basename(src)}`);
-  if (dest === src) return;
-  const rel = path.relative(src, dest);
-  if (rel && !rel.startsWith('..') && !path.isAbsolute(rel))
-    throw new Error('A folder cannot move into itself');
-  await withFileLocks([src, dest], async () => {
-    if ((await exists(dest)) && !(await sameFile(src, dest)))
-      throw new Error(`${CONFLICT_EXISTS}: ${path.basename(dest)}`);
-    await mkdir(path.dirname(dest), { recursive: true });
-    await rename(src, dest);
-  });
-}
-
-const exists = (p: string) =>
-  stat(p).then(
-    () => true,
-    () => false,
-  );
-
-/** Is `to` the same file as `from` under another spelling (a case-only rename on macOS/Windows)? */
-async function sameFile(from: string, to: string): Promise<boolean> {
-  const [a, b] = await Promise.all([realpath(from).catch(() => null), realpath(to).catch(() => null)]);
-  return a !== null && a === b && from !== to;
+  try {
+    await moveShared(src, dest, locks);
+  } catch (e) {
+    if (!(e instanceof FileError)) throw e;
+    if (e.code === 'not-found') throw new Error(`${NOT_FOUND}: ${path.basename(src)}`, { cause: e });
+    if (e.code === 'exists') throw new Error(`${CONFLICT_EXISTS}: ${path.basename(dest)}`, { cause: e });
+    throw new Error(e.message, { cause: e });
+  }
 }
 
 /**
@@ -480,11 +228,6 @@ export function watchTree(
   };
 }
 
-function inside(parent: string, child: string): boolean {
-  const rel = path.relative(parent, child);
-  return rel === '' || (!rel.startsWith('..') && !path.isAbsolute(rel));
-}
-
 /**
  * The notebook folders the renderer may touch: ones the user picked in a dialog, opened from the OS (Dock,
  * command line), or opened before (persisted, so Recent still works). A path is allowed when it lies inside a
@@ -538,7 +281,7 @@ export class FolderGrants {
   async allows(p: unknown): Promise<boolean> {
     if (typeof p !== 'string' || !path.isAbsolute(p) || p.includes('\0')) return false;
     const abs = path.resolve(p);
-    const root = this.#folders.find((f) => inside(f, abs));
+    const root = this.#folders.find((f) => isInside(f, abs));
     if (!root) return false;
     const realRoot = await realpath(root).catch(() => root);
     // Walk up to the nearest part that exists, but follow a dangling symlink on the way: a save through
@@ -547,7 +290,7 @@ export class FolderGrants {
     const tail: string[] = [];
     for (let hops = 0; ;) {
       const real = await realpath(probe).catch(() => null);
-      if (real !== null) return inside(realRoot, path.join(real, ...tail));
+      if (real !== null) return isInside(realRoot, path.join(real, ...tail));
       const link = await readlink(probe).catch(() => null);
       if (link !== null) {
         if (++hops > 40) return false; // a loop

@@ -14,6 +14,7 @@ A TypeScript notes app for folders of Markdown files. One UI runs in the browser
 | --- | --- |
 | `packages/text` | Text documents: `TextDocument`, selections, graphemes, decoding, undo history, search, stats. No DOM or Node (ESLint enforces it). |
 | `packages/markdown` | The Markdown engine: incremental tokenizers, `MarkdownModel`, editing helpers, the HTML renderer, the outline. No DOM or Node. |
+| `packages/node-files` | Notebook files on Node, shared by the desktop app, the server and the CLI: atomic saves, per-file locks, listings, moves. |
 | `packages/ui` | Preact and signals: the editor, the command catalog, the notebook model, the shell, and the `NotebookStore` adapters. |
 | `apps/web` | The Vite entry point. One static build serves the browser, the NAS server and the desktop app. |
 | `apps/server` | The NAS server (`node:http`): serves the client and `/api` for the configured roots. No framework. |

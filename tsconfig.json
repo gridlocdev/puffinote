@@ -1,12 +1,29 @@
 {
   "files": [],
   "references": [
-    { "path": "packages/text" },
-    { "path": "packages/markdown" },
-    { "path": "packages/ui" },
-    { "path": "apps/server" },
-    { "path": "apps/web" },
-    { "path": "apps/desktop" },
-    { "path": "apps/cli" }
+    {
+      "path": "packages/text"
+    },
+    {
+      "path": "packages/markdown"
+    },
+    {
+      "path": "packages/node-files"
+    },
+    {
+      "path": "packages/ui"
+    },
+    {
+      "path": "apps/server"
+    },
+    {
+      "path": "apps/web"
+    },
+    {
+      "path": "apps/desktop"
+    },
+    {
+      "path": "apps/cli"
+    }
   ]
 }

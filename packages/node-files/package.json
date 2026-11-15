@@ -1,0 +1,11 @@
+{
+  "name": "@puffinote/node-files",
+  "version": "0.2.2",
+  "private": true,
+  "type": "module",
+  "license": "MIT",
+  "description": "Notebook file handling on Node shared by the desktop app, the NAS server and the CLI: atomic saves, per-file locks, listings and moves.",
+  "exports": {
+    ".": "./src/index.ts"
+  }
+}

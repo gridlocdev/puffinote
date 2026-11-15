@@ -35,12 +35,18 @@ importers:
       '@puffinote/markdown':
         specifier: workspace:*
         version: link:../../packages/markdown
+      '@puffinote/node-files':
+        specifier: workspace:*
+        version: link:../../packages/node-files
       '@puffinote/text':
         specifier: workspace:*
         version: link:../../packages/text
 
   apps/desktop:
     devDependencies:
+      '@puffinote/node-files':
+        specifier: workspace:*
+        version: link:../../packages/node-files
       '@puffinote/web':
         specifier: workspace:*
         version: link:../web
@@ -50,8 +56,15 @@ importers:
       electron-builder:
         specifier: 26.18.0
         version: 26.18.0(electron-builder-squirrel-windows@26.18.0)
+      vite:
+        specifier: 8.3.5
+        version: 8.3.5(@types/node@24.19.2)(jiti@2.7.0)
 
-  apps/server: {}
+  apps/server:
+    dependencies:
+      '@puffinote/node-files':
+        specifier: workspace:*
+        version: link:../../packages/node-files
 
   apps/web:
     dependencies:
@@ -77,6 +90,8 @@ importers:
       '@puffinote/text':
         specifier: workspace:*
         version: link:../text
+
+  packages/node-files: {}
 
   packages/text: {}
 
