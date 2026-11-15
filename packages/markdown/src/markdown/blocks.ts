@@ -1,4 +1,5 @@
 import type { MarkdownModel } from './markdownModel.ts';
+import { isTableRowText } from './tableRows.ts';
 
 /** A multi-line construct that conceals or reveals as one unit (PRD §10.2). */
 export type BlockKind = 'fencedCode' | 'frontMatter' | 'table';
@@ -72,7 +73,7 @@ function isFenceLine(model: MarkdownModel, line: number): boolean {
 }
 
 function isTableBodyRow(model: MarkdownModel, line: number): boolean {
-  return model.enteringState(line).kind === 'normal' && /(^|[^\\])\|/.test(model.document.getLineText(line));
+  return model.enteringState(line).kind === 'normal' && isTableRowText(model.document.getLineText(line));
 }
 
 /** The block covering `line`, if any. `blocks` is in document order. */

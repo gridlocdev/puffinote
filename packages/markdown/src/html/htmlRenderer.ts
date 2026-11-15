@@ -194,7 +194,8 @@ class Renderer {
         return this.listLevel(line, this.listIndent(line), 0, 0);
     }
 
-    if (this.isTableStart(line)) return this.table(line);
+    const tableEnd = this.blockEnd(line, 'table');
+    if (tableEnd !== null) return this.table(line, tableEnd);
     return this.paragraph(line);
   }
 
@@ -468,23 +469,20 @@ class Renderer {
     return digits.length > 0 ? Number.parseInt(digits, 10) : 1;
   }
 
-  private table(line: number): number {
-    const n = this.doc.lineCount;
+  /** The table block starting at `line` (its header row), through its last body row. */
+  private table(line: number, end: number): number {
     const aligns = columnAligns(stripCr(this.doc.getLineText(line + 1)));
     this.out += '<table>\n<thead>\n';
     this.tableRow(this.model.lineTokens(line), 'th', aligns);
     this.out += '</thead>\n';
-    let i = line + 2; // past the header and delimiter rows
-    if (i < n && this.isTableRow(i)) {
+    // Past the header and delimiter rows.
+    if (line + 2 <= end) {
       this.out += '<tbody>\n';
-      while (i < n && this.isTableRow(i)) {
-        this.tableRow(this.model.lineTokens(i), 'td', aligns);
-        i++;
-      }
+      for (let i = line + 2; i <= end; i++) this.tableRow(this.model.lineTokens(i), 'td', aligns);
       this.out += '</tbody>\n';
     }
     this.out += '</table>\n';
-    return i;
+    return end + 1;
   }
 
   /** Split a row's tokens into cells at the `|` markers, then render each cell's inline run. */
@@ -670,24 +668,8 @@ class Renderer {
       case 'codeText':
         return false;
       default:
-        return !this.isTableStart(line);
+        return this.blockEnd(line, 'table') === null;
     }
-  }
-
-  private isTableStart(line: number): boolean {
-    return (
-      line + 1 < this.doc.lineCount &&
-      this.isTableRow(line) &&
-      this.first(line + 1)?.type === 'tableDelimiter'
-    );
-  }
-
-  /**
-   * A table row: the model splits a row's cells at its unescaped pipes and marks each one, so a line with a
-   * `|` marker is a row. Other inline markers (`**`, `[`) don't count, so the line after a table ends it.
-   */
-  private isTableRow(line: number): boolean {
-    return this.model.lineTokens(line).some((t) => this.isPipe(t));
   }
 
   private isPipe(t: Token): boolean {

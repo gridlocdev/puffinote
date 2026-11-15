@@ -9,6 +9,7 @@ import {
   tokenizeLine,
   tokenizeLineInline,
 } from './lineTokenizer.ts';
+import { isTableRowText, isUnescapedPipe } from './tableRows.ts';
 import { token, type Token } from './token.ts';
 
 /** The result of an incremental update: the new model and the first line that was re-tokenized. */
@@ -142,7 +143,7 @@ export class MarkdownModel {
 
     // A table body row depends on the header above it, which carried state doesn't track: back up to the
     // start of any run of pipe rows so the whole table is re-evaluated.
-    while (first > 0 && isPotentialTableRow(newDocument.getLineText(first - 1))) first--;
+    while (first > 0 && isTableRowText(newDocument.getLineText(first - 1))) first--;
 
     // A setext heading reaches backwards: typing or deleting the underline makes or unmakes the line above.
     if (first > 0 && isSetextTextLine(newDocument.getLineText(first - 1), false)) first--;
@@ -228,7 +229,7 @@ function tokenizeRange(
     if (
       state.kind === 'normal' &&
       i + 1 < doc.lineCount &&
-      isPotentialTableRow(doc.getLineText(i)) &&
+      isTableRowText(doc.getLineText(i)) &&
       isTableDelimiterRow(doc.getLineText(i + 1), doc.getLineText(i))
     ) {
       i = tokenizeTable(doc, i, toLine, entering, tokens);
@@ -300,7 +301,7 @@ function tokenizeTable(
   let i = start;
   row(i++, false);
   if (i < toLine) row(i++, true);
-  while (i < toLine && isPotentialTableRow(doc.getLineText(i))) row(i++, false);
+  while (i < toLine && isTableRowText(doc.getLineText(i))) row(i++, false);
   return i;
 }
 
@@ -328,21 +329,9 @@ function tokenizeTableRow(text: string, isDelimiter: boolean): Token[] {
   return output;
 }
 
-function isUnescapedPipe(line: string, k: number): boolean {
-  return line.charAt(k) === '|' && (k === 0 || line.charAt(k - 1) !== '\\');
-}
-
 function hasClosingFrontMatterFence(doc: TextDocument): boolean {
   for (let i = 1; i < doc.lineCount; i++) {
     if (isFrontMatterFenceLine(doc.getLineText(i))) return true;
-  }
-  return false;
-}
-
-function isPotentialTableRow(line: string): boolean {
-  const len = contentLength(line);
-  for (let k = 0; k < len; k++) {
-    if (isUnescapedPipe(line, k)) return true;
   }
   return false;
 }
@@ -354,7 +343,7 @@ function isPotentialTableRow(line: string): boolean {
  * keystroke (PRD §10.2, §11.3).
  */
 function isTableDelimiterRow(line: string, header: string): boolean {
-  if (!isPotentialTableRow(line)) return false;
+  if (!isTableRowText(line)) return false;
   const cells = tableCells(line);
   return (
     cells.length > 0 &&
