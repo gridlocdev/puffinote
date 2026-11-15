@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.2.3
+
+### Improvements
+
+- **Headings inside quotes look like headings.** A line such as `> ## Note` is drawn at heading size in the editor, and the export drops its closing `#` marks as it does for other headings.
+- **Moves in the desktop app are written to disk** before Puffinote reports them done, so a power cut right after a move doesn't lose it.
+- **Right-click menus wait for open dialogs.** Choosing a menu item while a dialog is open no longer acts behind it.
+
+### Bugs fixed
+
+- **Edit > Replace** in the desktop menu turns on as soon as the Replace row opens, and the menu updates when you pin or unpin a tab.
+- List items indented with tabs nest at the right depth, with each tab counting to the next tab stop.
+- In the desktop app, a save checks again just before it writes that the note is still inside a folder you opened.
+
 ## 0.2.2
 
 ### Improvements
