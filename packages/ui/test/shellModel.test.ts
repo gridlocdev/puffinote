@@ -1,3 +1,4 @@
+import { effect } from '@preact/signals';
 import { describe, expect, it, vi } from 'vitest';
 import { Notebook } from '../src/notebook/notebook.ts';
 import { findNode } from '../src/notebook/tree.ts';
@@ -569,6 +570,48 @@ describe('ShellModel in the Library layout (PRD §6)', () => {
     void m.menuCatalog.run('shell.newNote');
     await vi.waitFor(() => expect(m.overlay.value).not.toBeNull());
     expect(asked().label).toBe('Name (in b)');
+    m.setNotebook(null);
+  });
+});
+
+describe('ShellModel menu inputs', () => {
+  it('changes when the find bar’s Replace row opens or closes, which Replace and Replace All follow', async () => {
+    const store = new MemoryStore('N', { 'a.md': 'cat cat' });
+    const nb = await Notebook.open(store, { prefs: memoryPrefs({ autoSave: false }) });
+    const m = new ShellModel();
+    m.setNotebook(nb);
+    await nb.openFile('a.md');
+    m.setFindQuery('cat');
+    let runs = 0;
+    const stop = effect(() => {
+      void m.menuInputs.value;
+      runs++;
+    });
+    const before = runs;
+    m.replaceOpen.value = true;
+    expect(runs).toBe(before + 1);
+    expect(m.menuCatalog.isEnabled(m.menuCatalog.get('shell.replaceAll')!)).toBe(true);
+    m.replaceOpen.value = false;
+    expect(runs).toBe(before + 2);
+    stop();
+    m.setNotebook(null);
+  });
+
+  it('follows a tab being pinned', async () => {
+    const store = new MemoryStore('N', { 'a.md': '' });
+    const nb = await Notebook.open(store, { prefs: memoryPrefs({ autoSave: false }) });
+    const m = new ShellModel();
+    m.setNotebook(nb);
+    const a = (await nb.openFile('a.md'))!;
+    let runs = 0;
+    const stop = effect(() => {
+      void m.menuInputs.value;
+      runs++;
+    });
+    const before = runs;
+    nb.setTabPinned(a, true);
+    expect(runs).toBeGreaterThan(before);
+    stop();
     m.setNotebook(null);
   });
 });

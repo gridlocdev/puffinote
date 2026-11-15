@@ -161,6 +161,33 @@ export class ShellModel {
   readonly layoutPolicy = new LayoutPolicy(this.notebook);
   readonly layout = this.layoutPolicy.layout;
   readonly showTabBar = this.layoutPolicy.showTabBar;
+  /** Whether the find bar has text: Find Next and Previous follow this, not every letter typed. */
+  private readonly hasFindText = computed(() => !!this.findQuery.value);
+  /**
+   * Everything the commands' enabled and checked states read, as one signal that changes when any of them
+   * does. A host that mirrors the catalog in a native menu rebuilds it on this. Add here what a new command's
+   * `enabled` or `active` reads.
+   */
+  readonly menuInputs = computed(() => {
+    const nb = this.notebook.value;
+    const tab = this.activeTab.value;
+    return [
+      nb,
+      tab,
+      tab?.dirty.value,
+      tab?.pinned.value,
+      this.activeState.value?.mode.value,
+      this.layout.value,
+      this.showTabBar.value,
+      nb?.tabs.value,
+      nb?.selected.value,
+      nb?.pinned.value,
+      nb?.sidebarCollapsed.value,
+      this.zoom.value,
+      this.hasFindText.value,
+      this.replaceOpen.value,
+    ];
+  });
 
   constructor(host: ShellHost = {}) {
     this.host = host;
