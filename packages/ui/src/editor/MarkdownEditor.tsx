@@ -161,8 +161,8 @@ export function MarkdownEditor(props: MarkdownEditorProps) {
   const sel = state.selection.value;
   const mode = state.mode.value;
   const shownPicture = state.shownPicture.value;
-  const revealTick = state.revealTick.value;
-  const seenReveal = useRef(revealTick);
+  const revealRequest = state.revealRequest.value;
+  const seenReveal = useRef(revealRequest);
   const doc = state.document;
   const model = state.model;
   const blocks = state.blocks;
@@ -288,8 +288,8 @@ export function MarkdownEditor(props: MarkdownEditorProps) {
       caretEl.classList.remove('pn-blink');
       void caretEl.offsetWidth;
       caretEl.classList.add('pn-blink');
-      if (seenReveal.current !== revealTick) {
-        seenReveal.current = revealTick;
+      if (seenReveal.current !== revealRequest) {
+        seenReveal.current = revealRequest;
         centreInView(box);
       } else if (revealCaret.current) scrollIntoView(box);
     } else {

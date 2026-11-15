@@ -1,4 +1,4 @@
-import { signal } from '@preact/signals';
+import { signal, type ReadonlySignal } from '@preact/signals';
 import { blocksOf, MarkdownModel, updateBlocks, type Block } from '@puffinote/markdown';
 import {
   DocumentBuffer,
@@ -53,8 +53,7 @@ export class EditorState {
    * selection leaves that picture, so the picture is drawn again.
    */
   readonly shownPicture = signal<number | null>(null);
-  /** Bumps when `reveal` asks the surface to bring the caret into view. */
-  readonly revealTick = signal(0);
+  readonly #revealRequest = signal<object>({});
   /** The editor's indent unit for Tab (PRD §10.1: four spaces by default). */
   indentUnit = '    ';
 
@@ -258,7 +257,20 @@ export class EditorState {
   /** Select and ask the surface to scroll the caret into the middle of the view (Outline, Search). */
   reveal(anchor: number, caret = anchor): void {
     this.select(anchor, caret);
-    this.revealTick.value++;
+    this.requestReveal();
+  }
+
+  /**
+   * A new value each time something asks the surface to bring the caret into the middle of the view; the
+   * surface compares it with the last one it handled.
+   */
+  get revealRequest(): ReadonlySignal<object> {
+    return this.#revealRequest;
+  }
+
+  /** Ask the surface to scroll the caret into the middle of the view, where it is now. */
+  requestReveal(): void {
+    this.#revealRequest.value = {};
   }
 
   /** Show a picture's link text and select it (View Link Text, PRD §10.6). */

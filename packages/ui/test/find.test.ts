@@ -171,8 +171,10 @@ describe('find in note', () => {
     m.openFind(true);
     m.setFindQuery('puffin');
     m.replaceText.value = '';
+    const before = state.revealRequest.value;
     m.shellCatalog.run('shell.replaceAll');
     expect(state.text).toBe('   gannet');
+    expect(state.revealRequest.value).not.toBe(before); // the editor brings the caret back into view
     expect(m.notebook.value!.notice.value?.text).toBe('Replaced 3 matches');
     state.undo();
     expect(state.text).toBe('Puffin puffin PUFFIN gannet');

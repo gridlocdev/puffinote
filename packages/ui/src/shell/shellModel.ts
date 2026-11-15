@@ -411,7 +411,7 @@ export class ShellModel {
     const matches = findAll(state.text, query, Infinity);
     const edit = replaceAllEdit(state.text, matches, this.replaceText.peek());
     if (edit) state.apply(edit);
-    state.revealTick.value++;
+    state.requestReveal();
     const n = matches.length;
     this.notebook
       .peek()
