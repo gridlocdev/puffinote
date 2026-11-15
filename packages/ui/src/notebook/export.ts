@@ -2,6 +2,7 @@ import { imageSources, renderHtmlDocument } from '@puffinote/markdown';
 import { TextDocument } from '@puffinote/text';
 import type { NotebookStore } from '../platform/notebookStore.ts';
 import { extOf, resolveRelative, stemOf } from '../platform/paths.ts';
+import { leavesNotebook } from './urls.ts';
 
 /*
  * Export a note as one standalone HTML file (PRD §10.5): the export renderer's document, with the notebook
@@ -34,7 +35,7 @@ export interface NoteHtml {
 
 /** A scheme (`https:`, `data:`) or `//host`: not a notebook file. */
 function isExternal(src: string): boolean {
-  return /^[a-z][a-z0-9+.-]*:/i.test(src) || src.startsWith('//') || src.startsWith('#');
+  return leavesNotebook(src) || src.startsWith('#');
 }
 
 /** Base64 of `bytes`, in chunks so a large picture doesn't overflow the argument list. */

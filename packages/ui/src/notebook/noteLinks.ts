@@ -3,6 +3,7 @@
  * it names. Pure, so the rules are tested without a notebook or a DOM.
  */
 import { baseName, extOf, joinPath, parentOf, pathKey, resolveRelative } from '../platform/paths.ts';
+import { leavesNotebook } from './urls.ts';
 
 /** A link as the editor hands it over: its destination, or `[[target]]` for a wiki link. */
 export type NoteLink =
@@ -43,7 +44,7 @@ export function parseLinkHref(href: string): NoteLink | null {
     return { kind: 'wiki', target: name, fragment };
   }
   if (/^(https?:|mailto:)/i.test(h)) return { kind: 'external', url: h };
-  if (!h || /^[a-z][a-z0-9+.-]*:/i.test(h) || h.startsWith('//')) return null;
+  if (!h || leavesNotebook(h)) return null;
   const hash = h.indexOf('#');
   const path = (hash >= 0 ? h.slice(0, hash) : h).replace(/\?.*$/, '');
   const fragment = hash >= 0 ? decodeSafe(h.slice(hash + 1)) : '';

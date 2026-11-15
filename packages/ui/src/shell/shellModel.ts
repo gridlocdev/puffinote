@@ -13,6 +13,7 @@ import type { Tab } from '../notebook/tab.ts';
 import { folderOf } from '../notebook/library.ts';
 import { headingFor, parseLinkHref, resolveNoteLink } from '../notebook/noteLinks.ts';
 import type { TrashItem } from '../notebook/trash.ts';
+import { hasScheme } from '../notebook/urls.ts';
 import {
   allFiles,
   allFolders,
@@ -704,7 +705,7 @@ export class ShellModel {
 
   /** The notebook file a picture link written in note `notePath` points at, or null (a web picture, missing). */
   private pictureFile(url: string, notePath: string): string | null {
-    if (/^[a-z][a-z0-9+.-]*:/i.test(url)) return null;
+    if (hasScheme(url)) return null;
     const path = resolveRelative(notePath, url);
     const nb = this.notebook.peek();
     return path !== null && nb && findNode(nb.tree.peek(), path)?.kind === 'file' ? path : null;

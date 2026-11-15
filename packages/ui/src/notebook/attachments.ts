@@ -11,6 +11,7 @@ import {
   stemOf,
 } from '../platform/paths.ts';
 import type { Settings } from './settings.ts';
+import { leavesNotebook } from './urls.ts';
 
 /*
  * Pictures a note shows (PRD §10.6): where a pasted or dropped one is saved, the link written for it, and
@@ -29,7 +30,7 @@ export interface FileRef {
 
 /** `scheme:` or `//host`: not a notebook file. */
 function isExternal(url: string): boolean {
-  return /^[a-z][a-z0-9+.-]*:/i.test(url) || url.startsWith('//') || url.startsWith('#') || url === '';
+  return leavesNotebook(url) || url.startsWith('#') || url === '';
 }
 
 /** Every `![](…)` and `[](…)` destination in `text` that names a notebook file (code is skipped). */
