@@ -62,7 +62,7 @@ void Notebook.open(store, {
     setTimeout(() => URL.revokeObjectURL(url), 1000);
   },
 }).then(async (nb) => {
-  model.setNotebook(nb);
+  model.session.set(nb);
   if (nb.tabs.value.length === 0) await model.openFile('Welcome.md');
 });
 

@@ -35,6 +35,7 @@ import {
 import type { ImportFile } from '../notebook/importFiles.ts';
 import type { ConfirmOptions, PromptOptions } from './Dialog.tsx';
 import { LayoutPolicy } from './layoutPolicy.ts';
+import { NotebookSession } from './notebookSession.ts';
 
 /** A row in a context menu; `null` draws a separator. */
 export interface MenuItem {
@@ -111,13 +112,21 @@ function loadZoom(): number {
  * the file and tab actions that need to ask the user something first. One per window.
  */
 export class ShellModel {
-  readonly notebook = signal<Notebook | null>(null);
+  /** Which notebook the window shows, the switch to another, and the view state that goes with one. */
+  readonly session: NotebookSession = new NotebookSession({
+    leaving: () => {
+      if (this.overlay.peek()) this.close();
+      this.preview.value = null;
+      this.findQuery.value = null;
+      this.replaceOpen.value = false;
+    },
+    entered: () => (this.layoutPolicy.tabBarOverride.value = null),
+    confirmDiscardAll: () => this.confirmDiscardAll(),
+  });
+  readonly notebook = this.session.notebook;
   readonly overlay = signal<Overlay | null>(null);
   /** The picture preview (PRD §10.6): under any menu or dialog, over everything else. */
   readonly preview = signal<PicturePreview | null>(null);
-  /** The Filter and Search panels' boxes, kept while the user looks elsewhere. */
-  readonly filterQuery = signal('');
-  readonly searchQuery = signal('');
   /** Bumps when Filter or Search should put the caret in its box. */
   readonly focusPanelTick = signal(0);
   /** Find in Note's box (PRD §10.7): its text while the bar is open, null while it is closed. */
@@ -126,8 +135,6 @@ export class ShellModel {
   readonly replaceOpen = signal(false);
   /** The Replace box's text, kept while the bar is closed. */
   readonly replaceText = signal('');
-  /** The Library layout's popover under the path bar, if one is open. */
-  readonly popover = signal<'outline' | 'recent' | null>(null);
   /** How large notes are drawn (1 is 100%). Remembered across sessions in this browser or app. */
   readonly zoom = signal(loadZoom());
   readonly host: ShellHost;
@@ -215,47 +222,6 @@ export class ShellModel {
   /** Whether the Command Menu lists `c` now: an editor command only while a note is in front. */
   offers(c: Command): boolean {
     return this.shellIds.has(c.id) || this.activeState.value !== null;
-  }
-
-  setNotebook(nb: Notebook | null): void {
-    const old = this.notebook.peek();
-    if (old !== nb) {
-      // Nothing opened over the old notebook may act on the new one: a question still up is answered as
-      // cancelled, and the preview's offsets belonged to the old note in front.
-      if (this.overlay.peek()) this.close();
-      this.preview.value = null;
-      this.findQuery.value = null;
-      this.replaceOpen.value = false;
-    }
-    if (old && old !== nb) old.dispose();
-    this.layoutPolicy.tabBarOverride.value = null;
-    this.filterQuery.value = '';
-    this.searchQuery.value = '';
-    this.popover.value = null;
-    this.notebook.value = nb;
-  }
-
-  /** Bumps when an open of another notebook starts (see `adoptNotebook`). */
-  private notebookTicket = 0;
-
-  /** Say that opening another notebook has started; pass the ticket to `adoptNotebook` when it is read. */
-  beginNotebookOpen(): number {
-    return ++this.notebookTicket;
-  }
-
-  /**
-   * Put `nb`, opened under `ticket`, in place of the notebook in front. Reading a notebook can be slow (the NAS),
-   * so this asks about unsaved tabs again just before the switch: text typed meanwhile is never dropped without
-   * asking. An open that a later one overtook, or that the user cancels here, is closed and resolves false.
-   */
-  async adoptNotebook(nb: Notebook, ticket: number): Promise<boolean> {
-    const stale = () => ticket !== this.notebookTicket;
-    if (stale() || !(await this.confirmDiscardAll()) || stale()) {
-      if (this.notebook.peek() !== nb) nb.dispose();
-      return false;
-    }
-    this.setNotebook(nb);
-    return true;
   }
 
   // ----- Overlays -----
@@ -468,7 +434,7 @@ export class ShellModel {
     if (this.layout.peek() === 'library') {
       // The library has no panels: Outline and Recent are popovers, and the rest is the note list's box.
       if (panel === 'outline' || panel === 'recent') {
-        this.popover.value = this.popover.peek() === panel ? null : panel;
+        this.session.popover.value = this.session.popover.peek() === panel ? null : panel;
         return;
       }
       nb.sidebarCollapsed.value = false;

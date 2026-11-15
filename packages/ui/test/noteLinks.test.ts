@@ -98,7 +98,7 @@ describe('links between notes', () => {
       { prefs: memoryPrefs() },
     );
     const m = new ShellModel();
-    m.setNotebook(nb);
+    m.session.set(nb);
     await nb.openFile('a.md');
     await m.followLink('a.md', '[[b]]');
     expect(m.activeTab.value?.path.value).toBe('b.md');

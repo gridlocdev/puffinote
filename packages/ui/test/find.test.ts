@@ -38,7 +38,7 @@ describe('find in note', () => {
   async function setup(text: string) {
     const nb = await Notebook.open(new MemoryStore('N', { 'a.md': text }), { prefs: memoryPrefs() });
     const m = new ShellModel();
-    m.setNotebook(nb);
+    m.session.set(nb);
     const tab = (await nb.openFile('a.md'))!;
     return { m, state: tab.state! };
   }
@@ -191,7 +191,7 @@ describe('find in note', () => {
     const bytes = new Uint8Array([0x65, 0x67, 0x67, 0x20, 0xff, 0xfe, 0x80]); // "egg " and bytes that aren't UTF-8
     const nb = await Notebook.open(new MemoryStore('N', { 'a.md': bytes }), { prefs: memoryPrefs() });
     const m = new ShellModel();
-    m.setNotebook(nb);
+    m.session.set(nb);
     const tab = (await nb.openFile('a.md'))!;
     expect(tab.readOnly).toBe(true);
     const before = tab.state!.text;

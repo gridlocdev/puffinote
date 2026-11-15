@@ -50,7 +50,7 @@ export function PanelBox(props: {
 }
 
 export function FilterPanel({ model, nb }: { readonly model: ShellModel; readonly nb: Notebook }) {
-  const query = model.filterQuery.value;
+  const query = model.session.filterQuery.value;
   const result = useMemo(() => filterTree(nb.tree.value, query), [nb.tree.value, query]);
   // The folders leading to matches open themselves, but aren't held open: these toggles are the panel's own.
   const [expanded, setExpanded] = useState<ReadonlySet<string>>(result.opened);
@@ -62,7 +62,7 @@ export function FilterPanel({ model, nb }: { readonly model: ShellModel; readonl
         value={query}
         placeholder="Filter by name"
         label="Filter files by name"
-        onInput={(v) => (model.filterQuery.value = v)}
+        onInput={(v) => (model.session.filterQuery.value = v)}
       />
       {query.trim() && (
         <p class="pn-panel-note" role="status">
@@ -114,7 +114,7 @@ export async function runSearch(
 }
 
 export function SearchPanel({ model, nb }: { readonly model: ShellModel; readonly nb: Notebook }) {
-  const query = model.searchQuery.value;
+  const query = model.session.searchQuery.value;
   const [result, setResult] = useState<SearchResult | null>(null);
   const [index, setIndex] = useState(0);
   const list = useRef<HTMLUListElement>(null);
@@ -179,7 +179,7 @@ export function SearchPanel({ model, nb }: { readonly model: ShellModel; readonl
         value={query}
         placeholder="Search notes"
         label="Search the notebook"
-        onInput={(v) => (model.searchQuery.value = v)}
+        onInput={(v) => (model.session.searchQuery.value = v)}
         onKeyDown={onKey}
       />
       {query.trim() && (

@@ -182,7 +182,7 @@ function nameMatches(name: string, query: string): boolean {
 function NoteList({ model, nb }: { readonly model: ShellModel; readonly nb: Notebook }) {
   const scope = nb.scope.value;
   const sort = nb.sort.value;
-  const query = model.filterQuery.value.trim();
+  const query = model.session.filterQuery.value.trim();
   const { files, folders } = useMemo(
     () =>
       scopeList(nb.tree.value, scope, {
@@ -269,16 +269,16 @@ function NoteList({ model, nb }: { readonly model: ShellModel; readonly nb: Note
         <input
           ref={box}
           type="search"
-          value={model.filterQuery.value}
+          value={model.session.filterQuery.value}
           placeholder="Filter"
           aria-label="Filter notes by name or text"
           spellcheck={false}
           autocomplete="off"
-          onInput={(e) => (model.filterQuery.value = (e.target as HTMLInputElement).value)}
+          onInput={(e) => (model.session.filterQuery.value = (e.target as HTMLInputElement).value)}
           onKeyDown={(e) => {
-            if (e.key === 'Escape' && model.filterQuery.value) {
+            if (e.key === 'Escape' && model.session.filterQuery.value) {
               e.preventDefault();
-              model.filterQuery.value = '';
+              model.session.filterQuery.value = '';
             } else if (e.key === 'ArrowDown') {
               e.preventDefault();
               list.current?.focus();
@@ -447,7 +447,7 @@ function PathBar({ model, nb }: { readonly model: ShellModel; readonly nb: Noteb
   const tab = nb.active.value;
   const path = tab?.path.value ?? '';
   const parts = path ? path.split('/') : [];
-  const popover = model.popover.value;
+  const popover = model.session.popover.value;
   const showExt = nb.config.settings.value.showFileExtensions;
   const crumbs: { label: string; dir: string }[] = [{ label: nb.name, dir: '' }];
   for (let i = 0; i < parts.length - 1; i++)
@@ -490,11 +490,11 @@ function PathBar({ model, nb }: { readonly model: ShellModel; readonly nb: Noteb
 
 /** The Outline or Recent list, floating under the path bar until a pick, Escape or a click elsewhere. */
 function Popover({ model, nb }: { readonly model: ShellModel; readonly nb: Notebook }) {
-  const which = model.popover.value;
+  const which = model.session.popover.value;
   const ref = useRef<HTMLDivElement>(null);
   useEffect(() => {
     if (!which) return;
-    const close = () => (model.popover.value = null);
+    const close = () => (model.session.popover.value = null);
     const onDown = (e: PointerEvent) => {
       const t = e.target as HTMLElement;
       if (ref.current?.contains(t) || t.closest('[data-popover]')) return;
@@ -524,10 +524,10 @@ function Popover({ model, nb }: { readonly model: ShellModel; readonly nb: Noteb
       role="dialog"
       aria-label={which === 'outline' ? 'Outline' : 'History'}
       onClick={(e) => {
-        if ((e.target as HTMLElement).closest('li')) model.popover.value = null;
+        if ((e.target as HTMLElement).closest('li')) model.session.popover.value = null;
       }}
       onKeyDown={(e) => {
-        if (e.key === 'Enter' && (e.target as HTMLElement).closest('li')) model.popover.value = null;
+        if (e.key === 'Enter' && (e.target as HTMLElement).closest('li')) model.session.popover.value = null;
       }}
     >
       <h2 class="pn-popover-title">{which === 'outline' ? 'Outline' : 'History'}</h2>

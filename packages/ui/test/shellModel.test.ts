@@ -42,7 +42,7 @@ describe('ShellModel overlays', () => {
     const store = new MemoryStore('N', { 'a.md': '' });
     const nb = await Notebook.open(store, { prefs: memoryPrefs({ autoSave: false }) });
     const m = new ShellModel();
-    m.setNotebook(nb);
+    m.session.set(nb);
     const tab = (await nb.openFile('a.md'))!;
     tab.state!.insert('x');
     const closing = m.closeTab(tab);
@@ -54,7 +54,7 @@ describe('ShellModel overlays', () => {
     const o = m.overlay.value;
     if (o?.kind === 'confirm') o.done('discard');
     expect(await quitting).toBe(true);
-    m.setNotebook(null);
+    m.session.set(null);
   });
 });
 
@@ -69,7 +69,7 @@ describe('ShellModel Move To', () => {
     });
     const nb = await Notebook.open(store, { prefs: memoryPrefs({ autoSave: false }) });
     const m = new ShellModel();
-    m.setNotebook(nb);
+    m.session.set(nb);
     // Not its own folder or anything inside it, and not where a same-named item already is.
     expect(m.moveTargets('a')).toEqual(['c/a']);
     expect(m.moveTargets('a/b')).toEqual(['', 'c', 'c/a']);
@@ -79,7 +79,7 @@ describe('ShellModel Move To', () => {
     const item = menu?.kind === 'menu' ? menu.items.find((i) => i?.label === 'Move To…') : undefined;
     item?.run();
     expect(m.overlay.value).toEqual({ kind: 'moveTo', path: 'top.md' });
-    m.setNotebook(null);
+    m.session.set(null);
   });
 });
 
@@ -88,7 +88,7 @@ describe('ShellModel pinned tabs', () => {
     const store = new MemoryStore('N', { 'a.md': '', 'b.md': '', 'c.md': '' });
     const nb = await Notebook.open(store, { prefs: memoryPrefs({ autoSave: false }) });
     const m = new ShellModel();
-    m.setNotebook(nb);
+    m.session.set(nb);
     const a = (await nb.openFile('a.md'))!;
     await nb.openFile('b.md');
     const c = (await nb.openFile('c.md'))!;
@@ -99,7 +99,7 @@ describe('ShellModel pinned tabs', () => {
     expect(nb.tabs.value.map((t) => t.path.value)).toEqual(['a.md']);
     await m.closeTab(a);
     expect(nb.tabs.value).toEqual([]);
-    m.setNotebook(null);
+    m.session.set(null);
   });
 });
 
@@ -117,7 +117,7 @@ describe('ShellModel context menus run through the catalog', () => {
     const store = new MemoryStore('N', { 'a.md': '', 'b.md': '', 'c.md': '' });
     const nb = await Notebook.open(store, { prefs: memoryPrefs({ autoSave: false }) });
     const m = new ShellModel();
-    m.setNotebook(nb);
+    m.session.set(nb);
     const a = (await nb.openFile('a.md'))!;
     await nb.openFile('b.md');
     await nb.openFile('c.md');
@@ -128,26 +128,26 @@ describe('ShellModel context menus run through the catalog', () => {
     menuItem(m, 'Close Other Tabs').run();
     await vi.waitFor(() => expect(nb.tabs.value.map((t) => t.path.value)).toEqual(['a.md']));
     expect(m.menuCatalog.recentIds.slice(0, 2)).toEqual(['shell.closeOtherTabs', 'shell.pinTab']);
-    m.setNotebook(null);
+    m.session.set(null);
   });
 
   it('moves the file it was opened on, not the selected one', async () => {
     const store = new MemoryStore('N', { 'a.md': '', 'b.md': '' });
     const nb = await Notebook.open(store, { prefs: memoryPrefs({ autoSave: false }) });
     const m = new ShellModel();
-    m.setNotebook(nb);
+    m.session.set(nb);
     m.openFileMenu(findNode(nb.tree.value, 'b.md')!, '', { x: 0, y: 0 });
     menuItem(m, 'Move To…').run();
     const o = m.overlay.value;
     expect(o?.kind === 'moveTo' && o.path).toBe('b.md');
-    m.setNotebook(null);
+    m.session.set(null);
   });
 
   it('runs nothing while a question waits on the user', async () => {
     const store = new MemoryStore('N', { 'a.md': '', 'b.md': '' });
     const nb = await Notebook.open(store, { prefs: memoryPrefs({ autoSave: false }) });
     const m = new ShellModel();
-    m.setNotebook(nb);
+    m.session.set(nb);
     const a = (await nb.openFile('a.md'))!;
     m.openTabMenu(a, { x: 0, y: 0 });
     const close = menuItem(m, 'Close Tab');
@@ -157,7 +157,7 @@ describe('ShellModel context menus run through the catalog', () => {
     await Promise.resolve();
     expect(nb.tabs.value).toEqual([a]);
     m.close();
-    m.setNotebook(null);
+    m.session.set(null);
   });
 });
 
@@ -166,7 +166,7 @@ describe('ShellModel editor menu', () => {
     const store = new MemoryStore('N', { 'a.md': 'hello' });
     const nb = await Notebook.open(store, { prefs: memoryPrefs({ autoSave: false }) });
     const m = new ShellModel();
-    m.setNotebook(nb);
+    m.session.set(nb);
     const tab = (await nb.openFile('a.md'))!;
     const labels = () => {
       const o = m.overlay.value;
@@ -179,7 +179,7 @@ describe('ShellModel editor menu', () => {
     tab.state!.select(0, 2);
     m.openEditorMenu({ x: 0, y: 0 });
     expect(labels()).toEqual(['Cut', 'Copy', 'Paste', '-', 'Select All']);
-    m.setNotebook(null);
+    m.session.set(null);
   });
 });
 
@@ -217,7 +217,7 @@ describe('ShellModel Delete Picture', () => {
     const store = new MemoryStore('N', files);
     const nb = await Notebook.open(store, { prefs: memoryPrefs({ autoSave: false }) });
     const m = new ShellModel();
-    m.setNotebook(nb);
+    m.session.set(nb);
     const tab = (await nb.openFile('a.md'))!;
     const text = tab.state!.text;
     const start = text.indexOf('![');
@@ -279,7 +279,7 @@ describe('ShellModel picture preview and menu (PRD §10.6)', () => {
     const store = new MemoryStore('N', files);
     const nb = await Notebook.open(store, { prefs: memoryPrefs({ autoSave: false }) });
     const m = new ShellModel();
-    m.setNotebook(nb);
+    m.session.set(nb);
     const tab = (await nb.openFile('a.md'))!;
     const text = tab.state!.text;
     const start = text.indexOf('![');
@@ -376,7 +376,7 @@ describe('ShellModel Delete Picture Redo', () => {
     const store = new MemoryStore('N', { 'a.md': '![](pic.png)', 'b.md': '', 'pic.png': 'PNG' });
     const nb = await Notebook.open(store, { prefs: memoryPrefs({ autoSave: false }) });
     const m = new ShellModel();
-    m.setNotebook(nb);
+    m.session.set(nb);
     const b = (await nb.openFile('b.md'))!;
     const tab = (await nb.openFile('a.md'))!;
     await m.deletePicture({ start: 0, end: 12, url: 'pic.png' });
@@ -388,7 +388,7 @@ describe('ShellModel Delete Picture Redo', () => {
     await new Promise((r) => setTimeout(r, 10));
     expect(findNode(nb.tree.value, 'pic.png')).not.toBeNull();
     await store.read('pic.png');
-    m.setNotebook(null);
+    m.session.set(null);
   });
 });
 
@@ -399,26 +399,26 @@ describe('ShellModel switching notebooks', () => {
     const nb1 = await Notebook.open(one, { prefs: memoryPrefs({ autoSave: false }) });
     const nb2 = await Notebook.open(two, { prefs: memoryPrefs({ autoSave: false }) });
     const m = new ShellModel();
-    m.setNotebook(nb1);
+    m.session.set(nb1);
     await nb1.openFile('a.md');
     m.openPreview({ start: 0, end: 12, url: 'pic.png' });
     m.findQuery.value = 'x';
     const asking = m.confirm({ title: 'Delete?', message: '', buttons });
-    m.setNotebook(nb2);
+    m.session.set(nb2);
     expect(await asking).toBe('cancel');
     expect(m.overlay.value).toBeNull();
     expect(m.preview.value).toBeNull();
     expect(m.findQuery.value).toBeNull();
-    m.setNotebook(null);
+    m.session.set(null);
   });
 
   it('a closed notebook refuses to delete or move files', async () => {
     const one = new MemoryStore('One', { 'pic.png': '', 'a.md': '' });
     const nb1 = await Notebook.open(one, { prefs: memoryPrefs({ autoSave: false }) });
     const m = new ShellModel();
-    m.setNotebook(nb1);
+    m.session.set(nb1);
     m.open({ kind: 'unusedPictures', paths: ['pic.png'] });
-    m.setNotebook(null);
+    m.session.set(null);
     expect(m.overlay.value).toBeNull();
     await nb1.pictures.removeUnused(['pic.png']);
     await nb1.pictures.removeAll(['pic.png']);
@@ -433,7 +433,7 @@ describe('ShellModel Delete…', () => {
     const store = new MemoryStore('N', files);
     const nb = await Notebook.open(store, { prefs: memoryPrefs({ autoSave: false }) });
     const m = new ShellModel();
-    m.setNotebook(nb);
+    m.session.set(nb);
     for (const p of dirty) (await nb.openFile(p))!.state!.insert('typed ');
     const removing = m.remove(path);
     await vi.waitFor(() => expect(m.overlay.value?.kind).toBe('confirm'));
@@ -468,30 +468,30 @@ describe('ShellModel opening another notebook slowly', () => {
   it('asks again about text typed while the new notebook was opening', async () => {
     const m = new ShellModel();
     const old = await opened('Old');
-    m.setNotebook(old);
-    const ticket = m.beginNotebookOpen();
+    m.session.set(old);
+    const ticket = m.session.beginOpen();
     const next = await opened('New');
     (await old.openFile('a.md'))!.state!.insert('typed meanwhile');
-    const adopting = m.adoptNotebook(next, ticket);
+    const adopting = m.session.adopt(next, ticket);
     await vi.waitFor(() => expect(m.overlay.value?.kind).toBe('confirm'));
     const o = m.overlay.value;
     if (o?.kind === 'confirm') o.done('cancel');
     expect(await adopting).toBe(false);
     expect(m.notebook.value).toBe(old);
     expect(old.dirtyTabs).toHaveLength(1);
-    m.setNotebook(null);
+    m.session.set(null);
   });
 
   it('drops an open that a later one overtook', async () => {
     const m = new ShellModel();
-    const first = m.beginNotebookOpen();
-    const second = m.beginNotebookOpen();
+    const first = m.session.beginOpen();
+    const second = m.session.beginOpen();
     const two = await opened('Two');
-    expect(await m.adoptNotebook(two, second)).toBe(true);
+    expect(await m.session.adopt(two, second)).toBe(true);
     const one = await opened('One');
-    expect(await m.adoptNotebook(one, first)).toBe(false);
+    expect(await m.session.adopt(one, first)).toBe(false);
     expect(m.notebook.value).toBe(two);
-    m.setNotebook(null);
+    m.session.set(null);
   });
 });
 
@@ -500,7 +500,7 @@ describe('ShellModel closing a tab that changed on disk', () => {
     const store = new MemoryStore('N', { 'a.md': 'one', 'b.md': 'two' });
     const nb = await Notebook.open(store, { prefs: memoryPrefs({ autoSave: false }) });
     const m = new ShellModel();
-    m.setNotebook(nb);
+    m.session.set(nb);
     const a = (await nb.openFile('a.md'))!;
     const b = (await nb.openFile('b.md'))!;
     a.state!.insert('mine ');
@@ -546,7 +546,7 @@ describe('ShellModel in the Library layout (PRD §6)', () => {
     const store = new MemoryStore('N', { 'a/x.md': 'x', 'b/y.md': 'y' });
     const nb = await Notebook.open(store, { prefs: memoryPrefs({ autoSave: false, layout: 'library' }) });
     const m = new ShellModel();
-    m.setNotebook(nb);
+    m.session.set(nb);
     await nb.createNote('a', 'new'); // leaves the tree's selection on a/new.md
     nb.scope.value = 'folder:b';
     await nb.openFile('b/y.md'); // a card click
@@ -570,7 +570,7 @@ describe('ShellModel in the Library layout (PRD §6)', () => {
     void m.menuCatalog.run('shell.newNote');
     await vi.waitFor(() => expect(m.overlay.value).not.toBeNull());
     expect(asked().label).toBe('Name (in b)');
-    m.setNotebook(null);
+    m.session.set(null);
   });
 });
 
@@ -579,7 +579,7 @@ describe('ShellModel menu inputs', () => {
     const store = new MemoryStore('N', { 'a.md': 'cat cat' });
     const nb = await Notebook.open(store, { prefs: memoryPrefs({ autoSave: false }) });
     const m = new ShellModel();
-    m.setNotebook(nb);
+    m.session.set(nb);
     await nb.openFile('a.md');
     m.setFindQuery('cat');
     let runs = 0;
@@ -594,14 +594,14 @@ describe('ShellModel menu inputs', () => {
     m.replaceOpen.value = false;
     expect(runs).toBe(before + 2);
     stop();
-    m.setNotebook(null);
+    m.session.set(null);
   });
 
   it('follows a tab being pinned', async () => {
     const store = new MemoryStore('N', { 'a.md': '' });
     const nb = await Notebook.open(store, { prefs: memoryPrefs({ autoSave: false }) });
     const m = new ShellModel();
-    m.setNotebook(nb);
+    m.session.set(nb);
     const a = (await nb.openFile('a.md'))!;
     let runs = 0;
     const stop = effect(() => {
@@ -612,6 +612,6 @@ describe('ShellModel menu inputs', () => {
     nb.setTabPinned(a, true);
     expect(runs).toBeGreaterThan(before);
     stop();
-    m.setNotebook(null);
+    m.session.set(null);
   });
 });

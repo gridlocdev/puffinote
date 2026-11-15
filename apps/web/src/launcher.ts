@@ -220,7 +220,7 @@ export class Launcher {
 
   /** Back to the welcome screen. The caller has already dealt with unsaved notes. */
   close(): void {
-    this.model.setNotebook(null);
+    this.model.session.set(null);
     this.error.value = null;
   }
 
@@ -254,7 +254,7 @@ export class Launcher {
   private async openStore(store: NotebookStore, r: Recent): Promise<boolean> {
     this.opening.value = r.name;
     this.error.value = null;
-    const ticket = this.model.beginNotebookOpen();
+    const ticket = this.model.session.beginOpen();
     try {
       const nb = await Notebook.open(store, {
         prefs: this.prefs,
@@ -263,7 +263,7 @@ export class Launcher {
         confirmOpenExternal: (name) => this.model.confirmOpenExternal(name),
         recovery: webRecovery(recentKey(r)),
       });
-      if (!(await this.model.adoptNotebook(nb, ticket))) return false;
+      if (!(await this.model.session.adopt(nb, ticket))) return false;
       const key = recentKey(r);
       this.saveRecents([r, ...this.recents.value.filter((x) => recentKey(x) !== key)]);
       return true;
