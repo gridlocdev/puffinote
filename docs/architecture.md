@@ -35,6 +35,7 @@ Puffinote is one TypeScript code base with three hosts and a CLI. The browser, t
 - `@puffinote/text` knows text, not Markdown. `@puffinote/markdown` knows Markdown, not styling. Both use no DOM or Node APIs and import no UI library. ESLint enforces this, so they run in a browser, a worker and Node.
 - `@puffinote/ui` owns everything visual: styling, concealment, the shell and the stores.
 - The apps are thin. They pick a store, put the shell on the page, and wire the host's native parts.
+- Each package's `src/index.ts` names what it exports, and its `package.json` `exports` field allows only that file, so other packages and apps can't import a package's inner files. Export a new name there when another package needs it. A package's own tests may import its inner files.
 
 ## Text (`packages/text`)
 

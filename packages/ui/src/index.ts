@@ -1,21 +1,127 @@
-export * from './editor/commands.ts';
-export * from './editor/editorState.ts';
-export * from './editor/lineRender.ts';
-export * from './editor/MarkdownEditor.tsx';
-export * from './editor/motion.ts';
-export * from './editor/reveal.ts';
-export * from './commands/index.ts';
-export * from './editor/editorCommands.ts';
-export * from './notebook/importFiles.ts';
-export * from './notebook/notebook.ts';
-export * from './notebook/tab.ts';
-export * from './notebook/quickOpen.ts';
-export * from './notebook/recovery.ts';
-export * from './notebook/search.ts';
-export * from './notebook/settings.ts';
-export * from './notebook/tree.ts';
-export * from './platform/index.ts';
-export * from './shell/importPicker.ts';
-export * from './shell/Shell.tsx';
-export * from './shell/shellModel.ts';
-export * from './shell/Icon.tsx';
+export {
+  applyEditTo,
+  backspaceItemEdit,
+  backspacePairEdit,
+  codeBlockEdit,
+  deleteLinesEdit,
+  deleteRangeEdit,
+  duplicateLinesEdit,
+  type Edit,
+  type EditContext,
+  enterEdit,
+  headingEdit,
+  indentEdit,
+  joinLinesDeleteEdit,
+  linkEdit,
+  moveItemsToEdgeEdit,
+  moveLinesEdit,
+  outdentEdit,
+  pasteText,
+  pictureLinesEdit,
+  removeRangeEdit,
+  ruleEdit,
+  setTaskStateEdit,
+  softBreakEdit,
+  toggleInlineEdit,
+  toggleTaskEdit,
+  typeCharEdit,
+  withTaskSort,
+} from './editor/commands.ts';
+export { EditorState, type PictureSpot } from './editor/editorState.ts';
+export {
+  checkboxLabel,
+  type Decoration,
+  type DecorationKind,
+  isInsideConcealed,
+  lineAnnouncement,
+  type LineRender,
+  ListDepthTracker,
+  listOrdinal,
+  renderLine,
+  type Segment,
+  snapOutOfConcealed,
+} from './editor/lineRender.ts';
+export {
+  type CaretLayout,
+  type CaretUnit,
+  graphemeColumn,
+  itemTextStart,
+  lineDeleteStart,
+  rowStartTarget,
+  smartLineStart,
+  wordLeft,
+  wordRight,
+} from './editor/motion.ts';
+export {
+  keepReveal,
+  lineReveal,
+  type LineReveal,
+  type PictureAt,
+  pictureExtent,
+  pictureWithUrlAt,
+  type ViewMode,
+} from './editor/reveal.ts';
+export {
+  type Command,
+  CommandCatalog,
+  type CommandGroup,
+  type CommandSpec,
+  type CommandTarget,
+  isMac,
+  type Shortcut,
+  type ShortcutEvent,
+  toAccelerator,
+} from './commands/index.ts';
+export {
+  type LibraryScope,
+  Notebook,
+  type NotebookOptions,
+  type NoteSort,
+  type Notice,
+  type Session,
+  type SidebarPanel,
+} from './notebook/notebook.ts';
+export { type RecoveryEntry, type RecoveryStorage, webRecovery } from './notebook/recovery.ts';
+export {
+  localPrefs,
+  memoryPrefs,
+  type PartialSettings,
+  type PrefsStorage,
+  type SettingField,
+  type SettingKey,
+  type Settings,
+} from './notebook/settings.ts';
+export {
+  AuthError,
+  BrowserStore,
+  type ConflictReason,
+  type Entry,
+  type FileData,
+  MemoryStore,
+  NasClient,
+  type NasInfo,
+  type NasRoot,
+  NasStore,
+  nativeBridge,
+  type NativeEntry,
+  type NativeMenuItem,
+  NativeStore,
+  type NotebookStore,
+  persistStorage,
+  printHtml,
+  privateFolder,
+  type PuffinoteNative,
+  type StoreCapabilities,
+  type StoreKind,
+  type WriteOptions,
+} from './platform/index.ts';
+export { pickImportFiles } from './shell/importPicker.ts';
+export { Shell } from './shell/Shell.tsx';
+export {
+  type MenuItem,
+  type Overlay,
+  type PicturePreview,
+  type ShellHost,
+  ShellModel,
+} from './shell/shellModel.ts';
+export { Icon } from './shell/Icon.tsx';
