@@ -23,21 +23,7 @@ export function TabStrip({ model, nb }: { readonly model: ShellModel; readonly n
 
   const menu = (tab: Tab, e: MouseEvent) => {
     e.preventDefault();
-    model.open({
-      kind: 'menu',
-      x: e.clientX,
-      y: e.clientY,
-      items: [
-        {
-          label: tab.pinned.value ? 'Unpin Tab' : 'Pin Tab',
-          run: () => nb.setTabPinned(tab, !tab.pinned.peek()),
-        },
-        null,
-        { label: 'Close Tab', run: () => void model.closeTab(tab) },
-        { label: 'Close Other Tabs', disabled: tabs.length < 2, run: () => void model.closeTabs(tab) },
-        { label: 'Close All Tabs', run: () => void model.closeTabs(null) },
-      ],
-    });
+    model.openTabMenu(tab, { x: e.clientX, y: e.clientY });
   };
 
   const render = (tab: Tab) => {

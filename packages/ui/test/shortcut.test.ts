@@ -108,3 +108,24 @@ describe('keys during IME composition', () => {
     expect(isComposingKey({})).toBe(false);
   });
 });
+
+describe('CommandCatalog.run', () => {
+  it('hands the target to the command and to its enabled check, and asks the gate first', () => {
+    const seen: unknown[] = [];
+    const cat = new CommandCatalog([
+      {
+        id: 'x',
+        title: 'X',
+        description: '',
+        group: 'File',
+        enabled: (t) => t?.path !== 'locked.md',
+        run: (t) => void seen.push(t),
+      },
+    ]);
+    expect(cat.run('x', { path: 'a.md' })).toBe(true);
+    expect(cat.run('x', { path: 'locked.md' })).toBe(false);
+    cat.gate = () => false;
+    expect(cat.run('x')).toBe(false);
+    expect(seen).toEqual([{ path: 'a.md' }]);
+  });
+});

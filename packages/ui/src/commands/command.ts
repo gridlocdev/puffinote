@@ -11,6 +11,19 @@ import {
 /** Menu groups — the native menu bar and the palette's section labels. */
 export type CommandGroup = 'File' | 'Edit' | 'View' | 'Insert' | 'Format' | 'Go' | 'Help';
 
+/**
+ * What a command acts on when it isn't the selection or the note in front: the file, folder or tab a context
+ * menu was opened on. Commands that take one fall back to the selection without it.
+ */
+export interface CommandTarget {
+  /** A notebook-relative file or folder. */
+  readonly path?: string;
+  /** The folder a new file goes in. */
+  readonly dir?: string;
+  /** An open tab, by its id. */
+  readonly tabId?: number;
+}
+
 export interface CommandSpec {
   readonly id: string;
   readonly title: string;
@@ -22,10 +35,10 @@ export interface CommandSpec {
   readonly icon?: string;
   /** Extra search words for the palette. */
   readonly keywords?: string;
-  readonly run: () => void | Promise<void>;
-  readonly enabled?: () => boolean;
+  readonly run: (target?: CommandTarget) => void | Promise<void>;
+  readonly enabled?: (target?: CommandTarget) => boolean;
   /** Toggle commands: whether it is on. */
-  readonly active?: () => boolean;
+  readonly active?: (target?: CommandTarget) => boolean;
   /** Hidden from the palette (e.g. the palette command itself). */
   readonly hidden?: boolean;
   /** Works while a text field (the find box, a dialog field) has focus. */
@@ -39,8 +52,8 @@ export interface Command extends CommandSpec {
 }
 
 /**
- * The one command catalog: menus, toolbar, ⌘K palette, and key bindings all read it. Running a
- * command from anywhere goes through `run`, which also records it for the palette's recents.
+ * The one command catalog: menus, context menus, toolbar, ⌘K palette, and key bindings all read it. Running a
+ * command from anywhere goes through `run`, which checks the gate and records it for the palette's recents.
  */
 export class CommandCatalog {
   readonly all: readonly Command[];
@@ -65,24 +78,25 @@ export class CommandCatalog {
     return this.byId.get(id);
   }
 
-  isEnabled(c: Command): boolean {
-    return c.enabled?.() ?? true;
+  isEnabled(c: Command, target?: CommandTarget): boolean {
+    return c.enabled?.(target) ?? true;
   }
 
-  /** Called before every command runs; returning false cancels it (a dialog is open). */
-  beforeRun: ((c: Command) => boolean) | null = null;
+  /** Asked before every run, from any source; returning false cancels it (a question is waiting on the user). */
+  gate: ((c: Command) => boolean) | null = null;
 
-  run(id: string): boolean {
+  /** Run `id` on `target` (or on the selection) if it is enabled and the gate lets it. */
+  run(id: string, target?: CommandTarget): boolean {
     const c = this.byId.get(id);
-    if (!c || !this.isEnabled(c)) return false;
-    if (this.beforeRun && !this.beforeRun(c)) return false;
+    if (!c || !this.isEnabled(c, target)) return false;
+    if (this.gate && !this.gate(c)) return false;
     if (!c.hidden) {
       const at = this.recent.indexOf(id);
       if (at >= 0) this.recent.splice(at, 1);
       this.recent.unshift(id);
       this.recent.length = Math.min(this.recent.length, 5);
     }
-    void Promise.resolve(c.run()).catch((e: unknown) => console.error(`command ${id} failed`, e));
+    void Promise.resolve(c.run(target)).catch((e: unknown) => console.error(`command ${id} failed`, e));
     return true;
   }
 

@@ -1,5 +1,5 @@
 import { computed, effect, signal } from '@preact/signals';
-import { CommandCatalog, type Command, type CommandSpec } from '../commands/command.ts';
+import { CommandCatalog, type Command, type CommandSpec, type CommandTarget } from '../commands/command.ts';
 import { formatShortcut, isMac, parseShortcut } from '../commands/shortcut.ts';
 import { outlineOf } from '@puffinote/markdown';
 import { removeRangeEdit } from '../editor/commands.ts';
@@ -174,6 +174,9 @@ export class ShellModel {
       sortTasks: () => this.notebook.peek()?.settings.peek().sortCheckedTasks ?? false,
     });
     this.menuCatalog = new CommandCatalog([...shell, ...editor]);
+    // A question someone waits on (Save changes?, a name) takes no commands, from keys, menus or the palette:
+    // answer it first.
+    this.shellCatalog.gate = this.menuCatalog.gate = () => !this.asking;
     // The preview's offsets belong to the note it was opened from: another note in front closes it.
     effect(() => {
       const tab = this.activeTab.value;
@@ -459,32 +462,63 @@ export class ShellModel {
     const nb = this.notebook.peek();
     if (!nb) return;
     const store = nb.store;
+    const item = (id: string, target: CommandTarget, extra?: Partial<MenuItem>) =>
+      this.commandItem(id, target, extra);
     const items: (MenuItem | null)[] = [];
     if (node?.kind === 'file') {
-      items.push({
-        label: fileKind(node.path) === 'other' ? 'Open in Default App' : 'Open',
-        run: () => void this.openFile(node.path),
-      });
-      if (store.openExternal && fileKind(node.path) !== 'other') {
-        items.push({ label: 'Open in Default App', run: () => void store.openExternal!(node.path) });
-      }
+      const path = node.path;
+      items.push(
+        item('shell.openFile', { path }, fileKind(path) === 'other' ? { label: 'Open in Default App' } : {}),
+      );
+      if (store.openExternal && fileKind(path) !== 'other') items.push(item('shell.openExternal', { path }));
       if (this.layout.peek() === 'library') {
-        const pinned = nb.pinned.peek().includes(node.path);
-        items.push({ label: pinned ? 'Unpin' : 'Pin to Top', run: () => nb.togglePin(node.path) });
+        items.push(
+          item(
+            'shell.pinToTop',
+            { path },
+            { label: nb.pinned.peek().includes(path) ? 'Unpin' : 'Pin to Top' },
+          ),
+        );
       }
       items.push(null);
     }
     items.push(
-      { label: 'New Note…', run: () => void this.newNote(dir) },
-      { label: 'New Folder…', run: () => void this.newFolder(dir) },
+      item('shell.newNote', { dir }, { shortcut: undefined }),
+      item('shell.newFolder', { dir }, { shortcut: undefined }),
     );
     if (node && node.path) {
-      items.push(null, { label: 'Rename…', shortcut: 'F2', run: () => void this.rename(node.path) });
-      items.push({ label: 'Move To…', run: () => this.open({ kind: 'moveTo', path: node.path }) });
-      if (store.reveal) items.push({ label: revealLabel(), run: () => void store.reveal!(node.path) });
-      items.push(null, { label: 'Delete…', danger: true, run: () => void this.remove(node.path) });
+      const path = node.path;
+      items.push(null, item('shell.rename', { path }, { shortcut: 'F2' }), item('shell.moveTo', { path }));
+      if (store.reveal) items.push(item('shell.revealInFolder', { path }));
+      items.push(null, item('shell.delete', { path }, { danger: true }));
     }
     this.open({ kind: 'menu', x: at.x, y: at.y, items });
+  }
+
+  /** A tab's right-click menu: pin it, or close it, the others, or all of them. */
+  openTabMenu(tab: Tab, at: { x: number; y: number }): void {
+    const target = { tabId: tab.id };
+    const items = [
+      this.commandItem('shell.pinTab', target, { label: tab.pinned.peek() ? 'Unpin Tab' : 'Pin Tab' }),
+      null,
+      this.commandItem('shell.closeTab', target, { shortcut: undefined }),
+      this.commandItem('shell.closeOtherTabs', target),
+      this.commandItem('shell.closeAllTabs', undefined, { shortcut: undefined }),
+    ];
+    this.open({ kind: 'menu', x: at.x, y: at.y, items });
+  }
+
+  /** A menu row that runs command `id` on `target` through the catalog, so it passes the same gate as a key. */
+  private commandItem(id: string, target?: CommandTarget, extra: Partial<MenuItem> = {}): MenuItem {
+    const c = this.menuCatalog.get(id);
+    if (!c) throw new Error(`No command ${id}`);
+    return {
+      label: c.title,
+      shortcut: c.shortcutText || undefined,
+      disabled: !this.menuCatalog.isEnabled(c, target),
+      run: () => void this.menuCatalog.run(id, target),
+      ...extra,
+    };
   }
 
   /**
@@ -496,16 +530,8 @@ export class ShellModel {
       this.openPictureMenu(at.picture, at);
       return;
     }
-    const item = (id: string, shortcut: string): MenuItem | null => {
-      const c = this.menuCatalog.get(id);
-      if (!c) return null;
-      return {
-        label: c.title,
-        shortcut,
-        disabled: c.enabled ? !c.enabled() : false,
-        run: () => void c.run(),
-      };
-    };
+    const item = (id: string, shortcut: string): MenuItem | null =>
+      this.menuCatalog.get(id) ? this.commandItem(id, undefined, { shortcut }) : null;
     const key = (k: string) => formatShortcut(parseShortcut(k));
     const items = [
       item('edit.cut', key('mod+x')),
@@ -1182,6 +1208,15 @@ function shellCommandSpecs(m: ShellModel): CommandSpec[] {
   const hasNb = () => nb() !== null;
   const tab = () => m.activeTab.peek();
   const hasTab = () => tab() !== null;
+  /** The tab a context menu named, or the one in front. */
+  const tabOf = (t?: CommandTarget) =>
+    (t?.tabId !== undefined
+      ? nb()
+          ?.tabs.peek()
+          .find((x) => x.id === t.tabId)
+      : tab()) ?? null;
+  /** The file or folder a context menu named, or the selected one. */
+  const pathOf = (t?: CommandTarget) => t?.path ?? m.selectedPath();
   const specs: CommandSpec[] = [
     {
       id: 'shell.commandMenu',
@@ -1278,7 +1313,7 @@ function shellCommandSpecs(m: ShellModel): CommandSpec[] {
       icon: 'file-plus',
       global: true,
       enabled: hasNb,
-      run: () => m.newNote(),
+      run: (t) => m.newNote(t?.dir),
     },
     {
       id: 'shell.newFolder',
@@ -1289,7 +1324,7 @@ function shellCommandSpecs(m: ShellModel): CommandSpec[] {
       icon: 'folder-plus',
       global: true,
       enabled: hasNb,
-      run: () => m.newFolder(),
+      run: (t) => m.newFolder(t?.dir),
     },
     {
       id: 'shell.save',
@@ -1361,9 +1396,9 @@ function shellCommandSpecs(m: ShellModel): CommandSpec[] {
       shortcut: 'mod+w',
       icon: 'x',
       global: true,
-      enabled: hasTab,
-      run: async () => {
-        const t = tab();
+      enabled: (t) => tabOf(t) !== null,
+      run: async (target) => {
+        const t = tabOf(target);
         if (t) await m.closeTab(t);
       },
     },
@@ -1373,10 +1408,10 @@ function shellCommandSpecs(m: ShellModel): CommandSpec[] {
       description: 'Keep the note in front at the start of the tab strip, always in view.',
       group: 'File',
       icon: 'pin',
-      enabled: hasTab,
-      active: () => tab()?.pinned.value ?? false,
-      run: () => {
-        const t = tab();
+      enabled: (t) => tabOf(t) !== null,
+      active: (t) => tabOf(t)?.pinned.value ?? false,
+      run: (target) => {
+        const t = tabOf(target);
         if (t) nb()?.setTabPinned(t, !t.pinned.peek());
       },
     },
@@ -1386,7 +1421,7 @@ function shellCommandSpecs(m: ShellModel): CommandSpec[] {
       description: 'Close every tab but the one in front and the pinned ones.',
       group: 'File',
       enabled: () => (nb()?.tabs.peek().length ?? 0) > 1,
-      run: () => m.closeTabs(tab()),
+      run: (t) => m.closeTabs(tabOf(t)),
     },
     {
       id: 'shell.closeAllTabs',
@@ -1404,8 +1439,8 @@ function shellCommandSpecs(m: ShellModel): CommandSpec[] {
       description: 'Rename the selected file or folder, or the note in front.',
       group: 'File',
       icon: 'pencil',
-      enabled: () => hasNb() && !!(m.selectedPath() ?? tab()?.path.peek()),
-      run: () => m.rename(m.selectedPath() ?? tab()!.path.peek()),
+      enabled: (t) => hasNb() && !!(pathOf(t) ?? tab()?.path.peek()),
+      run: (t) => m.rename(pathOf(t) ?? tab()!.path.peek()),
     },
     {
       id: 'shell.delete',
@@ -1413,8 +1448,53 @@ function shellCommandSpecs(m: ShellModel): CommandSpec[] {
       description: 'Delete the selected file or folder.',
       group: 'File',
       icon: 'trash-2',
-      enabled: () => !!m.selectedPath(),
-      run: () => m.remove(m.selectedPath()!),
+      enabled: (t) => !!pathOf(t),
+      run: (t) => m.remove(pathOf(t)!),
+    },
+    {
+      id: 'shell.moveTo',
+      title: 'Move To…',
+      description: 'Move the selected file or folder to another folder.',
+      group: 'File',
+      enabled: (t) => !!pathOf(t),
+      run: (t) => m.open({ kind: 'moveTo', path: pathOf(t)! }),
+    },
+    {
+      id: 'shell.openFile',
+      title: 'Open',
+      description: 'Open the selected file.',
+      group: 'File',
+      hidden: true,
+      enabled: (t) => !!t?.path,
+      run: (t) => m.openFile(t!.path!),
+    },
+    {
+      id: 'shell.openExternal',
+      title: 'Open in Default App',
+      description: 'Open the selected file in the app the system opens it with.',
+      group: 'File',
+      hidden: true,
+      enabled: (t) => !!t?.path && !!nb()?.store.openExternal,
+      run: (t) => nb()!.store.openExternal!(t!.path!),
+    },
+    {
+      id: 'shell.pinToTop',
+      title: 'Pin to Top',
+      description: 'Keep the selected note at the top of the note list.',
+      group: 'File',
+      hidden: true,
+      enabled: (t) => hasNb() && !!t?.path,
+      active: (t) => !!t?.path && (nb()?.pinned.value.includes(t.path) ?? false),
+      run: (t) => nb()!.togglePin(t!.path!),
+    },
+    {
+      id: 'shell.revealInFolder',
+      title: revealLabel(),
+      description: 'Show the selected file or folder in the system’s file manager.',
+      group: 'File',
+      hidden: true,
+      enabled: (t) => !!t?.path && !!nb()?.store.reveal,
+      run: (t) => nb()!.store.reveal!(t!.path!),
     },
     {
       id: 'shell.showTrash',

@@ -102,6 +102,64 @@ describe('ShellModel pinned tabs', () => {
   });
 });
 
+describe('ShellModel context menus run through the catalog', () => {
+  const menuItem = (m: ShellModel, label: string) => {
+    const o = m.overlay.value;
+    if (o?.kind !== 'menu') throw new Error('no menu');
+    const item = o.items.find((i) => i?.label === label);
+    if (!item) throw new Error(`no ${label}`);
+    m.close();
+    return item;
+  };
+
+  it('acts on the tab it was opened on, not the one in front, and counts as a recent command', async () => {
+    const store = new MemoryStore('N', { 'a.md': '', 'b.md': '', 'c.md': '' });
+    const nb = await Notebook.open(store, { prefs: memoryPrefs({ autoSave: false }) });
+    const m = new ShellModel();
+    m.setNotebook(nb);
+    const a = (await nb.openFile('a.md'))!;
+    await nb.openFile('b.md');
+    await nb.openFile('c.md');
+    m.openTabMenu(a, { x: 0, y: 0 });
+    menuItem(m, 'Pin Tab').run();
+    expect(a.pinned.value).toBe(true);
+    m.openTabMenu(a, { x: 0, y: 0 });
+    menuItem(m, 'Close Other Tabs').run();
+    await vi.waitFor(() => expect(nb.tabs.value.map((t) => t.path.value)).toEqual(['a.md']));
+    expect(m.menuCatalog.recentIds.slice(0, 2)).toEqual(['shell.closeOtherTabs', 'shell.pinTab']);
+    m.setNotebook(null);
+  });
+
+  it('moves the file it was opened on, not the selected one', async () => {
+    const store = new MemoryStore('N', { 'a.md': '', 'b.md': '' });
+    const nb = await Notebook.open(store, { prefs: memoryPrefs({ autoSave: false }) });
+    const m = new ShellModel();
+    m.setNotebook(nb);
+    m.openFileMenu(findNode(nb.tree.value, 'b.md')!, '', { x: 0, y: 0 });
+    menuItem(m, 'Move To…').run();
+    const o = m.overlay.value;
+    expect(o?.kind === 'moveTo' && o.path).toBe('b.md');
+    m.setNotebook(null);
+  });
+
+  it('runs nothing while a question waits on the user', async () => {
+    const store = new MemoryStore('N', { 'a.md': '', 'b.md': '' });
+    const nb = await Notebook.open(store, { prefs: memoryPrefs({ autoSave: false }) });
+    const m = new ShellModel();
+    m.setNotebook(nb);
+    const a = (await nb.openFile('a.md'))!;
+    m.openTabMenu(a, { x: 0, y: 0 });
+    const close = menuItem(m, 'Close Tab');
+    void m.confirm({ title: 'Wait', message: '', buttons });
+    close.run();
+    expect(m.menuCatalog.run('shell.closeAllTabs')).toBe(false);
+    await Promise.resolve();
+    expect(nb.tabs.value).toEqual([a]);
+    m.close();
+    m.setNotebook(null);
+  });
+});
+
 describe('ShellModel editor menu', () => {
   it('offers the clipboard and Select All, with Cut and Copy off for an empty selection', async () => {
     const store = new MemoryStore('N', { 'a.md': 'hello' });
