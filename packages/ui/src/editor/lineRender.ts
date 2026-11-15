@@ -106,8 +106,10 @@ export function renderLine(
 
   const live = mode === 'live';
   const first = tokens[0];
-  const headingLevel = first?.type === 'headingMarker' ? Number(first.meta ?? '0') : 0;
   const quoteDepth = first?.type === 'blockquoteMarker' ? Number(first.meta ?? '1') : 0;
+  // A heading can sit inside a quote (`> ## Note`): its marker comes right after the quote's.
+  const headingToken = quoteDepth > 0 ? tokens[1] : first;
+  const headingLevel = headingToken?.type === 'headingMarker' ? Number(headingToken.meta ?? '0') : 0;
   const taskToken = tokens.find((t) => t.type === 'taskMarker');
   const task = taskToken ? taskStateFromMark(taskToken.meta ?? ' ') : null;
   const listToken = tokens.find((t) => t.type === 'listMarker');

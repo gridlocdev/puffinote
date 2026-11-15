@@ -86,6 +86,17 @@ describe('concealment (PRD §10.2)', () => {
     expect(render(md, far(md)).headingLevel).toBe(2);
   });
 
+  it('draws a heading inside a quote as a heading, hiding both markers off the line', () => {
+    const md = '> ## Note ##\n\nbody';
+    expect(visible(md, far(md))).toBe('Note');
+    expect(visible(md, caretAt(4))).toBe('> ## Note ##');
+    const r = render(md, far(md));
+    expect(r.headingLevel).toBe(2);
+    expect(r.className).toContain('pn-h2');
+    expect(r.className).toContain('pn-quote');
+    expect(render('> #hashtag', far(md)).headingLevel).toBe(0);
+  });
+
   it('draws list and task markers as decorations', () => {
     expect(visible('- item\nx', elsewhere)).toBe('<bullet>item');
     expect(visible('1. one\nx', elsewhere)).toBe('<number>one');

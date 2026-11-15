@@ -145,22 +145,7 @@ function normal(
 
     const heading = tryHeading(line, indent, len);
     if (heading) {
-      output.push(
-        token(
-          lineStart + indent,
-          heading.afterMarker - indent,
-          'headingMarker',
-          'marker',
-          String(heading.level),
-        ),
-      );
-      // An optional closing sequence (`# Done #`) is markup too: the same marker type, so the editor
-      // conceals it with the opening run and the export leaves it out.
-      const close = closingSequenceStart(line, heading.afterMarker, len);
-      tokenizeInline(line, lineStart, heading.afterMarker, close, output);
-      if (close < len) {
-        output.push(token(lineStart + close, len - close, 'headingMarker', 'marker', String(heading.level)));
-      }
+      headingTokens(line, lineStart, indent, heading, len, output);
       return BlockStates.normalAfter(false, lists);
     }
 
@@ -175,7 +160,13 @@ function normal(
         p++;
       }
       output.push(token(lineStart + indent, p - indent, 'blockquoteMarker', 'marker', String(depth)));
-      // A list item or task inside the quote (`> - [x] done`) gets its markers as it would outside one.
+      // A heading inside the quote (`> ## Note`) gets its markers as it would outside one.
+      const quotedHeading = tryHeading(line, p, len);
+      if (quotedHeading) {
+        headingTokens(line, lineStart, p, quotedHeading, len, output);
+        return BlockStates.normalAfter(false, lists);
+      }
+      // So does a list item or task (`> - [x] done`).
       const quotedMarkerEnd = tryListMarker(line, p, len);
       const contentStart =
         quotedMarkerEnd > 0 ? listItemMarkers(line, lineStart, p, quotedMarkerEnd, len, output) : p;
@@ -360,6 +351,24 @@ function isHorizontalRule(line: string, indent: number, len: number): boolean {
     else if (ch !== ' ') return false;
   }
   return count >= 3;
+}
+
+/** An ATX heading's tokens: its `#` run from `start`, its text, and its closing sequence if it has one. */
+function headingTokens(
+  line: string,
+  lineStart: number,
+  start: number,
+  heading: { level: number; afterMarker: number },
+  len: number,
+  output: Token[],
+): void {
+  const level = String(heading.level);
+  output.push(token(lineStart + start, heading.afterMarker - start, 'headingMarker', 'marker', level));
+  // An optional closing sequence (`# Done #`) is markup too: the same marker type, so the editor conceals it
+  // with the opening run and the export leaves it out.
+  const close = closingSequenceStart(line, heading.afterMarker, len);
+  tokenizeInline(line, lineStart, heading.afterMarker, close, output);
+  if (close < len) output.push(token(lineStart + close, len - close, 'headingMarker', 'marker', level));
 }
 
 function tryHeading(

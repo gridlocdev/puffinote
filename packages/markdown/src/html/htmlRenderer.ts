@@ -273,11 +273,11 @@ class Renderer {
         i = this.listLevel(i, this.listIndent(i), 0, d);
         continue;
       }
-      const heading = this.quotedHeading(i);
-      if (heading) {
-        this.out += `<h${heading.level}>`;
-        this.inline(this.model.lineTokens(i), 0, undefined, heading.textStart);
-        this.out += `</h${heading.level}>\n`;
+      const level = this.quotedHeadingLevel(i);
+      if (level > 0) {
+        this.out += `<h${level}>`;
+        this.inline(this.model.lineTokens(i));
+        this.out += `</h${level}>\n`;
         i++;
         continue;
       }
@@ -288,7 +288,7 @@ class Renderer {
         this.quoteDepth(i) === d &&
         !this.isBlankIn(i, d) &&
         !this.isListLine(i, d) &&
-        !this.quotedHeading(i)
+        this.quotedHeadingLevel(i) === 0
       ) {
         if (!first) this.out += '<br>\n';
         this.inline(this.model.lineTokens(i));
@@ -301,14 +301,11 @@ class Renderer {
     return i;
   }
 
-  /** An ATX heading after a quote prefix (`> ## Note`): its level and the offset its text starts at. */
-  private quotedHeading(line: number): { level: number; textStart: number } | null {
-    const prefix = this.first(line);
-    if (prefix?.type !== 'blockquoteMarker') return null;
-    const after = prefix.start + prefix.length;
-    const rest = stripCr(this.doc.getText(after, this.doc.getLineEnd(line) - after));
-    const m = /^(#{1,6})(?: |$)/.exec(rest);
-    return m ? { level: m[1]!.length, textStart: after + m[0].length } : null;
+  /** The level of an ATX heading after a quote prefix (`> ## Note`), or 0. */
+  private quotedHeadingLevel(line: number): number {
+    const [prefix, heading] = this.model.lineTokens(line);
+    if (prefix?.type !== 'blockquoteMarker' || heading?.type !== 'headingMarker') return 0;
+    return Number.parseInt(heading.meta ?? '', 10) || 0;
   }
 
   private quoteDepth(line: number): number {
@@ -531,19 +528,11 @@ class Renderer {
 
   // ----- inline rendering: pairs link and image structure out of the flat token stream -----
 
-  /** Render `tokens[from, to)`; text before the offset `skipBefore` is left out (a quoted heading's `#`). */
-  private inline(tokens: readonly Token[], from = 0, to = tokens.length, skipBefore = -1): void {
+  /** Render `tokens[from, to)`. */
+  private inline(tokens: readonly Token[], from = 0, to = tokens.length): void {
     let i = from;
     while (i < to) {
-      let t = tokens[i]!;
-      if (t.start < skipBefore) {
-        if (t.start + t.length <= skipBefore) {
-          i++;
-          continue;
-        }
-        const cut = skipBefore - t.start;
-        t = { ...t, start: skipBefore, length: t.length - cut };
-      }
+      const t = tokens[i]!;
       if (t.type === 'marker') {
         const text = this.doc.getText(t.start, t.length);
         if (text === '[') {

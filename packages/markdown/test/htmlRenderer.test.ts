@@ -141,6 +141,8 @@ describe('HTML renderer', () => {
       '<blockquote>\n<h2>Note <strong>this</strong></h2>\n<p>body</p>\n</blockquote>\n',
     );
     expect(body('> #hashtag')).toContain('<p>#hashtag</p>');
+    // Its closing sequence is markup, as it is outside a quote.
+    expect(body('> ## Done ##')).toBe('<blockquote>\n<h2>Done</h2>\n</blockquote>\n');
   });
 
   it('renders list and task items inside a blockquote as a list', () => {

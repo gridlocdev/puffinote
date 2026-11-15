@@ -15,7 +15,8 @@ export function outlineOf(doc: TextDocument, model: MarkdownModel): OutlineItem[
   const out: OutlineItem[] = [];
   for (let line = 0; line < doc.lineCount; line++) {
     const tokens = model.lineTokens(line);
-    const marker = tokens.find((t) => t.type === 'headingMarker');
+    // A heading inside a quote (`> ## Note`) belongs to the quote, not to the note's outline.
+    const marker = tokens[0]?.type === 'headingMarker' ? tokens[0] : undefined;
     if (marker) {
       const text = doc.getLineText(line).replace(/\r$/, '');
       // An ATX heading's `#` run and closing sequence are markup. A setext heading's marker is zero-length,
