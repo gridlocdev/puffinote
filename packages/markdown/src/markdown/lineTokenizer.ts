@@ -1,8 +1,9 @@
 import { BlockStates, listBase, type BlockState } from './blockState.ts';
-import { contentLength, isAsciiDigit } from './chars.ts';
+import { contentLength } from './chars.ts';
 import { tokenizeInline } from './inlineTokenizer.ts';
-import { isTaskMark, taskMark, taskStateFromMark, type TaskState } from './taskState.ts';
+import { taskMark } from './taskState.ts';
 import { token, type Token } from './token.ts';
+import { scanListMarker, scanTaskBox } from './listMarker.ts';
 
 /**
  * Tokenizes one line given the block state it is entered with, and returns the state the next line is
@@ -210,7 +211,7 @@ function listItemMarkers(
   output: Token[],
 ): number {
   output.push(token(lineStart + at, markerEnd - at, 'listMarker', 'marker'));
-  const task = tryTaskMarker(line, markerEnd, len);
+  const task = scanTaskBox(line, markerEnd, len);
   if (!task) return markerEnd;
   // The marker carries the state it spells, so consumers read it off the token.
   output.push(
@@ -400,31 +401,5 @@ function isQuote(line: string, indent: number, len: number): boolean {
 
 /** The column just past a list marker starting at `indent`, or 0 when there is none. */
 function tryListMarker(line: string, indent: number, len: number): number {
-  if (indent >= len) return 0;
-  const c = line.charAt(indent);
-  if (c === '-' || c === '*' || c === '+') {
-    return indent + 1 < len && line.charAt(indent + 1) === ' ' ? indent + 2 : 0;
-  }
-  // Ordered: one to nine digits, then '.' or ')', then a space.
-  let k = indent;
-  while (k < len && k - indent < 9 && isAsciiDigit(line.charAt(k))) k++;
-  if (k === indent || k >= len) return 0;
-  const d = line.charAt(k);
-  return (d === '.' || d === ')') && k + 1 < len && line.charAt(k + 1) === ' ' ? k + 2 : 0;
-}
-
-/** A task box (`[ ]`, `[/]`, `[x]`) at `start`, followed by a space or the end of the line. */
-function tryTaskMarker(line: string, start: number, len: number): { end: number; state: TaskState } | null {
-  if (
-    start + 2 < len &&
-    line.charAt(start) === '[' &&
-    line.charAt(start + 2) === ']' &&
-    isTaskMark(line.charAt(start + 1))
-  ) {
-    const after = start + 3;
-    if (after >= len || line.charAt(after) === ' ') {
-      return { end: after < len ? after + 1 : after, state: taskStateFromMark(line.charAt(start + 1)) };
-    }
-  }
-  return null;
+  return scanListMarker(line, indent, len)?.end ?? 0;
 }

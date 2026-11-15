@@ -1,6 +1,6 @@
-import { isAsciiDigit } from '../markdown/chars.ts';
 import { isSetextTextLine } from '../markdown/lineTokenizer.ts';
-import { isTaskMark, taskStateFromMark, type TaskState } from '../markdown/taskState.ts';
+import type { TaskState } from '../markdown/taskState.ts';
+import { scanListMarker, scanTaskBox } from '../markdown/listMarker.ts';
 
 /** The kind of list a line's marker belongs to. */
 export type ListKind = 'none' | 'unordered' | 'ordered';
@@ -66,43 +66,27 @@ export function parseLinePrefix(line: string): LinePrefix {
   let delim = '';
   let afterMarker = i;
 
-  if (i < len) {
-    const c = line.charAt(i);
-    if ((c === '-' || c === '*' || c === '+') && i + 1 < len && line.charAt(i + 1) === ' ') {
-      list = 'unordered';
-      bullet = c;
-      afterMarker = i + 2;
-    } else if (isAsciiDigit(c)) {
-      let k = i;
-      while (k < len && k - i < 9 && isAsciiDigit(line.charAt(k))) k++;
-      const d = line.charAt(k);
-      if (k < len && (d === '.' || d === ')') && k + 1 < len && line.charAt(k + 1) === ' ') {
-        list = 'ordered';
-        digitCount = k - i;
-        number = Number.parseInt(line.slice(i, k), 10);
-        delim = d;
-        afterMarker = k + 2;
-      }
-    }
+  const marker = scanListMarker(line, i, len);
+  if (marker?.kind === 'unordered') {
+    list = 'unordered';
+    bullet = marker.bullet;
+    afterMarker = marker.end;
+  } else if (marker?.kind === 'ordered') {
+    list = 'ordered';
+    digitCount = marker.digitCount;
+    number = marker.number;
+    delim = marker.delim;
+    afterMarker = marker.end;
   }
 
   let hasTask = false;
   let task: TaskState = 'notStarted';
   let prefixEnd = list === 'none' ? markerStart : afterMarker;
-
-  if (
-    list !== 'none' &&
-    afterMarker + 2 < len &&
-    line.charAt(afterMarker) === '[' &&
-    line.charAt(afterMarker + 2) === ']' &&
-    isTaskMark(line.charAt(afterMarker + 1))
-  ) {
-    const after = afterMarker + 3;
-    if (after >= len || line.charAt(after) === ' ') {
-      hasTask = true;
-      task = taskStateFromMark(line.charAt(afterMarker + 1));
-      prefixEnd = after < len ? after + 1 : after;
-    }
+  const box = list === 'none' ? null : scanTaskBox(line, afterMarker, len);
+  if (box) {
+    hasTask = true;
+    task = box.state;
+    prefixEnd = box.end;
   }
 
   const markerEnd =

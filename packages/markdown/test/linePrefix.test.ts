@@ -1,3 +1,4 @@
+import { TextDocument } from '@puffinote/text';
 import { describe, expect, it } from 'vitest';
 import {
   computeEnter,
@@ -10,7 +11,9 @@ import {
   stripDuplicateTaskMarker,
   taskCode,
   toggledTaskState,
+  MarkdownModel,
 } from '../src/index.ts';
+import { scanListMarker } from '../src/markdown/listMarker.ts';
 
 const prefix = (line: string): string => continuationPrefix(parseLinePrefix(line));
 
@@ -235,5 +238,37 @@ describe('markdown files', () => {
     expect(isMarkdownFile('photo.png')).toBe(false);
     expect(isMarkdownFile('README')).toBe(false);
     expect(extensionOf('a.dir/file')).toBe('');
+  });
+});
+
+describe('scanListMarker and parseLinePrefix agree with the tokenizer', () => {
+  const lines = [
+    '- a',
+    '* a',
+    '+ a',
+    '-a',
+    '1. a',
+    '123456789) a',
+    '1234567890. a',
+    '1.a',
+    '- [ ] t',
+    '- [x]',
+    '- [/] t',
+    '- [y] t',
+    '  > - [x] quoted',
+    '3) [ ]x',
+    '-',
+    '1.',
+  ];
+  it.each(lines)('%j', (line) => {
+    const p = parseLinePrefix(line);
+    const tokens = MarkdownModel.build(TextDocument.fromString(line)).lineTokens(0);
+    const marker = tokens.find((t) => t.type === 'listMarker');
+    const box = tokens.find((t) => t.type === 'taskMarker');
+    expect(p.hasList).toBe(marker !== undefined);
+    if (marker) expect(marker.start + marker.length).toBe(p.afterMarker);
+    expect(p.hasTask).toBe(box !== undefined);
+    const m = scanListMarker(line, p.markerStart, line.length);
+    expect(m?.end ?? p.markerStart).toBe(p.afterMarker);
   });
 });
