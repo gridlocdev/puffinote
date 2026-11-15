@@ -33,6 +33,8 @@ document.documentElement.dataset.host = host.kind;
 const app = document.getElementById('app')!;
 app.replaceChildren(); // index.html's "Starting Puffinote…", shown until the script got this far
 render(<Shell model={model} prefs={localPrefs} welcome={<Welcome launcher={launcher} />} />, app);
+// Before start, so a folder passed at launch opens instead of the last notebook.
+host.native?.onOpenFolder((path) => launcher.requestFolder(path));
 await launcher.start();
 // Dev-only handle for poking at the app from the console.
 if (import.meta.env.DEV) Object.assign(globalThis, { puffinote: { model, launcher } });
@@ -60,9 +62,6 @@ if (native) {
     // work; they aren't catalog commands, and their own question replaces it, answering it as cancelled.
     if (model.overlay.value && !catalog.get(id)?.global) return;
     void catalog.run(id);
-  });
-  native.onOpenFolder((path) => {
-    void model.confirmDiscardAll().then((ok) => (ok ? launcher.openNativePath(path) : undefined));
   });
   native.onCloseRequested(() => {
     void model.confirmDiscardAll().then((ok) => (ok ? native.confirmClose() : native.cancelClose()));

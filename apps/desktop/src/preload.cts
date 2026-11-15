@@ -12,6 +12,16 @@ function on(channel: string, cb: (...args: never[]) => void): () => void {
   return () => ipcRenderer.removeListener(channel, listener);
 }
 
+// Folders to open can arrive as soon as the page loads, before the page has set up its listener (it first
+// works out where it runs). They wait here until it does, so a folder passed at launch isn't lost.
+const pendingFolders: string[] = [];
+let folderListener: ((path: string) => void) | null = null;
+ipcRenderer.on('puffinote:open-folder', (_e, p: unknown) => {
+  if (typeof p !== 'string') return;
+  if (folderListener) folderListener(p);
+  else pendingFolders.push(p);
+});
+
 contextBridge.exposeInMainWorld('puffinoteNative', {
   platform: process.platform,
   pickFolder: (): Promise<string | null> => ipcRenderer.invoke('puffinote:pick-folder'),
@@ -38,7 +48,13 @@ contextBridge.exposeInMainWorld('puffinoteNative', {
     path.replace(/\\/g, '/').replace(/^\//, '').split('/').map(encodeURIComponent).join('/'),
   watch: (root: string | null): void => ipcRenderer.send('puffinote:watch', root),
   onChanged: (cb: (paths: readonly string[]) => void) => on('puffinote:changed', cb),
-  onOpenFolder: (cb: (path: string) => void) => on('puffinote:open-folder', cb),
+  onOpenFolder: (cb: (path: string) => void) => {
+    folderListener = cb;
+    for (const p of pendingFolders.splice(0)) cb(p);
+    return () => {
+      if (folderListener === cb) folderListener = null;
+    };
+  },
   setTitle: (title: string, dirty: boolean): void => ipcRenderer.send('puffinote:set-title', title, dirty),
   setTitleBarHeight: (height: number): void => ipcRenderer.send('puffinote:set-title-bar-height', height),
   setMenu: (menu: readonly NativeMenuItem[]): void => ipcRenderer.send('puffinote:set-menu', menu),

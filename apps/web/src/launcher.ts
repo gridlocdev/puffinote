@@ -98,6 +98,8 @@ export class Launcher {
   readonly needsToken = signal(false);
   /** `start` is reopening the last notebook (or the browser notebook). */
   readonly starting = signal(false);
+  /** The OS asked for a folder (see `requestFolder`), so `start` doesn't reopen the last notebook. */
+  private folderRequested = false;
   /** The recent notebook open now, by `recentKey`. */
   readonly current = signal<string | null>(null);
 
@@ -132,6 +134,7 @@ export class Launcher {
     this.starting.value = true;
     try {
       await this.prune();
+      if (this.folderRequested) return;
       const last = this.available()[0];
       if (last) await this.open(last);
       else if (this.kind === 'browser') await this.openPrivate();
@@ -236,6 +239,15 @@ export class Launcher {
     } catch (e) {
       this.reportError(e);
     }
+  }
+
+  /**
+   * A folder the OS asked the desktop app to open (command line, Finder, the Dock, a second launch), once
+   * unsaved notes are dealt with. At start it opens instead of the last notebook.
+   */
+  requestFolder(path: string): void {
+    this.folderRequested = true;
+    void this.model.confirmDiscardAll().then((ok) => (ok ? this.openNativePath(path) : undefined));
   }
 
   /** A folder the desktop app was asked to open (command line, Dock, second launch). */

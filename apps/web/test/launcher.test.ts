@@ -142,3 +142,17 @@ describe('Launcher.prune (PRD §6)', () => {
     expect(l.recents.value).toEqual([]);
   });
 });
+
+describe('Launcher.requestFolder', () => {
+  it('opens a folder passed at launch instead of the last notebook', async () => {
+    const native = { folderGone: async () => false } as unknown as PuffinoteNative;
+    const model = { confirmDiscardAll: async () => true } as unknown as ShellModel;
+    const l = new Launcher(model, {} as PrefsStorage, { kind: 'native', native, nas: null });
+    l.recents.value = [{ kind: 'native', path: '/last', name: 'last' }];
+    const open = vi.spyOn(l, 'open').mockResolvedValue(true);
+    l.requestFolder('/asked/Notes');
+    await l.start();
+    await vi.waitFor(() => expect(open).toHaveBeenCalledOnce());
+    expect(open).toHaveBeenCalledWith({ kind: 'native', path: '/asked/Notes', name: 'Notes' });
+  });
+});

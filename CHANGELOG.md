@@ -9,6 +9,7 @@
 
 ### Bugs fixed
 
+- The desktop app opens a folder it's launched with (from Finder, the Dock or the command line) instead of reopening the last notebook.
 - Pasting or dropping a picture with the caret at the very end of a note saves the picture and links it. Before, the file was saved but no link went into the note.
 
 ## 0.2.3
