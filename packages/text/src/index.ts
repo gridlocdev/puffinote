@@ -47,3 +47,4 @@ export {
 } from './editing/documentBuffer.ts';
 export { type UndoEffect, type UndoRun } from './editing/editHistory.ts';
 export { applyEdit, compose, invertEdit, type TextEdit, touches } from './editing/textEdit.ts';
+export { ignoreError } from './errors/ignoreError.ts';

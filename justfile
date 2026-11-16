@@ -163,6 +163,16 @@ fmt:
 fmt-check:
     pnpm format:check
 
+# Architecture rules only: layers, entry points, platform APIs, swallowed errors, file size. Part of `check`.
+[group('quality')]
+check-arch:
+    pnpm vitest run test/architecture.test.ts
+
+# Record today's architecture violations and exceptions (once, when adopting the rules; refuses after that).
+[group('quality')]
+arch-baseline:
+    ARCH_BASELINE=write pnpm vitest run test/architecture.test.ts
+
 # ── Housekeeping ──────────────────────────────────────────────────────────
 
 # Install dependencies (pnpm via corepack).
