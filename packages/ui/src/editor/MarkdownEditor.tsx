@@ -59,6 +59,8 @@ export interface MarkdownEditorProps {
    * its own errors and never rejects.
    */
   readonly onPictures?: (files: readonly File[]) => Promise<readonly string[]>;
+  /** Shows a failure the editor can't recover from on its own (inserting dropped or pasted pictures). */
+  readonly onError: (e: unknown) => void;
   /** Find in Note's matches to mark, and which one is current (PRD §10.7). */
   readonly findMatches?: { readonly matches: readonly TextRange[]; readonly current: number };
 }
@@ -814,7 +816,7 @@ export function MarkdownEditor(props: MarkdownEditorProps) {
     const pictures = pictureFiles(e.clipboardData);
     if (pictures.length > 0 && props.onPictures) {
       e.preventDefault();
-      void insertPictures(pictures);
+      insertPictures(pictures).catch(props.onError);
       return;
     }
     const pasted = e.clipboardData?.getData('text/plain');
@@ -854,7 +856,7 @@ export function MarkdownEditor(props: MarkdownEditorProps) {
       const end = lineContentEnd(doc, doc.getPosition(at).line);
       state.select(end, end);
     }
-    void insertPictures(pictures);
+    insertPictures(pictures).catch(props.onError);
   }
 
   // ----- Mouse -----

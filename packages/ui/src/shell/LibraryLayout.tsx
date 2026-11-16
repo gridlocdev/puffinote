@@ -84,7 +84,9 @@ function LibraryNav({ model, nb }: { readonly model: ShellModel; readonly nb: No
           class="pn-icon-button"
           title={tip(model, 'shell.newFolder')}
           aria-label="New Folder"
-          onClick={() => void model.newFolder(folderOf(scope))}
+          onClick={() => {
+            model.newFolder(folderOf(scope)).catch(model.report);
+          }}
         >
           <Icon name="folder-plus" />
         </button>
@@ -214,7 +216,7 @@ function NoteList({ model, nb }: { readonly model: ShellModel; readonly nb: Note
     const i = shown.findIndex((f) => f.path === activePath);
     const next = shown[Math.max(0, Math.min(shown.length - 1, i < 0 ? 0 : i + by))]!;
     // Arrowing through the list shows each note but leaves the keyboard in the list.
-    if (fileKind(next.path) !== 'other') void nb.openFile(next.path);
+    if (fileKind(next.path) !== 'other') nb.openFile(next.path).catch(nb.report);
   };
 
   // Files from the desktop dropped on the list go into the folder it shows, or the top level (PRD §6.1).
@@ -260,7 +262,9 @@ function NoteList({ model, nb }: { readonly model: ShellModel; readonly nb: Note
           class="pn-icon-button"
           title={tip(model, 'shell.newNote')}
           aria-label="New Note"
-          onClick={() => void model.newNote(folderOf(scope))}
+          onClick={() => {
+            model.newNote(folderOf(scope)).catch(model.report);
+          }}
         >
           <Icon name="pencil" />
         </button>
@@ -286,7 +290,7 @@ function NoteList({ model, nb }: { readonly model: ShellModel; readonly nb: Note
               if (!shown.some((f) => f.path === activePath)) step(0);
             } else if (e.key === 'Enter' && shown[0]) {
               e.preventDefault();
-              void model.openFile(shown[0].path);
+              model.openFile(shown[0].path).catch(model.report);
             }
           }}
         />
@@ -347,9 +351,12 @@ function useTextHits(nb: Notebook, query: string, files: readonly TreeNode[]): R
     }
     const abort = new AbortController();
     const cancel = after(200, () => {
-      void nb.textSearch.notesContaining(query, paths, { signal: abort.signal }).then((found) => {
-        if (!abort.signal.aborted) setHits(found);
-      });
+      nb.textSearch
+        .notesContaining(query, paths, { signal: abort.signal })
+        .then((found) => {
+          if (!abort.signal.aborted) setHits(found);
+        })
+        .catch(nb.report);
     });
     return () => {
       abort.abort();
@@ -393,7 +400,9 @@ function NoteCard(props: {
       aria-selected={active}
       data-path={file.path}
       title={file.path}
-      onClick={() => void model.openFile(file.path)}
+      onClick={() => {
+        model.openFile(file.path).catch(model.report);
+      }}
       onContextMenu={(e) => {
         e.preventDefault();
         model.openFileMenu(file, parentOf(file.path), { x: e.clientX, y: e.clientY });

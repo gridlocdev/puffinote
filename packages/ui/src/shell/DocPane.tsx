@@ -29,8 +29,18 @@ export function Document(props: { readonly model: ShellModel; readonly nb: Noteb
         <Banner
           text={`“${tab.name}” changed on disk since you opened it.`}
           actions={[
-            { label: 'Reload from Disk', run: () => void nb.reload(tab) },
-            { label: 'Keep My Version', run: () => void nb.save(tab, true) },
+            {
+              label: 'Reload from Disk',
+              run: () => {
+                nb.reload(tab).catch(nb.report);
+              },
+            },
+            {
+              label: 'Keep My Version',
+              run: () => {
+                nb.save(tab, true).catch(nb.report);
+              },
+            },
           ]}
         />
       )}
@@ -38,8 +48,18 @@ export function Document(props: { readonly model: ShellModel; readonly nb: Noteb
         <Banner
           text={`“${tab.name}” was deleted or moved outside Puffinote.`}
           actions={[
-            { label: 'Save Again', run: () => void nb.save(tab, true) },
-            { label: 'Close Tab', run: () => void model.closeTab(tab) },
+            {
+              label: 'Save Again',
+              run: () => {
+                nb.save(tab, true).catch(nb.report);
+              },
+            },
+            {
+              label: 'Close Tab',
+              run: () => {
+                model.closeTab(tab).catch(model.report);
+              },
+            },
           ]}
         />
       )}
@@ -70,8 +90,11 @@ export function Document(props: { readonly model: ShellModel; readonly nb: Noteb
           sortTasks={nb.config.settings.value.sortCheckedTasks}
           onContextMenu={(at) => model.openEditorMenu(at)}
           onOpenPicture={(picture) => model.openPreview(picture)}
-          onFollowLink={(href) => void model.followLink(path, href)}
+          onFollowLink={(href) => {
+            model.followLink(path, href).catch(model.report);
+          }}
           findMatches={model.findMatches.value ?? undefined}
+          onError={nb.report}
           onPictures={async (files) => {
             // A picture that can't be read or saved is said in the status bar, and nothing is inserted.
             try {
@@ -223,7 +246,11 @@ export function EmptyNotebook({ model }: { readonly model: ShellModel }) {
     <div class="pn-empty">
       <p>No note open.</p>
       <div class="pn-empty-actions">
-        <button onClick={() => void model.newNote()}>
+        <button
+          onClick={() => {
+            model.newNote().catch(model.report);
+          }}
+        >
           New Note <kbd>{key('shell.newNote')}</kbd>
         </button>
         <button onClick={() => model.open({ kind: 'quickOpen' })}>

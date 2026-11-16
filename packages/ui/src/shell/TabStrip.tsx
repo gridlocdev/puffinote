@@ -45,7 +45,7 @@ export function TabStrip({ model, nb }: { readonly model: ShellModel; readonly n
           }
         }}
         onAuxClick={(e) => {
-          if (e.button === 1) void model.closeTab(tab);
+          if (e.button === 1) model.closeTab(tab).catch(model.report);
         }}
         onContextMenu={(e) => menu(tab, e)}
       >
@@ -68,7 +68,9 @@ export function TabStrip({ model, nb }: { readonly model: ShellModel; readonly n
             tabIndex={-1}
             aria-label={dirty ? `Close ${name} (unsaved)` : `Close ${name}`}
             onPointerDown={(e) => e.stopPropagation()}
-            onClick={() => void model.closeTab(tab)}
+            onClick={() => {
+              model.closeTab(tab).catch(model.report);
+            }}
           >
             <span class="pn-dot" />
             <Icon name="x" />

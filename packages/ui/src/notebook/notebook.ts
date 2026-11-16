@@ -186,7 +186,7 @@ export class Notebook {
       closed: () => this.disposed,
       report: (e) => this.report(e),
     });
-    this.meta = new NoteMetaCache(store);
+    this.meta = new NoteMetaCache(store, this.report);
     this.trash = new NotebookTrash({
       store,
       closed: () => this.disposed,
@@ -343,7 +343,7 @@ export class Notebook {
     if (this.persistTimer) {
       this.persistTimer();
       this.persistTimer = null;
-      void this.persist();
+      this.persist().catch(this.report);
     }
     for (const d of this.disposers) d();
     this.meta.dispose();
@@ -466,7 +466,7 @@ export class Notebook {
     this.refreshTimer?.();
     this.refreshTimer = after(150, () => {
       this.refreshTimer = null;
-      void this.refresh();
+      this.refresh().catch(this.report);
     });
   }
 
@@ -549,7 +549,7 @@ export class Notebook {
         timer = go
           ? after(AUTOSAVE_MS, () => {
               timer = null;
-              if (tab.dirty.peek() && this.tabs.peek().includes(tab)) void this.save(tab);
+              if (tab.dirty.peek() && this.tabs.peek().includes(tab)) this.save(tab).catch(this.report);
             })
           : null;
       }),
@@ -1094,7 +1094,7 @@ export class Notebook {
     }
     if (this.selected.value && isWithin(this.selected.value, path)) this.selected.value = null;
     await this.reloadTree();
-    if (linked.size > 0) void this.pictures.offerUnused([...linked]);
+    if (linked.size > 0) this.pictures.offerUnused([...linked]).catch(this.report);
     return item;
   }
 
@@ -1171,7 +1171,7 @@ export class Notebook {
     this.persistTimer?.();
     this.persistTimer = after(500, () => {
       this.persistTimer = null;
-      void this.persist();
+      this.persist().catch(this.report);
     });
   }
 
@@ -1207,9 +1207,10 @@ export class Notebook {
     this.notice.value = { kind, text };
   }
 
-  report(e: unknown): void {
+  /** Show a failure in the status bar. Bound, so it can be passed to `.catch` as it is. */
+  readonly report = (e: unknown): void => {
     this.notify('error', e instanceof Error ? e.message : String(e));
-  }
+  };
 }
 
 interface SaveSlot {

@@ -20,7 +20,9 @@ const model = new ShellModel({
   // The desktop app brings the folder dialog straight up; a NAS shows the server's folders on the welcome
   // screen. A plain browser has only its own notebook, so the command is hidden there.
   openNotebook: host.native
-    ? (): void => void launcher.openFolder()
+    ? (): void => {
+        launcher.openFolder().catch(launcher.reportError);
+      }
     : host.kind === 'nas'
       ? (): void => launcher.close()
       : undefined,
@@ -31,7 +33,9 @@ const model = new ShellModel({
       const key = recentKey(r);
       return { key, name: r.name, place: recentPlace(r), current: key === launcher.current.value };
     }),
-  openRecent: (key) => void launcher.openRecent(key),
+  openRecent: (key) => {
+    launcher.openRecent(key).catch(launcher.reportError);
+  },
   titleBar: host.native?.platform === 'darwin',
   setTitleBarHeight: (h) => host.native?.setTitleBarHeight(h),
 });
@@ -72,7 +76,10 @@ if (native) {
     void catalog.run(id);
   });
   native.onCloseRequested(() => {
-    void model.confirmDiscardAll().then((ok) => (ok ? native.confirmClose() : native.cancelClose()));
+    model
+      .confirmDiscardAll()
+      .then((ok) => (ok ? native.confirmClose() : native.cancelClose()))
+      .catch(model.report);
   });
 
   effect(() => {

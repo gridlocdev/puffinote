@@ -172,9 +172,11 @@ export class NoteMetaCache {
   private readonly queued = new Set<string>();
   private running = 0;
   private disposed = false;
+  private readonly report: (e: unknown) => void;
 
-  constructor(store: NotebookStore) {
+  constructor(store: NotebookStore, report: (e: unknown) => void) {
     this.store = store;
+    this.report = report;
   }
 
   /**
@@ -213,16 +215,22 @@ export class NoteMetaCache {
     while (this.running < 4 && this.queue.length > 0 && !this.disposed) {
       const job = this.queue.shift()!;
       this.running++;
-      void this.load(job.path).then((meta) => {
-        this.running--;
-        this.queued.delete(`${job.path}\n${job.modified}`);
-        if (this.disposed) return;
-        if (meta) {
-          this.cache.set(job.path, { modified: job.modified, meta });
-          this.slot(job.path).value = meta;
-        }
-        this.pump();
-      });
+      this.run(job).catch(this.report);
+    }
+  }
+
+  private async run(job: { readonly path: string; readonly modified: number }): Promise<void> {
+    try {
+      const meta = await this.load(job.path);
+      if (meta && !this.disposed) {
+        this.cache.set(job.path, { modified: job.modified, meta });
+        this.slot(job.path).value = meta;
+      }
+    } finally {
+      // Even when the slot's update throws, so the queue never stalls with four jobs that won't finish.
+      this.running--;
+      this.queued.delete(`${job.path}\n${job.modified}`);
+      this.pump();
     }
   }
 

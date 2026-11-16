@@ -51,7 +51,9 @@ export class NotebookTrash {
 
   /** The status bar says what went to the Trash, with Undo. */
   offerUndo(items: readonly TrashItem[], text: string): void {
-    this.#host.offer(text, 'Undo', () => void this.restore(items));
+    this.#host.offer(text, 'Undo', () => {
+      this.restore(items).catch((e: unknown) => this.#host.report(e));
+    });
   }
 
   /** What is in the notebook's Trash, newest first (none on the desktop, whose files go to the system Trash). */

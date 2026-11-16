@@ -55,7 +55,7 @@ export function useFileDrop(
     e.preventDefault();
     e.stopPropagation();
     // Read the drop now: its items are gone once this handler returns.
-    void model.importDropped(dir, droppedFiles(e.dataTransfer!));
+    model.importDropped(dir, droppedFiles(e.dataTransfer!)).catch(model.report);
   };
   return { target, handlers: { onDragOver, onDragEnter: onDragOver, onDragLeave, onDrop } };
 }

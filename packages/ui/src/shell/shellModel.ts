@@ -145,6 +145,12 @@ export class ShellModel {
     confirmDiscardAll: () => this.confirmDiscardAll(),
   });
   readonly notebook = this.session.notebook;
+  /** Show a failure in the open notebook's status bar, or log it when none is open. Bound, for `.catch`. */
+  readonly report = (e: unknown): void => {
+    const nb = this.notebook.peek();
+    if (nb) nb.report(e);
+    else console.error(e);
+  };
   readonly overlay = signal<Overlay | null>(null);
   /** The picture preview (PRD §10.6): under any menu or dialog, over everything else. */
   readonly preview = signal<PicturePreview | null>(null);
@@ -867,9 +873,13 @@ export class ShellModel {
     const effect =
       file !== null && bytes !== null
         ? {
-            undo: () => void nb.pictures.restore(file, bytes),
+            undo: () => {
+              nb.pictures.restore(file, bytes).catch(nb.report);
+            },
             // Only if no note shows it by then, apart from those the user agreed to take it from.
-            redo: () => void nb.pictures.removeUnused([file], agreed),
+            redo: () => {
+              nb.pictures.removeUnused([file], agreed).catch(nb.report);
+            },
           }
         : undefined;
     state.apply(removeRangeEdit(state.document, picture.start, picture.end), effect);
@@ -1630,7 +1640,9 @@ function shellCommandSpecs(m: ShellModel): CommandSpec[] {
       group: 'File',
       icon: 'trash-2',
       enabled: () => !!nb()?.trash.available,
-      run: () => void m.emptyTrash(),
+      run: () => {
+        m.emptyTrash().catch(m.report);
+      },
     },
     {
       id: 'shell.unusedPictures',

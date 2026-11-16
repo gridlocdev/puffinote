@@ -92,7 +92,7 @@ export class NotebookPictures {
     const key = (p: string) => pathKey(p, this.#ignoresCase);
     const now = new Set([...imageTargets(text, path)].map(key));
     const dropped = [...imageTargets(before, path)].filter((p) => !now.has(key(p)));
-    if (dropped.length > 0) void this.offerUnused(dropped);
+    if (dropped.length > 0) this.offerUnused(dropped).catch((e: unknown) => this.#host.report(e));
   }
 
   /**
@@ -347,7 +347,9 @@ export class NotebookPictures {
           : `No note shows ${unused.length} of these pictures any more.`,
       action: {
         label: 'Move to Trash',
-        run: () => void this.removeUnused(unused),
+        run: () => {
+          this.removeUnused(unused).catch((e: unknown) => this.#host.report(e));
+        },
       },
     };
     this.#offer = { notice, paths: unused };

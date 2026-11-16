@@ -131,14 +131,18 @@ function RailPanel({ model, nb }: { readonly model: ShellModel; readonly nb: Not
             <button
               class="pn-icon-button"
               title={tip(model, 'shell.newNote')}
-              onClick={() => void model.newNote()}
+              onClick={() => {
+                model.newNote().catch(model.report);
+              }}
             >
               <Icon name="file-plus" />
             </button>
             <button
               class="pn-icon-button"
               title={tip(model, 'shell.newFolder')}
-              onClick={() => void model.newFolder()}
+              onClick={() => {
+                model.newFolder().catch(model.report);
+              }}
             >
               <Icon name="folder-plus" />
             </button>
@@ -167,7 +171,12 @@ function RailPanel({ model, nb }: { readonly model: ShellModel; readonly nb: Not
                       run: () => nb.setExpanded([]),
                     },
                     null,
-                    { label: 'Refresh', run: () => void nb.refresh() },
+                    {
+                      label: 'Refresh',
+                      run: () => {
+                        nb.refresh().catch(nb.report);
+                      },
+                    },
                   ],
                 });
               }}

@@ -132,7 +132,7 @@ export function SearchPanel({ model, nb }: { readonly model: ShellModel; readonl
     // A newer query (or a changed tree) stops this scan where it is, not just hides its answer.
     const abort = new AbortController();
     const cancel = after(200, () => {
-      void runSearch(
+      runSearch(
         (q, opts) => nb.textSearch.find(q, opts),
         query,
         abort.signal,
@@ -140,7 +140,7 @@ export function SearchPanel({ model, nb }: { readonly model: ShellModel; readonl
           setResult(r);
           setIndex(0);
         },
-      );
+      ).catch(nb.report);
     });
     return () => {
       abort.abort();
@@ -169,7 +169,7 @@ export function SearchPanel({ model, nb }: { readonly model: ShellModel; readonl
     } else if (e.key === 'Enter') {
       e.preventDefault();
       const h = hits[index];
-      if (h) void open(h);
+      if (h) open(h).catch(nb.report);
     }
   };
   let lastPath = '';
@@ -213,7 +213,7 @@ export function SearchPanel({ model, nb }: { readonly model: ShellModel; readonl
               class={head ? 'pn-hit pn-hit-first' : 'pn-hit'}
               onClick={() => {
                 setIndex(i);
-                void open(h);
+                open(h).catch(nb.report);
               }}
             >
               {h.inTitle ? (
@@ -304,9 +304,11 @@ export function RecentPanel({ model, nb }: { readonly model: ShellModel; readonl
           tabIndex={0}
           aria-selected={nb.active.value?.path.value === p}
           title={p}
-          onClick={() => void model.openFile(p)}
+          onClick={() => {
+            model.openFile(p).catch(model.report);
+          }}
           onKeyDown={(e) => {
-            if (e.key === 'Enter') void model.openFile(p);
+            if (e.key === 'Enter') model.openFile(p).catch(model.report);
             else if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
               e.preventDefault();
               const sib = (e.currentTarget as HTMLElement)[

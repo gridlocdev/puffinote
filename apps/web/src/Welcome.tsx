@@ -55,7 +55,12 @@ function RecentRow(props: { readonly launcher: Launcher; readonly recent: Recent
   const { launcher, recent } = props;
   return (
     <li class="pw-row">
-      <button class="pw-row-main" onClick={() => void launcher.open(recent)}>
+      <button
+        class="pw-row-main"
+        onClick={() => {
+          launcher.open(recent).catch(launcher.reportError);
+        }}
+      >
         <Icon name="book-open" />
         <span class="pw-row-text">
           <span class="pw-row-name">{recent.name}</span>
@@ -83,7 +88,12 @@ function LocalActions(props: { readonly launcher: Launcher }) {
   if (launcher.kind === 'native') {
     return (
       <section class="pw-section pw-actions" aria-label="Open a notebook">
-        <button class="pw-primary" onClick={() => void launcher.openFolder()}>
+        <button
+          class="pw-primary"
+          onClick={() => {
+            launcher.openFolder().catch(launcher.reportError);
+          }}
+        >
           <Icon name="folder-open" />
           Open Folder…
         </button>
@@ -92,7 +102,12 @@ function LocalActions(props: { readonly launcher: Launcher }) {
   }
   return (
     <section class="pw-section pw-actions" aria-label="Open a notebook">
-      <button class="pw-primary" onClick={() => void launcher.openPrivate()}>
+      <button
+        class="pw-primary"
+        onClick={() => {
+          launcher.openPrivate().catch(launcher.reportError);
+        }}
+      >
         <Icon name="book-open" />
         Open the Browser Notebook
       </button>
@@ -108,7 +123,7 @@ function TokenForm(props: { readonly launcher: Launcher }) {
       class="pw-section pw-token"
       onSubmit={(e) => {
         e.preventDefault();
-        void props.launcher.setToken(value.value);
+        props.launcher.setToken(value.value).catch(props.launcher.reportError);
       }}
     >
       <h2>Sign in to the server</h2>
@@ -215,7 +230,12 @@ function NasBrowser(props: { readonly launcher: Launcher; readonly client: NasCl
         </nav>
       )}
       <div class="pw-actions">
-        <button class="pw-primary" onClick={() => void launcher.openNas(r, path.value)}>
+        <button
+          class="pw-primary"
+          onClick={() => {
+            launcher.openNas(r, path.value).catch(launcher.reportError);
+          }}
+        >
           <Icon name="book-open" />
           Open “{here}”
         </button>
@@ -226,7 +246,12 @@ function NasBrowser(props: { readonly launcher: Launcher; readonly client: NasCl
           <ul class="pw-list pw-folders">
             {folders.map((e) => (
               <li key={e.path} class="pw-row">
-                <button class="pw-row-main" onClick={() => void launcher.openNas(r, e.path)}>
+                <button
+                  class="pw-row-main"
+                  onClick={() => {
+                    launcher.openNas(r, e.path).catch(launcher.reportError);
+                  }}
+                >
                   <Icon name="book-open" />
                   <span class="pw-row-name">{e.name}</span>
                 </button>

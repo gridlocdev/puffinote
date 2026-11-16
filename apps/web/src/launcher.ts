@@ -248,7 +248,10 @@ export class Launcher {
    */
   requestFolder(path: string): void {
     this.folderRequested = true;
-    void this.model.confirmDiscardAll().then((ok) => (ok ? this.openNativePath(path) : undefined));
+    this.model
+      .confirmDiscardAll()
+      .then((ok) => (ok ? this.openNativePath(path) : undefined))
+      .catch(this.reportError);
   }
 
   /** A folder the desktop app was asked to open (command line, Dock, second launch). */
@@ -305,7 +308,7 @@ export class Launcher {
         const dir = await privateFolder();
         if (!dir) throw new Error('This browser can’t keep a notebook.');
         // Not awaited: Firefox asks the user, and the notebook opens meanwhile. A refusal changes nothing.
-        void persistStorage();
+        persistStorage().catch(this.reportError);
         return new BrowserStore(dir, true);
       }
     }
@@ -346,7 +349,7 @@ export class Launcher {
   }
 
   /** Show what went wrong; a NAS auth failure asks for the token instead. */
-  reportError(e: unknown): void {
+  readonly reportError = (e: unknown): void => {
     if (e instanceof AuthError) {
       this.needsToken.value = true;
       this.error.value = this.nas?.token ? 'That token wasn’t accepted.' : null;
@@ -356,7 +359,7 @@ export class Launcher {
     this.error.value = /not found|NOT_FOUND|isn’t in the notebook/i.test(message)
       ? 'That folder isn’t there any more.'
       : message;
-  }
+  };
 
   private saveRecents(list: Recent[]): void {
     this.recents.value = list.slice(0, MAX_RECENTS);

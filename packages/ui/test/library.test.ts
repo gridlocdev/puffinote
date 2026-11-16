@@ -166,7 +166,9 @@ describe('NoteMetaCache', () => {
   it('wakes only the reader of the note whose excerpt arrived', async () => {
     const files: Record<string, string> = {};
     for (let i = 0; i < 20; i++) files[`n${i}.md`] = `note ${i}`;
-    const cache = new NoteMetaCache(new UrlStore('N', files));
+    const cache = new NoteMetaCache(new UrlStore('N', files), (e) => {
+      throw e;
+    });
     let runs = 0;
     let seen: string | undefined;
     const stop = effect(() => {
@@ -187,7 +189,9 @@ describe('NoteMetaCache', () => {
     ]);
     const store = new UrlStore('N', { 'a.png': png, 'b.svg': '<svg width="4" height="2"></svg>' });
     store.urls = true;
-    const cache = new NoteMetaCache(store);
+    const cache = new NoteMetaCache(store, (e) => {
+      throw e;
+    });
     cache.get('a.png', 1);
     await vi.waitFor(() =>
       expect(cache.get('b.svg', 1)?.image).toEqual({ format: 'SVG', width: 4, height: 2 }),

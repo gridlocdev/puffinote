@@ -63,7 +63,7 @@ export function FileTree(props: {
 
   const activate = (node: TreeNode) => {
     if (node.kind === 'dir') props.onToggle(node.path, !expanded.has(node.path));
-    else void model.openFile(node.path);
+    else model.openFile(node.path).catch(model.report);
   };
 
   // ----- Keyboard (PRD §6.2) -----
@@ -77,7 +77,7 @@ export function FileTree(props: {
     if (e.metaKey || e.ctrlKey) {
       if ((e.key === 'Backspace' || e.key === 'Delete') && selected) {
         e.preventDefault();
-        void model.remove(selected);
+        model.remove(selected).catch(model.report);
       }
       return;
     }
@@ -116,7 +116,7 @@ export function FileTree(props: {
         e.preventDefault();
         // Finder renames on Enter; elsewhere Enter opens.
         if (row) {
-          if (isMac) void model.rename(row.node.path);
+          if (isMac) model.rename(row.node.path).catch(model.report);
           else activate(row.node);
         }
         return;
@@ -135,11 +135,11 @@ export function FileTree(props: {
       }
       case 'F2':
         e.preventDefault();
-        if (row) void model.rename(row.node.path);
+        if (row) model.rename(row.node.path).catch(model.report);
         return;
       case 'Delete':
         e.preventDefault();
-        if (row) void model.remove(row.node.path);
+        if (row) model.remove(row.node.path).catch(model.report);
         return;
       case 'ContextMenu':
         e.preventDefault();
@@ -273,7 +273,7 @@ export function FileTree(props: {
       setDrag(null);
       if (drop && started && ev) {
         const { dir } = targetAt(ev.clientX, ev.clientY);
-        if (dir !== null) void nb.move(node.path, dir);
+        if (dir !== null) nb.move(node.path, dir).catch(nb.report);
       }
       after(0, () => (suppressClick.current = false));
     };
@@ -363,7 +363,11 @@ export function FileTree(props: {
               if (suppressClick.current) return;
               if (opensOnClick(e)) {
                 // A note is selected once it's open; a folder opens or closes without being selected.
-                if (n.kind === 'file') void model.openFile(n.path).then(() => (nb.selected.value = n.path));
+                if (n.kind === 'file')
+                  model
+                    .openFile(n.path)
+                    .then(() => (nb.selected.value = n.path))
+                    .catch(model.report);
                 else activate(n);
                 return;
               }

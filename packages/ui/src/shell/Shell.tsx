@@ -90,7 +90,7 @@ export function Shell(props: {
     const onHide = () => {
       const nb = model.notebook.peek();
       nb?.flushRecovery();
-      void nb?.persist();
+      nb?.persist().catch(nb.report);
     };
     window.addEventListener('beforeunload', onBeforeUnload);
     window.addEventListener('pagehide', onHide);
@@ -173,7 +173,9 @@ function Overlays({ model, prefs }: { readonly model: ShellModel; readonly prefs
           files={allFiles(nb.tree.value).map((f) => f.path)}
           recent={nb.recent.value}
           showExtensions={nb.config.settings.value.showFileExtensions}
-          onOpen={(p) => void model.openFile(p)}
+          onOpen={(p) => {
+            model.openFile(p).catch(model.report);
+          }}
           onClose={close}
         />
       ) : null;
@@ -183,7 +185,9 @@ function Overlays({ model, prefs }: { readonly model: ShellModel; readonly prefs
           name={baseName(o.path)}
           folders={model.moveTargets(o.path)}
           notebookName={nb.name}
-          onMove={(dir) => void nb.move(o.path, dir)}
+          onMove={(dir) => {
+            nb.move(o.path, dir).catch(nb.report);
+          }}
           onClose={close}
         />
       ) : null;
@@ -199,7 +203,7 @@ function Overlays({ model, prefs }: { readonly model: ShellModel; readonly prefs
           onClose={close}
           onEmpty={() => {
             close();
-            void model.emptyTrash();
+            model.emptyTrash().catch(model.report);
           }}
         />
       ) : null;

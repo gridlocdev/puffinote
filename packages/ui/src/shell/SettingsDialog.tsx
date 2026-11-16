@@ -36,7 +36,7 @@ export function SettingsDialog(props: {
   const apply = () => {
     if (nb) {
       nb.config.setPreferences(user, atOpen.user);
-      void nb.config.setOverrides(book, atOpen.book);
+      nb.config.setOverrides(book, atOpen.book).catch(nb.report);
     } else props.prefs.save(withChanges(props.prefs.load(), user, changedSettings(atOpen.user, user)));
     props.onClose();
   };

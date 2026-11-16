@@ -58,7 +58,13 @@ export function TrashDialog(props: {
               {parentOf(item.path) || nb.name}
               {item.deleted ? ` · ${when.format(item.deleted)}` : ''}
             </span>
-            <button type="button" disabled={busy} onClick={() => void restore([item])}>
+            <button
+              type="button"
+              disabled={busy}
+              onClick={() => {
+                restore([item]).catch(nb.report);
+              }}
+            >
               Restore
             </button>
           </li>

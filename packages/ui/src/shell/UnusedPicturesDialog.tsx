@@ -28,7 +28,7 @@ export function UnusedPicturesDialog(props: {
       onSubmit={() => {
         const chosen = paths.filter((p) => picked.has(p));
         props.onClose();
-        void nb.pictures.removeUnused(chosen);
+        nb.pictures.removeUnused(chosen).catch(nb.report);
       }}
       actions={
         <>

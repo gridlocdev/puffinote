@@ -49,6 +49,11 @@ const webRoot = path.join(here, 'web');
 const CLOSE_ACK_MS = 3000;
 /** PUFFINOTE_HEADLESS=1: render offscreen and never show a window or Dock icon (automated checks). */
 const headless = process.env.PUFFINOTE_HEADLESS === '1';
+
+/** A `.catch` handler for work nobody waits on: the main process has no window to show it in, so it logs. */
+function logFailure(what: string): (e: unknown) => void {
+  return (e) => console.error(`Puffinote: ${what} failed:`, e);
+}
 if (headless) app.dock?.hide();
 
 // The web client loads from app://puffinote/ — a standard, secure scheme so fetch, modules and CSP behave like
@@ -187,7 +192,7 @@ function createWindow(): BrowserWindow {
     win.webContents.send(Channels.closeRequested);
     state.closeTimer = setTimeout(() => {
       state.closeTimer = null;
-      void offerForceClose(win, state);
+      offerForceClose(win, state).catch(logFailure('offerForceClose'));
     }, CLOSE_ACK_MS);
   });
   win.on('closed', () => {
@@ -205,7 +210,7 @@ function createWindow(): BrowserWindow {
     if (state.closeTimer) clearTimeout(state.closeTimer);
     state.closeTimer = null;
     if (action === 'destroy') win.destroy();
-    else void recoverRenderer(win, state, details.reason, action === 'ask');
+    else recoverRenderer(win, state, details.reason, action === 'ask').catch(logFailure('recoverRenderer'));
   });
   // The page's beforeunload guard blocks unloading while notes are dirty. Once the close handshake has asked
   // (and the user chose Don't Save), let it through; otherwise (a reload, a page-initiated close) it holds.
@@ -214,19 +219,19 @@ function createWindow(): BrowserWindow {
   });
   // Links in notes open in the user's browser, never inside the app.
   win.webContents.setWindowOpenHandler(({ url }) => {
-    if (/^(https?|mailto):/i.test(url)) void shell.openExternal(url);
+    if (/^(https?|mailto):/i.test(url)) shell.openExternal(url).catch(logFailure('shell.openExternal'));
     return { action: 'deny' };
   });
   win.webContents.on('will-navigate', (e, url) => {
     if (isAppUrl(url)) return;
     e.preventDefault();
-    if (/^(https?|mailto):/i.test(url)) void shell.openExternal(url);
+    if (/^(https?|mailto):/i.test(url)) shell.openExternal(url).catch(logFailure('shell.openExternal'));
   });
   win.webContents.on('did-finish-load', () => {
     for (const p of pendingOpen.splice(0)) win.webContents.send(Channels.openFolder, p);
   });
 
-  void win.loadURL('app://puffinote/index.html');
+  win.loadURL('app://puffinote/index.html').catch(logFailure('win.loadURL'));
   return win;
 }
 
@@ -464,7 +469,7 @@ function registerIpc(): void {
     app.addRecentDocument(root);
     state.watchRoot = root;
     state.stopWatch = watchTree(root, (paths) => {
-      void Promise.all(
+      Promise.all(
         paths.map(async (p) => {
           const known = knownVersion.get(p);
           if (known === undefined) return p;
@@ -474,10 +479,12 @@ function registerIpc(): void {
           if (knownVersion.get(p) === known) knownVersion.delete(p);
           return p;
         }),
-      ).then((changed) => {
-        const out = changed.filter((p): p is string => p !== null);
-        if (out.length > 0 && !win.isDestroyed()) win.webContents.send(Channels.changed, out);
-      });
+      )
+        .then((changed) => {
+          const out = changed.filter((p): p is string => p !== null);
+          if (out.length > 0 && !win.isDestroyed()) win.webContents.send(Channels.changed, out);
+        })
+        .catch(logFailure('Promise.all'));
     });
   });
   ipcMain.on(Channels.setTitle, (e, title: unknown, dirty: unknown) => {
@@ -500,7 +507,9 @@ function registerIpc(): void {
     const template = toTemplate(items, win);
     const updates: MenuItemConstructorOptions = {
       label: 'Check for Updates…',
-      click: () => void updateChecks.request(true),
+      click: () => {
+        updateChecks.request(true).catch(logFailure('updateChecks.request'));
+      },
     };
     if (process.platform === 'darwin') {
       template.unshift({
@@ -641,7 +650,9 @@ async function checkForUpdates(manual: boolean): Promise<void> {
 async function autoCheckForUpdates(): Promise<void> {
   if (!app.isPackaged || headless || process.env.PUFFINOTE_NO_UPDATE_CHECK === '1') return;
   if (!checkDue(await loadUpdatePrefs(updatePrefsFile), Date.now())) return;
-  setTimeout(() => void updateChecks.request(false), 5000);
+  setTimeout(() => {
+    updateChecks.request(false).catch(logFailure('updateChecks.request'));
+  }, 5000);
 }
 
 /** `pnfile://local/Users/me/Notes/pic.png` → the absolute path, on macOS/Linux and Windows. */
@@ -650,28 +661,31 @@ function fileFromUrl(url: string): string {
   return /^\/[A-Za-z]:\//.test(pathname) ? pathname.slice(1) : pathname;
 }
 
-void app.whenReady().then(async () => {
-  if (!single) return; // quitting: the running instance has the folders
-  protocol.handle('app', (req) => {
-    const { pathname } = new URL(req.url);
-    const file = path.normalize(path.join(webRoot, decodeURIComponent(pathname)));
-    if (!file.startsWith(webRoot + path.sep)) return new Response('Forbidden', { status: 403 });
-    return net.fetch(pathToFileURL(file).toString());
-  });
-  protocol.handle(FILE_SCHEME, async (req) => {
-    const file = fileFromUrl(req.url);
-    if (!(await grants.allows(file))) return new Response('Forbidden', { status: 403 });
-    return net.fetch(pathToFileURL(file).toString());
-  });
-  registerIpc();
-  await grants.load();
-  lastWindow = await loadSavedWindow(windowFile);
-  createWindow();
-  void autoCheckForUpdates();
-  app.on('activate', () => {
-    if (BrowserWindow.getAllWindows().length === 0) createWindow();
-  });
-});
+app
+  .whenReady()
+  .then(async () => {
+    if (!single) return; // quitting: the running instance has the folders
+    protocol.handle('app', (req) => {
+      const { pathname } = new URL(req.url);
+      const file = path.normalize(path.join(webRoot, decodeURIComponent(pathname)));
+      if (!file.startsWith(webRoot + path.sep)) return new Response('Forbidden', { status: 403 });
+      return net.fetch(pathToFileURL(file).toString());
+    });
+    protocol.handle(FILE_SCHEME, async (req) => {
+      const file = fileFromUrl(req.url);
+      if (!(await grants.allows(file))) return new Response('Forbidden', { status: 403 });
+      return net.fetch(pathToFileURL(file).toString());
+    });
+    registerIpc();
+    await grants.load();
+    lastWindow = await loadSavedWindow(windowFile);
+    createWindow();
+    autoCheckForUpdates().catch(logFailure('autoCheckForUpdates'));
+    app.on('activate', () => {
+      if (BrowserWindow.getAllWindows().length === 0) createWindow();
+    });
+  })
+  .catch(logFailure('app.whenReady'));
 
 app.on('window-all-closed', () => {
   if (process.platform !== 'darwin' || quitting) app.quit();
