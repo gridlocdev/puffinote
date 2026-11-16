@@ -1,0 +1,1 @@
+A made-up notebook for the browser tests: a note with formatting and tasks, one in a folder with a numbered list and a picture, one with accents, CJK and emoji in its name and text, and an empty one. Never copy real notes here.

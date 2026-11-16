@@ -149,6 +149,27 @@ fuzz runs="500":
 diagram:
     WRITE_DIAGRAM=1 pnpm vitest run packages/ui/test/saveChart.test.ts -t "is drawn"
 
+# Browser scenarios against the built client and the NAS server, on the fixture notebook in ./.e2e-data.
+[group('quality')]
+e2e *args: build-web
+    pnpm exec playwright test -c e2e/playwright.config.ts --project=web {{ args }}
+
+# Accept the current screenshots as the new baseline (macOS; look at the diff in .e2e-results first).
+[group('quality')]
+e2e-update *args: build-web
+    pnpm exec playwright test -c e2e/playwright.config.ts --project=web --update-snapshots {{ args }}
+
+# Drive the app headlessly for a quick look: just drive cmd:"New Note" type:"hello" key:ControlOrMeta+KeyS shot:after aria
+[group('quality')]
+[positional-arguments]
+drive *steps: build-web
+    node e2e/drive.ts "$@"
+
+# Desktop smoke test: the built Electron app, headless, on a throwaway profile and a copy of the fixture notebook.
+[group('quality')]
+e2e-desktop: build-desktop
+    pnpm exec playwright test -c e2e/playwright.config.ts --project=desktop
+
 # Run the tests in watch mode.
 [group('quality')]
 test-watch *args:
@@ -196,6 +217,7 @@ setup:
 [group('housekeeping')]
 clean:
     rm -rf packages/*/dist apps/web/dist apps/desktop/out "{{ release }}" apps/desktop/node_modules/.cache/puffinote-dev
+    rm -rf .e2e-data .e2e-results .e2e-report .e2e-soak .types-e2e
     find . -name '*.tsbuildinfo' -not -path '*/node_modules/*' -delete
 
 # Remove build output and every node_modules (run `just setup` after).
