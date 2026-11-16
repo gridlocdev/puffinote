@@ -336,8 +336,15 @@ export class ShellModel {
 
   // ----- Focus -----
 
+  /**
+   * Put the keyboard in the note in front, once it has drawn. A dialog that came up in the meantime keeps the
+   * keyboard: on a slow NAS, ⌘N's note can land after the user opened Quick Open.
+   */
   focusEditor(): void {
-    after(0, () => globalThis.document?.querySelector<HTMLElement>('.pn-shell-main .pn-input')?.focus());
+    after(0, () => {
+      if (this.overlay.peek()) return;
+      globalThis.document?.querySelector<HTMLElement>('.pn-shell-main .pn-input')?.focus();
+    });
   }
 
   // ----- Find in Note (PRD §10.7) -----

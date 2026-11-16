@@ -136,7 +136,7 @@ The Layout setting (§9) picks one. Both share the note, the status bar, the com
 
 - ⌥⌘S focuses the tree (on the open note when nothing is selected); ⌥⌘E focuses the editor.
 - The keyboard goes where the click was meant for. A click on a toolbar button (the rail, the panel's header buttons, tabs, the view switch) leaves it where it was, as on macOS, so the caret stays in the note and a cancelled dialog gives it back there. Tab still reaches those buttons.
-- A new note takes the caret. A new folder is selected with the keyboard on it in the tree, so Enter renames it. The tree getting the keyboard back (after a dialog, say) never selects a row on its own.
+- A new note takes the caret, unless a dialog came up while it was being written (Quick Open on a slow NAS, say): the dialog keeps the keyboard. A new folder is selected with the keyboard on it in the tree, so Enter renames it. The tree getting the keyboard back (after a dialog, say) never selects a row on its own.
 - In the tree: ↑/↓ move, ←/→ collapse or expand (or go to the parent or first child), Home/End jump, typing jumps to a matching name, Enter opens a file or toggles a folder, F2 renames, Delete deletes. Escape selects the folder that holds the selected row, and from the top level selects nothing.
 - On macOS, as in Finder, Enter renames the selected row and ⌘↓ opens it (Space also opens or toggles).
 - A click on a file opens and selects it and puts the keyboard in the editor; a click on a folder opens or closes it without selecting it, so the selection stays where it was. ⌥-click selects a row without opening it and puts the keyboard in the tree, so Enter then renames it.
