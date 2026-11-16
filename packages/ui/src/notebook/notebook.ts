@@ -68,6 +68,8 @@ const RECOVERY_MS = 1000;
 const RECOVERY_MAX_WAIT_MS = 5000;
 const SAVED_FLASH_MS = 3000;
 const RECENT_LIMIT = 20;
+/** Moves kept for a rename or move asked for with an older path (see `follow`). */
+const MOVES_KEPT = 50;
 
 /** A message for the status line: what just failed, or what needs the user. */
 export interface Notice {
@@ -169,11 +171,18 @@ export class Notebook {
   private readonly writing = new Set<Tab>();
   /** Each in-flight write's end (after the tab took its answer), for a move to wait on. */
   private readonly writeDone = new Map<Tab, Promise<void>>();
+  /** A refresh's reads of open notes that are out, for a move to wait on. */
+  private readonly readsOut = new Set<{ readonly path: string; readonly done: Promise<boolean> }>();
   /**
-   * Held while a rename or move changes paths under the store: saves wait for it, then write to the path
-   * the move left the tab at. One move at a time.
+   * Held while a rename, a move or a new file changes paths under the store: saves wait for it, then write to
+   * the path the move left the tab at. One at a time, so a folder can't move while a note is being made in it.
    */
   private moveLock: Promise<void> | null = null;
+  /**
+   * The last moves made, oldest first. A rename or move asked for with a path from before one (a dialog opened
+   * while it was on its way, on a slow NAS) follows them to where the file or folder is now.
+   */
+  private readonly moves: { readonly from: string; readonly to: string }[] = [];
   /** Session writes, one after another, so an older one never lands last. */
   private persistChain: Promise<void> = Promise.resolve();
 
@@ -435,12 +444,28 @@ export class Notebook {
         tab.path.value !== path ||
         this.writing.has(tab) ||
         !this.tabs.peek().includes(tab);
+      // A move under way: read where it leaves the note. One that starts while the read is out waits for it
+      // (see relocate), so a slow NAS never gets a read for a path that just moved.
+      while (this.moveLock) await this.moveLock;
+      if (stale()) continue;
+      const reading = this.store.read(path);
+      // Whether it worked; the move only waits for it, and this refresh handles a failure below.
+      const out = {
+        path,
+        done: reading.then(
+          () => true,
+          () => false,
+        ),
+      };
+      this.readsOut.add(out);
       let data: FileData;
       try {
-        data = await this.store.read(path);
+        data = await reading;
       } catch (e) {
         if (e instanceof NotFoundError && !stale()) tab.conflict.value = 'deleted';
         continue;
+      } finally {
+        this.readsOut.delete(out);
       }
       if (stale()) continue;
       // The listing came before this read, so the tab is at least as new as it says (see the check above).
@@ -852,17 +877,19 @@ export class Notebook {
     const file = noteFileName(name);
     const path = joinPath(dir, file);
     if (!this.checkName(file)) return null;
-    try {
-      await this.store.write(path, new Uint8Array(), { create: true });
-    } catch (e) {
-      this.report(e);
-      return null;
-    }
-    if (dir) this.toggleFolder(dir, true);
-    await this.reloadTree();
-    this.selected.value = path;
-    await this.openFile(path);
-    return path;
+    return this.exclusive(async () => {
+      try {
+        await this.store.write(path, new Uint8Array(), { create: true });
+      } catch (e) {
+        this.report(e);
+        return null;
+      }
+      if (dir) this.toggleFolder(dir, true);
+      await this.reloadTree();
+      this.selected.value = path;
+      await this.openFile(path);
+      return path;
+    });
   }
 
   async createFolder(dir: string, name: string): Promise<string | null> {
@@ -873,23 +900,25 @@ export class Notebook {
       this.notify('error', `“${name}” already exists there.`);
       return null;
     }
-    try {
-      await this.store.mkdir(path);
-    } catch (e) {
-      this.report(e);
-      return null;
-    }
-    if (dir) this.toggleFolder(dir, true);
-    await this.reloadTree();
-    this.selected.value = path;
-    return path;
+    return this.exclusive(async () => {
+      try {
+        await this.store.mkdir(path);
+      } catch (e) {
+        this.report(e);
+        return null;
+      }
+      if (dir) this.toggleFolder(dir, true);
+      await this.reloadTree();
+      this.selected.value = path;
+      return path;
+    });
   }
 
   /** Rename a file or folder in place. Returns the new path. */
   async rename(path: string, name: string): Promise<string | null> {
     if (name === baseName(path)) return path;
     if (!this.checkName(name)) return null;
-    return this.relocate(path, joinPath(parentOf(path), name));
+    return this.relocate(path, (from) => joinPath(parentOf(from), name));
   }
 
   /**
@@ -898,7 +927,10 @@ export class Notebook {
    */
   async move(path: string, dir: string): Promise<string | null> {
     if (parentOf(path) === dir || isWithin(dir, path)) return null;
-    return this.relocate(path, joinPath(dir, baseName(path)));
+    return this.relocate(path, (from) => {
+      const into = this.follow(dir);
+      return parentOf(from) === into || isWithin(into, from) ? null : joinPath(into, baseName(from));
+    });
   }
 
   /** Whether moving `path` into `dir` would do anything (the drag indicator shows only then). */
@@ -907,33 +939,77 @@ export class Notebook {
     return !findNode(this.tree.value, joinPath(dir, baseName(path)));
   }
 
-  private async relocate(from: string, to: string): Promise<string | null> {
-    if (this.disposed) return null;
+  /** Run `fn` holding the move lock, after the moves and new files before it. */
+  private async exclusive<T>(fn: () => Promise<T>): Promise<T> {
     while (this.moveLock) await this.moveLock;
     let release!: () => void;
     this.moveLock = new Promise<void>((r) => (release = r));
-    let moved: Tab[];
-    const node = findNode(this.tree.peek(), from);
-    const movedFiles = !node ? [] : node.kind === 'file' ? [from] : allFiles(node).map((f) => f.path);
     try {
-      // Saves already writing to the old path land first; later ones wait for the lock (see writeTab).
-      await Promise.all(
-        this.tabs.peek().flatMap((t) => (isWithin(t.path.peek(), from) ? [this.writeDone.get(t)] : [])),
-      );
+      return await fn();
+    } finally {
+      this.moveLock = null;
+      release();
+    }
+  }
+
+  /** Where `path` is now: a path the tree no longer has follows the moves made since it was read. */
+  private follow(path: string): string {
+    if (!path || findNode(this.tree.peek(), path)) return path;
+    const moves = this.moves;
+    let i = moves.length - 1;
+    while (i >= 0 && !isWithin(path, moves[i]!.from)) i--;
+    for (; i >= 0 && i < moves.length; i++) {
+      const m = moves[i]!;
+      if (isWithin(path, m.from)) path = rebase(path, m.from, m.to);
+    }
+    return path;
+  }
+
+  /**
+   * Move `path` to where `target` says, given where it is by the time the lock is free (a move before it may
+   * have taken it, or its folder, elsewhere). `target` returns null when there's nothing to do.
+   */
+  private async relocate(path: string, target: (from: string) => string | null): Promise<string | null> {
+    if (this.disposed) return null;
+    const done = await this.exclusive(async () => {
+      if (this.disposed) return null;
+      const from = this.follow(path);
+      const to = target(from);
+      if (to === null) return null;
+      if (to === from) return { from, to, movedFiles: [] };
+      const node = findNode(this.tree.peek(), from);
+      const movedFiles = !node ? [] : node.kind === 'file' ? [from] : allFiles(node).map((f) => f.path);
+      // Saves already writing to the old path, and a refresh's reads there, land first; later ones wait for
+      // the lock (see writeTab and refresh).
+      await Promise.all([
+        ...this.tabs.peek().flatMap((t) => (isWithin(t.path.peek(), from) ? [this.writeDone.get(t)] : [])),
+        ...[...this.readsOut].flatMap((r) => (isWithin(r.path, from) ? [r.done] : [])),
+      ]);
       try {
         await this.store.move(from, to);
       } catch (e) {
         this.report(e);
         return null;
       }
-      moved = this.tabs.value.filter((t) => isWithin(t.path.value, from));
+      this.moves.push({ from, to });
+      if (this.moves.length > MOVES_KEPT) this.moves.shift();
+      const moved = this.tabs.value.filter((t) => isWithin(t.path.value, from));
       for (const t of moved) t.path.value = rebase(t.path.value, from, to);
       this.tabs.value = [...this.tabs.value];
       await Promise.all(moved.map((t) => this.adoptMovedVersion(t)));
-    } finally {
-      this.moveLock = null;
-      release();
-    }
+      this.afterMove(from, to);
+      // Before the lock goes, so the next move finds this one's paths in the tree.
+      await this.reloadTree();
+      return { from, to, movedFiles };
+    });
+    if (!done) return null;
+    const { from, to, movedFiles } = done;
+    if (from !== to) await this.relinkPictures(from, to, movedFiles);
+    return to;
+  }
+
+  /** Paths the notebook keeps (recent, pinned, the Library's folder, open folders, the selection) follow a move. */
+  private afterMove(from: string, to: string): void {
     this.recent.value = this.recent.value.map((p) => (isWithin(p, from) ? rebase(p, from, to) : p));
     if (this.pinned.value.some((p) => isWithin(p, from))) {
       this.pinned.value = this.pinned.value.map((p) => (isWithin(p, from) ? rebase(p, from, to) : p));
@@ -950,9 +1026,6 @@ export class Notebook {
     if (this.selected.value && isWithin(this.selected.value, from)) {
       this.selected.value = rebase(this.selected.value, from, to);
     }
-    await this.reloadTree();
-    await this.relinkPictures(from, to, movedFiles);
-    return to;
   }
 
   /**
