@@ -29,7 +29,7 @@ export function tokenizeLine(
       return inFencedCode(line, lineStart, len, entering, output);
     case 'indentedCode':
       return inIndentedCode(line, lineStart, len, lineIndex, allowFrontMatterOpen, entering, output);
-    default:
+    case 'normal':
       return normal(
         line,
         lineStart,

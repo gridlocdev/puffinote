@@ -301,7 +301,28 @@ function decorationFor(
       const width = embedWidth(t.meta);
       return { kind: 'image', text: '', url: `[[${embedTarget(t.meta)}]]`, ...(width ? { width } : {}) };
     }
-    default:
+    case 'autolink':
+    case 'blockquoteMarker':
+    case 'codeFence':
+    case 'codeText':
+    case 'emphasis':
+    case 'escape':
+    case 'frontMatterFence':
+    case 'frontMatterText':
+    case 'hardBreak':
+    case 'headingMarker':
+    case 'highlight':
+    case 'imageAlt':
+    case 'inlineCode':
+    case 'linkUrl':
+    case 'marker':
+    case 'setextUnderline':
+    case 'strikethrough':
+    case 'strong':
+    case 'strongEmphasis':
+    case 'tableDelimiter':
+    case 'text':
+    case 'wikiLink':
       return null;
   }
 }

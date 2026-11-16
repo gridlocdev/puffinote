@@ -86,7 +86,8 @@ function SegmentView({
         );
       case 'rule':
         return <span {...common} class="pn-deco pn-rule" />;
-      default:
+      case 'bullet':
+      case 'number':
         return (
           <span {...common} class={`pn-deco pn-deco-${d.kind}`}>
             {d.text}

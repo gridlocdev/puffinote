@@ -192,6 +192,27 @@ class Renderer {
         return this.quote(line);
       case 'listMarker':
         return this.listLevel(line, this.listIndent(line), 0, 0);
+      case 'autolink':
+      case 'embed':
+      case 'emphasis':
+      case 'escape':
+      case 'frontMatterText':
+      case 'hardBreak':
+      case 'highlight':
+      case 'imageAlt':
+      case 'imageUrl':
+      case 'inlineCode':
+      case 'linkUrl':
+      case 'marker':
+      case 'strikethrough':
+      case 'strong':
+      case 'strongEmphasis':
+      case 'tableDelimiter':
+      case 'taskMarker':
+      case 'text':
+      case 'wikiLink':
+      case undefined:
+        break;
     }
 
     const tableEnd = this.blockEnd(line, 'table');
@@ -626,7 +647,24 @@ class Renderer {
       case 'embed':
         this.out += `<span class="embed">${text}</span>`;
         break;
-      default:
+      case 'blockquoteMarker':
+      case 'codeFence':
+      case 'codeText':
+      case 'escape':
+      case 'frontMatterFence':
+      case 'frontMatterText':
+      case 'hardBreak':
+      case 'headingMarker':
+      case 'horizontalRule':
+      case 'imageAlt':
+      case 'imageUrl':
+      case 'linkUrl':
+      case 'listMarker':
+      case 'marker':
+      case 'setextUnderline':
+      case 'tableDelimiter':
+      case 'taskMarker':
+      case 'text':
         this.out += text;
     }
   }
@@ -656,7 +694,24 @@ class Renderer {
       case 'setextUnderline':
       case 'codeText':
         return false;
-      default:
+      case 'autolink':
+      case 'embed':
+      case 'emphasis':
+      case 'escape':
+      case 'frontMatterText':
+      case 'hardBreak':
+      case 'highlight':
+      case 'imageAlt':
+      case 'imageUrl':
+      case 'inlineCode':
+      case 'linkUrl':
+      case 'marker':
+      case 'strikethrough':
+      case 'strong':
+      case 'strongEmphasis':
+      case 'taskMarker':
+      case 'text':
+      case 'wikiLink':
         return this.blockEnd(line, 'table') === null;
     }
   }

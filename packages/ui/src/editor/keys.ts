@@ -103,7 +103,9 @@ export function undoRunFor(action: KeyAction, key: string, repeat: boolean): Und
     case 'enter':
     case 'tab':
       return { group: `key:${key}`, join: repeat };
-    default:
+    case 'move':
+    case 'page':
+    case 'vertical':
       return undefined;
   }
 }
