@@ -778,6 +778,15 @@ export function MarkdownEditor(props: MarkdownEditorProps) {
     }
   }
 
+  /**
+   * The browser keeps one undo history for the whole page, holding what was typed into the hidden input. Its own
+   * undo (⌘Z in a dialog's box with nothing left to undo, say) would take that typing back out of the input and
+   * move the keyboard behind the dialog. The note has its own history, run by the Undo and Redo commands.
+   */
+  function onBeforeInput(e: InputEvent): void {
+    if (e.inputType === 'historyUndo' || e.inputType === 'historyRedo') e.preventDefault();
+  }
+
   function onInput(e: Event): void {
     if (composing.current) return;
     takeInput(e.currentTarget as HTMLTextAreaElement, (text) => insertText(withLineEnding(doc, text)));
@@ -1018,6 +1027,7 @@ export function MarkdownEditor(props: MarkdownEditorProps) {
             autocomplete="off"
             spellcheck={false}
             onKeyDown={onKeyDown}
+            onBeforeInput={onBeforeInput}
             onInput={onInput}
             onCompositionStart={onCompositionStart}
             onCompositionEnd={onCompositionEnd}

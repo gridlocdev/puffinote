@@ -13,6 +13,7 @@
 
 ### Bugs fixed
 
+- ⌘Z in a dialog's empty text box (New Folder's name, say) does nothing. Before, it could undo the last typing in the note behind the dialog and move the keyboard there.
 - A dialog opened while a new note was still being saved (Quick Open on a slow NAS, say) keeps the keyboard. Before, the new note took it, and keys went into the note behind the dialog.
 - The desktop app opens a folder it's launched with (from Finder, the Dock or the command line) instead of reopening the last notebook.
 - Pasting or dropping a picture with the caret at the very end of a note saves the picture and links it. Before, the file was saved but no link went into the note.

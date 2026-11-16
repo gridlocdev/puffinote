@@ -1,4 +1,4 @@
-import { editor, expect, letAutosave, openApp, openNote, readData, test } from './fixtures.ts';
+import { editor, expect, letAutosave, openApp, openNote, readData, runCommand, test } from './fixtures.ts';
 
 test.describe('Formatting as you type', () => {
   test.beforeEach(async ({ seed, page }) => {
@@ -25,6 +25,18 @@ test.describe('Formatting as you type', () => {
     await letAutosave(page);
     await expect.poll(() => readData('Welcome.md')).toContain('- [ ] Water the ferns\n- [ ] Buy stamps\n');
     await expect(editor(page)).toBeFocused();
+  });
+
+  test('⌘Z in a dialog’s empty box leaves the note behind it alone', async ({ page }) => {
+    await page.keyboard.type('x');
+    await runCommand(page, 'New Folder…');
+    const name = page.getByRole('dialog', { name: 'New Folder' }).getByRole('textbox');
+    await expect(name).toBeFocused();
+    await page.keyboard.press('ControlOrMeta+KeyZ');
+    await expect(name).toBeFocused();
+    await page.keyboard.press('Escape');
+    await letAutosave(page);
+    await expect.poll(() => readData('Welcome.md')).toMatch(/^x/);
   });
 });
 
