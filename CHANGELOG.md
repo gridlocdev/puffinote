@@ -16,6 +16,7 @@
 - On a slow NAS, renaming or moving a folder while a new note in it was still being written, or renaming a note again before the first rename landed, no longer fails with a “not found” error. The note ends up where you asked.
 - ⌘Z in a dialog's empty text box (New Folder's name, say) does nothing. Before, it could undo the last typing in the note behind the dialog and move the keyboard there.
 - A dialog opened while a new note was still being saved (Quick Open on a slow NAS, say) keeps the keyboard. Before, the new note took it, and keys went into the note behind the dialog.
+- A dialog opened while a new folder was still being made (the command menu on a slow NAS, say) keeps the keyboard. Before, the file tree took it.
 - The desktop app opens a folder it's launched with (from Finder, the Dock or the command line) instead of reopening the last notebook.
 - Pasting or dropping a picture with the caret at the very end of a note saves the picture and links it. Before, the file was saved but no link went into the note.
 

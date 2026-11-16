@@ -35,6 +35,32 @@ test.describe('Desktop, browser and NAS', () => {
     await expect(box).toBeFocused();
   });
 
+  test('on a slow NAS, a dialog opened while a new folder is still being made keeps the keyboard', async ({
+    seed,
+    page,
+  }) => {
+    seed('basic');
+    await openApp(page);
+    // Hold the new folder until the command menu is up.
+    let release = () => {};
+    const held = new Promise<void>((resolve) => (release = resolve));
+    await page.route(/\/api\/mkdir\?.*path=Ideas/, async (route) => {
+      await held;
+      await route.continue();
+    });
+    await runCommand(page, 'New Folder…');
+    await page.keyboard.press('ControlOrMeta+KeyA');
+    await page.keyboard.type('Ideas');
+    await page.keyboard.press('Enter');
+    await page.keyboard.press('ControlOrMeta+KeyK');
+    const box = page.getByRole('dialog', { name: 'Command Menu' }).getByRole('combobox');
+    await expect(box).toBeFocused();
+    release();
+    await expect(page.getByRole('treeitem', { name: 'Ideas' })).toBeVisible();
+    await page.clock.runFor(100);
+    await expect(box).toBeFocused();
+  });
+
   test('on a slow NAS, renaming a folder while a new note in it is still being written keeps the note', async ({
     seed,
     page,

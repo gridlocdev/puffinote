@@ -446,12 +446,17 @@ export class ShellModel {
     if (this.activeState.peek()) this.focusEditor();
   }
 
+  /**
+   * Put the keyboard in the file tree (the note list in the library layout), once it has drawn. As with
+   * `focusEditor`, a dialog that came up in the meantime keeps the keyboard: on a slow NAS, a new folder can land
+   * after the user opened the command menu.
+   */
   focusTree(): void {
     const nb = this.notebook.peek();
     if (!nb) return;
     nb.sidebarCollapsed.value = false;
     if (this.layout.peek() === 'library') {
-      after(0, () => document.querySelector<HTMLElement>('.pn-notes-list')?.focus());
+      this.focusUnlessDialog('.pn-notes-list');
       return;
     }
     if (nb.panel.peek() !== 'files' && nb.panel.peek() !== 'filter') nb.panel.value = 'files';
@@ -459,7 +464,14 @@ export class ShellModel {
     // "nothing selected", so New Note still goes to the top level.)
     const open = nb.active.peek()?.path.peek();
     if (!nb.selected.peek() && open) nb.reveal(open);
-    after(0, () => document.querySelector<HTMLElement>('.pn-sidebar .pn-tree')?.focus());
+    this.focusUnlessDialog('.pn-sidebar .pn-tree');
+  }
+
+  private focusUnlessDialog(selector: string): void {
+    after(0, () => {
+      if (this.overlay.peek()) return;
+      document.querySelector<HTMLElement>(selector)?.focus();
+    });
   }
 
   showPanel(panel: SidebarPanel): void {
