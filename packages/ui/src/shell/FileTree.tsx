@@ -1,3 +1,4 @@
+import { after, type Cancel, nextFrame } from '../schedule.ts';
 import { useLayoutEffect, useRef, useState } from 'preact/hooks';
 import { isMac } from '../commands/shortcut.ts';
 import type { Notebook } from '../notebook/notebook.ts';
@@ -189,15 +190,15 @@ export function FileTree(props: {
     const startY = e.clientY;
     let started = false;
     let hoverDir: string | null = null;
-    let hoverTimer: ReturnType<typeof setTimeout> | null = null;
+    let hoverTimer: Cancel | null = null;
     const clearHover = () => {
-      if (hoverTimer) clearTimeout(hoverTimer);
+      hoverTimer?.();
       hoverTimer = null;
       hoverDir = null;
     };
     // Autoscroll near the tree's top or bottom edge, after a short hold (PRD §6.1).
     let edgeSince = 0;
-    let scrollFrame = 0;
+    let scrollFrame: Cancel | null = null;
     let lastPointer: { x: number; y: number } | null = null;
     const edgeSpeed = (y: number): number => {
       const tree = ref.current;
@@ -209,7 +210,7 @@ export function FileTree(props: {
       return 0;
     };
     const tick = (now: number) => {
-      scrollFrame = 0;
+      scrollFrame = null;
       const tree = ref.current;
       if (!tree || !lastPointer) return;
       const speed = edgeSpeed(lastPointer.y);
@@ -226,11 +227,11 @@ export function FileTree(props: {
           setDrag({ path: node.path, x: lastPointer.x, y: lastPointer.y, target: dir });
         }
       }
-      scrollFrame = requestAnimationFrame(tick);
+      scrollFrame = nextFrame(tick);
     };
     const stopScroll = () => {
-      if (scrollFrame) cancelAnimationFrame(scrollFrame);
-      scrollFrame = 0;
+      scrollFrame?.();
+      scrollFrame = null;
       edgeSince = 0;
     };
     const targetAt = (x: number, y: number): { dir: string | null; row: TreeNode | null } => {
@@ -254,13 +255,13 @@ export function FileTree(props: {
       const { dir, row } = targetAt(ev.clientX, ev.clientY);
       setDrag({ path: node.path, x: ev.clientX, y: ev.clientY, target: dir });
       lastPointer = { x: ev.clientX, y: ev.clientY };
-      if (!scrollFrame && edgeSpeed(ev.clientY) !== 0) scrollFrame = requestAnimationFrame(tick);
+      if (!scrollFrame && edgeSpeed(ev.clientY) !== 0) scrollFrame = nextFrame(tick);
       // A closed folder held under the pointer opens, so you can aim inside it.
       const closed = row?.kind === 'dir' && !expandedRef.current.has(row.path) ? row.path : null;
       if (closed !== hoverDir) {
         clearHover();
         hoverDir = closed;
-        if (closed) hoverTimer = setTimeout(() => props.onToggle(closed, true), HOVER_OPEN_MS);
+        if (closed) hoverTimer = after(HOVER_OPEN_MS, () => props.onToggle(closed, true));
       }
     };
     const finish = (drop: boolean, ev?: PointerEvent) => {
@@ -274,7 +275,7 @@ export function FileTree(props: {
         const { dir } = targetAt(ev.clientX, ev.clientY);
         if (dir !== null) void nb.move(node.path, dir);
       }
-      setTimeout(() => (suppressClick.current = false));
+      after(0, () => (suppressClick.current = false));
     };
     const onUp = (ev: PointerEvent) => finish(true, ev);
     const onKey = (ev: KeyboardEvent) => {

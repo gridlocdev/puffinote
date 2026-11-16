@@ -127,3 +127,4 @@ export {
   ShellModel,
 } from './shell/shellModel.ts';
 export { Icon } from './shell/Icon.tsx';
+export { after, type Cancel, nextFrame } from './schedule.ts';

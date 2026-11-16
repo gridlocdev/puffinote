@@ -1,3 +1,4 @@
+import { after } from '../schedule.ts';
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'preact/hooks';
 import { folderOf, scopeList } from '../notebook/library.ts';
 import type { LibraryScope, Notebook, NoteSort } from '../notebook/notebook.ts';
@@ -345,14 +346,14 @@ function useTextHits(nb: Notebook, query: string, files: readonly TreeNode[]): R
       return;
     }
     const abort = new AbortController();
-    const t = setTimeout(() => {
+    const cancel = after(200, () => {
       void nb.textSearch.notesContaining(query, paths, { signal: abort.signal }).then((found) => {
         if (!abort.signal.aborted) setHits(found);
       });
-    }, 200);
+    });
     return () => {
       abort.abort();
-      clearTimeout(t);
+      cancel();
     };
   }, [query, key, nb.tree.value]);
   return hits;
@@ -510,7 +511,7 @@ function Popover({ model, nb }: { readonly model: ShellModel; readonly nb: Noteb
     window.addEventListener('pointerdown', onDown, true);
     window.addEventListener('keydown', onKey, true);
     // The list takes the keyboard, so arrows and Enter work at once.
-    setTimeout(() => ref.current?.querySelector<HTMLElement>('li[aria-selected="true"], li')?.focus());
+    after(0, () => ref.current?.querySelector<HTMLElement>('li[aria-selected="true"], li')?.focus());
     return () => {
       window.removeEventListener('pointerdown', onDown, true);
       window.removeEventListener('keydown', onKey, true);

@@ -1,6 +1,14 @@
 import { effect } from '@preact/signals';
 import { render } from 'preact';
-import { localPrefs, pickImportFiles, Shell, ShellModel, type RecentNotebook } from '@puffinote/ui';
+import {
+  after,
+  type Cancel,
+  localPrefs,
+  pickImportFiles,
+  Shell,
+  ShellModel,
+  type RecentNotebook,
+} from '@puffinote/ui';
 import '@puffinote/ui/styles.css';
 import { Launcher, recentKey, recentPlace } from './launcher.ts';
 import { nativeMenu } from './nativeMenu.ts';
@@ -73,13 +81,13 @@ if (native) {
   });
 
   // Rebuild the menu when enabled/checked states may have moved; coalesced to one send.
-  let queued: ReturnType<typeof setTimeout> | null = null;
+  let queued: Cancel | null = null;
   effect(() => {
     void model.menuInputs.value;
     if (queued) return;
-    queued = setTimeout(() => {
+    queued = after(30, () => {
       queued = null;
       native.setMenu(nativeMenu(catalog));
-    }, 30);
+    });
   });
 }

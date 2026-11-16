@@ -1,3 +1,4 @@
+import { type Cancel, nextFrame } from '../schedule.ts';
 import { blockAtLine, toggledTaskState, parseLinePrefix, type Token } from '@puffinote/markdown';
 import { isCollapsed, selectionEnd, selectionStart } from '@puffinote/text';
 import { useLayoutEffect, useMemo, useRef } from 'preact/hooks';
@@ -346,7 +347,7 @@ export function MarkdownEditor(props: MarkdownEditorProps) {
     props.onScroll?.((e.currentTarget as HTMLElement).scrollTop);
     if (isCollapsed(sel) || paintQueued.current) return;
     paintQueued.current = true;
-    requestAnimationFrame(() => {
+    nextFrame(() => {
       paintQueued.current = false;
       paintRef.current();
     });
@@ -366,7 +367,7 @@ export function MarkdownEditor(props: MarkdownEditorProps) {
     const ro = new ResizeObserver(() => {
       if (queued) return;
       queued = true;
-      requestAnimationFrame(() => {
+      nextFrame(() => {
         queued = false;
         placeRef.current();
         paintRef.current();
@@ -413,11 +414,11 @@ export function MarkdownEditor(props: MarkdownEditorProps) {
     registry.set('pn-find-current', current);
   };
   useLayoutEffect(() => paintFindRef.current());
-  const findFrame = useRef(0);
+  const findFrame = useRef<Cancel | null>(null);
   function repaintFindSoon(): void {
     if (!findMatches || findFrame.current) return;
-    findFrame.current = requestAnimationFrame(() => {
-      findFrame.current = 0;
+    findFrame.current = nextFrame(() => {
+      findFrame.current = null;
       paintFindRef.current();
     });
   }
@@ -453,7 +454,7 @@ export function MarkdownEditor(props: MarkdownEditorProps) {
     () => () => {
       globalThis.CSS?.highlights?.delete('pn-find');
       globalThis.CSS?.highlights?.delete('pn-find-current');
-      cancelAnimationFrame(findFrame.current);
+      findFrame.current?.();
     },
     [],
   );
@@ -581,7 +582,7 @@ export function MarkdownEditor(props: MarkdownEditorProps) {
       // In a task's revealed `- [ ]`: the line is laid out wider than it will be once the caret leaves the
       // marker. Step to the text first and measure the move once the marker has turned back into a checkbox.
       moveTo(itemTextStart(from), extend, true);
-      requestAnimationFrame(() => verticalRef.current(dir, extend));
+      nextFrame(() => verticalRef.current(dir, extend));
       return;
     }
     const box = caretBoxAt(sel.caret);

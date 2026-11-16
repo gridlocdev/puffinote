@@ -1,3 +1,4 @@
+import { after, type Cancel } from '../schedule.ts';
 import { useRef, useState } from 'preact/hooks';
 import { draggingFiles, droppedFiles } from './importPicker.ts';
 import type { ShellModel } from './shellModel.ts';
@@ -16,12 +17,12 @@ export function useFileDrop(
   open?: (path: string) => void,
 ) {
   const [target, setTarget] = useState<string | null>(null);
-  const hover = useRef<{ path: string | null; timer: ReturnType<typeof setTimeout> | null }>({
+  const hover = useRef<{ path: string | null; timer: Cancel | null }>({
     path: null,
     timer: null,
   });
   const clearHover = () => {
-    if (hover.current.timer) clearTimeout(hover.current.timer);
+    hover.current.timer?.();
     hover.current = { path: null, timer: null };
   };
   const leave = () => {
@@ -39,7 +40,7 @@ export function useFileDrop(
     const closed = closedFolderAt?.(e.target) ?? null;
     if (open && closed !== hover.current.path) {
       clearHover();
-      hover.current = { path: closed, timer: closed ? setTimeout(() => open(closed), HOVER_OPEN_MS) : null };
+      hover.current = { path: closed, timer: closed ? after(HOVER_OPEN_MS, () => open(closed)) : null };
     }
   };
   const onDragLeave = (e: DragEvent) => {

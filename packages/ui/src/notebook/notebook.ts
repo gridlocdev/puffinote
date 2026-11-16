@@ -1,3 +1,4 @@
+import { after, type Cancel } from '../schedule.ts';
 import { effect, signal } from '@preact/signals';
 import { encodeText, isReadOnlyDecode, readText } from '@puffinote/text';
 import { applyRefEdits, imageTargets, relinkEdits, type RefEdit } from './attachments.ts';
@@ -148,8 +149,8 @@ export class Notebook {
 
   private readonly options: NotebookOptions;
   private readonly disposers: (() => void)[] = [];
-  private persistTimer: ReturnType<typeof setTimeout> | null = null;
-  private refreshTimer: ReturnType<typeof setTimeout> | null = null;
+  private persistTimer: Cancel | null = null;
+  private refreshTimer: Cancel | null = null;
   /** Each note tab's file as the listing showed it when a refresh last read it, to skip it while unchanged. */
   private readonly checkedStats = new WeakMap<Tab, FileStat & { readonly path: string }>();
   /** Tree reads started; only the newest one's answer is taken (see `reloadTree`). */
@@ -340,14 +341,14 @@ export class Notebook {
     this.disposed = true;
     // A session write still waiting on its debounce goes out now, before the tabs it describes go away.
     if (this.persistTimer) {
-      clearTimeout(this.persistTimer);
+      this.persistTimer();
       this.persistTimer = null;
       void this.persist();
     }
     for (const d of this.disposers) d();
     this.meta.dispose();
     for (const t of this.tabs.value) t.dispose();
-    if (this.refreshTimer) clearTimeout(this.refreshTimer);
+    this.refreshTimer?.();
     this.pictures.dispose();
   }
 
@@ -462,11 +463,11 @@ export class Notebook {
   }
 
   scheduleRefresh(): void {
-    if (this.refreshTimer) clearTimeout(this.refreshTimer);
-    this.refreshTimer = setTimeout(() => {
+    this.refreshTimer?.();
+    this.refreshTimer = after(150, () => {
       this.refreshTimer = null;
       void this.refresh();
-    }, 150);
+    });
   }
 
   // ----- Tabs -----
@@ -535,7 +536,7 @@ export class Notebook {
   }
 
   private watchAutosave(tab: Tab): void {
-    let timer: ReturnType<typeof setTimeout> | null = null;
+    let timer: Cancel | null = null;
     tab.onDispose(
       effect(() => {
         void tab.state!.version.value;
@@ -544,18 +545,16 @@ export class Notebook {
           tab.conflict.value === 'none' &&
           this.config.settings.value.autoSave &&
           !tab.readOnly;
-        if (timer) clearTimeout(timer);
+        timer?.();
         timer = go
-          ? setTimeout(() => {
+          ? after(AUTOSAVE_MS, () => {
               timer = null;
               if (tab.dirty.peek() && this.tabs.peek().includes(tab)) void this.save(tab);
-            }, AUTOSAVE_MS)
+            })
           : null;
       }),
     );
-    tab.onDispose(() => {
-      if (timer) clearTimeout(timer);
-    });
+    tab.onDispose(() => timer?.());
   }
 
   /**
@@ -570,11 +569,11 @@ export class Notebook {
       if (offered.text !== tab.savedText) tab.recovered.value = offered;
       else store.remove(tab.path.peek());
     }
-    let timer: ReturnType<typeof setTimeout> | null = null;
+    let timer: Cancel | null = null;
     let since = 0;
     let lastPath = tab.path.peek();
     const write = () => {
-      if (timer) clearTimeout(timer);
+      timer?.();
       timer = null;
       if (tab.recoveryOff || tab.recovered.peek() || !tab.dirty.peek() || !this.tabs.peek().includes(tab))
         return;
@@ -595,7 +594,7 @@ export class Notebook {
         }
         if (pending || tab.recoveryOff) return;
         if (!dirty) {
-          if (timer) clearTimeout(timer);
+          timer?.();
           timer = null;
           store.remove(path);
           return;
@@ -603,13 +602,13 @@ export class Notebook {
         const now = Date.now();
         if (!timer) since = now;
         else if (now - since >= RECOVERY_MAX_WAIT_MS) return;
-        else clearTimeout(timer);
-        timer = setTimeout(write, RECOVERY_MS);
+        else timer();
+        timer = after(RECOVERY_MS, write);
       }),
     );
     this.flushers.set(tab, write);
     tab.onDispose(() => {
-      if (timer) clearTimeout(timer);
+      timer?.();
       this.flushers.delete(tab);
     });
   }
@@ -807,9 +806,9 @@ export class Notebook {
 
   private flashSaved(tab: Tab): void {
     tab.saved.value = true;
-    setTimeout(() => {
+    after(SAVED_FLASH_MS, () => {
       if (!tab.dirty.peek()) tab.saved.value = false;
-    }, SAVED_FLASH_MS);
+    });
   }
 
   /** Take the disk's version into `tab`, as one undoable step (PRD §5). */
@@ -1169,11 +1168,11 @@ export class Notebook {
 
   private schedulePersist(): void {
     if (!this.loaded) return;
-    if (this.persistTimer) clearTimeout(this.persistTimer);
-    this.persistTimer = setTimeout(() => {
+    this.persistTimer?.();
+    this.persistTimer = after(500, () => {
       this.persistTimer = null;
       void this.persist();
-    }, 500);
+    });
   }
 
   /**

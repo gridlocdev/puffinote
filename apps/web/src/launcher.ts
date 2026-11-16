@@ -1,5 +1,6 @@
 import { signal } from '@preact/signals';
 import {
+  after,
   AuthError,
   BrowserStore,
   NasClient,
@@ -77,7 +78,7 @@ export function download(name: string, bytes: Uint8Array, mime: string): void {
   document.body.append(a);
   a.click();
   a.remove();
-  setTimeout(() => URL.revokeObjectURL(url), 10_000);
+  after(10_000, () => URL.revokeObjectURL(url));
 }
 
 /**

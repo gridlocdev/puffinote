@@ -1,3 +1,4 @@
+import { after } from '../schedule.ts';
 import {
   ConflictError,
   NotFoundError,
@@ -15,7 +16,7 @@ import { baseName, parentOf } from './paths.ts';
  */
 export async function privateFolder(timeoutMs = 5000): Promise<FileSystemDirectoryHandle | null> {
   // A browser with site storage blocked can leave this hanging rather than refuse; give up after a while.
-  const timeout = new Promise<null>((resolve) => setTimeout(() => resolve(null), timeoutMs));
+  const timeout = new Promise<null>((resolve) => after(timeoutMs, () => resolve(null)));
   const folder = (async () => {
     const root = await navigator.storage.getDirectory();
     return await root.getDirectoryHandle('notebook', { create: true });

@@ -1,5 +1,6 @@
 /* The panels the Icon rail layout shows (PRD §6.3); the Library layout borrows Outline and Recent. */
 
+import { after } from '../schedule.ts';
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'preact/hooks';
 import type { Notebook } from '../notebook/notebook.ts';
 import type { SearchHit } from '../notebook/search.ts';
@@ -130,7 +131,7 @@ export function SearchPanel({ model, nb }: { readonly model: ShellModel; readonl
     }
     // A newer query (or a changed tree) stops this scan where it is, not just hides its answer.
     const abort = new AbortController();
-    const t = setTimeout(() => {
+    const cancel = after(200, () => {
       void runSearch(
         (q, opts) => nb.textSearch.find(q, opts),
         query,
@@ -140,10 +141,10 @@ export function SearchPanel({ model, nb }: { readonly model: ShellModel; readonl
           setIndex(0);
         },
       );
-    }, 200);
+    });
     return () => {
       abort.abort();
-      clearTimeout(t);
+      cancel();
     };
     // The tree keeps its object while its entries are the same (`Notebook.reloadTree`), so a refresh on
     // window focus doesn't start the scan again.

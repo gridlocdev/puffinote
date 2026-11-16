@@ -1,3 +1,4 @@
+import { after } from '../schedule.ts';
 import { PicturePreview } from './PicturePreview.tsx';
 import { useSignalEffect } from '@preact/signals';
 import type { ComponentChildren } from 'preact';
@@ -123,8 +124,7 @@ export function Shell(props: {
     const n = model.notebook.value;
     if (!n?.notice.value) return;
     // An offer (Move to Trash) stays up longer, so there's time to take it.
-    const t = setTimeout(() => (n.notice.value = null), n.notice.value.action ? NOTICE_MS * 2 : NOTICE_MS);
-    return () => clearTimeout(t);
+    return after(n.notice.value.action ? NOTICE_MS * 2 : NOTICE_MS, () => (n.notice.value = null));
   });
 
   const layout = nb?.config.settings.value.layout ?? props.prefs.load().layout ?? 'rail';

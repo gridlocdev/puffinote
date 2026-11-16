@@ -1,3 +1,4 @@
+import { after } from '../schedule.ts';
 import { useEffect, useState } from 'preact/hooks';
 
 /** How long typing pauses before the word count and the Outline catch up. */
@@ -16,8 +17,7 @@ export function useSettled<T>(value: T, key: unknown, delay: number): T {
       return;
     }
     if (Object.is(held.value, value)) return;
-    const timer = setTimeout(() => setHeld({ value, key }), delay);
-    return () => clearTimeout(timer);
+    return after(delay, () => setHeld({ value, key }));
   }, [value, key]);
   return held.key === key ? held.value : value;
 }

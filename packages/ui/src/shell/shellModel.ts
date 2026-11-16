@@ -1,3 +1,4 @@
+import { after } from '../schedule.ts';
 import { computed, effect, signal } from '@preact/signals';
 import { CommandCatalog, type Command, type CommandSpec, type CommandTarget } from '../commands/command.ts';
 import { formatShortcut, isMac, parseShortcut } from '../commands/shortcut.ts';
@@ -330,7 +331,7 @@ export class ShellModel {
   // ----- Focus -----
 
   focusEditor(): void {
-    setTimeout(() => globalThis.document?.querySelector<HTMLElement>('.pn-shell-main .pn-input')?.focus());
+    after(0, () => globalThis.document?.querySelector<HTMLElement>('.pn-shell-main .pn-input')?.focus());
   }
 
   // ----- Find in Note (PRD §10.7) -----
@@ -352,7 +353,7 @@ export class ShellModel {
     else if (this.findQuery.peek() === null) this.findQuery.value = this.lastFind;
     if (replace) this.replaceOpen.value = true;
     const which = replace && this.findQuery.peek() ? '.pn-find-replace input' : '.pn-find input';
-    setTimeout(() => {
+    after(0, () => {
       const box = globalThis.document?.querySelector<HTMLInputElement>(which);
       box?.focus();
       box?.select();
@@ -437,7 +438,7 @@ export class ShellModel {
     if (!nb) return;
     nb.sidebarCollapsed.value = false;
     if (this.layout.peek() === 'library') {
-      setTimeout(() => document.querySelector<HTMLElement>('.pn-notes-list')?.focus());
+      after(0, () => document.querySelector<HTMLElement>('.pn-notes-list')?.focus());
       return;
     }
     if (nb.panel.peek() !== 'files' && nb.panel.peek() !== 'filter') nb.panel.value = 'files';
@@ -445,7 +446,7 @@ export class ShellModel {
     // "nothing selected", so New Note still goes to the top level.)
     const open = nb.active.peek()?.path.peek();
     if (!nb.selected.peek() && open) nb.reveal(open);
-    setTimeout(() => document.querySelector<HTMLElement>('.pn-sidebar .pn-tree')?.focus());
+    after(0, () => document.querySelector<HTMLElement>('.pn-sidebar .pn-tree')?.focus());
   }
 
   showPanel(panel: SidebarPanel): void {
