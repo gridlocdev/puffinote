@@ -55,6 +55,17 @@ describe('NasStore over the NAS server', () => {
     expect(store.fileUrl('Projects/x.png')).toContain('path=Work%2FProjects%2Fx.png');
   });
 
+  it('fails a request the server never answers, instead of waiting forever', async () => {
+    // A server that dropped off: the request hangs until its signal gives up.
+    const hang: typeof fetch = (_url, init) =>
+      new Promise((_resolve, reject) => {
+        init?.signal?.addEventListener('abort', () => reject(init.signal?.reason as Error));
+      });
+    const store = new NasStore(new NasClient('http://nas.invalid/api', hang, 20), 'notes', 'Work');
+    await expect(store.read('Plan.md')).rejects.toThrow("The server didn't answer within 0 seconds.");
+    await expect(store.write('Plan.md', enc('x'), { expected: null })).rejects.toThrow("didn't answer");
+  });
+
   it('turns HTTP failures into the store’s errors', async () => {
     const store = new NasStore(client, 'notes', 'Work');
     const { version } = await store.read('Plan.md');

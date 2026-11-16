@@ -21,6 +21,8 @@ export interface NasInfo {
 export class AuthError extends Error {}
 
 const TOKEN_KEY = 'puffinote.nasToken';
+/** A server that dropped off fails the request instead of leaving a save or a read waiting forever. */
+const REQUEST_TIMEOUT_MS = 20_000;
 
 /**
  * The NAS server's API (`/api`), shared by the folder browser that picks a notebook and the store that edits
@@ -28,11 +30,18 @@ const TOKEN_KEY = 'puffinote.nasToken';
  */
 export class NasClient {
   readonly base: string;
+  /** How long a request may take, body included, before it fails (PRD §3). */
+  readonly timeoutMs: number;
   private readonly fetchImpl: typeof fetch;
 
-  constructor(base = './api', fetchImpl: typeof fetch = globalThis.fetch.bind(globalThis)) {
+  constructor(
+    base = './api',
+    fetchImpl: typeof fetch = globalThis.fetch.bind(globalThis),
+    timeoutMs = REQUEST_TIMEOUT_MS,
+  ) {
     this.base = base.replace(/\/$/, '');
     this.fetchImpl = fetchImpl;
+    this.timeoutMs = timeoutMs;
   }
 
   get token(): string | null {
@@ -80,6 +89,12 @@ export class NasClient {
     const res = await this.fetchImpl(this.base + path, {
       ...init,
       headers: { ...this.headers(), ...(init.headers as Record<string, string> | undefined) },
+      signal: init.signal ?? AbortSignal.timeout(this.timeoutMs),
+    }).catch((e: unknown) => {
+      if (e instanceof DOMException && e.name === 'TimeoutError') {
+        throw new Error(`The server didn't answer within ${Math.round(this.timeoutMs / 1000)} seconds.`);
+      }
+      throw e;
     });
     if (res.ok) return res;
     const message = await res

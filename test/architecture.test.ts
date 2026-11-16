@@ -324,12 +324,14 @@ function stringArg(node: ts.Expression | undefined): string | null {
   return node && ts.isStringLiteralLike(node) ? node.text : null;
 }
 
-/** `fetch(url)` or `fetch(url, { … })` with no `signal`. An options value built elsewhere can't be checked here. */
+/**
+ * `fetch(url)` or `fetch(url, { … })` with no `signal` of its own. Spreading the caller's options doesn't count:
+ * they may carry none. An options value built elsewhere can't be checked here.
+ */
 function fetchWithoutSignal(call: ts.CallExpression): boolean {
   const options = call.arguments[1];
   if (!options) return true;
   if (!ts.isObjectLiteralExpression(options)) return false;
-  if (options.properties.some((p) => ts.isSpreadAssignment(p))) return false;
   return !options.properties.some((p) => p.name && ts.isIdentifier(p.name) && p.name.text === 'signal');
 }
 
@@ -355,7 +357,9 @@ function checkCode(file: string, source: ts.SourceFile, report: Report): void {
         confined('effect', node, `uses ${effectNames.get(node.expression.text)}`);
       }
       const first = node.arguments[0];
-      if (name === 'fetch' && isGlobalCall(node, declared)) {
+      // A store given its fetch for tests (`this.fetchImpl(…)`) sends requests all the same.
+      const injectedFetch = name === 'fetchImpl' && ts.isPropertyAccessExpression(node.expression);
+      if ((name === 'fetch' && isGlobalCall(node, declared)) || injectedFetch) {
         confined('fetch', node, 'calls fetch');
         if (!test && fetchWithoutSignal(node)) {
           report.add('fetch-timeout', null, 'calls fetch with no timeout', report.line(node));
