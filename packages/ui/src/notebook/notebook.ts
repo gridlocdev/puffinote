@@ -1,6 +1,6 @@
 import { after, type Cancel } from '../schedule.ts';
 import { effect, signal } from '@preact/signals';
-import { encodeText, isReadOnlyDecode, readText } from '@puffinote/text';
+import { encodeText, isReadOnlyDecode, readText, reloadEdit } from '@puffinote/text';
 import { applyRefEdits, imageTargets, relinkEdits, type RefEdit } from './attachments.ts';
 import { NoteMetaCache } from './noteMeta.ts';
 import { NotebookSearch } from './search.ts';
@@ -826,29 +826,12 @@ export class Notebook {
     tab.markSaved(version);
   }
 
-  /** Replace the tab's text as one undoable step, changing only the part that differs. */
+  /** Replace the tab's text as one undoable step, changing only the part that differs (`reloadEdit`). */
   private applyText(tab: Tab, text: string): void {
     const state = tab.state;
     if (!state) return;
-    const caret = Math.min(state.selection.peek().caret, text.length);
-    const old = state.document;
-    // The smallest replacement, so the caret and undo history keep their footing.
-    let p = 0;
-    const oldText = old.getText();
-    const max = Math.min(oldText.length, text.length);
-    while (p < max && oldText.charCodeAt(p) === text.charCodeAt(p)) p++;
-    let s = 0;
-    while (s < max - p && oldText.charCodeAt(oldText.length - 1 - s) === text.charCodeAt(text.length - 1 - s))
-      s++;
-    if (p !== oldText.length || p !== text.length) {
-      state.apply({
-        start: p,
-        length: oldText.length - p - s,
-        text: text.slice(p, text.length - s),
-        anchor: caret,
-        caret,
-      });
-    }
+    const edit = reloadEdit(state.document.getText(), text, state.selection.peek().caret);
+    if (edit) state.apply({ ...edit, anchor: edit.caret });
   }
 
   // ----- Files and folders -----

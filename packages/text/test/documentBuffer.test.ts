@@ -197,6 +197,23 @@ describe('reloadFrom', () => {
     buf.reloadFrom('no');
     expect(buf.selection.caret).toBe(2);
   });
+
+  it('moves the caret off the middle of an emoji, so typing there keeps it whole', () => {
+    const buf = new DocumentBuffer('ab');
+    buf.selection = caretAt(1);
+    buf.reloadFrom('😀b'); // offset 1 falls between the emoji's two halves
+    expect(buf.selection.caret).toBe(0);
+    buf.insert('x');
+    expect(text(buf)).toBe('x😀b');
+  });
+
+  it('is its own undo step, even when it only adds to what was just typed', () => {
+    const buf = new DocumentBuffer('');
+    buf.insert('a');
+    buf.reloadFrom('ab');
+    buf.undo();
+    expect(text(buf)).toBe('a');
+  });
 });
 
 describe('undo effects', () => {

@@ -10,6 +10,7 @@ import {
 import { computeStats, type DocumentStats } from '../document/stats.ts';
 import { TextDocument } from '../document/textDocument.ts';
 import { EditHistory, type UndoEffect, type UndoRun } from './editHistory.ts';
+import { reloadEdit } from './reloadEdit.ts';
 
 /** A run of Backspace presses undoes as one step (PRD §10.1). */
 export const deleteBackRun: UndoRun = { group: 'deleteBack', join: true };
@@ -184,21 +185,17 @@ export class DocumentBuffer {
   /**
    * Take the version on disk as one undoable edit, which is what "Reload" means when the file
    * changed underneath. Undo gives back what was in the editor. The reloaded text becomes the
-   * saved baseline, so undoing the reload makes the document dirty again. The caret keeps its
-   * offset where the new text is long enough.
+   * saved baseline, so undoing the reload makes the document dirty again. The caret stays where
+   * `reloadEdit` puts it.
    */
   reloadFrom(text: string | null | undefined): void {
-    const replacement = text ?? '';
-    if (this.document.getText() === replacement) {
-      this.markSaved();
-      return;
+    const edit = reloadEdit(this.document.getText(), text ?? '', this.selectionValue.caret);
+    if (edit) {
+      // Its own undo step, never folded into the typing around it.
+      this.history.breakCoalescing();
+      this.replaceRange(edit.start, edit.length, edit.text, edit.caret);
+      this.history.breakCoalescing();
     }
-    this.replaceRange(
-      0,
-      this.document.length,
-      replacement,
-      Math.min(this.selectionValue.caret, replacement.length),
-    );
     this.markSaved();
   }
 
