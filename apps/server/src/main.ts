@@ -9,7 +9,8 @@ import { createServer, parseHosts, refuseWithoutToken } from './server.ts';
  *   PUFFINOTE_TOKEN   shared bearer token; required unless the bind address is loopback or
  *                     PUFFINOTE_ALLOW_NO_TOKEN=1 (a reverse proxy in front does the auth)
  *   PUFFINOTE_ALLOW_NO_TOKEN  1 = listen on the network without a token (PRD §3)
- *   PUFFINOTE_HOST    bind address (default 0.0.0.0)    PORT  (default 8790)
+ *   PUFFINOTE_HOST    bind address (default 0.0.0.0)
+ *   PUFFINOTE_PORT    port (default 8790); plain PORT still works, for older Docker setups
  *   PUFFINOTE_HOSTS   extra Host names (comma-separated) served when there is no token; IP
  *                     literals and localhost are always accepted, anything else gets 421
  *   PUFFINOTE_MAX_MB  largest upload in MiB (default 64)
@@ -25,7 +26,7 @@ const staticDir =
   env.PUFFINOTE_STATIC === ''
     ? null
     : path.resolve(env.PUFFINOTE_STATIC ?? path.join(here, '../../web/dist'));
-const port = Number(env.PORT ?? 8790);
+const port = Number(env.PUFFINOTE_PORT || env.PORT || 8790);
 const host = env.PUFFINOTE_HOST || '0.0.0.0';
 const token = env.PUFFINOTE_TOKEN || null;
 const refusal = refuseWithoutToken({ host, token, allowNoToken: env.PUFFINOTE_ALLOW_NO_TOKEN === '1' });

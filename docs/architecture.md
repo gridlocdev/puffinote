@@ -147,7 +147,7 @@ The desktop app, the NAS server and the CLI handle notebook files on disk with o
   - `PUFFINOTE_ROOTS=Name=/dir;Other=/dir2` names the folders that hold notebooks (required).
   - `PUFFINOTE_STATIC` is the built web client (default `../web/dist`; empty means API only).
   - `PUFFINOTE_TOKEN` requires a bearer token. Without one the server refuses to start on a non-loopback address, unless `PUFFINOTE_ALLOW_NO_TOKEN=1` says a reverse proxy in front authenticates.
-  - `PUFFINOTE_HOST` and `PORT` set the bind address (default `0.0.0.0:8790`).
+  - `PUFFINOTE_HOST` and `PUFFINOTE_PORT` (plain `PORT` as a fallback) set the bind address (default `0.0.0.0:8790`).
   - `PUFFINOTE_HOSTS` lists extra Host names accepted without a token.
   - `PUFFINOTE_MAX_MB` caps an upload (default 64).
 - **Paths.** Every path is confined to its root, including `..`, absolute paths, NUL bytes and symlinks that point out. A listing leaves out folder links back up the listed path (a loop).

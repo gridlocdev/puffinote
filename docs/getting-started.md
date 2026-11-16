@@ -50,7 +50,7 @@ Then open `http://<nas>:8790` and enter the token. To expose several folders or 
 | `PUFFINOTE_ALLOW_NO_TOKEN` | unset | `1` lets the server listen on the network without a token, for a reverse proxy that already asks for a password |
 | `PUFFINOTE_HOST` | `0.0.0.0` | The address to listen on (`127.0.0.1` answers this machine only) |
 | `PUFFINOTE_HOSTS` | unset | Without a token, the extra host names to answer (comma-separated) |
-| `PORT` | `8790` | The port to listen on |
+| `PUFFINOTE_PORT` | `8790` | The port to listen on. Plain `PORT` still works when this is unset |
 | `PUFFINOTE_MAX_MB` | `64` | The largest file you can save, in MB |
 
 Anyone who can reach the server can change and delete your notes, so it refuses to start on a network address (such as the default `0.0.0.0`) without `PUFFINOTE_TOKEN`. If your NAS's reverse proxy already asks for a password, set `PUFFINOTE_ALLOW_NO_TOKEN=1` instead, and publish the port only to the proxy.
