@@ -33,6 +33,8 @@ export default tseslint.config(
   {
     // The engine packages must stay portable: browser, worker, Node, Electron renderer.
     files: ['packages/text/**/*.ts', 'packages/markdown/**/*.ts'],
+    // The random-operation runner reads its seeds from the environment; it runs only under Vitest in Node.
+    ignores: ['packages/*/test/support/**'],
     rules: {
       'no-restricted-globals': ['error', 'window', 'document', 'navigator', 'localStorage', 'process'],
       'no-restricted-imports': ['error', { patterns: ['node:*', 'preact', 'preact/*', '@preact/*'] }],

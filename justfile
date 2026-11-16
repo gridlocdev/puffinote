@@ -138,6 +138,12 @@ check:
 test *args:
     pnpm vitest run {{ args }}
 
+# Run the random-operation tests (every test named "random …") for more seeds: `just fuzz 5000`. A failure prints
+# FUZZ_SEED=<n>; `FUZZ_SEED=<n> just test -t random` replays it with every step.
+[group('quality')]
+fuzz runs="500":
+    FUZZ_RUNS={{ runs }} pnpm vitest run -t random --testTimeout=0
+
 # Run the tests in watch mode.
 [group('quality')]
 test-watch *args:
