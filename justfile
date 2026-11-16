@@ -170,6 +170,22 @@ drive *steps: build-web
 e2e-desktop: build-desktop
     pnpm exec playwright test -c e2e/playwright.config.ts --project=desktop
 
+# Every random-operation test tries `runs` seeds and random use tries 25, starting from a seed taken from the
+# clock. A failure prints FUZZ_SEED=<n> to replay it; both halves run even when the first fails.
+# Long random runs on new seeds, on this machine: before a release, after a big change to saving, or while away.
+[group('quality')]
+soak runs="1000": build-web
+    #!/usr/bin/env bash
+    set -uo pipefail
+    base=$(date +%s)
+    echo "Seeds start at $base (FUZZ_SEED=<n> replays one)."
+    status=0
+    FUZZ_RUNS={{ runs }} FUZZ_SEED_BASE=$base pnpm vitest run -t random --testTimeout=0 --silent=passed-only || status=1
+    # Its own folder: a replay or the next soak clears .e2e-results, not this run's screenshots and traces.
+    echo "Random-use failures keep their screenshots and traces in .e2e-soak/$base."
+    FUZZ_RUNS=25 FUZZ_SEED_BASE=$base pnpm exec playwright test -c e2e/playwright.config.ts --project=web -g random --output=".e2e-soak/$base" || status=1
+    exit $status
+
 # Run the tests in watch mode.
 [group('quality')]
 test-watch *args:

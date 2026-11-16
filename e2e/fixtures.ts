@@ -32,7 +32,6 @@ export async function waitForApp(page: Page): Promise<void> {
   await page.getByRole('main').getByRole('status').waitFor({ state: 'attached' });
 }
 
-/** Files a notebook may not have yet; the app reads them and carries on without. */
 /**
  * Failed requests the app expects and handles: its own files it reads before they exist, and a create-only
  * write of a .gitignore that is already there.

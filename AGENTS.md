@@ -9,7 +9,7 @@ A TypeScript notes app for folders of Markdown files. One UI runs in the browser
 - Never add to `test/architecture-baseline.json`. Fix the violation; lower or delete its entry when you do. A comment is never permission: a deliberate exception (`ignoreError(promise, 'why')`, an `eslint-disable`, a `@ts-expect-error`) goes in `test/architecture-exceptions.json` only after the owner agrees.
 - Timers in the page go through `packages/ui/src/schedule.ts` (`after`, `nextFrame`), never `setTimeout` or `requestAnimationFrame` directly.
 - When you change behaviour, add or update a test in the package's `test/` folder, and update the PRD section the code cites (`PRD §n`).
-- What only shows in the running app (focus, layout, saving through the server) gets a scenario in `e2e/` under its `docs/features.md` heading, on the fixture notebooks in `e2e/fixtures` only. Run `just e2e` after UI changes.
+- What only shows in the running app (focus, layout, saving through the server) gets a scenario in `e2e/` under its `docs/features.md` heading, on the fixture notebooks in `e2e/fixtures` only. Run `just e2e` after UI changes, and `just soak` before a release or after a big change to saving or editing.
 - Check UI changes headlessly (a browser driven in the background, or the desktop app with `PUFFINOTE_HEADLESS=1`). Never open a visible window to check your work.
 
 ## Layout

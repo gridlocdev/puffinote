@@ -4,7 +4,7 @@
 // as its own scenario.
 import { readdirSync, readFileSync, statSync } from 'node:fs';
 import type { Page } from '@playwright/test';
-import { DATA, expect, openApp, runCommand, test, watchErrors } from './fixtures.ts';
+import { DATA, expect, openApp, runCommand, test, waitForApp, watchErrors } from './fixtures.ts';
 import { createRandom } from './randomOps.ts';
 
 const STEPS = 40;
@@ -194,6 +194,13 @@ for (const runSeed of seeds) {
         // A person takes longer than this between keys. Without it, focus the app moves a moment after a command
         // (to the editor, say) lands after the next key has opened a dialog, which no one could do.
         await page.clock.runFor(STEP_PAUSE_MS);
+        // The notebook switcher's last entry leaves for the start screen; open the fixture notebook again.
+        const reopen = page.getByRole('button', { name: 'Open “E2E”' });
+        if (await reopen.isVisible()) {
+          log.push('back to the notebook');
+          await reopen.click();
+          await waitForApp(page);
+        }
         expect(errors, 'console errors').toEqual([]);
         expect(await focusOutsideDialog(page), 'an open dialog has the keyboard').toBeNull();
       }
