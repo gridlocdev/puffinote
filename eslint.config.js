@@ -14,6 +14,15 @@ export default tseslint.config(
     },
   },
   {
+    // Typed rules: slower, so source files only.
+    files: ['packages/*/src/**/*.{ts,tsx,cts}', 'apps/*/src/**/*.{ts,tsx,cts}'],
+    languageOptions: { parserOptions: { projectService: true, tsconfigRootDir: import.meta.dirname } },
+    rules: {
+      '@typescript-eslint/no-floating-promises': 'error',
+      '@typescript-eslint/no-misused-promises': 'error',
+    },
+  },
+  {
     files: ['**/scripts/**/*.mjs'],
     languageOptions: { globals: { console: 'readonly', process: 'readonly' } },
   },
