@@ -144,6 +144,11 @@ test *args:
 fuzz runs="500":
     FUZZ_RUNS={{ runs }} pnpm vitest run -t random --testTimeout=0
 
+# Redraw the save diagram in docs/architecture.md from the table in saveChart.ts.
+[group('quality')]
+diagram:
+    WRITE_DIAGRAM=1 pnpm vitest run packages/ui/test/saveChart.test.ts -t "is drawn"
+
 # Run the tests in watch mode.
 [group('quality')]
 test-watch *args:

@@ -69,6 +69,58 @@ Puffinote is one TypeScript code base with three hosts and a CLI. The browser, t
   - `commands.ts` holds the editing behaviour (Enter, Tab, pairing, line moves), and `editorCommands.ts` turns it into catalog commands.
 - **Commands (`commands/`).** `CommandCatalog` is the one list of commands. The command menu, the shortcuts, the context menus and the Electron menu bar all read it. Shortcuts are written once (`mod+shift+k`) and formatted per platform. Every run goes through `CommandCatalog.run(id, target?)`: a context menu passes the file, folder, tab or picture it was opened on as the `CommandTarget`, and the shell's `gate` refuses every command while a question waits on the user.
 - **Notebook (`notebook/`).** `Notebook` is one open notebook as signals: the tree, the tabs, the active tab, the recent files, the settings and the notices. Every file change goes through it, so the tree, the tabs and the recent list stay reconciled with the folder. It also writes `.puffinote/session.json`. `Tab` (`tab.ts`) is one open note or picture. Its disk state (version, saved text) changes only through its own methods, which move its `generation` with it, so a refresh that read the disk before a save can tell its answer is stale. `search.ts` (`nb.textSearch`) runs full-text search over the notes, reading open tabs from memory. `transfer.ts` (`nb.transfer`) holds the archive download, the file import and the HTML and PDF export. `notebookSettings.ts` (`nb.config`) holds the user's preferences, the notebook's overrides in `.puffinote/settings.json` and the settings they resolve to. `storeWrites.ts` has the write that refuses to go over a file changed since it was read, for stores that give no versions. `trash.ts` keeps the notebook's own Trash in `.puffinote/trash/` for the stores without a system Trash (browser, NAS), using only the store's move. `notebookTrash.ts` (`nb.trash`) decides which Trash a delete goes to, and lists, restores and empties the notebook's own. `notebookPictures.ts` (`nb.pictures`) reads pictures for the editor, saves pasted ones, finds the ones no note shows and offers to delete them.
+- **Saving a note (`notebook/saveChart.ts`).** The moves a tab may make between saved, dirty, saving, failed, conflict and closed are written once as a table of rows: from a state, on an event, to a state, with what to do on the way. `Notebook` keeps the state in each tab's signals and its own bookkeeping (the write in flight, the autosave timer, the recovery copy). A random-operation test drives the table and checks it never writes twice at once or over a conflict, keeps a recovery copy of every unsaved edit and autosaves each one; another drives the real `Notebook` against a slow, failing disk. `just diagram` redraws the table below.
+
+```mermaid
+stateDiagram-v2
+  [*] --> clean
+  closed --> [*]
+  clean --> dirty : edit / startTimer, keepCopy
+  clean --> clean : outsideChange / takeFile
+  clean --> missing : outsideDelete / flag
+  clean --> closed : close
+  dirty --> dirty : edit / startTimer, keepCopy
+  dirty --> clean : editBack / stopTimer, dropCopy
+  dirty --> saving : timer / writeFile
+  dirty --> saving : save / stopTimer, writeFile
+  dirty --> conflict : outsideChange / stopTimer, flag
+  dirty --> conflict : outsideDelete / stopTimer, flag
+  dirty --> closed : close / stopTimer, discard, dropCopy
+  saving --> savingDirty : edit / startTimer, keepCopy
+  saving --> clean : saved / dropCopy
+  saving --> failed : failed / report
+  saving --> conflict : versionChanged / flag
+  saving --> closed : close / discard, dropCopy
+  savingDirty --> savingDirty : edit / startTimer, keepCopy
+  savingDirty --> savingDirty : timer / queueSave
+  savingDirty --> savingDirty : save / queueSave
+  savingDirty --> dirty : saved / startTimer, runQueued
+  savingDirty --> dirty : failed / report, startTimer, runQueued
+  savingDirty --> conflict : versionChanged / stopTimer, flag
+  savingDirty --> closed : close / stopTimer, discard, dropCopy
+  failed --> dirty : edit / startTimer, keepCopy
+  failed --> clean : editBack / dropCopy
+  failed --> saving : save / writeFile
+  failed --> conflict : outsideChange / flag
+  failed --> conflict : outsideDelete / flag
+  failed --> closed : close / discard, dropCopy
+  conflict --> conflict : edit / keepCopy
+  conflict --> dirty : fileBack / unflag, startTimer
+  conflict --> clean : reloadFromDisk / replaceWithFile, unflag, dropCopy
+  conflict --> saving : keepMine / overwriteFile
+  conflict --> closed : close / discard, dropCopy
+  missing --> conflict : edit / keepCopy
+  missing --> clean : outsideChange / takeFile, unflag
+  missing --> clean : fileBack / unflag
+  missing --> restoring : keepMine / overwriteFile
+  missing --> closed : close
+  restoring --> savingDirty : edit / startTimer, keepCopy
+  restoring --> clean : saved
+  restoring --> missing : failed / report, flag
+  restoring --> missing : versionChanged / flag
+  restoring --> closed : close
+```
+
 - **Shell (`shell/`).** `ShellModel` holds the overlays (dialogs, ⌘K, ⌘O) and the shell commands. `NotebookSession` (`notebookSession.ts`, `model.session`) holds the open notebook and the switch to another: it closes the old one, resets the view state that belongs to one notebook, and drops an open that a later one overtook. `LayoutPolicy` (`layoutPolicy.ts`) decides the layout's rules apart from drawing: which layout is up, whether the tab strip shows, and the Library layout's one note at a time. `Shell` and its components draw it.
 - **Stores (`platform/`).** `NotebookStore` is the only way the UI reaches files. Paths are notebook-relative and `/`-separated. Each store has its own version token for conflict detection: the mtime, size and inode (native), an mtime (browser), an ETag (NAS) or a counter (memory). A write with a stale version fails with a `ConflictError`.
 
