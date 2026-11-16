@@ -104,9 +104,13 @@ export class Tab {
     this.conflict.value = 'none';
   }
 
-  /** A save of `text` landed as `version`. Edits made while it was in flight stay unsaved. */
-  savedAs(version: string | null, text: string): void {
+  /**
+   * A save of `text` in `format` landed as `version`. Edits made while it was in flight stay unsaved, and the
+   * file is now in the format that save wrote, whatever a reload in the meantime read.
+   */
+  savedAs(version: string | null, text: string, format: TextFileFormat = this.format): void {
     this.#setDisk(version, text);
+    this.format = format;
     this.dirty.value = (this.state?.text ?? '') !== text;
     this.conflict.value = 'none';
   }

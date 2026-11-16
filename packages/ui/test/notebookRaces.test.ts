@@ -140,6 +140,67 @@ describe('Notebook saves and refreshes in flight', () => {
     expect(await text(store, 'a.md')).toBe('hello world!');
   });
 
+  it('drops a Reload from Disk that read the disk before a save landed', async () => {
+    const store = new GatedStore('N', { 'a.md': 'hello' });
+    const nb = await openWith(store);
+    const tab = (await nb.openFile('a.md'))!;
+    tab.state!.select(5);
+    tab.state!.insert(' world');
+    store.holdReads = true;
+    const reloading = nb.reload(tab);
+    await settle();
+    store.holdReads = false;
+    expect(store.reads).toHaveLength(1); // read 'hello' at the old version
+    expect(await nb.save(tab)).toBe(true);
+    for (const r of store.reads) r();
+    await reloading;
+    expect(tab.state!.text).toBe('hello world');
+    expect(tab.dirty.value).toBe(false);
+    tab.state!.insert('!');
+    expect(await nb.save(tab)).toBe(true);
+    expect(await text(store, 'a.md')).toBe('hello world!');
+  });
+
+  it("takes the encoding of the disk's version with its text, and saves in it", async () => {
+    const store = new MemoryStore('N', { 'a.md': 'hello', 'b.md': 'same' });
+    const nb = await openWith(store);
+    const a = (await nb.openFile('a.md'))!;
+    const b = (await nb.openFile('b.md'))!;
+    const bom = (t: string) => new Uint8Array([0xef, 0xbb, 0xbf, ...new TextEncoder().encode(t)]);
+    // Rewritten outside with a byte-order mark: a with new text, b with the same text.
+    await store.write('a.md', bom('theirs'), { force: true });
+    await store.write('b.md', bom('same'), { force: true });
+    await nb.refresh();
+    for (const tab of [a, b]) {
+      expect(tab.format.bom).toBe(true);
+      tab.state!.select(tab.state!.document.length);
+      tab.state!.insert('!');
+      expect(await nb.save(tab)).toBe(true);
+    }
+    expect((await store.read('a.md')).bytes).toEqual(bom('theirs!'));
+    expect((await store.read('b.md')).bytes).toEqual(bom('same!'));
+  });
+
+  it('keeps the encoding a save wrote, when a reload lands while it is in flight', async () => {
+    const store = new GatedStore('N', { 'a.md': 'hello' });
+    const nb = await openWith(store);
+    const tab = (await nb.openFile('a.md'))!;
+    tab.state!.insert('mine ');
+    await store.write('a.md', new Uint8Array([0xef, 0xbb, 0xbf, 0x74]), { force: true });
+    await nb.refresh();
+    expect(tab.conflict.value).toBe('changed');
+    store.holdWrites = true;
+    const keeping = nb.save(tab, true); // Keep My Version, in the tab's encoding: no byte-order mark
+    await settle();
+    await nb.reload(tab); // Reload from Disk takes the file's mark
+    expect(tab.format.bom).toBe(true);
+    store.writes.shift()!.release();
+    expect(await keeping).toBe(true);
+    // The disk now holds the write, without a mark, and the tab knows it.
+    expect((await store.read('a.md')).bytes[0]).toBe(0x6d);
+    expect(tab.format.bom).toBe(false);
+  });
+
   it('skips a tab whose save is in flight', async () => {
     const store = new GatedStore('N', { 'a.md': 'hello' });
     const nb = await openWith(store);

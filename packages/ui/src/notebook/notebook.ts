@@ -1,6 +1,6 @@
 import { after, type Cancel } from '../schedule.ts';
 import { effect, signal } from '@preact/signals';
-import { encodeText, isReadOnlyDecode, readText, reloadEdit } from '@puffinote/text';
+import { type DecodedText, encodeText, isReadOnlyDecode, readText, reloadEdit } from '@puffinote/text';
 import { applyRefEdits, imageTargets, relinkEdits, type RefEdit } from './attachments.ts';
 import { NoteMetaCache } from './noteMeta.ts';
 import { NotebookSearch } from './search.ts';
@@ -449,15 +449,17 @@ export class Notebook {
         if (tab.conflict.value === 'deleted') tab.conflict.value = 'none';
         continue;
       }
-      const text = readText(data.bytes).text;
+      const decoded = readText(data.bytes);
+      const text = decoded.text;
       if (text === tab.savedText) {
-        // Touched, or deleted and put back, with the same text: nothing to resolve.
+        // Touched, or deleted and put back, with the same text: nothing to resolve. It may have a new encoding.
         tab.adoptVersion(data.version);
+        tab.format = decoded.format;
         if (tab.conflict.value === 'deleted') tab.conflict.value = 'none';
         continue;
       }
       if (tab.dirty.value) tab.conflict.value = 'changed';
-      else this.replaceText(tab, text, data.version);
+      else this.replaceText(tab, decoded, data.version);
     }
     await this.config.reload();
   }
@@ -750,7 +752,8 @@ export class Notebook {
     let finished!: () => void;
     this.writeDone.set(tab, new Promise<void>((r) => (finished = r)));
     try {
-      const bytes = encodeText(text, tab.format);
+      const format = tab.format;
+      const bytes = encodeText(text, format);
       const version = force
         ? await this.store.write(path, bytes, { force })
         : await writeOver(
@@ -762,7 +765,7 @@ export class Notebook {
             () => this.disposed,
           );
       // Edits made while the write was in flight stay unsaved.
-      tab.savedAs(version, text);
+      tab.savedAs(version, text, format);
       const stat = this.stats.peek().get(path);
       const now = Date.now();
       this.stats.value = new Map(this.stats.peek()).set(path, {
@@ -813,16 +816,23 @@ export class Notebook {
 
   /** Take the disk's version into `tab`, as one undoable step (PRD §5). */
   async reload(tab: Tab): Promise<void> {
+    const generation = tab.generation;
+    const path = tab.path.value;
     try {
-      const data = await this.store.read(tab.path.value);
-      this.replaceText(tab, readText(data.bytes).text, data.version);
+      const data = await this.store.read(path);
+      // A save, move or another reload landed while this read was out: the tab is newer than this answer.
+      if (tab.generation !== generation || tab.path.peek() !== path || !this.tabs.peek().includes(tab))
+        return;
+      this.replaceText(tab, readText(data.bytes), data.version);
     } catch (e) {
       this.report(e);
     }
   }
 
-  private replaceText(tab: Tab, text: string, version: string | null): void {
-    this.applyText(tab, text);
+  /** Take the file as read into `tab`: its text as one undoable step, and its encoding for the next save. */
+  private replaceText(tab: Tab, file: DecodedText, version: string | null): void {
+    this.applyText(tab, file.text);
+    tab.format = file.format;
     tab.markSaved(version);
   }
 
