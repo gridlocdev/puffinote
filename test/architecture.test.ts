@@ -32,7 +32,10 @@ const LAYERS: Record<string, readonly string[]> = {
   'apps/desktop': ['packages/node-files', 'packages/text'],
 };
 
-/** The pure engine packages: no DOM, Node or Preact, in source or tests. */
+/**
+ * The pure engine packages: no DOM, Node or Preact in their source. Their tests run in Node and may read fixtures
+ * with node:fs and settings from process.env (randomOps.ts does), so the engine rules skip them.
+ */
 const ENGINE = ['packages/text', 'packages/markdown'];
 const ENGINE_BANNED = [/^node:/, /^preact/, /^@preact\//];
 const ENGINE_BANNED_GLOBALS = [
@@ -42,6 +45,7 @@ const ENGINE_BANNED_GLOBALS = [
   'localStorage',
   'sessionStorage',
   'indexedDB',
+  'process',
 ];
 
 /** The parts that run in the page. */
@@ -223,7 +227,7 @@ function imports(source: ts.SourceFile): { spec: string; node: ts.Node }[] {
 function checkImports(file: string, source: ts.SourceFile, report: Report): void {
   const part = partOf(file);
   if (!part) return;
-  const engine = ENGINE.includes(part);
+  const engine = ENGINE.includes(part) && !isTest(file);
   for (const { spec, node } of imports(source)) {
     const line = report.line(node);
     if (engine && ENGINE_BANNED.some((pattern) => pattern.test(spec))) {
@@ -337,9 +341,9 @@ function fetchWithoutSignal(call: ts.CallExpression): boolean {
 
 function checkCode(file: string, source: ts.SourceFile, report: Report): void {
   const part = partOf(file) ?? '';
-  const engine = ENGINE.includes(part);
-  const renderer = RENDERER.includes(part);
   const test = isTest(file);
+  const engine = ENGINE.includes(part) && !test;
+  const renderer = RENDERER.includes(part);
   const declared = declaredNames(source);
   const confined = (rule: Rule, node: ts.Node, what: string) => {
     const allowed = CONFINED.find((c) => c.rule === rule)?.allowed ?? [];

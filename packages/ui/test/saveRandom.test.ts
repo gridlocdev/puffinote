@@ -6,7 +6,7 @@ import { memoryPrefs } from '../src/notebook/settings.ts';
 import type { Tab } from '../src/notebook/tab.ts';
 import { MemoryStore } from '../src/platform/memoryStore.ts';
 import type { FileData, WriteOptions } from '../src/platform/notebookStore.ts';
-import { runRandomOps, type Op } from './support/randomOps.ts';
+import { RANDOM_TIMEOUT, runRandomOps, type Op } from './support/randomOps.ts';
 
 const NOTES = ['a.md', 'b.md'];
 const encode = (text: string) => new TextEncoder().encode(text);
@@ -222,60 +222,64 @@ describe('saving open notes', () => {
     vi.useRealTimers();
   });
 
-  it('random typing, autosaves, refreshes, outside changes and slow or failing calls never lose a save or go back to an older file', async () => {
-    await runRandomOps<World>({
-      steps: 120,
-      setup: async (r) => {
-        const store = new GatedStore('N', Object.fromEntries(NOTES.map((p) => [p, r.text(6)])));
-        for (const p of NOTES) {
-          const data = await store.read(p);
-          store.held.set(data.version!, data.bytes);
-        }
-        const nb = await Notebook.open(store, { prefs: memoryPrefs({ autoSave: true }) });
-        const tabs: Tab[] = [];
-        for (const p of NOTES) tabs.push((await nb.openFile(p))!);
-        store.tabFor = (path) => tabs.find((t) => t.path.peek() === path);
-        const errors: string[] = [];
-        const stop = effect(() => {
-          const notice = nb.notice.value;
-          if (notice?.kind === 'error' && !INJECTED.test(notice.text)) errors.push(notice.text);
-        });
-        store.gated = true;
-        return { store, nb, tabs, errors, newest: new Map(), stop };
-      },
-      ops,
-      check: (w) => {
-        expect(w.errors, 'nothing fails but the calls the test failed').toEqual([]);
-        expect(
-          w.store.writesDuringConflict,
-          'nothing is written over a conflict until the user chooses',
-        ).toEqual([]);
-        for (const tab of w.tabs) {
-          const path = tab.path.peek();
-          const writes = w.store.parked.filter((c) => c.kind === 'write' && c.path === path).length;
-          expect(writes, `${path}: never two writes at once`).toBeLessThanOrEqual(1);
-          const version = tab.version;
-          if (version === null) continue;
-          const n = Number(version);
-          expect(n, `${path}: the tab never goes back to an older file`).toBeGreaterThanOrEqual(
-            w.newest.get(tab) ?? 0,
-          );
-          w.newest.set(tab, n);
+  it(
+    'random typing, autosaves, refreshes, outside changes and slow or failing calls never lose a save or go back to an older file',
+    async () => {
+      await runRandomOps<World>({
+        steps: 120,
+        setup: async (r) => {
+          const store = new GatedStore('N', Object.fromEntries(NOTES.map((p) => [p, r.text(6)])));
+          for (const p of NOTES) {
+            const data = await store.read(p);
+            store.held.set(data.version!, data.bytes);
+          }
+          const nb = await Notebook.open(store, { prefs: memoryPrefs({ autoSave: true }) });
+          const tabs: Tab[] = [];
+          for (const p of NOTES) tabs.push((await nb.openFile(p))!);
+          store.tabFor = (path) => tabs.find((t) => t.path.peek() === path);
+          const errors: string[] = [];
+          const stop = effect(() => {
+            const notice = nb.notice.value;
+            if (notice?.kind === 'error' && !INJECTED.test(notice.text)) errors.push(notice.text);
+          });
+          store.gated = true;
+          return { store, nb, tabs, errors, newest: new Map(), stop };
+        },
+        ops,
+        check: (w) => {
+          expect(w.errors, 'nothing fails but the calls the test failed').toEqual([]);
           expect(
-            encodeText(tab.savedText, tab.format),
-            `${path}: what the tab thinks is on disk is the file at its version`,
-          ).toEqual(w.store.held.get(version));
-          expect(tab.dirty.peek(), `${path}: dirty exactly when the text differs from the disk's`).toBe(
-            tab.state!.text !== tab.savedText,
-          );
-        }
-      },
-      teardown: (w) => {
-        w.stop();
-        w.store.gated = false;
-        for (const call of w.store.parked.splice(0)) call.let(true, false);
-        w.nb.dispose();
-      },
-    });
-  });
+            w.store.writesDuringConflict,
+            'nothing is written over a conflict until the user chooses',
+          ).toEqual([]);
+          for (const tab of w.tabs) {
+            const path = tab.path.peek();
+            const writes = w.store.parked.filter((c) => c.kind === 'write' && c.path === path).length;
+            expect(writes, `${path}: never two writes at once`).toBeLessThanOrEqual(1);
+            const version = tab.version;
+            if (version === null) continue;
+            const n = Number(version);
+            expect(n, `${path}: the tab never goes back to an older file`).toBeGreaterThanOrEqual(
+              w.newest.get(tab) ?? 0,
+            );
+            w.newest.set(tab, n);
+            expect(
+              encodeText(tab.savedText, tab.format),
+              `${path}: what the tab thinks is on disk is the file at its version`,
+            ).toEqual(w.store.held.get(version));
+            expect(tab.dirty.peek(), `${path}: dirty exactly when the text differs from the disk's`).toBe(
+              tab.state!.text !== tab.savedText,
+            );
+          }
+        },
+        teardown: (w) => {
+          w.stop();
+          w.store.gated = false;
+          for (const call of w.store.parked.splice(0)) call.let(true, false);
+          w.nb.dispose();
+        },
+      });
+    },
+    RANDOM_TIMEOUT,
+  );
 });

@@ -7,6 +7,13 @@
 //
 // A failure throws with the seed and the last 30 steps (all of them under FUZZ_SEED). Pin a found seed as a plain test so it stays fixed.
 
+/**
+ * The time limit for a random test: a minute for the few seeds `just check` runs, none when FUZZ_RUNS asks for
+ * more or FUZZ_SEED replays one with every step. Vitest's 5-second default fails under a loaded `just check`, and
+ * a limit given to the test itself beats `--testTimeout`, so `just fuzz` and `just soak` need it to be 0.
+ */
+export const RANDOM_TIMEOUT = process.env.FUZZ_RUNS || process.env.FUZZ_SEED ? 0 : 60_000;
+
 export interface Random {
   /** Integer in [0, max). */
   int(max: number): number;

@@ -7,7 +7,7 @@ import {
   type SaveEvent,
   type SaveState,
 } from '../src/notebook/saveChart.ts';
-import { runRandomOps, type Op } from './support/randomOps.ts';
+import { RANDOM_TIMEOUT, runRandomOps, type Op } from './support/randomOps.ts';
 
 /** The chart's state, plus a model of the note on disk and the user's typing around it. */
 interface World {
@@ -163,40 +163,45 @@ const ops: Op<World>[] = [
 const SAVING: readonly SaveState[] = ['saving', 'savingDirty', 'restoring'];
 
 describe('the save chart', () => {
-  it('random events never write twice at once or over a conflict, keep a copy of every unsaved edit, and autosave every one', async () => {
-    await runRandomOps<World>({
-      steps: 200,
-      setup: (r) => ({
-        state: 'clean',
-        autoSave: r.chance(0.7),
-        unsaved: false,
-        editedSinceWrite: false,
-        writes: 0,
-        diskMoved: false,
-        timer: false,
-        queued: false,
-        copy: false,
-        flagged: false,
-      }),
-      ops,
-      check: (w) => {
-        if (w.state === 'closed') return;
-        const s = w.state;
-        expect(w.writes, 'a write is out exactly while saving').toBe(SAVING.includes(s) ? 1 : 0);
-        expect(w.flagged, 'flagged exactly in a conflict').toBe(s === 'conflict' || s === 'missing');
-        if (s === 'clean' || s === 'missing' || s === 'restoring')
-          expect(w.unsaved, 'clean means the disk has every edit').toBe(false);
-        if (s === 'dirty' || s === 'failed' || s === 'conflict' || s === 'savingDirty')
-          expect(w.unsaved, `${s} means there are unsaved edits`).toBe(true);
-        if (s === 'saving') expect(w.editedSinceWrite, 'saving: no edit since the write started').toBe(false);
-        if (s === 'savingDirty')
-          expect(w.editedSinceWrite, 'savingDirty: an edit since the write started').toBe(true);
-        if (s === 'dirty' && w.autoSave)
-          expect(w.timer, 'with Auto-save on, a dirty tab saves soon').toBe(true);
-        if (w.unsaved) expect(w.copy, 'every unsaved edit has a recovery copy').toBe(true);
-      },
-    });
-  });
+  it(
+    'random events never write twice at once or over a conflict, keep a copy of every unsaved edit, and autosave every one',
+    async () => {
+      await runRandomOps<World>({
+        steps: 200,
+        setup: (r) => ({
+          state: 'clean',
+          autoSave: r.chance(0.7),
+          unsaved: false,
+          editedSinceWrite: false,
+          writes: 0,
+          diskMoved: false,
+          timer: false,
+          queued: false,
+          copy: false,
+          flagged: false,
+        }),
+        ops,
+        check: (w) => {
+          if (w.state === 'closed') return;
+          const s = w.state;
+          expect(w.writes, 'a write is out exactly while saving').toBe(SAVING.includes(s) ? 1 : 0);
+          expect(w.flagged, 'flagged exactly in a conflict').toBe(s === 'conflict' || s === 'missing');
+          if (s === 'clean' || s === 'missing' || s === 'restoring')
+            expect(w.unsaved, 'clean means the disk has every edit').toBe(false);
+          if (s === 'dirty' || s === 'failed' || s === 'conflict' || s === 'savingDirty')
+            expect(w.unsaved, `${s} means there are unsaved edits`).toBe(true);
+          if (s === 'saving')
+            expect(w.editedSinceWrite, 'saving: no edit since the write started').toBe(false);
+          if (s === 'savingDirty')
+            expect(w.editedSinceWrite, 'savingDirty: an edit since the write started').toBe(true);
+          if (s === 'dirty' && w.autoSave)
+            expect(w.timer, 'with Auto-save on, a dirty tab saves soon').toBe(true);
+          if (w.unsaved) expect(w.copy, 'every unsaved edit has a recovery copy').toBe(true);
+        },
+      });
+    },
+    RANDOM_TIMEOUT,
+  );
 
   it('lists each move once', () => {
     const keys = SAVE_TRANSITIONS.map((t) => `${t.from} ${t.on}`);
