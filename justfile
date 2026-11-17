@@ -151,13 +151,15 @@ diagram:
 
 # Browser scenarios against the built client and the NAS server, on the fixture notebook in ./.e2e-data.
 [group('quality')]
+[positional-arguments]
 e2e *args: build-web
-    pnpm exec playwright test -c e2e/playwright.config.ts --project=web {{ args }}
+    pnpm exec playwright test -c e2e/playwright.config.ts --project=web "$@"
 
 # Accept the current screenshots as the new baseline (macOS; look at the diff in .e2e-results first).
 [group('quality')]
+[positional-arguments]
 e2e-update *args: build-web
-    pnpm exec playwright test -c e2e/playwright.config.ts --project=web --update-snapshots {{ args }}
+    pnpm exec playwright test -c e2e/playwright.config.ts --project=web --update-snapshots "$@"
 
 # Drive the app headlessly for a quick look: just drive cmd:"New Note" type:"hello" key:ControlOrMeta+KeyS shot:after aria
 [group('quality')]

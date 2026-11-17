@@ -10,10 +10,18 @@ import { createRandom } from './randomOps.ts';
 const STEPS = 40;
 
 /**
- * Commands that leave the page, download a file, or show the system's file picker. Matched against the title of
- * each ⌘K entry.
+ * Commands that leave the page, download a file, show the system's file picker, or use the clipboard, which in a
+ * browser can be the owner's real one. Matched against the title of each ⌘K entry.
  */
-const SKIP = [/print/i, /export/i, /download/i, /import/i, /open notebook/i, /default app/i];
+const SKIP = [
+  /print/i,
+  /export/i,
+  /download/i,
+  /import/i,
+  /open notebook/i,
+  /default app/i,
+  /^(cut|copy|paste)\b/i,
+];
 
 /** Keys worth pressing on their own, besides the letters random typing presses. Add the app's single-key shortcuts. */
 const KEYS = [
@@ -67,7 +75,8 @@ async function runRandomCommand(page: Page, pick: (count: number) => number): Pr
       () => true,
       () => false,
     );
-  // Another window that is open (a dialog, a menu) can keep ⌘K to itself.
+  // ⌘K opens over no dialog but its own kind, so with one open this is expected: the per-step check makes sure
+  // that dialog kept the keyboard.
   if (!opened) return 'command menu did not open';
   const options = menu.getByRole('option');
   const entries = await options.evaluateAll((items) =>

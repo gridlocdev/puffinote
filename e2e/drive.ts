@@ -19,6 +19,11 @@ import { BASE_URL, NOW, ROOT, SERVER_COMMAND, SERVER_ENV, seedData } from './ser
 
 const SHOTS = path.join(ROOT, '.e2e-results/drive');
 const SERVER_START_MS = 15_000;
+/**
+ * The pause between steps on the page's clock, as in random use: a focus move the app makes a moment after a key
+ * (a dialog taking the keyboard as it opens) lands before the next step, as it would for a person.
+ */
+const STEP_PAUSE_MS = 50;
 
 function parseArgs(args: string[]): { fixture: string; dark: boolean; steps: string[] } {
   let fixture = 'basic';
@@ -61,6 +66,17 @@ const server = spawn(process.execPath, SERVER_COMMAND, {
   env: { ...process.env, ...SERVER_ENV },
   stdio: ['ignore', 'ignore', 'inherit'],
 });
+// Stop the server however this ends: Ctrl+C, a kill, or output piped into `head` that closes early (EPIPE).
+// Otherwise it keeps the port, and the next run or `just e2e` fails with EADDRINUSE.
+const stop = (code: number) => {
+  server.kill();
+  process.exit(code);
+};
+process.on('SIGINT', () => stop(130));
+process.on('SIGTERM', () => stop(143));
+process.stdout.on('error', (error: NodeJS.ErrnoException) => {
+  if (error.code === 'EPIPE') stop(0);
+});
 
 try {
   await waitForServer();
@@ -82,6 +98,7 @@ try {
     const kind = colon === -1 ? step : step.slice(0, colon);
     const value = colon === -1 ? '' : step.slice(colon + 1);
     console.log(`> ${step}`);
+    await page.clock.runFor(STEP_PAUSE_MS);
     switch (kind) {
       case 'cmd':
         await page.keyboard.press('ControlOrMeta+KeyK');

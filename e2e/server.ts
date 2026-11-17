@@ -14,7 +14,8 @@ import { fileURLToPath } from 'node:url';
 
 export const ROOT = fileURLToPath(new URL('..', import.meta.url));
 export const DATA = `${ROOT}.e2e-data`;
-export const PORT = 8797;
+// A port no other app's checks use (Taskite has 8797, Cellestra 8791), so two apps' checks can run at once.
+export const PORT = 8793;
 export const BASE_URL = `http://127.0.0.1:${PORT}`;
 /** The page's clock in every scenario and in the driver, so dates in the app read the same on every run. */
 export const NOW = new Date('2027-01-15T09:00:00Z');

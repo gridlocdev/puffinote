@@ -31,6 +31,10 @@ test.describe('Desktop, browser and NAS', () => {
       await expect(
         window.getByRole('tree', { name: 'Files' }).getByRole('treeitem', { name: 'Welcome.md' }),
       ).toBeVisible();
+      expect(
+        await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows().some((w) => w.isVisible())),
+        'no window shows on the screen',
+      ).toBe(false);
       expect(errors).toEqual([]);
     } finally {
       await app.close();
