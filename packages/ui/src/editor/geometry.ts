@@ -217,6 +217,22 @@ export function lineSelectionRects(
   return out;
 }
 
+/**
+ * The drawn pictures on a line that the selection `[fromCol, toCol)` covers whole (PRD §10.1): their images'
+ * boxes, to tint over them, since a picture hides the highlight drawn behind it.
+ */
+export function selectedPictureRects(lineEl: Element, fromCol: number, toCol: number): DOMRect[] {
+  const out: DOMRect[] = [];
+  for (const run of runsOf(lineEl)) {
+    if (run.getAttribute('data-deco') !== 'image') continue;
+    const from = fromOf(run);
+    const to = toOf(run);
+    const img = run.querySelector('img');
+    if (img && from < to && fromCol <= from && toCol >= to) out.push(img.getBoundingClientRect());
+  }
+  return out;
+}
+
 /** The line elements in document order. */
 export function lineElements(root: Element): HTMLElement[] {
   return Array.from(root.querySelectorAll<HTMLElement>(':scope > [data-line]'));

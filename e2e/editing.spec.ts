@@ -68,6 +68,24 @@ test.describe('Pictures in your notes', () => {
     expect(await picture.evaluate((img: HTMLImageElement) => img.naturalWidth)).toBe(16);
   });
 
+  test('a picture inside the selection is tinted with the selection colour', async ({ seed, page }) => {
+    seed('basic');
+    await openApp(page);
+    await openNote(page, 'packing');
+    const main = page.getByRole('main');
+    await main.getByText('Boots').click();
+    await expect(main.locator('.pn-selection-picture')).toHaveCount(0);
+    await page.keyboard.press('ControlOrMeta+KeyA');
+    const tint = main.locator('.pn-selection-picture');
+    await expect(tint).toHaveCount(1);
+    const picture = await main.locator('[data-deco="image"] img').boundingBox();
+    const box = await tint.boundingBox();
+    expect(box?.width).toBeCloseTo(picture?.width ?? 0, 0);
+    expect(box?.height).toBeCloseTo(picture?.height ?? 0, 0);
+    await page.keyboard.press('ArrowDown');
+    await expect(tint).toHaveCount(0);
+  });
+
   test('copying text with a picture puts the picture itself on the clipboard, not its link', async ({
     seed,
     page,

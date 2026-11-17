@@ -9,7 +9,14 @@ import { selectionHtml, showsPictures } from './copy.ts';
 import { pasteText, setTaskStateEdit, withTaskSort, typeCharEdit, withLineEnding } from './commands.ts';
 import { markdownCommandSpecs } from './editorCommands.ts';
 import type { EditorState } from './editorState.ts';
-import { caretBox, firstRowEndingBelow, hitTest, lineSelectionRects, textRanges } from './geometry.ts';
+import {
+  caretBox,
+  firstRowEndingBelow,
+  hitTest,
+  lineSelectionRects,
+  selectedPictureRects,
+  textRanges,
+} from './geometry.ts';
 import { lineAnnouncement, renderLine, snapOutOfConcealed } from './lineRender.ts';
 import { buildRows } from './rows.ts';
 import { settleMs, useSettled } from './settled.ts';
@@ -137,6 +144,8 @@ export function MarkdownEditor(props: MarkdownEditorProps) {
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const caretRef = useRef<HTMLDivElement>(null);
   const selectionRef = useRef<HTMLDivElement>(null);
+  /** Over the content: tints the pictures inside the selection, which hide the highlight drawn behind them. */
+  const pictureTintRef = useRef<HTMLDivElement>(null);
   const goalX = useRef<number | null>(null);
   const composing = useRef(false);
   /** What the hidden input holds besides new text: the selection, or the letter before the caret. */
@@ -310,8 +319,10 @@ export function MarkdownEditor(props: MarkdownEditorProps) {
    * long note measures a few dozen lines instead of every one.
    */
   function paintSelection(content: HTMLElement, layer: HTMLElement): void {
+    const tints = pictureTintRef.current;
     if (isCollapsed(sel)) {
       if (layer.firstChild) layer.replaceChildren();
+      if (tints?.firstChild) tints.replaceChildren();
       return;
     }
     const { rows, rowOfLine, byLine } = rowIndex.current;
@@ -331,23 +342,29 @@ export function MarkdownEditor(props: MarkdownEditorProps) {
     }
     const origin = content.getBoundingClientRect();
     const rects: DOMRect[] = [];
+    const pictures: DOMRect[] = [];
     for (let line = first; line <= last; line++) {
       const el = byLine[line];
       if (!el || rowOfLine[line] === undefined || el.style.display === 'none') continue;
       const from = line === a.line ? a.column : 0;
       const to = line === b.line ? b.column : Number.MAX_SAFE_INTEGER;
       for (const r of lineSelectionRects(el, from, to, line < b.line)) rects.push(r);
+      for (const r of selectedPictureRects(el, from, to)) pictures.push(r);
     }
-    const frag = document.createDocumentFragment();
-    for (const r of rects) {
-      const div = document.createElement('div');
-      div.className = 'pn-selection-rect';
-      div.style.transform = `translate(${r.left - origin.left}px, ${r.top - origin.top}px)`;
-      div.style.width = `${r.width}px`;
-      div.style.height = `${r.height}px`;
-      frag.appendChild(div);
-    }
-    layer.replaceChildren(frag);
+    const draw = (boxes: readonly DOMRect[], className: string): DocumentFragment => {
+      const frag = document.createDocumentFragment();
+      for (const r of boxes) {
+        const div = document.createElement('div');
+        div.className = className;
+        div.style.transform = `translate(${r.left - origin.left}px, ${r.top - origin.top}px)`;
+        div.style.width = `${r.width}px`;
+        div.style.height = `${r.height}px`;
+        frag.appendChild(div);
+      }
+      return frag;
+    };
+    layer.replaceChildren(draw(rects, 'pn-selection-rect'));
+    tints?.replaceChildren(draw(pictures, 'pn-selection-picture'));
   }
 
   const paintQueued = useRef(false);
@@ -1023,6 +1040,7 @@ export function MarkdownEditor(props: MarkdownEditorProps) {
         <div class="pn-content" ref={contentRef} data-placeholder={empty ? props.placeholder : undefined}>
           {rows}
           <div class="pn-selection-layer" ref={selectionRef} aria-hidden="true" />
+          <div class="pn-picture-tint-layer" ref={pictureTintRef} aria-hidden="true" />
           <div class="pn-caret pn-blink" ref={caretRef} aria-hidden="true" />
           <div aria-live="polite" style={visuallyHidden}>
             {announcement}

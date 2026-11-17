@@ -5,6 +5,7 @@
 ### What's new
 
 - **Copy takes pictures along.** Copying a selection now puts it on the clipboard as formatted text too, so it pastes into Word, OneNote, Mail or Google Docs with its bold, lists and headings, and the pictures in it go along as pictures, not links. Puffinote and plain-text apps still get the Markdown.
+- **Selected pictures are highlighted.** A picture inside the selection is covered with the selection colour, so you can see it will be copied along with the text.
 - **`![[name.png]]` pictures export as pictures** in Export as HTML and Export as PDF, not as their text.
 - **Recent Notebooks menu.** Click the notebook's initials at the top of the rail to switch to a notebook you opened before, reveal the notebook’s folder in Finder or Explorer, or open another one. Notebooks whose folder you deleted drop off the list when Puffinote starts; ones on an unplugged drive or a server that's off stay.
 - **Pictures embedded as `![[name.png]]`** (as other Markdown apps paste them) are drawn as pictures, found by name wherever they are in the notebook. `![[name.png|300]]` draws one 300 px wide.
