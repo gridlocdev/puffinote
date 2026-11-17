@@ -281,6 +281,57 @@
   text-align: center;
   color: var(--pn-marker);
 }
+/* Bullets are drawn as shapes, not font glyphs, so every level is the same size in any font (PRD §10.2). The
+   shape sits on the middle of the x-height, as the text's lowercase letters do. */
+.pn-deco-bullet::before {
+  content: '';
+  display: inline-block;
+  box-sizing: border-box;
+  vertical-align: middle;
+  width: 0.42em;
+  height: 0.42em;
+  background: currentColor;
+}
+.pn-bullet-disc::before {
+  border-radius: 50%;
+}
+.pn-bullet-circle::before {
+  border-radius: 50%;
+  background: none;
+  border: 0.1em solid currentColor;
+}
+.pn-bullet-square::before {
+  width: 0.38em;
+  height: 0.38em;
+}
+.pn-bullet-open-square::before {
+  background: none;
+  border: 0.1em solid currentColor;
+}
+.pn-bullet-diamond::before,
+.pn-bullet-open-diamond::before,
+.pn-bullet-small-diamond::before {
+  width: 0.36em;
+  height: 0.36em;
+  transform: rotate(45deg);
+}
+.pn-bullet-open-diamond::before {
+  background: none;
+  border: 0.1em solid currentColor;
+}
+.pn-bullet-small-diamond::before {
+  width: 0.28em;
+  height: 0.28em;
+}
+.pn-bullet-triangle::before {
+  width: 0.4em;
+  height: 0.48em;
+  clip-path: polygon(0 0, 100% 50%, 0 100%);
+}
+.pn-bullet-dash::before {
+  width: 0.56em;
+  height: 0.1em;
+}
 .pn-deco-number {
   text-align: right;
   font-variant-numeric: tabular-nums;

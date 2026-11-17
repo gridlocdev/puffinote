@@ -29,6 +29,7 @@ export {
 } from './editor/commands.ts';
 export { EditorState, type PictureSpot } from './editor/editorState.ts';
 export {
+  bulletShape,
   checkboxLabel,
   type Decoration,
   type DecorationKind,

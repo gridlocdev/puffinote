@@ -2,7 +2,7 @@ import { parseLinePrefix, renderHtmlBody } from '@puffinote/markdown';
 import { TextDocument } from '@puffinote/text';
 import { memo } from 'preact/compat';
 import { lineViewPropsEqual, type LineViewProps } from './lineProps.ts';
-import { checkboxLabel, renderLine, type Segment } from './lineRender.ts';
+import { bulletShape, checkboxLabel, renderLine, type Segment } from './lineRender.ts';
 import type { ViewMode } from './reveal.ts';
 
 /** One source line. Memoized by `lineViewPropsEqual`: a line redraws only when what it draws changes. */
@@ -87,6 +87,7 @@ function SegmentView({
       case 'rule':
         return <span {...common} class="pn-deco pn-rule" />;
       case 'bullet':
+        return <span {...common} class={`pn-deco pn-deco-bullet pn-bullet-${bulletShape(d.text)}`} />;
       case 'number':
         return (
           <span {...common} class={`pn-deco pn-deco-${d.kind}`}>

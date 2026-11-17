@@ -11,6 +11,7 @@ import {
   keepReveal,
   checkboxLabel,
   lineAnnouncement,
+  bulletShape,
   renderLine,
   snapOutOfConcealed,
   type LineRender,
@@ -271,7 +272,7 @@ describe('nested numbered lists (PRD §10.2)', () => {
     expect(deco(2, 1)).toBe('b)');
   });
 
-  it('draws a bullet as a disc, a circle, then a square by depth', () => {
+  it('draws bullets by depth in OneNote order, the last shape repeating deeper in', () => {
     const doc = TextDocument.fromString('- a');
     const model = MarkdownModel.build(doc);
     const tokens = model.lineTokensRelative(0);
@@ -279,7 +280,30 @@ describe('nested numbered lists (PRD §10.2)', () => {
     const glyph = (depth: number) =>
       renderLine('- a', tokens, reveal, 'live', null, depth).segments.find((s) => s.deco?.kind === 'bullet')
         ?.deco?.text;
-    expect([0, 1, 2, 3].map(glyph)).toEqual(['•', '◦', '▪', '•']);
+    expect([0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 12].map(glyph)).toEqual([
+      '•',
+      '◦',
+      '▪',
+      '□',
+      '◆',
+      '◇',
+      '▸',
+      '–',
+      '⬩',
+      '⬩',
+      '⬩',
+    ]);
+    expect(['•', '◦', '▪', '□', '◆', '◇', '▸', '–', '⬩'].map(bulletShape)).toEqual([
+      'disc',
+      'circle',
+      'square',
+      'open-square',
+      'diamond',
+      'open-diamond',
+      'triangle',
+      'dash',
+      'small-diamond',
+    ]);
   });
 
   /** Each line's depth, as the editor walks the note: a table drawn whole is skipped. */

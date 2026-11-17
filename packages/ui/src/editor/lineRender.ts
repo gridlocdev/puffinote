@@ -288,7 +288,7 @@ function decorationFor(
       const marker = text.trim();
       const m = /^(\d+)([.)])$/.exec(marker);
       if (m) return { kind: 'number', text: listOrdinal(Number(m[1]), listDepth) + m[2]! };
-      return task ? null : { kind: 'bullet', text: bulletGlyphs[listDepth % bulletGlyphs.length]! };
+      return task ? null : { kind: 'bullet', text: bulletGlyph(listDepth) };
     }
     case 'taskMarker':
       return { kind: 'checkbox', text: '', task: task ?? 'notStarted' };
@@ -327,8 +327,36 @@ function decorationFor(
   }
 }
 
-/** A bullet's glyph by nesting depth (PRD §10.2): a disc, then a circle, then a square, and round again. */
-const bulletGlyphs = ['•', '◦', '▪'] as const;
+/**
+ * A bullet's glyph by nesting depth (PRD §10.2), in OneNote's order: a disc, a circle, a square, an open
+ * square, a diamond, an open diamond, a triangle, a dash, then a small diamond for every deeper level. The
+ * editor draws each as a shape of the same size (styles.css, `.pn-bullet-*`); the glyph names the shape.
+ */
+const bulletGlyphs = ['•', '◦', '▪', '□', '◆', '◇', '▸', '–', '⬩'] as const;
+
+/** The CSS shape name for each bullet glyph, in `bulletGlyphs` order. */
+const bulletShapes = [
+  'disc',
+  'circle',
+  'square',
+  'open-square',
+  'diamond',
+  'open-diamond',
+  'triangle',
+  'dash',
+  'small-diamond',
+] as const;
+
+/** The shape that draws bullet glyph `glyph` (`.pn-bullet-<shape>` in styles.css). */
+export function bulletShape(glyph: string): (typeof bulletShapes)[number] {
+  const i = bulletGlyphs.indexOf(glyph as (typeof bulletGlyphs)[number]);
+  return bulletShapes[Math.max(i, 0)]!;
+}
+
+/** The bullet glyph at nesting depth `depth`: the last one repeats past the end of the list. */
+export function bulletGlyph(depth: number): string {
+  return bulletGlyphs[Math.min(depth, bulletGlyphs.length - 1)]!;
+}
 
 /**
  * How an ordered item's number is drawn at nesting depth `depth` (PRD §10.2): 1, 2, 3 at the top level, then
