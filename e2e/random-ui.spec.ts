@@ -124,8 +124,13 @@ const STEP_PAUSE_MS = 50;
  */
 async function typeable(page: Page, text: string): Promise<string> {
   const inText = await page.evaluate(() => {
-    const active = document.activeElement as HTMLElement | null;
-    return !!active && (active.matches('input, textarea') || active.isContentEditable);
+    const active = document.activeElement;
+    // A radio button or checkbox is an input too, but holds no text.
+    const textInput = ['text', 'search', 'email', 'url', 'tel', 'password', 'number'];
+    if (active instanceof HTMLInputElement) return textInput.includes(active.type);
+    return (
+      active instanceof HTMLTextAreaElement || (active instanceof HTMLElement && active.isContentEditable)
+    );
   });
   return inText ? text : text.replace(/[^\x20-\x7e\n\r]/g, '');
 }
