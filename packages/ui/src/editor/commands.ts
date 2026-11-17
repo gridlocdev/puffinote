@@ -373,9 +373,14 @@ function nestedInQuote(text: string, p: LinePrefix): boolean {
   return p.hasQuote && p.hasList && p.markerStart - quoteMarkerEnd(text, p) > 1;
 }
 
-/** Shift+Tab: remove one indent step (a tab, or up to `indent.length` spaces) from each selected line. */
+/**
+ * Shift+Tab: remove one indent step (a tab, or up to `indent.length` spaces) from each selected line. A list
+ * item already at the top level loses its marker instead (bullet or number and any task box), keeping its
+ * quote, as Backspace at the start of its text does (PRD §10.1).
+ */
 export function outdentEdit(doc: TextDocument, sel: Selection, indent = defaultIndent): Edit | null {
   const [a, b] = selectedLines(doc, sel);
+  let stripped = false;
   const edit = spliceLines(doc, sel, a, b, (text) => {
     // A list item nested in a quote outdents after the quote marker, keeping the space that follows `>`.
     const p = parseLinePrefix(text);
@@ -383,9 +388,12 @@ export function outdentEdit(doc: TextDocument, sel: Selection, indent = defaultI
     if (text.charAt(at) === '\t') return { at, remove: 1, insert: '' };
     let n = 0;
     while (n < indent.length && text.charAt(at + n) === ' ' && (at === 0 || at + n < p.markerStart)) n++;
-    return n > 0 ? { at, remove: n, insert: '' } : null;
+    if (n > 0) return { at, remove: n, insert: '' };
+    if (!p.hasList) return null;
+    stripped = true;
+    return { at: p.markerStart, remove: p.length - p.markerStart, insert: '' };
   });
-  return edit ? withRenumber(doc, edit, [a, b + 1], 'nested') : null;
+  return edit ? withRenumber(doc, edit, [a, b + 1], stripped ? 'all' : 'nested') : null;
 }
 
 // ----- Ordered-list renumbering -----

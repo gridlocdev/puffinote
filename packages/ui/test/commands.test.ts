@@ -155,7 +155,23 @@ describe('Tab and Shift+Tab', () => {
   it('outdents by one step', () => {
     expect(run('      - b|', (d, s) => outdentEdit(d, s))).toBe('  - b|');
     expect(run('\t- b|', (d, s) => outdentEdit(d, s))).toBe('- b|');
-    expect(run('- b|', (d, s) => outdentEdit(d, s))).toBe('(none)');
+    expect(run('b|', (d, s) => outdentEdit(d, s))).toBe('(none)');
+  });
+
+  it('takes the marker off a top-level item of any list type', () => {
+    expect(run('- b|', (d, s) => outdentEdit(d, s))).toBe('b|');
+    expect(run('* |b', (d, s) => outdentEdit(d, s))).toBe('|b');
+    expect(run('3. b|', (d, s) => outdentEdit(d, s))).toBe('b|');
+    expect(run('- [x] b|', (d, s) => outdentEdit(d, s))).toBe('b|');
+    expect(run('1. [ ] b|', (d, s) => outdentEdit(d, s))).toBe('b|');
+  });
+
+  it('restarts the numbered items after an item that loses its marker', () => {
+    expect(run('1. a\n2. b|\n3. c\n4. d', (d, s) => outdentEdit(d, s))).toBe('1. a\nb|\n1. c\n2. d');
+  });
+
+  it('outdents nested lines and takes the marker off top-level ones in one selection', () => {
+    expect(run('‹- a\n    - b›', (d, s) => outdentEdit(d, s))).toBe('‹a\n- b›');
   });
 
   it('does nothing on a selection of only blank lines', () => {
@@ -176,7 +192,7 @@ describe('Tab and Shift+Tab', () => {
     expect(run('> - a\n> - b|', (d, s) => indentEdit(d, s))).toBe('> - a\n>     - b|');
     expect(run('> - a\n>     - b|', (d, s) => outdentEdit(d, s))).toBe('> - a\n> - b|');
     expect(run('> > - a\n> > - b|', (d, s) => indentEdit(d, s, '\t'))).toBe('> > - a\n> > \t- b|');
-    expect(run('> - b|', (d, s) => outdentEdit(d, s))).toBe('(none)');
+    expect(run('> - b|', (d, s) => outdentEdit(d, s))).toBe('> b|');
   });
 
   it('restarts the nested items left behind when the first one is outdented', () => {
