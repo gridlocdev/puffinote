@@ -15,7 +15,14 @@ import { writeAtomic } from '@puffinote/node-files';
 import { mkdir, stat } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
-import { Channels, CONFLICT_EXISTS, FILE_SCHEME, NOT_FOUND, type NativeMenuItem } from './bridge.ts';
+import {
+  asResult,
+  Channels,
+  CONFLICT_EXISTS,
+  FILE_SCHEME,
+  NOT_FOUND,
+  type NativeMenuItem,
+} from './bridge.ts';
 import {
   FolderGrants,
   fileVersion,
@@ -401,39 +408,45 @@ function registerIpc(): void {
     // Listing a notebook's own folder is how one opens: a folder not granted yet gets asked about.
     await allowFolder(fromEvent(e), dir);
     const folder = path.resolve(dir as string);
-    return listDir(folder, (p) => grants.allows(p)).catch((err: unknown) => notFound(err, folder));
+    return asResult(() =>
+      listDir(folder, (p) => grants.allows(p)).catch((err: unknown) => notFound(err, folder)),
+    );
   });
   ipcMain.handle(Channels.read, async (e, p: unknown) => {
     const file = await guard(e, p);
     // One handle for the mtime and the bytes, so an external write can't slip between them and hand the
     // renderer old text under the new version (its next save would then overwrite that write).
-    return readWithMtime(file).catch((err: unknown) => notFound(err, file));
+    return asResult(() => readWithMtime(file).catch((err: unknown) => notFound(err, file)));
   });
   ipcMain.handle(
     Channels.write,
     async (e, p: unknown, bytes: unknown, expected: unknown, force: unknown, create: unknown) => {
       const file = await guard(e, p);
       if (!(bytes instanceof Uint8Array)) forbidden();
-      return writeNative(
-        file,
-        bytes,
-        typeof expected === 'string' ? expected : null,
-        force === true,
-        create === true,
+      return asResult(() =>
+        writeNative(
+          file,
+          bytes,
+          typeof expected === 'string' ? expected : null,
+          force === true,
+          create === true,
+        ),
       );
     },
   );
   ipcMain.handle(Channels.mkdir, async (e, p: unknown) => {
     const dir = await guard(e, p);
-    const s = await stat(dir).catch(() => null);
-    if (s && !s.isDirectory()) throw new Error(`${CONFLICT_EXISTS}: ${path.basename(dir)}`);
-    await mkdir(dir, { recursive: true });
+    return asResult(async () => {
+      const s = await stat(dir).catch(() => null);
+      if (s && !s.isDirectory()) throw new Error(`${CONFLICT_EXISTS}: ${path.basename(dir)}`);
+      await mkdir(dir, { recursive: true });
+    });
   });
   ipcMain.handle(Channels.move, async (e, from: unknown, to: unknown) => {
     const src = await guard(e, from);
     const dest = await guard(e, to);
     // Like trash: a granted notebook folder itself never moves.
-    await moveEntry(src, dest, (p) => grants.isRoot(p));
+    return asResult(() => moveEntry(src, dest, (p) => grants.isRoot(p)));
   });
   ipcMain.handle(Channels.trash, async (e, p: unknown) => {
     const target = await guard(e, p);

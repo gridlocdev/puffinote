@@ -61,5 +61,27 @@ export const CONFLICT_CHANGED = 'PUFFINOTE_CONFLICT_CHANGED';
 export const CONFLICT_EXISTS = 'PUFFINOTE_CONFLICT_EXISTS';
 export const NOT_FOUND = 'PUFFINOTE_NOT_FOUND';
 
+/**
+ * An expected failure (a conflict or a missing file), sent back from a file handler as its result instead of
+ * thrown: Electron prints every handler that throws to the terminal, and these happen in normal use (the state
+ * folder's `.gitignore` already being there). The preload turns it back into a rejection with this message.
+ */
+export interface IpcFailure {
+  readonly puffinoteFailure: string;
+}
+
+/** Run a file handler, returning a conflict or not-found error as an `IpcFailure`; anything else still throws. */
+export async function asResult<T>(run: () => Promise<T>): Promise<T | IpcFailure> {
+  try {
+    return await run();
+  } catch (e) {
+    const message = e instanceof Error ? e.message : '';
+    if ([CONFLICT_CHANGED, CONFLICT_EXISTS, NOT_FOUND].some((code) => message.startsWith(code))) {
+      return { puffinoteFailure: message };
+    }
+    throw e;
+  }
+}
+
 /** The scheme notebook pictures load from: `pnfile://local/<absolute path, URL-encoded>`. */
 export const FILE_SCHEME = 'pnfile';

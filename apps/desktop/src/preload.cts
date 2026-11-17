@@ -1,6 +1,6 @@
 // Sandboxed preload: may only require('electron'), so channel names are inlined here.
 // Keep them in step with `Channels` in bridge.ts.
-import type { NativeEntry, NativeMenuItem } from './bridge.ts';
+import type { IpcFailure, NativeEntry, NativeMenuItem } from './bridge.ts';
 
 // A sandboxed preload is CommonJS and can only reach Electron through require().
 // eslint-disable-next-line @typescript-eslint/no-require-imports, @typescript-eslint/consistent-type-imports
@@ -10,6 +10,13 @@ function on(channel: string, cb: (...args: never[]) => void): () => void {
   const listener = (_e: unknown, ...args: unknown[]) => (cb as (...a: unknown[]) => void)(...args);
   ipcRenderer.on(channel, listener);
   return () => ipcRenderer.removeListener(channel, listener);
+}
+
+/** Invoke a file handler, turning an expected failure it sent back (`asResult` in bridge.ts) into a rejection. */
+async function call<T>(channel: string, ...args: unknown[]): Promise<T> {
+  const r = (await ipcRenderer.invoke(channel, ...args)) as T | IpcFailure;
+  if (typeof r === 'object' && r !== null && 'puffinoteFailure' in r) throw new Error(r.puffinoteFailure);
+  return r;
 }
 
 // Folders to open can arrive as soon as the page loads, before the page has set up its listener (it first
@@ -26,18 +33,18 @@ contextBridge.exposeInMainWorld('puffinoteNative', {
   platform: process.platform,
   pickFolder: (): Promise<string | null> => ipcRenderer.invoke('puffinote:pick-folder'),
   folderGone: (path: string): Promise<boolean> => ipcRenderer.invoke('puffinote:folder-gone', path),
-  list: (dir: string): Promise<NativeEntry[]> => ipcRenderer.invoke('puffinote:list', dir),
+  list: (dir: string): Promise<NativeEntry[]> => call('puffinote:list', dir),
   read: (path: string): Promise<{ bytes: Uint8Array; modified: number; version: string }> =>
-    ipcRenderer.invoke('puffinote:read', path),
+    call('puffinote:read', path),
   write: (
     path: string,
     bytes: Uint8Array,
     expected: string | null,
     force: boolean,
     create: boolean,
-  ): Promise<string> => ipcRenderer.invoke('puffinote:write', path, bytes, expected, force, create),
-  mkdir: (path: string): Promise<void> => ipcRenderer.invoke('puffinote:mkdir', path),
-  move: (from: string, to: string): Promise<void> => ipcRenderer.invoke('puffinote:move', from, to),
+  ): Promise<string> => call('puffinote:write', path, bytes, expected, force, create),
+  mkdir: (path: string): Promise<void> => call('puffinote:mkdir', path),
+  move: (from: string, to: string): Promise<void> => call('puffinote:move', from, to),
   trash: (path: string): Promise<void> => ipcRenderer.invoke('puffinote:trash', path),
   reveal: (path: string): Promise<void> => ipcRenderer.invoke('puffinote:reveal', path),
   openExternal: (path: string): Promise<void> => ipcRenderer.invoke('puffinote:open-external', path),
