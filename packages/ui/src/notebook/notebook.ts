@@ -223,6 +223,7 @@ export class Notebook {
         if (roots.length === 1) this.selected.value = roots[0]!;
       },
       notify: (kind, text) => this.notify(kind, text),
+      picturePath: (notePath, ref) => this.pictures.pathOf(notePath, ref),
       report: (e) => this.report(e),
     });
     this.pictures = new NotebookPictures({

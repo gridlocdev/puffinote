@@ -59,6 +59,46 @@ describe('Export as HTML', () => {
   });
 });
 
+describe('Wiki embeds in export and copy', () => {
+  it('exports a wiki embed as the picture the notebook finds by name, with its width', async () => {
+    const store = new MemoryStore('N', { 'a/n.md': 'x', 'attachments/cat.png': png, 'b/dog.png': png });
+    const nb = await Notebook.open(store, { prefs: memoryPrefs({ autoSave: false }) });
+    const out = await noteHtml(
+      store,
+      'a/n.md',
+      '![[cat.png|300]]\n\n![[gone.png]]\n\n![[Other note]]',
+      (n, r) => nb.pictures.pathOf(n, r),
+    );
+    expect(out.html).toContain(
+      `<img src="data:image/png;base64,${toBase64(png)}" alt="cat.png" width="300">`,
+    );
+    expect(out.html).toContain('<span class="embed">gone.png</span>');
+    expect(out.html).toContain('<span class="embed">Other note</span>');
+    expect(out.skipped).toEqual(['gone.png']);
+  });
+});
+
+describe('Copy with pictures', () => {
+  it('gives a fragment of formatted text with linked and embedded pictures inside it', async () => {
+    const store = new MemoryStore('N', { 'a/n.md': 'x', 'a/p.png': png, 'attachments/cat.png': png });
+    const nb = await Notebook.open(store, { prefs: memoryPrefs({ autoSave: false }) });
+    const html = await nb.transfer.copyHtml('a/n.md', 'some **bold**\n\n![p](p.png)\n\n![[cat.png]]');
+    expect(html).not.toContain('<html');
+    expect(html).toContain('<strong>bold</strong>');
+    expect(html).toContain(`<img src="data:image/png;base64,${toBase64(png)}" alt="p">`);
+    expect(html).toContain(`<img src="data:image/png;base64,${toBase64(png)}" alt="cat.png">`);
+    expect(nb.notice.value).toBeNull();
+  });
+
+  it('says which pictures stayed links', async () => {
+    const store = new MemoryStore('N', { 'n.md': 'x' });
+    const nb = await Notebook.open(store, { prefs: memoryPrefs({ autoSave: false }) });
+    const html = await nb.transfer.copyHtml('n.md', '![m](gone.png)');
+    expect(html).toContain('<img src="gone.png" alt="m">');
+    expect(nb.notice.value?.text).toContain('Copied without “gone.png”');
+  });
+});
+
 describe('Export as PDF', () => {
   it('hands the same standalone HTML to the host to print, named after the note', async () => {
     const store = new MemoryStore('N', { 'a/n.md': '# Hi', 'a/p.png': png });

@@ -19,6 +19,7 @@ export {
   innerStart,
   spanEnd,
 } from './markdown/inlineDelimiters.ts';
+export { embedTarget, embedWidth } from './markdown/embed.ts';
 export { extensionOf, isMarkdownFile } from './markdown/markdownFiles.ts';
 export { MarkdownModel, type MarkdownModelUpdate } from './markdown/markdownModel.ts';
 export {

@@ -67,4 +67,37 @@ test.describe('Pictures in your notes', () => {
     await expect(picture).toBeVisible();
     expect(await picture.evaluate((img: HTMLImageElement) => img.naturalWidth)).toBe(16);
   });
+
+  test('copying text with a picture puts the picture itself on the clipboard, not its link', async ({
+    seed,
+    page,
+  }) => {
+    seed('basic');
+    await page.context().grantPermissions(['clipboard-read', 'clipboard-write']);
+    await openApp(page);
+    await openNote(page, 'packing');
+    await page.getByRole('main').getByText('Boots').click();
+    await page.keyboard.press('ControlOrMeta+KeyA');
+    await page.keyboard.press('ControlOrMeta+KeyC');
+    const read = () =>
+      page.evaluate(async () => {
+        // Read again while the pictures are still being written: the clipboard changes under the first read.
+        const [item] = await navigator.clipboard.read().catch(() => []);
+        if (!item?.types.includes('text/html')) return { html: '', text: '' };
+        try {
+          const text = item.types.includes('text/plain')
+            ? await (await item.getType('text/plain')).text()
+            : '';
+          return { html: await (await item.getType('text/html')).text(), text };
+        } catch {
+          return { html: '', text: '' };
+        }
+      });
+    let copied = { html: '', text: '' };
+    await expect.poll(async () => (copied = await read()).html).toContain('<img src="data:image/png;base64,');
+    const { html, text } = copied;
+    expect(html).toContain('<li>Boots</li>');
+    expect(html).not.toContain('src="square.png"');
+    expect(text).toContain('![A small orange square](square.png)');
+  });
 });

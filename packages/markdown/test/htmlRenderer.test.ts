@@ -290,6 +290,18 @@ describe('HTML renderer', () => {
     expect(html).toContain('alt="a"> b</p>');
   });
 
+  it('draws a wiki embed as the picture the embed option finds, with its width, and as text otherwise', () => {
+    const html = renderHtmlBody(TextDocument.fromString('a ![[b.png|300]] c\n\n![[d.md]]\n\n![[e.png]]'), {
+      embed: (target) =>
+        target === 'b.png' ? 'data:image/png;base64,AA==' : target === 'e.png' ? 'javascript:1' : null,
+    });
+    expect(html).toContain('<p>a <img src="data:image/png;base64,AA==" alt="b.png" width="300"> c</p>');
+    expect(html).toContain('<span class="embed">d.md</span>');
+    // A found URL is still checked (PRD §10.5).
+    expect(html).not.toContain('javascript');
+    expect(body('![[b.png]]')).toContain('<span class="embed">b.png</span>');
+  });
+
   it('prints light, with page margins and no break inside code or pictures', () => {
     const html = renderHtmlDocument(TextDocument.fromString('x'));
     expect(html).toContain('@page { margin: 18mm 16mm; }');

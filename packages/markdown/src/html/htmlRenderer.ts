@@ -2,6 +2,7 @@ import type { TextDocument } from '@puffinote/text';
 import { listBase } from '../markdown/blockState.ts';
 import { blockAtLine, blocksOf, type Block, type BlockKind } from '../markdown/blocks.ts';
 import { isAsciiDigit } from '../markdown/chars.ts';
+import { embedTarget, embedWidth } from '../markdown/embed.ts';
 import { MarkdownModel } from '../markdown/markdownModel.ts';
 import { taskLabel, taskStateFromMark, type TaskState } from '../markdown/taskState.ts';
 import type { Token } from '../markdown/token.ts';
@@ -13,6 +14,11 @@ export interface HtmlOptions {
    * say), or null/undefined to keep it. The result is checked like any other image URL (PRD §10.5).
    */
   readonly image?: (src: string) => string | null | undefined;
+  /**
+   * The `src` for the picture a `![[target]]` wiki embed names, or null/undefined to export the embed as its
+   * text. The result is checked like any other image URL (PRD §10.5).
+   */
+  readonly embed?: (target: string) => string | null | undefined;
 }
 
 /**
@@ -644,9 +650,18 @@ class Renderer {
       case 'wikiLink':
         this.out += `<span class="wikilink">${text}</span>`;
         break;
-      case 'embed':
-        this.out += `<span class="embed">${text}</span>`;
+      case 'embed': {
+        const target = embedTarget(t.meta);
+        const src = target ? this.options.embed?.(target) : null;
+        const safe = src ? safeHref(src, 'image') : null;
+        if (safe === null) {
+          this.out += `<span class="embed">${text}</span>`;
+          break;
+        }
+        const width = embedWidth(t.meta);
+        this.out += `<img src="${escapeAttr(safe)}" alt="${escapeAttr(target)}"${width ? ` width="${width}"` : ''}>`;
         break;
+      }
       case 'blockquoteMarker':
       case 'codeFence':
       case 'codeText':

@@ -5,6 +5,7 @@ import { useLayoutEffect, useMemo, useRef } from 'preact/hooks';
 import type { JSX } from 'preact';
 import { CommandCatalog } from '../commands/command.ts';
 import { isMac } from '../commands/shortcut.ts';
+import { selectionHtml, showsPictures } from './copy.ts';
 import { pasteText, setTaskStateEdit, withTaskSort, typeCharEdit, withLineEnding } from './commands.ts';
 import { markdownCommandSpecs } from './editorCommands.ts';
 import type { EditorState } from './editorState.ts';
@@ -59,6 +60,12 @@ export interface MarkdownEditorProps {
    * its own errors and never rejects.
    */
   readonly onPictures?: (files: readonly File[]) => Promise<readonly string[]>;
+  /**
+   * Copy or Cut of a selection that shows pictures (PRD §10.1): put `markdown` on the clipboard again with the
+   * pictures themselves in its formatted copy. Called inside the copy event, so the clipboard write it starts
+   * counts as the user's.
+   */
+  readonly onCopyPictures?: (markdown: string) => void;
   /** Shows a failure the editor can't recover from on its own (inserting dropped or pasted pictures). */
   readonly onError: (e: unknown) => void;
   /** Find in Note's matches to mark, and which one is current (PRD §10.7). */
@@ -813,7 +820,10 @@ export function MarkdownEditor(props: MarkdownEditorProps) {
   function onCopy(e: ClipboardEvent, cut: boolean): void {
     if (isCollapsed(sel)) return;
     e.preventDefault();
-    e.clipboardData?.setData('text/plain', state.selectedText());
+    const text = state.selectedText();
+    e.clipboardData?.setData('text/plain', text);
+    e.clipboardData?.setData('text/html', selectionHtml(text));
+    if (props.onCopyPictures && showsPictures(text)) props.onCopyPictures(text);
     if (cut) {
       // As Delete does: one undo step, and numbered lists renumber when the cut joins lines.
       revealCaret.current = true;

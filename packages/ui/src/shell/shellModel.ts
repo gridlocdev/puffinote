@@ -753,6 +753,26 @@ export class ShellModel {
     }
   }
 
+  /**
+   * Copy or Cut of a selection that shows pictures (PRD §10.1): the clipboard gets the Markdown again, and the
+   * formatted copy with the pictures embedded once they are read. Started inside the copy event, with the
+   * formatted copy still to come, so the browser counts the write as the user's.
+   */
+  copyWithPictures(notePath: string, markdown: string): void {
+    const nb = this.notebook.peek();
+    if (!nb || typeof ClipboardItem === 'undefined') return;
+    const html = nb.transfer.copyHtml(notePath, markdown).then((h) => new Blob([h], { type: 'text/html' }));
+    const item = new ClipboardItem({
+      'text/plain': new Blob([markdown], { type: 'text/plain' }),
+      'text/html': html,
+    });
+    navigator.clipboard.write([item]).catch(() => {
+      if (this.notebook.peek() === nb) {
+        nb.notify('error', 'Puffinote couldn’t copy the pictures. The text was copied without them.');
+      }
+    });
+  }
+
   /** Edit Description…: change a picture's alt text, the words read out in its place (one undo step). */
   async editPictureDescription(picture: PictureAt): Promise<void> {
     const state = this.activeTab.peek()?.state;

@@ -95,6 +95,7 @@ export function Document(props: { readonly model: ShellModel; readonly nb: Noteb
           }}
           findMatches={model.findMatches.value ?? undefined}
           onError={nb.report}
+          onCopyPictures={(markdown) => model.copyWithPictures(path, markdown)}
           onPictures={async (files) => {
             // A picture that can't be read or saved is said in the status bar, and nothing is inserted.
             try {

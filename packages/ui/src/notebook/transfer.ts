@@ -1,6 +1,6 @@
 import type { Tab } from './tab.ts';
 import { archiveName, notebookArchive } from './archive.ts';
-import { noteHtml } from './export.ts';
+import { clipboardHtml, noteHtml, type PicturePath } from './export.ts';
 import { fileCount, importName, isImportJunk, type ImportFile, type ImportResult } from './importFiles.ts';
 import { ConflictError, type Entry, type NotebookStore } from '../platform/notebookStore.ts';
 import { baseName, joinPath, stemOf, uniqueName } from '../platform/paths.ts';
@@ -19,6 +19,8 @@ export interface TransferHost {
   imported(dir: string, roots: readonly string[]): Promise<void>;
   notify(kind: 'info' | 'error', text: string): void;
   report(e: unknown): void;
+  /** The notebook file a picture link or `[[name]]` embed in a note names, or null (PRD §10.6). */
+  picturePath: PicturePath;
 }
 
 /** Files in and out of a notebook: Import Notes…, Download Notebook, Export as HTML, Print (PRD §5, §10.5). */
@@ -150,9 +152,9 @@ export class NotebookTransfer {
     const download = this.#host.download;
     if (!download) return this.#host.notify('info', 'Puffinote can’t save a file here.');
     try {
-      const out = await noteHtml(this.#host.store, tab.path.peek(), tab.state.text);
+      const out = await noteHtml(this.#host.store, tab.path.peek(), tab.state.text, this.#host.picturePath);
       download(out.name, new TextEncoder().encode(out.html), 'text/html');
-      this.noteSkipped(out.skipped);
+      this.noteSkipped(out.skipped, 'Exported');
     } catch (e) {
       this.#host.report(e);
     }
@@ -171,21 +173,31 @@ export class NotebookTransfer {
     const print = this.#host.print;
     if (!tab.state || !print) return;
     try {
-      const out = await noteHtml(this.#host.store, tab.path.peek(), tab.state.text);
+      const out = await noteHtml(this.#host.store, tab.path.peek(), tab.state.text, this.#host.picturePath);
       await print(out.html, `${stemOf(tab.path.peek())}.pdf`);
-      this.noteSkipped(out.skipped);
+      this.noteSkipped(out.skipped, 'Exported');
     } catch (e) {
       this.#host.report(e);
     }
   }
 
-  /** Say which pictures an export left as links instead of embedding them. */
-  private noteSkipped(skipped: readonly string[]): void {
+  /**
+   * The formatted copy of `text`, selected in the note at `notePath` (PRD §10.1): HTML with its pictures
+   * embedded. Says in the status bar which pictures stayed links.
+   */
+  async copyHtml(notePath: string, text: string): Promise<string> {
+    const out = await clipboardHtml(this.#host.store, notePath, text, this.#host.picturePath);
+    this.noteSkipped(out.skipped, 'Copied');
+    return out.html;
+  }
+
+  /** Say which pictures an export or a copy left as links instead of embedding them. */
+  private noteSkipped(skipped: readonly string[], done: 'Exported' | 'Copied'): void {
     if (skipped.length === 0) return;
     const which = skipped.length === 1 ? `“${skipped[0]}”` : `${skipped.length} pictures`;
     this.#host.notify(
       'info',
-      `Exported without ${which}: missing, too large or not a PNG, JPEG, GIF, WebP, AVIF or BMP, so ${skipped.length === 1 ? 'it stays a link' : 'they stay links'}.`,
+      `${done} without ${which}: missing, too large or not a PNG, JPEG, GIF, WebP, AVIF or BMP, so ${skipped.length === 1 ? 'it stays a link' : 'they stay links'}.`,
     );
   }
 }
