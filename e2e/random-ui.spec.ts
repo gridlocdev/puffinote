@@ -103,6 +103,12 @@ async function runRandomCommand(page: Page, pick: (count: number) => number): Pr
       () => false,
     );
   if (!clicked && (await menu.count()) === 0) return `command menu was replaced before ${chosen.label}`;
+  // The menu follows the app while it is open: a delete that lands after it opened closes the note and turns
+  // off the commands that need one.
+  if (!clicked && (await options.nth(chosen.i).getAttribute('aria-disabled')) === 'true') {
+    await page.keyboard.press('Escape');
+    return `${chosen.label} was turned off before the click`;
+  }
   if (!clicked) throw new Error(`could not click ${chosen.label} in the command menu`);
   return `command ${chosen.label}`;
 }
