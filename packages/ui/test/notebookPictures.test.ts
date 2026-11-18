@@ -18,6 +18,7 @@ async function setup(files: Record<string, string | Uint8Array>) {
   const trash = new NotebookTrash({
     store,
     closed: () => false,
+    exclusive: (fn) => fn(),
     restored: async () => {},
     offer: (text, label, run) => (notice.value = { kind: 'info', text, action: { label, run } }),
     notify: (kind, text) => (notice.value = { kind, text }),

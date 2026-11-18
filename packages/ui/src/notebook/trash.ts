@@ -50,8 +50,8 @@ export async function moveToTrash(
     try {
       await store.move(path, `${trashDir}/${id}/${path}`);
     } catch (e) {
-      await store.remove(`${trashDir}/${id}.json`).catch(() => undefined);
-      await store.remove(`${trashDir}/${id}`).catch(() => undefined);
+      // The move's error is the one to report. A manifest left behind has no item, so the Trash never lists it.
+      await Promise.allSettled([store.remove(`${trashDir}/${id}.json`), store.remove(`${trashDir}/${id}`)]);
       throw e;
     }
     return item;
@@ -95,15 +95,26 @@ async function readManifest(store: NotebookStore, id: string): Promise<TrashItem
 
 /**
  * Put `item` back where it was, or beside it under a free name (`name 2.md`) when something has that name
- * now; it never overwrites. Returns the path it went to.
+ * now; it never overwrites. Returns the path it went to. Its entry stays in the Trash folder until
+ * `clearTrashEntry` removes it.
  */
 export async function restoreFromTrash(store: NotebookStore, item: TrashItem): Promise<string> {
   const from = `${trashDir}/${item.id}/${item.path}`;
-  const dir = parentOf(item.path);
-  const target = await moveToFreeName(store, from, dir, baseName(item.path));
-  await store.remove(`${trashDir}/${item.id}`).catch(() => undefined);
-  await store.remove(`${trashDir}/${item.id}.json`).catch(() => undefined);
-  return target;
+  return moveToFreeName(store, from, parentOf(item.path), baseName(item.path));
+}
+
+/** Remove what is left of a restored item in the Trash folder: its manifest first, so the Trash stops listing it. */
+export async function clearTrashEntry(store: NotebookStore, item: TrashItem): Promise<void> {
+  await removeIfThere(store, `${trashDir}/${item.id}.json`);
+  await removeIfThere(store, `${trashDir}/${item.id}`);
+}
+
+async function removeIfThere(store: NotebookStore, path: string): Promise<void> {
+  try {
+    await store.remove(path);
+  } catch (e) {
+    if (!(e instanceof NotFoundError)) throw e;
+  }
 }
 
 async function moveToFreeName(

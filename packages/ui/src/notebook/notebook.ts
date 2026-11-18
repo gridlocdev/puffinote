@@ -202,6 +202,7 @@ export class Notebook {
     this.trash = new NotebookTrash({
       store,
       closed: () => this.disposed,
+      exclusive: (fn) => this.exclusive(fn),
       restored: async (paths) => {
         // A note showing a restored picture drew it as missing.
         this.pictures.forget(paths);

@@ -9,6 +9,7 @@ function setup(store: MemoryStore) {
   const trash = new NotebookTrash({
     store,
     closed: () => false,
+    exclusive: (fn) => fn(),
     restored: async (paths) => void restored.push([...paths]),
     offer: (text, label, run) => offers.push({ text, label, run }),
     notify: (_kind, text) => said.push(text),

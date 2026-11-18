@@ -31,6 +31,5 @@
   "storage: packages/ui/src/shell/shellModel.ts": 3,
   "swallowed-promise: apps/desktop/src/main.ts": 3,
   "swallowed-promise: apps/desktop/src/updates.ts": 1,
-  "swallowed-promise: packages/ui/src/notebook/trash.ts": 4,
   "swallowed-promise: packages/ui/src/platform/browserStore.ts": 2
 }

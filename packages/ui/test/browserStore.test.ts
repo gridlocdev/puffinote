@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { BrowserStore } from '../src/platform/browserStore.ts';
 import { fakeFolder } from './fakeFileSystem.ts';
 import { ConflictError } from '../src/platform/notebookStore.ts';
-import { listTrash, moveToTrash, restoreFromTrash } from '../src/notebook/trash.ts';
+import { clearTrashEntry, listTrash, moveToTrash, restoreFromTrash } from '../src/notebook/trash.ts';
 import { Notebook } from '../src/notebook/notebook.ts';
 import { searchCachePath } from '../src/notebook/search.ts';
 import { memoryPrefs } from '../src/notebook/settings.ts';
@@ -87,6 +87,7 @@ describe('BrowserStore trash (PRD §6.1)', () => {
     expect(await listTrash(store)).toEqual([item]);
     await store.mkdir('F'); // the same name to this disk
     expect(await restoreFromTrash(store, item)).toBe('f 2');
+    await clearTrashEntry(store, item);
     expect(new TextDecoder().decode((await store.read('f 2/a.md')).bytes)).toBe('one');
     expect(await listTrash(store)).toEqual([]);
   });

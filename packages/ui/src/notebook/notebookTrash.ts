@@ -1,6 +1,7 @@
 import type { NotebookStore } from '../platform/notebookStore.ts';
 import { baseName } from '../platform/paths.ts';
 import {
+  clearTrashEntry,
   emptyTrash,
   hasNotebookTrash,
   listTrash,
@@ -14,6 +15,8 @@ export interface TrashHost {
   readonly store: NotebookStore;
   /** Whether the notebook closed; a closed notebook changes no files. */
   closed(): boolean;
+  /** Run `fn` in its turn with new notes, renames, moves and deletes, one at a time. */
+  exclusive<T>(fn: () => Promise<T>): Promise<T>;
   /** Items came back at `paths`: show them. */
   restored(paths: readonly string[]): Promise<void>;
   /** Put a message in the status bar, with a button. */
@@ -64,21 +67,28 @@ export class NotebookTrash {
 
   /**
    * Put trashed items back where they were, under a free name when the old one is taken (never overwriting).
-   * Returns the paths they went to.
+   * Returns the paths they went to. Restores wait their turn with new notes, renames, moves and deletes, so a
+   * free name is still free when the item lands, and the file tree shows it before the next one runs.
    */
   async restore(items: readonly TrashItem[]): Promise<string[]> {
     const host = this.#host;
-    if (host.closed()) return [];
-    const out: string[] = [];
-    for (const item of items) {
-      try {
-        out.push(await restoreFromTrash(host.store, item));
-      } catch (e) {
-        host.report(e);
+    const out = await host.exclusive(async () => {
+      const put: string[] = [];
+      if (host.closed()) return put;
+      for (const item of items) {
+        try {
+          put.push(await restoreFromTrash(host.store, item));
+        } catch (e) {
+          host.report(e);
+          continue;
+        }
+        // The item is back; a leftover in the Trash folder is reported but doesn't undo that.
+        await clearTrashEntry(host.store, item).catch((e: unknown) => host.report(e));
       }
-    }
+      if (put.length > 0) await host.restored(put);
+      return put;
+    });
     if (out.length === 0) return out;
-    await host.restored(out);
     const renamed = items.length === 1 && out[0] !== items[0]!.path;
     if (out.length === 1) {
       host.notify(

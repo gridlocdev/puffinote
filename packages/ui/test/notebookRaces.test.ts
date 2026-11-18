@@ -559,6 +559,32 @@ describe('Notebook names taken in flight (PRD §6.1)', () => {
     expect(nb.notice.value?.text).toBe('“b.md” already exists there.');
     expect(await text(store, 'a.md')).toBe('');
   });
+
+  it('refuses a new note of a name a restore from the Trash took while the note waited', async () => {
+    const store = new GatedStore('N', { 'a.md': 'hello' });
+    const nb = await openWith(store);
+    expect(await nb.remove('a.md')).toBe(true);
+    const undo = nb.notice.value?.action;
+    expect(undo?.label).toBe('Undo');
+    // The restore lands, then its file tree refresh is held back.
+    const move = store.move.bind(store);
+    vi.spyOn(store, 'move').mockImplementation(async (from, to) => {
+      await move(from, to);
+      if (to === 'a.md') store.holdLists = true;
+    });
+    const writes = vi.spyOn(store, 'write');
+    undo!.run();
+    await settle();
+    const created = nb.createNote('', 'a');
+    await settle();
+    store.holdLists = false;
+    for (const l of store.lists.splice(0)) l();
+    expect(await created).toBeNull();
+    await settle();
+    expect(writes.mock.calls.filter(([p]) => p === 'a.md')).toHaveLength(0);
+    expect(await text(store, 'a.md')).toBe('hello');
+    expect(nb.tree.value.children.map((c) => c.path)).toEqual(['a.md']);
+  });
 });
 
 describe('Notebook moves and saves in flight', () => {
