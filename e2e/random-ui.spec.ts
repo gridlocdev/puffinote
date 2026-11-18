@@ -160,14 +160,15 @@ function notebookFiles(dir = DATA, prefix = ''): Record<string, string> {
 
 /** After a run: every open note is saved, and a reload shows the notebook without writing anything. */
 async function checkSettled(page: Page): Promise<void> {
-  // A dialog a command opens a moment later (a Delete… confirmation) can come up after the first Escape.
-  const dialogs = page.locator('[role=dialog], [role=alertdialog]');
+  // A dialog a command opens a moment later (a Delete… confirmation) can come up after the first Escape. An open
+  // menu (a panel's … menu) keeps the keyboard too, so it is closed the same way.
+  const dialogs = page.locator('[role=dialog], [role=alertdialog], [role=menu]');
   for (let i = 0; i < 6; i++) {
     await page.clock.runFor(STEP_PAUSE_MS);
     if ((await dialogs.count()) === 0) break;
     await page.keyboard.press('Escape');
   }
-  await expect(dialogs, 'Escape closes every dialog').toHaveCount(0);
+  await expect(dialogs, 'Escape closes every dialog and menu').toHaveCount(0);
   // Until these timers fire, a tab can look saved while an edit is still on its way to the file.
   await page.clock.runFor(SETTLE_MS);
   // Random use may have turned Auto-save off, so save the way a user would.
