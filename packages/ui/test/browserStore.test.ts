@@ -1,8 +1,11 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { BrowserStore } from '../src/platform/browserStore.ts';
 import { fakeFolder } from './fakeFileSystem.ts';
 import { ConflictError } from '../src/platform/notebookStore.ts';
 import { listTrash, moveToTrash, restoreFromTrash } from '../src/notebook/trash.ts';
+import { Notebook } from '../src/notebook/notebook.ts';
+import { searchCachePath } from '../src/notebook/search.ts';
+import { memoryPrefs } from '../src/notebook/settings.ts';
 
 async function storeWith(files: Record<string, string>, caseInsensitive: boolean) {
   const { root, fs } = fakeFolder('Notes', caseInsensitive);
@@ -86,5 +89,42 @@ describe('BrowserStore trash (PRD §6.1)', () => {
     expect(await restoreFromTrash(store, item)).toBe('f 2');
     expect(new TextDecoder().decode((await store.read('f 2/a.md')).bytes)).toBe('one');
     expect(await listTrash(store)).toEqual([]);
+  });
+});
+
+describe('search index on a browser folder', () => {
+  const openNotebook = (store: BrowserStore) =>
+    Notebook.open(store, { prefs: memoryPrefs({ autoSave: false }) });
+  const notesRead = (read: { mock: { calls: unknown[][] } }) =>
+    read.mock.calls.map(([p]) => p as string).filter((p) => p.endsWith('.md'));
+  const found = async (nb: Notebook, query: string) =>
+    [...new Set((await nb.textSearch.find(query)).map((h) => h.path))].sort();
+
+  it('saves the index in the folder, and a reopened notebook reads only the notes that changed', async () => {
+    const { store } = await storeWith(
+      { 'a.md': 'apple pie', 'f/b.md': 'banana bread', 'c.md': 'cherry' },
+      true,
+    );
+    const first = await openNotebook(store);
+    expect(await found(first, 'apple')).toEqual(['a.md']);
+    await first.textSearch.save();
+    first.dispose();
+    const saved = JSON.parse(await text(store, searchCachePath)) as { notes: [string][] };
+    expect(saved.notes.map(([p]) => p).sort()).toEqual(['a.md', 'c.md', 'f/b.md']);
+    expect(await text(store, '.puffinote/cache/.gitignore')).toBe('*\n');
+
+    // While it was closed: one note edited, one deleted, one added.
+    await store.write('f/b.md', new TextEncoder().encode('blueberry bread'));
+    await store.remove('c.md');
+    await store.write('d.md', new TextEncoder().encode('date bread'));
+
+    const again = await openNotebook(store);
+    const read = vi.spyOn(store, 'read');
+    expect(await found(again, 'bread')).toEqual(['d.md', 'f/b.md']);
+    expect(notesRead(read).sort()).toEqual(['d.md', 'f/b.md']);
+    expect(await found(again, 'banana')).toEqual([]);
+    expect(await found(again, 'cherry')).toEqual([]);
+    expect(notesRead(read).sort()).toEqual(['d.md', 'f/b.md']);
+    again.dispose();
   });
 });
