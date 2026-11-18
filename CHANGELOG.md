@@ -5,6 +5,8 @@
 ### Bugs fixed
 
 - A second new note or folder given the same name before the first one appeared, or a rename onto that name, now says the name already exists instead of showing a save error.
+- Renaming or moving something you had just deleted no longer shows an error, and a delete asked for right after a rename deletes the renamed item.
+- A note deleted just before you closed the page is no longer looked for when the notebook opens again.
 
 ## 0.2.4
 

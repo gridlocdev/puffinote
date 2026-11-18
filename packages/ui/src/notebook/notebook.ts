@@ -287,7 +287,8 @@ export class Notebook {
         if (typeof sb.panel === 'string') this.panel.value = sb.panel;
       }
       for (const t of session.tabs ?? []) {
-        if (typeof t?.path !== 'string') continue;
+        // A note deleted just before the page closed can still be in the session, which went out before it.
+        if (typeof t?.path !== 'string' || findNode(this.tree.peek(), t.path)?.kind !== 'file') continue;
         const tab = await this.openTab(t.path).catch(() => null);
         if (tab && t.pinned === true) this.setTabPinned(tab, true);
         if (tab?.state) {
@@ -987,6 +988,11 @@ export class Notebook {
     const done = await this.exclusive(async () => {
       if (this.disposed) return null;
       const from = this.follow(path);
+      if (!findNode(this.tree.peek(), from)) {
+        // Deleted while this waited its turn.
+        this.notify('error', `“${baseName(from)}” is no longer there.`);
+        return null;
+      }
       const to = target(from);
       if (to === null) return null;
       if (to === from) return { from, to, movedFiles: [] };
@@ -1143,37 +1149,46 @@ export class Notebook {
    */
   private async deleteEntry(path: string): Promise<TrashItem | null | false> {
     if (this.disposed) return false;
-    const node = findNode(this.tree.peek(), path);
-    const notes = (!node ? [] : node.kind === 'file' ? [path] : allFiles(node).map((f) => f.path)).filter(
-      (p) => fileKind(p) === 'note',
-    );
-    const linked = new Set<string>();
-    if (this.config.settings.peek().unusedImages === 'ask') {
-      for (const p of notes) {
-        const text = await this.noteText(p);
-        if (text !== null) for (const t of imageTargets(text, p)) if (!isWithin(t, path)) linked.add(t);
+    // In turn with new files, renames and moves, so a rename asked for first moves the item before it goes,
+    // and one asked for after finds it gone.
+    const done = await this.exclusive(async () => {
+      if (this.disposed) return false;
+      const at = this.follow(path);
+      const node = findNode(this.tree.peek(), at);
+      const notes = (!node ? [] : node.kind === 'file' ? [at] : allFiles(node).map((f) => f.path)).filter(
+        (p) => fileKind(p) === 'note',
+      );
+      const linked = new Set<string>();
+      if (this.config.settings.peek().unusedImages === 'ask') {
+        for (const p of notes) {
+          const text = await this.noteText(p);
+          if (text !== null) for (const t of imageTargets(text, p)) if (!isWithin(t, at)) linked.add(t);
+        }
       }
-    }
-    let item: TrashItem | null;
-    try {
-      item = await this.trash.take(path, node?.kind ?? 'file');
-    } catch (e) {
-      this.report(e);
-      return false;
-    }
-    for (const t of [...this.tabs.value]) if (isWithin(t.path.value, path)) this.closeTab(t);
-    this.recent.value = this.recent.value.filter((p) => !isWithin(p, path));
-    if (this.pinned.value.some((p) => isWithin(p, path))) {
-      this.pinned.value = this.pinned.value.filter((p) => !isWithin(p, path));
-    }
-    const scope = this.scope.value;
-    if (scope !== 'folder:' && scope.startsWith('folder:') && isWithin(scope.slice(7), path)) {
-      this.scope.value = `folder:${parentOf(path)}`;
-    }
-    if (this.selected.value && isWithin(this.selected.value, path)) this.selected.value = null;
-    await this.reloadTree();
-    if (linked.size > 0) this.pictures.offerUnused([...linked]).catch(this.report);
-    return item;
+      let item: TrashItem | null;
+      try {
+        item = await this.trash.take(at, node?.kind ?? 'file');
+      } catch (e) {
+        this.report(e);
+        return false;
+      }
+      for (const t of [...this.tabs.value]) if (isWithin(t.path.value, at)) this.closeTab(t);
+      this.recent.value = this.recent.value.filter((p) => !isWithin(p, at));
+      if (this.pinned.value.some((p) => isWithin(p, at))) {
+        this.pinned.value = this.pinned.value.filter((p) => !isWithin(p, at));
+      }
+      const scope = this.scope.value;
+      if (scope !== 'folder:' && scope.startsWith('folder:') && isWithin(scope.slice(7), at)) {
+        this.scope.value = `folder:${parentOf(at)}`;
+      }
+      if (this.selected.value && isWithin(this.selected.value, at)) this.selected.value = null;
+      // Before the lock goes, so the next rename or move finds the item gone.
+      await this.reloadTree();
+      return { item, linked };
+    });
+    if (done === false) return false;
+    if (done.linked.size > 0) this.pictures.offerUnused([...done.linked]).catch(this.report);
+    return done.item;
   }
 
   private async openElsewhere(path: string): Promise<void> {

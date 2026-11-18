@@ -372,6 +372,18 @@ describe('Notebook moves, names, settings and session', () => {
     expect(read.mock.calls.filter(([p]) => p.endsWith('.md'))).toEqual([]);
   });
 
+  it('reopens no tab for a note the saved session names but the notebook no longer has', async () => {
+    const store = new MemoryStore('N', {
+      'a.md': 'hello',
+      [sessionPath]: JSON.stringify({ tabs: [{ path: 'gone.md' }, { path: 'a.md' }], active: 'gone.md' }),
+    });
+    const reads = vi.spyOn(store, 'read');
+    const nb = await openWith(store);
+    expect(nb.tabs.value.map((t) => t.path.value)).toEqual(['a.md']);
+    expect(nb.active.value?.path.value).toBe('a.md');
+    expect(reads.mock.calls.map(([p]) => p)).not.toContain('gone.md');
+  });
+
   it('writes a pending session on dispose, and session writes land in order', async () => {
     vi.useFakeTimers();
     try {
@@ -496,6 +508,39 @@ describe('Notebook names taken in flight (PRD §6.1)', () => {
     expect(await first).toBe('Ideas');
     expect(await second).toBeNull();
     expect(nb.notice.value?.text).toBe('“Ideas” already exists there.');
+  });
+
+  it('refuses a rename of an item a delete took to the Trash while the rename waited', async () => {
+    const store = new GatedStore('N', { 'a.md': 'hello' });
+    const nb = await openWith(store);
+    const moves = vi.spyOn(store, 'move');
+    store.holdWrites = true;
+    const deleting = nb.remove('a.md');
+    await settle();
+    const renaming = nb.rename('a.md', 'b.md');
+    store.holdWrites = false;
+    for (const w of store.writes.splice(0)) w.release();
+    expect(await deleting).toBe(true);
+    expect(await renaming).toBeNull();
+    expect(moves.mock.calls.filter(([from]) => from === 'a.md')).toHaveLength(1);
+    // The delete's Undo stays up: it's the one notice the user can act on.
+    expect(nb.notice.value?.action?.label).toBe('Undo');
+  });
+
+  it('deletes an item where a rename asked for first put it', async () => {
+    const store = new GatedStore('N', { 'a.md': 'hello' });
+    const nb = await openWith(store);
+    store.holdLists = true;
+    const renaming = nb.rename('a.md', 'b.md');
+    await settle();
+    const deleting = nb.remove('a.md');
+    store.holdLists = false;
+    for (const l of store.lists.splice(0)) l();
+    expect(await renaming).toBe('b.md');
+    expect(await deleting).toBe(true);
+    await expect(store.read('b.md')).rejects.toThrow();
+    await expect(store.read('a.md')).rejects.toThrow();
+    expect(nb.tree.value.children.map((c) => c.path)).toEqual([]);
   });
 
   it('refuses a rename onto a name a new note took first', async () => {
