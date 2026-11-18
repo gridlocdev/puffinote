@@ -13,13 +13,9 @@
   "empty-catch: apps/cli/src/commands/notebook.ts": 1,
   "empty-catch: apps/desktop/src/files.ts": 2,
   "empty-catch: apps/web/src/launcher.ts": 2,
-  "empty-catch: packages/node-files/src/atomicWrite.ts": 1,
   "empty-catch: packages/ui/src/notebook/noteMeta.ts": 1,
-  "empty-catch: packages/ui/src/notebook/notebook.ts": 2,
   "empty-catch: packages/ui/src/notebook/notebookPictures.ts": 1,
-  "empty-catch: packages/ui/src/notebook/notebookSettings.ts": 2,
   "empty-catch: packages/ui/src/notebook/recovery.ts": 1,
-  "empty-catch: packages/ui/src/notebook/settings.ts": 2,
   "empty-catch: packages/ui/src/platform/nasStore.ts": 1,
   "empty-catch: packages/ui/src/shell/shellModel.ts": 2,
   "key-listener: packages/ui/src/shell/FileTree.tsx": 1,
@@ -35,9 +31,6 @@
   "storage: packages/ui/src/shell/shellModel.ts": 3,
   "swallowed-promise: apps/desktop/src/main.ts": 3,
   "swallowed-promise: apps/desktop/src/updates.ts": 1,
-  "swallowed-promise: packages/node-files/src/atomicWrite.ts": 4,
-  "swallowed-promise: packages/node-files/src/locks.ts": 3,
-  "swallowed-promise: packages/ui/src/notebook/notebook.ts": 1,
   "swallowed-promise: packages/ui/src/notebook/trash.ts": 4,
   "swallowed-promise: packages/ui/src/platform/browserStore.ts": 2
 }

@@ -1,4 +1,5 @@
 import type { ViewMode } from '../editor/reveal.ts';
+import { parseJson } from './storeWrites.ts';
 
 /**
  * Puffinote's settings (PRD §9). They resolve in layers, lowest first: the defaults here, the user's
@@ -250,33 +251,36 @@ export function unrecognized(raw: unknown): Record<string, unknown> {
 /** Where the user's own preferences live: localStorage in a browser, a config file on the desktop. */
 export interface PrefsStorage {
   load(): PartialSettings;
-  save(prefs: PartialSettings): void;
+  /** Whether they were stored: with storage off, they last until the page closes. */
+  save(prefs: PartialSettings): boolean;
 }
 
 const PREFS_KEY = 'puffinote.prefs';
 
 export const localPrefs: PrefsStorage = {
   load() {
-    try {
-      return sanitize(JSON.parse(localStorage.getItem(PREFS_KEY) ?? '{}'));
-    } catch {
-      return {};
-    }
+    return sanitize(parseJson(readStoredPrefs() ?? '{}'));
   },
   save(prefs) {
+    // Keys this version doesn't know (a newer one's) are kept; an unreadable value has none to keep.
+    const stored = parseJson(readStoredPrefs() ?? 'null');
     try {
-      let stored: unknown = null;
-      try {
-        stored = JSON.parse(localStorage.getItem(PREFS_KEY) ?? 'null');
-      } catch {
-        // Unreadable: nothing to keep.
-      }
       localStorage.setItem(PREFS_KEY, JSON.stringify({ ...unrecognized(stored), ...prefs }));
+      return true;
     } catch {
-      // Storage disabled: preferences last until the page closes.
+      return false;
     }
   },
 };
+
+/** The stored preferences' text, or null when there are none or storage is off. */
+function readStoredPrefs(): string | null {
+  try {
+    return localStorage.getItem(PREFS_KEY);
+  } catch {
+    return null;
+  }
+}
 
 /** Preferences kept only in memory (tests, the demo). */
 export function memoryPrefs(initial: PartialSettings = {}): PrefsStorage {
@@ -285,6 +289,7 @@ export function memoryPrefs(initial: PartialSettings = {}): PrefsStorage {
     load: () => ({ ...value }),
     save: (p) => {
       value = { ...p };
+      return true;
     },
   };
 }

@@ -24,7 +24,7 @@ import {
 } from '../platform/paths.ts';
 import { indentUnit, type PrefsStorage } from './settings.ts';
 import { NotebookSettings } from './notebookSettings.ts';
-import { encodeJson, ensureStateDir, sameBytes, writeOver } from './storeWrites.ts';
+import { encodeJson, ensureStateDir, parseJson, sameBytes, writeOver } from './storeWrites.ts';
 import {
   allFiles,
   ancestorsOf,
@@ -187,7 +187,7 @@ export class Notebook {
    */
   private readonly moves: { readonly from: string; readonly to: string }[] = [];
   /** Session writes, one after another, so an older one never lands last. */
-  private persistChain: Promise<void> = Promise.resolve();
+  private persistChain: Promise<unknown> = Promise.resolve();
 
   private constructor(store: NotebookStore, options: NotebookOptions) {
     this.store = store;
@@ -401,7 +401,11 @@ export class Notebook {
     } catch (e) {
       if (ticket === this.treeReads) throw e; // a superseded read's failure (a folder renamed under it) is moot
     }
-    if (next === null || ticket !== this.treeReads) return this.latestTreeRead.catch(() => {});
+    // A superseded read waits for the latest one; that one's failure goes to its own caller.
+    if (next === null || ticket !== this.treeReads) {
+      await Promise.allSettled([this.latestTreeRead]);
+      return;
+    }
     // A picture whose size or time changed (or that went away) is read again when next drawn. Stores without
     // change events (a browser folder, the NAS) only tell this way.
     const before = this.stats.peek();
@@ -1114,14 +1118,12 @@ export class Notebook {
   private async adoptMovedVersion(tab: Tab): Promise<void> {
     if (tab.kind !== 'note' || this.writing.has(tab)) return;
     const generation = tab.generation;
-    try {
-      const data = await this.store.read(tab.path.value);
-      if (tab.generation !== generation || this.writing.has(tab) || data.version === tab.version) return;
-      if (readText(data.bytes).text !== tab.savedText) return;
-      tab.adoptVersion(data.version);
-    } catch {
-      // Gone already: the next refresh flags it.
-    }
+    // Gone already (no data): the next refresh flags it.
+    const data = await this.store.read(tab.path.value).catch(() => null);
+    if (!data || tab.generation !== generation || this.writing.has(tab) || data.version === tab.version)
+      return;
+    if (readText(data.bytes).text !== tab.savedText) return;
+    tab.adoptVersion(data.version);
   }
 
   /**
@@ -1265,14 +1267,16 @@ export class Notebook {
    * Write the session now (before closing the notebook). The session is taken at the call; writes go out one
    * after another, so the last call's session is the one left on disk.
    */
-  persist(): Promise<void> {
+  persist(): Promise<boolean> {
     const bytes = encodeJson(this.session());
     const run = this.persistChain.then(async () => {
       try {
         await ensureStateDir(this.store);
         await this.store.write(sessionPath, bytes, { force: true });
+        return true;
       } catch {
         // A read-only notebook just doesn't remember its tabs.
+        return false;
       }
     });
     this.persistChain = run;
@@ -1280,11 +1284,8 @@ export class Notebook {
   }
 
   private async readJson(path: string): Promise<unknown> {
-    try {
-      return JSON.parse(readText((await this.store.read(path)).bytes).text) as unknown;
-    } catch {
-      return null;
-    }
+    const data = await this.store.read(path).catch(() => null);
+    return data && parseJson(readText(data.bytes).text);
   }
 
   // ----- Notices -----

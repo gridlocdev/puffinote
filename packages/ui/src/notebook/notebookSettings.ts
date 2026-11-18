@@ -16,7 +16,7 @@ import {
   type PrefsStorage,
   type Settings,
 } from './settings.ts';
-import { encodeJson, ensureStateDir, sameBytes, writeOver } from './storeWrites.ts';
+import { encodeJson, ensureStateDir, parseJson, sameBytes, writeOver } from './storeWrites.ts';
 import { stateDir } from './tree.ts';
 
 export const overridesPath = `${stateDir}/settings.json`;
@@ -62,13 +62,9 @@ export class NotebookSettings {
 
   /** Read this notebook's overrides as the notebook opens. A file that can't be read or parsed counts as none. */
   async load(): Promise<void> {
-    let raw: unknown = null;
-    try {
-      raw = JSON.parse(readText((await this.#host.store.read(overridesPath)).bytes).text) as unknown;
-    } catch {
-      // No file, or not JSON: no overrides.
-    }
-    this.overrides.value = sanitize(raw);
+    // No file, or not JSON: no overrides.
+    const data = await this.#host.store.read(overridesPath).catch(() => null);
+    this.overrides.value = sanitize(data && parseJson(readText(data.bytes).text));
   }
 
   /**
@@ -156,12 +152,8 @@ export class NotebookSettings {
         return { known: {}, rest: {}, version: undefined, bytes: new Uint8Array() };
       throw e;
     }
-    let raw: unknown = null;
-    try {
-      raw = JSON.parse(readText(data.bytes).text) as unknown;
-    } catch {
-      // Not JSON: nothing in it can be kept.
-    }
+    // Not JSON: nothing in it can be kept.
+    const raw = parseJson(readText(data.bytes).text);
     return { known: sanitize(raw), rest: unrecognized(raw), version: data.version, bytes: data.bytes };
   }
 }

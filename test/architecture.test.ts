@@ -389,7 +389,7 @@ function checkCode(file: string, source: ts.SourceFile, report: Report): void {
           report.line(node),
         );
       }
-      if (name === 'ignoreError' && !test) {
+      if ((name === 'ignoreError' || name === 'ignoreErrorSync') && !test) {
         const reason = stringArg(node.arguments[1]);
         if (reason?.trim())
           report.add('ignore-error', reason.trim(), `ignores an error ("${reason.trim()}")`, null, true);

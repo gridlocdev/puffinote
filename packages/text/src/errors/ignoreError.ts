@@ -10,3 +10,13 @@ export function ignoreError(promise: Promise<unknown>, reason: string): Promise<
     () => undefined,
   );
 }
+
+/** `ignoreError` for synchronous work, listed the same way. */
+export function ignoreErrorSync(fn: () => unknown, reason: string): void {
+  void reason;
+  try {
+    fn();
+  } catch {
+    return;
+  }
+}

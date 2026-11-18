@@ -1,4 +1,7 @@
 {
+  "ignore-error: packages/node-files/src/atomicWrite.ts -> the file is already saved; some file systems cannot sync a folder": 1,
+  "ignore-error: packages/node-files/src/atomicWrite.ts -> the save failed with its own error; a leftover temp file is never listed": 1,
+  "ignore-error: packages/node-files/src/atomicWrite.ts -> the write's error is the one to report; the cut only tidies its tail": 2,
   "lint-disable: apps/desktop/src/preload.cts -> @typescript-eslint/no-require-imports, @typescript-eslint/consistent-type-imports": 1,
   "lint-disable: packages/markdown/src/html/htmlRenderer.ts -> no-control-regex": 1,
   "lint-disable: packages/ui/src/notebook/archive.ts -> no-control-regex": 1

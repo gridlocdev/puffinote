@@ -9,19 +9,22 @@ import { realOfNearest } from './paths.ts';
  */
 export class FileLocks {
   readonly #tails = new Map<string, Promise<unknown>>();
-  /** Keys are worked out one call at a time, so calls take a lock in the order they were made. */
+  /**
+   * Keys are worked out one call at a time, so calls take a lock in the order they were made. A key that can't
+   * be worked out fails its own call, not the ones after it.
+   */
   #keying: Promise<unknown> = Promise.resolve();
 
   async run<T>(p: string, fn: () => Promise<T>): Promise<T> {
     const keyed = this.#keying.then(() => lockKey(p));
-    this.#keying = keyed.catch(() => {});
+    this.#keying = Promise.allSettled([keyed]);
     return this.#runKey(await keyed, fn);
   }
 
   /** `run` over several files, taken in one order so two callers can't wait on each other. */
   async runAll<T>(paths: readonly string[], fn: () => Promise<T>): Promise<T> {
     const keyed = this.#keying.then(() => Promise.all(paths.map(lockKey)));
-    this.#keying = keyed.catch(() => {});
+    this.#keying = Promise.allSettled([keyed]);
     const keys = [...new Set(await keyed)].sort();
     const next = (i: number): Promise<T> => {
       const key = keys[i];
@@ -33,7 +36,8 @@ export class FileLocks {
   async #runKey<T>(key: string, fn: () => Promise<T>): Promise<T> {
     const prev = this.#tails.get(key) ?? Promise.resolve();
     const run = prev.then(fn, fn);
-    const tail = run.catch(() => {});
+    // The next call waits for this one to settle either way; this one's failure goes to its own caller.
+    const tail = Promise.allSettled([run]);
     this.#tails.set(key, tail);
     try {
       return await run;

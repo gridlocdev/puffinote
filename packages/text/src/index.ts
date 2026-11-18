@@ -61,4 +61,4 @@ export {
 export { type UndoEffect, type UndoRun } from './editing/editHistory.ts';
 export { type ReloadEdit, reloadEdit } from './editing/reloadEdit.ts';
 export { applyEdit, compose, invertEdit, type TextEdit, touches } from './editing/textEdit.ts';
-export { ignoreError } from './errors/ignoreError.ts';
+export { ignoreError, ignoreErrorSync } from './errors/ignoreError.ts';

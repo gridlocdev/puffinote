@@ -50,6 +50,15 @@ export function sameBytes(a: Uint8Array, b: Uint8Array): boolean {
   return a.length === b.length && a.every((x, i) => x === b[i]);
 }
 
+/** The value `text` holds, or null when it isn't JSON. */
+export function parseJson(text: string): unknown {
+  try {
+    return JSON.parse(text) as unknown;
+  } catch {
+    return null;
+  }
+}
+
 export function encodeJson(value: unknown): Uint8Array {
   return new TextEncoder().encode(JSON.stringify(value, null, 2) + '\n');
 }

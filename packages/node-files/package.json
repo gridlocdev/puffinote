@@ -5,6 +5,9 @@
   "type": "module",
   "license": "MIT",
   "description": "Notebook file handling on Node shared by the desktop app, the NAS server and the CLI: atomic saves, per-file locks, listings and moves.",
+  "dependencies": {
+    "@puffinote/text": "workspace:*"
+  },
   "exports": {
     ".": "./src/index.ts"
   }

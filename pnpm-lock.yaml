@@ -94,7 +94,11 @@ importers:
         specifier: workspace:*
         version: link:../text
 
-  packages/node-files: {}
+  packages/node-files:
+    dependencies:
+      '@puffinote/text':
+        specifier: workspace:*
+        version: link:../text
 
   packages/text: {}
 

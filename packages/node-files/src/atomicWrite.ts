@@ -17,6 +17,7 @@ import {
 } from 'node:fs';
 import { access, chown, open, rename, stat, unlink } from 'node:fs/promises';
 import path from 'node:path';
+import { ignoreError, ignoreErrorSync } from '@puffinote/text';
 import { FileError } from './errors.ts';
 import { realTarget } from './paths.ts';
 
@@ -94,10 +95,14 @@ export async function replaceFile(file: string, bytes: Uint8Array): Promise<Stat
     } finally {
       await h.close();
     }
-    if (target) await chown(tmp, target.uid, target.gid).catch(() => {}); // only root may give files away
+    if (target) await keepOwner(tmp, target);
     await rename(tmp, file);
   } catch (e) {
-    if (created) await unlink(tmp).catch(() => {});
+    if (created)
+      await ignoreError(
+        unlink(tmp),
+        'the save failed with its own error; a leftover temp file is never listed',
+      );
     throw e;
   }
   await syncDir(path.dirname(file));
@@ -165,7 +170,10 @@ export async function overwriteInPlace(h: InPlaceHandle, bytes: Uint8Array, oldS
     try {
       await writeRange(oldSize, bytes.length);
     } catch (e) {
-      await h.truncate(oldSize).catch(() => {});
+      await ignoreError(
+        h.truncate(oldSize),
+        "the write's error is the one to report; the cut only tidies its tail",
+      );
       throw e;
     }
   }
@@ -186,11 +194,10 @@ export function overwriteInPlaceSync(h: InPlaceHandleSync, bytes: Uint8Array, ol
     try {
       writeRange(oldSize, bytes.length);
     } catch (e) {
-      try {
-        h.truncate(oldSize);
-      } catch {
-        // The error that matters is the write's.
-      }
+      ignoreErrorSync(
+        () => h.truncate(oldSize),
+        "the write's error is the one to report; the cut only tidies its tail",
+      );
       throw e;
     }
   }
@@ -224,6 +231,18 @@ function isReadOnlySync(file: string, mode: number): boolean {
 export async function syncDir(dir: string): Promise<void> {
   const h = await open(dir, 'r').catch(() => null);
   if (!h) return;
-  await h.sync().catch(() => {});
+  await ignoreError(h.sync(), 'the file is already saved; some file systems cannot sync a folder');
   await h.close();
+}
+
+/** Errors from chown that mean the owner can't be given away here: not root, or a file system without owners. */
+const CANNOT_CHOWN = new Set(['EPERM', 'EACCES', 'EINVAL', 'ENOTSUP', 'ENOSYS', 'EOPNOTSUPP']);
+
+/** Give the replacement the old file's owner and group, where this process may (only root may give files away). */
+async function keepOwner(tmp: string, target: Stats): Promise<void> {
+  try {
+    await chown(tmp, target.uid, target.gid);
+  } catch (e) {
+    if (!CANNOT_CHOWN.has((e as NodeJS.ErrnoException).code ?? '')) throw e;
+  }
 }
