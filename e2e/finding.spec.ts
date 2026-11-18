@@ -43,4 +43,29 @@ test.describe('Finding things', () => {
     await page.getByRole('complementary').getByText('Call the plumber').first().click();
     await expect(page.getByRole('tab', { name: /Welcome/, selected: true })).toBeVisible();
   });
+
+  test('Search matches words in any order, and names without their accents', async ({ page }) => {
+    await page.getByRole('navigation', { name: 'Panels' }).getByRole('button', { name: 'Search' }).click();
+    await page.keyboard.type('plumb call');
+    const panel = page.getByRole('complementary');
+    await expect(panel.getByText('Call the plumber').first()).toBeVisible();
+    await page.keyboard.press('ControlOrMeta+KeyA');
+    await page.keyboard.type('cafe');
+    await expect(panel.getByText('Café ☕ notes.md').first()).toBeVisible();
+  });
+
+  test('Search finds a word just typed into a note', async ({ page }) => {
+    await openNote(page, 'welcome');
+    await page.getByRole('main').getByText('Water the ferns').click();
+    await page.keyboard.press('End');
+    await page.keyboard.type(' zebrafish');
+    await page.keyboard.press('ControlOrMeta+Shift+KeyF');
+    await page.keyboard.type('zebra');
+    await expect(
+      page
+        .getByRole('complementary')
+        .getByText(/zebrafish/)
+        .first(),
+    ).toBeVisible();
+  });
 });

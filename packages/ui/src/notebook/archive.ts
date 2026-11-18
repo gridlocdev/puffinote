@@ -2,17 +2,19 @@ import type { NotebookStore } from '../platform/notebookStore.ts';
 import { joinPath } from '../platform/paths.ts';
 import { zip, type ZipEntry } from '../platform/zip.ts';
 import { trashDir } from './trash.ts';
-import { stateDir } from './tree.ts';
+import { cacheDir, stateDir } from './tree.ts';
 
 /**
  * Whether Download Notebook leaves `path` out (PRD §5): git's own folder, the notebook's Trash (what was
- * deleted), and the window state in `.puffinote/session.json`, which belongs to this machine. The notebook's
- * settings go with it.
+ * deleted), the window state in `.puffinote/session.json`, which belongs to this machine, and the search index in
+ * `.puffinote/cache/`, which is built again. The notebook's settings go with it.
  */
 export function leftOutOfArchive(path: string): boolean {
   return (
     path === `${stateDir}/session.json` ||
     path === trashDir ||
+    path === cacheDir ||
+    path.startsWith(`${cacheDir}/`) ||
     path.startsWith(`${trashDir}/`) ||
     path.split('/').includes('.git')
   );

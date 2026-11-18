@@ -98,6 +98,9 @@ export interface Session {
 
 export const sessionPath = `${stateDir}/session.json`;
 
+/** How long after opening the notebook the search index catches up with the notes. */
+const warmSearchDelay = 2000;
+
 export interface NotebookOptions {
   readonly prefs: PrefsStorage;
   /** Hand a file nobody here can open to the user (a download), when the store can't open it externally. */
@@ -241,7 +244,11 @@ export class Notebook {
     });
     this.textSearch = new NotebookSearch({
       files: () => allFiles(this.tree.value),
+      stat: (path) => this.stats.peek().get(path),
       read: (path) => this.store.read(path),
+      store,
+      closed: () => this.disposed,
+      report: (e) => this.report(e),
       openTexts: () =>
         new Map(this.tabs.value.filter((t) => t.state).map((t) => [t.path.value, t.state!.text])),
     });
@@ -294,6 +301,8 @@ export class Notebook {
     }
     await this.openRecovered();
     this.loaded = true;
+    // Bring the search index up to date once the notebook has settled, so the first search is quick (PRD §6.3).
+    this.disposers.push(after(warmSearchDelay, () => void this.textSearch.refresh().catch(this.report)));
 
     // Remember the session whenever any of its parts changes.
     this.disposers.push(
@@ -357,6 +366,7 @@ export class Notebook {
     }
     for (const d of this.disposers) d();
     this.meta.dispose();
+    this.textSearch.dispose();
     for (const t of this.tabs.value) t.dispose();
     this.refreshTimer?.();
     this.pictures.dispose();

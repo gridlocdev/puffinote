@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
+import { searchCachePath } from '../src/notebook/search.ts';
 import { Notebook, sessionPath } from '../src/notebook/notebook.ts';
 import { memoryPrefs } from '../src/notebook/settings.ts';
 import { noteFileName } from '../src/notebook/tree.ts';
@@ -344,18 +345,31 @@ describe('Notebook moves, names, settings and session', () => {
     expect(nb.tree.value.children.map((c) => c.name)).toEqual(['f', 'c.md']);
   });
 
-  it('stops a search when its signal aborts', async () => {
-    const store = new GatedStore('N', { 'a.md': 'x', 'b.md': 'x', 'c.md': 'x' });
+  it('answers an aborted search at once, while the index keeps catching up for the next one', async () => {
+    // An empty saved index, so the only reads held are the notes'.
+    const store = new GatedStore('N', {
+      'a.md': 'x',
+      'b.md': 'x',
+      'c.md': 'x',
+      [searchCachePath]: '{"format": 1, "notes": []}',
+    });
     const nb = await openWith(store);
     store.holdReads = true;
     const abort = new AbortController();
     const searching = nb.textSearch.find('x', { signal: abort.signal });
     await settle();
-    expect(store.reads).toHaveLength(1);
     abort.abort();
-    store.reads.shift()!();
     expect(await searching).toEqual([]);
-    expect(store.reads).toHaveLength(0); // no further files read
+    store.holdReads = false;
+    while (store.reads.length > 0) {
+      store.reads.shift()!();
+      await settle();
+    }
+    const read = vi.spyOn(store, 'read');
+    expect(new Set((await nb.textSearch.find('x')).map((h) => h.path))).toEqual(
+      new Set(['a.md', 'b.md', 'c.md']),
+    );
+    expect(read.mock.calls.filter(([p]) => p.endsWith('.md'))).toEqual([]);
   });
 
   it('writes a pending session on dispose, and session writes land in order', async () => {

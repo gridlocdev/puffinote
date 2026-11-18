@@ -12,6 +12,7 @@
 
 ### Improvements
 
+- **Search is faster and finds more.** Puffinote keeps an index of your notes, so a search only reads the notes that changed since the last one, and a reopened notebook starts from the saved index. Search now matches words in any order ("budget march" finds "the March budget"), at the start of words, ignoring accents. Put a phrase in quotes to find it as typed. The best matches come first. The Library's Filter box reads from the same index.
 - **Bullets look like OneNote's.** Each nesting level has its own shape: disc, circle, square, open square, diamond, open diamond, triangle, dash, then small diamonds. They are drawn at one size, so no level looks bigger or bolder than another.
 - **Shift+Tab on a top-level list item turns it into a plain line**, taking off its bullet, number or checkbox, as Backspace at the start of its text does.
 - The NAS server reads its port from `PUFFINOTE_PORT`, like its other settings. `PORT` still works when that is unset, so existing Docker setups keep running.

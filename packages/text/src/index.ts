@@ -19,6 +19,19 @@ export {
   type SearchOptions,
 } from './document/search.ts';
 export {
+  countWords,
+  foldedWords,
+  type FoldedText,
+  foldString,
+  foldWithOffsets,
+  isEmptyQuery,
+  parseWordQuery,
+  WordIndex,
+  type WordMatch,
+  wordMatches,
+  type WordQuery,
+} from './document/wordSearch.ts';
+export {
   caretAt,
   isCollapsed,
   type LinePosition,

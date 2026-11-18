@@ -12,6 +12,8 @@ export interface TreeNode {
 
 /** The notebook's own state folder: never shown in the tree. */
 export const stateDir = '.puffinote';
+/** Caches the app can build again (the search index); a change there says nothing about the notes. */
+export const cacheDir = `${stateDir}/cache`;
 
 export const emptyTree: TreeNode = { path: '', name: '', kind: 'dir', children: [] };
 
@@ -80,7 +82,7 @@ export async function loadTree(
  * client or an IDE touches all the time and the tree never lists.
  */
 export function ignoredChange(path: string): boolean {
-  return path.split('/').includes('.git');
+  return path.split('/').includes('.git') || path.startsWith(`${cacheDir}/`);
 }
 
 function shown(e: Entry, hidden: boolean): boolean {

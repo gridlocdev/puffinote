@@ -37,9 +37,13 @@ export async function waitForApp(page: Page): Promise<void> {
  * write of a .gitignore that is already there.
  */
 const EXPECTED: readonly { status: number; method: string; url: RegExp }[] = [
-  { status: 404, method: 'GET', url: /\/api\/file\?.*path=\.puffinote%2F(settings|session)\.json$/ },
+  {
+    status: 404,
+    method: 'GET',
+    url: /\/api\/file\?.*path=\.puffinote%2F(settings\.json|session\.json|cache%2Fsearch-index\.json)$/,
+  },
   { status: 404, method: 'GET', url: /\/api\/list\?.*path=\.puffinote%2Ftrash$/ },
-  { status: 412, method: 'PUT', url: /\/api\/file\?.*path=\.puffinote%2F(trash%2F)?\.gitignore$/ },
+  { status: 412, method: 'PUT', url: /\/api\/file\?.*path=\.puffinote%2F(trash%2F|cache%2F)?\.gitignore$/ },
 ];
 
 /**

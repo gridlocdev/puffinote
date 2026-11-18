@@ -91,6 +91,8 @@ describe('notebookArchive', () => {
     expect(leftOutOfArchive('.puffinote/trash')).toBe(true);
     expect(leftOutOfArchive('.puffinote/trash/1700000000000/a.md')).toBe(true);
     expect(leftOutOfArchive('.puffinote/settings.json')).toBe(false);
+    expect(leftOutOfArchive('.puffinote/cache')).toBe(true);
+    expect(leftOutOfArchive('.puffinote/cache/search-index.json')).toBe(true);
     expect(leftOutOfArchive('.git/config')).toBe(true);
     expect(leftOutOfArchive('sub/.git')).toBe(true);
     expect(leftOutOfArchive('.puffinote/settings.json')).toBe(false);
