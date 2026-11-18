@@ -889,6 +889,7 @@ export class Notebook {
     const path = joinPath(dir, file);
     if (!this.checkName(file)) return null;
     return this.exclusive(async () => {
+      if (this.disposed || this.taken(path, `“${file}” already exists.`)) return null;
       try {
         await this.store.write(path, new Uint8Array(), { create: true });
       } catch (e) {
@@ -907,11 +908,8 @@ export class Notebook {
     if (this.disposed) return null;
     if (!this.checkName(name)) return null;
     const path = joinPath(dir, name);
-    if (findNode(this.tree.value, path)) {
-      this.notify('error', `“${name}” already exists there.`);
-      return null;
-    }
     return this.exclusive(async () => {
+      if (this.disposed || this.taken(path, `“${name}” already exists there.`)) return null;
       try {
         await this.store.mkdir(path);
       } catch (e) {
@@ -988,6 +986,7 @@ export class Notebook {
       const to = target(from);
       if (to === null) return null;
       if (to === from) return { from, to, movedFiles: [] };
+      if (this.taken(to, `“${baseName(to)}” already exists there.`)) return null;
       const node = findNode(this.tree.peek(), from);
       const movedFiles = !node ? [] : node.kind === 'file' ? [from] : allFiles(node).map((f) => f.path);
       // Saves already writing to the old path, and a refresh's reads there, land first; later ones wait for
@@ -1189,6 +1188,16 @@ export class Notebook {
     } catch (e) {
       this.report(e);
     }
+  }
+
+  /**
+   * Whether `path` is in the tree, saying so if it is. Called holding the lock: a dialog checks the name when it
+   * is answered, but a new file or move queued before it may have taken the name since.
+   */
+  private taken(path: string, message: string): boolean {
+    if (!findNode(this.tree.peek(), path)) return false;
+    this.notify('error', message);
+    return true;
   }
 
   private checkName(name: string): boolean {

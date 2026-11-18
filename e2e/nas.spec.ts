@@ -61,6 +61,31 @@ test.describe('Desktop, browser and NAS', () => {
     await expect(box).toBeFocused();
   });
 
+  test('on a slow NAS, a second new note of the same name asked for before the first lands is refused', async ({
+    seed,
+    page,
+  }) => {
+    seed('basic');
+    await openApp(page);
+    const errors = watchErrors(page);
+    let release = () => {};
+    const held = new Promise<void>((resolve) => (release = resolve));
+    await page.route(/\/api\/file\?.*path=Untitled\.md/, async (route) => {
+      if (route.request().method() === 'PUT') await held;
+      await route.continue();
+    });
+    for (let i = 0; i < 2; i++) {
+      await page.keyboard.press('ControlOrMeta+KeyN');
+      await expect(page.getByRole('dialog', { name: 'New Note' })).toBeVisible();
+      await page.keyboard.press('Enter');
+    }
+    release();
+    await expect(page.getByRole('status')).toContainText('“Untitled.md” already exists.');
+    await expect(page.getByRole('tab', { name: /Untitled/ })).toHaveCount(1);
+    expect(readDataIfThere('Untitled.md')).toBe('');
+    expect(errors).toEqual([]);
+  });
+
   test('on a slow NAS, renaming a folder while a new note in it is still being written keeps the note', async ({
     seed,
     page,

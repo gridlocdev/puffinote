@@ -458,6 +458,64 @@ describe('Notebook opens in flight', () => {
   });
 });
 
+describe('Notebook names taken in flight (PRD §6.1)', () => {
+  /** Creates and moves of `path` that reached the store. */
+  const calls = (store: MemoryStore, path: string) => {
+    const writes = vi.spyOn(store, 'write');
+    const moves = vi.spyOn(store, 'move');
+    return () =>
+      writes.mock.calls.filter(([p]) => p === path).length +
+      moves.mock.calls.filter(([, to]) => to === path).length;
+  };
+
+  it('refuses a second new note of the same name, asked for while the first is still being written', async () => {
+    const store = new GatedStore('N', { 'a.md': '' });
+    const nb = await openWith(store);
+    const reached = calls(store, 'Untitled.md');
+    store.holdWrites = true;
+    const first = nb.createNote('', 'Untitled');
+    const second = nb.createNote('', 'Untitled');
+    await settle();
+    store.holdWrites = false;
+    for (const w of store.writes.splice(0)) w.release();
+    expect(await first).toBe('Untitled.md');
+    expect(await second).toBeNull();
+    expect(reached()).toBe(1);
+    expect(nb.notice.value?.text).toBe('“Untitled.md” already exists.');
+  });
+
+  it('refuses a second new folder of the same name', async () => {
+    const store = new GatedStore('N', { 'a.md': '' });
+    const nb = await openWith(store);
+    store.holdLists = true;
+    const first = nb.createFolder('', 'Ideas');
+    const second = nb.createFolder('', 'Ideas');
+    await settle();
+    store.holdLists = false;
+    for (const l of store.lists.splice(0)) l();
+    expect(await first).toBe('Ideas');
+    expect(await second).toBeNull();
+    expect(nb.notice.value?.text).toBe('“Ideas” already exists there.');
+  });
+
+  it('refuses a rename onto a name a new note took first', async () => {
+    const store = new GatedStore('N', { 'a.md': '' });
+    const nb = await openWith(store);
+    const reached = calls(store, 'b.md');
+    store.holdWrites = true;
+    const created = nb.createNote('', 'b');
+    const renamed = nb.rename('a.md', 'b.md');
+    await settle();
+    store.holdWrites = false;
+    for (const w of store.writes.splice(0)) w.release();
+    expect(await created).toBe('b.md');
+    expect(await renamed).toBeNull();
+    expect(reached()).toBe(1);
+    expect(nb.notice.value?.text).toBe('“b.md” already exists there.');
+    expect(await text(store, 'a.md')).toBe('');
+  });
+});
+
 describe('Notebook moves and saves in flight', () => {
   class SlowMoves extends GatedStore {
     holdMoves = false;

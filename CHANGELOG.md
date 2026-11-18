@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+### Bugs fixed
+
+- A second new note or folder given the same name before the first one appeared, or a rename onto that name, now says the name already exists instead of showing a save error.
+
 ## 0.2.4
 
 ### What's new
