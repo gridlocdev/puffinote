@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.2.4
 
 ### What's new
 
@@ -14,6 +14,7 @@
 
 - **Search is faster and finds more.** Puffinote keeps an index of your notes, so a search only reads the notes that changed since the last one, and a reopened notebook starts from the saved index. Search now matches words in any order ("budget march" finds "the March budget"), at the start of words, ignoring accents. Put a phrase in quotes to find it as typed. The best matches come first. The Library's Filter box reads from the same index.
 - **Bullets look like OneNote's.** Each nesting level has its own shape: disc, circle, square, open square, diamond, open diamond, triangle, dash, then small diamonds. They are drawn at one size, so no level looks bigger or bolder than another.
+- **Tab and Shift+Tab move the highlight** in the command menu, Go to File and Move To, as ↓ and ↑ do.
 - **Shift+Tab on a top-level list item turns it into a plain line**, taking off its bullet, number or checkbox, as Backspace at the start of its text does.
 - The NAS server reads its port from `PUFFINOTE_PORT`, like its other settings. `PORT` still works when that is unset, so existing Docker setups keep running.
 
@@ -23,6 +24,7 @@
 - ⌘Z in a dialog's empty text box (New Folder's name, say) does nothing. Before, it could undo the last typing in the note behind the dialog and move the keyboard there.
 - A dialog opened while a new note was still being saved (Quick Open on a slow NAS, say) keeps the keyboard. Before, the new note took it, and keys went into the note behind the dialog.
 - A dialog opened while a new folder was still being made (the command menu on a slow NAS, say) keeps the keyboard. Before, the file tree took it.
+- If the NAS stops answering, a save, read or move fails after 20 seconds with “The server didn't answer within 20 seconds.” Before, it could wait forever.
 - The desktop app opens a folder it's launched with (from Finder, the Dock or the command line) instead of reopening the last notebook.
 - Pasting or dropping a picture with the caret at the very end of a note saves the picture and links it. Before, the file was saved but no link went into the note.
 
