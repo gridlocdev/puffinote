@@ -1,6 +1,6 @@
 # Getting started
 
-You can run Puffinote as a desktop app, on a NAS with Docker, or from source in your browser.
+You can use Puffinote online, run it as a desktop app, on a NAS with Docker, or from source in your browser.
 
 ## What you need
 
@@ -33,6 +33,10 @@ The apps aren't signed by Apple or Microsoft yet, so the first launch needs one 
 ### Updates
 
 The desktop app checks for a new version once a day and tells you when one is out; **Download** opens the release page. It never installs anything by itself. You can turn the check off in the dialog, or run it from **Check for Updates…** in the app menu (Help on Windows and Linux).
+
+## Use it online
+
+Open [gridloc.dev/apps/puffinote](https://gridloc.dev/apps/puffinote/) in any modern browser. Nothing to install. Your notes stay in that browser's private storage on your computer, so another browser or device starts with an empty notebook. To open a folder on disk, use the desktop app; to have the same notes everywhere, run it on a NAS.
 
 ## Run it on a NAS (Docker)
 

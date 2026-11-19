@@ -10,7 +10,7 @@ Puffinote is a personal knowledge base that's just a folder of Markdown files. I
 
 ## Getting started
 
-Download the desktop app for macOS, Windows or Linux from the [Releases page](https://github.com/gridlocdev/puffinote/releases/latest), or run it on your NAS with Docker:
+Use it online at [gridloc.dev/apps/puffinote](https://gridloc.dev/apps/puffinote/), download the desktop app for macOS, Windows or Linux from the [Releases page](https://github.com/gridlocdev/puffinote/releases/latest), or run it on your NAS with Docker:
 
 ```bash
 docker build -t puffinote . && docker run -d -p 8790:8790 -e PUFFINOTE_TOKEN=change-me -v /volume1/notes:/data puffinote
