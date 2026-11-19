@@ -1,6 +1,8 @@
 # Changelog
 
-## Unreleased
+## 1.0.0
+
+Puffinote 1.0.0 is the first stable release.
 
 ### Bugs fixed
 
